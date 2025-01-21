@@ -76,10 +76,10 @@ def GetLocalHostIP():
     return ip
 
 
-def Int2HexString(intVal, with0xprefix = True):
+def Int2HexString(intVal, with0xprefix=True):
     if with0xprefix:
         return '0x{:02X}'.format(intVal)
-    return '{:02X}',format(intVal)
+    return '{:02X}'.format(intVal)
 
 
 def EscapedHexdecimalConverter(key):
@@ -147,9 +147,7 @@ def FindUnInstalledPackages(checklist):
 
 def CreateInstance(key, package, *args, **kwargs):
     classname = '{}_{}_state'.format(package.lower().replace('_state', ''), key)
-    namespaces = ['workstates']
-    namespaces.append(package)
-    namespaces.append(classname)
+    namespaces = ['workstates', package, classname]
     q = queue.Queue()
     instance = None
     try:
@@ -163,7 +161,7 @@ def CreateInstance(key, package, *args, **kwargs):
         q.get_nowait()
         instance = getattr(_extractAttr(module, q), classname)(*args, **kwargs)
     except Exception as e:
-        print('Exception caught at CreateInstance, error was :%s' % str(e))
+        print('Exception caught at CreateInstance, error was: %s' % str(e))
     return instance
 
 
@@ -186,7 +184,7 @@ class Bcolors(Enum):
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 def PrintMessage(msg, color):
-    if not(msg is None or len(msg) is 0):
+    if msg and len(msg) > 0:
         sys.stdout.write(color.value)
         print(msg)
         sys.stdout.write(Bcolors.RESET.value)

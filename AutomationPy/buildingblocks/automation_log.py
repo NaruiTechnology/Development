@@ -20,19 +20,19 @@ import os as os
 from buildingblocks.utils import InvalidArgumentException
 
 '''
-    This class has bas been implemented using the Singleton designs pattern
+    This class has been implemented using the Singleton design pattern
 '''
 
 
 class AutomationLog(object):
-    _instancePaeAutomationLog = None
+    _instanceAutomationLog = None
 
     def __new__(cls, *args, **kwargs):
-        if not cls._instancePaeAutomationLog:
-            cls._instancePaeAutomationLog = super(AutomationLog, cls).__new__(cls)
+        if not cls._instanceAutomationLog:
+            cls._instanceAutomationLog = super(AutomationLog, cls).__new__(cls)
             cwd = os.getcwd()
             fileName = r'automation.log'
-            if args.__len__() > 0:
+            if len(args) > 0:
                 fileName = args[0] + '.log'
             cls._automationLogfile = os.path.join(cwd, fileName)
             logging.basicConfig(level=logging.DEBUG,
@@ -40,8 +40,8 @@ class AutomationLog(object):
                                 datefmt='%m-%d %H:%M',
                                 filename=cls._automationLogfile,
                                 filemode='a')
-            cls._logDictioanry = {}
-        return cls._instancePaeAutomationLog
+            cls._logDictionary = {}
+        return cls._instanceAutomationLog
 
 
     @classmethod
@@ -56,21 +56,20 @@ class AutomationLog(object):
 
     @classmethod
     def GetLogger(cls, name):
-        if name is None or name == '':
+        if not name:
             return None
 
-        log = cls._logDictioanry.get(name)
+        log = cls._logDictionary.get(name)
         if log is None:
             log = logging.getLogger(name)
-            cls._logDictioanry[name] = log
+            cls._logDictionary[name] = log
         return log
 
 
     @classmethod
     def Close(cls):
-        #for key, log in cls._logDictioanry.iteritems():
-        for key in cls._logDictioanry:
-            log = cls._logDictioanry[key]
+        for key in cls._logDictionary:
+            log = cls._logDictionary[key]
             handlers = log.handlers[:]
             for handler in handlers:
                 handler.close()
@@ -79,8 +78,8 @@ class AutomationLog(object):
     @classmethod
     def TryAddConsole(cls, logname):
         try:
-            if logname is None or logname not in cls._logDictioanry.keys():
-                raise InvalidArgumentException('Cannot find the log from dictionary.')
+            if not logname or logname not in cls._logDictionary:
+                raise InvalidArgumentException('Cannot find the log in dictionary.')
             console = logging.StreamHandler()
             console.setLevel(logging.INFO)
             formatter = cls.GetFormater()
