@@ -31,7 +31,7 @@ class WorkstateMetaClass(type):
         return super(WorkstateMetaClass, cls).__new__(cls, name, parents, dct)
 
 
-class WorkState(object):  # abstract base class
+class WorkState(object):# abstract base class
     __metaclass__ = WorkstateMetaClass
     file = __file__
 
@@ -50,8 +50,8 @@ class WorkState(object):  # abstract base class
     def GetInvoke(self, device=None):
         if self._invokeFactory is None:
             return None
-        invoke = self._invokeFactory.DefaultDevice()
-        if device is not None:
+        invoke =  self._invokeFactory.DefaultDevice()
+        if not device is None:
             invoke = self._invokeFactory.Get(device)
         return invoke
 
@@ -61,7 +61,7 @@ class WorkState(object):  # abstract base class
 
     @property
     def Success(self):
-        return self._success
+        self._success
 
     @Success.setter
     def Success(self, val):
@@ -76,17 +76,17 @@ class WorkState(object):  # abstract base class
             self._invokeFactory = val.GetInvokeFactory()
             self._config = val._config
 
-    def Execute(self):
+    def Excute(self):
         try:
             self.DoWork()
         except Exception as e:
-            print("!!!! error at Execute, error %s" % str(e))
+            print("!!!! error at Excute, error %s" % str(e))
             self._success = False
         finally:
             EventHandler().callback(Consts.STATE_COMPLETE_EVENT, self)
 
     def LogMessage(self, msg):
-        print(msg)
+        print (msg)
         if self._outfile is not None:
             self._outfile.write(msg)
             self._outfile.flush()

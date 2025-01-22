@@ -20,19 +20,19 @@ import os as os
 from buildingblocks.utils import InvalidArgumentException
 
 '''
-    This class has been implemented using the Singleton design pattern
+    This class has bas been implemented using the Singleton designs pattern
 '''
 
 
 class AutomationLog(object):
-    _instanceAutomationLog = None
+    _instancePaeAutomationLog = None
 
     def __new__(cls, *args, **kwargs):
-        if not cls._instanceAutomationLog:
-            cls._instanceAutomationLog = super(AutomationLog, cls).__new__(cls)
+        if not cls._instancePaeAutomationLog:
+            cls._instancePaeAutomationLog = super(AutomationLog, cls).__new__(cls)
             cwd = os.getcwd()
             fileName = r'automation.log'
-            if len(args) > 0:
+            if args.__len__() > 0:
                 fileName = args[0] + '.log'
             cls._automationLogfile = os.path.join(cwd, fileName)
             logging.basicConfig(level=logging.DEBUG,
@@ -41,7 +41,7 @@ class AutomationLog(object):
                                 filename=cls._automationLogfile,
                                 filemode='a')
             cls._logDictionary = {}
-        return cls._instanceAutomationLog
+        return cls._instancePaeAutomationLog
 
 
     @classmethod
@@ -56,7 +56,7 @@ class AutomationLog(object):
 
     @classmethod
     def GetLogger(cls, name):
-        if not name:
+        if name is None or name == '':
             return None
 
         log = cls._logDictionary.get(name)
@@ -68,6 +68,7 @@ class AutomationLog(object):
 
     @classmethod
     def Close(cls):
+        #for key, log in cls._logDictionary.iteritems():
         for key in cls._logDictionary:
             log = cls._logDictionary[key]
             handlers = log.handlers[:]
@@ -78,8 +79,8 @@ class AutomationLog(object):
     @classmethod
     def TryAddConsole(cls, logname):
         try:
-            if not logname or logname not in cls._logDictionary:
-                raise InvalidArgumentException('Cannot find the log in dictionary.')
+            if logname is None or logname not in cls._logDictionary.keys():
+                raise InvalidArgumentException('Cannot find the log from dictionary.')
             console = logging.StreamHandler()
             console.setLevel(logging.INFO)
             formatter = cls.GetFormater()

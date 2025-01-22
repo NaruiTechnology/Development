@@ -1,0 +1,134 @@
+{
+    "IfwiBuild": {
+        "Input" : "c:/Temp",
+        "SourceBkcFileNamePattern" : "^((WLY)|(PLY)|(MEH)|(BKV)|(IDV)|(HAV))(.*)_(LBG_SPS.bin)$",
+        "ExtractedBiosImage" : "ExtractedBiosImage.bin",
+        "BKCBinaries" : "c:/Temp"
+    },
+    "Actions" : [
+        {
+            "verify_build_exists": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {}
+            }
+        },
+        {
+            "extract_bios_region": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                }
+            }
+        },
+        {
+            "parse_bios_region": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                }
+            }
+        },
+        {
+            "feed_local_binaries": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "RegionsMap":{
+                        "Microcode" : {
+                            "GUID" : "197DB236-F856-4924-90F8-CDF12FB875F3",
+                            "Method" : "RAW",
+                            "OutputFolder" : "Mcu",
+                            "OutputName" : "Microcode.bin"
+                        },
+                        "BIOSACM" : {
+                            "GUID" : "8A4B197F-1113-43D0-A23F-26F369B2B841",
+                            "Method" : "RawDATA",
+                            "OutputFolder" : "BiosAcm",
+                            "OutputName" : "BiosAcm.bin"
+                        },
+                        "SINIT" : {
+                            "GUID" : "BAC1001B-ECCC-40c6-990D-E8C19A8E477A",
+                            "Method" : "FREEFORM",
+                            "OutputFolder" : "Sinit",
+                            "OutputName" : "Sinit.bin"
+                        },
+                        "VMDDxeEfi" : {
+                            "GUID" : "02A6DE33-3EA9-4c17-8EA2-5681CC7AFDED",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "VMDDxeEfi",
+                            "OutputName" : "VMDDxeEfi.bin"
+                        },
+                        "RSTeSataRaidEfi" : {
+                            "GUID" : "EFE92A04-F5D0-4e44-8757-25B3AFA3BFFF",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "RSTeSataRaidEfi",
+                            "OutputName" : "RSTeSataRaidEfi.bin"
+                        },
+                        "RSTeSataEfi": {
+                            "GUID" : "15E1E31A-9F9D-4C84-82FB-1A707FC0F63B",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "RSTeSataEfi",
+                            "OutputName" : "RSTeSataEfi.bin"
+                        },
+                        "RSTesSataEfi" : {
+                            "GUID" : "B44B2005-42BC-41C9-80AF-ABD7DC7D6923",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "RSTesSataEfi",
+                            "OutputName" : "RSTesSataEfi.bin"
+                        },
+                        "10GNicEFI" : {
+                            "GUID" : "5C001692-066D-45B0-BB85-9C8BDF6C0845",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "10GNicEfi",
+                            "OutputName" : "10GNicEfi.bin"
+                        },
+                        "1GNicEFI": {
+                            "GUID" : "A1f436EA-A127-4EF8-957C-8048606FF670",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "1GNicEfi",
+                            "OutputName" : "1GNicEfi.bin"
+                        },
+                        "NvmDimmDriver" : {
+                            "GUID" : "9CE4325E-003E-11E3-B582-B8AC6F199A57",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "NvmDimmDriver",
+                            "OutputName" : "NvmDimmDriver.bin"
+                        },
+                        "NvmDimmHii" : {
+                            "GUID" : "EA9DE6D5-7839-46F7-9E63-4DE8B00E2E5D",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "NvmDimmHii",
+                            "OutputName" : "NvmDimmHii.bin"
+                        },
+                        "BiosGuard" : {
+                            "GUID" : "7934156D-CFCE-460e-92F5-A07909A59ECA",
+                            "Method" : "FREEFORM",
+                            "OutputFolder" : "BiosGuard",
+                            "OutputName" : "BiosGuard.bin"
+                        },
+                        "AspeedVideo" : {
+                            "GUID" : "81E4AD76-6A94-4d4f-A239-93FE2C4E79B0",
+                            "Method" : "DRIVER",
+                            "OutputFolder" : "AspeedVideo",
+                            "OutputName" : "AspeedVideo.bin"
+                        }
+                    },
+                    "DefaultGuid": {
+                        "BiosAcm" : "8A4B197F-1113-43D0-A23F-26F369B2B841"
+                    }
+                }
+            }
+        },
+        {
+            "cleanup": {
+                "skip": false,
+                "transactionComplete": true,
+                "actionData": {}
+            }
+        }
+    ],
+    "BuildOutputFilesPattern" : "(WLY)|(PLY)|(MEH)|(BKV)|(IDV)|(HAV)",
+    "LogName" : "BkcAutomation",
+    "OneTimeOnly" : true
+}
