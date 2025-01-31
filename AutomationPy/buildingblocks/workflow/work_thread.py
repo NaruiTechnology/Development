@@ -87,22 +87,23 @@ class WorkThread:#abstract base class
     def Setup(self, config):
         try:
             if config is not None:
-                s = config["timeout"]
+                s = config.get("timeout", None)
                 if s is not None and s.strip() != '':
                     self.SetTimeout(int(s))
                 clsname = [type(self).__name__.replace('thread', '')]
-                if clsname in config["log"].keys():
-                    logfileName = config["log"][clsname]
+                log_config = config.get("log", {})
+                if clsname in log_config.keys():
+                    logfileName = log_config[clsname]
                     if logfileName is not None and logfileName.strip() != '':
-                        logpath = config["log"]["path"]
-                        if logpath is not None and logpath != "current":
+                        logpath = log_config.get("path", "current")
+                        if logpath != "current":
                             logfileName = os.path.join(logpath, logfileName)
                         self.SetLogFileName(logfileName)
-                if config["recurring"] is not None:
-                        recurring = config["recurring"].strip()
-                        if recurring != '':
-                            self._recurringInterval = int(recurring, 16)
-        except:pass
+                recurring = config.get("recurring", '').strip()
+                if recurring != '':
+                    self._recurringInterval = int(recurring, 16)
+        except:
+            pass
 
     def Start(self):
         try:

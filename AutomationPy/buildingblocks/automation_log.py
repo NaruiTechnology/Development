@@ -68,9 +68,7 @@ class AutomationLog(object):
 
     @classmethod
     def Close(cls):
-        #for key, log in cls._logDictionary.iteritems():
-        for key in cls._logDictionary:
-            log = cls._logDictionary[key]
+        for key, log in cls._logDictionary.items():  # Simplified iteration
             handlers = log.handlers[:]
             for handler in handlers:
                 handler.close()

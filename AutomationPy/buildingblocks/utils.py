@@ -76,10 +76,10 @@ def GetLocalHostIP():
     return ip
 
 
-def Int2HexString(intVal, with0xprefix = True):
+def Int2HexString(intVal, with0xprefix=True):
     if with0xprefix:
         return '0x{:02X}'.format(intVal)
-    return '{:02X}',format(intVal)
+    return '{:02X}'.format(intVal)  # Fixed typo
 
 
 def EscapedHexdecimalConverter(key):
@@ -97,9 +97,7 @@ def EscapedHexdecimalConverter(key):
            u'\\x1b\\x01\\x00':'\x1b\x01\x00',
            u'\\x4E':'\x4E',
            u'\\x59':'\x59'}
-    if key in dic.keys():
-        return dic[key]
-    return None
+    return dic.get(key, None)  # Optimized using get method
 
 def IdGenerator(size = 32, chars=string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))

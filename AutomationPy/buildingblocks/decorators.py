@@ -42,7 +42,7 @@ def timeElapseTimer(func):
             if len(args) > 2 and args[2] is True:
                 timer.startTime = time.time()
             elapsedTime = time.time() - timer.startTime
-            if not (timeout > 0 and elapsedTime > timeout):
+            if timeout <= 0 or elapsedTime <= timeout:
                 timer.isTimeout = False
         return func(*args, **kwargs)
     timer.startTime = time.time()
