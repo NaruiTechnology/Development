@@ -51,7 +51,12 @@ class WorkThread:#abstract base class
         '''
         self._timeout = -1
         self._shutdownEvent = None
-
+        self._id = repr("WorkThread_" + util.IdGenerator())
+        
+    @property
+    def Id(self):
+        return self._id
+    
     @property
     def ShutdownEvent(self):
         return self._shutdownEvent

@@ -37,15 +37,17 @@ class WorkState(object):# abstract base class
 
     def __init__(self, *args, **kwargs):
         self._success = True
-        self._id = util.IdGenerator()
+        self._id = repr("WorkState_" + util.IdGenerator())
         self._parentWorkThread = None
-        self._manufactureId = None
         self._configTest = None
         self._outfile = None
         self._invokeFactory = None
 
-    def __str__(self):
-        return repr("WorkState_" + self._id)
+    # def __str__(self):
+    #     return repr("WorkState_" + self._id)
+    @property
+    def Id(self):
+        return self._id
 
     def GetInvoke(self, device=None):
         if self._invokeFactory is None:
