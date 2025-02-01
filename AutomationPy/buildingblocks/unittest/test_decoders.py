@@ -83,10 +83,10 @@ class test_decoders(TestCase, my_class_with_timeout_function):
         myderivedCls = myDerivedClass()
         conn = myderivedCls.SerialPortConnection
         conn2 = myderivedCls.SerialPortConnection
-        self.assertEquals(conn, conn2)
+        self.assertEqual(conn, conn2)
         myderivedCls.SerialPortConnection = conn2
         conn3 = conn2
-        self.assertEquals(conn, conn3)
+        self.assertEqual(conn, conn3)
         del myderivedCls.SerialPortConnection
 
     def test_overridsDecoraterSuccess(self):
@@ -106,17 +106,17 @@ class test_decoders(TestCase, my_class_with_timeout_function):
 
     def test_MessageBufferDecorater(self):
         myConcretClass = myDerivedClass()
-        self.assertEquals(0, len(myConcretClass.NotificationMessage.content))
+        self.assertEqual(0, len(myConcretClass.NotificationMessage.content))
         for x in range(0, 3):
             myConcretClass.NotificationMessage('Message_{}'.format(x))
-        self.assertEquals(3, len(myConcretClass.NotificationMessage.content))
+        self.assertEqual(3, len(myConcretClass.NotificationMessage.content))
 
     def test_callCount(self):
         print('\n')
         n = 3
         for i in range(0, n):
             print(self._greetings())
-        self.assertEquals(n, self._greetings.count)
+        self.assertEqual(n, self._greetings.count)
 
     @callCount
     @initializer
@@ -132,7 +132,7 @@ class test_decoders(TestCase, my_class_with_timeout_function):
         '''
         self._delay(delay)
         self._checkTimeout(timeout)
-        self.assertEquals(False, self._success)
+        self.assertEqual(False, self._success)
 
     def test_timeout_no(self):
         timeout = 10
@@ -140,7 +140,7 @@ class test_decoders(TestCase, my_class_with_timeout_function):
         self._checkTimeout(timeout, True)  # reset the timer
         self._delay(delay)
         self._checkTimeout(timeout)
-        self.assertEquals(True, self._success)
+        self.assertEqual(True, self._success)
 
     def _delay(self, timeout):
         start = time.time()
