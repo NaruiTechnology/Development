@@ -1,7 +1,9 @@
+# Install Glasgow Haskell Compiler
+# https://www.google.com/search?q=how+to+compile+and+run+Glasgow+on+windows+10&rlz=1C1UEAD_enUS1140US1140&oq=how+to+compile+and+run+Glasgow+on+windows+10&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigATIHCAIQIRigATIHCAMQIRigAdIBCTM0NzAyajBqN6gCALACAA&sourceid=chrome&ie=UTF-8
 import tkinter as tk
 from tkinter import ttk, filedialog
-from beam_scan_controller import BeamScanController
-from scan_pattern_generator import generate_raster_pattern
+from beam_scan_controller import BeamScanController, ScanPoint
+from GUI.scan_pattern_generator import * # generate_raster_pattern
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
@@ -142,7 +144,7 @@ class ScanGUI:
     #         self.ax.autoscale_view()
     #         self.canvas.draw()
     #         time.sleep(0.5)
-        def update_plot(self):
+    def update_plot(self):
         while self.running and not self.controller._stop_event.is_set():
             data = self.controller.scan_data
             reflections = [p.reflection_value for p in data if p.reflection_value > 0]
@@ -173,8 +175,6 @@ class ScanGUI:
 
             self.canvas.draw()
             time.sleep(0.5)
-
-
 
     def export_csv(self):
         if not self.controller.scan_data:

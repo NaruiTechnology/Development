@@ -1,11 +1,11 @@
-from glasgow.device import GlasgowDevice
-from glasgow.applet.interface import GlasgowAppletInterface
+from glasgow.software.glasgow.hardware.device import GlasgowDevice
+#TODO: from glasgow.software.glasgow.applet.interface import GlasgowAppletInterface
 
 class GlasgowScanInterface:
     def __init__(self):
         self.device = GlasgowDevice()
         self.device.open()
-        self.iface: GlasgowAppletInterface = self.device.instantiate_applet("ebeam-scan", args=[])
+        # TODO: self.iface: GlasgowAppletInterface = self.device.instantiate_applet("ebeam-scan", args=[])
 
     def send_scan_point(self, x, y, eV):
         # Placeholder for sending values to FPGA registers
