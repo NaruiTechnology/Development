@@ -136,14 +136,6 @@ class ScanGUI:
         self.running = False
         self.controller.stop_scan()
 
-    # def update_plot(self):
-    #     while self.running and not self.controller._stop_event.is_set():
-    #         reflections = [p.reflection_value for p in self.controller.scan_data if p.reflection_value > 0]
-    #         self.line.set_data(range(len(reflections)), reflections)
-    #         self.ax.relim()
-    #         self.ax.autoscale_view()
-    #         self.canvas.draw()
-    #         time.sleep(0.5)
     def update_plot(self):
         while self.running and not self.controller._stop_event.is_set():
             data = self.controller.scan_data
@@ -192,5 +184,6 @@ class ScanGUI:
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.configure(bg="dimgray")
     app = ScanGUI(root)
     root.mainloop()
