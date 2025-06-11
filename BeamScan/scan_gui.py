@@ -1,5 +1,17 @@
+
+# Requiremets to generate an electronic beam pattern scan for an electron microscope.  The requirements are listed below: 
+# 1. The Glasgow Interface Explore revC2 and its supported library/applets must be used.
+# 2. The applets and libraries of the Amaranth language are essential to this component
+# 3. Python must be used
+# 4. To use a Python class as the outlet is preferred.  The class should be implemented using the Singleton design pattern.
+# 5.  The data members of the scanning pattern-generating class must include:
+#      a) An array of data structure values.  The members of the data structure include: Electronic Volts, Z     axis value in float type,  a tuple of the eV value pairs (mapped to the 2-D x-y axis coordinate pairs i of the target sample area in the float type).
+#      b) The reflection values are read back in float type.
+# 6) Three callable functions are required: StarScan, PauseScan, StopScan. An event will be signaled when each function is called. 
+
 # Install Glasgow Haskell Compiler
 # https://www.google.com/search?q=how+to+compile+and+run+Glasgow+on+windows+10&rlz=1C1UEAD_enUS1140US1140&oq=how+to+compile+and+run+Glasgow+on+windows+10&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigATIHCAIQIRigATIHCAMQIRigAdIBCTM0NzAyajBqN6gCALACAA&sourceid=chrome&ie=UTF-8
+# pip install matplotlib
 import tkinter as tk
 from tkinter import ttk, filedialog
 from beam_scan_controller import BeamScanController, ScanPoint
@@ -52,6 +64,7 @@ class ScanGUI:
 
         self.start_button = ttk.Button(btn_frame, text="Start Scan", command=self.start_scan)
         self.start_button.grid(row=0, column=0, padx=5)
+        # self.start_button.pack(side=tk.LEFT, padx=5)
 
         self.pause_button = ttk.Button(btn_frame, text="Pause Scan", command=self.pause_scan)
         self.pause_button.grid(row=0, column=1, padx=5)
