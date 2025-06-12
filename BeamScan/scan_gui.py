@@ -1,4 +1,3 @@
-
 # Requiremets to generate an electronic beam pattern scan for an electron microscope.  The requirements are listed below: 
 # 1. The Glasgow Interface Explore revC2 and its supported library/applets must be used.
 # 2. The applets and libraries of the Amaranth language are essential to this component
@@ -59,25 +58,24 @@ class ScanGUI:
         root.geometry("700x1000")
 
         # Buttons
-        btn_frame = ttk.Frame(root)
+        btn_frame = tk.Frame(root, bg="dimgray")
         btn_frame.pack(pady=10)
 
-        self.start_button = ttk.Button(btn_frame, text="Start Scan", command=self.start_scan)
+        self.start_button = tk.Button(btn_frame, text="Start Scan", bg="green", fg="white", command=self.start_scan, font=("Arial", 12, "bold"), width=10)
         self.start_button.grid(row=0, column=0, padx=5)
-        # self.start_button.pack(side=tk.LEFT, padx=5)
-
-        self.pause_button = ttk.Button(btn_frame, text="Pause Scan", command=self.pause_scan)
+  
+        self.pause_button = tk.Button(btn_frame, text="Pause Scan", bg="gold", fg="black", command=self.pause_scan, font=("Arial", 12, "bold"), width=10)
         self.pause_button.grid(row=0, column=1, padx=5)
 
-        self.stop_button = ttk.Button(btn_frame, text="Stop Scan", command=self.stop_scan)
+        self.stop_button = tk.Button(btn_frame, text="Stop Scan", bg="red", fg="white", command=self.stop_scan, font=("Arial", 12, "bold"), width=10)
         self.stop_button.grid(row=0, column=2, padx=5)
 
-        self.export_button = ttk.Button(btn_frame, text="Export CSV", command=self.export_csv)
+        self.export_button = tk.Button(btn_frame, text="Export CSV", bg="gray", fg="white", command=self.export_csv)
         self.export_button.grid(row=0, column=3, padx=5)
 
         self.status = tk.StringVar()
         self.status.set("Ready")
-        self.status_label = ttk.Label(root, textvariable=self.status)
+        self.status_label = tk.Label(root, textvariable=self.status, bg="gray", fg="white", font=("Arial", 10), width=15)
         self.status_label.pack()
 
         # Matplotlib figure
@@ -89,7 +87,8 @@ class ScanGUI:
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=root)
         self.canvas_widget = self.canvas.get_tk_widget()
-        self.canvas_widget.pack(pady=10)
+        self.canvas_widget.pack(pady=20)
+
 
         self.running = False
 
@@ -102,7 +101,7 @@ class ScanGUI:
         self.ax_line.set_xlabel("Point Index")
         self.ax_line.set_ylabel("Reflection")
         self.line, = self.ax_line.plot([], [], 'b.-')
-
+        self.fig.subplots_adjust(hspace=0.8)  # Add vertical space between line and heatmap
         # Heatmap plot
         self.heatmap_data = None
         self.heatmap = self.ax_heatmap.imshow([[0]], cmap="inferno", origin="lower", interpolation="nearest")
