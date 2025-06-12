@@ -56,7 +56,7 @@ class ScanGUI:
         self.controller = BeamScanController()
 
         root.title("Electron Beam Scan Controller")
-        root.geometry("700x500")
+        root.geometry("700x1000")
 
         # Buttons
         btn_frame = ttk.Frame(root)
