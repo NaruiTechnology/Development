@@ -261,7 +261,7 @@ class ESMScanController:
                 
                 # Get reflection value
                 reflection = self._get_reflection_value(i, j)
-                reflection *= self.scanner.scale_to_ev  # Scale to eV
+                reflection *= self.scanner.scale_to_ev  # TODO: Scale to eV
 
                 # Persist reflection value in pattern_matrix
                 self.scanner.pattern_matrix[i, j, 2] = reflection
