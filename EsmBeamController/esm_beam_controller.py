@@ -8,55 +8,7 @@ import threading
 import time
 import queue
 
-class BeamScanner:
-    def __init__(self, x_start, y_start, width, height, step_size, dwell_time, scale_to_ev):
-        self.x_start = x_start
-        self.y_start = y_start
-        self.width = width
-        self.height = height
-        self.step_size = step_size
-        self.dwell_time = dwell_time
-        self.scale_to_ev = scale_to_ev
-        
-        # Calculate matrix dimensions
-        self.rows = int(height / step_size)
-        self.cols = int(width / step_size)
-        # pattern_matrix now has 3 values: x_ev, y_ev, reflection
-        self.pattern_matrix = self._generate_scan_pattern()
-        
-    def _generate_scan_pattern(self):
-        # Add a third channel for reflection value (init to 0)
-        matrix = np.zeros((self.rows, self.cols, 3), dtype=np.float32)
-        
-        for y_index in range(self.rows):
-            y_pos = self.y_start + y_index * self.step_size
-            
-            if y_index % 2 == 0:  # Even rows: left-to-right
-                for x_index in range(self.cols):
-                    x_pos = self.x_start + x_index * self.step_size
-                    x_ev, y_ev = self._convert_to_ev(x_pos, y_pos)
-                    matrix[y_index, x_index, 0] = x_ev
-                    matrix[y_index, x_index, 1] = y_ev
-                    matrix[y_index, x_index, 2] = 0.0  # reflection value placeholder
-            else:  # Odd rows: right-to-left
-                for x_index in range(self.cols-1, -1, -1):
-                    x_pos = self.x_start + x_index * self.step_size
-                    x_ev, y_ev = self._convert_to_ev(x_pos, y_pos)
-                    matrix[y_index, x_index, 0] = x_ev
-                    matrix[y_index, x_index, 1] = y_ev
-                    matrix[y_index, x_index, 2] = 0.0  # reflection value placeholder
-        return matrix
-    
-    def _convert_to_ev(self, x, y):
-        # print("(x = {}, Y = {})".format(x, y))
-        return (x * self.scale_to_ev, y * self.scale_to_ev)
-    
-    def get_scan_dimensions(self):
-        return (self.rows, self.cols)
-    
-    def get_pattern_matrix(self):
-        return self.pattern_matrix
-
+from BeamScanner import BeamScanner
 
 class ESMScanController:
     def __init__(self, root):
