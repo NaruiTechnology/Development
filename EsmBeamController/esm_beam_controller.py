@@ -21,10 +21,12 @@ class BeamScanner:
         # Calculate matrix dimensions
         self.rows = int(height / step_size)
         self.cols = int(width / step_size)
+        # pattern_matrix now has 3 values: x_ev, y_ev, reflection
         self.pattern_matrix = self._generate_scan_pattern()
         
     def _generate_scan_pattern(self):
-        matrix = np.zeros((self.rows, self.cols, 2), dtype=np.float32)
+        # Add a third channel for reflection value (init to 0)
+        matrix = np.zeros((self.rows, self.cols, 3), dtype=np.float32)
         
         for y_index in range(self.rows):
             y_pos = self.y_start + y_index * self.step_size
@@ -32,14 +34,17 @@ class BeamScanner:
             if y_index % 2 == 0:  # Even rows: left-to-right
                 for x_index in range(self.cols):
                     x_pos = self.x_start + x_index * self.step_size
-                    matrix[y_index, x_index] = self._convert_to_ev(x_pos, y_pos)
-                    print(matrix[y_index, x_index])
+                    x_ev, y_ev = self._convert_to_ev(x_pos, y_pos)
+                    matrix[y_index, x_index, 0] = x_ev
+                    matrix[y_index, x_index, 1] = y_ev
+                    matrix[y_index, x_index, 2] = 0.0  # reflection value placeholder
             else:  # Odd rows: right-to-left
                 for x_index in range(self.cols-1, -1, -1):
                     x_pos = self.x_start + x_index * self.step_size
-                    matrix[y_index, x_index] = self._convert_to_ev(x_pos, y_pos)
-                    print(matrix[y_index, x_index])
-
+                    x_ev, y_ev = self._convert_to_ev(x_pos, y_pos)
+                    matrix[y_index, x_index, 0] = x_ev
+                    matrix[y_index, x_index, 1] = y_ev
+                    matrix[y_index, x_index, 2] = 0.0  # reflection value placeholder
         return matrix
     
     def _convert_to_ev(self, x, y):
@@ -245,7 +250,7 @@ class ESMScanController:
                     break
                 
                 # Get position in eV
-                x_ev, y_ev = pattern[i, j]
+                x_ev, y_ev = pattern[i, j, 0], pattern[i, j, 1]
                 
                 # Send to hardware if connected
                 if self.hardware_enabled:
@@ -256,9 +261,17 @@ class ESMScanController:
                 
                 # Get reflection value
                 reflection = self._get_reflection_value(i, j)
+                reflection *= self.scanner.scale_to_ev  # Scale to eV
+
+                # Persist reflection value in pattern_matrix
+                self.scanner.pattern_matrix[i, j, 2] = reflection
+                print(f"({i}, {j}) - X: {x_ev:.2f} eV, Y: {y_ev:.2f} eV, Reflection: {reflection: .2f} eV")
                 
                 # Update visualization
                 self.update_queue.put((i, j, reflection))
+                
+        # print("--- Print reflection to matrix.")
+        # print(self.scanner.pattern_matrix)
         
         self.scan_active = False
         self.root.after(0, self._reset_ui_state)
