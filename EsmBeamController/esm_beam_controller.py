@@ -33,14 +33,17 @@ class BeamScanner:
                 for x_index in range(self.cols):
                     x_pos = self.x_start + x_index * self.step_size
                     matrix[y_index, x_index] = self._convert_to_ev(x_pos, y_pos)
+                    print(matrix[y_index, x_index])
             else:  # Odd rows: right-to-left
                 for x_index in range(self.cols-1, -1, -1):
                     x_pos = self.x_start + x_index * self.step_size
                     matrix[y_index, x_index] = self._convert_to_ev(x_pos, y_pos)
-                    
+                    print(matrix[y_index, x_index])
+
         return matrix
     
     def _convert_to_ev(self, x, y):
+        # print("(x = {}, Y = {})".format(x, y))
         return (x * self.scale_to_ev, y * self.scale_to_ev)
     
     def get_scan_dimensions(self):
