@@ -1,6 +1,8 @@
 import asyncio
 import logging
 from glasgow.hardware.device import GlasgowDevice
+# from glasgow.software.glasgow.hardware.device import GlasgowDeviceTransport
+# TODO from glasgow.support.usbtransport import GlasgowDeviceTransport
 import usb1 as usb
 
 class GlasgowUARTController:
@@ -15,8 +17,8 @@ class GlasgowUARTController:
         self._logger = logging.getLogger(__name__)  
 
     async def connect(self):
-        self.transport = await usb.USBTransfer() # GlassgowDeviceTransport.acquire()
-        self.device = GlasgowDevice(self.transport)
+        # TODO: self.transport = await GlasgowDeviceTransport.acquire() # usb.USBTransfer() # GlassgowDeviceTransport.acquire()
+        self.device = GlasgowDevice() # TODO:GlasgowDevice(self.transport)
         await self.device.allocate()
         await self.device.run()
 
