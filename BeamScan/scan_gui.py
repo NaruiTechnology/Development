@@ -21,7 +21,7 @@ import threading
 import time
 import csv
 
-from GlasgowScanInterface import *
+# from GlasgowScanInterface import *
 
 class ScanGUI:
     def __init__(self, root):
@@ -39,7 +39,7 @@ class ScanGUI:
         self.y_max_var = tk.DoubleVar(value=0.5)
         self.step_var = tk.DoubleVar(value=0.1)
 
-        self.g_interface = GlasgowScanInterface()
+        # self.g_interface = GlasgowScanInterface()
 
         entries = [
             ("eV", self.ev_var),
