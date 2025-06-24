@@ -60,7 +60,6 @@ class ScanVisualizer(QtWidgets.QWidget):
         self.step_input.setRange(1, 500)
         self.step_input.setValue(step)
         self.step_input.setPrefix("Step (microns): ")
-        # self.step_input.setStyleSheet("background-color: blue; color: white;")
         self.input_layout.addWidget(self.step_input)
 
         self.dwell_input = QtWidgets.QDoubleSpinBox()
@@ -73,6 +72,21 @@ class ScanVisualizer(QtWidgets.QWidget):
         self.apply_btn = QtWidgets.QPushButton("Apply")
         self.input_layout.addWidget(self.apply_btn)
         self.apply_btn.clicked.connect(self.apply_parameters)
+
+        # --- Add scan control buttons ---
+        self.start_btn = QtWidgets.QPushButton("Start Scan")
+        self.start_btn.setStyleSheet("background-color: green; color: black;")
+        self.pause_btn = QtWidgets.QPushButton("Pause Scan")
+        self.pause_btn.setStyleSheet("background-color: gold; color: black;")
+        self.stop_btn = QtWidgets.QPushButton("Stop Scan")
+        self.stop_btn.setStyleSheet("background-color: red; color: black;")
+
+        self.input_layout.addWidget(self.start_btn)
+        self.input_layout.addWidget(self.pause_btn)
+        self.input_layout.addWidget(self.stop_btn)
+        self.start_btn.clicked.connect(self.start_scan)
+        self.pause_btn.clicked.connect(self.pause_scan)
+        self.stop_btn.clicked.connect(self.stop_scan)
 
         # Layout for the widget
         self.main_layout = QtWidgets.QVBoxLayout(self)
@@ -184,6 +198,23 @@ class ScanVisualizer(QtWidgets.QWidget):
         fname = f"beam_scan_snapshot.png"
         pixmap.save(fname)
         print(f"Saved snapshot: {fname}")
+        
+    def start_scan(self):
+        self.paused = False
+        self.x = 0
+        self.y = 0
+        self.scan_data.clear()
+        self.timer.start(30)
+
+    def pause_scan(self):
+        self.paused = True
+
+    def stop_scan(self):
+        self.paused = True
+        self.x = 0
+        self.y = 0
+        self.scan_data.clear()
+        self.update()
         
 if __name__ == "__main__":
     import sys
