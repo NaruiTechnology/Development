@@ -13,6 +13,7 @@ class ScanVisualizer(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("Beam Scan Visualization")
         self.setMinimumSize(400, 400)
+        self.setStyleSheet("background-color: white;")
 
         self.width = width
         self.height = height
@@ -54,15 +55,15 @@ class ScanVisualizer(QtWidgets.QWidget):
             randVal =  random.randint(0, 99)
             intensity = int(
                 255 * ((self.x / self.width) * 0.5 + (self.y / self.height) * 0.5)
-                * (0.8 + 0.2 * (0.5 + 0.5 * randVal)) #QtCore.qrand()))
+                * (0.8 + 0.2 * (0.5 + 0.5 * randVal))
             )
             intensity = max(0, min(255, intensity))
 
             self.scan_data.append((self.x, self.y, intensity))
             if len(self.scan_data) > 10000:
                 self.scan_data.pop(0)
-
             self.update()
+            
         except Exception as e:
             logger.error(f"Error updating scan: {e}")
 
@@ -78,7 +79,8 @@ class ScanVisualizer(QtWidgets.QWidget):
                 # py = (y * self.zoom) + self.offset.y()
                 px = x + self.offset.x()
                 py = y + self.offset.y()
-                color = QtGui.QColor(intensity, intensity//2, 255 - intensity)
+                # color = QtGui.QColor(intensity, intensity//2, 255 - intensity)
+                color = QtCore.Qt.GlobalColor.white
                 painter.setPen(color)
                 painter.drawPoint(px, py)
         except Exception as e:
@@ -133,7 +135,8 @@ if __name__ == "__main__":
     import sys
     try:
         app = QtWidgets.QApplication(sys.argv)
-        visualizer = ScanVisualizer(1000, 1000, 10, 100)
+        app.setStyleSheet("QWidget { background-color: white; }")
+        visualizer = ScanVisualizer(width=1000, height=1000, step=5, dwell=0.5)
         visualizer.show()
         sys.exit(app.exec())        
     except Exception as e:
