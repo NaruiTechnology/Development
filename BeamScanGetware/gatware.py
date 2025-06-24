@@ -1,6 +1,6 @@
 from amaranth import *
 
-class Getware(Elaboratable):
+class Gatware(Elaboratable):
     def __init__(self, bit_width=8):
         self.x = Signal(bit_width)
         self.y = Signal(bit_width)
