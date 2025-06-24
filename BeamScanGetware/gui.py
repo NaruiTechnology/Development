@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ScanVisualizer(QtWidgets.QWidget):
-    def __init__(self, width, height, step, dwell):
+    def __init__(self, width, height, step, dwell, dryRun=True):
         super().__init__()
         self.setWindowTitle("Beam Scan Visualization")
         self.setMinimumSize(400, 400)
@@ -26,10 +26,11 @@ class ScanVisualizer(QtWidgets.QWidget):
         self.is_panning = False
         self.last_pos = None
         self.paused = False
+        self.dryRun = dryRun
 
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_scan)
-        self.timer.start(30)  # ~33 FPS
+        # self.timer.start(30)  # ~33 FPS
 
         self.x = 0
         self.y = 0
@@ -159,7 +160,9 @@ class ScanVisualizer(QtWidgets.QWidget):
         painter.drawText(10, 20, f"X: {self.x}  Y: {self.y}  Dwell: {self.dwell}")
 
         if self.paused:
-            painter.drawText(10, 40, "Paused (Spacebar to resume)")
+            # TODO: painter.drawText(10, 40, "Paused (Spacebar to resume)")
+            painter.drawText(10, 40, "Scan stopped.")
+
 
     # def wheelEvent(self, event): # Uncomment to enable zooming with mouse wheel
     #     delta = event.angleDelta().y() / 120  # steps of wheel
@@ -204,16 +207,20 @@ class ScanVisualizer(QtWidgets.QWidget):
         self.x = 0
         self.y = 0
         self.scan_data.clear()
-        self.timer.start(30)
+        if self.dryRun:
+            self.timer.start(30)
 
     def pause_scan(self):
-        self.paused = True
+        # self.paused = True
+        self.paused = not self.paused
 
     def stop_scan(self):
         self.paused = True
-        self.x = 0
-        self.y = 0
-        self.scan_data.clear()
+        if self.timer.isActive():
+            self.timer.stop()
+        # self.x = 0
+        # self.y = 0
+        # self.scan_data.clear()
         self.update()
         
 if __name__ == "__main__":
@@ -221,7 +228,7 @@ if __name__ == "__main__":
     try:
         app = QtWidgets.QApplication(sys.argv)
         app.setStyleSheet("QWidget { background-color: white; }")
-        visualizer = ScanVisualizer(width=1000, height=1000, step=5, dwell=0.5)
+        visualizer = ScanVisualizer(width=1000, height=1000, step=5, dwell=0.5, dryRun=True)
         visualizer.show()
         sys.exit(app.exec())
     except Exception as e:
