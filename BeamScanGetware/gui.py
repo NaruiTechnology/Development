@@ -15,6 +15,7 @@ class ScanVisualizer(QtWidgets.QWidget):
         self.setMinimumSize(400, 400)
         self.setStyleSheet("background-color: white;")
 
+        # --- Existing scan parameters ---
         self.width = width
         self.height = height
         self.step = step
@@ -36,6 +37,59 @@ class ScanVisualizer(QtWidgets.QWidget):
         self.scan_data = []
 
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+
+        # --- Add input widgets for parameters (moved to bottom) ---
+        self.input_panel = QtWidgets.QWidget(self)
+        self.input_panel.setStyleSheet("background-color: dimgray; color: white;")
+        self.input_layout = QtWidgets.QHBoxLayout(self.input_panel)
+        self.input_panel.setFixedHeight(50)
+
+        self.width_input = QtWidgets.QSpinBox()
+        self.width_input.setRange(10, 5000)
+        self.width_input.setValue(width)
+        self.width_input.setPrefix("Width (microns): ")
+        self.input_layout.addWidget(self.width_input)
+
+        self.height_input = QtWidgets.QSpinBox()
+        self.height_input.setRange(10, 5000)
+        self.height_input.setValue(height)
+        self.height_input.setPrefix("Height: ")
+        self.input_layout.addWidget(self.height_input)
+
+        self.step_input = QtWidgets.QSpinBox()
+        self.step_input.setRange(1, 500)
+        self.step_input.setValue(step)
+        self.step_input.setPrefix("Step (microns): ")
+        # self.step_input.setStyleSheet("background-color: blue; color: white;")
+        self.input_layout.addWidget(self.step_input)
+
+        self.dwell_input = QtWidgets.QDoubleSpinBox()
+        self.dwell_input.setRange(0.01, 10.0)
+        self.dwell_input.setSingleStep(0.01)
+        self.dwell_input.setValue(dwell)
+        self.dwell_input.setPrefix("Dwell(ms): ")
+        self.input_layout.addWidget(self.dwell_input)
+
+        self.apply_btn = QtWidgets.QPushButton("Apply")
+        self.input_layout.addWidget(self.apply_btn)
+        self.apply_btn.clicked.connect(self.apply_parameters)
+
+        # Layout for the widget
+        self.main_layout = QtWidgets.QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        # The scan area will be drawn in the remaining space
+        self.main_layout.addStretch(1)  # Add stretch to push input_panel to bottom
+        self.main_layout.addWidget(self.input_panel)
+
+    def apply_parameters(self):
+        self.width = self.width_input.value()
+        self.height = self.height_input.value()
+        self.step = self.step_input.value()
+        self.dwell = self.dwell_input.value()
+        self.x = 0
+        self.y = 0
+        self.scan_data.clear()
+        self.update()
 
     def update_scan(self):
         if self.paused:
@@ -138,6 +192,6 @@ if __name__ == "__main__":
         app.setStyleSheet("QWidget { background-color: white; }")
         visualizer = ScanVisualizer(width=1000, height=1000, step=5, dwell=0.5)
         visualizer.show()
-        sys.exit(app.exec())        
+        sys.exit(app.exec())
     except Exception as e:
         print(f"Error: {e}")
