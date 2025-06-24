@@ -161,28 +161,28 @@ class ScanVisualizer(QtWidgets.QWidget):
         if self.paused:
             painter.drawText(10, 40, "Paused (Spacebar to resume)")
 
-    def wheelEvent(self, event):
-        delta = event.angleDelta().y() / 120  # steps of wheel
-        factor = 1.1 ** delta
-        self.zoom = max(1, min(20, self.zoom * factor))
-        self.update()
+    # def wheelEvent(self, event): # Uncomment to enable zooming with mouse wheel
+    #     delta = event.angleDelta().y() / 120  # steps of wheel
+    #     factor = 1.1 ** delta
+    #     self.zoom = max(1, min(20, self.zoom * factor))
+    #     self.update()
 
-    def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.MouseButton.LeftButton:
-            self.is_panning = True
-            self.last_pos = event.pos()
+    # def mousePressEvent(self, event):
+    #     if event.button() == QtCore.Qt.MouseButton.LeftButton:
+    #         self.is_panning = True
+    #         self.last_pos = event.pos()
 
-    def mouseMoveEvent(self, event):
-        if self.is_panning and self.last_pos:
-            delta = event.pos() - self.last_pos
-            self.offset += delta
-            self.last_pos = event.pos()
-            self.update()
+    # def mouseMoveEvent(self, event):
+    #     if self.is_panning and self.last_pos:
+    #         delta = event.pos() - self.last_pos
+    #         self.offset += delta
+    #         self.last_pos = event.pos()
+    #         self.update()
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == QtCore.Qt.MouseButton.LeftButton:
-            self.is_panning = False
-            self.last_pos = None
+    # def mouseReleaseEvent(self, event):
+    #     if event.button() == QtCore.Qt.MouseButton.LeftButton:
+    #         self.is_panning = False
+    #         self.last_pos = None
 
     def keyPressEvent(self, event):
         key = event.key()

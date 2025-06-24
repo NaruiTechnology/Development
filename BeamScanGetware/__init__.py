@@ -1,77 +1,77 @@
-import argparse
-import asyncio
-from amaranth import *
-from glasgow import applet
-from BeamScanGetware.getware import ScanPatternGenerator
+# import argparse
+# import asyncio
+# from amaranth import *
+# from glasgow import applet
+# from BeamScanGetware.getware import ScanPatternGenerator
 
-try:
-    from PyQt6 import QtWidgets, QtGui, QtCore
-    from gui import ScanVisualizer
-except ImportError:
-    QtWidgets = None  # Visualization disabled
-    ScanVisualizer = None  # Visualization disabled
+# try:
+#     from PyQt6 import QtWidgets, QtGui, QtCore
+#     from gui import ScanVisualizer
+# except ImportError:
+#     QtWidgets = None  # Visualization disabled
+#     ScanVisualizer = None  # Visualization disabled
 
 
-class BeamScanApplet(applet.GlasgowApplet):
-    help = "Output 2D beam scan pattern over GPIO with visualization"
-    description = "Controls GPIO DAC output for electron beam scanning with real-time PyQt6 UI"
+# class BeamScanApplet(applet.GlasgowApplet):
+#     help = "Output 2D beam scan pattern over GPIO with visualization"
+#     description = "Controls GPIO DAC output for electron beam scanning with real-time PyQt6 UI"
 
-    @classmethod
-    def add_arguments(cls, parser: argparse.ArgumentParser):
-        parser.add_argument("--x-start", type=int, default=0, help="X start coordinate")
-        parser.add_argument("--y-start", type=int, default=0, help="Y start coordinate")
-        parser.add_argument("--width", type=int, required=True, help="Scan width")
-        parser.add_argument("--height", type=int, required=True, help="Scan height")
-        parser.add_argument("--step", type=int, default=1, help="Step size")
-        parser.add_argument("--dwell", type=int, default=100, help="Dwell time (clock cycles)")
-        parser.add_argument("--visualize", action="store_true", help="Enable PyQt6 visualization")
+#     @classmethod
+#     def add_arguments(cls, parser: argparse.ArgumentParser):
+#         parser.add_argument("--x-start", type=int, default=0, help="X start coordinate")
+#         parser.add_argument("--y-start", type=int, default=0, help="Y start coordinate")
+#         parser.add_argument("--width", type=int, required=True, help="Scan width")
+#         parser.add_argument("--height", type=int, required=True, help="Scan height")
+#         parser.add_argument("--step", type=int, default=1, help="Step size")
+#         parser.add_argument("--dwell", type=int, default=100, help="Dwell time (clock cycles)")
+#         parser.add_argument("--visualize", action="store_true", help="Enable PyQt6 visualization")
 
-    def build(self, target, args):
-        m = Module()
-        scan = ScanPatternGenerator()
+#     def build(self, target, args):
+#         m = Module()
+#         scan = ScanPatternGenerator()
 
-        m.submodules.scan = scan
+#         m.submodules.scan = scan
 
-        m.d.comb += [
-            scan.enable.eq(1),
-            scan.dwell_time.eq(args.dwell),
-            scan.x_start.eq(args.x_start),
-            scan.y_start.eq(args.y_start),
-            scan.x_range.eq(args.width),
-            scan.y_range.eq(args.height),
-            scan.step.eq(args.step),
-        ]
+#         m.d.comb += [
+#             scan.enable.eq(1),
+#             scan.dwell_time.eq(args.dwell),
+#             scan.x_start.eq(args.x_start),
+#             scan.y_start.eq(args.y_start),
+#             scan.x_range.eq(args.width),
+#             scan.y_range.eq(args.height),
+#             scan.step.eq(args.step),
+#         ]
 
-        # Output X to GPIO Bank A (A0-A7)
-        target.add_subsignal("bank_a", scan.x)
-        # Output Y to GPIO Bank B (B0-B7)
-        target.add_subsignal("bank_b", scan.y)
+#         # Output X to GPIO Bank A (A0-A7)
+#         target.add_subsignal("bank_a", scan.x)
+#         # Output Y to GPIO Bank B (B0-B7)
+#         target.add_subsignal("bank_b", scan.y)
 
-        return m
+#         return m
 
-    async def run(self, device, args):
-        # Visualization run if requested and PyQt6 available
-        if args.visualize and QtWidgets is not None:
-            await self.run_visualization(args)
-        else:
-            print("Scan started without visualization.")
-            await asyncio.sleep(10)  # Dummy wait, replace with actual control if needed
+#     async def run(self, device, args):
+#         # Visualization run if requested and PyQt6 available
+#         if args.visualize and QtWidgets is not None:
+#             await self.run_visualization(args)
+#         else:
+#             print("Scan started without visualization.")
+#             await asyncio.sleep(10)  # Dummy wait, replace with actual control if needed
 
-    async def run_visualization(self, args):
-        app = QtWidgets.QApplication([])
+#     async def run_visualization(self, args):
+#         app = QtWidgets.QApplication([])
 
-        window = ScanVisualizer(
-            width=args.width,
-            height=args.height,
-            step=args.step,
-            dwell=args.dwell,
-        )
-        window.show()
+#         window = ScanVisualizer(
+#             width=args.width,
+#             height=args.height,
+#             step=args.step,
+#             dwell=args.dwell,
+#         )
+#         window.show()
 
-        # Run Qt event loop alongside asyncio
-        loop = asyncio.get_event_loop()
-        qt_future = loop.run_in_executor(None, app.exec)
-        await qt_future
+#         # Run Qt event loop alongside asyncio
+#         loop = asyncio.get_event_loop()
+#         qt_future = loop.run_in_executor(None, app.exec)
+#         await qt_future
 
 
 # class ScanVisualizer(QtWidgets.QWidget):
