@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import threading
+import random
 import time
 
 from BeamScanner import BeamScanner
@@ -155,6 +156,8 @@ class ESMScanController(QMainWindow):
         # Prepare scatter data arrays (preallocate for all points)
         x_vals = pattern[:, :, 0].flatten()
         y_vals = pattern[:, :, 1].flatten()
+        self.x_vals = x_vals
+        self.y_vals = y_vals
         x_min, x_max = np.min(x_vals), np.max(x_vals)
         y_min, y_max = np.min(y_vals), np.max(y_vals)
         self.scatter_ax.clear()
@@ -174,9 +177,6 @@ class ESMScanController(QMainWindow):
             for j in j_range:
                 if self.stop_requested:
                     break
-
-                while self.scan_paused: 
-                    time.sleep(0.1)
 
                 x_ev, y_ev = pattern[i, j, 0], pattern[i, j, 1]
 
@@ -209,9 +209,26 @@ class ESMScanController(QMainWindow):
     def _send_to_glasgow(self, x_ev, y_ev):
         pass  # Hardware integration placeholder
 
-    def _get_reflection_value(self, i, j):
-        # This function is kept for compatibility, but not used for heatmap anymore
-        return 0
+    def _get_reflection_value(self, i=None, j=None):
+        # Simulate beam intensity with decay and noise
+        randVal = random.randint(0, 99)
+        width = float(self.entries['Width'].text())
+        height = float(self.entries['Height'].text())
+        width = width if width != 0 else 1
+        height = height if height != 0 else 1
+
+        # Always use i, j for point-wise calculation
+        if i is not None and j is not None:
+            x = i / width
+            y = j / height
+            intensity = int(
+                255 * ((x * 0.5 + y * 0.5) * (0.8 + 0.2 * (0.5 + 0.5 * randVal)))
+            )
+            intensity = max(0, min(255, intensity))
+            return intensity
+        else:
+            # Fallback: return 0 if no indices provided
+            return 0
 
 def main():
     app = QApplication(sys.argv)
