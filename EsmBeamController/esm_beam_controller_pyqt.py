@@ -211,7 +211,7 @@ class ESMScanController(QMainWindow):
 
     def _get_reflection_value(self, i=None, j=None):
         # Simulate beam intensity with decay and noise
-        randVal = random.randint(0, 99)
+        randVal = random.randint(0, 9)
         width = float(self.entries['Width'].text())
         height = float(self.entries['Height'].text())
         width = width if width != 0 else 1
