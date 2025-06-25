@@ -7,6 +7,11 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import time
 import queue
+import logging
+from glasgow.hardware.device import GlasgowDevice
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from BeamScanner import BeamScanner
 
@@ -121,17 +126,25 @@ class ESMScanController:
         }
     
     def connect_hardware(self):
-        """Simulate hardware connection - would be implemented with Glasgow API"""
-        self.hardware_enabled = True
-        self.connect_btn.config(text="Hardware Connected", state=tk.DISABLED)
-        print("Glasgow hardware connected")
-        
-        # In a real implementation:
-        # self.device = GlasgowDevice().acquire()
-        # self.dac = DACApplet(self.device)
-        # self.dac.build()
-        # self.dac.start(...)
-    
+        try:
+            self.device = GlasgowDevice().safe_open()
+            self.device.set_gpio_direction("port-a", 0xFF)
+            self.device.set_gpio_direction("port-b", 0xFF)
+            self.hardware_enabled = True
+            self.connect_btn.setText("Hardware Connected")
+            self.connect_btn.setEnabled(False)
+            self.hardware_enabled = True
+            self.connect_btn.config(text="Hardware Connected", state=tk.DISABLED)
+            print("Glasgow hardware connected")
+            
+            # In a real implementation:
+            # self.device = GlasgowDevice().acquire()
+            # self.dac = DACApplet(self.device)
+            # self.dac.build()
+            # self.dac.start(...)
+        except Exception as e:
+            logging.error(f"Error connecting to hardware: {e}")
+
     def start_scan(self):
         """Start a new scanning thread"""
         if self.scan_active:
@@ -243,6 +256,14 @@ class ESMScanController:
         # self.dac.set_voltage(0, volts_x)  # Channel 0 = X-axis
         # self.dac.set_voltage(1, volts_y)  # Channel 1 = Y-axis
         # self._trigger_beam_deflection()
+        if self.hardware_enabled and hasattr(self, 'device'):
+            x_val = int(np.clip(x_ev / self.scanner.scale_to_ev, 0, 255))
+            y_val = int(np.clip(y_ev / self.scanner.scale_to_ev, 0, 255))
+
+            # Send the digital PWM duty cycle values
+            self.device.set_gpio("port-a", x_val)
+            self.device.set_gpio("port-b", y_val)
+            self.device.flush()
         pass
 
     def _ev_to_volts(self, ev_value, axis):

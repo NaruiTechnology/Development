@@ -1,0 +1,24 @@
+name: pwm-dac
+title: Dual-channel PWM DAC Output
+version: 0.1
+author: Henry Li
+type: interface
+platforms: [glasgow]
+inputs: []
+outputs:
+  - io:
+      width: 2
+      dir: o
+      default: 0
+description: |
+  Outputs 8-bit PWM signals on 2 GPIO pins to emulate analog voltages.
+  Use RC filters to smooth signals for controlling analog hardware.
+
+build-args:
+  - name: --bit-width
+    type: int
+    default: 8
+    description: PWM resolution (in bits)
+
+depends:
+  - amaranth
