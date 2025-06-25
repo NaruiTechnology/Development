@@ -159,13 +159,13 @@ class ESMScanController(QMainWindow):
         y_min, y_max = np.min(y_vals), np.max(y_vals)
         self.scatter_ax.clear()
         self.scatter_ax.set_facecolor('white')
-        self.scatter_ax.set_title("Pattern Matrix Scatter Map")
+        # self.scatter_ax.set_title("Pattern Matrix Scatter Map")
         self.scatter_ax.set_xlabel("X (eV)")
         self.scatter_ax.set_ylabel("Y (eV)")
         self.scatter_ax.set_xlim(x_min, x_max)
         self.scatter_ax.set_ylim(y_max, y_min)
         self.scatter_ax.set_aspect('equal')
-        self._scatter_plot = self.scatter_ax.scatter([], [], c='black', s=10, edgecolors='none')
+        self._scatter_plot = self.scatter_ax.scatter([], [], c='gray', s=10, edgecolors='none')
         self.scatter_canvas.draw_idle()
         self.scatter_points = []
         idx = 0
@@ -175,8 +175,8 @@ class ESMScanController(QMainWindow):
                 if self.stop_requested:
                     break
 
-                while self.scan_paused and not self.stop_requested:
-                    time.sleep(1)
+                while self.scan_paused: 
+                    time.sleep(0.1)
 
                 x_ev, y_ev = pattern[i, j, 0], pattern[i, j, 1]
 
