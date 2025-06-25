@@ -70,7 +70,7 @@ class ESMScanController(QMainWindow):
         vis_panel_layout = QHBoxLayout(vis_panel)
 
         # Scatter map group
-        scatter_group = QGroupBox("Pattern Matrix Scatter Map")
+        scatter_group = QGroupBox("Pattern Scan Map")
         scatter_layout = QVBoxLayout()
         self.scatter_fig, self.scatter_ax = plt.subplots(figsize=(6, 5))
         self.scatter_canvas = FigureCanvas(self.scatter_fig)
