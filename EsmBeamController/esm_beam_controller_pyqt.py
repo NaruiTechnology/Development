@@ -3,8 +3,10 @@ import numpy as np
 import threading
 import random
 import time
+import asyncio
 
 from BeamScanner import BeamScanner
+from BeamScanner.glasgow_uart_io import GlasgowUARTController
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -22,6 +24,7 @@ class ESMScanController(QMainWindow):
         self.scan_paused = False
         self.stop_requested = False
         self.hardware_enabled = False
+        self.uart_controller = None
         self.update_queue = []
         self._init_ui()
         self.timer = QTimer()
@@ -32,7 +35,6 @@ class ESMScanController(QMainWindow):
         main_widget = QWidget()
         main_layout = QVBoxLayout()
 
-        # --- Input panel: arrange all input widgets horizontally ---
         self.entries = {}
         input_panel = QWidget()
         input_layout = QHBoxLayout(input_panel)
@@ -48,7 +50,6 @@ class ESMScanController(QMainWindow):
             input_layout.addWidget(le)
         main_layout.addWidget(input_panel)
 
-        # --- Control buttons ---
         btn_layout = QHBoxLayout()
         self.start_btn = QPushButton("Start Scan")
         self.start_btn.clicked.connect(self.start_scan)
@@ -66,11 +67,9 @@ class ESMScanController(QMainWindow):
         btn_layout.addWidget(self.connect_btn)
         main_layout.addLayout(btn_layout)
 
-        # --- Visualization panel ---
         vis_panel = QWidget()
         vis_panel_layout = QHBoxLayout(vis_panel)
 
-        # Scatter map group
         scatter_group = QGroupBox("Pattern Scan Map")
         scatter_layout = QVBoxLayout()
         self.scatter_fig, self.scatter_ax = plt.subplots(figsize=(6, 5))
@@ -79,11 +78,10 @@ class ESMScanController(QMainWindow):
         scatter_group.setLayout(scatter_layout)
         vis_panel_layout.addWidget(scatter_group)
 
-        # Set default scatter map axes to match default width and height
         default_width = float(dict(params)["Width"])
         default_height = float(dict(params)["Height"])
         self.scatter_ax.set_xlim(0, default_width)
-        self.scatter_ax.set_ylim(default_height, 0)  # Invert Y for image-like orientation
+        self.scatter_ax.set_ylim(default_height, 0)
         self.scatter_ax.set_aspect('equal')
         self.scatter_ax.set_facecolor('white')
         for item in ([self.scatter_ax.title, self.scatter_ax.xaxis.label, self.scatter_ax.yaxis.label] +
@@ -94,11 +92,10 @@ class ESMScanController(QMainWindow):
 
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
-        self._scatter_plot = None  # For efficient updating
-        self.scatter_points = []  # store (x, y) tuples as scan progresses
+        self._scatter_plot = None
+        self.scatter_points = []
 
     def _periodic_update(self):
-        # No heatmap update needed, only scatter map is used
         pass
 
     def get_parameters(self):
@@ -113,17 +110,21 @@ class ESMScanController(QMainWindow):
         }
 
     def connect_hardware(self):
-        self.hardware_enabled = True
-        self.connect_btn.setText("Hardware Connected")
-        self.connect_btn.setEnabled(False)
-        print("Glasgow hardware connected")
+        try:
+            self.uart_controller = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600)
+            asyncio.run(self.uart_controller.connect())
+            self.hardware_enabled = True
+            self.connect_btn.setText("Hardware Connected")
+            self.connect_btn.setEnabled(False)
+            print("Glasgow hardware connected via UART")
+        except Exception as e:
+            print(f"Error connecting to hardware: {e}")
 
     def start_scan(self):
         if self.scan_active:
             return
         params = self.get_parameters()
         self.scanner = BeamScanner(**params)
-        rows, cols = self.scanner.get_scan_dimensions()
         self.scan_active = True
         self.scan_paused = False
         self.stop_requested = False
@@ -153,25 +154,19 @@ class ESMScanController(QMainWindow):
         pattern = self.scanner.get_pattern_matrix()
         rows, cols, _ = pattern.shape
 
-        # Prepare scatter data arrays (preallocate for all points)
         x_vals = pattern[:, :, 0].flatten()
         y_vals = pattern[:, :, 1].flatten()
-        self.x_vals = x_vals
-        self.y_vals = y_vals
-        x_min, x_max = np.min(x_vals), np.max(x_vals)
-        y_min, y_max = np.min(y_vals), np.max(y_vals)
         self.scatter_ax.clear()
         self.scatter_ax.set_facecolor('white')
-        # self.scatter_ax.set_title("Pattern Matrix Scatter Map")
         self.scatter_ax.set_xlabel("X (eV)")
         self.scatter_ax.set_ylabel("Y (eV)")
-        self.scatter_ax.set_xlim(x_min, x_max)
-        self.scatter_ax.set_ylim(y_max, y_min)
+        self.scatter_ax.set_xlim(np.min(x_vals), np.max(x_vals))
+        self.scatter_ax.set_ylim(np.max(y_vals), np.min(y_vals))
         self.scatter_ax.set_aspect('equal')
         self._scatter_plot = self.scatter_ax.scatter([], [], c='gray', s=10, edgecolors='none')
         self.scatter_canvas.draw_idle()
         self.scatter_points = []
-        idx = 0
+
         for i in range(rows):
             j_range = range(cols) if i % 2 == 0 else range(cols - 1, -1, -1)
             for j in j_range:
@@ -180,17 +175,18 @@ class ESMScanController(QMainWindow):
 
                 x_ev, y_ev = pattern[i, j, 0], pattern[i, j, 1]
 
-                if self.hardware_enabled:
-                    self._send_to_glasgow(x_ev, y_ev)
+                if self.hardware_enabled and self.uart_controller:
+                    try:
+                        asyncio.run(self.uart_controller.send(bytes([int(x_ev) & 0xFF, int(y_ev) & 0xFF])))
+                    except Exception as e:
+                        print(f"Failed to send to Glasgow: {e}")
 
                 time.sleep(self.scanner.dwell_time / 1000.0)
-                reflection = self._get_reflection_value(i, j)
-                reflection *= self.scanner.scale_to_ev
+                reflection = self._get_reflection_value(i, j) * self.scanner.scale_to_ev
                 self.scanner.pattern_matrix[i, j, 2] = reflection
 
                 print(f"({i}, {j}) - X: {x_ev:.2f} eV, Y: {y_ev:.2f} eV, Reflection: {reflection: .2f} eV")
 
-                # Append to scatter plot points
                 self.scatter_points.append((x_ev, y_ev))
                 self._update_scatter_map()
 
@@ -206,29 +202,21 @@ class ESMScanController(QMainWindow):
         self._scatter_plot.set_offsets(offsets)
         self.scatter_canvas.draw_idle()
 
-    def _send_to_glasgow(self, x_ev, y_ev):
-        pass  # Hardware integration placeholder
-
     def _get_reflection_value(self, i=None, j=None):
-        # Simulate beam intensity with decay and noise
         randVal = random.randint(0, 9)
         width = float(self.entries['Width'].text())
         height = float(self.entries['Height'].text())
         width = width if width != 0 else 1
         height = height if height != 0 else 1
 
-        # Always use i, j for point-wise calculation
         if i is not None and j is not None:
             x = i / width
             y = j / height
             intensity = int(
                 255 * ((x * 0.5 + y * 0.5) * (0.8 + 0.2 * (0.5 + 0.5 * randVal)))
             )
-            intensity = max(0, min(255, intensity))
-            return intensity
-        else:
-            # Fallback: return 0 if no indices provided
-            return 0
+            return max(0, min(255, intensity))
+        return 0
 
 def main():
     app = QApplication(sys.argv)
