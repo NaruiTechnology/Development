@@ -16,6 +16,7 @@ from PyQt6.QtCore import QTimer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 
+
 class ESMScanController(QMainWindow):
     def __init__(self):
         super().__init__()
