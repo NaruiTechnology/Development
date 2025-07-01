@@ -1,7 +1,7 @@
 import asyncio
 from glasgow.hardware.device import GlasgowDevice
 # from glasgow.applet.interface.uart import UARTInterface
-from glasgow.applet.interface.uart import UARTInterface, UARTApplet
+# from glasgow.applet.interface.uart import UARTInterface, UARTApplet
 
 # from glasgow.software.glasgow.applet.interface.uart import UARTInterface, UARTApplet
 # from glasgow.software.glasgow.applet.interface.uart import UARTInterface, UART
@@ -115,12 +115,14 @@ class GlasgowUARTController:
 
 #         except Exception as e:
 #             raise RuntimeError(f"Failed to connect to Glasgow device: {e}")
+
     async def connect(self):
         try:
             # Step 1: Initialize device and assembly
             self.device = GlasgowDevice(serial=self.serial_number)
-            self.assembly = HardwareAssembly(device=self.device)
-
+            self.interface = await UARTInterface.attach(self.device, voltage=self.voltage,
+                                                        port=self.port, tx=self.tx, rx=self.rx,
+                                                        baud=self.baudrate)
             # Step 2: Create UARTApplet with the hardware assembly
             applet = UARTApplet(self.assembly)
 
