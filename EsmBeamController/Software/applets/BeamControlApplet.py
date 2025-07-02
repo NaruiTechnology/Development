@@ -2,11 +2,11 @@ import asyncio, struct, time
 from usb1 import USBError
 
 # from commands import BaseCommand
-from ..lib.glasgow.support.logging import dump_hex
+from Software.lib.glasgow.support.logging import dump_hex
 
-from ..lib.glasgow.applet import GlasgowApplet
+from Software.lib.glasgow.applet import GlasgowApplet
 from glasgow.hardware.device import GlasgowDeviceError
-from ..lib.glasgow.support.endpoint  import ServerEndpoint
+from Software.lib.glasgow.support.endpoint  import ServerEndpoint
 
 from commands.structs import Transforms
 from commands.low_level_commands import ExternalCtrlCommand
@@ -90,10 +90,10 @@ class BeamControlApplet(GlasgowApplet):
             stall_count_reset, self.__addr_stall_count_reset = target.registers.add_rw(1, init=1)
             subtarget_args.update({"benchmark_counters": [out_stall_events, out_stall_cycles, stall_count_reset]})
 
-        subtarget = OBISubtarget(**subtarget_args)
+        # subtarget = OBISubtarget(**subtarget_args)
 
-        return iface.add_subtarget(subtarget)
-        return None
+        # return iface.add_subtarget(subtarget)
+        return iface
 
     # @classmethod
     # def add_run_arguments(cls, parser, access):
