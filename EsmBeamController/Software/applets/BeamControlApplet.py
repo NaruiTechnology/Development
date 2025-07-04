@@ -1,6 +1,11 @@
 import asyncio, struct, time
 from usb1 import USBError
 
+from amaranth import *
+from amaranth.lib import enum, data, io, wiring
+from amaranth.lib.fifo import SyncFIFOBuffered
+from amaranth.lib.wiring import In, Out, flipped
+
 # from commands import BaseCommand
 from Software.lib.glasgow.support.logging import dump_hex
 
@@ -93,7 +98,8 @@ class BeamControlApplet(GlasgowApplet):
         # subtarget = OBISubtarget(**subtarget_args)
 
         # return iface.add_subtarget(subtarget)
-        return iface
+        # return iface
+        return iface.add_subtarget(GlasgowTarge(**subtarget_args))
 
     # @classmethod
     # def add_run_arguments(cls, parser, access):
@@ -293,3 +299,5 @@ class BeamControlApplet(GlasgowApplet):
         finally:
             self.logger.info("OBI Server Closed.")
        
+class GlasgowTarge(wiring.Component):    
+    pass       

@@ -112,7 +112,7 @@ class ESMScanController(QMainWindow):
 
     def connect_hardware(self):
         try:
-            self.uart_controller = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600)
+            self.uart_controller = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600, serial_number='C3-20241215T152505Z')
             asyncio.run(self.uart_controller.connect())
             self.hardware_enabled = True
             self.connect_btn.setText("Hardware Connected")

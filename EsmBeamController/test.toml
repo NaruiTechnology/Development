@@ -1,0 +1,20 @@
+[instrument_info]
+manufacturer='FEI'
+model='FIB 200'
+
+[beam.electron]
+[beam.electron.pinout]
+scan_enable = [0,1]
+
+
+[beam.ion]
+[beam.ion.pinout]
+blank_enable = [4, 5]
+blank = [-2, 3]
+
+[transforms]
+yflip = true
+rotate90 = true
+
+[timings]
+ext_switch_delay_ms = 20

@@ -10,10 +10,16 @@ from glasgow.hardware.device import GlasgowDevice
 # from glasgow.software.glasgow.hardware.assembly import HardwareAssembly
 # from glasgow.software.glasgow.applet import GlasgowAppletMetadata
 
-from glasgow.software.glasgow.hardware.assembly import HardwareAssembly
-from glasgow.software.glasgow.applet.interface.uart import UARTApplet, UARTInterface
+# from glasgow.software.glasgow.hardware.assembly import HardwareAssembly
+# from glasgow.software.glasgow.applet.interface.uart import UARTApplet, UARTInterface
+
+from Software.applets.BeamControlApplet import BeamControlApplet
+from Software.applets.controllerTarget import OBISubtarget
+from Software.lib.glasgow.legacy import DeprecatedTarget, DeprecatedDemultiplexer
+from Software.lib.glasgow.hardware.assembly import HardwareAssembly
+
 import argparse
-# from types import SimpleNamespace
+
 
 
 # class GlasgowUARTController:
@@ -118,45 +124,63 @@ class GlasgowUARTController:
 
     async def connect(self):
         try:
-            # Step 1: Initialize device and assembly
+            from Software.configs.applet import OBIAppletArguments
+            args = OBIAppletArguments()
+            args.parse_toml()
+            args = args.args
             self.device = GlasgowDevice(serial=self.serial_number)
-            self.interface = await UARTInterface.attach(self.device, voltage=self.voltage,
-                                                        port=self.port, tx=self.tx, rx=self.rx,
-                                                        baud=self.baudrate)
-            # Step 2: Create UARTApplet with the hardware assembly
-            applet = UARTApplet(self.assembly)
+            self.assembly = HardwareAssembly(device=self.device)
+            applet = BeamControlApplet()            
+            target = DeprecatedTarget(assembly=self.assembly)
+            applet.build(target, args)
+            self.device.demultiplexer = target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
+            plan = target.build_plan()
+            await self.device.download_target(plan)
+            voltage = 5.0
+            await self.device.set_voltage("AB", voltage)
+            self.iface = await self.device.demultiplexer.claim_interface(applet, applet.mux_interface, args,
+                                            # read_buffer_size=131072*16, write_buffer_size=131072*16)
+                                            read_buffer_size=16384*16384, write_buffer_size=16384*16384)
+            await self.iface.reset()
+            
+            #=======================================================================
+            # self.interface = await UARTInterface.attach(self.device, voltage=self.voltage,
+            #                                             port=self.port, tx=self.tx, rx=self.rx,
+            #                                             baud=self.baudrate)
+            # # Step 2: Create UARTApplet with the hardware assembly
+            # applet = UARTApplet(self.assembly)
 
-            # Step 3: Build parsed arguments (Namespace object) with required attributes
-            args = argparse.Namespace(
-                port=self.port,
-                tx=self.tx_pin,
-                rx=self.rx_pin,
-                baudrate=self.baud,
-                parity=None,
-                bits=8,
-                stop_bits=1,
-                operation="run",
-                voltage=None,
-                extclk=False,
-                divclk=False,
-                in_clk=None,
-                out_clk=None,
-                debug=False
-            )
+            # # Step 3: Build parsed arguments (Namespace object) with required attributes
+            # args = argparse.Namespace(
+            #     port=self.port,
+            #     tx=self.tx_pin,
+            #     rx=self.rx_pin,
+            #     baudrate=self.baud,
+            #     parity=None,
+            #     bits=8,
+            #     stop_bits=1,
+            #     operation="run",
+            #     voltage=None,
+            #     extclk=False,
+            #     divclk=False,
+            #     in_clk=None,
+            #     out_clk=None,
+            #     debug=False
+            # )
 
-            # # Step 4: Run the applet
+            # # # Step 4: Run the applet
+            # # await applet.run(args)
+
+            # # # Step 5: Retrieve UART interface
+            # # self.interface = getattr(applet, "uart_iface", None)
+            # # self.interface = await applet.run(args)
+            # # await self.assembly.build_applet(applet, args)
+            # # self.interface = await self.assembly.run_applet(applet, args, UARTInterface)
+            # # self.uart_iface = UARTInterface(...)
             # await applet.run(args)
-
-            # # Step 5: Retrieve UART interface
             # self.interface = getattr(applet, "uart_iface", None)
-            # self.interface = await applet.run(args)
-            # await self.assembly.build_applet(applet, args)
-            # self.interface = await self.assembly.run_applet(applet, args, UARTInterface)
-            # self.uart_iface = UARTInterface(...)
-            await applet.run(args)
-            self.interface = getattr(applet, "uart_iface", None)
-            if not isinstance(self.interface, UARTInterface):
-                raise RuntimeError("Failed to initialize UART interface.")
+            # if not isinstance(self.interface, UARTInterface):
+            #     raise RuntimeError("Failed to initialize UART interface.")
         except Exception as e:
             raise RuntimeError(f"Failed to connect to Glasgow device: {e}")
 
@@ -186,7 +210,7 @@ class GlasgowUARTController:
             self.interface = None
 
 async def main():
-    uart = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600)
+    uart = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600, serial_number='C3-20241215T152505Z')
     await uart.connect()
     await uart.send("Hello from Glasgow UART!\n")
     response = await uart.receive()
