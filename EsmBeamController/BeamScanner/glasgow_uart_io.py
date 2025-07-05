@@ -18,7 +18,8 @@ from Software.applets.controllerTarget import OBISubtarget
 from Software.lib.glasgow.legacy import DeprecatedTarget, DeprecatedDemultiplexer
 from Software.lib.glasgow.hardware.assembly import HardwareAssembly
 
-import argparse
+import argparse, os
+from types import SimpleNamespace
 
 
 
@@ -125,14 +126,22 @@ class GlasgowUARTController:
     async def connect(self):
         try:
             from Software.configs.applet import OBIAppletArguments
-            args = OBIAppletArguments()
-            args.parse_toml()
-            args = args.args
+            # os.environ["GLASGOW_TOOLCHAIN"] = "D:/NaruiTech/oss-cad-suite/bin"
+            # args = OBIAppletArguments()
+            # args.parse_toml()
+            # args = args.args
+            args = SimpleNamespace(
+                port="A",
+                x_pins=[f"{self.port}0"], # PinArgument(0)
+                y_pins=[f"{self.port}1"], # PinArgument(1)
+                operation="run"
+            )
             self.device = GlasgowDevice(serial=self.serial_number)
             self.assembly = HardwareAssembly(device=self.device)
-            applet = BeamControlApplet()            
+            # applet = BeamControlApplet()            
             target = DeprecatedTarget(assembly=self.assembly)
-            applet.build(target, args)
+            applet = BeamControlApplet(target, args)
+            self.iface = applet.build(target, args)
             self.device.demultiplexer = target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
             plan = target.build_plan()
             await self.device.download_target(plan)

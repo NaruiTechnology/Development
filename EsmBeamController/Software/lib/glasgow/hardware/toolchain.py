@@ -304,10 +304,10 @@ def find_toolchain(tools=("yosys", "nextpnr-ice40", "icepack"), *, quiet=False):
         if toolchain.available:
             logger.debug(f"using toolchain {kind!r} ({toolchain})")
             for tool in toolchain.tools:
-                logger.trace(f"tool {tool.name!r} is invoked as {tool.command!r}")
-            logger.trace(f"toolchain ID is %s", lazy(lambda: toolchain.identifier.hex()))
+                logger.debug(f"tool {tool.name!r} is invoked as {tool.command!r}")
+            logger.debug(f"toolchain ID is %s", lazy(lambda: toolchain.identifier.hex()))
             for tool in toolchain.tools:
-                logger.trace(f"tool ID of {tool.name!r} is %s", lazy(lambda: tool.identifier.hex()))
+                logger.debug(f"tool ID of {tool.name!r} is %s", lazy(lambda: tool.identifier.hex()))
             return toolchain
 
     else:

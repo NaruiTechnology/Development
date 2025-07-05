@@ -104,7 +104,7 @@ class DeprecatedMultiplexer:
 class DeprecatedMultiplexerInterface:
     def __init__(self, applet, assembly, pins, pipe_num):
         self.applet    = applet
-        self.logger    = applet.logger
+        # self.logger    = applet.logger
         self.assembly  = assembly
         self._pins     = pins
         self._pipe_num = pipe_num
@@ -243,7 +243,7 @@ class DeprecatedDemultiplexerInterface:
                  read_buffer_size=None, write_buffer_size=None):
         self.device = device
         self.applet = applet
-        self.logger = applet.logger
+        # self.logger = applet.logger
 
         self._mux_interface = mux_interface
         if self._mux_interface._in_pipe is not None:
