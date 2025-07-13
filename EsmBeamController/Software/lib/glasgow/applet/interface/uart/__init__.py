@@ -148,7 +148,7 @@ class UARTComponent(wiring.Component):
 class UARTInterface:
     def __init__(self, logger, assembly, *, rx, tx, parity="none"):
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         ports = assembly.add_port_group(rx=rx, tx=tx)
         assembly.use_pulls({rx: "high"})

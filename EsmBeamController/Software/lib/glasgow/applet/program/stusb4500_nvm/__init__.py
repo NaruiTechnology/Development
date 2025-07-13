@@ -13,7 +13,7 @@ class StUsb4500NvmInterface:
     def __init__(self, interface, logger, i2c_address):
         self.lower     = interface
         self._logger   = logger
-        self._level    = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level    = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._i2c_addr = i2c_address
 
     def _log(self, message, *args):

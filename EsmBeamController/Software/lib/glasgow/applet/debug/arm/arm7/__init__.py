@@ -307,14 +307,14 @@ class DebugARM7Transaction:
     def __init__(self, logger):
         self._logger  = logger
         self._depth   = 2
-        self._level   = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level   = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         self._buffer  = bytearray()
         self._to_read = 0
         self._results = None
 
     def _log(self, message, *args):
-        level = logging.TRACE if self._depth > 2 else self._level
+        level = logging.DEBUG if self._depth > 2 else self._level
         self._logger.log(level, "ARM7: " + "  " * self._depth + message, *args)
 
     @contextlib.contextmanager
@@ -758,7 +758,7 @@ class DebugARM7Interface(GDBRemote):
     def __init__(self, logger, assembly: AbstractAssembly, *,
                  tck, tms, tdo, tdi, trst=None, endian):
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         ports = assembly.add_port_group(tck=tck, tms=tms, tdo=tdo, tdi=tdi, trst=trst)
         component = assembly.add_submodule(DebugARM7Sequencer(ports))

@@ -132,7 +132,7 @@ class PDIDisplayInterface:
         self.lower   = interface
         self.device  = device
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._addr_cog_power = addr_cog_power
         self._addr_cog_disch = addr_cog_disch
         self._addr_cog_reset = addr_cog_reset

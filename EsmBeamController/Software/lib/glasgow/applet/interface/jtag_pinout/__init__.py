@@ -117,7 +117,7 @@ class JTAGPinoutComponent(wiring.Component):
 class JTAGPinoutInterface:
     def __init__(self, logger, assembly, *, pins, frequency):
         self._logger = logger
-        self._level  = logging.TRACE
+        self._level  = logging.DEBUG
 
         ports = assembly.add_port_group(pins=pins)
         component = assembly.add_submodule(JTAGPinoutComponent(ports,

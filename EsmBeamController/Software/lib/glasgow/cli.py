@@ -552,7 +552,7 @@ def configure_logger(args, term_handler):
 
     if args.log_file or args.filter_log:
         term_handler.addFilter(SubjectFilter(level, args.filter_log))
-        root_logger.setLevel(logging.TRACE)
+        root_logger.setLevel(logging.DEBUG)
     else:
         # By setting the log level on the root logger, we avoid creating LogRecords in the first
         # place instead of filtering them later; we have a *lot* of logging, so this is much

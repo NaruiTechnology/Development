@@ -11,7 +11,8 @@ from amaranth.build import Resource, Pins
 from ..lib.glasgow.support.logging import dump_hex
 
 from ..lib.glasgow.applet import GlasgowApplet
-from glasgow.hardware.device import GlasgowDeviceError
+# from glasgow.hardware.device import GlasgowDeviceError
+from ..lib.glasgow.hardware.device import GlasgowDeviceError
 from ..lib.glasgow.support.endpoint  import ServerEndpoint
 
 from commands.structs import Transforms

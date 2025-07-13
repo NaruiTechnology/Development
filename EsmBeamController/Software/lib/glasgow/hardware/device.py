@@ -287,7 +287,7 @@ class GlasgowDevice:
                     endpoint_dir = "IN"
                 if endpoint & usb1.ENDPOINT_DIR_MASK == usb1.ENDPOINT_OUT:
                     endpoint_dir = "OUT"
-                logger.trace("USB: %s EP%d %s (cancelled)",
+                logger.info("USB: %s EP%d %s (cancelled)",
                              transfer_type, endpoint & 0x7f, endpoint_dir)
                 cancel_future.set_result(None)
             elif result_future.cancelled():
@@ -325,38 +325,38 @@ class GlasgowDevice:
                     pass # already finished, one way or another
 
     async def control_read(self, request_type, request, value, index, length):
-        logger.trace("USB: CONTROL IN type=%#04x request=%#04x "
+        logger.info("USB: CONTROL IN type=%#04x request=%#04x "
                      "value=%#06x index=%#06x length=%d (submit)",
                      request_type, request, value, index, length)
         data = await self._do_transfer(is_read=True, setup=lambda transfer:
             transfer.setControl(request_type|usb1.ENDPOINT_IN, request, value, index, length))
-        logger.trace("USB: CONTROL IN data=<%s> (completed)", dump_hex(data))
+        logger.info("USB: CONTROL IN data=<%s> (completed)", dump_hex(data))
         return data
 
     async def control_write(self, request_type, request, value, index, data):
         if not isinstance(data, (bytes, bytearray)):
             data = bytes(data)
-        logger.trace("USB: CONTROL OUT type=%#04x request=%#04x "
+        logger.info("USB: CONTROL OUT type=%#04x request=%#04x "
                      "value=%#06x index=%#06x data=<%s> (submit)",
                      request_type, request, value, index, dump_hex(data))
         await self._do_transfer(is_read=False, setup=lambda transfer:
             transfer.setControl(request_type|usb1.ENDPOINT_OUT, request, value, index, data))
-        logger.trace("USB: CONTROL OUT (completed)")
+        logger.info("USB: CONTROL OUT (completed)")
 
     async def bulk_read(self, endpoint, length):
-        logger.trace("USB: BULK EP%d IN length=%d (submit)", endpoint & 0x7f, length)
+        logger.info("USB: BULK EP%d IN length=%d (submit)", endpoint & 0x7f, length)
         data = await self._do_transfer(is_read=True, setup=lambda transfer:
             transfer.setBulk(endpoint|usb1.ENDPOINT_IN, length))
-        logger.trace("USB: BULK EP%d IN data=<%s> (completed)", endpoint & 0x7f, dump_hex(data))
+        logger.info("USB: BULK EP%d IN data=<%s> (completed)", endpoint & 0x7f, dump_hex(data))
         return data
 
     async def bulk_write(self, endpoint, data):
         if not isinstance(data, (bytes, bytearray)):
             data = bytes(data)
-        logger.trace("USB: BULK EP%d OUT data=<%s> (submit)", endpoint & 0x7f, dump_hex(data))
+        logger.info("USB: BULK EP%d OUT data=<%s> (submit)", endpoint & 0x7f, dump_hex(data))
         await self._do_transfer(is_read=False, setup=lambda transfer:
             transfer.setBulk(endpoint|usb1.ENDPOINT_OUT, data))
-        logger.trace("USB: BULK EP%d OUT (completed)", endpoint & 0x7f)
+        logger.info("USB: BULK EP%d OUT (completed)", endpoint & 0x7f)
 
     async def _read_eeprom_raw(self, idx, addr, length, chunk_size=0x1000):
         """
@@ -683,7 +683,7 @@ class GlasgowDevice:
         try:
             value = await self.control_read(usb1.REQUEST_TYPE_VENDOR, REQ_REGISTER, addr, 0, width)
             value = int.from_bytes(value, byteorder="little")
-            logger.trace("register %d read: %#04x", addr, value)
+            logger.info("register %d read: %#04x", addr, value)
             return value
         except usb1.USBErrorPipe:
             await self._register_error(addr)
@@ -691,7 +691,7 @@ class GlasgowDevice:
     async def write_register(self, addr, value, width=1):
         """Write ``value`` to ``width``-byte FPGA register at ``addr``."""
         try:
-            logger.trace("register %d write: %#04x", addr, value)
+            logger.info("register %d write: %#04x", addr, value)
             value = value.to_bytes(width, byteorder="big")
             await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_REGISTER, addr, 0, value)
         except usb1.USBErrorPipe:

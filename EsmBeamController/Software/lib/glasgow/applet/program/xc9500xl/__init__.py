@@ -320,7 +320,7 @@ class XC9500XLInterface:
     def __init__(self, interface, logger, frequency):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._frequency = frequency
 
     def _log(self, message, *args):
@@ -350,7 +350,7 @@ class XC95xxXLInterface:
     def __init__(self, interface, logger, frequency, device):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._frequency = frequency
         self.device  = device
         self.DR_ISDATA = DR_ISDATA(device.fbs)

@@ -94,7 +94,7 @@ class ControlMDIOInterface:
     def __init__(self, logger: logging.Logger, assembly: AbstractAssembly, *,
                  mdc: GlasgowPin, mdio: GlasgowPin):
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         assembly.use_pulls({mdio: "low"})
         ports = assembly.add_port_group(mdc=mdc, mdio=mdio)

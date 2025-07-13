@@ -111,7 +111,7 @@ class ServerEndpoint(aobject, asyncio.Protocol):
         self._check_future()
 
     def data_received(self, data):
-        self._log(logging.TRACE, "endpoint received %d bytes", len(data))
+        self._log(logging.DEBUG, "endpoint received %d bytes", len(data))
         self._queue.append(data)
         self._queued += len(data)
         self._check_pushback()
@@ -121,11 +121,11 @@ class ServerEndpoint(aobject, asyncio.Protocol):
         if self._queue_size is None:
             return
         elif not self._read_paused and self._queued >= self._queue_size:
-            self._log(logging.TRACE, "queue full, pausing reads")
+            self._log(logging.DEBUG, "queue full, pausing reads")
             self._transport.pause_reading()
             self._read_paused = True
         elif self._read_paused and self._queued < self._queue_size:
-            self._log(logging.TRACE, "queue not full, resuming reads")
+            self._log(logging.DEBUG, "queue not full, resuming reads")
             self._transport.resume_reading()
             self._read_paused = False
 
@@ -147,7 +147,7 @@ class ServerEndpoint(aobject, asyncio.Protocol):
             self._buffer = None
         if self._buffer is None:
             self._buffer = b""
-            self._log(logging.TRACE, "recv end-of-stream")
+            self._log(logging.DEBUG, "recv end-of-stream")
             self._recv_epoch += 1
             if self._cancel_on_eof:
                 raise asyncio.CancelledError
@@ -158,7 +158,7 @@ class ServerEndpoint(aobject, asyncio.Protocol):
         data = bytearray()
         while length == 0 or len(data) < length:
             if not self._buffer:
-                self._log(logging.TRACE, "recv waits for %d bytes", length - len(data))
+                self._log(logging.DEBUG, "recv waits for %d bytes", length - len(data))
                 await self._refill()
 
             if length == 0:
@@ -170,7 +170,7 @@ class ServerEndpoint(aobject, asyncio.Protocol):
             self._check_pushback()
             data += chunk
 
-        self._log(logging.TRACE, "recv <%s>", dump_hex(data))
+        self._log(logging.DEBUG, "recv <%s>", dump_hex(data))
         return data
 
     async def recv_until(self, separator):
@@ -178,7 +178,7 @@ class ServerEndpoint(aobject, asyncio.Protocol):
         data = bytearray()
         while True:
             if not self._buffer:
-                self._log(logging.TRACE, "recv waits for <%s>", separator.hex())
+                self._log(logging.DEBUG, "recv waits for <%s>", separator.hex())
                 await self._refill()
 
             try:
@@ -196,22 +196,22 @@ class ServerEndpoint(aobject, asyncio.Protocol):
                 self._check_pushback()
                 self._buffer = None
 
-        self._log(logging.TRACE, "recv <%s%s>", dump_hex(data), separator.hex())
+        self._log(logging.DEBUG, "recv <%s%s>", dump_hex(data), separator.hex())
         return data
 
     async def recv_wait(self):
         if not self._buffer:
-            self._log(logging.TRACE, "recv wait")
+            self._log(logging.DEBUG, "recv wait")
             await self._refill()
 
     async def send(self, data):
         data = bytes(data)
         if self._transport is not None and self._send_epoch == self._recv_epoch:
-            self._log(logging.TRACE, "send <%s>", dump_hex(data))
+            self._log(logging.DEBUG, "send <%s>", dump_hex(data))
             self._transport.write(data)
             return True
         else:
-            self._log(logging.TRACE, "send to previous connection discarded")
+            self._log(logging.DEBUG, "send to previous connection discarded")
             return False
 
     async def close(self):

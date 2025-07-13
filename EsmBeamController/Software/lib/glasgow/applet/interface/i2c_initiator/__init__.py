@@ -130,7 +130,7 @@ class I2CInitiatorInterface:
     def __init__(self, interface, logger):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
     async def reset(self):
         self._logger.debug("I2C: reset")
@@ -212,7 +212,7 @@ class I2CInitiatorInterface:
             return None
 
     async def poll(self, addr):
-        self._logger.trace("I2C: poll addr=%s", bin(addr))
+        self._logger.info("I2C: poll addr=%s", bin(addr))
         await self._cmd_start()
         await self._cmd_count(1)
         await self._cmd_write()

@@ -43,7 +43,7 @@ class ProgramICE40SRAMInterface:
     def __init__(self, interface, logger, device, addr_dut_reset, addr_dut_done):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._device = device
         self._addr_dut_reset = addr_dut_reset
         self._addr_dut_done  = addr_dut_done

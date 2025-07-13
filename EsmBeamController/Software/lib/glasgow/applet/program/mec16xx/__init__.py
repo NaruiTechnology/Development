@@ -31,7 +31,7 @@ class MEC16xxInterface(aobject):
     async def __init__(self, interface, logger):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         idcode, device = await self.lower.identify()
         if device is None or device.name != "ARC6xx":

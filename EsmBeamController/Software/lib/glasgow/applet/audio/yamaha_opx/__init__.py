@@ -395,7 +395,7 @@ class YamahaOPxInterface(metaclass=ABCMeta):
     def __init__(self, interface, logger, *, instant_writes=True, filter=None):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         # Adjust delays such that earlier writes borrow from later delays. Useful for VGM files,
         # where writes are unphysically assumed to take no time.

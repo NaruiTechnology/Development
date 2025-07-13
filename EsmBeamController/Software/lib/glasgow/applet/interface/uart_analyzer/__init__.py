@@ -100,7 +100,7 @@ class UARTAnalyzerInterface:
     def __init__(self, logger: logging.Logger, assembly: AbstractAssembly,
                  channels: dict[str, Optional[GlasgowPin]], parity="none"):
         self._logger   = logger
-        self._level    = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level    = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._channels = [channel for channel, pin in channels.items() if pin is not None]
         self._pins     = tuple(channels[name] for name in self._channels)
 

@@ -182,7 +182,7 @@ class QSPIAnalyzerInterface:
     def __init__(self, logger: logging.Logger, assembly: AbstractAssembly, *,
                  cs: GlasgowPin, sck: GlasgowPin, io: GlasgowPin, buffer_size=512):
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         ports = assembly.add_port_group(cs=cs, sck=sck, io=io)
         component = assembly.add_submodule(QSPIAnalyzerComponent(ports, buffer_size))

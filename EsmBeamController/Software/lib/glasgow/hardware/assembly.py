@@ -138,7 +138,7 @@ class HardwareInPipe(AbstractInPipe):
 
     async def _start(self):
         assert not self._in_running
-        self._logger.trace(f"IN pipe {self._in_interface}: starting")
+        self._logger.info(f"IN pipe {self._in_interface}: starting")
         self._parent.device.usb_handle.setInterfaceAltSetting(self._in_interface, 1)
         for _ in range(_xfers_per_queue):
             self._in_tasks.submit(self._in_task())
@@ -147,7 +147,7 @@ class HardwareInPipe(AbstractInPipe):
     async def _stop(self):
         if not self._in_running:
             return
-        self._logger.trace(f"IN pipe {self._in_interface}: stopping")
+        self._logger.info(f"IN pipe {self._in_interface}: stopping")
         await self._in_tasks.cancel()
         self._in_buffer.clear()
         self._parent.device.usb_handle.setInterfaceAltSetting(self._in_interface, 0)
@@ -157,7 +157,7 @@ class HardwareInPipe(AbstractInPipe):
         if self._in_buffer_size is not None:
             async with self._in_pushback:
                 while len(self._in_buffer) > self._in_buffer_size:
-                    self._logger.trace(f"IN pipe {self._in_interface}: read pushback")
+                    self._logger.info(f"IN pipe {self._in_interface}: read pushback")
                     await self._in_pushback.wait()
 
         size = self._in_packet_size * _packets_per_xfer
@@ -175,7 +175,7 @@ class HardwareInPipe(AbstractInPipe):
 
         # Return exactly the requested length.
         while len(self._in_buffer) < length:
-            self._logger.trace(f"IN pipe {self._in_interface}: need %d bytes",
+            self._logger.info(f"IN pipe {self._in_interface}: need %d bytes",
                 length - len(self._in_buffer))
             self._in_stalls += 1
             assert self._in_tasks
@@ -197,13 +197,13 @@ class HardwareInPipe(AbstractInPipe):
             # Always return a memoryview object, to avoid hard to detect edge cases downstream.
             result = memoryview(b"".join(chunks))
 
-        self._logger.trace(f"IN pipe {self._in_interface}: read <%s>", dump_hex(result))
+        self._logger.info(f"IN pipe {self._in_interface}: read <%s>", dump_hex(result))
         return result
 
     async def recv_until(self, delimiter) -> bytes:
         assert len(delimiter) >= 1
 
-        self._logger.trace(f"IN pipe {self._in_interface}: need <%s> delimiter",
+        self._logger.info(f"IN pipe {self._in_interface}: need <%s> delimiter",
             dump_hex(delimiter))
 
         chunks = []
@@ -222,16 +222,16 @@ class HardwareInPipe(AbstractInPipe):
                 break
 
         result = b"".join(chunks)
-        self._logger.trace(f"IN pipe {self._in_interface}: read <%s>", dump_hex(result))
+        self._logger.info(f"IN pipe {self._in_interface}: read <%s>", dump_hex(result))
         return result
 
     async def reset(self):
-        self._logger.trace(f"IN pipe {self._in_interface}: reset")
+        self._logger.info(f"IN pipe {self._in_interface}: reset")
         await self._stop()
         await self._start()
 
     async def detach(self) -> tuple[int, None]:
-        self._logger.trace(f"IN pipe {self._in_interface}: detaching")
+        self._logger.info(f"IN pipe {self._in_interface}: detaching")
         _check_detach()
         await self._stop()
         self._parent.device.usb_handle.releaseInterface(self._in_interface)
@@ -266,14 +266,14 @@ class HardwareOutPipe(AbstractOutPipe):
 
     async def _start(self):
         assert not self._out_running
-        self._logger.trace(f"OUT pipe {self._out_interface}: starting")
+        self._logger.info(f"OUT pipe {self._out_interface}: starting")
         self._parent.device.usb_handle.setInterfaceAltSetting(self._out_interface, 1)
         self._out_running = True
 
     async def _stop(self):
         if not self._out_running:
             return
-        self._logger.trace(f"OUT pipe {self._out_interface}: clearing")
+        self._logger.info(f"OUT pipe {self._out_interface}: clearing")
         await self._out_tasks.cancel()
         self._out_buffer.clear()
         self._parent.device.usb_handle.setInterfaceAltSetting(self._out_interface, 0)
@@ -328,13 +328,13 @@ class HardwareOutPipe(AbstractOutPipe):
             if self._out_inflight >= self._out_buffer_size:
                 self._out_stalls += 1
             while self._out_inflight >= self._out_buffer_size:
-                self._logger.trace(f"OUT pipe {self._out_interface}: write pushback")
+                self._logger.info(f"OUT pipe {self._out_interface}: write pushback")
                 await self._out_tasks.wait_one()
 
         # Eagerly check if any of our previous queued writes errored out.
         await self._out_tasks.poll()
 
-        self._logger.trace(f"OUT pipe {self._out_interface}: write <%s>", dump_hex(data))
+        self._logger.info(f"OUT pipe {self._out_interface}: write <%s>", dump_hex(data))
         self._out_buffer.write(data)
 
         # The write scheduling algorithm attempts to satisfy several partially conflicting goals:
@@ -365,7 +365,7 @@ class HardwareOutPipe(AbstractOutPipe):
     # TODO: we should not in principle need `_wait=False` as flushes of large batches of data
     # should happen automatically as data is sent
     async def flush(self, *, _wait=True):
-        self._logger.trace(f"OUT pipe {self._out_interface}: flush")
+        self._logger.info(f"OUT pipe {self._out_interface}: flush")
 
         # First, we ensure we can submit one more task. (There can be more tasks than
         # _xfers_per_queue because a task may spawn another one just before it terminates.)
@@ -387,19 +387,19 @@ class HardwareOutPipe(AbstractOutPipe):
             self._out_tasks.submit(self._out_task(data))
 
         if _wait:
-            self._logger.trace(f"OUT pipe {self._out_interface}: wait for flush")
+            self._logger.info(f"OUT pipe {self._out_interface}: wait for flush")
             if self._out_tasks:
                 self._out_stalls += 1
             while self._out_tasks:
                 await self._out_tasks.wait_all()
 
     async def reset(self):
-        self._logger.trace(f"OUT pipe {self._out_interface}: reset")
+        self._logger.info(f"OUT pipe {self._out_interface}: reset")
         await self._stop()
         await self._start()
 
     async def detach(self) -> tuple[None, int]:
-        self._logger.trace(f"OUT pipe {self._out_interface}: detaching")
+        self._logger.info(f"OUT pipe {self._out_interface}: detaching")
         _check_detach()
         await self._stop()
         self._parent.device.usb_handle.releaseInterface(self._out_interface)
@@ -435,12 +435,12 @@ class HardwareInOutPipe(HardwareInPipe, HardwareOutPipe, AbstractInOutPipe):
         await HardwareOutPipe._stop(self)
 
     async def reset(self):
-        self._logger.trace(f"IN/OUT pipe {self._in_interface}/{self._out_interface}: reset")
+        self._logger.info(f"IN/OUT pipe {self._in_interface}/{self._out_interface}: reset")
         await self._stop()
         await self._start()
 
     async def detach(self) -> tuple[int, int]:
-        self._logger.trace(f"IN/OUT pipe {self._in_interface}/{self._out_interface}: detaching")
+        self._logger.info(f"IN/OUT pipe {self._in_interface}/{self._out_interface}: detaching")
         _check_detach()
         await self._stop()
         return self._in_interface, self._out_interface

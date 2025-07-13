@@ -136,7 +136,7 @@ class QSPIControllerComponent(wiring.Component):
 class QSPIControllerInterface:
     def __init__(self, logger, assembly: AbstractAssembly, *, cs, sck, io):
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         ports = assembly.add_port_group(cs=cs, sck=sck, io=io)
         assembly.use_pulls({io: "high"}) # pull WP#/HOLD# high

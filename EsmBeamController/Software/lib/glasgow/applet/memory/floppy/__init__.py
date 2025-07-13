@@ -559,7 +559,7 @@ class ShugartFloppyInterface:
     def __init__(self, interface, logger, sys_clk_freq):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._sys_clk_freq = sys_clk_freq
 
     def _log(self, message, *args):
@@ -1042,7 +1042,7 @@ class MemoryFloppyAppletTool(GlasgowAppletTool, applet=MemoryFloppyApplet):
         header  = None
         size    = None
         for offset, (comma, symbol) in enumerate(symbstream):
-            self.logger.trace("state=%s sym=%s.%02X",
+            self.logger.info("state=%s sym=%s.%02X",
                               state, "K" if comma else "D", symbol)
 
             if comma and symbol == 0xA1:

@@ -80,9 +80,9 @@ class GlasgowBuildPlan:
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as proc:
                 for stdout_line in proc.stdout:
                     stdout_lines.append(stdout_line)
-                    logger.trace(f"build: %s", stdout_line.rstrip())
+                    logger.info(f"build: %s", stdout_line.rstrip())
                 if proc.wait():
-                    if not logger.isEnabledFor(logging.TRACE): # don't print the log twice
+                    if not logger.isEnabledFor(logging.DEBUG): # don't print the log twice
                         for stdout_line in stdout_lines:
                             logger.info(f"build: %s", stdout_line.rstrip())
                     if logger.isEnabledFor(logging.INFO):
@@ -129,10 +129,10 @@ class GlasgowBuildPlan:
             # the cache exists; skip building the bitstream, and reproduce the stdout to our log
             # if anyone would actually see it
             logger.debug(f"bitstream ID {self.bitstream_id.hex()} is cached")
-            logger.trace(f"bitstream was read from {str(bitstream_filename)!r}")
-            if logger.isEnabledFor(logging.TRACE):
+            logger.info(f"bitstream was read from {str(bitstream_filename)!r}")
+            if logger.isEnabledFor(logging.DEBUG):
                 for stdout_line in stdout_data.decode().splitlines():
-                    logger.trace(f"build: %s", stdout_line)
+                    logger.info(f"build: %s", stdout_line)
         else:
             # the cache does not exist; build it (`execute` directs the stdout to our log, so we
             # don't have to forward it here) and write the artifacts to the platform-appropriate
@@ -148,7 +148,7 @@ class GlasgowBuildPlan:
             with stdout_filename.open("wb") as stdout_file:
                 stdout_file.write(stdout_hash + b"\n") # keep it a text file
                 stdout_file.write(stdout_data)
-            logger.trace(f"bitstream was written to {str(bitstream_filename)!r}")
+            logger.info(f"bitstream was written to {str(bitstream_filename)!r}")
         # finally, we have a bitstream! and chances are, we have obtained it much faster than we
         # would have otherwise.
         return bitstream_data

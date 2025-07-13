@@ -123,7 +123,7 @@ class ControlServoComponent(wiring.Component):
 class ControlServoInterface:
     def __init__(self, logger, assembly, *, out):
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         ports = assembly.add_port_group(out=out)
         component = assembly.add_submodule(ControlServoComponent(ports))

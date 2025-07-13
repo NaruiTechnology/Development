@@ -193,7 +193,7 @@ class SPIAnalyzerInterface:
                  cs: GlasgowPin, sck: GlasgowPin, copi: GlasgowPin, cipo: GlasgowPin,
                  buffer_size=512):
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         ports = assembly.add_port_group(cs=cs, sck=sck, copi=copi, cipo=cipo)
         component = assembly.add_submodule(SPIAnalyzerComponent(ports, buffer_size))

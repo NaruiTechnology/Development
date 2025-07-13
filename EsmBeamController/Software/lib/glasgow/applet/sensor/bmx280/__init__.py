@@ -151,7 +151,7 @@ class BMx280Interface:
     def __init__(self, interface, logger):
         self._iface   = interface
         self._logger  = logger
-        self._level   = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level   = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._has_cal = False
         self._has_hum = False
         self._ident   = "BMx280"

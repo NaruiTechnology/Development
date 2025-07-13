@@ -39,7 +39,7 @@ BIT_ERR  = 0b10000000
 class Memory25xInterface:
     def __init__(self, logger, assembly, *, cs, sck, io):
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         self.qspi = QSPIControllerInterface(logger, assembly, cs=cs, sck=sck, io=io)
 

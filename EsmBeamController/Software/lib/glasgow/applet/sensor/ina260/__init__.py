@@ -35,7 +35,7 @@ class INA260I2CInterface:
         self.lower     = interface
         self._i2c_addr = i2c_address
         self._logger   = logger
-        self._level    = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level    = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
     async def _read_reg16u(self, reg):
         await self.lower.write(self._i2c_addr, [reg])

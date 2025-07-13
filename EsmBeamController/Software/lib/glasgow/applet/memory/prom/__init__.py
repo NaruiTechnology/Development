@@ -375,7 +375,7 @@ class MemoryPROMInterface:
     def __init__(self, interface, logger, a_bits, dq_bits):
         self.lower    = interface
         self._logger  = logger
-        self._level   = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level   = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self.a_bytes  = (a_bits  + 7) // 8
         self.dq_bytes = (dq_bits + 7) // 8
 

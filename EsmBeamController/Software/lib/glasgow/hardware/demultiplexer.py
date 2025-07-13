@@ -196,17 +196,17 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
 
     async def cancel(self):
         if self._in_tasks or self._out_tasks:
-            self.logger.trace("FIFO: cancelling operations")
+            self.logger.info("FIFO: cancelling operations")
             await self._in_tasks .cancel()
             await self._out_tasks.cancel()
 
     async def reset(self):
         await self.cancel()
 
-        self.logger.trace("asserting reset")
+        self.logger.info("asserting reset")
         await self.device.write_register(self._addr_reset, 1)
 
-        self.logger.trace("FIFO: synchronizing buffers")
+        self.logger.info("FIFO: synchronizing buffers")
         self.device.usb_handle.setInterfaceAltSetting(self._pipe_num, 1)
         self._in_buffer .clear()
         self._out_buffer.clear()
@@ -214,20 +214,20 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
         # Pipeline reads before deasserting reset, so that if the applet immediately starts
         # streaming data, there are no overflows. (This is perhaps not the best way to implement
         # an applet, but we can support it easily enough, and it avoids surprise overflows.)
-        self.logger.trace("FIFO: pipelining reads")
+        self.logger.info("FIFO: pipelining reads")
         for _ in range(_xfers_per_queue):
             self._in_tasks.submit(self._in_task())
         # Give the IN tasks a chance to submit their transfers before deasserting reset.
         await asyncio.sleep(0)
 
-        self.logger.trace("deasserting reset")
+        self.logger.info("deasserting reset")
         await self.device.write_register(self._addr_reset, 0)
 
     async def _in_task(self):
         if self._read_buffer_size is not None:
             async with self._in_pushback:
                 while len(self._in_buffer) > self._read_buffer_size:
-                    self.logger.trace("FIFO: read pushback")
+                    self.logger.info("FIFO: read pushback")
                     await self._in_pushback.wait()
 
         size = self._in_packet_size * _packets_per_xfer
@@ -255,7 +255,7 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             # Return exactly the requested length.
             self._in_stalls += 1
             while len(self._in_buffer) < length:
-                self.logger.trace("FIFO: need %d bytes", length - len(self._in_buffer))
+                self.logger.info("FIFO: need %d bytes", length - len(self._in_buffer))
                 await self._in_tasks.wait_one()
 
         async with self._in_pushback:
@@ -273,7 +273,7 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             # Always return a memoryview object, to avoid hard to detect edge cases downstream.
             result = memoryview(b"".join(chunks))
 
-        self.logger.trace("FIFO: read <%s>", dump_hex(result))
+        self.logger.info("FIFO: read <%s>", dump_hex(result))
         return result
 
     def _out_slice(self):
@@ -319,13 +319,13 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             if self._out_inflight >= self._write_buffer_size:
                 self._out_stalls += 1
             while self._out_inflight >= self._write_buffer_size:
-                self.logger.trace("FIFO: write pushback")
+                self.logger.info("FIFO: write pushback")
                 await self._out_tasks.wait_one()
 
         # Eagerly check if any of our previous queued writes errored out.
         await self._out_tasks.poll()
 
-        self.logger.trace("FIFO: write <%s>", dump_hex(data))
+        self.logger.info("FIFO: write <%s>", dump_hex(data))
         self._out_buffer.write(data)
 
         # The write scheduling algorithm attempts to satisfy several partially conflicting goals:
@@ -354,7 +354,7 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             self._out_tasks.submit(self._out_task(self._out_slice()))
 
     async def flush(self, wait=True):
-        self.logger.trace("FIFO: flush")
+        self.logger.info("FIFO: flush")
 
         # First, we ensure we can submit one more task. (There can be more tasks than
         # _xfers_per_queue because a task may spawn another one just before it terminates.)
@@ -376,7 +376,7 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             self._out_tasks.submit(self._out_task(data))
 
         if wait:
-            self.logger.trace("FIFO: wait for flush")
+            self.logger.info("FIFO: wait for flush")
             if self._out_tasks:
                 self._out_stalls += 1
             while self._out_tasks:

@@ -26,7 +26,7 @@ class XC6SJTAGInterface:
     def __init__(self, interface, logger):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
     def _log(self, message, *args):
         self._logger.log(self._level, "XC6S: " + message, *args)

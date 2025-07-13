@@ -319,7 +319,7 @@ class JTAGProbeInterface:
     def __init__(self, interface, logger, has_trst=False, __name__=__name__):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         self.has_trst    = has_trst
         self._state      = JTAGState.UNKNOWN

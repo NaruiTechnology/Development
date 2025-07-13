@@ -9,7 +9,7 @@ class Memory24xInterface:
     def __init__(self, interface, logger, i2c_address, address_width, page_size):
         self.lower       = interface
         self._logger     = logger
-        self._level      = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level      = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._i2c_addr   = i2c_address
         self._addr_width = address_width
         self._page_size  = page_size

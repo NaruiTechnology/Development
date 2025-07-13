@@ -142,7 +142,7 @@ class NBDServer:
         await self._send64(IHAVEOPT)
         await self._send16(handshake_flags)
         client_flags = await self._recv32()
-        self._logger.trace(f'client flags: {client_flags}')
+        self._logger.info(f'client flags: {client_flags}')
         unsupported = client_flags & ~handshake_flags
         if unsupported:
             raise RuntimeError(f"Unsupported client flags: {unsupported:#x}")
@@ -154,7 +154,7 @@ class NBDServer:
         done = False
         while not done:
             option, data = await self._recv_option()
-            self._logger.trace(f"option: {option}, {data=}")
+            self._logger.info(f"option: {option}, {data=}")
             if option == NBD_OPT_GO:
                 done = True
                 await self._send_info(option)
@@ -204,7 +204,7 @@ class NBDServer:
         # the client."
         while True:
             req = await self._recv_request()
-            self._logger.trace(f"command {req.command}, length {req.length}")
+            self._logger.info(f"command {req.command}, length {req.length}")
             if req.command == NBD_CMD_READ:
                 data = await self.device_read(req.offset, req.length)
                 await self._write_simple_reply(0, req.cookie, data)
@@ -241,7 +241,7 @@ async def main():
     ServerEndpoint.add_argument(parser, "endpoint")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.TRACE)
+    logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
 
     disk = bytearray(args.size)

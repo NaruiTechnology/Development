@@ -24,7 +24,7 @@ class EJTAGDebugInterface(aobject, GDBRemote):
     async def __init__(self, interface, logger):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         self._control = DR_CONTROL()
         self._state   = "Probe"

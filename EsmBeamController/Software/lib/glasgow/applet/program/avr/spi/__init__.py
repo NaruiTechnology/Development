@@ -35,7 +35,7 @@ class ProgramAVRSPIInterface(ProgramAVRInterface):
     def __init__(self, interface, logger, addr_dut_reset):
         self.lower   = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._addr_dut_reset = addr_dut_reset
         self._extended_addr  = None
         self.erase_time      = None

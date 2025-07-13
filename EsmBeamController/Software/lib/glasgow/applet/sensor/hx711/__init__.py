@@ -96,7 +96,7 @@ class HX711Interface:
     def __init__(self, interface, logger):
         self._lower  = interface
         self._logger = logger
-        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level  = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
 
         self._channel = "A"
         self._gain    = 128

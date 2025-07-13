@@ -87,7 +87,7 @@ class GlasgowICE40Platform(GlasgowPlatform, LatticeICE40Platform):
 
         pll.logger.debug("PLL: f_in=%.3f f_out(req)=%.3f f_out(act)=%.3f [MHz] ppm=%d",
                          pll.f_in / 1e6, pll.f_out / 1e6, f_out / 1e6, ppm)
-        pll.logger.trace("iCE40 PLL: feedback_path=%s divr=%d divf=%d divq=%d filter_range=%d",
+        pll.logger.info("iCE40 PLL: feedback_path=%s divr=%d divf=%d divq=%d filter_range=%d",
                          feedback_path, divr, divf, divq, filter_range)
 
         m = Module()

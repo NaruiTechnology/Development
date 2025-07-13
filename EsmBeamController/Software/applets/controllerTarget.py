@@ -14,7 +14,8 @@ from amaranth.lib.wiring import In, Out, flipped
 # from ..Software.lib.glasgow.applet import GlasgowApplet
 from Software.lib.glasgow.support.logging import dump_hex
 from Software.lib.glasgow.support.endpoint import ServerEndpoint
-from glasgow.hardware.device import GlasgowDeviceError
+# from glasgow.hardware.device import GlasgowDeviceError
+from Software.lib.glasgow.hardware.device import GlasgowDeviceError
 
 from usb1 import USBError
 

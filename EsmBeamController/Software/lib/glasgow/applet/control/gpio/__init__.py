@@ -44,7 +44,7 @@ class GPIOInterface:
     def __init__(self, logger: logging.Logger, assembly: AbstractAssembly, *,
                  pins: tuple[GlasgowPin]):
         self._logger   = logger
-        self._level    = logging.DEBUG if self._logger.name == __name__ else logging.TRACE
+        self._level    = logging.DEBUG if self._logger.name == __name__ else logging.DEBUG
         self._assembly = assembly
         self._pins     = pins
 
