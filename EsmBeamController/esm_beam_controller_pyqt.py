@@ -21,6 +21,7 @@ class ESMScanController(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ESM Beam Controller (PyQt6)")
+        self.setStyleSheet("background-color: dimgray;")  # Set the background color to dimgray
         self.scan_active = False
         self.scan_paused = False
         self.stop_requested = False

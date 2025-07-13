@@ -41,28 +41,32 @@ class GlasgowUARTController:
             await self.device.download_target(plan)
             voltage = 5.0
             await self.device.set_voltage("AB", voltage)
-            self.iface = await self.device.demultiplexer.claim_interface(applet, applet.mux_interface, args,
-                                            # read_buffer_size=131072*16, write_buffer_size=131072*16)
-                                            read_buffer_size=16384*16384, write_buffer_size=16384*16384)
-            await self.iface.reset()
+            # self.iface = await self.device.demultiplexer.claim_interface(applet, applet.mux_interface, args,
+            #                                 # read_buffer_size=131072*16, write_buffer_size=131072*16)
+            #                                 read_buffer_size=16384*16384, write_buffer_size=16384*16384)
+            self.iface = self.device.demultiplexer.claim_interface(applet, args)         
+            
+            # await self.iface.reset()
 
         except Exception as e:
             raise RuntimeError(f"Failed to connect to Glasgow device: {e}")
+        
+        pass
 
     async def send(self, data: bytes):
         if not isinstance(data, bytes):
             data = data.encode("utf-8")
 
-        if self.interface:
-            await self.interface.write(data)
-            await self.interface.flush()
+        if self.iface:
+            await self.iface.write(data)
+            await self.iface.flush()
         else:
             raise RuntimeError("UART interface not connected.")
 
     async def receive(self, size: int = 64, timeout: float = 2.0) -> bytes:
-        if self.interface:
+        if self.iface:
             try:
-                return await asyncio.wait_for(self.interface.read(size), timeout=timeout)
+                return await asyncio.wait_for(self.iface.read(size), timeout=timeout)
             except asyncio.TimeoutError:
                 return b""
         else:
