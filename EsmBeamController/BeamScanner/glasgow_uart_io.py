@@ -31,22 +31,26 @@ class GlasgowUARTController:
                 operation="run"
             )
             self.device = GlasgowDevice(serial=self.serial_number)
-            self.assembly = HardwareAssembly(device=self.device)
-            # applet = BeamControlApplet()            
+            self.assembly = HardwareAssembly(device=self.device)         
             target = DeprecatedTarget(assembly=self.assembly)
+            
             applet = BeamControlApplet(target, args)
             self.iface = applet.build(target, args)
             self.device.demultiplexer = target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
             plan = target.build_plan()
             await self.device.download_target(plan)
-            voltage = 5.0
+            voltage = 3.3 # 5.0
             await self.device.set_voltage("AB", voltage)
-            # self.iface = await self.device.demultiplexer.claim_interface(applet, applet.mux_interface, args,
-            #                                 # read_buffer_size=131072*16, write_buffer_size=131072*16)
-            #                                 read_buffer_size=16384*16384, write_buffer_size=16384*16384)
-            self.iface = self.device.demultiplexer.claim_interface(applet, args)         
+            # self.interface = await self.device.demultiplexer.claim_interface(
+            #     self.device,
+            #     applet,
+            #     target.multiplexer,
+            #     read_buffer_size=16384*16384,
+            #     write_buffer_size=16384*16384
+            # )
+            # self.interface = self.device.demultiplexer.claim_interface(applet, args)         
             
-            # await self.iface.reset()
+            # await self.interface.reset()
 
         except Exception as e:
             raise RuntimeError(f"Failed to connect to Glasgow device: {e}")
