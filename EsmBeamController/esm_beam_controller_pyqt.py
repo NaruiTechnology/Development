@@ -6,7 +6,8 @@ import time
 import asyncio
 
 from BeamScanner import BeamScanner
-from BeamScanner.glasgow_uart_io import GlasgowUARTController
+# from BeamScanner.glasgow_uart_io import GlasgowUARTController
+from Software.controller.glasgowUartController import GlasgowUARTController
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,

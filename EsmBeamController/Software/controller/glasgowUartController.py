@@ -85,15 +85,15 @@ class GlasgowUARTController:
 async def main():
     uart = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600, serial_number='C3-20241215T152505Z')
     await uart.connect()
-    await uart.send("Hello from Glasgow UART!\n")
-    response = await uart.receive()
-    print("Received:", response)
-    await uart.disconnect()
+    # await uart.send("Hello from Glasgow UART!\n")
+    # response = await uart.receive()
+    # print("Received:", response)
+    # await uart.disconnect()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except Exception as e:
-        print(f"[ERROR] {e}")
-
+        print(f"[ERROR] {e}")   
+    pass
 
