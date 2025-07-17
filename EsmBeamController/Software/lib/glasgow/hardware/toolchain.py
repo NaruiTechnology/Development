@@ -25,6 +25,28 @@ class ToolchainNotFound(Exception):
 class Tool(metaclass=ABCMeta):
     def __init__(self, name):
         self.name = str(name)
+        
+    def digest(self) -> bytes:
+        """Returns a stable hash digest representing this tool's configuration.
+        
+        Combines the tool's name, version, and other identifying characteristics.
+        """
+        hasher = hashlib.blake2s()
+        
+        # Include basic identification
+        hasher.update(self.name.encode('utf-8'))
+        
+        # Include version if available
+        version = self.version
+        if version is not None:
+            hasher.update(str(version).encode('utf-8'))
+        
+        # Include command path if available
+        cmd = self.command
+        if cmd is not None:
+            hasher.update(str(cmd).encode('utf-8'))
+            
+        return hasher.digest()        
 
     @property
     def env_var_name(self):
@@ -70,6 +92,7 @@ class Tool(metaclass=ABCMeta):
         in its entirety, but has no other meaning. Typically implemented by hashing the binary and
         its data files.
         """
+        raise NotImplementedError
 
     def __repr__(self):
         return f"<{self.__class__.__module__}.{self.__class__.__name__} {self.name}>"

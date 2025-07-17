@@ -5,6 +5,8 @@ from Software.applets.BeamControlApplet import BeamControlApplet
 from Software.applets.controllerTarget import OBISubtarget
 from Software.lib.glasgow.legacy import DeprecatedTarget, DeprecatedDemultiplexer
 from Software.lib.glasgow.hardware.assembly import HardwareAssembly
+from Software.lib.glasgow.hardware.target import GlasgowHardwareTarget
+from Software.lib.glasgow.hardware.multiplexer import DirectMultiplexer
 
 import argparse, os
 from types import SimpleNamespace
@@ -28,13 +30,23 @@ class GlasgowUARTController:
                 port="A",
                 x_pins=[f"{self.port}0"], # PinArgument(0)
                 y_pins=[f"{self.port}1"], # PinArgument(1)
-                operation="run"
+                operation="run",
+                loopback = True,
+                out_only = False,
+                xflip = False, 
+                yflip = False, 
+                rotate90 = False,
+                ext_switch_delay = 0.5,
+                benchmark = True           
             )
             self.device = GlasgowDevice(serial=self.serial_number)
-            self.assembly = HardwareAssembly(device=self.device)         
-            target = DeprecatedTarget(assembly=self.assembly)
+            self.assembly = HardwareAssembly(device=self.device) 
+                    
+            # target = DeprecatedTarget(assembly=self.assembly) # using lelgacy code
+            # applet = BeamControlApplet(target, args)
             
-            applet = BeamControlApplet(target, args)
+            target = GlasgowHardwareTarget(revision=self.device.revision, multiplexer_cls=DirectMultiplexer)
+            applet = BeamControlApplet() # target, args)
             self.iface = applet.build(target, args)
             self.device.demultiplexer = target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
             plan = target.build_plan()
