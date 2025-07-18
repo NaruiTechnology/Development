@@ -51,7 +51,7 @@ class GlasgowUARTController:
             self.device.demultiplexer = target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
             plan = target.build_plan()
             await self.device.download_target(plan)
-            voltage = 3.3 # 5.0
+            voltage = 5.0
             await self.device.set_voltage("AB", voltage)
             # self.interface = await self.device.demultiplexer.claim_interface(
             #     self.device,
