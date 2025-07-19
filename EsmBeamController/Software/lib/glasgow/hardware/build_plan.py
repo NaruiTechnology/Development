@@ -97,16 +97,10 @@ class GlasgowBuildPlan:
     def execute(self, build_dir=None, *, debug=False):
         """Execute the build process"""
         if build_dir is None:
-            build_dir = GlasgowBuildPlan.get_build_dir()  #tempfile.mkdtemp(prefix="glasgow_")
+            build_dir = GlasgowBuildPlan.get_build_dir() 
         
         try:
-            # Prepare build files
-            # files = {
-            #     "top.v": BuildScriptUtil._generate_top_verilog(),
-            #     "constraints.pcf": BuildScriptUtil._generate_constraints(),
-            #     "build.sh": BuildScriptUtil._generate_build_script()
-            # }
-            # files = BuildScriptUtil.prepare_build_environment()
+
             files = self._inner.build_files
             
             # Write files
@@ -117,23 +111,6 @@ class GlasgowBuildPlan:
                 if filename.endswith('.sh'):
                     path.chmod(0o755)
 
-
-            # pcf_path = os.path.join(build_dir, 'top.pcf')
-            # if not os.path.exists(pcf_path):
-            #     raise FileNotFoundError(f"Constraints file {pcf_path} not found")
-            
-            # # Basic validation - check if it contains pin assignments
-            # with open(pcf_path) as f:
-            #     if "set_io" not in f.read():
-            #         print("WARNING: No pin assignments found in PCF file")
-            #         pcf_path = os.path.join(self.work_dir, 'top.pcf')    
-            #         # If no PCF provided, create a minimal default one
-            #         if not os.path.exists(pcf_path):
-            #             print("WARNING: Generating default PCF file - verify pin assignments!")
-            #             with open(pcf_path, 'w') as f:
-            #                 f.write("set_io clk 21\n")  # Basic clock pin
-            #                 f.write("set_io led 99\n")  # Basic LED pin
-
             # Run build
             proc = subprocess.run(
                 ["./build.sh"],
@@ -142,18 +119,6 @@ class GlasgowBuildPlan:
                 stderr=subprocess.STDOUT,
                 text=True
             )
-
-                    
-            # with open(pcf_path) as f:
-            #     content = f.read()
-            #     if 'set_io' not in content:
-            #         raise ValueError("PCF file has no pin constraints!")
-                
-                
-            # data = None
-            # suppressBuildError = False #----------------!!!!!! TODO -------------------------
-            # if suppressBuildError:
-            #     return data, proc.stdout
 
             if proc.returncode != 0:
                 raise GatewareBuildError(
@@ -232,14 +197,15 @@ class GlasgowBuildPlan:
             bitstream_data, stdout_data = self.execute(debug=debug) # TODO
             if bitstream_data:
                 bitstream_hash = hashlib.blake2s(bitstream_data).digest()
-                stdout_hash = hashlib.blake2s(stdout_data).hexdigest().encode()
+                # stdout_hash = hashlib.blake2s(stdout_data).hexdigest().encode()
+                stdout_hash = hashlib.blake2s(stdout_data.encode('utf-8')).hexdigest()
                 bitstream_filename.parent.mkdir(parents=True, exist_ok=True)
                 with bitstream_filename.open("wb") as bitstream_file:
                     bitstream_file.write(bitstream_hash)
                     bitstream_file.write(bitstream_data)
                 with stdout_filename.open("wb") as stdout_file:
-                    stdout_file.write(stdout_hash + b"\n") # keep it a text file
-                    stdout_file.write(stdout_data)
+                    stdout_file.write(stdout_hash.encode('utf-8') + b"\n") # keep it a text file
+                    stdout_file.write(stdout_data.encode('utf-8'))
                 logger.info(f"bitstream was written to {str(bitstream_filename)!r}")
             # finally, we have a bitstream! and chances are, we have obtained it much faster than we
         # would have otherwise.

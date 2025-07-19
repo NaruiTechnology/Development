@@ -53,16 +53,7 @@ class GlasgowUARTController:
             await self.device.download_target(plan)
             voltage = 5.0
             await self.device.set_voltage("AB", voltage)
-            # self.interface = await self.device.demultiplexer.claim_interface(
-            #     self.device,
-            #     applet,
-            #     target.multiplexer,
-            #     read_buffer_size=16384*16384,
-            #     write_buffer_size=16384*16384
-            # )
-            # self.interface = self.device.demultiplexer.claim_interface(applet, args)         
-            
-            # await self.interface.reset()
+ 
 
         except Exception as e:
             raise RuntimeError(f"Failed to connect to Glasgow device: {e}")

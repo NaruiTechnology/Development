@@ -475,6 +475,7 @@ class GlasgowDevice:
                                      0, 0, bitstream_id)
         except usb1.USBErrorPipe:
             raise GlasgowDeviceError("FPGA configuration failed")
+        
         try:
             # Each bitstream has an I2C register at address 0, which is used to check that the FPGA
             # has configured properly and that the I2C bus function is intact. A small subset of
