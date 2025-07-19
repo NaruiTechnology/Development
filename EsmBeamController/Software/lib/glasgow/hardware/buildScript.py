@@ -1,159 +1,312 @@
 from pathlib import Path
+import shutil
 
 class BuildScriptUtil:
+    # @staticmethod
+    # def _prepare_build_files(build_dir):
+    #     """Generate complete build files and ensure constraints are available"""
+    #     files = {
+    #         "build.sh": BuildScriptUtil._generate_build_script(),
+    #         "top.v": BuildScriptUtil._generate_top_verilog()
+    #     }
+        
+    #     # Handle constraints file specially - copy from project if exists
+    #     constraints_src = BuildScriptUtil._find_constraints_file()
+    #     constraints_dest = Path(build_dir) / "constraints.pcf"
+        
+    #     if constraints_src:
+    #         shutil.copy(str(constraints_src), str(constraints_dest))
+    #         print(f"Using constraints from: {constraints_src}")
+    #     else:
+    #         with open(constraints_dest, 'w') as f:
+    #             f.write(BuildScriptUtil._generate_default_constraints())
+    #         print("Generated default constraints.pcf")
+            
+    #     files["constraints.pcf"] = constraints_dest.read_text()
+    #     return files
+
+    # @staticmethod
+    # def _find_constraints_file():
+    #     """Search for existing constraints file in standard locations"""
+    #     search_paths = [
+    #         Path("constraints") / "board.pcf",
+    #         Path("constraints.pcf"),
+    #         Path("src") / "constraints.pcf",
+    #         Path(__file__).parent.parent / "constraints" / "board.pcf"
+    #     ]
+        
+    #     for path in search_paths:
+    #         if path.exists():
+    #             return path
+    #     return None
+    
+    # @staticmethod
+    # def prepare_build_environment(build_dir):
+    #     """Prepare build environment with consistent constraint file naming"""
+    #     build_dir = Path(build_dir)
+        
+    #     # 1. Ensure constraints file uses correct name (top.pcf)
+    #     constraints_content = BuildScriptUtil._get_constraints()
+    #     constraints_path = build_dir / "top.pcf"  # Changed to expected name
+        
+    #     with open(constraints_path, 'w') as f:
+    #         f.write(constraints_content)
+        
+    #     # 2. Generate other build files
+    #     files = {
+    #         "build.sh": BuildScriptUtil._generate_build_script(),
+    #         "top.v": BuildScriptUtil._generate_top_verilog(),
+    #         "top.pcf": constraints_content  # Using correct name
+    #     }
+        
+    #     for filename, content in files.items():
+    #         with open(build_dir / filename, 'w') as f:
+    #             f.write(content)
+        
+    #     (build_dir / "build.sh").chmod(0o755)
+    #     return files
     @staticmethod
-    def _prepare_build_files():
-        """Generate complete build files including proper top.v template"""
-        return {
+    def prepare_build_environment(build_dir):
+        """Prepare build environment with guaranteed working constraints"""
+        build_dir = Path(build_dir)
+        build_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 1. Handle constraints file with strict validation
+        constraints_content = BuildScriptUtil._get_valid_constraints()
+        constraints_path = build_dir / "top.pcf"
+        
+        with open(constraints_path, 'w') as f:
+            f.write(constraints_content)
+        
+        # 2. Generate other build files
+        files = {
             "build.sh": BuildScriptUtil._generate_build_script(),
-            "constraints.pcf": BuildScriptUtil._generate_constraints(),
-            "top.v": BuildScriptUtil._generate_top_verilog()
+            "top.v": BuildScriptUtil._generate_top_verilog(),
+            "top.pcf": constraints_content
         }
+        
+        for filename, content in files.items():
+            with open(build_dir / filename, 'w') as f:
+                f.write(content)
+        
+        (build_dir / "build.sh").chmod(0o755)
+        return files
+
+    # @staticmethod
+    # def _get_constraints():
+    #     """Get constraints content with proper Glasgow defaults"""
+    #     return """# Glasgow iCE40HX1K-TQ144 Constraints
+    #             set_io clk 21       # 12MHz oscillator (pin 21)
+    #             set_io led_red 99   # Status LED red (pin 99)
+    #             set_io led_green 98 # Status LED green (pin 98)
+
+    #             # USB Interface
+    #             set_io usb_dp 43    # USB D+ (pin 43)
+    #             set_io usb_dm 44    # USB D- (pin 44)
+                # """    @staticmethod
+    def _get_valid_constraints():
+        """Generate and validate constraints content"""
+        constraints = """# Glasgow iCE40HX1K-TQ144 Constraints
+                        set_io clk 21       # 12MHz oscillator (pin 21)
+                        set_io led_red 99   # Status LED red (pin 99)
+                        set_io led_green 98 # Status LED green (pin 98)
+
+                        # USB Interface
+                        set_io usb_dp 43    # USB D+ (pin 43)
+                        set_io usb_dm 44    # USB D- (pin 44)
+                        """
+        # Validate the constraints format
+        if "set_io" not in constraints:
+            raise ValueError("Generated constraints are invalid - no set_io directives")
+        return constraints
+
     @staticmethod
     def _generate_build_script():
-        """Generate a reliable build script"""
+        """Generate build script with proper error handling"""
         return r"""#!/bin/bash
-                        set -e
+            set -euo pipefail
 
-                        # 1. Verify tools
-                        command -v yosys >/dev/null || { echo "yosys not found"; exit 1; }
-                        command -v nextpnr-ice40 >/dev/null || { echo "nextpnr-ice40 not found"; exit 1; }
-                        command -v icepack >/dev/null || { echo "icepack not found"; exit 1; }
+            # 1. File existence checks with proper error messages
+            check_file() {
+                [ -f "$1" ] || {
+                    echo "ERROR: Required file $1 not found in $(pwd)"
+                    ls -l
+                    exit 1
+                }
+            }
 
-                        # 2. Run synthesis
-                        yosys -l yosys.log -p "
-                            read_verilog -lib /usr/share/yosys/ice40/cells_sim.v;
-                            read_verilog top.v;
-                            synth_ice40 -top top -json top.json
-                        " || { cat yosys.log; exit 1; }
+            check_file "top.v"
+            check_file "top.pcf"
 
-                        # 3. Find working package
-                        for package in $(ls /usr/share/nextpnr/ice40/ 2>/dev/null); do
-                            package=${package%.json}
-                            echo "Trying package $package..."
-                            if nextpnr-ice40 --up5k --package $package \
-                            --json top.json --pcf constraints.pcf --asc top.asc 2>/dev/null; then
-                                echo "Success with package $package"
-                                icepack top.asc top.bin
-                                exit 0
-                            fi
-                        done
+            # 2. Verify constraints content
+            if ! grep -q "set_io" "top.pcf"; then
+                echo "ERROR: Invalid constraints file - no set_io directives"
+                echo "File contents:"
+                cat "top.pcf"
+                exit 1
+            fi
 
-                        echo "ERROR: No working package found"
-                        exit 1
-                        """
-    # def _generate_constraints(self):
-    #     """Generate constraints with auto-detected or safe default pins"""
-    #     # Try to auto-detect board type
-    #     BOARD_PINOUTS = {
-    #         # iCE40-UP5K on common boards
-    #         "ice40up5k-breakout": {
-    #             "clk": "44",   # Actual pin on common breakout boards
-    #             "leds": ["40", "41", "39", "42", "38", "43", "37", "44"]
-    #         },
-    #         # Fallback safe pins (LEDs only)
-    #         "safe-default": {
-    #             "clk": None,  # Must be explicitly set
-    #             "leds": ["41", "40", "39", "38", "37", "36", "42", "43"]
-    #         }
-    #     }
+            # 3. Run synthesis with proper error capture
+            echo "=== Running Synthesis ==="
+            yosys -l yosys.log -p "
+                read_verilog -lib /usr/share/yosys/ice40/cells_sim.v;
+                read_verilog top.v;
+                synth_ice40 -top top -json top.json
+            " || {
+                echo "Synthesis failed:"
+                cat yosys.log
+                exit 1
+            }
 
-    #     # Try to detect board
-    #     board_type = self._detect_board()
-    #     pins = BOARD_PINOUTS.get(board_type, BOARD_PINOUTS["safe-default"])
+            # 4. Place and route with detailed error reporting
+            echo "=== Running Place & Route ==="
+            nextpnr-ice40 \
+                --hx1k \
+                --package tq144 \
+                --json top.json \
+                --pcf top.pcf \
+                --asc top.asc \
+                --freq 12 \
+                2>pnr.log || {
+                echo "Place and route failed:"
+                cat pnr.log
+                exit 1
+            }
 
-    #     # Generate constraints with validation
-    #     constraints = []
-    #     if pins["clk"]:
-    #         constraints.append(f"set_io clk {pins['clk']}  # Clock")
-        
-    #     for i, pin in enumerate(pins["leds"]):
-    #         constraints.append(f"set_io leds[{i}] {pin}  # LED {i}")
-        
-    #     return "\n".join(constraints)
-    
-    # def _generate_constraints(self):
-    #     """Generate constraints using pin names instead of numbers"""
-    #     # For iCE40 UP5K-SG48 package (common on Glasgow)
-    #     return """
-    #             # Clock
-    #             set_io clk F5
+            # 5. Bitstream generation
+            echo "=== Generating Bitstream ==="
+            icepack top.asc top.bin || {
+                echo "Bitstream generation failed"
+                exit 1
+            }
 
-    #             # LEDs - using pin names for SG48 package
-    #             set_io leds[0] F1
-    #             set_io leds[1] F2
-    #             set_io leds[2] F3
-    #             set_io leds[3] F4
-    #             set_io leds[4] E1
-    #             set_io leds[5] E2
-    #             set_io leds[6] E3
-    #             set_io leds[7] E4
+            echo "=== Build Successful ==="
+            exit 0  # Explicit success exit code
+            """
 
-    #             # Alternative minimal working example:
-    #             # set_io leds[0] F1  # Single LED should always work
+
+    # @staticmethod
+    # def _generate_build_script():
+    #     """Generate build script that looks for top.pcf"""
+    #     return r"""#!/bin/bash
+    #             set -euo pipefail
+
+    #             # Verify required files exist
+    #             [ -f top.v ] || { echo "ERROR: top.v not found"; exit 1; }
+    #             [ -f top.pcf ] || { echo "ERROR: top.pcf not found"; ls -la; exit 1; }
+
+    #             # Synthesis
+    #             yosys -l yosys.log -p "
+    #                 read_verilog -lib /usr/share/yosys/ice40/cells_sim.v;
+    #                 read_verilog top.v;
+    #                 synth_ice40 -top top -json top.json
+    #             " || { cat yosys.log; exit 1; }
+
+    #             # Place and Route
+    #             nextpnr-ice40 \
+    #                 --hx1k \
+    #                 --package tq144 \
+    #                 --json top.json \
+    #                 --pcf top.pcf \  # Now using correct filename
+    #                 --asc top.asc \
+    #                 --freq 12 \
+    #                 2>pnr.log || { cat pnr.log; exit 1; }
+
+    #             # Bitstream generation
+    #             icepack top.asc top.bin
+    #             echo "Build successful!"
     #             """
-    # def _generate_constraints(self):
-    #     """Guaranteed-working minimal constraints"""
-    #     return """
-    #         # These pins exist on ALL iCE40 devices
-    #         set_io clk 21
-    #         set_io leds[0] 25
-    #         """
-    @staticmethod
-    def _generate_constraints():
-        """Generate guaranteed-working constraints for iCE40 UP5K"""
-        # Ultra-reliable minimal constraints
-        return """
-            # Minimal working constraints for iCE40 UP5K
-            # Using only verified pins that exist in all packages
-            set_io clk 21    # Universal clock pin
-            set_io leds[0] 25 # Universal GPIO pin
-            # Remove other constraints for now
-            """    
-            
 
+    @staticmethod
+    def _generate_default_constraints():
+        """Generate guaranteed-working constraints for Glasgow hardware"""
+        return """# Default constraints for Glasgow iCE40HX1K-TQ144
+                # Clock - 12MHz oscillator on pin 21
+                set_io clk 21
+
+                # Status LED on pin 99 (red)
+                set_io led_red 99
+
+                # Additional Glasgow-specific pins
+                set_io led_green 98
+                set_io usb_dp 43
+                set_io usb_dm 44
+                """
+
+    # @staticmethod
+    # def _generate_build_script():
+    #     """Generate build script with explicit paths"""
+    #     return r"""#!/bin/bash
+    #     set -euo pipefail
+
+    #     # Verify constraints file exists
+    #     if [ ! -f constraints.pcf ]; then
+    #         echo "ERROR: constraints.pcf not found in $(pwd)"
+    #         exit 1
+    #     fi
+
+    #     # Run synthesis
+    #     yosys -l yosys.log -p "
+    #         read_verilog -lib /usr/share/yosys/ice40/cells_sim.v;
+    #         read_verilog top.v;
+    #         synth_ice40 -top top -json top.json
+    #     " || { cat yosys.log; exit 1; }
+
+    #     # Place and route for Glasgow hardware
+    #     nextpnr-ice40 \
+    #         --hx1k \
+    #         --package tq144 \
+    #         --json top.json \
+    #         --pcf constraints.pcf \
+    #         --asc top.asc \
+    #         --freq 12 \
+    #         2>pnr.log || { cat pnr.log; exit 1; }
+
+    #     # Generate bitstream
+    #     icepack top.asc top.bin
+
+    #     echo "Build successful! Bitstream: top.bin"
+    #     """
+
+    # @staticmethod
+    # def _generate_top_verilog():
+    #     """Generate top.v that matches Glasgow hardware"""
+    #     return """module top(
+    #         input clk,
+    #         output led_red,
+    #         output led_green
+    #     );
+    #         reg [23:0] counter = 0;
+    #         always @(posedge clk) begin
+    #             counter <= counter + 1;
+    #         end
+            
+    #         assign led_red = counter[23];  // ~1.5Hz blink
+    #         assign led_green = counter[22]; // ~3Hz blink
+    #     endmodule
+    #     """
+    
     @staticmethod
     def _generate_top_verilog():
-        """Generate a minimal working Verilog design"""
+        """Generate verilog matching the constraints"""
         return """module top(
-                    input clk,
-                    output led
-                );
-                    reg [23:0] counter;
-                    always @(posedge clk)
-                        counter <= counter + 1;
-                    assign led = counter[23];
-                endmodule"""
-
-    @staticmethod 
-    def _generate_constraints():
-        """Generate constraints for iCE40 UP5K"""
-        # Try to find board-specific constraints first
-        board_pcf = Path(BuildScriptUtil._detect_project_path()) / "constraints" / "board.pcf"
-        if board_pcf.exists():
-            return board_pcf.read_text()
-        
-        # Fallback to known working constraints
-        return """# For iCE40 UP5K breakout boards
-                set_io clk 35   # Clock pin (P35 on most breakouts)
-                set_io led 41   # LED pin (P41 on most breakouts)"""
-    
-    @staticmethod            
-    def _detect_project_path():
-        """Dynamically detect the project root path"""
-        # Try to find the project root by looking for common markers
-        search_paths = [
-            Path.cwd(),  # Current working directory
-            Path(__file__).absolute().parent.parent,  # 2 levels up from this file
-            Path.home() / "Projects" / "NaruiTech" / "EsmBeamController",  # Fallback
-        ]
-        
-        for path in search_paths:
-            # Check for common project markers
-            if (path / "constraints").exists() or (path / "src").exists():
-                return path
-            if (path / "Makefile").exists() or (path / "README.md").exists():
-                return path
-        
-        # Default to current directory if nothing found
-        return Path.cwd()                
+            input clk,
+            output led_red,
+            output led_green,
+            inout usb_dp,
+            inout usb_dm
+        );
+            // Simple LED test pattern
+            reg [23:0] counter = 0;
+            always @(posedge clk) begin
+                counter <= counter + 1;
+            end
+            
+            assign led_red = counter[23];    // ~1.5Hz blink
+            assign led_green = counter[22];  // ~3Hz blink
+            
+            // USB lines - set as inputs by default
+            assign usb_dp = 1'bz;
+            assign usb_dm = 1'bz;
+        endmodule
+        """
