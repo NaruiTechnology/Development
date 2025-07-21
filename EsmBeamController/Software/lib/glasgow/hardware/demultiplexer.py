@@ -59,11 +59,19 @@ _packets_per_xfer = 32
 # are diminishing.
 _xfers_per_queue = min(16, _max_packets_per_ep // _packets_per_xfer)
 
-
 class DirectDemultiplexer(AccessDemultiplexer):
     def __init__(self, device, pipe_count):
         super().__init__(device)
         self._claimed = set()
+        # Debug trace the configurations of USB
+        for config in device.usb_handle.getDevice().iterConfigurations():
+            print(f"Config {config.getConfigurationValue()}:")
+            for interface in config:
+                print(f"  Interface {interface.getNumSettings()}:")
+                for setting in interface:
+                    print(f"    AltSetting {setting.getAlternateSetting()}")
+                    for endpoint in setting:
+                        print(f"      Endpoint 0x{endpoint.getAddress():02x} ({'IN' if endpoint.getAddress() & 0x80 else 'OUT'})")
 
         for config in device.usb_handle.getDevice().iterConfigurations():
             if config.getNumInterfaces() == pipe_count:
