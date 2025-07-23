@@ -85,7 +85,9 @@ class DirectDemultiplexer(AccessDemultiplexer):
                     pass
                 break
         else:
-            assert False
+        #     assert False
+        pass
+    
 
     async def claim_interface(self, applet, mux_interface, args, pull_low=set(), pull_high=set(),
                               **kwargs):
@@ -162,45 +164,8 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
     def __init__(self, device, applet, mux_interface,
                  read_buffer_size=None, write_buffer_size=None):
         super().__init__(device, applet)
-
-        self._write_buffer_size = write_buffer_size
-        self._read_buffer_size  = read_buffer_size
-        self._in_pushback  = asyncio.Condition()
-        self._out_inflight = 0
-
-        self._pipe_num   = mux_interface._pipe_num
-        self._addr_reset = mux_interface._addr_reset
-
-        config_num = self.device.usb_handle.getConfiguration()
-        for config in self.device.usb_handle.getDevice().iterConfigurations():
-            if config.getConfigurationValue() == config_num:
-                break
-
-        interfaces = list(config.iterInterfaces())
-        assert self._pipe_num < len(interfaces)
-        interface = interfaces[self._pipe_num]
-
-        settings = list(interface.iterSettings())
-        setting = settings[1] # alt-setting 1 has the actual endpoints
-        for endpoint in setting.iterEndpoints():
-            address = endpoint.getAddress()
-            packet_size = endpoint.getMaxPacketSize()
-            if address & usb1.ENDPOINT_DIR_MASK == usb1.ENDPOINT_IN:
-                self._endpoint_in = address
-                self._in_packet_size = packet_size
-            if address & usb1.ENDPOINT_DIR_MASK == usb1.ENDPOINT_OUT:
-                self._endpoint_out = address
-                self._out_packet_size = packet_size
-        assert self._endpoint_in != None and self._endpoint_out != None
-
-        self._interface  = self.device.usb_handle.claimInterface(self._pipe_num)
-        self._in_tasks   = TaskQueue()
-        self._in_buffer  = ChunkedFIFO()
-        self._out_tasks  = TaskQueue()
-        self._out_buffer = ChunkedFIFO()
-
-        self._in_stalls  = 0
-        self._out_stalls = 0
+        
+        self.set_usb_handle(mux_interface, read_buffer_size, write_buffer_size)
 
     async def cancel(self):
         if self._in_tasks or self._out_tasks:

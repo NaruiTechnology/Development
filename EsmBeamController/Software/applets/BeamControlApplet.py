@@ -107,6 +107,7 @@ class BeamControlApplet(GlasgowApplet):
 
 
     def build(self, target, args):
+        args.pipes = "PQ"
         self.mux_interface = iface = \
                 target.multiplexer.claim_interface(self, args)
                 

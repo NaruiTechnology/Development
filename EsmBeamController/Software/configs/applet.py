@@ -1,5 +1,4 @@
-import argparse
-
+import argparse,os
 from ..lib.glasgow.applet import PinArgument
 from ..lib.glasgow.support.endpoint import endpoint
 
@@ -13,7 +12,11 @@ except:
 
 # TODO: generate this from ScopeSettings
 class OBIAppletArguments:
-    def __init__(self, path="D:/NaruiTech/Development/EsmBeamController/test.toml"): # TODO: "microscope.toml"):
+    def __init__(self, path=None): # TODO: "microscope.toml"):
+        if not path:
+            path = f"{os.getcwd()}/EsmBeamController/test.toml" #TODO
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Configuration file not found: {path}")
         self.path = path
         self.toml = None
         self.args = argparse.Namespace(port_spec="AB",

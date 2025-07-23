@@ -21,11 +21,59 @@ class GlasgowUARTController:
         self.serial_number = serial_number
         self.device = None
         self.interface = None
+    
+    # def setup_usb_config(self):
+    #     import usb.core
+    #     import usb.util
 
+    #     # Constants for Glasgow USB device
+    #     VENDOR_ID = 0x20b7
+    #     PRODUCT_ID = 0x9db1
+
+    #     # Find the device
+    #     dev = usb.core.find(idVendor=VENDOR_ID, idProduct=PRODUCT_ID)
+
+    #     if dev is None:
+    #         raise ValueError("Glasgow device not found.")
+
+    #     # Detach kernel driver if needed
+    #     for intf_num in range(4):
+    #         if dev.is_kernel_driver_active(intf_num):
+    #             dev.detach_kernel_driver(intf_num)
+
+    #     # Set configuration 1
+    #     dev.set_configuration(1)
+    #     cfg = dev.get_active_configuration()
+
+    #     print(f"Active Configuration: {cfg.bConfigurationValue}, Interfaces: {cfg.bNumInterfaces}")
+
+    #     # Set alternate setting 1 for interfaces 0–3
+    #     for intf in cfg:
+    #         if intf.bAlternateSetting == 1:
+    #             continue  # already alt setting 1
+    #         intf_num = intf.bInterfaceNumber
+    #         try:
+    #             usb.util.claim_interface(dev, intf_num)
+    #             dev.set_interface_altsetting(interface=intf_num, alternate_setting=1)
+    #             print(f"Set Interface {intf_num} to alternate setting 1.")
+    #         except usb.core.USBError as e:
+    #             print(f"Error setting Interface {intf_num} AltSetting 1: {e}")
+
+    #     # Display active endpoints
+    #     print("\nActive endpoints (after alt setting applied):")
+    #     for intf in cfg:
+    #         if intf.bAlternateSetting != 1:
+    #             continue
+    #         print(f"Interface {intf.bInterfaceNumber} (Alt {intf.bAlternateSetting}):")
+    #         for ep in intf.endpoints():
+    #             print(f"  Endpoint: address=0x{ep.bEndpointAddress:02X}, dir={'IN' if ep.bEndpointAddress & 0x80 else 'OUT'}")
 
     async def connect(self):
         try:
-            from Software.configs.applet import OBIAppletArguments
+            from Software.configs.applet import OBIAppletArguments          
+            
+            # self.setup_usb_config()//
+                                                                         
             args = SimpleNamespace(
                 port="A",
                 x_pins=[f"{self.port}0"], # PinArgument(0)
@@ -54,8 +102,12 @@ class GlasgowUARTController:
             self.device.demultiplexer = target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
             plan = target.build_plan()
             
+            await self.device.download_target(plan)
+            # voltage = 5.0
+            # await self.device.set_voltage("AB", voltage)
             # from Software.configs.applet import OBIAppletArguments  
-            # from Software.lib.glasgow import OBIDemux          
+            
+            # from . import OBIDemux          
             # args = OBIAppletArguments()
             # args.parse_toml()
             # args = args.args
@@ -63,10 +115,6 @@ class GlasgowUARTController:
             # interface = await self.device.demultiplexer.claim_interface(applet, applet.mux_interface, args,
             #                                                 read_buffer_size=16384*16384, write_buffer_size=16384*16384)  
 
-            await self.device.download_target(plan)
-            # voltage = 5.0
-            # await self.device.set_voltage("AB", voltage)
- 
 
         except Exception as e:
             raise RuntimeError(f"Failed to connect to Glasgow device: {e}")
