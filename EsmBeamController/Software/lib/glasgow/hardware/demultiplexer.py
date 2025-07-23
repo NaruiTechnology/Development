@@ -85,9 +85,8 @@ class DirectDemultiplexer(AccessDemultiplexer):
                     pass
                 break
         else:
-        #     assert False
-        pass
-    
+            assert False
+
 
     async def claim_interface(self, applet, mux_interface, args, pull_low=set(), pull_high=set(),
                               **kwargs):

@@ -105,15 +105,17 @@ class GlasgowUARTController:
             await self.device.download_target(plan)
             # voltage = 5.0
             # await self.device.set_voltage("AB", voltage)
-            # from Software.configs.applet import OBIAppletArguments  
             
-            # from . import OBIDemux          
-            # args = OBIAppletArguments()
-            # args.parse_toml()
-            # args = args.args
-            # self.device.demultiplexer = OBIDemux(self.device, target.multiplexer.pipe_count) # target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
-            # interface = await self.device.demultiplexer.claim_interface(applet, applet.mux_interface, args,
-            #                                                 read_buffer_size=16384*16384, write_buffer_size=16384*16384)  
+            from Software.configs.applet import OBIAppletArguments  
+            
+            from . import OBIDemux          
+            args = OBIAppletArguments()
+            args.parse_toml()
+            args = args.args
+            self.device.demultiplexer = OBIDemux(self.device, target.multiplexer.pipe_count) # target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
+            interface = await self.device.demultiplexer.claim_interface(applet, applet.mux_interface, args,
+                                                            read_buffer_size=16384*16384, write_buffer_size=16384*16384)  
+            interface.reset()  # Reset the interface to ensure it's ready for communication
 
 
         except Exception as e:
