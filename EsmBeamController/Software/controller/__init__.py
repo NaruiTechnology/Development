@@ -14,11 +14,12 @@ class OBIDemux(glasgow_access.DirectDemultiplexer):
         super().__init__(*args, **kwargs)
     async def claim_interface(self, applet, mux_interface, *args, **kwargs):
         iface = await super().claim_interface(applet, mux_interface, *args, **kwargs)
-        self._interfaces.remove(iface)
-        await iface.cancel()
-        new_iface = OBIDemuxInterface(self.device, applet, mux_interface, **kwargs)
-        self._interfaces.append(new_iface)
-        return new_iface
+        # self._interfaces.remove(iface)
+        # await iface.cancel()
+        # new_iface = OBIDemuxInterface(self.device, applet, mux_interface, **kwargs)
+        # self._interfaces.append(new_iface)
+        # return new_iface
+        return iface
 
 class OBIDemuxInterface(glasgow_access.DirectDemultiplexerInterface):
     def __init__(self, *args, **kwargs):

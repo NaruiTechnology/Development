@@ -117,7 +117,7 @@ class GlasgowUARTController:
         try:
             from Software.configs.applet import OBIAppletArguments          
             
-            self.setup_usb_config()
+            # self.setup_usb_config()
                                                                          
             args = SimpleNamespace(
                 port="A",
@@ -132,7 +132,7 @@ class GlasgowUARTController:
                 ext_switch_delay = 0.5,
                 benchmark = True           
             )
-            self.device = GlasgowDevice(serial=self.serial_number)
+            self.device = GlasgowDevice()#serial=self.serial_number)
             self.assembly = HardwareAssembly(device=self.device) 
                     
             # target = DeprecatedTarget(assembly=self.assembly) # using lelgacy code
@@ -147,7 +147,7 @@ class GlasgowUARTController:
             self.device.demultiplexer = target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
             plan = target.build_plan()
             
-            await self.device.download_target(plan)
+            # await self.device.download_target(plan)
             # voltage = 5.0
             # await self.device.set_voltage("AB", voltage)
             
@@ -194,7 +194,7 @@ class GlasgowUARTController:
             self.interface = None
 
 async def main():
-    uart = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600, serial_number='C3-20241215T152505Z')
+    uart = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600) #, serial_number='C3-20241215T152505Z')
     await uart.connect()
     # await uart.send("Hello from Glasgow UART!\n")
     # response = await uart.receive()

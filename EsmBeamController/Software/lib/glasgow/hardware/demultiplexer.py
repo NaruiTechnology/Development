@@ -63,29 +63,29 @@ class DirectDemultiplexer(AccessDemultiplexer):
     def __init__(self, device, pipe_count):
         super().__init__(device)
         self._claimed = set()
-        # Debug trace the configurations of USB
-        for config in device.usb_handle.getDevice().iterConfigurations():
-            print(f"Config {config.getConfigurationValue()}:")
-            for interface in config:
-                print(f"  Interface {interface.getNumSettings()}:")
-                for setting in interface:
-                    print(f"    AltSetting {setting.getAlternateSetting()}")
-                    for endpoint in setting:
-                        print(f"      Endpoint 0x{endpoint.getAddress():02x} ({'IN' if endpoint.getAddress() & 0x80 else 'OUT'})")
+        # # Debug trace the configurations of USB
+        # for config in device.usb_handle.getDevice().iterConfigurations():
+        #     print(f"Config {config.getConfigurationValue()}:")
+        #     for interface in config:
+        #         print(f"  Interface {interface.getNumSettings()}:")
+        #         for setting in interface:
+        #             print(f"    AltSetting {setting.getAlternateSetting()}")
+        #             for endpoint in setting:
+        #                 print(f"      Endpoint 0x{endpoint.getAddress():02x} ({'IN' if endpoint.getAddress() & 0x80 else 'OUT'})")
 
-        for config in device.usb_handle.getDevice().iterConfigurations():
-            if config.getNumInterfaces() == pipe_count:
-                try:
-                    device.usb_handle.setConfiguration(config.getConfigurationValue())
-                except (usb1.USBErrorInvalidParam, usb1.USBErrorNotSupported):
-                    # Neither WinUSB, nor libusbK, nor libusb0 allow selecting any configuration
-                    # that is not the 1st one. This is a limitation of the KMDF USB target.
-                    #
-                    # Some libusb versions report InvalidParam and some NotSupported.
-                    pass
-                break
-        else:
-            assert False
+        # for config in device.usb_handle.getDevice().iterConfigurations():
+        #     if config.getNumInterfaces() == pipe_count:
+        #         try:
+        #             device.usb_handle.setConfiguration(config.getConfigurationValue())
+        #         except (usb1.USBErrorInvalidParam, usb1.USBErrorNotSupported):
+        #             # Neither WinUSB, nor libusbK, nor libusb0 allow selecting any configuration
+        #             # that is not the 1st one. This is a limitation of the KMDF USB target.
+        #             #
+        #             # Some libusb versions report InvalidParam and some NotSupported.
+        #             pass
+        #         break
+        # else:
+        #     assert False
 
 
     async def claim_interface(self, applet, mux_interface, args, pull_low=set(), pull_high=set(),
@@ -162,8 +162,7 @@ class DirectDemultiplexer(AccessDemultiplexer):
 class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
     def __init__(self, device, applet, mux_interface,
                  read_buffer_size=None, write_buffer_size=None):
-        super().__init__(device, applet)
-        
+        super().__init__(device, applet)       
         self.set_usb_handle(mux_interface, read_buffer_size, write_buffer_size)
 
     async def cancel(self):

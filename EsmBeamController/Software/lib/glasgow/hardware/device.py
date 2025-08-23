@@ -488,6 +488,8 @@ class GlasgowDevice:
                 "FPGA health check failed; if you are using a newly manufactured device, "
                 "ask the vendor of the device for return and replacement, else ask for support "
                 "on community channels")
+            
+            
     # async def download_bitstream(self, bitstream, bitstream_id=b"\xff" * 16):
     #     """Download bitstream to FPGA with robust error handling"""
     #     MAX_RETRIES = 3
