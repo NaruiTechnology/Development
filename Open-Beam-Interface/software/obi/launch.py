@@ -78,7 +78,7 @@ class OBILauncher:
             await applet.interact(device, args, iface)
 
         else:
-            await iface.reset()
+            #TODO await iface.reset()
             return iface
 
 # from support import stream_logs

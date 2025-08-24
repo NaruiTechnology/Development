@@ -10,7 +10,6 @@ from obi.macros import BitmapVectorPattern
 from .scan_parameters import SettingBoxWithDefaults, QHLine
 from .dose_calc import DoseCalcWidget
 
-
 class PatternWorker(QObject):
     progress = pyqtSignal(int)
     process_requested = pyqtSignal(dict)
