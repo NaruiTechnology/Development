@@ -167,7 +167,8 @@ class Endpoint:
 @dataclass
 class ScopeSettings:
     endpoint: Union[Endpoint, None]
-    beam_settings: dict({str: BeamSettings})
+    # beam_settings: dict({str: BeamSettings})
+    beam_settings: dict[str, BeamSettings]
 
     @classmethod
     def from_dict(cls, d:dict):
@@ -182,10 +183,14 @@ class ScopeSettings:
             endpoint = endpoint,
             beam_settings = beams
         )
-    
+ 
     @classmethod
-    def from_toml_file(cls, path="microscope.toml"):
+    def from_toml_file(cls, file): #, path="microscope.toml"):       
         from tomlkit.toml_file import TOMLFile
+        import os
+        path = f"{os.getcwd()}/{file}"
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"No file found at {file}")
         toml_file = TOMLFile(path)
         toml = toml_file.read()
         if "beam" in toml:
@@ -195,11 +200,15 @@ class ScopeSettings:
                 toml["beam"]["ion"].update({"type": BeamType.Ion})
         return cls.from_dict(toml)
     
-    def to_toml_file(self, path="microscope.toml"):
+    def to_toml_file(self): #, path="microscope.toml"): 
+
         from tomlkit.toml_file import TOMLFile
         from tomlkit.toml_document import TOMLDocument
         from tomlkit.container import Container
         from tomlkit.items import Item
+        path = cls.path()
+        if path is None:
+            raise FileNotFoundError("No microscope.toml file found in current working directory")
         toml_file = TOMLFile(path)
         old_toml = toml_file.read()
         d = self.to_dict()
