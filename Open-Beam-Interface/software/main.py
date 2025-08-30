@@ -72,7 +72,7 @@ class Window(QMainWindow):
     beam_enum = {"electron": BeamType.Electron, "ion": BeamType.Ion}
     def __init__(self):
         super().__init__()
-        self.scope_settings = ScopeSettings.from_toml_file()
+        self.scope_settings = ScopeSettings.from_toml_file("microscope.toml")
         ep = self.scope_settings.endpoint
         print(ep)
         if ep == None:
