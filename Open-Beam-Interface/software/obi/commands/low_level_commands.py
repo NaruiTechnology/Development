@@ -254,7 +254,11 @@ class Command(data.Struct):
         each subsequent byte of the command.
     """
     type: CmdType
-    payload: data.UnionLayout({cmd.fieldstr: cmd.as_struct_layout() for cmd in all_commands})
+    # Prior AI: payload: data.UnionLayout({cmd.fieldstr: cmd.as_struct_layout() for cmd in all_commands})
+    payload: "data.UnionLayout"  # type annotation only, no call expression
     deserialized_states = {cmd.cmdtype : 
             {f"{cmd.fieldstr}_{state}":offset for state, offset in cmd.bytelayout.as_deserialized_states().items()} 
             for cmd in all_commands}
+
+# Assign the UnionLayout after the class definition ---- Copilot generated code ----
+Command.payload = data.UnionLayout({cmd.fieldstr: cmd.as_struct_layout() for cmd in all_commands})

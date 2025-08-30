@@ -17,7 +17,7 @@ import pyqtgraph as pg
 import qasync
 from qasync import asyncSlot, asyncClose, QApplication, QEventLoop
 
-from obi.gui.components import ImageDisplay, CombinedScanControls, CombinedPatternControls, BeamControl, MagCalWidget
+from obi.gui import ImageDisplay, CombinedScanControls, CombinedPatternControls, BeamControl, MagCalWidget
 
 from obi.transfer import TCPConnection, setup_logging, TransferError
 from obi.macros import FrameBuffer, BitmapVectorPattern
