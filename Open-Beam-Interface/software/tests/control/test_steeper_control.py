@@ -5,6 +5,10 @@ import asyncio
 from amaranth.sim import Simulator, Settle
 from amaranth import Module, ClockDomain
 
+from obi.sysControl.stepper.stepperChannel import StepperChannel
+from obi.sysControl.stepper.controlStepperInterface import ControlStepperInterface
+from obi.sysControl.stepper.controlStepperSubtarget import ControlStepperSubtarget  
+from obi.sysControl.stepper.stepperApplet import ControlStepperApplet
 
 # ---------------------------------------------------------------------------
 # Helper: Mock lower interface
@@ -27,7 +31,7 @@ class MockLower:
 class ControlStepperTest(unittest.TestCase):
     def test_stepper_channel_generates_pulses(self):
         """Simulate StepperChannel and verify it runs without errors."""
-        from obi.sysControl.stepper.stepperChannel import StepperChannel
+
         try:
             m = Module()
             m.domains.sync = ClockDomain("sync")  
@@ -55,13 +59,11 @@ class ControlStepperTest(unittest.TestCase):
             
             
         except Exception as e:
-            # self.fail(f"StepperChannel simulation raised an exception: {e}")
-            pass
+            self.fail(f"StepperChannel simulation raised an exception: {e}")
             
     def test_interface_commands(self):
         """Check that ControlStepperInterface encodes commands correctly."""
-        from obi.sysControl.stepper.controlStepperInterface import ControlStepperInterface
-        from obi.sysControl.stepper.controlStepperSubtarget import ControlStepperSubtarget  
+
 
         try:
             async def run_test():
@@ -118,17 +120,10 @@ class ControlStepperTest(unittest.TestCase):
         args = type("Args", (), {
             "pin_step": "A0", "pin_dir": "A1", "pin_en": "A2"
         })()
-        from obi.sysControl.stepper.stepperApplet import ControlStepperApplet
+
         try:
             applet = ControlStepperApplet()
             # Should not raise
             applet.build(DummyTarget(), args)
         except Exception as e:
             self.fail(f"ControlStepperApplet.build() raised an exception: {e}")
-
-
-# ---------------------------------------------------------------------------
-# Allow running directly
-# ---------------------------------------------------------------------------
-# if __name__ == "__main__":
-#     unittest.main()
