@@ -6,12 +6,12 @@ logger = logging.getLogger()
 import numpy as np
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtCore import QThread, QObject, pyqtSignal, pyqtSlot as Slot
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QDoubleValidator
 from PyQt6.QtWidgets import (QHBoxLayout, QMainWindow, QDialog, QProgressBar,
                              QMessageBox, QPushButton, QComboBox, QCheckBox,
                              QVBoxLayout, QWidget, QLabel, QGridLayout,
                              QSpinBox, QFileDialog, QLineEdit, QDialogButtonBox, QToolBar,
-                             QDockWidget, QSizePolicy)
+                             QDockWidget, QSizePolicy, QTabWidget, QFormLayout, QGroupBox)
 import pyqtgraph as pg
 
 import qasync
@@ -24,6 +24,8 @@ from obi.macros import FrameBuffer, BitmapVectorPattern
 from obi.config.meta import ScopeSettings
 
 from obi.commands import *
+
+from obi.sysControl.stepper.controlStepperInterface import ControlStepperInterface
 
 setup_logging({"Stream": logging.DEBUG, "Command": logging.DEBUG, "Connection": logging.DEBUG})
 
@@ -70,53 +72,217 @@ class Tools(QToolBar):
 class Window(QMainWindow):
     _logger = logging.getLogger("GUI")
     beam_enum = {"electron": BeamType.Electron, "ion": BeamType.Ion}
+
     def __init__(self):
         super().__init__()
         self.scope_settings = ScopeSettings.from_toml_file("microscope.toml")
         ep = self.scope_settings.endpoint
         print(ep)
-        if ep == None:
+        if ep is None:
             self.conn = TCPConnection("localhost", 2224)
         else:
-            host = ep.host
-            if host == None:
-                host = "localhost"
+            host = ep.host or "localhost"
             port = ep.port
             self.conn = TCPConnection(host, port)
 
         self.fb = FrameBuffer(self.conn)
 
-        self.image_display = ImageDisplay(511, 511)
-        self.setCentralWidget(self.image_display)
+        # Create the tab widget
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
 
-        self.toolbar = Tools()
-        self.addToolBar(self.toolbar)
-        self.toolbar.calibrate.triggered.connect(self.open_calibration)
-        self.toolbar.debug.triggered.connect(self.printstuff)
+        # Add existing widgets to the first tab
+        self.main_tab = QWidget()
+        self.tabs.addTab(self.main_tab, "Main Controls")
+        self.setup_main_tab()
+
+        # Add stepper control to the second tab
+        self.stepper_tab = QWidget()
+        self.tabs.addTab(self.stepper_tab, "Stepper Control")
+        self.setup_stepper_tab()
+
+    def setup_main_tab(self):
+        """Set up the Main Controls tab with left-right horizontal layout."""
+        layout = QHBoxLayout()  # Horizontal layout for left and right groups
+
+        # Left Group: Contains the remaining widgets
+        left_group = QGroupBox("Left Panel")
+        left_layout = QVBoxLayout()
+        self.image_display = ImageDisplay(511, 511)
+        left_layout.addWidget(self.image_display)
+        left_group.setLayout(left_layout)
+
+        # Right Group: Contains Beam Status, Photo Controls, and Pattern Control
+        right_group = QGroupBox("Right Panel")
+        right_layout = QVBoxLayout()
 
         self.beam_control = BeamStateWidget(self.conn, self.scope_settings.beam_settings)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.beam_control)
-
         self.scan_control = ScanControlWidget()
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.scan_control)
-
         self.pattern_control = PatternControlWidget(self.conn)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.pattern_control)
 
-        self.scan_control.inner.live.start_btn.clicked.connect(self.toggle_live_scan)
-        self.scan_control.inner.live.roi_btn.clicked.connect(self.toggle_roi_scan)
-        self.scan_control.inner.photo.acq_btn.clicked.connect(self.acquire_photo)
-        self.unique_controllers = [self.scan_control.inner.live, self.scan_control.inner.photo, self.pattern_control, self.beam_control]
+        right_layout.addWidget(self.beam_control)
+        right_layout.addWidget(self.scan_control)
+        right_layout.addWidget(self.pattern_control)
+        right_group.setLayout(right_layout)
 
-        ## Popup window
-        self.mag_cal = MagCalWidget()
-        self.mag_cal.inner.pass_toml(self.scope_settings)
-        self.image_display.measure_lines.sigRegionChanged.connect(self.mag_cal.inner.get_measurement)
-        self.image_display.sigResolutionChanged.connect(self.mag_cal.inner.get_resolution)
-        self.beam_control.inner.sigBeamTypeChanged.connect(self.mag_cal.inner.set_beam)
-        self.mag_cal.inner.sigRequestUpdateToml.connect(self.update_toml)
-        self.mag_cal.inner.sigToggleMeasureLines.connect(self.image_display.toggle_double_lines)
-    
+        # Add both groups to the main layout
+        layout.addWidget(left_group)
+        layout.addWidget(right_group)
+
+        self.main_tab.setLayout(layout)
+
+    def setup_stepper_tab(self):
+        """Set up the Stepper Control tab with updated layout."""
+        layout = QHBoxLayout()  # Horizontal layout for left and right groups
+
+        # Left Group: X/Y configuration input, Current Position, and Progress Bar
+        config_group = QGroupBox("Target Position")
+        config_layout = QVBoxLayout()  # Vertical layout for inputs and bottom widgets
+
+        # X/Y Configuration Input
+        input_layout = QHBoxLayout()  # Horizontal layout for X/Y inputs
+        self.x_input = QLineEdit()
+        self.y_input = QLineEdit()
+        self.x_input.setPlaceholderText("Enter target X position")
+        self.y_input.setPlaceholderText("Enter target Y position")
+        self.x_input.setValidator(QDoubleValidator())  # Validate float input
+        self.y_input.setValidator(QDoubleValidator())  # Validate float input
+
+        input_layout.addWidget(QLabel("X Position:"))
+        input_layout.addWidget(self.x_input)
+        input_layout.addWidget(QLabel("Y Position:"))
+        input_layout.addWidget(self.y_input)
+        config_layout.addLayout(input_layout)
+
+        # Add margin between Target Position and Current Position
+        config_layout.addSpacing(50)  # Add 50 pixels of space
+
+        # Current Position
+        current_position_layout = QHBoxLayout()  # Horizontal layout for Current X/Y positions
+        current_position_layout.addWidget(QLabel("Current X Position:"))
+        self.current_x_label = QLabel("X: 0.0")
+        current_position_layout.addWidget(self.current_x_label)
+        current_position_layout.addWidget(QLabel("Current Y Position:"))
+        self.current_y_label = QLabel("Y: 0.0")
+        current_position_layout.addWidget(self.current_y_label)
+        config_layout.addLayout(current_position_layout)
+
+        # Progress Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)  # Example range
+        self.progress_bar.setValue(0)  # Initial value
+        self.progress_bar.setTextVisible(False)  # Hide percentage text
+        self.progress_bar.setStyleSheet("QProgressBar::chunk { background-color: green; }")  # Green color bar
+        config_layout.addWidget(self.progress_bar)
+
+        config_group.setLayout(config_layout)
+        layout.addWidget(config_group)
+
+        # Right Group: Apply button and control buttons
+        control_group = QGroupBox("Stepper Motor Controls")
+        control_layout = QVBoxLayout()
+
+        # Apply Button
+        self.apply_button = QPushButton("Apply")
+        self.apply_button.setFixedSize(150, 40)  # Set button size
+        self.apply_button.setStyleSheet("text-align: center;")  # Align text to center
+        self.apply_button.clicked.connect(self.apply_target_position)
+        control_layout.addWidget(self.apply_button, alignment=Qt.AlignmentFlag.AlignTop)
+        control_layout.addSpacing(200)  # Add 200 pixels of space below the Apply button
+
+        # Control Buttons
+        button_group = QGroupBox()  # Group buttons together
+        button_layout = QVBoxLayout()
+        button_layout.setSpacing(10)  # Add 10 pixels between buttons
+
+        self.home_button = QPushButton("Home")
+        self.start_button = QPushButton("Start")
+        self.pause_button = QPushButton("Pause")
+        self.resume_button = QPushButton("Resume")
+        self.stop_button = QPushButton("Stop")
+
+        # Set button size and align text to center
+        for button in [self.home_button, self.start_button, self.pause_button, self.resume_button, self.stop_button]:
+            button.setFixedSize(150, 40)
+            button.setStyleSheet("text-align: center;")
+
+        self.home_button.clicked.connect(self.home_stepper)
+        self.start_button.clicked.connect(self.start_stepper)
+        self.pause_button.clicked.connect(self.pause_stepper)
+        self.resume_button.clicked.connect(self.resume_stepper)
+        self.stop_button.clicked.connect(self.stop_stepper)
+
+        button_layout.addWidget(self.home_button)
+        button_layout.addWidget(self.start_button)
+        button_layout.addWidget(self.pause_button)
+        button_layout.addWidget(self.resume_button)
+        button_layout.addWidget(self.stop_button)
+
+        button_layout.addStretch()  # Push buttons to the bottom
+        button_group.setLayout(button_layout)
+        control_layout.addWidget(button_group)
+
+        control_group.setLayout(control_layout)
+        layout.addWidget(control_group)
+
+        self.stepper_tab.setLayout(layout)
+
+        # Initialize stepper interface
+        self.stepper_interface = ControlStepperInterface(self.conn, logger)
+
+    def apply_target_position(self):
+        """Apply the target X/Y position with validation."""
+        try:
+            x_target = float(self.x_input.text())
+            y_target = float(self.y_input.text())
+            QMessageBox.information(self, "Target Position Applied", f"X: {x_target}, Y: {y_target}")
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Input", "Please enter valid numeric values for X and Y positions.")
+
+    @asyncSlot()
+    async def home_stepper(self):
+        """Reset the stepper motor to the origin point."""
+        await self.stepper_interface.enable()
+        await self.stepper_interface.run_steps(0)  # Reset to origin
+        await self.stepper_interface.disable()
+        self.update_current_position(0.0, 0.0)
+
+    @asyncSlot()
+    async def start_stepper(self):
+        """Start moving the stepper motor to the target position."""
+        try:
+            x_target = float(self.x_input.text())
+            y_target = float(self.y_input.text())
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Input", "Please enter valid numeric values for X and Y positions.")
+            return
+
+        await self.stepper_interface.enable()
+        # Assuming `run_steps` moves the motor to the target position
+        await self.stepper_interface.run_steps(int(x_target))
+        await self.stepper_interface.run_steps(int(y_target))
+        self.update_current_position(x_target, y_target)
+
+    @asyncSlot()
+    async def pause_stepper(self):
+        """Pause the stepper motor."""
+        await self.stepper_interface.run_continuous(False)
+
+    @asyncSlot()
+    async def resume_stepper(self):
+        """Resume the stepper motor."""
+        await self.stepper_interface.run_continuous(True)
+
+    @asyncSlot()
+    async def stop_stepper(self):
+        """Stop the stepper motor."""
+        await self.stepper_interface.disable()
+
+    def update_current_position(self, x, y):
+        """Update the current X/Y position labels."""
+        self.current_x_label.setText(f"X: {x}")
+        self.current_y_label.setText(f"Y: {y}")
+
     def printstuff(self):
         from rich import print
         def describe(obj):
@@ -252,9 +418,6 @@ def run_gui():
     app.aboutToQuit.connect(app_close_event.set)
 
     window = Window()
-    # if not args.window_size == None:
-    #     window.resize(args.window_size[0], args.window_size[1])
-    
     window.show()
 
     with event_loop:
