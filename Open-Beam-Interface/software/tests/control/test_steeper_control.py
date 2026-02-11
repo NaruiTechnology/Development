@@ -122,7 +122,7 @@ class ControlStepperTest(unittest.TestCase):
         })()
 
         try:
-            applet = ControlStepperApplet()
+            applet = ControlStepperApplet(None)
             # Should not raise
             applet.build(DummyTarget(), args)
         except Exception as e:
