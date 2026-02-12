@@ -8,11 +8,13 @@ import importlib.resources
 
 import usb1
 # copied =======================================================
-# from /home/henry/snap/code/210/.local/share/pipx/venvs/fx2/lib/python3.12/site-packages/fx2 
+""" # from /home/henry/snap/code/210/.local/share/pipx/venvs/fx2/lib/python3.12/site-packages/fx2 
 # to /home/henry/Projects/Naruitech/Development/.venv/lib/python3.12/site-packages/glasgow/hardware/fx2/__init__.py
 # ==============================================================
 from glasgow.hardware.fx2 import REQ_RAM, REG_CPUCS 
-from glasgow.hardware.fx2.format import input_data
+from glasgow.hardware.fx2.format import input_data """
+from fx2 import REQ_RAM, REG_CPUCS 
+from fx2.format import input_data
 
 from ..support.logging import *
 from . import quirks

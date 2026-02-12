@@ -14,7 +14,7 @@ except:
 class OBIAppletArguments:
     def __init__(self, path=None): # TODO: "microscope.toml"):
         if not path:
-            path = f"{os.getcwd()}/EsmBeamController/test.toml" #TODO
+            path = f"{os.getcwd()}/Development/EsmBeamController/test.toml" #TODO
         if not os.path.exists(path):
             raise FileNotFoundError(f"Configuration file not found: {path}")
         self.path = path
