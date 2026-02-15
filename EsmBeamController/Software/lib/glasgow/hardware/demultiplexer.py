@@ -155,7 +155,7 @@ class DirectDemultiplexer(AccessDemultiplexer):
                                       ", ".join(sorted(args.port_spec)),
                                       ", ".join(map(str, device_pull_high)))
 
-        await iface.reset()
+            await iface.reset()
         return iface
 
 

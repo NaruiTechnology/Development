@@ -92,8 +92,8 @@ class GlasgowUARTController:
             # target = DeprecatedTarget(assembly=self.assembly) # using lelgacy code
             # applet = BeamControlApplet(target, args)
 
-            voltage = 3.3
-            await self.device.set_voltage("AB", voltage)
+            """ voltage = 3.3
+            await self.device.set_voltage("AB", voltage) """
   
             target = GlasgowHardwareTarget(revision=self.device.revision, multiplexer_cls=DirectMultiplexer)
             applet = BeamControlApplet() # target, args)
