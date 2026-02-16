@@ -4,6 +4,7 @@ import threading
 import random
 import time
 import asyncio
+import struct
 
 from BeamScanner import BeamScanner
 # from BeamScanner.glasgow_uart_io import GlasgowUARTController
@@ -180,7 +181,9 @@ class ESMScanController(QMainWindow):
 
                 if self.hardware_enabled and self.uart_controller:
                     try:
-                        asyncio.run(self.uart_controller.send(bytes([int(x_ev) & 0xFF, int(y_ev) & 0xFF])))
+                        b = bytearray(struct.pack('ff', x_ev, y_ev))
+                        asyncio.run(self.uart_controller.send(b))
+                        #asyncio.run(self.uart_controller.send(bytes([int(x_ev) & 0xFF, int(y_ev) & 0xFF])))
                     except Exception as e:
                         print(f"Failed to send to Glasgow: {e}")
 

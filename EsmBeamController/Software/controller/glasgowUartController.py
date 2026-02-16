@@ -124,8 +124,8 @@ class GlasgowUARTController:
         pass
 
     async def send(self, data: bytes):
-        if not isinstance(data, bytes):
-            data = data.encode("utf-8")
+        """ if not isinstance(data, bytes):
+            data = data.encode("utf-8") """
 
         if self.iface:
             await self.iface.write(data)
