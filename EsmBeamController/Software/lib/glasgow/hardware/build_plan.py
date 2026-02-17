@@ -120,7 +120,11 @@ class GlasgowBuildPlan:
                 text=True
             )
 
+            # print(proc.stdout)  
+            
             if proc.returncode != 0:
+                print("--- FULL BUILD LOG ---")
+                print(proc.stdout)  # This will show the exact error from Yosys or nextpnr
                 raise GatewareBuildError(
                     f"Build failed (code {proc.returncode}):\n"
                     f"{proc.stdout[-500:]}")

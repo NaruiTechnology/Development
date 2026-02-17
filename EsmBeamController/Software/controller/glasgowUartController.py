@@ -92,8 +92,8 @@ class GlasgowUARTController:
             # target = DeprecatedTarget(assembly=self.assembly) # using lelgacy code
             # applet = BeamControlApplet(target, args)
 
-            """ voltage = 3.3
-            await self.device.set_voltage("AB", voltage) """
+            voltage = 3.3 # 1.8 
+            await self.device.set_voltage("AB", voltage)
   
             target = GlasgowHardwareTarget(revision=self.device.revision, multiplexer_cls=DirectMultiplexer)
             applet = BeamControlApplet() # target, args)
@@ -101,10 +101,7 @@ class GlasgowUARTController:
             self.device.demultiplexer = target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)
             plan = target.build_plan()
             
-            #TODO await self.device.download_target(plan)
-            
-            voltage = 5.0
-            await self.device.set_voltage("AB", voltage)
+            #await self.device.download_target(plan, reload=True)
                      
             from Software.configs.applet import OBIAppletArguments  
             

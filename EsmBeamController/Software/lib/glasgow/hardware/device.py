@@ -319,7 +319,7 @@ class GlasgowDevice:
         transfer.setCallback(lambda transfer: loop.call_soon_threadsafe(usb_callback, transfer))
         handle_usb_error(lambda: transfer.submit())
         try:
-            return await result_future
+            return await asyncio.wait_for(result_future, timeout=10.0)
         finally:
             if result_future.cancelled():
                 try:
@@ -466,92 +466,47 @@ class GlasgowDevice:
         return bytes(bitstream_id)
 
     async def download_bitstream(self, bitstream, bitstream_id=b"\xff" * 16):
-        """Download ``bitstream`` with ID ``bitstream_id`` to FPGA."""
-        # Send consecutive chunks of bitstream. Sending 0th chunk also clears the FPGA bitstream.
-        index = 0
-        while index * 4096 < len(bitstream):
-            await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_FPGA_CFG,
-                                     0, index, bitstream[index * 4096:(index + 1) * 4096])
-            index += 1
-        # Complete configuration by setting bitstream ID. This starts the FPGA.
-        try:
-            await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_BITSTREAM_ID,
-                                     0, 0, bitstream_id)
-        except usb1.USBErrorPipe:
-            raise GlasgowDeviceError("FPGA configuration failed")
-        
-        try:
-            # Each bitstream has an I2C register at address 0, which is used to check that the FPGA
-            # has configured properly and that the I2C bus function is intact. A small subset of
-            # production devices manufactured by 1bitSquared fails this check.
-            magic, = await self.control_read(usb1.REQUEST_TYPE_VENDOR, REQ_REGISTER, 0x00, 0, 1)
-        except usb1.USBErrorPipe:
+            """Download ``bitstream`` with ID ``bitstream_id`` to FPGA."""
+            index = 0
+            while index * 4096 < len(bitstream):
+                await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_FPGA_CFG,
+                                        0, index, bitstream[index * 4096:(index + 1) * 4096])
+                index += 1
+                
+            # Complete configuration by setting bitstream ID. This starts the FPGA.
+            try:
+                await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_BITSTREAM_ID,
+                                        0, 0, bitstream_id)
+            except usb1.USBErrorPipe:
+                raise GlasgowDeviceError("FPGA configuration failed")
+            
+            # --- NEW STABILIZATION LOGIC ---
+            # Give the FPGA more time to start its internal clock and settle the I2C bus
+            await asyncio.sleep(0.5) 
+
+            MAX_HANDSHAKE_RETRIES = 3
             magic = 0
-        if magic != 0xa5:
-            raise GlasgowDeviceError(
-                "FPGA health check failed; if you are using a newly manufactured device, "
-                "ask the vendor of the device for return and replacement, else ask for support "
-                "on community channels")
             
-            
-    # async def download_bitstream(self, bitstream, bitstream_id=b"\xff" * 16):
-    #     """Download bitstream to FPGA with robust error handling"""
-    #     MAX_RETRIES = 3
-    #     CHUNK_SIZE = 4096
-    #     RETRY_DELAY = 0.1  # seconds
-
-    #     async def safe_control_write(*args, **kwargs):
-    #         for attempt in range(MAX_RETRIES):
-    #             try:
-    #                 return await self.control_write(*args, **kwargs)
-    #             except usb1.USBErrorPipe as e:
-    #                 if attempt == MAX_RETRIES - 1:
-    #                     raise
-    #                 await asyncio.sleep(RETRY_DELAY * (attempt + 1))
-
-    #     # Send bitstream in chunks with retries
-    #     for index in range(0, len(bitstream), CHUNK_SIZE):
-    #         chunk = bitstream[index:index + CHUNK_SIZE]
-    #         await safe_control_write(
-    #             usb1.REQUEST_TYPE_VENDOR,
-    #             REQ_FPGA_CFG,
-    #             0, index // CHUNK_SIZE,
-    #             chunk
-    #         )
-
-    #     # Finalize configuration with retries
-    #     for attempt in range(MAX_RETRIES):
-    #         try:
-    #             await safe_control_write(
-    #                 usb1.REQUEST_TYPE_VENDOR,
-    #                 REQ_BITSTREAM_ID,
-    #                 0, 0,
-    #                 bitstream_id
-    #             )
-                
-    #             # Verify configuration
-    #             try:
-    #                 magic, = await self.control_read(
-    #                     usb1.REQUEST_TYPE_VENDOR,
-    #                     REQ_REGISTER,
-    #                     0x00, 0, 1
-    #                 )
-    #                 if magic == 0xa5:
-    #                     return  # Success
-                        
-    #             except usb1.USBErrorPipe:
-    #                 pass
-
-    #             if attempt == MAX_RETRIES - 1:
-    #                 raise GlasgowDeviceError("FPGA health check failed after retries")
+            for attempt in range(MAX_HANDSHAKE_RETRIES):
+                try:
+                    # Attempt to read the magic register with a dedicated timeout
+                    magic_data = await asyncio.wait_for(
+                        self.control_read(usb1.REQUEST_TYPE_VENDOR, REQ_REGISTER, 0x00, 0, 1), 
+                        timeout=2.0
+                    )
+                    magic = magic_data[0]
+                    if magic == 0xa5:
+                        break # Success!
+                except (asyncio.TimeoutError, usb1.USBErrorPipe):
+                    logger.warning(f"FPGA handshake attempt {attempt + 1} failed, retrying...")
+                    await asyncio.sleep(0.2) # Wait before retry
                     
-    #         except usb1.USBErrorPipe:
-    #             if attempt == MAX_RETRIES - 1:
-    #                 raise GlasgowDeviceError("FPGA configuration failed after retries")
-                
-    #         # Exponential backoff before retry
-    #         await asyncio.sleep(RETRY_DELAY * (2 ** attempt))
-            
+            if magic != 0xa5:
+                raise GlasgowDeviceError(
+                    "FPGA health check failed; if you are using a newly manufactured device, "
+                    "ask the vendor of the device for return and replacement, else ask for support "
+                    "on community channels")
+                        
     async def download_target(self, plan, *, reload=False):
         if await self.bitstream_id() == plan.bitstream_id and not reload:
             logger.info("device already has bitstream ID %s", plan.bitstream_id.hex())
