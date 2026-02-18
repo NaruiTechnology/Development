@@ -157,7 +157,7 @@ if __name__ == '__main__':
 
 
 
-    invokeSerial = InvokeSerial('COM3', 115200)
+    invokeSerial = InvokeSerial('COM3', )
     f = open('test.log', 'w')
     while True:
         buffer = invokeSerial.ReadMessage().strip()

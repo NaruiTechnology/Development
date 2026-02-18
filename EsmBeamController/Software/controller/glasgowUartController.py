@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 
 class GlasgowUARTController:
-    def __init__(self, port="A", tx_pin=0, rx_pin=1, baud=9600, serial_number=None):
+    def __init__(self, port="A", tx_pin=0, rx_pin=1, baud=115200, serial_number=None):
         self.port = port
         self.tx_pin = tx_pin
         self.rx_pin = rx_pin
@@ -146,7 +146,7 @@ class GlasgowUARTController:
             self.interface = None
 
 async def main():
-    uart = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=9600) #, serial_number='C3-20241215T152505Z')
+    uart = GlasgowUARTController(port="A", tx_pin=0, rx_pin=1, baud=115200) #, serial_number='C3-20241215T152505Z')
     await uart.connect()
     # await uart.send("Hello from Glasgow UART!\n")
     # response = await uart.receive()

@@ -8,6 +8,7 @@ import threading
 import time
 import queue
 import logging
+import asyncio, struct
 from glasgow.hardware.device import GlasgowDevice
 
 logging.basicConfig(level=logging.INFO)
@@ -198,8 +199,7 @@ class ESMScanController:
         self.pause_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.DISABLED)
     
-    def _scan_worker(self):
-        """Worker thread that performs scanning"""
+    """ def _scan_worker(self):
         pattern = self.scanner.get_pattern_matrix()
         rows, cols, _ = pattern.shape
         
@@ -239,7 +239,58 @@ class ESMScanController:
         # print(self.scanner.pattern_matrix)
         
         self.scan_active = False
-        self.root.after(0, self._reset_ui_state)
+        self.root.after(0, self._reset_ui_state) """
+    
+    def _scan_worker(self):
+        # Create a persistent event loop for this thread to avoid the overhead of asyncio.run()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        pattern = self.scanner.get_pattern_matrix()
+        rows, cols, _ = pattern.shape
+        
+        # ... (Plotting initialization remains the same)
+
+        for i in range(rows):
+            # Implement zig-zag scanning
+            j_range = range(cols) if i % 2 == 0 else range(cols - 1, -1, -1)
+            
+            # Prepare a row-buffer to send data in larger chunks
+            row_data = bytearray()
+            
+            for j in j_range:
+                if self.stop_requested:
+                    break
+
+                x_ev, y_ev = pattern[i, j, 0], pattern[i, j, 1]
+                
+                # Pack the 8 bytes (two 32-bit floats)
+                row_data.extend(struct.pack('ff', x_ev, y_ev))
+
+                # Update UI/Internal state (Logic from your original file)
+                time.sleep(self.scanner.dwell_time / 1000.0)
+                reflection = self._get_reflection_value(i, j) * self.scanner.scale_to_ev
+                self.scanner.pattern_matrix[i, j, 2] = reflection
+                self.scatter_points.append((x_ev, y_ev))
+
+            # Send the entire row at once to saturate USB microframes
+            if self.hardware_enabled and self.uart_controller and row_data:
+                try:
+                    # Use the existing loop to schedule the write and flush
+                    loop.run_until_complete(self.uart_controller.send(row_data))
+                    # Explicitly flush to ensure the hardware receives the row before the next one starts
+                    # This interacts with the flush() logic in demultiplexer.py
+                    if hasattr(self.uart_controller.iface, 'flush'):
+                        loop.run_until_complete(self.uart_controller.iface.flush(wait=True))
+                except Exception as e:
+                    print(f"Failed to send row to Glasgow: {e}")
+
+            # Update the map once per row for performance
+            self._update_scatter_map()
+
+        loop.close()
+        self.scan_active = False
+        self._reset_ui_state()
     
     def _send_to_glasgow(self, x_ev, y_ev):
         """
