@@ -153,11 +153,11 @@ class ProgramM16CInterface:
             await self.lower.write(b"\x00")
             await self.lower.flush()
             await asyncio.sleep(0.040) # >20 ms delay
-        await self.lower.write([BAUD_RATES[9600]])
+        await self.lower.write([BAUD_RATES[115200]])
         async def response():
             while True:
                 new_baud, = await self.lower.read(1)
-                if new_baud == BAUD_RATES[9600]:
+                if new_baud == BAUD_RATES[115200]:
                     return
         try:
             await asyncio.wait_for(response(), timeout=self.timeout)
@@ -362,7 +362,7 @@ class ProgramM16CApplet(GlasgowApplet):
         access.add_run_arguments(parser)
 
         parser.add_argument(
-            "-b", "--baud", metavar="RATE", type=int, default=9600, choices=BAUD_RATES.keys(),
+            "-b", "--baud", metavar="RATE", type=int, default=115200, choices=BAUD_RATES.keys(),
             help="set baud rate to RATE bits per second (default: %(default)s)")
 
     async def run(self, device, args):
@@ -433,7 +433,7 @@ class ProgramM16CApplet(GlasgowApplet):
     async def interact(self, device, args, iface):
         try:
             await device.write_register(
-                self.__addr_bit_cyc, self.__bit_cyc_for_baud[9600], width=3)
+                self.__addr_bit_cyc, self.__bit_cyc_for_baud[115200], width=3)
             await iface.sync_bootloader()
             self.logger.info("bootloader identification %s", await iface.bootloader_version())
 
@@ -451,7 +451,7 @@ class ProgramM16CApplet(GlasgowApplet):
                 else:
                     raise M16CBootloaderError("cannot unlock bootloader")
 
-            if args.baud != 9600:
+            if args.baud != 115200: #600:
                 await iface.bootloader_set_baud(args.baud)
                 await device.write_register(
                     self.__addr_bit_cyc, self.__bit_cyc_for_baud[args.baud], width=3)
