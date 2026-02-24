@@ -143,10 +143,8 @@ def FindUnInstalledPackages(checklist):
 
 
 
-def CreateInstance(key, package, *args, **kwargs):
-    classname = '{}_{}_state'.format(package.lower().replace('_state', ''), key)
+def CreateInstance(classname, *args, **kwargs):
     namespaces = ['workstates']
-    namespaces.append(package)
     namespaces.append(classname)
     q = queue.Queue()
     instance = None

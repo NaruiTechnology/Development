@@ -1,23 +1,21 @@
 from abc import abstractmethod
 
-from Development.AutomationPy.buildingblocks.decorators import overrides
-from Development.AutomationPy.buildingblocks.workflow.workstate import WorkState
+from AutomationPy.buildingblocks.workflow.workstate import WorkState
 
 import asyncio
 import os
 
-class LoadFPGAState(WorkState):
+@abstractmethod
+class loadFpgaImage_state(WorkState):
     def __init__(self, parent):
         self._last_output = ""
-        super(LoadFPGAState, self).__init__(parent)
+        super(loadFpgaImage_state, self).__init__(parent)
     
     @property
     def last_output(self):
-        """Returns the stdout from the last command execution."""
-        return self._last_output
+         return self._last_output
     
     def __str__(self):
-        """Returns the last command output/error message as string."""
         return self._last_output
     
     async def runCommand(self, cmd, dirFrom = None, *args):
@@ -48,3 +46,8 @@ class LoadFPGAState(WorkState):
             os.chdir(cwd)
         return success
     
+
+
+""" class loadFpgaImage_state(object):
+    def __init__(self, parent):
+        super(loadFpgaImage_state, self).__init__(parent) """

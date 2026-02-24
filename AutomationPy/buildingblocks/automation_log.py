@@ -17,7 +17,7 @@
 #-------------- -----------------------------------------------------------------
 import logging
 import os as os
-from buildingblocks.utils import InvalidArgumentException
+from AutomationPy.buildingblocks.utils import InvalidArgumentException
 
 '''
     This class has bas been implemented using the Singleton designs pattern

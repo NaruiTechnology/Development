@@ -1,13 +1,12 @@
-from .LoadFPGAState import LoadFPGAState
-from Development.AutomationPy.buildingblocks.decorators import overrides
 import os
+from AutomationPy.buildingblocks.decorators import overrides
+from .loadFpgaImage_state import loadFpgaImage_state
 
-class BuildFPGAImageState(LoadFPGAState):
-    def __init__(self, parent):
-        self._buildPlan = None
-        super(BuildFPGAImageState, self).__init__(parent)
+class buildFPGAImage_state(loadFpgaImage_state):
+    def __init__(self,  parent):
+        super(buildFPGAImage_state, self).__init__(parent)
 
-    @overrides(LoadFPGAState)
+    @overrides(loadFpgaImage_state)
     async def DoWork(self):
         topJson = "top.json"
         topV = "top.v"

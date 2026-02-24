@@ -1,0 +1,63 @@
+{
+    "Actions":[
+        {
+            "connectDevice": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {}
+            }
+        },
+        {
+            "buildFPGAPlan": {
+                "skip": true,
+                "transactionComplete": false,
+                "actionData": {}
+            }
+        },
+        {
+            "buildFPGAImage": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {                    
+                    "shellCmd": { 
+                        "commandFormat": "yosys -p {} {}"
+                    }}
+            }
+        },
+        {
+            "generateFullImage": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "shellCmd": { 
+                        "commandFormat": "icepack {} {}"
+                    }
+                }
+            }
+        },
+        {
+            "invokeNextpnr": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "shellCmd": { 
+                        "commandFormat": "nextpnr-ice40 --hx8k --package tq144 --json {} --pcf {} --asc {}"
+                    }
+                }
+            }
+        },
+        {
+            "flashImage": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "shellCmd": { 
+                        "commandFormat": "glasgow run program-ice40-sram {}"
+                    }
+                }
+            }
+        }
+
+    ],
+    "LogName": "LoadFPGAImage"
+}

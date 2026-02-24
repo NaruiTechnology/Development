@@ -21,9 +21,9 @@ from time import sleep
 import os as os
 import sys
 import time
-import buildingblocks.utils as util
-from buildingblocks.event_handler import EventHandler
-from buildingblocks.definitions import Consts
+import AutomationPy.buildingblocks.utils as util
+from AutomationPy.buildingblocks.event_handler import EventHandler
+from AutomationPy.buildingblocks.definitions import Consts
 
 
 class WorkThreadMetaClass(type):

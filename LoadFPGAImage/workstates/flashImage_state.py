@@ -1,13 +1,12 @@
-from .LoadFPGAState import LoadFPGAState
-from Development.AutomationPy.buildingblocks.decorators import overrides
 import os
+from AutomationPy.buildingblocks.decorators import overrides
+from .loadFpgaImage_state import loadFpgaImage_state
 
-class FlashImageState(LoadFPGAState):
+class flashImage_state(loadFpgaImage_state):
     def __init__(self, parent):
-        self._buildPlan = None
-        super(FlashImageState, self).__init__(parent)
+        super(flashImage_state, self).__init__(parent)
 
-    @overrides(LoadFPGAState)
+    @overrides(loadFpgaImage_state)
     async def DoWork(self):
         topBin = "top.bin"
         if os.path.isfile(os.path.join(self.parent.buildPlan.buildDir, topBin)):

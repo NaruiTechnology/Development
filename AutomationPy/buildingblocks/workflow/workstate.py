@@ -17,9 +17,10 @@
 #-------------- -----------------------------------------------------------------
 
 from abc import abstractmethod
-from buildingblocks.event_handler import EventHandler
-from buildingblocks.definitions import Consts
-import buildingblocks.utils as util
+from ..event_handler import EventHandler
+from ..definitions import Consts
+#import buildingblocks.utils as util
+from ..utils import *
 
 
 class WorkstateMetaClass(type):
@@ -37,7 +38,7 @@ class WorkState(object):# abstract base class
 
     def __init__(self, *args, **kwargs):
         self._success = True
-        self._id = repr("WorkState_" + util.IdGenerator())
+        self._id = repr("WorkState_" + IdGenerator())
         self._parentWorkThread = None
         self._configTest = None
         self._outfile = None

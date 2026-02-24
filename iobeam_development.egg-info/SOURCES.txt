@@ -1,6 +1,5 @@
 pyproject.toml
 AutomationPy/__init__.py
-AutomationPy/bkc_image_automation.py
 AutomationPy/suite_buildingblocks.py
 EsmBeamController/__init__.py
 EsmBeamController/clear_pycache.py

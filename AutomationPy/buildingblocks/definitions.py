@@ -15,32 +15,52 @@
 # form or by any means without the express written consent of
 
 #-------------- -----------------------------------------------------------------
+from enum import Enum
+from AutomationPy.buildingblocks.utils import InvalidArgumentException
 
+class LengthType(Enum):
+    def __str__(self):
+        return self.value
+    METER = 'm'
+    MIL_METER = 'mm'
+    CENT_METER = 'cm'
+    KILO_METER = 'km'
+    YARD = 'yd'
+    FOOT = 'ft'
+    INCH = 'in'
+    MILE = 'mi'
+
+
+class RESULTS(Enum):
+    def __str__(self):
+        return self.value
+    PASSED = 'PASSED'
+    FAILED = 'FAILED'
+    SKIPPED = 'SKIPPED'
+    UNKNOWN = 'UNKNOWN'
+
+class LengthMetric:
+    def __getitem__(self, index):
+        if index is None or not (type(index) is LengthType):
+            raise InvalidArgumentException(index)
+
+        return {LengthType.MIL_METER: 1000.0,
+                LengthType.CENT_METER: 100.0,
+                LengthType.KILO_METER: 0.001,
+                LengthType.INCH: 39.3701,
+                LengthType.FOOT: 3.28084,
+                LengthType.YARD: 1.09361,
+                LengthType.MILE: 0.000621371}[index]
 
 class Consts:
     STATE_COMPLETE_EVENT = 'StateComplete'
-    BKC_AUTOMATION_PACKAGE = 'bkc_automation_state'
+    """ BKC_AUTOMATION_PACKAGE = 'bkc_automation_state'
     BKC_STATE_OBJ_PREFIX = 'bkc_automation_'
-    BKC_STATE_OBJ_SUFFIX = '_state'
+    """    
+    STATE_OBJ_SUFFIX = '_state'
     ACTION_DATA = 'actionData'
-    TRANSCTION_COMPLETE = 'transactionComplete'
-    WORK_DIRECTORY = 'Input'
-    AUTOMATION_WORKSPACE= 'AutomationWorkSpace'
-    BIOS_DUMP = 'BiosDump'
-    EXTRACTED_BIOS_IMAGE = 'ExtractedBiosImage'
     BACKUP = 'Backup'
     SKIP = 'skip'
-    REGIONS_MAP = 'RegionsMap'
-    BKC_BINARIES_OUTPUT = 'BKCBinaries'
-    SOURCE_BKC_FILE_NAME_PATTERN = 'SourceBkcFileNamePattern'
-    GUID = 'GUID'
-    METHOD = 'Method'
-    COMPLETED_MSG = '--- Completed ---'
-    FAILED_MSG = '--- Failed ---'
-    OUTPUT_FOLDER = 'OutputFolder'
-    OUTPUT_NAME = 'OutputName'
-    RAW_BINARY_METHODS = "['RAW', 'FREEFORM', 'RawDATA']"
-    DRIVER_METHODS = "['DRIVER']"
     REGEX_GUILD_PATTERN = '(\{){0,1}[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}(\}){0,1}'
 
 

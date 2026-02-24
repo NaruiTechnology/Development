@@ -12,4 +12,4 @@ dependencies = []
 
 [tool.setuptools]
 # Explicitly defining the packages prevents the "Multiple top-level packages" error
-packages = ["AutomationPy", "EsmBeamController"]
+packages = ["AutomationPy", "EsmBeamController", "LoadFPGAImage"]
