@@ -1,26 +1,19 @@
 #-------------------------------------------------------------------------------
-# This file contains 'Framework Code' and is licensed as such
-# under the terms of your license agreement with  your
-# vendor. This file may not be modified, except as allowed by
-# additional terms of your license agreement.
+# Name:
+# Purpose:
 #
-## @file
+# Author:      liyingho
 #
-
-# This software and associated documentation (if any) is furnished
-# under a license and may only be used or copied in accordance
-# with the terms of the license. Except as permitted by such
-# license, no part of this software or documentation may be
-# reproduced, stored in a retrieval system, or transmitted in any
-# form or by any means without the express written consent of
-
+# Created:     06/03/2019
+# Copyright:   
+# Licence:     <your licence>
 #-------------- -----------------------------------------------------------------
 import time
 
 
-def hierarchyValidation(class_func):
+def overrides(interfaceClass):
     def overrider(method):
-        assert(method.__name__ in dir(class_func))
+        assert(method.__name__ in dir(interfaceClass))
         return method
     return overrider
 
@@ -42,7 +35,7 @@ def timeElapseTimer(func):
             if len(args) > 2 and args[2] is True:
                 timer.startTime = time.time()
             elapsedTime = time.time() - timer.startTime
-            if timeout <= 0 or elapsedTime <= timeout:
+            if not (timeout > 0 and elapsedTime > timeout):
                 timer.isTimeout = False
         return func(*args, **kwargs)
     timer.startTime = time.time()

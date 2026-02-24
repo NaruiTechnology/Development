@@ -33,8 +33,12 @@ class GlasgowBuildPlan:
         self._toolchain = toolchain
         self._bitstream_id = self._generate_identifier()
         self.project_path = Path.cwd() # self._detect_project_path()
+        self._buildDir = self._inner._buildDir
 
-
+    @property
+    def buildDir(self):
+        return self._buildDir
+    
     def _generate_identifier(self) -> bytes:
         import sys
         """Generate a stable identifier for the build configuration.
@@ -226,7 +230,7 @@ class ToolchainBuildPlan:
         if hasattr(inner, 'files'):
             self.files = inner.files
         else:
-            build_dir = GlasgowBuildPlan.get_build_dir()
+            self._buildDir = build_dir = GlasgowBuildPlan.get_build_dir()
             self.files = BuildScriptUtil.prepare_build_environment(build_dir) #_prepare_build_files(buld_dir)
             
     @property
