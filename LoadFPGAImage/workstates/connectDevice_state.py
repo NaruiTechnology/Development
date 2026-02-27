@@ -11,28 +11,6 @@ class connectDevice_state(loadFpgaImage_state):
 
     @overrides(loadFpgaImage_state)
     async def DoWork(self):
-        voltage = 3.3
-        device = self.ParentWorkThread.device
-        
-        try:
-            """ if hasattr(device, '_loop'):
-                device._loop = asyncio.get_running_loop() """
-            
-            await asyncio.wait_for(
-                #device.set_voltage("AB", voltage), 
-                self.runCommand(f"glasgow run control-gpio -V {voltage} --pins A0"),
-                timeout=1000.0 # 100s is plenty if it's working
-            )
-            
-            print("Hardware responded successfully.")
-            self.Success = True 
-                
-        except Exception as e:
-            print(f"Hardware error: {e}")
-            self.Success = False
-
-    @overrides(loadFpgaImage_state)
-    async def DoWork(self):
         #device = self.ParentWorkThread.device
         try:
             stateConfig = self.ParentWorkThread.GetStateCongig(self)
