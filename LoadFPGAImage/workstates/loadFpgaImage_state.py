@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import subprocess
 
 from AutomationPy.buildingblocks.workflow.workstate import WorkState
 
@@ -31,12 +32,16 @@ class loadFpgaImage_state(WorkState):
 
         try:
             os.chdir(runfrom)
-            proc = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT)
-            stdout, _ = await proc.communicate()
-            self._last_output = stdout.decode('utf-8') if stdout else ""
+            
+            params = command.split(" ")
+            proc = subprocess.Popen(params,
+                                    cwd=runfrom,
+                                    stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    text=True)
+            if proc.returncode != 0:
+                self._last_output = proc.stdout 
             success = proc.returncode == 0
         except Exception as e:
             self._last_output = str(e)

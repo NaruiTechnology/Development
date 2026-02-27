@@ -27,7 +27,7 @@ class LoadFPGAThread(WorkThread):
         if deviceId is not None:
             self._device.open(deviceId)
         self._fpgaBuildPlan = None
-
+        
     @property
     def device(self):
         """Get the glasgow device instance."""
@@ -43,10 +43,10 @@ class LoadFPGAThread(WorkThread):
         """Set the FPGA build plan."""
         self._fpgaBuildPlan = value
 
-    @overrides(WorkThread)
+    """ @overrides(WorkThread)
     def IntialWork(self):
         self._queue = queue.Queue()
-        return self._initialWork()
+        return self._initialWork() """
 
     @overrides(WorkThread)
     def StateFactory(self, workState = None):
@@ -60,9 +60,9 @@ class LoadFPGAThread(WorkThread):
                 self._logger.info(Consts.COMPLETED_MSG)
         else:
             state = None
-            self._logger.error(Consts.FAILED_MSG)
+            #self._logger.error(Consts.FAILED_MSG)
         if state is not None:
-            self._logger.info('Calling {}'.format(type(state).__name__.replace(Consts.BKC_STATE_OBJ_PREFIX, '')
+            self._logger.info('Calling {}'.format(type(state).__name__
                                                     .replace(Consts.STATE_OBJ_SUFFIX, '')))
         elif self._config.OneTimeOnly:
             self.Stop()

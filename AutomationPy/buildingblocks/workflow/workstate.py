@@ -21,6 +21,8 @@ from ..event_handler import EventHandler
 from ..definitions import Consts
 #import buildingblocks.utils as util
 from ..utils import *
+import asyncio
+import inspect
 
 
 class WorkstateMetaClass(type):
@@ -36,10 +38,10 @@ class WorkState(object):# abstract base class
     __metaclass__ = WorkstateMetaClass
     file = __file__
 
-    def __init__(self, *args, **kwargs):
-        self._success = True
+    def __init__(self, parent, *args, **kwargs):
+        self._success = False
         self._id = repr("WorkState_" + IdGenerator())
-        self._parentWorkThread = None
+        self._parentWorkThread = parent
         self._configTest = None
         self._outfile = None
         self._invokeFactory = None
@@ -62,6 +64,13 @@ class WorkState(object):# abstract base class
     def ParentWorkThread(self):
         return self._parentWorkThread
 
+    @ParentWorkThread.setter
+    def ParentWorkThread(self, val):
+        if val is not None and type(val).__name__.lower().endswith('thread'):
+            self._parentWorkThread = val
+            #self._invokeFactory = val.GetInvokeFactory()
+            self._config = val._config
+
     @property
     def Success(self):
         self._success
@@ -70,24 +79,27 @@ class WorkState(object):# abstract base class
     def Success(self, val):
         self._success = val
 
-    def GetParentWorkThread(self):
+    """ def GetParentWorkThread(self):
         return self._parentWorkThread
 
     def SetParentWorkThread(self, val):
         if val is not None and type(val).__name__.lower().endswith('thread'):
             self._parentWorkThread = val
             self._invokeFactory = val.GetInvokeFactory()
-            self._config = val._config
+            self._config = val._config """
 
-    def Excute(self):
+    async def Execute(self):
         try:
-            self.DoWork()
+            if inspect.iscoroutinefunction(self.DoWork):
+                await self.DoWork()
+            else:
+                self.DoWork()
         except Exception as e:
-            print("!!!! error at Excute, error %s" % str(e))
+            print("!!!! error at Execute, error %s" % str(e))
             self._success = False
-        finally:
+        """ finally:
             EventHandler().callback(Consts.STATE_COMPLETE_EVENT, self)
-
+ """
     def LogMessage(self, msg):
         print (msg)
         if self._outfile is not None:

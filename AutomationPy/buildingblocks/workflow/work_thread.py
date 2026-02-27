@@ -24,9 +24,11 @@ import time
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.event_handler import EventHandler
 from AutomationPy.buildingblocks.definitions import Consts
+import asyncio
+import queue
 
 
-class WorkThreadMetaClass(type):
+class WorkThreadMetaClass(type): 
     def __new__(cls, name, parents, dct):
         if 'class_id' not in dct:
             dct['class_id'] = name.lower()
@@ -38,18 +40,20 @@ class WorkThreadMetaClass(type):
         return functools.partial(self.__call__, obj)
 
 
-class WorkThread:#abstract base class
-    __metaclass__ = WorkThreadMetaClass
+class WorkThread(Thread):
     file = __file__
 
     def __init__(self):
+        super(WorkThread, self).__init__()
+        self._queue = None #Queue()
+        self._isTerminated = False
+        self._timeout = 0  # Seconds, 0 = infinite
         self._thread = None#Thread(target = self.WorkerProcess, args = [None])
-        self._isRunning = False
+        #elf._isRunning = False
         self._recurringInterval = util.DefaultRecurringInterval
         '''
             NOTE: if the timeout value < 0, the life time for a work thread is infinit
         '''
-        self._timeout = -1
         self._shutdownEvent = None
         self._id = repr("WorkThread_" + util.IdGenerator())
         
@@ -110,7 +114,7 @@ class WorkThread:#abstract base class
         except:
             pass
 
-    def Start(self):
+    """ def Start(self):
         try:
             self._thread = Thread(target = self.WorkerProcess)
             if self._thread is not None:
@@ -120,11 +124,15 @@ class WorkThread:#abstract base class
         except:
             type_, value_, traceback_ = sys.exc_info()
             print("type: {0}, value: {1}, traceback: {2}".format(type_, value_, traceback_))
-
+ """
+    def Start(self):
+        self.start()
+        
     def Stop(self):
-        if self._thread is not None:
+        """ if self._thread is not None:
             self._isRunning = False
-            self._thread.do_run = False
+            self._thread.do_run = False """
+        self._isTerminated = True
 
     def _isShutDownSet(self):
         if self._shutdownEvent is None:
@@ -148,6 +156,39 @@ class WorkThread:#abstract base class
                 self.Stop()
                 break
 
+    def run(self):
+        # Create a persistent loop for this thread's lifetime
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        startTime = time.time()
+        
+        print(f"Starting Thread: {self.__class__.__name__}")
+
+        loop = None
+        state = None
+        while not self._isTerminated:
+            if self._timeout > 0 and (time.time() - startTime) > self._timeout:
+                print("Global timeout reached.")
+                break
+            try:
+                state = self.StateFactory(state)
+                if state is not None:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(state.Execute())
+                else:
+                    print("No more states to execute. Thread is idle.")
+                    self._isTerminated = True                   
+                    
+            except Exception as e:
+                print(f"Execution Error: {e}")
+                break  
+            finally:                    
+                if loop is not None and loop in locals():
+                    loop.close() 
+                        
+            sleep(self._recurringInterval)
 
     def ExecuteState(self, state):
         if state is None:

@@ -182,7 +182,7 @@ class Bcolors(Enum):
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 def PrintMessage(msg, color):
-    if not(msg is None or len(msg) is 0):
+    if not(msg is None or len(msg) == 0):
         sys.stdout.write(color.value)
         print(msg)
         sys.stdout.write(Bcolors.RESET.value)
