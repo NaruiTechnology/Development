@@ -186,14 +186,3 @@ def PrintMessage(msg, color):
         sys.stdout.write(color.value)
         print(msg)
         sys.stdout.write(Bcolors.RESET.value)
-'''
-    try:
-        sitepackagepath = os.path.join(sys.executable.replace('python.exe', ''), 'lib\\site-packages')
-        dirs = os.listdir(GetSitePackagePath())
-    except:pass
-    if not dirs is None:
-        uninstalledPackages = [x for x in checklist if x not in dirs]
-    return uninstalledPackages
-
-'''
-

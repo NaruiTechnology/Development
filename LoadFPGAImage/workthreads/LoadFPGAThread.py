@@ -43,10 +43,12 @@ class LoadFPGAThread(WorkThread):
         """Set the FPGA build plan."""
         self._fpgaBuildPlan = value
 
-    """ @overrides(WorkThread)
-    def IntialWork(self):
-        self._queue = queue.Queue()
-        return self._initialWork() """
+    def GetStateCongig(self, state):
+        for action in self._config.Actions:
+            stateName = type(state).__name__.replace(Consts.STATE_OBJ_SUFFIX, '')
+            if stateName in action:
+                return action[stateName]
+        return None
 
     @overrides(WorkThread)
     def StateFactory(self, workState = None):

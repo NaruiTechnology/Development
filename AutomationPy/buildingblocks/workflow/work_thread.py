@@ -25,8 +25,6 @@ import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.event_handler import EventHandler
 from AutomationPy.buildingblocks.definitions import Consts
 import asyncio
-import queue
-
 
 class WorkThreadMetaClass(type): 
     def __new__(cls, name, parents, dct):
@@ -35,7 +33,6 @@ class WorkThreadMetaClass(type):
         return super(WorkThreadMetaClass, cls).__new__(cls, name, parents, dct)
 
     def __get__(self, obj, objtype):
-        """Support instance methods."""
         import functools
         return functools.partial(self.__call__, obj)
 
@@ -48,8 +45,6 @@ class WorkThread(Thread):
         self._queue = None #Queue()
         self._isTerminated = False
         self._timeout = 0  # Seconds, 0 = infinite
-        self._thread = None#Thread(target = self.WorkerProcess, args = [None])
-        #elf._isRunning = False
         self._recurringInterval = util.DefaultRecurringInterval
         '''
             NOTE: if the timeout value < 0, the life time for a work thread is infinit
@@ -114,24 +109,10 @@ class WorkThread(Thread):
         except:
             pass
 
-    """ def Start(self):
-        try:
-            self._thread = Thread(target = self.WorkerProcess)
-            if self._thread is not None:
-                self._isRunning = True
-                self._thread.start()
-                #self._thread.join()
-        except:
-            type_, value_, traceback_ = sys.exc_info()
-            print("type: {0}, value: {1}, traceback: {2}".format(type_, value_, traceback_))
- """
     def Start(self):
         self.start()
         
     def Stop(self):
-        """ if self._thread is not None:
-            self._isRunning = False
-            self._thread.do_run = False """
         self._isTerminated = True
 
     def _isShutDownSet(self):
@@ -139,22 +120,6 @@ class WorkThread(Thread):
             return False
         else:
             return self._shutdownEvent.is_set()
-
-    def WorkerProcess(self):
-        startTime = time.time()
-        while self._isRunning:
-            state = self.StateFactory()
-            if state is not None:
-                self.ExecuteState(state)
-            sleep(self._recurringInterval)
-            elapsedTime = time.time() - startTime
-            if self._timeout > 0 and elapsedTime > self._timeout:
-                print("timeout {0} (sec) reached, stop now.".format(self._timeout))
-                self.Stop()
-                break
-            if self._isShutDownSet():
-                self.Stop()
-                break
 
     def run(self):
         # Create a persistent loop for this thread's lifetime
@@ -203,23 +168,4 @@ class WorkThread(Thread):
         finally:
             pass
 
-    def onStateComplete(self, sender):
-        try:
-            state = self.StateFactory(sender)
-            if state is not None:
-                self.ExecuteState(state)
-        finally:
-            EventHandler().removeEvent(Consts.STATE_COMPLETE_EVENT)
-            pass
-'''
-def threadTestFunction(arg):
-    for i in range(arg):
-        print "{0} : running".format(i)
-        sleep(1)
-
-if __name__ == '__main__':
-    thread = Thread(target = threadTestFunction, args = (10,))
-    thread.start()
-    thread.join()
-    print "thread finished...exiting"
-'''
+    

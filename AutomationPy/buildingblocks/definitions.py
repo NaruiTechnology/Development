@@ -61,6 +61,10 @@ class Consts:
     ACTION_DATA = 'actionData'
     BACKUP = 'Backup'
     SKIP = 'skip'
+    TIMEOUT = 'timeout'
+    ACTION_DATA = 'actionData'
+    COMMAND_FORMAT = 'commandFormat'
+    ACTION_DATA = 'actionData'
     REGEX_GUILD_PATTERN = '(\{){0,1}[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}(\}){0,1}'
 
 

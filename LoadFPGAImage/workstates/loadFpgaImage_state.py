@@ -1,10 +1,10 @@
 from abc import abstractmethod
 import subprocess
 
+from amaranth import Const
 from AutomationPy.buildingblocks.workflow.workstate import WorkState
-
-import asyncio
 import os
+from AutomationPy.buildingblocks.definitions import Consts
 
 @abstractmethod
 class loadFpgaImage_state(WorkState):
@@ -18,6 +18,19 @@ class loadFpgaImage_state(WorkState):
     
     def __str__(self):
         return self._last_output
+    
+    def formatCommand(self, stateConfig):
+        if not stateConfig or Consts.COMMAND_FORMAT not in stateConfig[Consts.ACTION_DATA]:
+            return None
+        
+        command_format = stateConfig[Consts.ACTION_DATA][Consts.COMMAND_FORMAT]
+        positional_values = [v for k, v in stateConfig[Consts.ACTION_DATA].items() if k != Consts.COMMAND_FORMAT]
+        try:
+            formatted_command = command_format.format(*positional_values)
+            return formatted_command
+        except (IndexError, KeyError) as e:
+            print(f"Error formatting command: {e}")
+            return None
     
     async def runCommand(self, cmd, dirFrom = None, *args):
         success = False
@@ -50,9 +63,3 @@ class loadFpgaImage_state(WorkState):
         finally:
             os.chdir(cwd)
         return success
-    
-
-
-""" class loadFpgaImage_state(object):
-    def __init__(self, parent):
-        super(loadFpgaImage_state, self).__init__(parent) """

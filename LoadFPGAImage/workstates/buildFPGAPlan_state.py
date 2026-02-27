@@ -32,8 +32,6 @@ class buildFPGAPlan_state(loadFpgaImage_state):
             ext_switch_delay = 0.5,
             benchmark = True           
         )
-        voltage = 3.3 # 1.8 
-        await self.device.set_voltage("AB", voltage)
         target = GlasgowHardwareTarget(revision=self.device.revision, multiplexer_cls=DirectMultiplexer)
         self.iface = applet.build(target, args)
         self.device.demultiplexer = target.multiplexer

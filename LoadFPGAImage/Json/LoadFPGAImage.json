@@ -4,7 +4,12 @@
             "connectDevice": {
                 "skip": false,
                 "transactionComplete": false,
-                "actionData": {}
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {}",
+                    "voltage": 3.3,
+                    "pins": "A0"
+                },
+                "timeout": 20.0
             }
         },
         {

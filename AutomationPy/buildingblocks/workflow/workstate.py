@@ -46,8 +46,6 @@ class WorkState(object):# abstract base class
         self._outfile = None
         self._invokeFactory = None
 
-    # def __str__(self):
-    #     return repr("WorkState_" + self._id)
     @property
     def Id(self):
         return self._id
@@ -79,15 +77,6 @@ class WorkState(object):# abstract base class
     def Success(self, val):
         self._success = val
 
-    """ def GetParentWorkThread(self):
-        return self._parentWorkThread
-
-    def SetParentWorkThread(self, val):
-        if val is not None and type(val).__name__.lower().endswith('thread'):
-            self._parentWorkThread = val
-            self._invokeFactory = val.GetInvokeFactory()
-            self._config = val._config """
-
     async def Execute(self):
         try:
             if inspect.iscoroutinefunction(self.DoWork):
@@ -97,9 +86,7 @@ class WorkState(object):# abstract base class
         except Exception as e:
             print("!!!! error at Execute, error %s" % str(e))
             self._success = False
-        """ finally:
-            EventHandler().callback(Consts.STATE_COMPLETE_EVENT, self)
- """
+
     def LogMessage(self, msg):
         print (msg)
         if self._outfile is not None:
