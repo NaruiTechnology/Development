@@ -66,9 +66,7 @@ class LoadFPGAThread(WorkThread):
         if state is not None:
             self._logger.info('Calling {}'.format(type(state).__name__
                                                     .replace(Consts.STATE_OBJ_SUFFIX, '')))
-        elif self._config.OneTimeOnly:
-            self.Stop()
-
+        
         return state
 
     @overrides(WorkThread)

@@ -1,5 +1,7 @@
+import asyncio
 import os
 from AutomationPy.buildingblocks.decorators import overrides
+from AutomationPy.buildingblocks.definitions import Consts
 from .loadFpgaImage_state import loadFpgaImage_state
 
 class buildFPGAImage_state(loadFpgaImage_state):
@@ -10,6 +12,17 @@ class buildFPGAImage_state(loadFpgaImage_state):
     async def DoWork(self):
         topJson = "top.json"
         topV = "top.v"
-        synthIce40Cmd =  "synth_ice40 -top top -json {}".format(topJson)
-        if os.path.isfile(os.path.join(self.parent.buildPlan.buildDir, topJson)) and os.path.isfile(os.path.join(self.parent.buildPlan.buildDir, topV)):
-            await self.runCommand(self, "yosys -p {} {}".format(synthIce40Cmd, topV), self.parent.buildPlan.buildDir)
+        try:
+            stateConfig = self.ParentWorkThread.GetStateCongig(self)
+            if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
+                cmd = self.formatCommand(stateConfig)
+                if os.path.isfile(os.path.join(self.ParentWorkThread.fpgaBuildPlan.buildDir, topJson)) and os.path.isfile(os.path.join(self.ParentWorkThread.fpgaBuildPlan.buildDir, topV)):
+                    await asyncio.wait_for(
+                    self.runCommand(cmd),
+                    timeout=stateConfig[Consts.TIMEOUT]
+                    )
+                    self.Success = True
+                    print("Build FPGA image successfully.")
+        except Exception as e:
+            print(f"Build FPGA image failed with error: {e}")
+            self.Success = False                

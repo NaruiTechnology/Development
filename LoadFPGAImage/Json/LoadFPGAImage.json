@@ -14,9 +14,11 @@
         },
         {
             "buildFPGAPlan": {
-                "skip": true,
+                "skip": false,
                 "transactionComplete": false,
-                "actionData": {}
+                "actionData": {
+                    "commandFormat": "./build.sh"
+                }
             }
         },
         {
@@ -24,9 +26,10 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {                    
-                    "shellCmd": { 
-                        "commandFormat": "yosys -p {} {}"
-                    }}
+                    "commandFormat": "yosys -p 'synth_ice40 -top top -json top.json' {}",
+                    "": "top.v"
+                },
+                "timeout": 20.0
             }
         },
         {

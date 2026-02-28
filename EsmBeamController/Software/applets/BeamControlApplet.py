@@ -15,8 +15,8 @@ from ..lib.glasgow.applet import GlasgowApplet
 from ..lib.glasgow.hardware.device import GlasgowDeviceError
 from ..lib.glasgow.support.endpoint  import ServerEndpoint
 
-from commands.structs import Transforms
-from commands.low_level_commands import ExternalCtrlCommand
+from ..commands.structs import Transforms
+from ..commands.low_level_commands import ExternalCtrlCommand
 
 import logging
 logger = logging.getLogger()
@@ -123,15 +123,15 @@ class BeamControlApplet(GlasgowApplet):
         )
 
         subtarget_args = {
-            "ports": ports,
-            "in_fifo": iface.get_in_fifo(depth=512, auto_flush=False),
-            "out_fifo": iface.get_out_fifo(depth=512),
-            "loopback": args.loopback,
-            "transforms": Transforms(args.xflip, args.yflip, args.rotate90),
-            "out_only": args.out_only
+            #"ports": ports,
+            #"in_fifo": iface.get_in_fifo(depth=512, auto_flush=False),
+            #"out_fifo": iface.get_out_fifo(depth=512),
+            #"loopback": args.loopback,
+            #"transforms": Transforms(args.xflip, args.yflip, args.rotate90),
+            #"out_only": args.out_only
         }
 
-        if args.ext_switch_delay:
+        """ if args.ext_switch_delay:
             ext_delay_cycles = int(args.ext_switch_delay * pow(10, -3) / (1/(48 * pow(10,6))))
             subtarget_args.update({"ext_switch_delay": ext_delay_cycles})
 
@@ -140,7 +140,7 @@ class BeamControlApplet(GlasgowApplet):
             out_stall_cycles, self.__addr_out_stall_cycles = target.registers.add_ro(16, init=0)
             stall_count_reset, self.__addr_stall_count_reset = target.registers.add_rw(1, init=1)
             subtarget_args.update({"benchmark_counters": [out_stall_events, out_stall_cycles, stall_count_reset]})
-
+ """
         # subtarget = OBISubtarget(**subtarget_args)
 
         # return iface.add_subtarget(subtarget)
