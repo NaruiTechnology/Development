@@ -59,6 +59,8 @@ class Consts:
     """    
     STATE_OBJ_SUFFIX = '_state'
     ACTION_DATA = 'actionData'
+    ARGS_DATA = 'args'
+    COMPLETED_MSG_FORMAT = '{} completed.'
     BACKUP = 'Backup'
     SKIP = 'skip'
     TIMEOUT = 'timeout'

@@ -47,21 +47,44 @@ class buildFPGAPlan_state(loadFpgaImage_state):
                 stateConfig = self.ParentWorkThread.GetStateCongig(self)
                 if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
                     cmd = self.formatCommand(stateConfig)
-                    proc = await asyncio.create_subprocess_shell(
+                    """ proc = await asyncio.create_subprocess_shell(
                         cmd,
                         cwd=plan.buildDir,
                         stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE
+                        stderr=asyncio.subprocess.PIPE,
+                        env=os.environ.copy() # Ensures toolchain paths are inherited
                     )
                     stdout, stderr = await proc.communicate()
                     if proc.returncode != 0:
                         print(f"Command failed with error: {stderr.decode()}")
                         self.Success = False
                     else:
-                        print("Command executed successfully.")
+                        print(f"{stdout.decode()}\n------------Command executed successfully.------------")
                         self.ParentWorkThread.fpgaBuildPlan = plan
                         self.Success = True
-                        print("Build FPGA plan successfully.")               
+                        print("Build FPGA plan successfully.")  
+ """
+                    
+                    await self.commandAsyncio(cmd, plan.buildDir)
+                    success = self._buildPlanValidation(stateConfig, plan.buildDir) 
+                    if success is True:
+                        self.Success = True
+                        self.ParentWorkThread.fpgaBuildPlan = plan
+                        print("Build FPGA plan successfully.")  
         except Exception as e:
             print(f"Build FPGA plan failed with error: {e}")
-            self.Success = False                
+            self.Success = False        
+
+    def _buildPlanValidation(self, stateConfig, buildDir):
+        builSuccess = False
+        if Consts.ARGS_DATA in stateConfig:  
+            outputFiles = stateConfig[Consts.ARGS_DATA].get("outputFiles", [])
+            for outputFile in outputFiles:
+                outputPath = os.path.join(buildDir, outputFile)
+                if os.path.isfile(outputPath):
+                    print(f"Confirmed output file {outputFile} exists at {buildDir}.")
+                    builSuccess |= True
+                else:
+                    print(f"Output file {outputFile} is missing at {buildDir}.")
+                    builSuccess &= False  
+        return builSuccess       

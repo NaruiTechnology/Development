@@ -1,11 +1,11 @@
 import asyncio
-
-from EsmBeamController.Software.lib.glasgow.hardware.device import GlasgowDevice
-from .loadFpgaImage_state import loadFpgaImage_state
+#from EsmBeamController.Software.lib.glasgow.hardware.device import GlasgowDevice
+#from .loadFpgaImage_state import loadFpgaImage_state
+from .executeCommandLine_state import executeCommandLine_state
 from AutomationPy.buildingblocks.decorators import overrides
 from AutomationPy.buildingblocks.definitions import Consts
 
-class connectDevice_state(loadFpgaImage_state):
+""" class connectDevice_state(loadFpgaImage_state):
     def __init__(self, parent):
         super(connectDevice_state, self).__init__(parent)
 
@@ -26,4 +26,26 @@ class connectDevice_state(loadFpgaImage_state):
                 
         except Exception as e:
             print(f"Hardware error: {e}")
-            self.Success = False
+            self.Success = False """
+
+class connectDevice_state(executeCommandLine_state):
+    def __init__(self, parent):
+        super(connectDevice_state, self).__init__(parent)
+
+"""     @overrides(executeCommandLine_state)
+    async def DoWork(self):
+        try:
+            stateConfig = self.ParentWorkThread.GetStateCongig(self)
+            if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
+                cmd = self.formatCommand(stateConfig)
+                await asyncio.wait_for(
+                self.runCommand(cmd),
+                timeout=stateConfig[Consts.TIMEOUT]
+            )
+            print("Hardware responded successfully.")
+            self.Success = True 
+                
+        except Exception as e:
+            print(f"Hardware error: {e}")
+            self.Success = False """
+            

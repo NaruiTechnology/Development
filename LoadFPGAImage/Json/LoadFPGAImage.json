@@ -18,6 +18,10 @@
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "./build.sh"
+                },
+                "timeout": 0.0,
+                "args": {
+                    "outputFiles": ["top.v", "top.json", "top.pcf", "top.asc", "top.bin"] 
                 }
             }
         },
@@ -29,18 +33,7 @@
                     "commandFormat": "yosys -p 'synth_ice40 -top top -json top.json' {}",
                     "": "top.v"
                 },
-                "timeout": 20.0
-            }
-        },
-        {
-            "generateFullImage": {
-                "skip": false,
-                "transactionComplete": false,
-                "actionData": {
-                    "shellCmd": { 
-                        "commandFormat": "icepack {} {}"
-                    }
-                }
+                "timeout": 10.0
             }
         },
         {
@@ -48,10 +41,23 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "shellCmd": { 
-                        "commandFormat": "nextpnr-ice40 --hx8k --package tq144 --json {} --pcf {} --asc {}"
-                    }
-                }
+                    "commandFormat": "nextpnr-ice40 --hx1k --package tq144 --json {} --pcf {} --asc {}",
+                    "json": "top.json",
+                    "pcf": "top.pcf",
+                    "asc": "top.asc"
+                },
+                "timeout": 2.0
+            }
+        },
+        {
+            "bitsStreamPackage": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "icepack {}",
+                    "": "top.asc top.bin"
+                },
+                "timeout": 2.0
             }
         },
         {
@@ -59,13 +65,12 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "shellCmd": { 
-                        "commandFormat": "glasgow run program-ice40-sram {}"
-                    }
-                }
+                    "commandFormat": "glasgow run program-ice40-sram {}",
+                    "": "top.bin"
+                },
+                "timeout": 10.0
             }
         }
-
     ],
     "LogName": "LoadFPGAImage"
 }

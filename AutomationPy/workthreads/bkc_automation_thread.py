@@ -43,7 +43,7 @@ class bkc_automation_thread(WorkThread):
             if self._queue.qsize() > 0:
                 state = self._queue.get_nowait()
             else:
-                self._logger.info(Consts.COMPLETED_MSG)
+                self._logger.info(Consts.COMPLETED_MSG_FORMAT.format(type(self).__name__))
         else:
             state = None
             self._logger.error(Consts.FAILED_MSG)

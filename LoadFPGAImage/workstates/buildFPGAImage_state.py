@@ -2,9 +2,11 @@ import asyncio
 import os
 from AutomationPy.buildingblocks.decorators import overrides
 from AutomationPy.buildingblocks.definitions import Consts
-from .loadFpgaImage_state import loadFpgaImage_state
+#from .loadFpgaImage_state import loadFpgaImage_state
+from .executeCommandLine_state import executeCommandLine_state
+from .asyncioCommand_state import asyncioCommand_state
 
-class buildFPGAImage_state(loadFpgaImage_state):
+""" class buildFPGAImage_state(loadFpgaImage_state):
     def __init__(self,  parent):
         super(buildFPGAImage_state, self).__init__(parent)
 
@@ -25,4 +27,8 @@ class buildFPGAImage_state(loadFpgaImage_state):
                     print("Build FPGA image successfully.")
         except Exception as e:
             print(f"Build FPGA image failed with error: {e}")
-            self.Success = False                
+            self.Success = False                 """
+
+class buildFPGAImage_state(asyncioCommand_state):
+    def __init__(self,  parent):
+        super(buildFPGAImage_state, self).__init__(parent)
