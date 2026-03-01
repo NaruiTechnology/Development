@@ -1,4 +1,20 @@
 {
+    "Header":{
+        "Aplication": "Dual Beam System"
+    },
+    "Equipment":{
+        "Vendor": "FEI Co",
+        "VendorAddress": "5350 NE Dawson Creek Drive, Hillsboro, OR, 97124, United States",
+        "Model": "",
+        "Glasgow": {
+            "Id": "C3-20251207T145552Z"
+        },
+        "Config": {
+            "SampleFlatfor": {},
+            "E-Beam": {},
+            "I-Bean": {}
+        }
+    },
     "Actions":[
         {
             "connectDevice": {
@@ -61,7 +77,7 @@
             }
         },
         {
-            "flashImage": {
+            "updateFPGAImage": {
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
