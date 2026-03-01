@@ -5,6 +5,7 @@
 # additional terms of your license agreement.
 #
 ## @file
+# Auther: Henry Li
 #
 
 # This software and associated documentation (if any) is furnished
@@ -67,6 +68,6 @@ class Consts:
     ACTION_DATA = 'actionData'
     COMMAND_FORMAT = 'commandFormat'
     ACTION_DATA = 'actionData'
-    REGEX_GUILD_PATTERN = '(\{){0,1}[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}(\}){0,1}'
+    REGEX_GUILD_PATTERN = r'(\{){0,1}[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}(\}){0,1}'
 
 
