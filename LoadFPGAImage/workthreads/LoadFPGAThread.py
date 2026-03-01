@@ -1,7 +1,6 @@
 from AutomationPy.buildingblocks.decorators import overrides
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.workflow.work_thread import WorkThread
-from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 import AutomationPy.buildingblocks.utils as util
 from EsmBeamController.Software.lib.glasgow.hardware.device import GlasgowDevice

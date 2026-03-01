@@ -46,25 +46,7 @@ class buildFPGAPlan_state(loadFpgaImage_state):
             if plan is not None and os.path.exists(os.path.join(plan.buildDir, "top.v")):
                 stateConfig = self.ParentWorkThread.GetStateCongig(self)
                 if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
-                    cmd = self.formatCommand(stateConfig)
-                    """ proc = await asyncio.create_subprocess_shell(
-                        cmd,
-                        cwd=plan.buildDir,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=os.environ.copy() # Ensures toolchain paths are inherited
-                    )
-                    stdout, stderr = await proc.communicate()
-                    if proc.returncode != 0:
-                        print(f"Command failed with error: {stderr.decode()}")
-                        self.Success = False
-                    else:
-                        print(f"{stdout.decode()}\n------------Command executed successfully.------------")
-                        self.ParentWorkThread.fpgaBuildPlan = plan
-                        self.Success = True
-                        print("Build FPGA plan successfully.")  
- """
-                    
+                    cmd = self.formatCommand(stateConfig)          
                     await self.commandAsyncio(cmd, plan.buildDir)
                     success = self._buildPlanValidation(stateConfig, plan.buildDir) 
                     if success is True:

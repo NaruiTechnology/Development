@@ -1,32 +1,4 @@
-import asyncio
-from AutomationPy.buildingblocks.decorators import overrides
-from .loadFpgaImage_state import loadFpgaImage_state
-from .executeCommandLine_state import executeCommandLine_state
-from .asyncioCommand_state import asyncioCommand_state
-from AutomationPy.buildingblocks.definitions import Consts
-
-""" class invokeNextpnr_state(loadFpgaImage_state):
-    def __init__(self, parent):
-        super(invokeNextpnr_state, self).__init__(parent)   
-
-    @overrides(loadFpgaImage_state)
-    async def DoWork(self):
-               
-        try:
-            stateConfig = self.ParentWorkThread.GetStateCongig(self)
-            if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
-                cmd = self.formatCommand(stateConfig)
-                await asyncio.wait_for(
-                #device.set_voltage("AB", voltage), 
-                self.runCommand(cmd),
-                timeout=stateConfig[Consts.TIMEOUT]
-            )
-            print("Invoke Nextpnr successfully.")
-            self.Success = True 
-                
-        except Exception as e:
-            print(f"Invoke Nextpnr failed, error: {e}")
-            self.Success = False    """         
+from .asyncioCommand_state import asyncioCommand_state 
 
 class invokeNextpnr_state(asyncioCommand_state):
     def __init__(self, parent):

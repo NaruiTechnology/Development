@@ -21,7 +21,6 @@ from ..event_handler import EventHandler
 from ..definitions import Consts
 #import buildingblocks.utils as util
 from ..utils import *
-import asyncio
 import inspect
 
 
