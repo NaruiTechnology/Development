@@ -36,6 +36,7 @@ class buildFPGAPlan_state(loadFpgaImage_state):
             #ext_switch_delay = 0.5,
             #benchmark = True         
         )
+        args = self._findDeviceConfigById(self.ParentWorkThread._device.serial)
         try:
             device = self.ParentWorkThread.device
             target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
@@ -70,3 +71,9 @@ class buildFPGAPlan_state(loadFpgaImage_state):
                     print(f"Output file {outputFile} is missing at {buildDir}.")
                     builSuccess &= False  
         return builSuccess       
+    
+    def _findDeviceConfigById(self, deviceId):
+        for key, value in self.ParentWorkThread._config["Glasgow"].items():
+            if isinstance(value, dict) and value.get("Id") == deviceId:
+                return SimpleNamespace(**value)
+        return None    
