@@ -112,6 +112,16 @@
                 },
                 "timeout": 10.0
             }
+        },
+        {
+            "flashFPGAfirmware": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "glasgow flash"
+                },
+                "timeout": 0.5
+            }
         }
     ],
     "LogName": "LoadFPGAImage"

@@ -6,7 +6,7 @@ from workthreads.LoadFPGAThread import LoadFPGAThread
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Load FPGA image onto the device.')
-    parser.add_argument('-j', action='store', dest='jsonfile', help="Config Json file path", default=os.path.realpath(r'./Json/LoadFPGAImage.json'))
+    parser.add_argument('-j', action='store', dest='jsonfile', help="Config Json file path", default=os.path.realpath(r'./Development/LoadFPGAImage/Json/LoadFPGAImage.json'))
     parser.add_argument('-g', action='store', dest='deviceId', help="Glasgow device Id", default=None)
 
     args = parser.parse_args()
