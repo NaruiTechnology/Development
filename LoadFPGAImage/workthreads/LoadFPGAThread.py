@@ -22,9 +22,7 @@ class LoadFPGAThread(WorkThread):
         self._logger = logInstance.GetLogger(self._logName)     
         AutomationLog.TryAddConsole(self._logName) 
         self._queue = None
-        self._device = GlasgowDevice()
-        if deviceId is not None:
-            self._device.open(deviceId)
+        self._device = GlasgowDevice(deviceId) 
         self._fpgaBuildPlan = None
         
     @property

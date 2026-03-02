@@ -7,13 +7,17 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Load FPGA image onto the device.')
     parser.add_argument('-j', action='store', dest='jsonfile', help="Config Json file path", default=None)
-    #parser.add_argument('-l', action='store', dest='logname', help="Log file name", default='LoadFPGAImage')
+    parser.add_argument('-g', action='store', dest='deviceId', help="Glasgow device Id", default=None)
 
     args = parser.parse_args()
     if args.jsonfile is not None:
         jsonpath = args.jsonfile
     else:
         jsonpath = os.path.realpath(r'Development/LoadFPGAImage/Json/LoadFPGAImage.json')
+    if args.deviceId is not None:
+        deviceId = args.deviceId
+    else:
+        deviceId = None        
     config = AutomationConfig(jsonpath)
-    thread = LoadFPGAThread(config)
+    thread = LoadFPGAThread(config, deviceId)
     thread.Start()

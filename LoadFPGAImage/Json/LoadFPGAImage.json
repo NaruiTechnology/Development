@@ -6,15 +6,41 @@
         "Vendor": "FEI Co",
         "VendorAddress": "5350 NE Dawson Creek Drive, Hillsboro, OR, 97124, United States",
         "Model": "",
-        "Glasgow": {
-            "Id": "C3-20251207T145552Z"
-        },
         "Config": {
             "SampleFlatfor": {},
             "E-Beam": {},
             "I-Bean": {}
         }
     },
+    "Glasgow": { 
+        "Device0": {
+            "Id": "C3-20251207T145552Z",
+            "Port": {
+                "A": {
+                    "DefaultVol": 3.3,
+                    "0": {"Name": "x-EScan", "Direction": "Out", "Volt": 3.3},
+                    "1": {"Name": "y-EScan", "Direction": "Out", "Volt": 3.3},
+                    "2": {},
+                    "3": {},
+                    "4": {},
+                    "5": {},
+                    "6": {},
+                    "7": {}
+                },
+                "B": {
+                    "DefaultVol": 3.3,
+                    "0": {},
+                    "1": {},
+                    "2": {},
+                    "3": {},
+                    "4": {},
+                    "5": {},
+                    "6": {},
+                    "7": {}
+                }
+            }           
+        }
+    },     
     "Actions":[
         {
             "connectDevice": {
