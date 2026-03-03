@@ -20,7 +20,6 @@
 from abc import abstractmethod
 from ..event_handler import EventHandler
 from ..definitions import Consts
-#import buildingblocks.utils as util
 from ..utils import *
 import inspect, subprocess, asyncio
 
@@ -112,11 +111,7 @@ class WorkState(object):# abstract base class
         runfrom = cwd
         if dirFrom is not None and os.path.isdir(dirFrom):
             runfrom = dirFrom
-
         command = cmd
-        if args:
-            command += " " + " ".join(args)
-
         try:
             os.chdir(runfrom)
             
@@ -129,6 +124,7 @@ class WorkState(object):# abstract base class
                                     text=True)
             if proc.returncode != 0:
                 self._last_output = proc.stdout 
+            stdout, stderr = await proc.communicate() 
             success = proc.returncode == 0
         except Exception as e:
             self._last_output = str(e)
