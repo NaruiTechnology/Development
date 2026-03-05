@@ -10,7 +10,7 @@ class executeCommandLine_state(loadFpgaImage_state):
     @overrides(loadFpgaImage_state)
     async def DoWork(self):
         try:
-            stateConfig = self.ParentWorkThread.GetStateCongig(self)
+            stateConfig = self.ParentWorkThread.GetStateConfig(self)
             if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
                 cmd = self.formatCommand(stateConfig)
                 await asyncio.wait_for(

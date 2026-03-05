@@ -45,7 +45,7 @@ class buildFPGAPlan_state(loadFpgaImage_state):
             device.demultiplexer = target.multiplexer
             plan = target.build_plan()
             if plan is not None and os.path.exists(os.path.join(plan.buildDir, "top.v")):
-                stateConfig = self.ParentWorkThread.GetStateCongig(self)
+                stateConfig = self.ParentWorkThread.GetStateConfig(self)
                 if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
                     cmd = self.formatCommand(stateConfig)          
                     await self.commandAsyncio(cmd, plan.buildDir)

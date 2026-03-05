@@ -122,14 +122,15 @@ class WorkThread(Thread):
         else:
             return self._shutdownEvent.is_set()
 
-    def run(self):
+    def run(self, verbose=False):
         # Create a persistent loop for this thread's lifetime
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
         startTime = time.time()
         
-        print(f"Starting Thread: {self.__class__.__name__}")
+        if verbose:
+            print(f"Starting Thread: {self.__class__.__name__}")
 
         loop = None
         state = None
@@ -144,7 +145,8 @@ class WorkThread(Thread):
                     asyncio.set_event_loop(loop)
                     loop.run_until_complete(state.Execute())
                 else:
-                    print("No more states to execute. Thread is idle.")
+                    if verbose:
+                        print("No more states to execute. Thread is idle.")
                     self._isTerminated = True                   
                     
             except Exception as e:
@@ -170,3 +172,9 @@ class WorkThread(Thread):
             pass
 
     
+    def GetStateConfig(self, state):
+        for action in self._config.Actions:
+            stateName = type(state).__name__.replace(Consts.STATE_OBJ_SUFFIX, '')
+            if stateName in action:
+                return action[stateName]
+        return None

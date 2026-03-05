@@ -1,0 +1,33 @@
+{
+    "Glasgow": { 
+        "Device0": {
+            "Id": "C3-20251207T145552Z"
+        }           
+    },
+    "Actions":[
+        {
+            "writeData": {
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
+                    "voltage": 3.3,
+                    "port": "A",
+                    "length": 8
+                },
+                "timeout": 1.0
+            }
+        },
+        {
+            "readData": {
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {}",
+                    "voltage": 3.3,
+                    "port": "B",
+                    "length": 8
+                },
+                "timeout": 1.0
+            }
+        }
+    ],
+    "LogName": "GlasgowDataIO",
+    "Verbose": false
+}
