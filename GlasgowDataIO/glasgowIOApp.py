@@ -36,7 +36,7 @@ async def main():
         print(f'Write data value {v} to Glasgow device {deviceId}')
         write_inst = writeDataThread(config, deviceId, v) 
         write_inst.Start()
-        time.sleep(args.pause)
+        time.sleep(float(args.pause))
 
 if __name__ == '__main__':
     asyncio.run(main())
