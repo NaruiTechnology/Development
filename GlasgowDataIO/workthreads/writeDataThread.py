@@ -1,4 +1,3 @@
-import AutomationPy.buildingblocks.utils as util
 from .dataIOThread import dataIOThread
 
 class writeDataThread(dataIOThread):

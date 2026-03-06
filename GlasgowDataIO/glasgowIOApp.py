@@ -1,6 +1,5 @@
 import os
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
-from workthreads.readThread import readDataThread
 from workthreads.writeDataThread import writeDataThread
 import time, asyncio
 

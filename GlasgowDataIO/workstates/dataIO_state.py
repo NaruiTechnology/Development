@@ -15,6 +15,9 @@ class dataIO_state(WorkState):
     
     @data.setter
     def data(self, val):
+        self._data = val
+        if self._data is None:
+            return
         stateConfig = self.ParentWorkThread.GetStateConfig(self)
         if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
             self._data = val
@@ -29,7 +32,6 @@ class dataIO_state(WorkState):
                 self._bitsList = [(self._data >> x) & 1 for x in range(num_bits - 1, -1, -1)]
                 self._bitsList = [0] * (action.get('length') - len(self._bitsList)) + self._bitsList
 
-   
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)

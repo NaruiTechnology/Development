@@ -44,6 +44,8 @@ class WorkState(object):# abstract base class
         self._configTest = None
         self._outfile = None
         self._invokeFactory = None
+        self._stdout = None
+        self._stderr = None
 
     @property
     def Id(self):
@@ -105,7 +107,7 @@ class WorkState(object):# abstract base class
             print(f"Error formatting command: {e}")
             return None
     
-    async def runCommand(self, cmd, dirFrom = None, *args):
+    async def runCommand(self, cmd, dirFrom = None):
         success = True
         cwd = os.getcwd()
         runfrom = cwd
@@ -132,9 +134,11 @@ class WorkState(object):# abstract base class
             success = False
         finally:
             os.chdir(cwd)
+            self._stdout = stdout
+            self._stderr = stderr
         return success
 
-    async def commandAsyncio(self, cmd, dirFrom = None, *args):
+    async def commandAsyncio(self, cmd, dirFrom = None, verbose=False): #*args):
         success = True
         cwd = os.getcwd()
         runfrom = cwd
@@ -155,7 +159,8 @@ class WorkState(object):# abstract base class
             if proc.returncode != 0:
                 self._last_output = stderr.decode() 
             else:
-                print(stdout.decode())
+                if verbose:
+                    print(stdout.decode())
             success = proc.returncode == 0
         except Exception as e:
             self._last_output = str(e)
@@ -163,6 +168,8 @@ class WorkState(object):# abstract base class
             success = False
         finally:
             os.chdir(cwd)
+            self._stdout = stdout
+            self._stderr = stderr
         return success
 
     @abstractmethod

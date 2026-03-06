@@ -24,4 +24,5 @@ class writeData_state(dataIO_state):
                     args.append(val[:-1])
                     cmdFormat = action.get(Consts.COMMAND_FORMAT)
                     return cmdFormat.format(*args)
+        return None
             
