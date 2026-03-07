@@ -9,7 +9,7 @@
             "writeData": {
                 "actionData": {
                     "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
-                    "voltage": 2.8,
+                    "voltage": 2.5,
                     "port": "A",
                     "length": 8
                 },
