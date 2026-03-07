@@ -47,5 +47,5 @@ class readData_state(dataIO_state):
                     digit = match.group(1)
                     valstr = f'{valstr}{digit}'
             self._data = int(valstr, 2)
-            print(f'Read Glasgow data from port [{self._port}], pins {self._pinList}, value = [{self._data}]')
+            print(f'Read Glasgow data from port [{self._port}], pins {self._pinList}, raw data = [{valstr}], value = [{self._data}]')
 
