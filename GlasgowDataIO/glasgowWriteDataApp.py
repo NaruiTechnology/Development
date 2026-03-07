@@ -11,7 +11,7 @@ async def main():
     parser.add_argument('-s', action='store', dest='startValue', help="start value", default=1)
     parser.add_argument('-e', action='store', dest='endValue', help="end value", default=10)
     parser.add_argument('-i', action='store', dest='increment', help="value increment", default=1)
-    parser.add_argument('-p', action='store', dest='pause', help="Gause time", default=0.5)
+    parser.add_argument('-p', action='store', dest='pause', help="Pause time", default=0.5)
        
     args = parser.parse_args()
     if args.jsonfile is not None:
