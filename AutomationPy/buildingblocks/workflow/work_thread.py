@@ -151,6 +151,8 @@ class WorkThread(Thread):
                     
             except Exception as e:
                 print(f"Execution Error: {e}")
+                self._isTerminated = True
+                raise(str(e))
                 break  
             finally:                    
                 if loop is not None and loop in locals():
