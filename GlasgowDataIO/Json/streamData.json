@@ -1,0 +1,25 @@
+{
+    "Glasgow": { 
+        "Device0": {
+            "Id": "C3-20251207T145552Z"
+        }           
+    },
+    "Actions":[
+        {
+            "streamData": {
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {}{} {}{}={}",
+                    "voltage": 2.5,
+                    "port": "A",
+                    "pin": 0,
+                    "resolution": 12,
+                    "waveform": "sine",
+                    "frequency": 50.0
+                },
+                "timeout": 60.0
+            }
+        }
+    ],
+    "LogName": "WaveformGenerator",
+    "Verbose": true
+}

@@ -123,7 +123,7 @@ class WorkThread(Thread):
             return self._shutdownEvent.is_set()
 
     def run(self, verbose=False):
-        # Create a persistent loop for this thread's lifetime
+        # Create ONE persistent loop for this thread's entire lifetime
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
@@ -132,33 +132,33 @@ class WorkThread(Thread):
         if verbose:
             print(f"Starting Thread: {self.__class__.__name__}")
 
-        loop = None
         state = None
-        while not self._isTerminated:
-            if self._timeout > 0 and (time.time() - startTime) > self._timeout:
-                print("Global timeout reached.")
-                break
-            try:
+        try:
+            while not self._isTerminated:
+                if self._timeout > 0 and (time.time() - startTime) > self._timeout:
+                    print("Global timeout reached.")
+                    break
+                
                 state = self.StateFactory(state)
                 if state is not None:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+                    # Run the state within the existing persistent loop
                     loop.run_until_complete(state.Execute())
                 else:
                     if verbose:
                         print("No more states to execute. Thread is idle.")
                     self._isTerminated = True                   
-                    
-            except Exception as e:
-                print(f"Execution Error: {e}")
-                self._isTerminated = True
-                raise(str(e))
-                break  
-            finally:                    
-                if loop is not None and loop in locals():
-                    loop.close() 
-                        
-            sleep(self._recurringInterval)
+                
+                # Use the loop to sleep asynchronously or use standard sleep
+                time.sleep(self._recurringInterval)
+        except Exception as e:
+            print(f"Execution Error: {e}")
+            self._isTerminated = True
+        finally:                    
+            # Properly close the hardware and loop once at the very end
+            if loop.is_running():
+                loop.stop()
+            loop.close()            
+
 
     def ExecuteState(self, state):
         if state is None:

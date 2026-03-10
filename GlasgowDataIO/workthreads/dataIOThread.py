@@ -18,6 +18,7 @@ class dataIOThread(WorkThread):
         AutomationLog.TryAddConsole(self._logName) 
         self._queue = None
         self._data = data
+        self._deviceId = deviceId
 
     @overrides(WorkThread)
     def StateFactory(self, workState = None):
