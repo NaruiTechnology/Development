@@ -1,7 +1,7 @@
 import queue
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.decorators import overrides
-from workstates.streamData_state import streamData_state
+from ..workstates.streamData_state import streamData_state
 from .dataIOThread import dataIOThread
 
 class streamDataThread(dataIOThread):

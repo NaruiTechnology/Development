@@ -24,49 +24,59 @@ class streamData_state(dataIO_state):
             
             # Configuration
             voltage = action.get('voltage', 3.3)
-            port = action.get('port', 'A')
-            pin_num = action.get('pin', 0)
-            resolution = action.get('resolution', 12)
+            commandFormat = action.get('commandFormat')
+            resolution = 0
+            pins = ''
+            pinValueGroupFormat = ''
+            ports = action.get('ports')
+
+            if isinstance(ports, list):
+                for item in list(ports):
+                    pList = item.get('pinList')
+                    if pList is not None and len(pList) > 0:
+                        port = item.get('port')
+                        for x in pList:                            
+                            pins = f'{pins}{port}{x},'
+                            pinValueGroupFormat = f"{pinValueGroupFormat}{port}{x}=" + '{} '
+                            resolution += 1
+                pins = pins[:-1]                 
+                pinValueGroupFormat = pinValueGroupFormat[:-1]
+
             wave_type = action.get('waveform', 'sine')
             frequency = action.get('frequency', 1.0)
+            point = action.get('point', 100)
             
-            lut = self._generate_lut(wave_type, resolution)
+            lut = self._generate_lut(wave_type, resolution, point)
             delay = 1.0 / (frequency * len(lut))
 
             """ if self._gpio_iface is None:
                 await self._initialize_hardware() """
 
-            # THE STANDARD APPLET APPROACH:
-            # Instead of subprocess, we use a mock-up of the internal Glasgow API call.
-            # In a production environment, you would instantiate the applet class once.
-            self.Logger.info(f"Initializing Glasgow Control-GPIO Applet on Port {port}")
-
-
-            # Implementation of the "persistent" command logic
-            # This simulates the applet's 'write' functionality without restarting the FPGA
             for val in lut:
+                bits = [int(bit) for bit in bin(val)[2:].zfill(resolution)]
+                pinValueGroup = pinValueGroupFormat.format(*bits)
                 if self._gpio_iface is not None: #TODO
                     #Hi speed Max Stream Throughput: ~100 kHz to 1 MHz 
-                    await self._gpio_iface.set_pin(pin_num, val)
+                    await self._gpio_iface.set_pin(pins, pinValueGroup)
                     self._success = True
                 else:
                     # Max reliable Frequecy: ~ 10 Hz to 100 Hz
-                    cmd = f"glasgow run control-gpio -V {voltage} --pins {port}{pin_num} {port}{pin_num}={val}"               
-                    #self._success = await self.commandAsyncio(cmd)
-                    await asyncio.wait_for(
-                        self.runCommand(cmd),
-                        timeout=stateConfig[Consts.TIMEOUT]
-                    )
+                    cmd = commandFormat.format(voltage, pins, pinValueGroup)              
+                    self._success = await self.commandAsyncio(cmd)
                 if not self._success: 
-                    break   
+                    break
+                else:
+                    if self.ParentWorkThread._config.Verbose:
+                        print (f'Send DAC data success, wave type = [{wave_type}], frequency = [{frequency}], points = [{point}], delay = [{delay:.3f}], data = [{val}].')   
                 await asyncio.sleep(delay)
 
         except Exception as e:
             self.Logger.error(f"Applet Error: {e}")
             self._success = False
 
-    def _generate_lut(self, wave_type, resolution, points=100):
+    def _generate_lut(self, wave_type, resolution, points=75):
         max_val = (1 << resolution) - 1
+        
         lut = []
         for i in range(points):
             t = i / points

@@ -8,13 +8,20 @@
         {
             "streamData": {
                 "actionData": {
-                    "commandFormat": "glasgow run control-gpio -V {} --pins {}{} {}{}={}",
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
                     "voltage": 2.5,
-                    "port": "A",
-                    "pin": 0,
-                    "resolution": 12,
-                    "waveform": "sine",
-                    "frequency": 50.0
+                    "ports": [
+                        {
+                            "port": "A",
+                            "pinList": [0,1,2,3,4,5,6,7]
+                        },
+                        {
+                            "port": "B",
+                            "pinList": []
+                        }
+                    ],
+                    "frequency": 0.5,
+                    "point": 70
                 },
                 "timeout": 60.0
             }
