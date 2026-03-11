@@ -20,8 +20,8 @@
                             "pinList": []
                         }
                     ],
-                    "frequency": 0.5,
-                    "point": 70
+                    "frequency": 1000,
+                    "point": 100
                 },
                 "timeout": 60.0
             }

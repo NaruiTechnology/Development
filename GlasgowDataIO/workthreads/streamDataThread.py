@@ -14,7 +14,7 @@ class streamDataThread(dataIOThread):
     def IntialWork(self):
         state = None
         self._queue = queue.Queue()
-   
+
         instance = streamData_state(self, waveForm=self._waveForm, data=self._data)
         instance.Logger = self._logger
         

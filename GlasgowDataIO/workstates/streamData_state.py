@@ -4,16 +4,15 @@ from workstates.dataIO_state import dataIO_state
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.decorators import overrides
 
-# Note: In a real Glasgow environment, you would import the applet
-# from glasgow.applet.interface.control_gpio import ControlGPIOApplet
 from EsmBeamController.Software.lib.glasgow.hardware.device import GlasgowDevice    
 from glasgow.applet.control.gpio import GPIOInterface
 
 class streamData_state(dataIO_state):
-    def __init__(self, parent, waveForm=None, data=None):
+    def __init__(self, parent, waveForm=None, data=None, **kwargs):
         super(streamData_state, self).__init__(parent)
         self._waveForm = waveForm 
-        self._data = data
+        # Handle both 'data' and 'stream' keyword arguments from the thread
+        self._data = data or kwargs.get('stream')
         self._gpio_iface = None
 
     @overrides(dataIO_state)
@@ -22,77 +21,98 @@ class streamData_state(dataIO_state):
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             action = stateConfig.get(Consts.ACTION_DATA)
             
-            # Configuration
+            # Configuration from JSON
             voltage = action.get('voltage', 3.3)
             commandFormat = action.get('commandFormat')
+            frequency = action.get('frequency', 10)
+            point_count = action.get('point', 100)
+                   
             resolution = 0
-            pins = ''
-            pinValueGroupFormat = ''
+            pins_arg = ''
+            pin_val_format = ''
             ports = action.get('ports')
 
             if isinstance(ports, list):
-                for item in list(ports):
+                for item in ports:
                     pList = item.get('pinList')
-                    if pList is not None and len(pList) > 0:
-                        port = item.get('port')
-                        for x in pList:                            
-                            pins = f'{pins}{port}{x},'
-                            pinValueGroupFormat = f"{pinValueGroupFormat}{port}{x}=" + '{} '
+                    if pList:
+                        port_name = item.get('port')
+                        for pin_idx in pList:                            
+                            pins_arg += f"{port_name}{pin_idx},"
+                            pin_val_format += f"{port_name}{pin_idx}={{}} "
                             resolution += 1
-                pins = pins[:-1]                 
-                pinValueGroupFormat = pinValueGroupFormat[:-1]
-
-            wave_type = action.get('waveform', 'sine')
-            frequency = action.get('frequency', 1.0)
-            point = action.get('point', 100)
             
-            lut = self._generate_lut(wave_type, resolution, point)
-            delay = 1.0 / (frequency * len(lut))
+            pins_arg = pins_arg.rstrip(',')
+            pin_val_format = pin_val_format.strip()
 
-            """ if self._gpio_iface is None:
-                await self._initialize_hardware() """
+            # --- WAVEFORM LOGIC AGAINST DATA ---
+            if self._data and len(self._data) > 0:
+                if self.ParentWorkThread._config.Verbose:
+                    self.Logger.info(f"Applying '{self._waveForm}' logic to custom data (Length: {len(self._data)})")
+                source_values = self._data
+            else:
+                if self.ParentWorkThread._config.Verbose:
+                    self.Logger.info(f"No custom data. Generating '{self._waveForm}' sequence with {point_count} points.")
+                source_values = [i / point_count for i in range(point_count)]
 
-            for val in lut:
-                bits = [int(bit) for bit in bin(val)[2:].zfill(resolution)]
-                pinValueGroup = pinValueGroupFormat.format(*bits)
-                if self._gpio_iface is not None: #TODO
-                    #Hi speed Max Stream Throughput: ~100 kHz to 1 MHz 
-                    await self._gpio_iface.set_pin(pins, pinValueGroup)
-                    self._success = True
-                else:
-                    # Max reliable Frequecy: ~ 10 Hz to 100 Hz
-                    cmd = commandFormat.format(voltage, pins, pinValueGroup)              
-                    self._success = await self.commandAsyncio(cmd)
+            # Calculate final DAC integers
+            stream_source = self._calculate_stream(source_values, resolution)
+            
+            # Calculate timing delay based on frequency and sample count
+            delay = 1.0 / (frequency * len(stream_source))
+
+            for val in stream_source:
+                # Convert integer to bit list, pad with zeros to match resolution
+                # [::-1] ensures Bit 0 maps to the first pin in the list (Little Endian)
+                bits = [int(b) for b in bin(val)[2:].zfill(resolution)[::-1]]
+                
+                # Format the pin assignments: e.g. "A0=0 A1=1 A2=0..."
+                pin_assignments = pin_val_format.format(*bits)
+                
+                # Construct and execute the Glasgow CLI command
+                cmd = commandFormat.format(voltage, pins_arg, pin_assignments)              
+                self._success = await self.commandAsyncio(cmd)
+                
                 if not self._success: 
                     break
                 else:
                     if self.ParentWorkThread._config.Verbose:
-                        print (f'Send DAC data success, wave type = [{wave_type}], frequency = [{frequency}], points = [{point}], delay = [{delay:.3f}], data = [{val}].')   
+                        print(f'DAC Output: Wave form = [{self._waveForm}], Value=[{val}], frequency = [{frequency} Hz], Delay=[{delay:.5f} s]')
+                
                 await asyncio.sleep(delay)
 
         except Exception as e:
-            self.Logger.error(f"Applet Error: {e}")
+            self.Logger.error(f"Waveform Execution Error: {e}")
             self._success = False
 
-    def _generate_lut(self, wave_type, resolution, points=75):
-        max_val = (1 << resolution) - 1
+    def _calculate_stream(self, source, resolution):
+        """
+        Maps source values to DAC integers using waveform math.
+        """
+        max_dac_val = (1 << resolution) - 1
+        stream = []
         
-        lut = []
-        for i in range(points):
-            t = i / points
-            if wave_type.lower() == "sine":
-                raw_val = (math.sin(2 * math.pi * t) + 1) * (max_val / 2)
-            elif wave_type.lower() == "square":
-                raw_val = max_val if t < 0.5 else 0
-            elif wave_type.lower() == "triangle":
-                raw_val = max_val * (1 - abs(2 * t - 1))
-            else:
-                raw_val = 0
+        # Normalize source if it looks like an index range (e.g., [0, 1, 2...])
+        max_in = max(source) if len(source) > 0 else 1.0
+        
+        for v in source:
+            # If we are doing 'sine/square/triangle', we need a 0.0-1.0 phase 't'
+            # If v is already 0..1, we use it. If v is larger, we normalize it.
+            t = v / max_in if (max_in > 1.0 and self._waveForm != 'custom') else v
             
-            val = int(round(raw_val))
-            if val > max_val or val < 0:
-                raise ValueError(f"Value {val} out of {resolution}-bit range")
-            lut.append(val)
-        return lut            
-         
-        
+            if self._waveForm == "sine":
+                raw = (math.sin(2 * math.pi * t) + 1) * (max_dac_val / 2)
+            elif self._waveForm == "square":
+                raw = max_dac_val if t < 0.5 else 0
+            elif self._waveForm == "triangle":
+                raw = max_dac_val * (1 - abs(2 * t - 1))
+            else:
+                # 'custom' or 'none' - Use raw values from data
+                # If values are 0..1, scale to DAC range. If > 1, use as direct integers.
+                raw = v * max_dac_val if v <= 1.0 else v
+            
+            # Round and clamp to resolution limits
+            final_val = int(round(raw))
+            stream.append(max(0, min(final_val, max_dac_val)))
+            
+        return stream
