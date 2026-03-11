@@ -13,8 +13,8 @@ async def main():
     import argparse
     parser = argparse.ArgumentParser(description='Load FPGA image onto the device.')
     parser.add_argument('-j', action='store', dest='jsonfile', help="Config Json file path", default=os.path.realpath(r'./Development/GlasgowDataIO/Json/streamData.json'))
-    parser.add_argument('-w', action='store', dest='waveForm', help="Wave form [square, sine, triangle]", default='sine')
-    parser.add_argument('-d', action='store', dest='data', help="Stream data", default=None)
+    parser.add_argument('-w', action='store', dest='waveForm', help="Wave form [square, sine, triangle, custom]", default='sine')
+    parser.add_argument('-d', action='store', dest='data', help="Stream data", default='0.0, 0.1, 0.2, 0.5, 0.8, 0.9, 1.0')
     parser.add_argument('-g', action='store', dest='deviceId', help="Glasgow device Id", default='C3-20251207T145552Z')
 
     args = parser.parse_args()
@@ -30,7 +30,8 @@ async def main():
     data = None
     if args.data is not None:
         print(f'Input data = {args.data}')
-        data = [int(x) for x in args.data.split(",")]
+        #data = [int(x) for x in args.data.split(",")]
+        data = [x for x in args.data.split(",")]
         print(f'---------------------------------\n') 
         print(data) 
        

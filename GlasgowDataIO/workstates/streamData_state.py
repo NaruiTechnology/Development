@@ -8,11 +8,10 @@ from EsmBeamController.Software.lib.glasgow.hardware.device import GlasgowDevice
 from glasgow.applet.control.gpio import GPIOInterface
 
 class streamData_state(dataIO_state):
-    def __init__(self, parent, waveForm=None, data=None, **kwargs):
+    def __init__(self, parent, waveForm=None, data=None):
         super(streamData_state, self).__init__(parent)
         self._waveForm = waveForm 
-        # Handle both 'data' and 'stream' keyword arguments from the thread
-        self._data = data or kwargs.get('stream')
+        self._data = data
         self._gpio_iface = None
 
     @overrides(dataIO_state)
@@ -85,11 +84,8 @@ class streamData_state(dataIO_state):
             self.Logger.error(f"Waveform Execution Error: {e}")
             self._success = False
 
-    def _calculate_stream(self, source, resolution):
-        """
-        Maps source values to DAC integers using waveform math.
-        """
-        max_dac_val = (1 << resolution) - 1
+    """ def _calculate_stream(self, source, resolution):
+          max_dac_val = (1 << resolution) - 1
         stream = []
         
         # Normalize source if it looks like an index range (e.g., [0, 1, 2...])
@@ -109,6 +105,56 @@ class streamData_state(dataIO_state):
             else:
                 # 'custom' or 'none' - Use raw values from data
                 # If values are 0..1, scale to DAC range. If > 1, use as direct integers.
+                raw = v * max_dac_val if v <= 1.0 else v
+            
+            # Round and clamp to resolution limits
+            final_val = int(round(raw))
+            stream.append(max(0, min(final_val, max_dac_val)))
+            
+        return stream
+    
+     """
+    
+    def _calculate_stream(self, source, resolution):
+        """
+        Maps source values to DAC integers using waveform math.
+        """
+        max_dac_val = (1 << resolution) - 1
+        stream = []
+        
+        # 1. Ensure all elements in source are numbers (int or float)
+        # This handles cases where data might be passed as strings from CLI
+        cleaned_source = []
+        for val in source:
+            try:
+                cleaned_source.append(float(val))
+            except (ValueError, TypeError):
+                self.Logger.warning(f"Skipping non-numeric value in stream: {val}")
+
+        if not cleaned_source:
+            self.Logger.error("Stream data contains no valid numbers.")
+            return []
+
+        # 2. Safely calculate max_in for normalization
+        max_in = max(cleaned_source)
+        
+        for v in cleaned_source:
+            # Normalize to 0.0-1.0 if the input range is large 
+            # and we are applying waveform math (sine/square/triangle)
+            if self._waveForm != 'custom' and max_in > 1.0:
+                t = v / max_in
+            else:
+                t = v
+            
+            if self._waveForm == "sine":
+                raw = (math.sin(2 * math.pi * t) + 1) * (max_dac_val / 2)
+            elif self._waveForm == "square":
+                raw = max_dac_val if t < 0.5 else 0
+            elif self._waveForm == "triangle":
+                raw = max_dac_val * (1 - abs(2 * t - 1))
+            else:
+                # 'custom' logic: If input is 0..1, scale to DAC. 
+                # If input is already > 1, treat as direct DAC counts.
                 raw = v * max_dac_val if v <= 1.0 else v
             
             # Round and clamp to resolution limits
