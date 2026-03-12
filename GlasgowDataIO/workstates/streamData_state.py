@@ -84,37 +84,7 @@ class streamData_state(dataIO_state):
             self.Logger.error(f"Waveform Execution Error: {e}")
             self._success = False
 
-    """ def _calculate_stream(self, source, resolution):
-          max_dac_val = (1 << resolution) - 1
-        stream = []
-        
-        # Normalize source if it looks like an index range (e.g., [0, 1, 2...])
-        max_in = max(source) if len(source) > 0 else 1.0
-        
-        for v in source:
-            # If we are doing 'sine/square/triangle', we need a 0.0-1.0 phase 't'
-            # If v is already 0..1, we use it. If v is larger, we normalize it.
-            t = v / max_in if (max_in > 1.0 and self._waveForm != 'custom') else v
-            
-            if self._waveForm == "sine":
-                raw = (math.sin(2 * math.pi * t) + 1) * (max_dac_val / 2)
-            elif self._waveForm == "square":
-                raw = max_dac_val if t < 0.5 else 0
-            elif self._waveForm == "triangle":
-                raw = max_dac_val * (1 - abs(2 * t - 1))
-            else:
-                # 'custom' or 'none' - Use raw values from data
-                # If values are 0..1, scale to DAC range. If > 1, use as direct integers.
-                raw = v * max_dac_val if v <= 1.0 else v
-            
-            # Round and clamp to resolution limits
-            final_val = int(round(raw))
-            stream.append(max(0, min(final_val, max_dac_val)))
-            
-        return stream
-    
-     """
-    
+   
     def _calculate_stream(self, source, resolution):
         """
         Maps source values to DAC integers using waveform math.
