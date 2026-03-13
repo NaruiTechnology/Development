@@ -175,8 +175,10 @@ class WorkThread(Thread):
 
     
     def GetStateConfig(self, state):
+        return self.GetStateConfigByName(type(state).__name__.replace(Consts.STATE_OBJ_SUFFIX, ''))
+
+    def GetStateConfigByName(self, stateName):
         for action in self._config.Actions:
-            stateName = type(state).__name__.replace(Consts.STATE_OBJ_SUFFIX, '')
             if stateName in action:
                 return action[stateName]
         return None

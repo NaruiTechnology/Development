@@ -68,9 +68,16 @@ class streamData_state(dataIO_state):
                 # Format the pin assignments: e.g. "A0=0 A1=1 A2=0..."
                 pin_assignments = pin_val_format.format(*bits)
                 
-                # Construct and execute the Glasgow CLI command
-                cmd = commandFormat.format(voltage, pins_arg, pin_assignments)              
-                self._success = await self.commandAsyncio(cmd)
+                if self._gpio_iface is None:
+                    # Construct and execute the Glasgow CLI command
+                    cmd = commandFormat.format(voltage, pins_arg, pin_assignments)              
+                    self._success = await self.commandAsyncio(cmd)
+                else:
+                    # Drive each bit to the corresponding Glasgow GPIO pin
+                    # Using the specific output(index, value) method as requested
+                    for bit_idx, bit_val in enumerate(bits):
+                        await self._gpio_iface.output(bit_idx, bool(bit_val))
+                    self._success = True
                 
                 if not self._success: 
                     break
