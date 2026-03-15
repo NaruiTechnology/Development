@@ -6,10 +6,9 @@ from types import SimpleNamespace
 from AutomationPy.buildingblocks.decorators import overrides
 
 from AutomationPy.buildingblocks.definitions import Consts
-from EsmBeamController.Software.configs.applet import OBIAppletArguments
-from EsmBeamController.Software.lib.glasgow.hardware.multiplexer import DirectMultiplexer
-from EsmBeamController.Software.lib.glasgow.hardware.target import GlasgowHardwareTarget
-from EsmBeamController.Software.applets.BeamControlApplet import BeamControlApplet
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
+from GlasgowDataIO.DataStreamApplet import DataStreamApplet
 from .loadFpgaImage_state import loadFpgaImage_state
 
 class buildFPGAPlan_state(loadFpgaImage_state):
@@ -40,7 +39,7 @@ class buildFPGAPlan_state(loadFpgaImage_state):
         try:
             device = self.ParentWorkThread.device
             target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
-            applet = BeamControlApplet()
+            applet = DataStreamApplet()
             iface = applet.build(target, args)
             device.demultiplexer = target.multiplexer
             plan = target.build_plan()

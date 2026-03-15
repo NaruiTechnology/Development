@@ -3,7 +3,7 @@ from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.workflow.work_thread import WorkThread
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 import AutomationPy.buildingblocks.utils as util
-from EsmBeamController.Software.lib.glasgow.hardware.device import GlasgowDevice
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import GlasgowDevice
 
 try:
     import queue

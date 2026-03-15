@@ -4,12 +4,10 @@ from workstates.dataIO_state import dataIO_state
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.decorators import overrides
 
-from EsmBeamController.Software.lib.glasgow.hardware.multiplexer import DirectMultiplexer
-from EsmBeamController.Software.lib.glasgow.hardware.target import GlasgowHardwareTarget
-from EsmBeamController.Software.lib.glasgow.hardware.assembly import HardwareAssembly
-from EsmBeamController.Software.lib.glasgow.abstract import GlasgowPin
-from EsmBeamController.Software.lib.glasgow.hardware.demultiplexer import DirectDemultiplexer
-from glasgow.applet.control.gpio import ControlGPIOApplet 
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.assembly import HardwareAssembly
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
 from types import SimpleNamespace
 from .. IobeamDemux import IobeamDemux
 from .. DataStreamApplet import DataStreamApplet
