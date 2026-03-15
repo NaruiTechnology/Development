@@ -4,8 +4,15 @@ from workstates.dataIO_state import dataIO_state
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.decorators import overrides
 
-from EsmBeamController.Software.lib.glasgow.hardware.device import GlasgowDevice    
-from glasgow.applet.control.gpio import GPIOInterface
+from EsmBeamController.Software.lib.glasgow.hardware.multiplexer import DirectMultiplexer
+from EsmBeamController.Software.lib.glasgow.hardware.target import GlasgowHardwareTarget
+from EsmBeamController.Software.lib.glasgow.hardware.assembly import HardwareAssembly
+from EsmBeamController.Software.lib.glasgow.abstract import GlasgowPin
+from EsmBeamController.Software.lib.glasgow.hardware.demultiplexer import DirectDemultiplexer
+from glasgow.applet.control.gpio import ControlGPIOApplet 
+from types import SimpleNamespace
+from .. IobeamDemux import IobeamDemux
+from .. DataStreamApplet import DataStreamApplet
 
 class streamData_state(dataIO_state):
     def __init__(self, parent, waveForm=None, data=None):
@@ -16,6 +23,7 @@ class streamData_state(dataIO_state):
 
     @overrides(dataIO_state)
     async def DoWork(self):
+        assembly = None
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             action = stateConfig.get(Consts.ACTION_DATA)
@@ -60,6 +68,9 @@ class streamData_state(dataIO_state):
             # Calculate timing delay based on frequency and sample count
             delay = 1.0 / (frequency * len(stream_source))
 
+            # await self._initialGPIPInterface()
+
+ 
             for val in stream_source:
                 # Convert integer to bit list, pad with zeros to match resolution
                 # [::-1] ensures Bit 0 maps to the first pin in the list (Little Endian)
@@ -90,7 +101,7 @@ class streamData_state(dataIO_state):
         except Exception as e:
             self.Logger.error(f"Waveform Execution Error: {e}")
             self._success = False
-
+      
    
     def _calculate_stream(self, source, resolution):
         """
@@ -139,3 +150,32 @@ class streamData_state(dataIO_state):
             stream.append(max(0, min(final_val, max_dac_val)))
             
         return stream
+    
+    async def _initialGPIPInterface(self):
+        device = self.ParentWorkThread._device
+        target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
+        assembly = HardwareAssembly(revision=device.revision)
+        applet = DataStreamApplet() #ControlGPIOApplet(assembly) 
+
+        action_data = self.ParentWorkThread._config["Actions"][0]["streamData"]["actionData"]        
+        action_voltage = action_data.get("voltage", 2.5)
+        voltages_map = {"A": action_voltage, "B": action_voltage}
+        pin_list = []
+        for p in action_data.get("ports", []):
+            port_letter = p.get("port")
+            for pin_num in p.get("pinList", []):
+                pin_list.append(f"{port_letter}{pin_num}")
+        
+        # 'voltages' must be a Mapping[GlasgowPort, float] for assembly.py
+        applet_args = SimpleNamespace(
+            voltage_map=voltages_map,
+            pins=GlasgowPin.parse(",".join(pin_list)) if pin_list else []
+        )             
+
+        self._gpio_iface = applet.build(target, applet_args)
+        plan = target.build_plan()      
+        device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)#target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)#target.multiplexer
+        self._gpio_iface = await device.demultiplexer.claim_interface(applet, self._gpio_iface, applet_args,
+                                                            read_buffer_size=16384*16384, write_buffer_size=16384*16384) 
+        #await self._gpio_iface.reset()
+

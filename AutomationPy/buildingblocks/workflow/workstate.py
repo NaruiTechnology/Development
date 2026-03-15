@@ -126,7 +126,6 @@ class WorkState(object):# abstract base class
                                     text=True)
             if proc.returncode != 0:
                 self._last_output = proc.stdout 
-            stdout, stderr = await proc.communicate() 
             success = proc.returncode == 0
         except Exception as e:
             self._last_output = str(e)
@@ -134,8 +133,8 @@ class WorkState(object):# abstract base class
             success = False
         finally:
             os.chdir(cwd)
-            self._stdout = stdout
-            self._stderr = stderr
+            self._stdout = proc.stdout
+            self._stderr = proc.stderr
         return success
 
     async def commandAsyncio(self, cmd, dirFrom = None, verbose=False): #*args):

@@ -11,7 +11,7 @@ class asyncioCommand_state(loadFpgaImage_state):
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
-            if stateConfig is not None and Consts.ACTION_DATA in stateConfig and self.ParentWorkThread.fpgaBuildPlan is not None:
+            if stateConfig is not None and Consts.ACTION_DATA in stateConfig: # and self.ParentWorkThread.fpgaBuildPlan is not None:
                 cmd = self.formatCommand(stateConfig)
                 self._success = await self.commandAsyncio(cmd, self.ParentWorkThread.fpgaBuildPlan.buildDir)
                 if self._success is True:

@@ -23,8 +23,6 @@ class streamDataThread(dataIOThread):
         state = None
         self._queue = queue.Queue()
 
-        self._initialGPIPInterface()
-
         instance = streamData_state(self, waveForm=self._waveForm, data=self._data)
         instance.Logger = self._logger
         instance._gpio_iface = self._iface
@@ -35,8 +33,7 @@ class streamDataThread(dataIOThread):
             state = self._queue.get_nowait()
 
         return state
-    
-    def _initialGPIPInterface(self):
+
         target = GlasgowHardwareTarget(revision=self._device.revision, multiplexer_cls=DirectMultiplexer)
         assembly = HardwareAssembly(revision=self._device.revision)
         applet = ControlGPIOApplet(assembly)       

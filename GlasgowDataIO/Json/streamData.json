@@ -17,7 +17,7 @@
                         },
                         {
                             "port": "B",
-                            "pinList": []
+                            "pinList": [0,1,2,3]
                         }
                     ],
                     "frequency": 1000,
