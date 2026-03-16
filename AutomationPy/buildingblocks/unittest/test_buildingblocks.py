@@ -16,13 +16,14 @@
 # form or by any means without the express written consent of
 
 #-------------- -----------------------------------------------------------------
-from unittest import TestCase, expectedFailure
+
+import unittest
 import os
-from buildingblocks.utils import InvalidArgumentException, Position
-from buildingblocks.automation_log import AutomationLog
+from ..utils import Position
+from ..automation_log import AutomationLog
 
 
-class test_buildingblocks(TestCase):
+class test_buildingblocks(unittest.TestCase):
     def setUp(self):
         self._logname = 'automationTest'
         self._automationlogInstance = AutomationLog(self._logname)
@@ -62,7 +63,7 @@ class test_buildingblocks(TestCase):
         self.assertEqual(5, pos.y)
         self.assertEqual(5, pos.z)
 
-    @expectedFailure
+    @unittest.expectedFailure
     def testAutomationAddConsoleFail(self):
         self._automationlogInstance.TryAddConsole('')
 

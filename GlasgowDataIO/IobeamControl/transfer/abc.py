@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger()
 from . import *
 
-from obi.commands import *
+from IobeamControl.commands.low_level_commands import *
 
 class TransferError(Exception):
     pass

@@ -2,6 +2,7 @@ import asyncio
 import logging
 from .abc import Stream, Connection
 from IobeamLauncher import IobeamLauncher
+from IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 
 logger = logging.getLogger()
 
