@@ -2,16 +2,16 @@
 import asyncio
 
 from types import SimpleNamespace
-from IobeamDemux import IobeamDemux
-from applet.DataStreamApplet import DataStreamApplet
-from glasgowLib.glasgow.hardware.device import GlasgowDevice
-from glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
-from glasgowLib.glasgow.hardware.assembly import HardwareAssembly
-from glasgowLib.glasgow.abstract import GlasgowPin
-from glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
+from .IobeamDemux import IobeamDemux
+from .applet.DataStreamApplet import DataStreamApplet
+from .glasgowLib.glasgow.hardware.device import GlasgowDevice
+from .glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
+from .glasgowLib.glasgow.hardware.assembly import HardwareAssembly
+from .glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
+from IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
 
 class IobeamLauncher(object):
     def __init__(self, config, taskName):

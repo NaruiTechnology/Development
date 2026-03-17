@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from .abc import Stream, Connection
-from IobeamLauncher import IobeamLauncher
+from ..IobeamLauncher import IobeamLauncher
 from IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 
 logger = logging.getLogger()
@@ -77,13 +77,16 @@ class GlasgowStream(Stream):
         return result
     
 class GlasgowConnection(Connection):
-    def __init__(self, deviceId=None):
+    def __init__(self, config, taskName):
         super(GlasgowConnection).__init__()
-        self._deviceId = deviceId
+        self._stream = None
+        self._config = config
+        self._taskName = taskName
 
     def connect(self, stream):
         self._stream = stream
 
     async def _connect(self):
         assert not self.connected
-        self._stream = GlasgowStream(await IobeamLauncher.start(self._deviceId))
+        launcher  = IobeamLauncher(self._config, self._taskName)
+        self._stream = GlasgowStream(await launcher.start())
