@@ -3,14 +3,8 @@ import math
 from workstates.dataIO_state import dataIO_state
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.decorators import overrides
-
-from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
-from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
-from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.assembly import HardwareAssembly
-from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
-from types import SimpleNamespace
-from ..IobeamControl.IobeamDemux import IobeamDemux
-from .. DataStreamApplet import DataStreamApplet
+from IobeamControl.transfer.glasgowStream import GlasgowConnection
+from IobeamControl.commands.structs import struct
 
 class streamData_state(dataIO_state):
     def __init__(self, parent, waveForm=None, data=None):
@@ -21,7 +15,6 @@ class streamData_state(dataIO_state):
 
     @overrides(dataIO_state)
     async def DoWork(self):
-        assembly = None
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             action = stateConfig.get(Consts.ACTION_DATA)
@@ -66,8 +59,8 @@ class streamData_state(dataIO_state):
             # Calculate timing delay based on frequency and sample count
             delay = 1.0 / (frequency * len(stream_source))
 
-            # await self._initialGPIPInterface()
-
+            conn = GlasgowConnection(self.ParentWorkThread._config, r'patternScan')
+            await conn._connect()
  
             for val in stream_source:
                 # Convert integer to bit list, pad with zeros to match resolution
@@ -82,11 +75,21 @@ class streamData_state(dataIO_state):
                     cmd = commandFormat.format(voltage, pins_arg, pin_assignments)              
                     self._success = await self.commandAsyncio(cmd)
                 else:
-                    # Drive each bit to the corresponding Glasgow GPIO pin
-                    # Using the specific output(index, value) method as requested
-                    for bit_idx, bit_val in enumerate(bits):
-                        await self._gpio_iface.output(bit_idx, bool(bit_val))
-                    self._success = True
+                    if conn.connected:
+                        resolution = ports
+                        # Dynamically determine the packing format based on the resolution variable
+                        # 8-bit resolution fits in 1 byte ('B'), 12/16-bit requires 2 bytes ('H')
+                        pack_type = 'B' if resolution <= 8 else 'H'               
+                        # Pack the entire list of integers (stream_source) into a Big-Endian binary block
+                        # This is more efficient than sending points one-by-one
+                        fmt = f">{len(stream_source)}{pack_type}"
+                        packed_data = struct.pack(fmt, *stream_source)     
+                        # transfer_bytes performs a synchronization check before writing the raw data
+                        # to the DataStreamApplet's pipes
+                        await conn.transfer_bytes(packed_data)
+                        
+                        self._success = True
+                        self.Logger.info(f"Streamed {len(stream_source)} samples at {resolution}-bit resolution.")
                 
                 if not self._success: 
                     break
@@ -149,31 +152,3 @@ class streamData_state(dataIO_state):
             
         return stream
     
-    async def _initialGPIPInterface(self):
-        device = self.ParentWorkThread._device
-        target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
-        assembly = HardwareAssembly(revision=device.revision)
-        applet = DataStreamApplet() #ControlGPIOApplet(assembly) 
-
-        action_data = self.ParentWorkThread._config["Actions"][0]["streamData"]["actionData"]        
-        action_voltage = action_data.get("voltage", 2.5)
-        voltages_map = {"A": action_voltage, "B": action_voltage}
-        pin_list = []
-        for p in action_data.get("ports", []):
-            port_letter = p.get("port")
-            for pin_num in p.get("pinList", []):
-                pin_list.append(f"{port_letter}{pin_num}")
-        
-        # 'voltages' must be a Mapping[GlasgowPort, float] for assembly.py
-        applet_args = SimpleNamespace(
-            voltage_map=voltages_map,
-            pins=GlasgowPin.parse(",".join(pin_list)) if pin_list else []
-        )             
-
-        self._gpio_iface = applet.build(target, applet_args)
-        plan = target.build_plan()      
-        device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)#target.multiplexer # OBIDemux(device, target.multiplexer.pipe_count)#target.multiplexer
-        self._gpio_iface = await device.demultiplexer.claim_interface(applet, self._gpio_iface, applet_args,
-                                                            read_buffer_size=16384*16384, write_buffer_size=16384*16384) 
-        #await self._gpio_iface.reset()
-
