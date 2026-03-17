@@ -9,7 +9,7 @@ from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import Glasg
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.assembly import HardwareAssembly
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
 from types import SimpleNamespace
-from .. IobeamDemux import IobeamDemux
+from ..IobeamControl.IobeamDemux import IobeamDemux
 from .. DataStreamApplet import DataStreamApplet
 
 class streamData_state(dataIO_state):

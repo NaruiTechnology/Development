@@ -187,3 +187,10 @@ def PrintMessage(msg, color):
         sys.stdout.write(color.value)
         print(msg)
         sys.stdout.write(Bcolors.RESET.value)
+
+def GetStateConfigByName(config, stateName):
+    if config is not None and stateName is not None:
+        for action in config.Actions:
+            if stateName in action:
+                return action[stateName]
+    return None

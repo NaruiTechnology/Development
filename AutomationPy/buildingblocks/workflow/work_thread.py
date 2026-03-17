@@ -172,13 +172,6 @@ class WorkThread(Thread):
             pass
         finally:
             pass
-
     
     def GetStateConfig(self, state):
-        return self.GetStateConfigByName(type(state).__name__.replace(Consts.STATE_OBJ_SUFFIX, ''))
-
-    def GetStateConfigByName(self, stateName):
-        for action in self._config.Actions:
-            if stateName in action:
-                return action[stateName]
-        return None
+        return util.GetStateConfigByName(self._config, type(state).__name__.replace(Consts.STATE_OBJ_SUFFIX, ''))
