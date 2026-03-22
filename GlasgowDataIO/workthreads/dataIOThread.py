@@ -20,6 +20,10 @@ class dataIOThread(WorkThread):
         self._data = data
         self._deviceId = deviceId
 
+    @property
+    def Logger(self):
+        return self._logger
+
     @overrides(WorkThread)
     def StateFactory(self, workState = None):
         state = None
@@ -40,7 +44,7 @@ class dataIOThread(WorkThread):
         self._queue = queue.Queue()
 
         stateName = type(self).__name__.replace('Thread', '')
-        instance = util.CreateInstance(f"{stateName}_state", self)
+        instance = util.CreateInstance(f"{stateName}{Consts.STATE_OBJ_SUFFIX}", self) #_state", self)
         instance.data = self._data
         instance.Logger = self._logger
         self._queue.put(instance)

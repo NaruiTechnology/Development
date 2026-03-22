@@ -9,23 +9,23 @@ from .glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
 from .glasgowLib.glasgow.hardware.assembly import HardwareAssembly
 from .glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
 import AutomationPy.buildingblocks.utils as util
+from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 from IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
 
 class IobeamLauncher(object):
-    def __init__(self, config, taskName):
+    def __init__(self, config):
         super(IobeamLauncher, self).__init__()
         self._config = config
-        self._taskName = taskName
 
     #@staticmethod
     async def start(self, deviceId=None):
-        return await self.run(self._taskName)
+        return await self.run()
 
     #@staticmethod
-    async def run(self, taskName):
-        stateConfig = util.GetStateConfigByName(self._config, taskName)
+    async def run(self):
+        stateConfig = util.GetStateConfigByName(self._config, Consts.STREAM_DATA) 
         deviceId = self._config.Glasgow.get("DeviceId")
         device = GlasgowDevice(deviceId)
         target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
@@ -61,11 +61,10 @@ if __name__ == "__main__":
     from pathlib import Path
     parser = argparse.ArgumentParser(description='Load FPGA image onto the device.')
     parser.add_argument('-j', action='store', dest='jsonfile', help="Config Json file path", default=os.path.realpath(r'./Development/GlasgowDataIO/Json/directIo.json'))
-    parser.add_argument('-t', action='store', dest='taskName', help="Direct data IO task", default=r'patternScan')
- 
+     
     args = parser.parse_args()
     if not Path(args.jsonfile).is_file():
         raise ValueError(f'Cannot find the JSON file {args.jsonfilej}')
     config = AutomationConfig(args.jsonfile)
-    launcher = IobeamLauncher(config, args.taskName)
+    launcher = IobeamLauncher(config)
     asyncio.run(launcher.start())

@@ -4,7 +4,7 @@
     },
     "Actions":[
         {
-            "patternScan":{
+            "streamData":{
                 "actionData": {
                     "voltage": 2.5,
                     "ports": [
@@ -20,5 +20,7 @@
                 }
             }
         }   
-    ]   
+    ],     
+    "LogName": "DirectIO",
+    "Verbose": true 
 }

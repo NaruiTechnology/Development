@@ -2,9 +2,19 @@ import os
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from GlasgowDataIO.workthreads.streamDataThread import streamDataThread
 import asyncio
-from EsmBeamController.Software.lib.glasgow.hardware.device import GlasgowDevice    
+from IobeamControl.transfer.glasgowStream import GlasgowConnection
 
-async def main():
+async def main(config, deviceId, waveForm, data, conn): 
+    if conn is not None and conn.connected: # TODO ------
+        conn = None
+    #----------------------------------------------- TODO
+    sream_inst = streamDataThread(config, deviceId, waveForm, data, conn) 
+    sream_inst.Start()
+
+async def connect(conn):
+    await conn._connect()
+
+if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Load FPGA image onto the device.')
     parser.add_argument('-j', action='store', dest='jsonfile', help="Config Json file path", default=os.path.realpath(r'./Development/GlasgowDataIO/Json/streamData.json'))
@@ -31,8 +41,7 @@ async def main():
         print(data) 
        
     config = AutomationConfig(jsonpath)
-    sream_inst = streamDataThread(config, deviceId, args.waveForm, data) 
-    sream_inst.Start()
-            
-if __name__ == '__main__':
-    asyncio.run(main())
+    conn = GlasgowConnection(config)
+
+    asyncio.run(connect(conn))
+    asyncio.run(main(config, deviceId, args.waveForm, data, conn))

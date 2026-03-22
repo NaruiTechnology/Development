@@ -58,6 +58,7 @@ class Consts:
     """ BKC_AUTOMATION_PACKAGE = 'bkc_automation_state'
     BKC_STATE_OBJ_PREFIX = 'bkc_automation_'
     """    
+    STREAM_DATA = 'streamData'
     STATE_OBJ_SUFFIX = '_state'
     ACTION_DATA = 'actionData'
     ARGS_DATA = 'args'

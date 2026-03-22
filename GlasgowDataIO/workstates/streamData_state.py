@@ -1,17 +1,23 @@
 import asyncio
 import math
-from workstates.dataIO_state import dataIO_state
+from .dataIO_state import dataIO_state
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.decorators import overrides
-from IobeamControl.transfer.glasgowStream import GlasgowConnection
-from IobeamControl.commands.structs import struct
+from GlasgowDataIO.IobeamControl.commands.structs import struct
 
 class streamData_state(dataIO_state):
     def __init__(self, parent, waveForm=None, data=None):
         super(streamData_state, self).__init__(parent)
         self._waveForm = waveForm 
         self._data = data
-        self._gpio_iface = None
+        self._conn = None
+
+    @property
+    def Conn(self):
+        return self._conn
+    @Conn.setter
+    def Conn(self, val):
+        self._conn = val
 
     @overrides(dataIO_state)
     async def DoWork(self):
@@ -46,11 +52,11 @@ class streamData_state(dataIO_state):
             # --- WAVEFORM LOGIC AGAINST DATA ---
             if self._data and len(self._data) > 0:
                 if self.ParentWorkThread._config.Verbose:
-                    self.Logger.info(f"Applying '{self._waveForm}' logic to custom data (Length: {len(self._data)})")
+                    self.ParentWorkThread.Logger.info(f"Applying '{self._waveForm}' logic to custom data (Length: {len(self._data)})")
                 source_values = self._data
             else:
                 if self.ParentWorkThread._config.Verbose:
-                    self.Logger.info(f"No custom data. Generating '{self._waveForm}' sequence with {point_count} points.")
+                    self.ParentWorkThread.Logger.info(f"No custom data. Generating '{self._waveForm}' sequence with {point_count} points.")
                 source_values = [i / point_count for i in range(point_count)]
 
             # Calculate final DAC integers
@@ -59,9 +65,6 @@ class streamData_state(dataIO_state):
             # Calculate timing delay based on frequency and sample count
             delay = 1.0 / (frequency * len(stream_source))
 
-            conn = GlasgowConnection(self.ParentWorkThread._config, r'patternScan')
-            await conn._connect()
- 
             for val in stream_source:
                 # Convert integer to bit list, pad with zeros to match resolution
                 # [::-1] ensures Bit 0 maps to the first pin in the list (Little Endian)
@@ -70,14 +73,13 @@ class streamData_state(dataIO_state):
                 # Format the pin assignments: e.g. "A0=0 A1=1 A2=0..."
                 pin_assignments = pin_val_format.format(*bits)
                 
-                if self._gpio_iface is None:
+                if self._conn is None:
                     # Construct and execute the Glasgow CLI command
                     cmd = commandFormat.format(voltage, pins_arg, pin_assignments)              
                     self._success = await self.commandAsyncio(cmd)
                 else:
-                    if conn.connected:
-                        resolution = ports
-                        # Dynamically determine the packing format based on the resolution variable
+                    if self._conn.connected:
+                         # Dynamically determine the packing format based on the resolution variable
                         # 8-bit resolution fits in 1 byte ('B'), 12/16-bit requires 2 bytes ('H')
                         pack_type = 'B' if resolution <= 8 else 'H'               
                         # Pack the entire list of integers (stream_source) into a Big-Endian binary block
@@ -86,10 +88,10 @@ class streamData_state(dataIO_state):
                         packed_data = struct.pack(fmt, *stream_source)     
                         # transfer_bytes performs a synchronization check before writing the raw data
                         # to the DataStreamApplet's pipes
-                        await conn.transfer_bytes(packed_data)
+                        await self._conn.transfer_bytes(packed_data)
                         
                         self._success = True
-                        self.Logger.info(f"Streamed {len(stream_source)} samples at {resolution}-bit resolution.")
+                        self.ParentWorkThread.Logger.info(f"Streamed {len(stream_source)} samples at {resolution}-bit resolution.")
                 
                 if not self._success: 
                     break
@@ -100,7 +102,7 @@ class streamData_state(dataIO_state):
                 await asyncio.sleep(delay)
 
         except Exception as e:
-            self.Logger.error(f"Waveform Execution Error: {e}")
+            self.ParentWorkThread.Logger.error(f"Waveform Execution Error: {e}")
             self._success = False
       
    
@@ -118,10 +120,10 @@ class streamData_state(dataIO_state):
             try:
                 cleaned_source.append(float(val))
             except (ValueError, TypeError):
-                self.Logger.warning(f"Skipping non-numeric value in stream: {val}")
+                self.ParentWorkThread.Logger.warning(f"Skipping non-numeric value in stream: {val}")
 
         if not cleaned_source:
-            self.Logger.error("Stream data contains no valid numbers.")
+            self.ParentWorkThread.Logger.error("Stream data contains no valid numbers.")
             return []
 
         # 2. Safely calculate max_in for normalization

@@ -77,16 +77,16 @@ class GlasgowStream(Stream):
         return result
     
 class GlasgowConnection(Connection):
-    def __init__(self, config, taskName):
+    def __init__(self, config):
         super(GlasgowConnection).__init__()
         self._stream = None
         self._config = config
-        self._taskName = taskName
 
     def connect(self, stream):
         self._stream = stream
 
     async def _connect(self):
         assert not self.connected
-        launcher  = IobeamLauncher(self._config, self._taskName)
+        launcher  = IobeamLauncher(self._config)
         self._stream = GlasgowStream(await launcher.start())
+

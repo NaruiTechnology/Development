@@ -1,21 +1,22 @@
-import queue
+import queue, asyncio
 from AutomationPy.buildingblocks.decorators import overrides
-from ..workstates.streamData_state import streamData_state
+from AutomationPy.buildingblocks.definitions import Consts
+from workstates.streamData_state import streamData_state
 from .dataIOThread import dataIOThread
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import GlasgowDevice
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.assembly import HardwareAssembly
+from IobeamControl.transfer.glasgowStream import GlasgowConnection
 from glasgow.applet.control.gpio import ControlGPIOApplet 
 from types import SimpleNamespace
 
 class streamDataThread(dataIOThread):
-    def __init__(self, config, deviceId=None, waveForm=None, data=None):
+    def __init__(self, config, deviceId=None, waveForm=None, data=None, conn=None):
         super(streamDataThread, self).__init__(config, deviceId)
         self._waveForm = waveForm
         self._data = data
-        self._device = GlasgowDevice(deviceId)
-        self._iface = None
+        self._conn = conn
 
     @overrides(dataIOThread)
     def IntialWork(self):
@@ -23,8 +24,8 @@ class streamDataThread(dataIOThread):
         self._queue = queue.Queue()
 
         instance = streamData_state(self, waveForm=self._waveForm, data=self._data)
+        instance.Conn = self._conn
         instance.Logger = self._logger
-        instance._gpio_iface = self._iface
         
         self._queue.put(instance)
 
