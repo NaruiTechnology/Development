@@ -6,6 +6,7 @@
         {
             "streamData":{
                 "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
                     "voltage": 2.5,
                     "ports": [
                         {
@@ -16,7 +17,10 @@
                             "port": "B",
                             "pinList": [0,1,2,3]
                         }
-                    ]
+                    ],
+                    "frequency": 100,
+                    "point": 100,
+                    "waveForm": "square"
                 }
             }
         }   

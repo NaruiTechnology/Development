@@ -10,10 +10,11 @@ from GlasgowDataIO.workstates.streamData_state import streamData_state
 from GlasgowDataIO.workthreads.dataIOThread import dataIOThread
 from AutomationPy.buildingblocks.decorators import overrides
 from AutomationPy.buildingblocks.definitions import Consts
+from IobeamControl.transfer.glasgowStream import GlasgowConnection
 
 JSON_PATH = r'./Development/GlasgowDataIO/Json/directIo.json'
 
-STREAM_DATA_FILE = r'./Development/GlasgowDataIO/Data/large_waveform.csv'
+STREAM_DATA_FILE = r'./Development/GlasgowDataIO/IobeamControl/unittest/testData/WaveformData_sine.csv'
 
 class GlasgowConnectTest(unittest.TestCase):
     def setUp(self):
@@ -30,6 +31,13 @@ class GlasgowConnectTest(unittest.TestCase):
         asyncio.run(self.run_mock_stream_test())
     def test_simulation_data(self):
         asyncio.run(self.run_sim_data_test())
+    def test_transfer_data(self):
+         if self._config is not None:
+            conn = GlasgowConnection(self._config)
+            asyncio.run(self._connect(conn))
+            asyncio.run(self._transferData(conn))
+            print("Transfer stream test completed successfully.") 
+
     def test_large_file_stream(self):
         asyncio.run(self.run_large_file_stream_test())
     
@@ -62,7 +70,18 @@ class GlasgowConnectTest(unittest.TestCase):
             state.Conn = conn
             await state.DoWork()
             self.assertTrue(state._success)
-            print("Simulation data stream test completed.")        
+            print("Simulation data stream test completed.")     
+   
+
+    async def _connect(self, conn):
+        await conn._connect()    
+    async def _transferData(self, conn):
+        if conn.connected:
+            state = streamData_state(MockThread(self._config), waveForm='square', data=self.sim_data)
+            state._isSimulation = False
+            state.Conn = conn
+            await state.DoWork()
+            self.assertTrue(state._success)              
 
     async def run_large_file_stream_test(self):
             """Test 3: Opens a data stream file with a large amount of data."""
@@ -88,5 +107,5 @@ class MockThread(dataIOThread):
 
     @overrides(dataIOThread)
     def GetStateConfig(self, state):
-        return self._config.Actions[0].get(TASK_NAME)  
+        return self._config.Actions[0].get(Consts.STREAM_DATA)  
 

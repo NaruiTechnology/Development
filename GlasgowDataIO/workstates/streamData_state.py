@@ -11,6 +11,7 @@ class streamData_state(dataIO_state):
         self._waveForm = waveForm 
         self._data = data
         self._conn = None
+        self._isSimulation = True
 
     @property
     def Conn(self):
@@ -30,6 +31,7 @@ class streamData_state(dataIO_state):
             commandFormat = action.get('commandFormat')
             frequency = action.get('frequency', 10)
             point_count = action.get('point', 100)
+            self._waveForm = action.get('waveForm', 'sine')
                    
             resolution = 0
             pins_arg = ''
@@ -60,6 +62,8 @@ class streamData_state(dataIO_state):
                 source_values = [i / point_count for i in range(point_count)]
 
             # Calculate final DAC integers
+            if self._waveForm  not in ['sine', 'square', 'triangle', 'custom']:
+                raise ValueError(f'Invalid waveform [{self._waveForm}] detected.')
             stream_source = self._calculate_stream(source_values, resolution)
             
             # Calculate timing delay based on frequency and sample count
@@ -73,12 +77,13 @@ class streamData_state(dataIO_state):
                 # Format the pin assignments: e.g. "A0=0 A1=1 A2=0..."
                 pin_assignments = pin_val_format.format(*bits)
                 
-                if self._conn is None:
+                if self._isSimulation\
+                      and commandFormat is not None and commandFormat != '': 
                     # Construct and execute the Glasgow CLI command
                     cmd = commandFormat.format(voltage, pins_arg, pin_assignments)              
                     self._success = await self.commandAsyncio(cmd)
                 else:
-                    if self._conn.connected:
+                    if self._conn is not None and self._conn.connected:
                          # Dynamically determine the packing format based on the resolution variable
                         # 8-bit resolution fits in 1 byte ('B'), 12/16-bit requires 2 bytes ('H')
                         pack_type = 'B' if resolution <= 8 else 'H'               

@@ -78,7 +78,7 @@ class GlasgowStream(Stream):
     
 class GlasgowConnection(Connection):
     def __init__(self, config):
-        super(GlasgowConnection).__init__()
+        super(GlasgowConnection, self).__init__()
         self._stream = None
         self._config = config
 
