@@ -20,6 +20,7 @@
                     ],
                     "frequency": 100,
                     "point": 100,
+                    "directStreamChunckSize": 8192,
                     "waveForm": "square"
                 }
             }

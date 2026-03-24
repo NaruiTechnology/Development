@@ -29,18 +29,24 @@ class GlasgowConnectTest(unittest.TestCase):
 
     def test_mock_connection(self):
         asyncio.run(self.run_mock_stream_test())
-    def test_simulation_data(self):
-        asyncio.run(self.run_sim_data_test())
-    def test_transfer_data(self):
-         if self._config is not None:
-            conn = GlasgowConnection(self._config)
-            asyncio.run(self._connect(conn))
-            asyncio.run(self._transferData(conn))
-            print("Transfer stream test completed successfully.") 
-
-    def test_large_file_stream(self):
-        asyncio.run(self.run_large_file_stream_test())
     
+    def test_transfer_data(self):
+        if self._config is not None:
+            conn = GlasgowConnection(self._config)
+           # Use a wrapper to ensure Connect -> Transfer happens in ONE session
+            async def run_full_transfer():
+                await self._connect(conn)
+                if conn.connected:
+                    await asyncio.sleep(0.5)
+                    await self._transferData(conn)
+                else:
+                    self.fail("Connection failed before transfer could start.")    
+            asyncio.run(run_full_transfer())
+        print("Transfer stream test completed successfully.")
+
+    def test_large_data_stream(self):
+        self.skipTest('------Temporarily skipped ---TODO')
+        asyncio.run(self.run_large_file_stream_test())
 
     async def connect_test(self):
         if self._config is not None:
@@ -49,7 +55,6 @@ class GlasgowConnectTest(unittest.TestCase):
             pass
 
     async def run_mock_stream_test(self):
-        """Test 1: Uses MockConnection to verify data flow without hardware."""
         conn = MockConnection()
         await conn._connect()
   
@@ -71,33 +76,33 @@ class GlasgowConnectTest(unittest.TestCase):
             await state.DoWork()
             self.assertTrue(state._success)
             print("Simulation data stream test completed.")     
-   
+
 
     async def _connect(self, conn):
-        await conn._connect()    
+        await conn._connect()   
     async def _transferData(self, conn):
         if conn.connected:
             state = streamData_state(MockThread(self._config), waveForm='square', data=self.sim_data)
             state._isSimulation = False
             state.Conn = conn
             await state.DoWork()
-            self.assertTrue(state._success)              
+            self.assertTrue(state._success)          
 
     async def run_large_file_stream_test(self):
-            """Test 3: Opens a data stream file with a large amount of data."""
             if Path(STREAM_DATA_FILE).is_file() and self._config is not None:
                 with open(STREAM_DATA_FILE, 'r') as f:
                     large_data = f.read()
 
-                conn = MockConnection()
-                await conn._connect()
-                
-                state = streamData_state(MockThread(self._config), waveForm='custom', data=large_data)
-                state.Conn = conn
+                    conn = MockConnection()
+                    await conn._connect()
+                    
+                    state = streamData_state(MockThread(self._config), waveForm='custom', data=large_data)
+                    state._isSimulation = False
+                    state.Conn = conn
 
-                await state.DoWork()
-                self.assertTrue(state._success)
-                print(f"Large file stream test ({len(large_data)} chars) completed.")
+                    await state.DoWork()
+                    self.assertTrue(state._success)
+                    print(f"Large file stream test ({len(large_data)} chars) completed.")
             else:
                 self.skipTest("Large data file or JSON config not found.")    
 

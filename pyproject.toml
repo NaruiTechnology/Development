@@ -18,3 +18,8 @@ packages = ["AutomationPy", "EsmBeamController", "LoadFPGAImage"]
 pythonpath = [
   "GlasgowDataIO"
 ]
+filterwarnings = [
+    "ignore:.*reset=.*:DeprecationWarning",
+    "ignore:Use \"with USBContext() as context\":DeprecationWarning",
+    "ignore::DeprecationWarning:glasgow.*"
+]

@@ -55,56 +55,63 @@ class streamData_state(dataIO_state):
             if self._data and len(self._data) > 0:
                 if self.ParentWorkThread._config.Verbose:
                     self.ParentWorkThread.Logger.info(f"Applying '{self._waveForm}' logic to custom data (Length: {len(self._data)})")
-                source_values = self._data
+                source_values = [v.strip() for v in self._data.replace('\n', ',').split(',') if v.strip()]
             else:
                 if self.ParentWorkThread._config.Verbose:
                     self.ParentWorkThread.Logger.info(f"No custom data. Generating '{self._waveForm}' sequence with {point_count} points.")
-                source_values = [i / point_count for i in range(point_count)]
+                #source_values = [i / point_count for i in range(point_count)]
+                source_values = self._data
 
             # Calculate final DAC integers
             if self._waveForm  not in ['sine', 'square', 'triangle', 'custom']:
                 raise ValueError(f'Invalid waveform [{self._waveForm}] detected.')
+            
             stream_source = self._calculate_stream(source_values, resolution)
+            if not stream_source:
+                self.ParentWorkThread.Logger.error("No valid data points to stream.")
+                self._success = False
+                return
             
             # Calculate timing delay based on frequency and sample count
             delay = 1.0 / (frequency * len(stream_source))
 
-            for val in stream_source:
-                # Convert integer to bit list, pad with zeros to match resolution
-                # [::-1] ensures Bit 0 maps to the first pin in the list (Little Endian)
-                bits = [int(b) for b in bin(val)[2:].zfill(resolution)[::-1]]
-                
-                # Format the pin assignments: e.g. "A0=0 A1=1 A2=0..."
-                pin_assignments = pin_val_format.format(*bits)
-                
-                if self._isSimulation\
-                      and commandFormat is not None and commandFormat != '': 
-                    # Construct and execute the Glasgow CLI command
-                    cmd = commandFormat.format(voltage, pins_arg, pin_assignments)              
-                    self._success = await self.commandAsyncio(cmd)
-                else:
+            for val in stream_source: 
+                if not self._isSimulation:
                     if self._conn is not None and self._conn.connected:
-                         # Dynamically determine the packing format based on the resolution variable
-                        # 8-bit resolution fits in 1 byte ('B'), 12/16-bit requires 2 bytes ('H')
-                        pack_type = 'B' if resolution <= 8 else 'H'               
-                        # Pack the entire list of integers (stream_source) into a Big-Endian binary block
-                        # This is more efficient than sending points one-by-one
-                        fmt = f">{len(stream_source)}{pack_type}"
-                        packed_data = struct.pack(fmt, *stream_source)     
-                        # transfer_bytes performs a synchronization check before writing the raw data
-                        # to the DataStreamApplet's pipes
-                        await self._conn.transfer_bytes(packed_data)
+                        # Small yield to ensure the event loop handles any pending connection tasks
+                        await asyncio.sleep(0.05) 
+                        
+                        pack_type = 'B' if resolution <= 8 else 'H'
+                        max_chunk_bytes = action.get('directStreamChunckSize', 8192)
+                        
+                        # Ensure we are packing exactly what the resolution requires
+                        for i in range(0, len(stream_source), max_chunk_bytes):
+                            chunk = stream_source[i : i + max_chunk_bytes]
+                            packed_chunk = struct.pack(f">{len(chunk)}{pack_type}", *chunk)
+                            
+                            # Attempt the transfer
+                            await self._conn.transfer_bytes(packed_chunk)
+                            # Minimal yield to keep the USB pipe from stalling
+                            await asyncio.sleep(0) 
                         
                         self._success = True
-                        self.ParentWorkThread.Logger.info(f"Streamed {len(stream_source)} samples at {resolution}-bit resolution.")
-                
-                if not self._success: 
-                    break
                 else:
-                    if self.ParentWorkThread._config.Verbose:
-                        print(f'DAC Output: Wave form = [{self._waveForm}], Value=[{val}], frequency = [{frequency} Hz], Delay=[{delay:.5f} s]')
-                
-                await asyncio.sleep(delay)
+                    # --- CLI SIMULATION MODE ---
+                    delay = 1.0 / (frequency * len(stream_source)) if len(stream_source) > 0 else 0
+                    for val in stream_source:
+                        bits = [int(b) for b in bin(val)[2:].zfill(resolution)[::-1]]
+                        # Format the pin assignments: e.g. "A0=0 A1=1 A2=0..."
+                        pin_assignments = pin_val_format.format(*bits)          
+                        if not self._success: 
+                            break
+                        if commandFormat:
+                            cmd = commandFormat.format(voltage, pins_arg, pin_assignments)
+                            self._success = await self.commandAsyncio(cmd)
+                            if not self._success: 
+                                break        
+                        if self.ParentWorkThread._config.Verbose:
+                            print(f'DAC Output: Wave form = [{self._waveForm}], Value=[{val}], frequency = [{frequency} Hz], Delay=[{delay:.5f} s]')               
+                        await asyncio.sleep(delay)
 
         except Exception as e:
             self.ParentWorkThread.Logger.error(f"Waveform Execution Error: {e}")
