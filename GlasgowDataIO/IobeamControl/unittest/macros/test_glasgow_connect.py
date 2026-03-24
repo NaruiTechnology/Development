@@ -45,7 +45,8 @@ class GlasgowConnectTest(unittest.TestCase):
         print("Transfer stream test completed successfully.")
 
     def test_large_data_stream(self):
-        self.skipTest('------Temporarily skipped ---TODO')
+        import pytest
+        pytest.skip('----Temporarily skipped, TODO')
         asyncio.run(self.run_large_file_stream_test())
 
     async def connect_test(self):
