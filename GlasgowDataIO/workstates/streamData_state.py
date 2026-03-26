@@ -31,7 +31,8 @@ class streamData_state(dataIO_state):
             commandFormat = action.get('commandFormat')
             frequency = action.get('frequency', 10)
             point_count = action.get('point', 100)
-            self._waveForm = action.get('waveForm', 'sine')
+            if self._waveForm is None:
+                self._waveForm = action.get('waveForm', 'sine')
                    
             resolution = 0
             pins_arg = ''
@@ -72,46 +73,42 @@ class streamData_state(dataIO_state):
                 self._success = False
                 return
             
-            # Calculate timing delay based on frequency and sample count
-            delay = 1.0 / (frequency * len(stream_source))
-
-            for val in stream_source: 
-                if not self._isSimulation:
-                    if self._conn is not None and self._conn.connected:
-                        # Small yield to ensure the event loop handles any pending connection tasks
-                        await asyncio.sleep(0.05) 
+            if not self._isSimulation:
+                if self._conn is not None and self._conn.connected:
+                    # Small yield to ensure the event loop handles any pending connection tasks
+                    await asyncio.sleep(0.05) 
+                    
+                    pack_type = 'B' if resolution <= 8 else 'H'
+                    max_chunk_bytes = action.get('directStreamChunckSize', 8192)
+                    
+                    # Ensure we are packing exactly what the resolution requires
+                    for i in range(0, len(stream_source), max_chunk_bytes):
+                        chunk = stream_source[i : i + max_chunk_bytes]
+                        packed_chunk = struct.pack(f">{len(chunk)}{pack_type}", *chunk)
                         
-                        pack_type = 'B' if resolution <= 8 else 'H'
-                        max_chunk_bytes = action.get('directStreamChunckSize', 8192)
-                        
-                        # Ensure we are packing exactly what the resolution requires
-                        for i in range(0, len(stream_source), max_chunk_bytes):
-                            chunk = stream_source[i : i + max_chunk_bytes]
-                            packed_chunk = struct.pack(f">{len(chunk)}{pack_type}", *chunk)
-                            
-                            # Attempt the transfer
-                            await self._conn.transfer_bytes(packed_chunk)
-                            # Minimal yield to keep the USB pipe from stalling
-                            await asyncio.sleep(0) 
-                        
-                        self._success = True
-                else:
-                    # --- CLI SIMULATION MODE ---
-                    delay = 1.0 / (frequency * len(stream_source)) if len(stream_source) > 0 else 0
-                    for val in stream_source:
-                        bits = [int(b) for b in bin(val)[2:].zfill(resolution)[::-1]]
-                        # Format the pin assignments: e.g. "A0=0 A1=1 A2=0..."
-                        pin_assignments = pin_val_format.format(*bits)          
+                        # Attempt the transfer
+                        await self._conn.transfer_bytes(packed_chunk)
+                        # Minimal yield to keep the USB pipe from stalling
+                        await asyncio.sleep(0) 
+                    
+                    self._success = True
+            else:
+                # --- CLI SIMULATION MODE ---
+                delay = 1.0 / (frequency * len(stream_source)) if len(stream_source) > 0 else 0
+                for val in stream_source:
+                    bits = [int(b) for b in bin(val)[2:].zfill(resolution)[::-1]]
+                    # Format the pin assignments: e.g. "A0=0 A1=1 A2=0..."
+                    pin_assignments = pin_val_format.format(*bits)          
+                    if commandFormat:
+                        cmd = commandFormat.format(voltage, pins_arg, pin_assignments)
+                        self._success = await self.commandAsyncio(cmd)
                         if not self._success: 
-                            break
-                        if commandFormat:
-                            cmd = commandFormat.format(voltage, pins_arg, pin_assignments)
-                            self._success = await self.commandAsyncio(cmd)
-                            if not self._success: 
-                                break        
-                        if self.ParentWorkThread._config.Verbose:
-                            print(f'DAC Output: Wave form = [{self._waveForm}], Value=[{val}], frequency = [{frequency} Hz], Delay=[{delay:.5f} s]')               
-                        await asyncio.sleep(delay)
+                            if self.ParentWorkThread._config.Verbose:
+                                print('Call GPIO command failed.')
+                            break        
+                    if self.ParentWorkThread._config.Verbose:
+                        print(f'DAC Output: Wave form = [{self._waveForm}], Value=[{val}], frequency = [{frequency} Hz], Delay=[{delay:.5f} s]')               
+                    await asyncio.sleep(delay)
 
         except Exception as e:
             self.ParentWorkThread.Logger.error(f"Waveform Execution Error: {e}")

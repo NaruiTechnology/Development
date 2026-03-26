@@ -7,9 +7,6 @@ from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.multiplexer import 
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import GlasgowDevice
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.assembly import HardwareAssembly
-from IobeamControl.transfer.glasgowStream import GlasgowConnection
-from glasgow.applet.control.gpio import ControlGPIOApplet 
-from types import SimpleNamespace
 
 class streamDataThread(dataIOThread):
     def __init__(self, config, deviceId=None, waveForm=None, data=None, conn=None):

@@ -21,7 +21,8 @@
                         }
                     ],
                     "frequency": 1000,
-                    "point": 100
+                    "point": 100,
+                    "waveForm" : "square"
                 },
                 "timeout": 60.0
             }

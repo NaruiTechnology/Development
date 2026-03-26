@@ -2,17 +2,15 @@ import os
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from GlasgowDataIO.workthreads.streamDataThread import streamDataThread
 import asyncio
-from IobeamControl.transfer.glasgowStream import GlasgowConnection
 
 async def main(config, deviceId, waveForm, data, conn): 
-    if conn is not None and conn.connected: # TODO ------
-        conn = None
-    #----------------------------------------------- TODO
     sream_inst = streamDataThread(config, deviceId, waveForm, data, conn) 
     sream_inst.Start()
 
-async def connect(conn):
-    await conn._connect()
+async def run_pipeline(config, deviceId, waveForm, data, conn):
+    if conn is not None:
+        await conn._connect()
+    await main(config, deviceId, waveForm, data, conn)    
 
 if __name__ == '__main__':
     import argparse
@@ -32,16 +30,7 @@ if __name__ == '__main__':
     
     if args.waveForm not in ['square', 'sine', 'triangle']:
         raise ValueError(f'The input parameter [{args.waveForm}] is invalid.')
-    data = None
-    if args.data is not None:
-        print(f'Input data = {args.data}')
-        #data = [int(x) for x in args.data.split(",")]
-        data = [x for x in args.data.split(",")]
-        print(f'---------------------------------\n') 
-        print(data) 
        
     config = AutomationConfig(jsonpath)
-    conn = GlasgowConnection(config)
-
-    asyncio.run(connect(conn))
-    asyncio.run(main(config, deviceId, args.waveForm, data, conn))
+    conn = None # TODO: GlasgowConnection(config)
+    asyncio.run(run_pipeline(config, args.deviceId, args.waveForm, args.data, conn))
