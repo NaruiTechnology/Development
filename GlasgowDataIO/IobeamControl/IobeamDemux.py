@@ -1,5 +1,5 @@
 import asyncio
-import EsmBeamController.Software.lib.glasgow.hardware.demultiplexer as glasgow_access
+import IobeamControl.glasgowLib.glasgow.hardware.demultiplexer as glasgow_access
 glasgow_access._xfers_per_queue = 16
 glasgow_access._packets_per_xfer = 128
 

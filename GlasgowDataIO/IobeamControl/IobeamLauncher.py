@@ -42,17 +42,25 @@ class IobeamLauncher(object):
                 pin_list.append(f"{port_letter}{pin_num}")
         
         # 'voltages' must be a Mapping[GlasgowPort, float] for assembly.py
+        buffer_size = eval(actionConfig.get('bufferSize', '16384*16384'))
         applet_args = SimpleNamespace(
             voltage_map=voltages_map,
-            pins=GlasgowPin.parse(",".join(pin_list)) if pin_list else []
+            pins=GlasgowPin.parse(",".join(pin_list)) if pin_list else [],
+            buffer_size = buffer_size,
+            benchmark = False
         )             
 
         iface = applet.build(target, applet_args)
         plan = target.build_plan()  
+
+        #build_result = plan.execute()
+        #await device.download(build_result)
+        
+        device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count) #
         device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)
         iface = await device.demultiplexer.claim_interface(applet, iface, applet_args,
-                                                           read_buffer_size=16384*16384, 
-                                                           write_buffer_size=16384*16384) 
+                                                           read_buffer_size=applet_args.buffer_size, #16384*16384, 
+                                                           write_buffer_size=applet_args.buffer_size) #16384*16384) 
         return iface        
 
 

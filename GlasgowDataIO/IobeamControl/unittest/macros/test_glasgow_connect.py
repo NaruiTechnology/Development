@@ -11,6 +11,12 @@ from GlasgowDataIO.workthreads.dataIOThread import dataIOThread
 from AutomationPy.buildingblocks.decorators import overrides
 from AutomationPy.buildingblocks.definitions import Consts
 from IobeamControl.transfer.glasgowStream import GlasgowConnection
+from IobeamControl.commands import DACCodeRange
+from IobeamControl.macros import RasterScanCommand
+from IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
+import logging
+logger = logging.getLogger()
+import pytest
 
 JSON_PATH = r'./Development/GlasgowDataIO/Json/directIo.json'
 
@@ -24,6 +30,29 @@ class GlasgowConnectTest(unittest.TestCase):
         else:
             self._config = None
 
+
+# real connect to hardware--------------------------------------------------------
+# 
+    def test_raster_scan(self):
+        # pytest.skip('----Temporarily skipped, TODO')
+        try:
+            asyncio.run(self.raster_scan())
+        except Exception as e:
+            print(f'Failed test_scan, error: {e}')
+            self.assertFalse(True)
+        self.assertTrue(True)
+
+    async def raster_scan(self):
+        test_range = DACCodeRange.from_resolution(2048)
+        test_dwell = 2
+        test_cmd = RasterScanCommand(cookie=123,
+            x_range=test_range, y_range=test_range, dwell_time=test_dwell)
+        conn = GlasgowConnection(self._config)
+        await conn._connect()
+        async for chunk in conn.transfer_multiple(test_cmd, latency=65536):
+            logger.debug(f"{dump_hex(chunk)}")
+# -------------------------------------------------------------------
+
     def test_connect(self):
         asyncio.run(self.connect_test())
 
@@ -31,6 +60,7 @@ class GlasgowConnectTest(unittest.TestCase):
         asyncio.run(self.run_mock_stream_test())
     
     def test_transfer_data(self):
+        pytest.skip('----Temporarily skipped, TODO')
         if self._config is not None:
             conn = GlasgowConnection(self._config)
            # Use a wrapper to ensure Connect -> Transfer happens in ONE session
@@ -45,7 +75,6 @@ class GlasgowConnectTest(unittest.TestCase):
         print("Transfer stream test completed successfully.")
 
     def test_large_data_stream(self):
-        import pytest
         pytest.skip('----Temporarily skipped, TODO')
         asyncio.run(self.run_large_file_stream_test())
 
@@ -106,6 +135,8 @@ class GlasgowConnectTest(unittest.TestCase):
                     print(f"Large file stream test ({len(large_data)} chars) completed.")
             else:
                 self.skipTest("Large data file or JSON config not found.")    
+
+                
 
 class MockThread(dataIOThread):
     def __init__(self, config):

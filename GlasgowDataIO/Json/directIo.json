@@ -18,6 +18,7 @@
                             "pinList": [0,1,2,3]
                         }
                     ],
+                    "bufferSize": "1024*1024",
                     "frequency": 100,
                     "point": 100,
                     "directStreamChunckSize": 8192,

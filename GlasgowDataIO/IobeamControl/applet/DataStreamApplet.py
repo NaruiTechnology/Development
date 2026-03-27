@@ -1,7 +1,8 @@
 
 import logging
 import asyncio, struct, time
-from EsmBeamController.Software.lib.glasgow.applet import GlasgowApplet
+#from EsmBeamController.Software.lib.glasgow.applet import GlasgowApplet
+from IobeamControl.glasgowLib.glasgow.applet import GlasgowApplet
 
 class DataStreamApplet(GlasgowApplet):
     required_revision = "C3"
@@ -24,8 +25,9 @@ class DataStreamApplet(GlasgowApplet):
         return iface        
     
     async def run(self, device, args):
+        buffer_size = args.buffer_size if hasattr(args, 'buffer_size') else 1024*1024 # 16384*16384 --TODOW
         iface = await device.demultiplexer.claim_interface(self, self.mux_interface, args,
-        read_buffer_size=16384*16384, write_buffer_size=16384*16384)
+        read_buffer_size=buffer_size, write_buffer_size=buffer_size)
         if args.benchmark:
             output_mode = 2 #no output
             raster_mode = 0 #no raster

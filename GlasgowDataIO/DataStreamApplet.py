@@ -24,8 +24,9 @@ class DataStreamApplet(GlasgowApplet):
         return iface        
     
     async def run(self, device, args):
-        iface = await device.demultiplexer.claim_interface(self, self.mux_interface, args,
-        read_buffer_size=16384*16384, write_buffer_size=16384*16384)
+        buffer_size = iface.buffer_size if hasattr(iface, 'buffer_size') else 1024*1024 # 16384*16384 ---TODO     
+        iface = await device.demultiplexer.claim_interface(self, self.mux_interface, args,                                                      
+        read_buffer_size=buffer_size, write_buffer_size=buffer_size)
         if args.benchmark:
             output_mode = 2 #no output
             raster_mode = 0 #no raster
