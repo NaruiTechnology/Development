@@ -13,6 +13,10 @@ from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 from IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
+from glasgow.applet.program.ice40_sram import ICE40SRAMInterface
+import logging
+
+logger = logging.getLogger(__name__)
 
 class IobeamLauncher(object):
     def __init__(self, config):
@@ -30,7 +34,7 @@ class IobeamLauncher(object):
         device = GlasgowDevice(deviceId)
         target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
         assembly = HardwareAssembly(revision=device.revision)
-        applet = DataStreamApplet()  
+        applet = DataStreamApplet(assembly)  
         
         actionConfig = stateConfig.get(Consts.ACTION_DATA)
         action_voltage = actionConfig.get("voltage", 2.5)
@@ -53,10 +57,25 @@ class IobeamLauncher(object):
         iface = applet.build(target, applet_args)
         plan = target.build_plan()  
 
-        #build_result = plan.execute()
-        #await device.download(build_result)
+        build_result = await plan.execute() 
+        if hasattr(build_result, "data"):
+            bitstream = build_result.data
+        elif hasattr(build_result, "bitstream"):
+            bitstream = build_result.bitstream
+        else:
+            bitstream = build_result 
+        print(f"Bitstream size: {len(bitstream)} bytes")
+        programmer = ICE40SRAMInterface(
+            logger=logger, 
+            assembly=assembly,
+            cs=GlasgowPin.parse("A0")[0], 
+            sck=GlasgowPin.parse("A1")[0],
+            copi=GlasgowPin.parse("A2")[0],
+            reset=GlasgowPin.parse("A3")[0]
+        )
+        await programmer.program(bitstream) # This programs the FPGA
+
         
-        device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count) #
         device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)
         iface = await device.demultiplexer.claim_interface(applet, iface, applet_args,
                                                            read_buffer_size=applet_args.buffer_size, #16384*16384, 

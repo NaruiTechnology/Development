@@ -2,7 +2,7 @@
 import unittest
 import asyncio
 from pathlib import Path
-from IobeamControl.transfer.glasgowStream import GlasgowConnection
+from ...transfer.glasgowStream import GlasgowConnection
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from IobeamControl.transfer.mock import MockConnection
 from IobeamControl.commands.structs import struct

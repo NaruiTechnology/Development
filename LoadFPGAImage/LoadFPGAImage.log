@@ -1,0 +1,174 @@
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.device INFO     found revC3 device with API level 5 (supported API level is 4)
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.device WARNING  please run `glasgow flash` to update firmware of device C3-20251207T145552Z
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    loading firmware from '/home/vboxuser/Projects/IobeamTech/Development/EsmBeamController/Software/lib/glasgow/hardware/firmware.ihex' to revC3 device
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    waiting for re-enumeration (hotplug event)
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    found revC3 device with serial C3-20251207T145552Z
+03-01 04:29 asyncio      DEBUG    Using selector: EpollSelector
+03-01 04:29 LoadFPGAImage INFO     Calling connectDevice
+03-01 04:29 asyncio      DEBUG    Using selector: EpollSelector
+03-01 04:29 LoadFPGAImage INFO     Calling buildFPGAPlan
+03-01 04:29 asyncio      DEBUG    Using selector: EpollSelector
+03-01 04:29 EsmBeamController.Software.applets.BeamControlApplet DEBUG    claimed pipe P
+03-01 04:29 EsmBeamController.Software.applets.BeamControlApplet DEBUG    adding reset register at address 0x01
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    using toolchain 'builtin' (yosys 0.62.0.0.post1088, nextpnr-ice40 0.9.0.0.post686, icepack 0.9.0.0.post686)
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'yosys' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-yosys'
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'nextpnr-ice40' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-nextpnr-ice40'
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'icepack' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-icepack'
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    toolchain ID is 9210263e4fde099f2466bb308a4833be
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'yosys' is 13ae1dd0073e5fd910f8dd5f867d3e29
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'nextpnr-ice40' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 04:29 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'icepack' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 04:29 LoadFPGAImage INFO     Calling buildFPGAImage
+03-01 04:29 asyncio      DEBUG    Using selector: EpollSelector
+03-01 04:29 LoadFPGAImage INFO     Calling invokeNextpnr
+03-01 04:29 asyncio      DEBUG    Using selector: EpollSelector
+03-01 04:29 LoadFPGAImage INFO     Calling bitsStreamPackage
+03-01 04:29 asyncio      DEBUG    Using selector: EpollSelector
+03-01 04:29 LoadFPGAImage INFO     Calling flashImage
+03-01 04:29 asyncio      DEBUG    Using selector: EpollSelector
+03-01 04:29 LoadFPGAImage INFO     LoadFPGAThread completed.
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.device INFO     found revC3 device with API level 5 (supported API level is 4)
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.device WARNING  please run `glasgow flash` to update firmware of device C3-20251207T145552Z
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    loading firmware from '/home/vboxuser/Projects/IobeamTech/Development/EsmBeamController/Software/lib/glasgow/hardware/firmware.ihex' to revC3 device
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    waiting for re-enumeration (hotplug event)
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    found revC3 device with serial C3-20251207T145552Z
+03-01 20:55 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:55 LoadFPGAImage INFO     Calling connectDevice
+03-01 20:55 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:55 LoadFPGAImage INFO     Calling buildFPGAPlan
+03-01 20:55 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:55 EsmBeamController.Software.applets.BeamControlApplet DEBUG    claimed pipe P
+03-01 20:55 EsmBeamController.Software.applets.BeamControlApplet DEBUG    adding reset register at address 0x01
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    using toolchain 'builtin' (yosys 0.62.0.0.post1088, nextpnr-ice40 0.9.0.0.post686, icepack 0.9.0.0.post686)
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'yosys' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-yosys'
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'nextpnr-ice40' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-nextpnr-ice40'
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'icepack' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-icepack'
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    toolchain ID is 9210263e4fde099f2466bb308a4833be
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'yosys' is 13ae1dd0073e5fd910f8dd5f867d3e29
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'nextpnr-ice40' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 20:55 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'icepack' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 20:55 LoadFPGAImage INFO     Calling buildFPGAImage
+03-01 20:55 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:55 LoadFPGAImage INFO     Calling invokeNextpnr
+03-01 20:55 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:55 LoadFPGAImage INFO     Calling bitsStreamPackage
+03-01 20:55 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:55 LoadFPGAImage INFO     Calling updateFPGAImage
+03-01 20:55 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:55 LoadFPGAImage INFO     LoadFPGAThread completed.
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device INFO     found revC3 device with API level 5 (supported API level is 4)
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device WARNING  please run `glasgow flash` to update firmware of device C3-20251207T145552Z
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    loading firmware from '/home/vboxuser/Projects/IobeamTech/Development/EsmBeamController/Software/lib/glasgow/hardware/firmware.ihex' to revC3 device
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    waiting for re-enumeration (hotplug event)
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    found revC3 device with serial C3-20251207T145552Z
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling connectDevice
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling buildFPGAPlan
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 EsmBeamController.Software.applets.BeamControlApplet DEBUG    claimed pipe P
+03-01 20:59 EsmBeamController.Software.applets.BeamControlApplet DEBUG    adding reset register at address 0x01
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    using toolchain 'builtin' (yosys 0.62.0.0.post1088, nextpnr-ice40 0.9.0.0.post686, icepack 0.9.0.0.post686)
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'yosys' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-yosys'
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'nextpnr-ice40' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-nextpnr-ice40'
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'icepack' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-icepack'
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    toolchain ID is 9210263e4fde099f2466bb308a4833be
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'yosys' is 13ae1dd0073e5fd910f8dd5f867d3e29
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'nextpnr-ice40' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'icepack' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 20:59 LoadFPGAImage INFO     Calling buildFPGAImage
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling invokeNextpnr
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling bitsStreamPackage
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling updateFPGAImage
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     LoadFPGAThread completed.
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device INFO     found revC3 device with API level 5 (supported API level is 4)
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device WARNING  please run `glasgow flash` to update firmware of device C3-20251207T145552Z
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    loading firmware from '/home/vboxuser/Projects/IobeamTech/Development/EsmBeamController/Software/lib/glasgow/hardware/firmware.ihex' to revC3 device
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    waiting for re-enumeration (hotplug event)
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    found revC3 device with serial C3-20251207T145552Z
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling connectDevice
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling buildFPGAPlan
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 EsmBeamController.Software.applets.BeamControlApplet DEBUG    claimed pipe P
+03-01 20:59 EsmBeamController.Software.applets.BeamControlApplet DEBUG    adding reset register at address 0x01
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    using toolchain 'builtin' (yosys 0.62.0.0.post1088, nextpnr-ice40 0.9.0.0.post686, icepack 0.9.0.0.post686)
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'yosys' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-yosys'
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'nextpnr-ice40' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-nextpnr-ice40'
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'icepack' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-icepack'
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    toolchain ID is 9210263e4fde099f2466bb308a4833be
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'yosys' is 13ae1dd0073e5fd910f8dd5f867d3e29
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'nextpnr-ice40' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 20:59 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'icepack' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 20:59 LoadFPGAImage INFO     Calling buildFPGAImage
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling invokeNextpnr
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling bitsStreamPackage
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     Calling updateFPGAImage
+03-01 20:59 asyncio      DEBUG    Using selector: EpollSelector
+03-01 20:59 LoadFPGAImage INFO     LoadFPGAThread completed.
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.device INFO     found revC3 device with API level 5 (supported API level is 4)
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.device WARNING  please run `glasgow flash` to update firmware of device C3-20251207T145552Z
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    loading firmware from '/home/vboxuser/Projects/IobeamTech/Development/EsmBeamController/Software/lib/glasgow/hardware/firmware.ihex' to revC3 device
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    waiting for re-enumeration (hotplug event)
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    found revC3 device with serial C3-20251207T145552Z
+03-01 21:01 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:01 LoadFPGAImage INFO     Calling connectDevice
+03-01 21:01 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:01 LoadFPGAImage INFO     Calling buildFPGAPlan
+03-01 21:01 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:01 EsmBeamController.Software.applets.BeamControlApplet DEBUG    claimed pipe P
+03-01 21:01 EsmBeamController.Software.applets.BeamControlApplet DEBUG    adding reset register at address 0x01
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    using toolchain 'builtin' (yosys 0.62.0.0.post1088, nextpnr-ice40 0.9.0.0.post686, icepack 0.9.0.0.post686)
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'yosys' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-yosys'
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'nextpnr-ice40' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-nextpnr-ice40'
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'icepack' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-icepack'
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    toolchain ID is 9210263e4fde099f2466bb308a4833be
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'yosys' is 13ae1dd0073e5fd910f8dd5f867d3e29
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'nextpnr-ice40' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 21:01 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'icepack' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 21:01 LoadFPGAImage INFO     Calling buildFPGAImage
+03-01 21:01 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:01 LoadFPGAImage INFO     Calling invokeNextpnr
+03-01 21:01 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:01 LoadFPGAImage INFO     Calling bitsStreamPackage
+03-01 21:01 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:01 LoadFPGAImage INFO     Calling updateFPGAImage
+03-01 21:01 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:02 LoadFPGAImage INFO     LoadFPGAThread completed.
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.device INFO     found revC3 device with API level 5 (supported API level is 4)
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.device WARNING  please run `glasgow flash` to update firmware of device C3-20251207T145552Z
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    loading firmware from '/home/vboxuser/Projects/IobeamTech/Development/EsmBeamController/Software/lib/glasgow/hardware/firmware.ihex' to revC3 device
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    waiting for re-enumeration (hotplug event)
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.device DEBUG    found revC3 device with serial C3-20251207T145552Z
+03-01 21:02 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:02 LoadFPGAImage INFO     Calling connectDevice
+03-01 21:02 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:02 LoadFPGAImage INFO     Calling buildFPGAPlan
+03-01 21:02 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:02 EsmBeamController.Software.applets.BeamControlApplet DEBUG    claimed pipe P
+03-01 21:02 EsmBeamController.Software.applets.BeamControlApplet DEBUG    adding reset register at address 0x01
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    using toolchain 'builtin' (yosys 0.62.0.0.post1088, nextpnr-ice40 0.9.0.0.post686, icepack 0.9.0.0.post686)
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'yosys' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-yosys'
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'nextpnr-ice40' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-nextpnr-ice40'
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool 'icepack' is invoked as '/home/vboxuser/Projects/IobeamTech/.venv/bin/yowasp-icepack'
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    toolchain ID is 9210263e4fde099f2466bb308a4833be
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'yosys' is 13ae1dd0073e5fd910f8dd5f867d3e29
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'nextpnr-ice40' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 21:02 EsmBeamController.Software.lib.glasgow.hardware.toolchain DEBUG    tool ID of 'icepack' is 8f66d804213e4810aa6fe49ca46867ae
+03-01 21:02 LoadFPGAImage INFO     Calling buildFPGAImage
+03-01 21:02 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:02 LoadFPGAImage INFO     Calling invokeNextpnr
+03-01 21:02 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:02 LoadFPGAImage INFO     Calling bitsStreamPackage
+03-01 21:02 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:02 LoadFPGAImage INFO     Calling updateFPGAImage
+03-01 21:02 asyncio      DEBUG    Using selector: EpollSelector
+03-01 21:02 LoadFPGAImage INFO     LoadFPGAThread completed.

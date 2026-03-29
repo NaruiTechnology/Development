@@ -16,6 +16,8 @@ from ..hardware.device import GlasgowDevice
 from ..hardware.assembly import HardwareAssembly
 from ..simulation.assembly import SimulationAssembly
 from ..gateware.clockgen import ClockGen
+from ..hardware.multiplexer import DirectMultiplexer
+from ..hardware.device import GlasgowDevice
 
 
 __all__ = [
@@ -662,7 +664,7 @@ from ..simulation.device import *
 from ..hardware.device import *
 from ..hardware.toolchain import find_toolchain
 from ..hardware.platform.rev_ab import GlasgowRevABPlatform
-
+from ..hardware.demultiplexer import DirectDemultiplexer
 
 __all__ += ["GlasgowAppletTestCase", "synthesis_test", "applet_simulation_test",
             "applet_hardware_test"]
@@ -848,7 +850,7 @@ class GlasgowAppletTestCase(unittest.TestCase):
 
         if mode == "record":
             self.device = None # in case the next line raises
-            self.device = GlasgowHardwareDevice()
+            self.device = GlasgowDevice() # GlasgowHardwareDevice()
             self.device.demultiplexer = DirectDemultiplexer(self.device, pipe_count=1)
             revision = self.device.revision
         else:
