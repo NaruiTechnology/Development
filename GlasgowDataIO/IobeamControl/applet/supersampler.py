@@ -14,25 +14,25 @@ class Supersampler(wiring.Component):
         super_dac_stream: X and Y DAC codes and `last` signal
         adc_stream: Averaged ADC sample value
     """
-    dac_stream: In(StreamSignature(DACStream))
+    dac_stream: In(StreamSignature(DACStream)) # type: ignore
 
     ADC_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
         "adc_code":   14,
     }))
-    adc_stream: Out(ADC_STREAM_SIGNATURE)
+    adc_stream: Out(ADC_STREAM_SIGNATURE) # type: ignore
 
-    super_dac_stream: Out(StreamSignature(SuperDACStream))
+    super_dac_stream: Out(StreamSignature(SuperDACStream)) # type: ignore
 
     SUPER_ADC_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
         "adc_code":   14,
         "adc_ovf":    1,  # ignored
         "last":       1,
     }))
-    super_adc_stream: In(SUPER_ADC_STREAM_SIGNATURE)
+    super_adc_stream: In(SUPER_ADC_STREAM_SIGNATURE) # type: ignore
 
     ## debug info
-    stall_cycles: Out(16)
-    stall_count_reset: In(1)
+    stall_cycles: Out(16) # type: ignore
+    stall_count_reset: In(1) # type: ignore
 
     def __init__(self):
         super().__init__()

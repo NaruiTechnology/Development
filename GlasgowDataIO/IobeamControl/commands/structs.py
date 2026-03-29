@@ -182,7 +182,9 @@ class DwellTime(u16):
         Important:
             One DwellTime = 125 ns
         '''
-
+    # Gemine suggested adding __new__ to these types to enforce type checking even when they're used as field types in the command dataclasses, since the dataclass constructors won't call the __init__ method of the field types, which means that without __new__, you could create a Command with invalid field values without triggering any errors. By adding __new__, we can ensure that any time a value is assigned to one of these types, whether directly or through a dataclass constructor, it will be validated against the defined constraints, providing better safety and error checking throughout the codebase.  
+    def __new__(cls, val=16): # Default to 16 bits for Signal() calls
+            return super().__new__(cls, val)
 @dataclass
 class DACCodeRange:
     '''

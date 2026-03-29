@@ -15,6 +15,7 @@ class DataStreamApplet(GlasgowApplet):
     @classmethod
     def add_build_arguments(cls, parser, access):
         super().add_build_arguments(parser, access)
+        
         access.add_pin_set_argument(parser, "ebeam_scan_enable", range(1,3))
         access.add_pin_set_argument(parser, "ibeam_scan_enable", range(1,3))
         access.add_pin_set_argument(parser, "ebeam_blank_enable", range(1,3))
@@ -80,11 +81,12 @@ class DataStreamApplet(GlasgowApplet):
             stall_count_reset, self.__addr_stall_count_reset = target.registers.add_rw(1, init=1)
             subtarget_args.update({"benchmark_counters": [out_stall_events, out_stall_cycles, stall_count_reset]})
     
-        subtarget = IobeamDataSubtarget(
+        """ subtarget = IobeamDataSubtarget(
             ports=ports,
             out_fifo=out_fifo, # Connects USB Host -> FPGA
             in_fifo=in_fifo     # Connects FPGA -> USB Host
-        )
+        ) """
+        subtarget = IobeamDataSubtarget(**subtarget_args)
 
         return iface.add_subtarget(subtarget)       
     

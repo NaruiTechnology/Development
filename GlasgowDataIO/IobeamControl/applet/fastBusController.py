@@ -6,12 +6,12 @@ from . import *
 
 class FastBusController(wiring.Component):
     # FPGA-side interface
-    dac_stream: In(StreamSignature(SuperDACStream))
+    dac_stream: In(StreamSignature(SuperDACStream)) # type: ignore
 
 
     # IO-side interface
-    bus: Out(BusSignature)
-    inline_blank: Out(BlankRequest)
+    bus: Out(BusSignature) # type: ignore
+    inline_blank: Out(BlankRequest) # type: ignore
 
     # Ignored
     # adc_stream: Out(StreamSignature(data.StructLayout({
@@ -24,7 +24,7 @@ class FastBusController(wiring.Component):
         "adc_ovf":  1,
         "last":     1,
     }))
-    adc_stream: Out(ADC_STREAM_SIGNATURE)
+    adc_stream: Out(ADC_STREAM_SIGNATURE) # type: ignore
 
     def __init__(self):
         self.delay = 3

@@ -13,24 +13,24 @@ from ..commands.structs import CmdType, BeamType, OutputMode, Transforms
 from . import * # StreamSignature, BusSignature, BlankRequest, Transforms, DACStream
 
 class CommandExecutor(wiring.Component):
-    cmd_stream: In(StreamSignature(Command))
-    img_stream: Out(StreamSignature(unsigned(16)))
+    cmd_stream: In(StreamSignature(Command)) # type: ignore
+    img_stream: Out(StreamSignature(unsigned(16)))# type: ignore
 
-    bus: Out(BusSignature)
-    inline_blank: In(BlankRequest)
+    bus: Out(BusSignature)# type: ignore
+    inline_blank: In(BlankRequest)# type: ignore
 
     #: Active if `Synchronize`, `Flush`, or `Abort` was the last received command.
-    flush: Out(1)
+    flush: Out(1) # type: ignore
 
     # Input to Scan/Signal Selector Relay Board
-    ext_ctrl_enable: Out(2)
-    ext_ctrl_enabled: Out(2)
-    beam_type: Out(BeamType)
+    ext_ctrl_enable: Out(2) # type: ignore
+    ext_ctrl_enabled: Out(2) # type: ignore
+    beam_type: Out(BeamType) # type: ignore
     # Input to Blanking control board
-    blank_enable: Out(1, init=1)
+    blank_enable: Out(1, init=1) # type: ignore
 
     #Input to Serializer
-    output_mode: Out(2)
+    output_mode: Out(2) # type: ignore
 
 
     def __init__(self, *, out_only:bool=False, adc_latency=8, ext_switch_delay=960000,
@@ -48,7 +48,7 @@ class CommandExecutor(wiring.Component):
     def elaborate(self, platform):
         m = Module()
 
-        delay_counter = Signal(DwellTime)
+        delay_counter = Signal(16) # Signal(DwellTime) # Signal(unsigned(16))
         inline_delay_counter = Signal(3)
 
         ext_switch_delay_counter = Signal(24)

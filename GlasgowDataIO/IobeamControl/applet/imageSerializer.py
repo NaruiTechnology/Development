@@ -8,8 +8,8 @@ from . import *
 
 
 class ImageSerializer(wiring.Component):
-    img_stream: In(StreamSignature(unsigned(16)))
-    usb_stream: Out(StreamSignature(8))
+    img_stream: In(StreamSignature(unsigned(16))) # type: ignore
+    usb_stream: Out(StreamSignature(8)) # type: ignore
     output_mode: In(2)
 
     def elaborate(self, platform):

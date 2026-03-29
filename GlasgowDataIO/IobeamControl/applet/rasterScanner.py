@@ -20,18 +20,18 @@ class RasterScanner(wiring.Component):
     """
     FRAC_BITS = 8
 
-    roi_stream: In(StreamSignature(RasterRegion))
+    roi_stream: In(StreamSignature(RasterRegion)) # type: ignore
 
     DWELL_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
         "dwell_time": 16, # DwellTime,
         "blank": BlankRequest,
     }))
-    dwell_stream: In(DWELL_STREAM_SIGNATURE)  
+    dwell_stream: In(DWELL_STREAM_SIGNATURE) # type: ignore  
 
-    abort: In(1)
+    abort: In(1) # type: ignore
     #: Interrupt the scan in progress and fetch the next ROI from `roi_stream`.
 
-    dac_stream: Out(StreamSignature(DACStream))
+    dac_stream: Out(StreamSignature(DACStream)) # type: ignore
 
     def elaborate(self, platform):
         m = Module()

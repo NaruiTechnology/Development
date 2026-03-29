@@ -5,8 +5,8 @@ from amaranth.build import *
 from . import *
 
 class PipelinedLoopbackAdapter(wiring.Component):
-    loopback_stream: In(unsigned(14))
-    bus: Out(BusSignature)
+    loopback_stream: In(unsigned(14)) # type: ignore
+    bus: Out(BusSignature) # type: ignore
 
     def __init__(self, adc_latency: int):
         self.adc_latency = adc_latency

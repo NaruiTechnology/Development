@@ -2,8 +2,8 @@ from amaranth import *
 from amaranth.build import *
 from amaranth.lib import enum, data, io, wiring
 from amaranth.lib.wiring import In, Out, flipped
-from ..commands.structs import CmdType, BeamType, OutputMode, Transforms
-from .commandParser import CommandParser
+from GlasgowDataIO.IobeamControl.commands.structs import CmdType, BeamType, OutputMode, Transforms
+from GlasgowDataIO.IobeamControl.applet.commandParser import CommandParser
 from ..glasgowLib.glasgow.legacy import DeprecatedFIFOReadPort, DeprecatedFIFOWritePort
 from ..glasgowLib.glasgow.legacy import DeprecatedFIFOReadPort, DeprecatedFIFOWritePort
 from .commandExecutor import CommandExecutor
@@ -14,15 +14,7 @@ from . import iobeam_resources
 class IobeamDataSubtarget(wiring.Component):
     def __init__(self, *, ports, out_fifo, in_fifo, led=None, control=None, data=None, 
                         ext_switch_delay=0, transforms: Transforms=None, 
-                        benchmark_counters=None, loopback=False, out_only=False):
-        # Define the structural signature for the Component
-        super().__init__(wiring.Signature({
-                    "usb_stream": In(wiring.Signature({
-                        "data": Out(8),
-                        "ready": In(1),
-                        "valid": Out(1)
-                    }))
-                }))   
+                        benchmark_counters=None, loopback=False, out_only=False, **kwargs):
         self.ports            = ports
         self.out_fifo         = out_fifo
         self.in_fifo          = in_fifo
@@ -58,8 +50,8 @@ class IobeamDataSubtarget(wiring.Component):
             self.out_fifo.r_data = self.out_fifo.stream # TODO
         if isinstance(self.in_fifo, DeprecatedFIFOWritePort): # TODO: _FIFOWritePort):
             self.in_fifo.w_data = self.in_fifo.stream
-        wiring.connect(m, self.out_fifo.r_data, parser.usb_stream) # TODO
-        wiring.connect(m, self.in_fifo.w_data, serializer.usb_stream) # TODO
+        # wiring.connect(m, self.out_fifo.r_data, parser.usb_stream) # TODO
+        # wiring.connect(m, self.in_fifo.w_data, serializer.usb_stream) # TODO
 
         m.d.comb += [
             self.in_fifo.flush.eq(executor.flush),

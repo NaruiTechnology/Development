@@ -57,7 +57,7 @@ class IobeamLauncher(object):
         iface = applet.build(target, applet_args)
         plan = target.build_plan()  
 
-        build_result = await plan.execute() 
+        build_result = plan.execute() 
         if hasattr(build_result, "data"):
             bitstream = build_result.data
         elif hasattr(build_result, "bitstream"):

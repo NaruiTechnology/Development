@@ -239,8 +239,6 @@ all_commands = [SynchronizeCommand,
                 VectorPixelMinDwellCommand]
 
 
-
-
 class Command(data.Struct):
     """
     The layout of cmd_stream (which is producedby CommandParser and consumed by CommandExecutor)
@@ -255,10 +253,20 @@ class Command(data.Struct):
     """
     type: CmdType
     # Prior AI: payload: data.UnionLayout({cmd.fieldstr: cmd.as_struct_layout() for cmd in all_commands})
-    payload: "data.UnionLayout"  # type annotation only, no call expression
+    # Gemini commented out ---- payload: "data.UnionLayout"  # type annotation only, no call expression
+    # FIX: Define the field directly in the annotation so Amaranth recognizes it.
+    payload: data.UnionLayout({cmd.fieldstr: cmd.as_struct_layout() for cmd in all_commands}) # type: ignore
     deserialized_states = {cmd.cmdtype : 
             {f"{cmd.fieldstr}_{state}":offset for state, offset in cmd.bytelayout.as_deserialized_states().items()} 
             for cmd in all_commands}
 
 # Assign the UnionLayout after the class definition ---- Copilot generated code ----
-Command.payload = data.UnionLayout({cmd.fieldstr: cmd.as_struct_layout() for cmd in all_commands})
+# Command.payload = data.UnionLayout({cmd.fieldstr: cmd.as_struct_layout() for cmd in all_commands})
+# Gemini suggested -----------------
+# 1. Remove the line: payload: "data.UnionLayout" from the Command class.
+# 2. At the very bottom of the file (after all_commands is defined):
+
+CommandLayout = data.StructLayout({
+    "type": CmdType,
+    "payload": data.UnionLayout({cmd.fieldstr: cmd.as_struct_layout() for cmd in all_commands})
+})

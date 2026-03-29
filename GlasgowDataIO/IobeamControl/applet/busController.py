@@ -2,26 +2,26 @@ from amaranth import *
 from amaranth.build import *
 from amaranth.lib import enum, data, io, wiring
 from amaranth.lib.wiring import In, Out, flipped
-from ..commands.structs import CmdType, BeamType, OutputMode, Transforms
+from GlasgowDataIO.IobeamControl.commands.structs import CmdType, BeamType, OutputMode, Transforms
 #from . import StreamSignature, BusSignature, BlankRequest, SuperDACStream, Transforms
-from . import * #StreamSignature, BusSignature, BlankRequest
-from .skidBuffer import SkidBuffer
+from GlasgowDataIO.IobeamControl.applet import * #StreamSignature, BusSignature, BlankRequest
+from GlasgowDataIO.IobeamControl.applet.skidBuffer import SkidBuffer
 
 
 class BusController(wiring.Component):
     # FPGA-side interface
-    dac_stream: In(StreamSignature(SuperDACStream))
+    dac_stream: In(StreamSignature(SuperDACStream)) # type: ignore
 
     ADC_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
         "adc_code": 14,
         "adc_ovf":  1,
         "last":     1,
     }))
-    adc_stream: Out(ADC_STREAM_SIGNATURE)
+    adc_stream: Out(ADC_STREAM_SIGNATURE) # type: ignore
 
     # IO-side interface
-    bus: Out(BusSignature)
-    inline_blank: Out(BlankRequest)
+    bus: Out(BusSignature) # type: ignore
+    inline_blank: Out(BlankRequest) # type: ignore
 
     def __init__(self, *, adc_half_period: int, adc_latency: int, transforms: Transforms = Transforms(False,False,False)):
         assert (adc_half_period * 2) >= 6, "ADC period must be large enough for FSM latency"
@@ -92,22 +92,23 @@ class BusController(wiring.Component):
                     m.d.sync += dac_stream_data.eq(self.dac_stream.payload)
                     # Transforms
                     # Rotate first so that x is x and y is y, then flip x and y as needed
-                    if self.transforms.rotate90:
+                    if self.transforms is not None and hasattr(self.transforms.rotate90, 'rotate90') and self.transforms.rotate90:
                         m.d.comb += x.eq(self.dac_stream.payload.dac_y_code)
                         m.d.comb += y.eq(self.dac_stream.payload.dac_x_code)
                     else:
                         m.d.comb += x.eq(self.dac_stream.payload.dac_x_code)
                         m.d.comb += y.eq(self.dac_stream.payload.dac_y_code)
                     
-                    if self.transforms.xflip:
-                        m.d.sync += self.dac_x_code_transformed.eq(16383-x)
-                    else:
-                        m.d.sync += self.dac_x_code_transformed.eq(x)
+                    if self.transforms is not None:
+                        if self.transforms.xflip:
+                            m.d.sync += self.dac_x_code_transformed.eq(16383-x)
+                        else:
+                            m.d.sync += self.dac_x_code_transformed.eq(x)
 
-                    if self.transforms.yflip:
-                        m.d.sync += self.dac_y_code_transformed.eq(16383-y)
-                    else:
-                        m.d.sync += self.dac_y_code_transformed.eq(y)
+                        if self.transforms.yflip:
+                            m.d.sync += self.dac_y_code_transformed.eq(16383-y)
+                        else:
+                            m.d.sync += self.dac_y_code_transformed.eq(y)
 
                     # Transmit blanking state from input stream
                     m.d.comb += self.inline_blank.eq(self.dac_stream.payload.blank)
