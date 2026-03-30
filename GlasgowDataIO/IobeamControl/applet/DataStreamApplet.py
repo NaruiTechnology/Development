@@ -86,9 +86,9 @@ class DataStreamApplet(GlasgowApplet):
             out_fifo=out_fifo, # Connects USB Host -> FPGA
             in_fifo=in_fifo     # Connects FPGA -> USB Host
         ) """
-        subtarget = IobeamDataSubtarget(**subtarget_args)
+        #subtarget = IobeamDataSubtarget(**subtarget_args)
 
-        return iface.add_subtarget(subtarget)       
+        return iface #.add_subtarget(subtarget)       
     
     async def run(self, device, args):
         buffer_size = args.buffer_size if hasattr(args, 'buffer_size') else 1024*1024 # 16384*16384 --TODOW

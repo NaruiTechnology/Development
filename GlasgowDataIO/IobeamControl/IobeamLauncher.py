@@ -65,15 +65,19 @@ class IobeamLauncher(object):
         else:
             bitstream = build_result 
         print(f"Bitstream size: {len(bitstream)} bytes")
-        programmer = ICE40SRAMInterface(
-            logger=logger, 
-            assembly=assembly,
-            cs=GlasgowPin.parse("A0")[0], 
-            sck=GlasgowPin.parse("A1")[0],
-            copi=GlasgowPin.parse("A2")[0],
-            reset=GlasgowPin.parse("A3")[0]
-        )
-        await programmer.program(bitstream) # This programs the FPGA
+        try:
+            programmer = ICE40SRAMInterface(
+                logger=logger, 
+                assembly=assembly,
+                cs=GlasgowPin.parse("A0")[0].number,    
+                sck=GlasgowPin.parse("A1")[0].number,
+                copi=GlasgowPin.parse("A2")[0].number,
+                reset=GlasgowPin.parse("A3")[0].number
+            )
+            await programmer.program(bitstream) # This programs the FPGA
+        except Exception as e:
+            logger.error(f"Programming failed: {e}")
+            raise e
 
         
         device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)

@@ -11,10 +11,12 @@
                     "ports": [
                         {
                             "port": "A",
+                            "direction":"out",
                             "pinList": [0,1,2,3,4,5,6,7]
                         },
                         {
                             "port": "B",
+                            "direction":"out",
                             "pinList": [0,1,2,3]
                         }
                     ],
@@ -25,8 +27,31 @@
                     "waveForm": "square"
                 }
             }
-        }   
-    ],     
+        }
+    ],
+    "Devices":[
+        {
+            "eBeam":{
+                "scanEnable":
+                {
+                    "pin":
+                    {
+                        "direction":"out",
+                        "port": "B",
+                        "pinList": [4, 5]
+                    } 
+                },
+                "transforms":{
+                    "yflip": true,
+                    "rotate90": true
+                },
+                "dewellTime": 20
+            }
+        },
+        {
+            "iBeam":{}
+        }
+    ],    
     "LogName": "DirectIO",
     "Verbose": true 
 }
