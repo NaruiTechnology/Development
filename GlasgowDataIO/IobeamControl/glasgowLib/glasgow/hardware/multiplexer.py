@@ -167,6 +167,6 @@ class DirectMultiplexerInterface(AccessMultiplexerInterface):
 
     def add_subtarget(self, subtarget):
         assert self._subtarget is None, "only one subtarget can be added"
-
-        self._subtarget = subtarget
+        subtarget._pipe_num = self._pipe_num
+        self._subtarget= subtarget
         return subtarget

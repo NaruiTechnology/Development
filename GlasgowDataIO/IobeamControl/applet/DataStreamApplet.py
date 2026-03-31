@@ -44,8 +44,10 @@ class DataStreamApplet(GlasgowApplet):
 
     def build(self, target, args):
         args.pipes = "PQ"
-        self.mux_interface = iface = \
-                target.multiplexer.claim_interface(self, args) 
+        self.mux_interface = iface =  target.multiplexer.claim_interface(self, args) 
+
+        self.magic_reg, _ = target.registers.add_ro(8, init=0xa5)
+        self.reset_reg, addr_reset = target.registers.add_rw(8, init=0)
 
         # Claim them ONCE here
         out_fifo = iface.get_out_fifo()
@@ -61,31 +63,35 @@ class DataStreamApplet(GlasgowApplet):
             # ebeam_blank = args.pin_set_ebeam_blank,
         )
 
-        subtarget_args = {
+        """ subtarget_args = {
             "ports": ports,
             "in_fifo": in_fifo,
             "out_fifo": out_fifo,
             #"loopback": args.loopback,
             #"transforms": Transforms(args.xflip, args.yflip, args.rotate90),
             #"out_only": args.out_only
-        }
+            "magic_reg": self.magic_reg,
+            "_addr_reset": addr_reset
+        } """
 
         if hasattr(args, 'ext_switch_delay'):  
             ext_delay_cycles = int(args.ext_switch_delay * pow(10, -3) / (1/(48 * pow(10,6))))
-            subtarget_args.update({"ext_switch_delay": ext_delay_cycles})
+            #subtarget_args.update({"ext_switch_delay": ext_delay_cycles})
 
         if hasattr(args, 'benchmark'):
             out_stall_events, self.__addr_out_stall_events = target.registers.add_ro(8, init=0)
             out_stall_cycles, self.__addr_out_stall_cycles = target.registers.add_ro(16, init=0)
             stall_count_reset, self.__addr_stall_count_reset = target.registers.add_rw(1, init=1)
-            subtarget_args.update({"benchmark_counters": [out_stall_events, out_stall_cycles, stall_count_reset]})
+            #subtarget_args.update({"benchmark_counters": [out_stall_events, out_stall_cycles, stall_count_reset]})
     
-        """ subtarget = IobeamDataSubtarget(
-            ports=ports,
-            out_fifo=out_fifo, # Connects USB Host -> FPGA
-            in_fifo=in_fifo     # Connects FPGA -> USB Host
-        ) """
-        subtarget = IobeamDataSubtarget(**subtarget_args)
+        subtarget = IobeamDataSubtarget(
+                ports=iface.get_port_group(),
+                in_fifo=in_fifo,
+                out_fifo=out_fifo,
+                magic_reg=self.magic_reg,
+                _addr_reset=addr_reset 
+            )
+        #subtarget = IobeamDataSubtarget(**subtarget_args)
 
         return iface.add_subtarget(subtarget)       
     

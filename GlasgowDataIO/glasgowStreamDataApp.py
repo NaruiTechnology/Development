@@ -33,5 +33,5 @@ if __name__ == '__main__':
         raise ValueError(f'The input parameter [{args.waveForm}] is invalid.')
        
     config = AutomationConfig(jsonpath)
-    conn = None #GlasgowConnection(config)
+    conn = GlasgowConnection(config)
     asyncio.run(run_pipeline(config, args.deviceId, args.waveForm, args.data, conn))

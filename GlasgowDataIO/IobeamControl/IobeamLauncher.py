@@ -13,7 +13,7 @@ from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 from IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
-from glasgow.applet.program.ice40_sram import ICE40SRAMInterface
+#from IobeamControl.glasgowLib.glasgow.applet.program.ice40_sram import ICE40SRAMInterface
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class IobeamLauncher(object):
         device = GlasgowDevice(deviceId)
         target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
         assembly = HardwareAssembly(revision=device.revision)
-        applet = DataStreamApplet(assembly)  
+        applet = DataStreamApplet()  
         
         actionConfig = stateConfig.get(Consts.ACTION_DATA)
         action_voltage = actionConfig.get("voltage", 2.5)
@@ -65,7 +65,7 @@ class IobeamLauncher(object):
         else:
             bitstream = build_result 
         print(f"Bitstream size: {len(bitstream)} bytes")
-        try:
+        """ try:
             programmer = ICE40SRAMInterface(
                 logger=logger, 
                 assembly=assembly,
@@ -77,7 +77,7 @@ class IobeamLauncher(object):
             await programmer.program(bitstream) # This programs the FPGA
         except Exception as e:
             logger.error(f"Programming failed: {e}")
-            raise e
+            raise e """
 
         
         device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)

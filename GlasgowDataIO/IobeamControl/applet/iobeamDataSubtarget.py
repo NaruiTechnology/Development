@@ -15,6 +15,7 @@ class IobeamDataSubtarget(wiring.Component):
     def __init__(self, *, ports, out_fifo, in_fifo, led=None, control=None, data=None, 
                         ext_switch_delay=0, transforms: Transforms=None, 
                         benchmark_counters=None, loopback=False, out_only=False, **kwargs):
+        self._addr_reset = kwargs.get("_addr_reset", None)
         self.ports            = ports
         self.out_fifo         = out_fifo
         self.in_fifo          = in_fifo
@@ -25,6 +26,7 @@ class IobeamDataSubtarget(wiring.Component):
         self.transforms = transforms
         self.loopback         = loopback
         self.out_only         = out_only
+        
 
         if not benchmark_counters == None:
             self.benchmark = True

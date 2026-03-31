@@ -1,8 +1,8 @@
 import queue, asyncio
 from AutomationPy.buildingblocks.decorators import overrides
 from AutomationPy.buildingblocks.definitions import Consts
-from workstates.streamData_state import streamData_state
-from .dataIOThread import dataIOThread
+from GlasgowDataIO.workstates.streamData_state import streamData_state
+from GlasgowDataIO.workthreads.dataIOThread import dataIOThread
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import GlasgowDevice
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
@@ -23,6 +23,7 @@ class streamDataThread(dataIOThread):
         instance = streamData_state(self, waveForm=self._waveForm, data=self._data)
         instance.Conn = self._conn
         instance.Logger = self._logger
+        instance._isSimulation = False if self._conn is not None else True
         
         self._queue.put(instance)
 
