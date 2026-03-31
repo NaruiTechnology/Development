@@ -8,7 +8,7 @@ from AutomationPy.buildingblocks.decorators import overrides
 from AutomationPy.buildingblocks.definitions import Consts
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
-from GlasgowDataIO.DataStreamApplet import DataStreamApplet
+from GlasgowDataIO.IobeamControl.applet.DataStreamApplet import DataStreamApplet
 from .loadFpgaImage_state import loadFpgaImage_state
 
 class buildFPGAPlan_state(loadFpgaImage_state):
