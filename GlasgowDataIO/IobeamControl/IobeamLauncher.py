@@ -2,8 +2,8 @@
 import asyncio
 
 from types import SimpleNamespace
-from .IobeamDemux import IobeamDemux
-from .applet.DataStreamApplet import DataStreamApplet
+from . IobeamDemux import IobeamDemux
+from . applet.DataStreamApplet import DataStreamApplet
 from .glasgowLib.glasgow.hardware.device import GlasgowDevice
 from .glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
 from .glasgowLib.glasgow.hardware.assembly import HardwareAssembly
@@ -50,10 +50,10 @@ class IobeamLauncher(object):
         # 'voltages' must be a Mapping[GlasgowPort, float] for assembly.py
         buffer_size = eval(actionConfig.get('bufferSize', '1024*1024')) # default to 10MB buffer if not specified
         applet_args = SimpleNamespace(
-            #cs=GlasgowPin.parse("A0")[0].number,    
-            #sck=GlasgowPin.parse("A1")[0].number,
-            #copi=GlasgowPin.parse("A2")[0].number,
-            #reset=GlasgowPin.parse("A3")[0].number,
+            cs=GlasgowPin.parse("A0"),    
+            sck=GlasgowPin.parse("A1"),
+            copi=GlasgowPin.parse("A2"),
+            reset=GlasgowPin.parse("A3"),
             voltage_map=voltages_map,
             pins=GlasgowPin.parse(",".join(pin_list)) if pin_list else [],
             buffer_size = buffer_size,
@@ -96,5 +96,5 @@ if __name__ == "__main__":
     if not Path(args.jsonfile).is_file():
         raise ValueError(f'Cannot find the JSON file {args.jsonfilej}')
     config = AutomationConfig(args.jsonfile)
-    launcher = IobeamLauncher(config)
+    launcher = IobeamLauncher(config) if not config.Simulate else None
     asyncio.run(launcher.start())

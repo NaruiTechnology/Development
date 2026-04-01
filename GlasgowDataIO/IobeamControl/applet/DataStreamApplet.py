@@ -2,7 +2,7 @@
 import logging
 
 import struct, time
-from ..glasgowLib.glasgow.applet import GlasgowApplet
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.applet import GlasgowApplet
 from .iobeamDataSubtarget import IobeamDataSubtarget
 
 class DataStreamApplet(GlasgowApplet):

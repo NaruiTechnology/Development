@@ -1,6 +1,6 @@
 import asyncio
 import math
-from .dataIO_state import dataIO_state
+from GlasgowDataIO.workstates.dataIO_state import dataIO_state
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.decorators import overrides
 from GlasgowDataIO.IobeamControl.commands.structs import struct
@@ -11,7 +11,7 @@ class streamData_state(dataIO_state):
         self._waveForm = waveForm 
         self._data = data
         self._conn = None
-        self._isSimulation = True
+        #self._isSimulation = True
 
     @property
     def Conn(self):
@@ -73,7 +73,7 @@ class streamData_state(dataIO_state):
                 self._success = False
                 return
             
-            if not self._isSimulation:
+            if not self.ParentWorkThread._config.Simulate:
                 if self._conn is not None and self._conn.connected:
                     # Small yield to ensure the event loop handles any pending connection tasks
                     await asyncio.sleep(0.05) 
