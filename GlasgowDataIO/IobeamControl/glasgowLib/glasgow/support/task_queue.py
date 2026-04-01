@@ -2,6 +2,8 @@ import time
 import asyncio
 from collections import deque
 
+from tifffile import logger
+
 
 __all__ = ["TaskQueue"]
 
@@ -68,7 +70,10 @@ class TaskQueue:
         """
         had_done = bool(self._done)
         while self._done:
-            await self._done.popleft()
+            try:
+                await self._done.popleft()
+            except Exception as e:
+                logger.error(f"poll: error occurred: {e}")
         return had_done
 
     async def wait_one(self):

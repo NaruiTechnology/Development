@@ -4,19 +4,22 @@ from .abc import Stream, Connection
 from ..IobeamLauncher import IobeamLauncher
 from IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 
-logger = logging.getLogger()
+logger = logging.getLogger('GlasgowStream')
 
 class GlasgowStream(Stream):
     def __init__(self, iface):
+        if iface is None:
+            raise RuntimeError("Cannot initialize GlasgowStream with None interface")
         self.lower = iface
+
     async def write(self, data):
-        self._logger.debug(f"send: data=<{dump_hex(data)}>")
+        logger.debug(f"send: data=<{dump_hex(data)}>")
         await self.lower.write(data)
-        self._logger.debug(f"send: done")
+        logger.debug(f"send: done")
     async def flush(self):
-        self._logger.debug(f"flush")
+        logger.debug(f"flush")
         await self.lower.flush()
-        self._logger.debug(f"flush: done")
+        logger.debug(f"flush: done")
     async def read(self, length):
         return await self.lower.read(length)
     async def readexactly(self, length):
@@ -58,7 +61,7 @@ class GlasgowStream(Stream):
             else:
                 while len(self.lower._in_buffer) < seplen:
                     print(f"{len(self.lower._in_tasks)=}")
-                    self._logger.debug("FIFO: need %d bytes", seplen - len(self.lower._in_buffer))
+                    logger.debug("FIFO: need %d bytes", seplen - len(self.lower._in_buffer))
                     await self.lower._in_tasks.wait_one()
 
             async with self.lower._in_pushback:
@@ -87,6 +90,15 @@ class GlasgowConnection(Connection):
 
     async def _connect(self):
         assert not self.connected
-        launcher  = IobeamLauncher(self._config)
-        self._stream = GlasgowStream(await launcher.start())
+        """ launcher  = IobeamLauncher(self._config)
+        self._stream = GlasgowStream(await launcher.start()) """
+        # Gemimi suggests that we should separate the concerns of launching and connecting, so that we can have more control over the connection lifecycle. This also allows us to handle cases where the launcher might fail to start or return a None interface.
+        launcher = IobeamLauncher(self._config)
+        iface = await launcher.start()
+        if iface is None:
+            raise ConnectionError("Launcher failed to start: Interface is None")
+        
+        # Crucial: Assign the wrapped stream
+        self._stream = GlasgowStream(iface)
+        logger.debug("Successfully connected and wrapped GlasgowStream")
 

@@ -88,8 +88,8 @@ class streamData_state(dataIO_state):
                         
                         # Attempt the transfer
                         await self._conn.transfer_bytes(packed_chunk)
-                        # Minimal yield to keep the USB pipe from stalling
-                        await asyncio.sleep(0) 
+                        #await self._conn.transfer_raw(packed_chunk)
+                        await asyncio.sleep(0.1) 
                     
                     self._success = True
             else:

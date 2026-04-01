@@ -14,7 +14,9 @@ from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 from IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
 #from IobeamControl.glasgowLib.glasgow.applet.program.ice40_sram import ICE40SRAMInterface
-import logging
+import logging 
+
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware import device
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +48,17 @@ class IobeamLauncher(object):
                 pin_list.append(f"{port_letter}{pin_num}")
         
         # 'voltages' must be a Mapping[GlasgowPort, float] for assembly.py
-        buffer_size = eval(actionConfig.get('bufferSize', '16384*16384'))
+        buffer_size = eval(actionConfig.get('bufferSize', '1024*1024')) # default to 10MB buffer if not specified
         applet_args = SimpleNamespace(
+            #cs=GlasgowPin.parse("A0")[0].number,    
+            #sck=GlasgowPin.parse("A1")[0].number,
+            #copi=GlasgowPin.parse("A2")[0].number,
+            #reset=GlasgowPin.parse("A3")[0].number,
             voltage_map=voltages_map,
             pins=GlasgowPin.parse(",".join(pin_list)) if pin_list else [],
             buffer_size = buffer_size,
-            benchmark = False
+            benchmark = False,
+            sample_rate=1000000
         )             
 
         iface = applet.build(target, applet_args)
@@ -65,25 +72,17 @@ class IobeamLauncher(object):
         else:
             bitstream = build_result 
         print(f"Bitstream size: {len(bitstream)} bytes")
-        """ try:
-            programmer = ICE40SRAMInterface(
-                logger=logger, 
-                assembly=assembly,
-                cs=GlasgowPin.parse("A0")[0].number,    
-                sck=GlasgowPin.parse("A1")[0].number,
-                copi=GlasgowPin.parse("A2")[0].number,
-                reset=GlasgowPin.parse("A3")[0].number
-            )
-            await programmer.program(bitstream) # This programs the FPGA
-        except Exception as e:
-            logger.error(f"Programming failed: {e}")
-            raise e """
 
-        
+        await asyncio.sleep(0.5)
         device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)
+        await asyncio.sleep(0.5)
         iface = await device.demultiplexer.claim_interface(applet, iface, applet_args,
                                                            read_buffer_size=applet_args.buffer_size, #16384*16384, 
                                                            write_buffer_size=applet_args.buffer_size) #16384*16384) 
+        
+        # device.usb_handle.resetDevice()     
+        await asyncio.sleep(0.5)
+
         return iface        
 
 

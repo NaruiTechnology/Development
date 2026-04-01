@@ -7,7 +7,7 @@ class IobeamDemux(glasgow_access.DirectDemultiplexer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
     async def claim_interface(self, applet, mux_interface, *args, **kwargs):
-        iface = await super().claim_interface(applet, mux_interface, *args, **kwargs)
+        return await super().claim_interface(applet, mux_interface, *args, **kwargs)
         
 class IobeamDemuxInterface(glasgow_access.DirectDemultiplexerInterface):
     def __init__(self, *args, **kwargs):

@@ -62,7 +62,7 @@ class Connection(metaclass = ABCMeta):
     # async def _synchronize(self):
     #     ...
 
-    async def _synchronize(self):
+    async def _synchronize(self):   
         if not self.connected:
             await self._connect()
         if self.synchronized:
@@ -79,7 +79,13 @@ class Connection(metaclass = ABCMeta):
         await self._stream.flush()
         res = struct.pack(">HH", 0xffff, cookie)
         data = await self._stream.readuntil(res)
+        # Gemini suggests that the response may contain extra data after the cookie, so we check that the cookie is present at the end of the response rather than assuming it is the entire response.
+        self._synchronized = True 
+        self._logger.debug("synchronization complete")
     
+        if not data.endswith(res):
+            self._logger.error(f"unexpected synchronization response: {data!r} (expected to end with {res!r})")
+            raise TransferError("synchronization failed")
     def _handle_incomplete_read(self, exc):
         self._disconnect()
         raise TransferError("connection closed") from exc
@@ -117,7 +123,11 @@ class Connection(metaclass = ABCMeta):
         await self._stream.flush()
     
     async def transfer_bytes(self, data:bytes, flush:bool = False, **kwargs):
-        await self._synchronize() # may raise asyncio.IncompleteReadError
+        if not self.synchronized:
+            await self._synchronize()
         await self._stream.write(data)
         await self._stream.flush()
+        """ self._synchronized = True    
+        await self._stream.write(data) """
 
+    
