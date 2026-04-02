@@ -5,7 +5,7 @@ import struct
 
 import logging
 logger = logging.getLogger()
-from . import *
+#from . import *
 
 from IobeamControl.commands.low_level_commands import *
 

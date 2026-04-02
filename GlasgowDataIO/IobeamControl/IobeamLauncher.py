@@ -73,15 +73,13 @@ class IobeamLauncher(object):
             bitstream = build_result 
         print(f"Bitstream size: {len(bitstream)} bytes")
 
-        await asyncio.sleep(0.5)
         device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)
-        await asyncio.sleep(0.5)
         iface = await device.demultiplexer.claim_interface(applet, iface, applet_args,
                                                            read_buffer_size=applet_args.buffer_size, #16384*16384, 
                                                            write_buffer_size=applet_args.buffer_size) #16384*16384) 
         
         # device.usb_handle.resetDevice()     
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
 
         return iface        
 
