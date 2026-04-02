@@ -60,6 +60,10 @@ class GlasgowStream(Stream):
                     break
             else:
                 while len(self.lower._in_buffer) < seplen:
+                    if len(self.lower._in_tasks) == 0:
+                        logger.error("No active input tasks. Connection likely lost.")
+                        raise ConnectionError("USB interface stopped responding.")
+                    
                     print(f"{len(self.lower._in_tasks)=}")
                     logger.debug("FIFO: need %d bytes", seplen - len(self.lower._in_buffer))
                     await self.lower._in_tasks.wait_one()

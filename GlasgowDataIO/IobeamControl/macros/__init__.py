@@ -1,9 +1,9 @@
 import asyncio
 import struct
 
-from IobeamControl.commands import DwellTime,DACCodeRange,OutputMode
-from IobeamControl.commands.low_level_commands import BaseCommand,VectorPixelCommand,RasterRegionCommand,SynchronizeCommand, RasterPixelRunCommand,BlankCommand,FlushCommand
-from IobeamControl.commands.structs import u16
+from GlasgowDataIO.IobeamControl.commands import DwellTime,DACCodeRange,OutputMode
+from GlasgowDataIO.IobeamControl.commands.low_level_commands import BaseCommand,VectorPixelCommand,RasterRegionCommand,SynchronizeCommand, RasterPixelRunCommand,BlankCommand,FlushCommand
+from GlasgowDataIO.IobeamControl.commands.structs import u16
 
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
 

@@ -2,11 +2,10 @@ import time
 import asyncio
 from collections import deque
 
-from tifffile import logger
-
+import logging
+logger = logging.getLogger(__name__)
 
 __all__ = ["TaskQueue"]
-
 
 class TaskQueue:
     """

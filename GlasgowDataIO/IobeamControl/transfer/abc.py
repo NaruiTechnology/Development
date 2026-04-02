@@ -5,9 +5,9 @@ import struct
 
 import logging
 logger = logging.getLogger()
-#from . import *
 
-from IobeamControl.commands.low_level_commands import *
+from GlasgowDataIO.IobeamControl.commands.low_level_commands import SynchronizeCommand, FlushCommand
+from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
 
 class TransferError(Exception):
     pass
