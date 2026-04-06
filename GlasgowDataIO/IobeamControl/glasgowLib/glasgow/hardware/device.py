@@ -475,14 +475,19 @@ class GlasgowDevice:
                 
             # Complete configuration by setting bitstream ID. This starts the FPGA.
             try:
+                await asyncio.sleep(0.5)
                 await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_BITSTREAM_ID,
                                         0, 0, bitstream_id)
-            except usb1.USBErrorPipe:
+                await asyncio.sleep(0.2)
+                status = await self._status()
+                if not (status & ST_FPGA_RDY):
+                    raise GlasgowDeviceError("FPGA did not become ready after configuration")
+            #except usb1.USBErrorPipe as e:
+            except Exception as e:
+                print(f"Error during FPGA configuration: {e}")
                 raise GlasgowDeviceError("FPGA configuration failed")
             
-            # --- NEW STABILIZATION LOGIC ---
-            # Give the FPGA more time to start its internal clock and settle the I2C bus
-            await asyncio.sleep(0.5) 
+            return
 
             MAX_HANDSHAKE_RETRIES = 3
             magic = 0

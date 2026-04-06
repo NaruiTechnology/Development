@@ -1,3 +1,4 @@
+from os import sync
 import time
 import asyncio
 from collections import deque
@@ -18,14 +19,25 @@ class TaskQueue:
     another read after one finishes, avoids overflow and ensures low latency.
     """
     def __init__(self):
-        self._live = set()
         self._done = deque()
         self._wait_time = 0.0
         self._wait_count = 0
+        self._live = set()
+        self._waiters = []
+        self._exception = None  # NEW: Track the hardware error
 
+    def set_exception(self, exc):
+        """NEW: Called by the Glasgow driver when LIBUSB_ERROR_IO occurs"""
+        self._exception = exc
+        for waiter in self._waiters:
+            if not waiter.done():
+                waiter.set_exception(exc)
+
+               
     def _callback(self, future):
         self._live.remove(future)
         self._done.append(future)
+        pass
 
     def submit(self, coro):
         """
@@ -61,42 +73,38 @@ class TaskQueue:
 
     async def poll(self):
         """
-        Await all finished tasks that have been submitted to the queue. Returns ``True`` if there
-        were any finished tasks, ``False`` otherwise.
-
-        This method needs to be called regularly to ensure that exceptions are propagated upwards
-        in the call stack. If it is not called, the queue will leak memory.
+        Processes finished tasks and PROPAGATES exceptions.
         """
         had_done = bool(self._done)
         while self._done:
-            try:
-                await self._done.popleft()
-            except Exception as e:
-                logger.error(f"poll: error occurred: {e}")
+            task = self._done.popleft()
+            # If a USBErrorIO happened, this 'await' will raise it.
+            # DO NOT wrap this in a try/except that swallows the error.
+            await task 
         return had_done
 
     async def wait_one(self):
-        """
-        Await at least one task in the queue. If there are no finished tasks, waits until the first
-        pending task finishes.
-        """
-        if not self._done:
-            started_at = time.monotonic()
-            await asyncio.wait(self._live, return_when=asyncio.FIRST_COMPLETED)
-            self._wait_time += time.monotonic() - started_at
-            self._wait_count += 1
-        await self.poll()
+        if self._exception:
+            raise self._exception # Immediately stop if a hardware error was reported
 
+        if not self._live and not self._done:
+            raise ConnectionError("USB TaskQueue is empty.")
+
+        if not self._done:
+            await asyncio.wait(self._live, return_when=asyncio.FIRST_COMPLETED)
+            
+        return await self.poll()    
+    
     async def wait_all(self):
-        """
-        Await all tasks in the queue, if any.
-        """
-        if self._live:
-            started_at = time.monotonic()
-            await asyncio.wait(self._live, return_when=asyncio.ALL_COMPLETED)
-            self._wait_time += time.monotonic() - started_at
-            self._wait_count += 1
-        await self.poll()
+            """
+            Await all tasks in the queue, if any.
+            """
+            if self._live:
+                started_at = time.monotonic()
+                await asyncio.wait(self._live, return_when=asyncio.ALL_COMPLETED)
+                self._wait_time += time.monotonic() - started_at
+                self._wait_count += 1
+            await self.poll()
 
     def __bool__(self):
         """Check whether there are any tasks in the queue."""

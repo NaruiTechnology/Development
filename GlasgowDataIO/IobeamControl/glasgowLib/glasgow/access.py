@@ -153,7 +153,6 @@ class AccessDemultiplexerInterface(metaclass=ABCMeta):
                         self.device.usb_handle.claimInterface(self._in_interface)
                         self.logger.info(f"Using IN EP {hex(address)} (iface {self._in_interface}, packet {packet_size})")
 
-
         assert self._endpoint_in is not None and self._endpoint_out is not None, \
             "Could not find both IN and OUT endpoints!"
 

@@ -113,9 +113,11 @@ class Connection(metaclass = ABCMeta):
             async for value in command.transfer(self._stream, **kwargs):
                 yield value
                 self._logger.debug(f"yield transfer_multiple")
-        except asyncio.IncompleteReadError as e:
-            self._handle_incomplete_read(e)
-    
+        except Exception as e:
+            if isinstance(e, asyncio.IncompleteReadError):
+                self._handle_incomplete_read(e)
+            raise
+
     async def transfer_raw(self, command, flush:bool = False, **kwargs):
         self._logger.debug(f"transfer {command!r}")
         await self._synchronize() # may raise asyncio.IncompleteReadError

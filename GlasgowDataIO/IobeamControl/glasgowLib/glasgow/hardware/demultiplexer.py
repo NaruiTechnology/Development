@@ -6,7 +6,7 @@ import usb1
 from ..support.logging import *
 from ..support.chunked_fifo import *
 from ..support.task_queue import *
-from ..access import AccessDemultiplexer, AccessDemultiplexerInterface
+from ..access import AccessDemultiplexer, AccessDemultiplexerInterface, AccessMultiplexer
 
 
 # On Linux, the total amount of in-flight USB requests for the entire system is limited

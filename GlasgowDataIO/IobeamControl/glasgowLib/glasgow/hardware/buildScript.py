@@ -91,7 +91,7 @@ class BuildScriptUtil:
                 --json top.json \
                 --pcf top.pcf \
                 --asc top.asc \
-                --freq 12 \
+                --freq 48 \
                 2>pnr.log || {
                 echo "Place and route failed:"
                 cat pnr.log

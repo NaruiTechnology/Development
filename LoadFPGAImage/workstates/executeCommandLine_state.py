@@ -18,6 +18,7 @@ class executeCommandLine_state(loadFpgaImage_state):
                 timeout=stateConfig[Consts.TIMEOUT]
             )
             print(f"DoWord - {type(self).__name__} successfully.")
+            status = await self.ParentWorkThread.device._status()
             self.Success = True 
                 
         except Exception as e:

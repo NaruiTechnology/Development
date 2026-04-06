@@ -24,65 +24,63 @@ class GlasgowStream(Stream):
         return await self.lower.read(length)
     async def readexactly(self, length):
         return await self.lower.read(length)
+    
+
     async def readuntil(self, separator=b'\n', *, flush=True, max_count=False):
-        def find_sep(buffer, separator=b'\n', offset=0):
+        # 1. Define finding logic locally to avoid scope errors
+        def find_sep(buffer, separator):
             if buffer._chunk is None:
                 if not buffer._queue:
-                    raise asyncio.IncompleteReadError
+                    return -1
                 buffer._chunk  = buffer._queue.popleft()
                 buffer._offset = 0
+            # Search within the current active chunk
             return buffer._chunk.obj.find(separator)
 
-        if flush and len(self.lower._out_buffer) > 0:
-            # Flush the buffer, so that everything written before the read reaches the device.
-            await self.lower.flush(wait=False)
-
+        # 2. Pre-calculate lengths
         seplen = len(separator)
         if seplen == 0:
-            raise ValueError('Separator should be at least one-byte string')
-        chunks = []
+            raise ValueError('Separator must be at least one byte')
 
-        # Loop until we find `separator` in the buffer, exceed the buffer size,
-        # or an EOF has happened.
+        # 3. Handle pending writes
+        if flush and len(self.lower._out_buffer) > 0:
+            await self.lower.flush(wait=False)
+
+        # 4. The main wait loop
         while True:
             buflen = len(self.lower._in_buffer)
-
-            if max_count & (buflen >= max_count):
-                break
-        
-            # Check if we now have enough data in the buffer for `separator` to fit.
+            
+            # Check for separator or max_count as before
             if buflen >= seplen:
                 isep = find_sep(self.lower._in_buffer, separator)
                 if isep != -1:
-                    print(f"found {isep=}")
-                    # `separator` is in the buffer. `isep` will be used later
-                    # to retrieve the data.
                     break
-            else:
-                while len(self.lower._in_buffer) < seplen:
-                    if len(self.lower._in_tasks) == 0:
-                        logger.error("No active input tasks. Connection likely lost.")
-                        raise ConnectionError("USB interface stopped responding.")
-                    
-                    print(f"{len(self.lower._in_tasks)=}")
-                    logger.debug("FIFO: need %d bytes", seplen - len(self.lower._in_buffer))
-                    await self.lower._in_tasks.wait_one()
-
-            async with self.lower._in_pushback:
-                chunk = self.lower._in_buffer.read()
-                self.lower._in_pushback.notify_all()
-                chunks.append(chunk)
             
-        if not (max_count & (buflen >= max_count)):
-            async with self.lower._in_pushback:
-                chunk = self.lower._in_buffer.read(isep+seplen)
-                self.lower._in_pushback.notify_all()
-                chunks.append(chunk)
-        
-        # Always return a memoryview object, to avoid hard to detect edge cases downstream.
-        result = memoryview(b"".join(chunks))
-        return result
-    
+            if max_count and buflen >= max_count:
+                isep = buflen - seplen
+                break
+
+            # PROTECT LINE #73 OF TASK_QUEUE.PY
+            # Instead of a direct await, we verify the queue is still healthy.
+            # If libusb has crashed, _in_tasks will often raise an exception here.
+            try:
+                if not self.lower._in_tasks:
+                    # The queue has been cleared/cancelled due to an I/O error
+                    raise ConnectionError("USB TaskQueue is empty or crashed.")
+                
+                # We use a timeout to prevent an infinite hang if the hardware 
+                # stops responding without raising a clean exception.
+                await asyncio.wait_for(self.lower._in_tasks.wait_one(), timeout=5.0)
+                
+            except (asyncio.TimeoutError, Exception) as e:
+                logger.error(f"Failed to wait for USB data: {e}")
+                # This catches the LIBUSB_ERROR_IO bubbling up from the queue
+                raise ConnectionError("Hardware I/O Error: The Glasgow interface disconnected.") from e
+
+        # Final extraction
+        chunk = self.lower._in_buffer.read(isep + seplen)
+        return memoryview(chunk)
+                 
 class GlasgowConnection(Connection):
     def __init__(self, config):
         super(GlasgowConnection, self).__init__()

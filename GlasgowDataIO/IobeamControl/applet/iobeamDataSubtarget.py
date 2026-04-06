@@ -4,12 +4,12 @@ from amaranth.lib import enum, data, io, wiring
 from amaranth.lib.wiring import In, Out, flipped
 from GlasgowDataIO.IobeamControl.commands.structs import CmdType, BeamType, OutputMode, Transforms
 from GlasgowDataIO.IobeamControl.applet.commandParser import CommandParser
-from ..glasgowLib.glasgow.legacy import DeprecatedFIFOReadPort, DeprecatedFIFOWritePort
-from ..glasgowLib.glasgow.legacy import DeprecatedFIFOReadPort, DeprecatedFIFOWritePort
-from .commandExecutor import CommandExecutor
-from .imageSerializer import ImageSerializer
-from .pipelinedLoopbackAdapter import PipelinedLoopbackAdapter
-from . import iobeam_resources
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.legacy import DeprecatedFIFOReadPort, DeprecatedFIFOWritePort
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.legacy import DeprecatedFIFOReadPort, DeprecatedFIFOWritePort
+from GlasgowDataIO.IobeamControl.applet.commandExecutor import CommandExecutor
+from GlasgowDataIO.IobeamControl.applet.imageSerializer import ImageSerializer
+from GlasgowDataIO.IobeamControl.applet.pipelinedLoopbackAdapter import PipelinedLoopbackAdapter
+from GlasgowDataIO.IobeamControl.applet import iobeam_resources
 
 class IobeamDataSubtarget(wiring.Component):
     def __init__(self, *, ports, out_fifo, in_fifo, led=None, control=None, data=None, 

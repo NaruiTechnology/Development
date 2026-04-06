@@ -7,7 +7,7 @@ from GlasgowDataIO.IobeamControl.macros import RasterScanCommand
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 from GlasgowDataIO.IobeamControl.transfer.mock import MockConnection
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
-from IobeamControl.transfer.glasgowStream import GlasgowConnection
+from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 
 JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData.json'
