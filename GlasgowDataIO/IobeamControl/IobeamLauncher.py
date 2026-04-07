@@ -81,6 +81,8 @@ class IobeamLauncher(object):
         await device.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_BITSTREAM_ID,
                                 0, 0, plan.bitstream_id)
         await asyncio.sleep(0.2)
+        await device.set_voltage("AB", action_voltage)
+        await asyncio.sleep(0.1)
         status = await device._status()    
         if not (status & ST_FPGA_RDY):
             raise RuntimeError("FPGA did not become ready after configuration") 
