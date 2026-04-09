@@ -71,19 +71,21 @@ class TaskQueue:
         if exception is not None:
             raise exception
 
-    async def poll(self):
-        """
-        Processes finished tasks and PROPAGATES exceptions.
-        """
+    """ async def poll(self):
         had_done = bool(self._done)
         while self._done:
             task = self._done.popleft()
             # If a USBErrorIO happened, this 'await' will raise it.
             # DO NOT wrap this in a try/except that swallows the error.
             await task 
-        return had_done
+        return had_done """
+    async def poll(self):
+        # Standard logic to extract results from the 'done' queue
+        if self._done:
+            return self._done.popleft().result()
+        return None
 
-    async def wait_one(self):
+    """ async def wait_one(self):
         if self._exception:
             raise self._exception # Immediately stop if a hardware error was reported
 
@@ -93,18 +95,26 @@ class TaskQueue:
         if not self._done:
             await asyncio.wait(self._live, return_when=asyncio.FIRST_COMPLETED)
             
-        return await self.poll()    
+        return await self.poll() """  
+    async def wait_one(self):
+        if not self._live and not self._done:
+            return None
+        if not self._done:
+            await asyncio.wait(self._live, return_when=asyncio.FIRST_COMPLETED)
+        return await self.poll()  
     
-    async def wait_all(self):
-            """
-            Await all tasks in the queue, if any.
-            """
+    """ async def wait_all(self):
             if self._live:
                 started_at = time.monotonic()
                 await asyncio.wait(self._live, return_when=asyncio.ALL_COMPLETED)
                 self._wait_time += time.monotonic() - started_at
                 self._wait_count += 1
-            await self.poll()
+            await self.poll() """
+    async def wait_all(self):
+        if self._live:
+            await asyncio.wait(self._live)
+        while self._done:
+            self._done.popleft().result()
 
     def __bool__(self):
         """Check whether there are any tasks in the queue."""

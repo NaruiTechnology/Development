@@ -44,10 +44,15 @@ class DataStreamApplet(GlasgowApplet):
 
     def build(self, target, args):
         args.pipes = "PQ"
-        self.mux_interface = iface =  target.multiplexer.claim_interface(self, args) 
+        #self.mux_interface = iface =  target.multiplexer.claim_interface(self, args) 
 
-        self.magic_reg, _ = target.registers.add_ro(8, init=0xa5)
+        self.magic_reg, self.addr_magic = target.registers.add_ro(8, init=0xa5)
+        """ self.reset_reg, addr_reset = target.registers.add_rw(8, init=0)
+        self.addr_reset = addr_reset """
+        
         self.reset_reg, addr_reset = target.registers.add_rw(8, init=0)
+        self.addr_reset = addr_reset 
+        self.mux_interface = iface =  target.multiplexer.claim_interface(self, args) 
 
         # Claim them ONCE here
         out_fifo = iface.get_out_fifo()
@@ -73,63 +78,41 @@ class DataStreamApplet(GlasgowApplet):
             "magic_reg": self.magic_reg,
             "_addr_reset": addr_reset
         } """
-
-        if hasattr(args, 'ext_switch_delay'):  
-            ext_delay_cycles = int(args.ext_switch_delay * pow(10, -3) / (1/(48 * pow(10,6))))
-            #subtarget_args.update({"ext_switch_delay": ext_delay_cycles})
-
-        if hasattr(args, 'benchmark'):
-            out_stall_events, self.__addr_out_stall_events = target.registers.add_ro(8, init=0)
-            out_stall_cycles, self.__addr_out_stall_cycles = target.registers.add_ro(16, init=0)
-            stall_count_reset, self.__addr_stall_count_reset = target.registers.add_rw(1, init=1)
-            #subtarget_args.update({"benchmark_counters": [out_stall_events, out_stall_cycles, stall_count_reset]})
-    
+   
         subtarget = IobeamDataSubtarget(
                 ports=iface.get_port_group(),
                 in_fifo=in_fifo,
                 out_fifo=out_fifo,
                 magic_reg=self.magic_reg,
-                _addr_reset=addr_reset 
+                _addr_reset=self.addr_reset #reset_reg #addr_reset 
             )
         #subtarget = IobeamDataSubtarget(**subtarget_args)
 
         return iface.add_subtarget(subtarget)       
     
     async def run(self, device, args):
-        buffer_size = args.buffer_size if hasattr(args, 'buffer_size') else 1024*1024 # 16384*16384 --TODOW
-        iface = await device.demultiplexer.claim_interface(self, self.mux_interface, args,
-        read_buffer_size=buffer_size, write_buffer_size=buffer_size)
-        if args.benchmark:
-            output_mode = 2 #no output
-            raster_mode = 0 #no raster
-            mode = int(output_mode<<1 | raster_mode)
-            sync_cmd = struct.pack('>BHB', 0, 123, mode)
-            flush_cmd = struct.pack('>B', 2)
-            await iface.write(sync_cmd)
-            await iface.write(flush_cmd)
-            await iface.flush()
-            await iface.read(4)
-            print(f"got cookie!")
-            commands = bytearray()
-            print("generating block of commands...")
-            for _ in range(131072*16):
-                commands.extend(struct.pack(">BHHH", 0x14, 0, 16383, 1))
-                commands.extend(struct.pack(">BHHH", 0x14, 16383, 0, 1))
-            length = len(commands)
-            print("writing commands...")
-            while True:
-                await device.write_register(self.__addr_stall_count_reset, 1)
-                await device.write_register(self.__addr_stall_count_reset, 0)
-                begin = time.time()
-                await iface.write(commands)
-                await iface.flush()
-                end = time.time()
-                out_stall_events = await device.read_register(self.__addr_out_stall_events)
-                out_stall_cycles = await device.read_register(self.__addr_out_stall_cycles, width=2)
-                self.logger.info("benchmark: %.2f MiB/s (%.2f Mb/s)",
-                                 (length / (end - begin)) / (1 << 20),
-                                 (length / (end - begin)) / (1 << 17))
-                self.logger.info(f"out stalls: {out_stall_events}, stalled cycles: {out_stall_cycles}")
-                
-        else:
-            return iface
+        # This is the OBI approach: Return the interface 
+        # let the Launcher/Connection handle the high-level streaming.
+        return await device.demultiplexer.claim_interface(self, self.mux_interface, args)
+
+    async def run_handshake(self, iface):
+        print("Synchronizing with Glasgow hardware...")
+        
+        # 1. Generate a unique 16-bit cookie
+        cookie_val = 0x1234 
+        # Command Format: [ID=0 (Sync), Cookie_High, Cookie_Low, Mode]
+        sync_cmd = struct.pack('>BHB', 0, cookie_val, 1) 
+        
+        # 2. Clear the pipes
+        await iface.write(sync_cmd)
+        await iface.flush()
+        
+        # 3. Block until the FPGA echoes the cookie back
+        # This is where the -1 error is prevented; we don't proceed until sync is confirmed.
+        reply = await iface.read(4)
+        
+        if len(reply) < 4:
+            raise RuntimeError("Handshake failed: No response from hardware")
+            
+        print(f"Handshake successful. Hardware echo: {reply.hex()}")
+

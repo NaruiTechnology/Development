@@ -40,13 +40,36 @@ class IobeamDataSubtarget(wiring.Component):
     def elaborate(self, platform):
         m = Module()
 
+        # --- FIX 1: THE RUN GATE ---
+        # Initialize the gate signal to 0 to ensure silence on power-up.
+        run_enable = Signal() # reset=0)
+        if self._addr_reset is not None:
+            m.d.comb += run_enable.eq(self._addr_reset)
+        else:
+            m.d.sync += run_enable.eq(1)
+
+        
         ## core modules and interconnections
         m.submodules.parser     = parser     = CommandParser()
-        m.submodules.executor   = executor   = CommandExecutor(out_only=self.out_only, ext_switch_delay=self.ext_switch_delay, transforms=self.transforms)
+        m.submodules.executor   = executor   = CommandExecutor(out_only=self.out_only, 
+                                                               ext_switch_delay=self.ext_switch_delay, 
+                                                               transforms=self.transforms)
         m.submodules.serializer = serializer = ImageSerializer()
+
+        # Ensure run_enable is used to gate the write-enable of the FIFO
+        # If this isn't here, the register has no 'effect' and is deleted.
+        m.d.comb += self.in_fifo.w_en.eq(serializer.usb_stream.valid & run_enable)
 
         wiring.connect(m, parser.cmd_stream, executor.cmd_stream)
         wiring.connect(m, executor.img_stream, serializer.img_stream)
+        # --- FIX 2: EXPLICIT USB OUT ROUTING ---
+        # Manually connecting the OUT FIFO to the Parser ensures the handshake 
+        # command is actually processed by the FPGA.
+        m.d.comb += [
+            parser.usb_stream.payload.eq(self.out_fifo.r_data),
+            parser.usb_stream.valid.eq(self.out_fifo.r_rdy),
+            self.out_fifo.r_en.eq(parser.usb_stream.ready)
+        ]
 
         if isinstance(self.out_fifo, DeprecatedFIFOReadPort): # TODO: _FIFOReadPort):
             self.out_fifo.r_data = self.out_fifo.stream # TODO
@@ -55,12 +78,32 @@ class IobeamDataSubtarget(wiring.Component):
         # wiring.connect(m, self.out_fifo.r_data, parser.usb_stream) # TODO
         # wiring.connect(m, self.in_fifo.w_data, serializer.usb_stream) # TODO
 
+        # --- FIX 3: GATING THE SERIALIZER (REPLACES EXECUTOR.BUS.WE) ---
+        # We now use serializer.usb_stream because it follows the standard 
+        # valid/ready protocol, avoiding the AttributeError on executor.bus.
+        with m.If(run_enable):
+            m.d.comb += [
+                self.in_fifo.w_data.eq(serializer.usb_stream.payload),
+                self.in_fifo.w_en.eq(serializer.usb_stream.valid), # This is the gated 'Write Enable'
+                serializer.usb_stream.ready.eq(self.in_fifo.w_rdy)
+            ]
+        with m.Else():
+            # Force the IN pipe to be quiet during initialization to prevent -1 error.
+            m.d.comb += [
+                self.in_fifo.w_data.eq(0),
+                self.in_fifo.w_en.eq(0),
+                serializer.usb_stream.ready.eq(0)
+            ]
+
+        # THE FIX: Gate the FIFO write enable with run_enable.
+        # This makes the register 'load-bearing' logic.
         m.d.comb += [
-            self.in_fifo.flush.eq(executor.flush),
-            serializer.output_mode.eq(executor.output_mode)
+            self.in_fifo.w_data.eq(serializer.usb_stream.payload),
+            self.in_fifo.w_en.eq(serializer.usb_stream.valid & run_enable), # GATED HERE
+            serializer.usb_stream.ready.eq(self.in_fifo.w_rdy & run_enable)
         ]
 
-
+        
         ## Ports/resources ==========================================================
         platform.add_resources(iobeam_resources)
 
