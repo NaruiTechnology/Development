@@ -58,8 +58,7 @@ class IobeamDataSubtarget(wiring.Component):
 
         # Ensure run_enable is used to gate the write-enable of the FIFO
         # If this isn't here, the register has no 'effect' and is deleted.
-        m.d.comb += self.in_fifo.w_en.eq(serializer.usb_stream.valid & run_enable)
-
+        
         wiring.connect(m, parser.cmd_stream, executor.cmd_stream)
         wiring.connect(m, executor.img_stream, serializer.img_stream)
         # --- FIX 2: EXPLICIT USB OUT ROUTING ---
@@ -71,35 +70,19 @@ class IobeamDataSubtarget(wiring.Component):
             self.out_fifo.r_en.eq(parser.usb_stream.ready)
         ]
 
-        if isinstance(self.out_fifo, DeprecatedFIFOReadPort): # TODO: _FIFOReadPort):
+        """ if isinstance(self.out_fifo, DeprecatedFIFOReadPort): # TODO: _FIFOReadPort):
             self.out_fifo.r_data = self.out_fifo.stream # TODO
         if isinstance(self.in_fifo, DeprecatedFIFOWritePort): # TODO: _FIFOWritePort):
-            self.in_fifo.w_data = self.in_fifo.stream
+            self.in_fifo.w_data = self.in_fifo.stream """
         # wiring.connect(m, self.out_fifo.r_data, parser.usb_stream) # TODO
         # wiring.connect(m, self.in_fifo.w_data, serializer.usb_stream) # TODO
 
-        # --- FIX 3: GATING THE SERIALIZER (REPLACES EXECUTOR.BUS.WE) ---
-        # We now use serializer.usb_stream because it follows the standard 
-        # valid/ready protocol, avoiding the AttributeError on executor.bus.
-        with m.If(run_enable):
-            m.d.comb += [
-                self.in_fifo.w_data.eq(serializer.usb_stream.payload),
-                self.in_fifo.w_en.eq(serializer.usb_stream.valid), # This is the gated 'Write Enable'
-                serializer.usb_stream.ready.eq(self.in_fifo.w_rdy)
-            ]
-        with m.Else():
-            # Force the IN pipe to be quiet during initialization to prevent -1 error.
-            m.d.comb += [
-                self.in_fifo.w_data.eq(0),
-                self.in_fifo.w_en.eq(0),
-                serializer.usb_stream.ready.eq(0)
-            ]
-
-        # THE FIX: Gate the FIFO write enable with run_enable.
-        # This makes the register 'load-bearing' logic.
+        # DELETE the with m.If(run_enable) and with m.Else blocks
+        # REPLACE with this single block:
         m.d.comb += [
             self.in_fifo.w_data.eq(serializer.usb_stream.payload),
-            self.in_fifo.w_en.eq(serializer.usb_stream.valid & run_enable), # GATED HERE
+            # This creates a direct physical AND gate that MUST exist in hardware
+            self.in_fifo.w_en.eq(serializer.usb_stream.valid & run_enable),
             serializer.usb_stream.ready.eq(self.in_fifo.w_rdy & run_enable)
         ]
 

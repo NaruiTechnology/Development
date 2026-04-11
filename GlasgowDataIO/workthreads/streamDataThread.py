@@ -7,6 +7,7 @@ from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.multiplexer import 
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import GlasgowDevice
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.assembly import HardwareAssembly
+from AutomationPy.buildingblocks.automation_log import AutomationLog
 
 class streamDataThread(dataIOThread):
     def __init__(self, config, deviceId=None, waveForm=None, data=None, conn=None):
@@ -14,6 +15,10 @@ class streamDataThread(dataIOThread):
         self._waveForm = waveForm
         self._data = data
         self._conn = conn
+        logName = config.LogName
+        logInstance = AutomationLog(logName)
+        self._logger = logInstance.GetLogger(logName)     
+        AutomationLog.TryAddConsole(logName) 
 
     @overrides(dataIOThread)
     def IntialWork(self):

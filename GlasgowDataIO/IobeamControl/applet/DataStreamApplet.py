@@ -84,7 +84,7 @@ class DataStreamApplet(GlasgowApplet):
                 in_fifo=in_fifo,
                 out_fifo=out_fifo,
                 magic_reg=self.magic_reg,
-                _addr_reset=self.addr_reset #reset_reg #addr_reset 
+                _addr_reset=self.reset_reg 
             )
         #subtarget = IobeamDataSubtarget(**subtarget_args)
 

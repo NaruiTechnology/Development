@@ -16,7 +16,7 @@ async def run_pipeline(config, deviceId, waveForm, data, conn):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Load FPGA image onto the device.')
-    parser.add_argument('-j', action='store', dest='jsonfile', help="Config Json file path", default=os.path.realpath(r'./Development/GlasgowDataIO/Json/streamData.json'))
+    parser.add_argument('-j', action='store', dest='jsonfile', help="Config Json file path", default=os.path.realpath(r'./Json/streamData.json'))
     parser.add_argument('-w', action='store', dest='waveForm', help="Wave form [square, sine, triangle, custom]", default='square')
     parser.add_argument('-d', action='store', dest='data', help="Stream data", default="00.0, 1, 2, 5, 8, 9, 10,0.0, 1, 2, 5, 8, 9, 10,0.0, 1, 2, 5, 8, 9, 10,0.0, 1, 2, 5, 8, 9, 10")
     parser.add_argument('-g', action='store', dest='deviceId', help="Glasgow device Id", default='C3-20251207T145552Z')

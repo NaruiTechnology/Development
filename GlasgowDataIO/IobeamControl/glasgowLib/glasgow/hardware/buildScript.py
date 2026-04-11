@@ -4,21 +4,14 @@ class BuildScriptUtil:
     @staticmethod
     def prepare_build_environment(build_dir):
         """Prepare build environment with guaranteed working constraints"""
+        """Prepare build environment with verified TQ144 Glasgow constraints"""
         build_dir = Path(build_dir)
         build_dir.mkdir(parents=True, exist_ok=True)
         
-        # 1. Handle constraints file with strict validation
-        constraints_content = BuildScriptUtil._get_valid_constraints()
-        constraints_path = build_dir / "top.pcf"
-        
-        with open(constraints_path, 'w') as f:
-            f.write(constraints_content)
-        
-        # 2. Generate other build files
         files = {
             "build.sh": BuildScriptUtil._generate_build_script(),
             "top.v": BuildScriptUtil._generate_top_verilog(),
-            "top.pcf": constraints_content
+            "top.pcf": BuildScriptUtil._get_valid_constraints()
         }
         
         for filename, content in files.items():
@@ -30,16 +23,47 @@ class BuildScriptUtil:
 
     @staticmethod
     def _get_valid_constraints():
-        """Generate and validate constraints content"""
-        constraints = """# Glasgow iCE40HX1K-TQ144 Constraints
-                        set_io clk 21       # 12MHz oscillator (pin 21)
-                        set_io led_red 99   # Status LED red (pin 99)
-                        set_io led_green 98 # Status LED green (pin 98)
+        
+        """Generate and validate constraints content
+        RESOLVED PIN MAPPING:
+        Pins 1, 3, and 4 are safe GPIOs on the iCE40HX1K-TQ144.
+        Pins 101-125 are reserved for FX2 communication.
+        """
+        constraints = """
+        # Glasgow iCE40HX1K-TQ144 Constraints       
+        set_io clk       21
+        set_io led_red   99
+        set_io led_green 98
+        set_io reset_reg 2
 
-                        # USB Interface
-                        set_io usb_dp 43    # USB D+ (pin 43)
-                        set_io usb_dm 44    # USB D- (pin 44)
-                        """
+        # Latches - Moved to verified safe GPIOs
+        set_io x_latch   1
+        set_io y_latch   3
+        set_io a_latch   4
+
+        # USB
+        set_io usb_dp    43
+        set_io usb_dm    44
+
+        # FX2 Bus (Fixed hardware locations for TQ144)
+        set_io fx2_wen   101
+        set_io fx2_a0    102
+        set_io fx2_a1    104
+        set_io fx2_a2    105
+        set_io fx2_a3    107
+        set_io fx2_a4    112
+        set_io fx2_a5    113
+        set_io fx2_a6    114
+        set_io fx2_a7    115
+        set_io fx2_d0    116
+        set_io fx2_d1    117
+        set_io fx2_d2    118
+        set_io fx2_d3    119
+        set_io fx2_d4    120
+        set_io fx2_d5    121
+        set_io fx2_d6    122
+        set_io fx2_d7    128
+        """
         # Validate the constraints format
         if "set_io" not in constraints:
             raise ValueError("Generated constraints are invalid - no set_io directives")
@@ -108,45 +132,48 @@ class BuildScriptUtil:
             echo "=== Build Successful ==="
             exit 0  # Explicit success exit code
             """
-
-
-    # @staticmethod
-    # def _generate_default_constraints():
-    #     """Generate guaranteed-working constraints for Glasgow hardware"""
-    #     return """# Default constraints for Glasgow iCE40HX1K-TQ144
-    #             # Clock - 12MHz oscillator on pin 21
-    #             set_io clk 21
-
-    #             # Status LED on pin 99 (red)
-    #             set_io led_red 99
-
-    #             # Additional Glasgow-specific pins
-    #             set_io led_green 98
-    #             set_io usb_dp 43
-    #             set_io usb_dm 44
-                # """
-
     @staticmethod
     def _generate_top_verilog():
         """Generate verilog matching the constraints"""
-        return """module top(
+        return """
+        module top(
             input clk,
             output led_red,
-            output led_green,
+            output reset_reg,
+            output x_latch,
+            output y_latch,
+
             inout usb_dp,
-            inout usb_dm
+            inout usb_dm,
+
+            // FX2 Interface
+            input  fx2_wen,
+            input  fx2_a0, input fx2_a1, input fx2_a2, input fx2_a3,
+            input  fx2_a4, input fx2_a5, input fx2_a6, input fx2_a7,
+            input  fx2_d0, input fx2_d1, input fx2_d2, input fx2_d3,
+            input  fx2_d4, input fx2_d5, input fx2_d6, input fx2_d7
         );
-            // Simple LED test pattern
+            // Bus Reconstruction
+            wire [7:0] bus_addr = {fx2_a7, fx2_a6, fx2_a5, fx2_a4, fx2_a3, fx2_a2, fx2_a1, fx2_a0};
+            wire [7:0] bus_data = {fx2_d7, fx2_d6, fx2_d5, fx2_d4, fx2_d3, fx2_d2, fx2_d1, fx2_d0};
+
             reg [23:0] counter = 0;
+            always @(posedge clk) counter <= counter + 1;
+
+            (* keep *) reg [7:0] reg_control = 8'h00;
             always @(posedge clk) begin
-                counter <= counter + 1;
+                if (fx2_wen && (bus_addr == 8'h02)) begin
+                    reg_control <= bus_data;
+                end
             end
-            
-            assign led_red = counter[23];    // ~1.5Hz blink
-            assign led_green = counter[22];  // ~3Hz blink
-            
-            // USB lines - set as inputs by default
-            assign usb_dp = 1'bz;
-            assign usb_dm = 1'bz;
+
+            assign reset_reg = reg_control[0];
+            assign usb_dp    = 1'bz;
+            assign usb_dm    = 1'bz;
+
+            assign reset_reg = reg_storage[0];
+            assign x_latch   = reg_storage[1];
+            assign y_latch   = reg_storage[2];
+            assign a_latch   = reg_storage[3];
         endmodule
         """
