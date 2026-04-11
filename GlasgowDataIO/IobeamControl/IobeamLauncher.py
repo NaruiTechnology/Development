@@ -53,31 +53,15 @@ class IobeamLauncher(object):
         actionConfig = stateConfig.get(Consts.ACTION_DATA)
 
         device = GlasgowDevice(deviceId)
+        #await device.control_read(usb1.REQUEST_TYPE_VENDOR, 0x13, 0x00, 0, 1)
         target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
-        #assembly = HardwareAssembly(revision=device.revision)
         applet = DataStreamApplet()  
         
         action_voltage = actionConfig.get("voltage", 2.5)
         buffer_size = eval(actionConfig.get('bufferSize', '1024*1024')) # default to 10MB buffer if not specified
         pin_list = [f"{p.get('port')}{n}" for p in actionConfig.get("ports", []) for n in p.get("pinList", [])]
-
-        #voltages_map = {"A": action_voltage, "B": action_voltage}
-        """ pin_list = []
-        for p in actionConfig.get("ports", []):
-            port_letter = p.get("port")
-            for pin_num in p.get("pinList", []):
-                pin_list.append(f"{port_letter}{pin_num}") """
-        
-        # 'voltages' must be a Mapping[GlasgowPort, float] for assembly.py
         
         applet_args = SimpleNamespace(
-            #cs=GlasgowPin.parse("A0"),    
-            #sck=GlasgowPin.parse("A1"),
-            #copi=GlasgowPin.parse("A2"),
-            #reset=GlasgowPin.parse("A3"),
-            #magic=0xa5, 
-            #magic_pin=GlasgowPin.parse("B0"),
-            #target = "ice40-hx1k-vq100",
             voltage_map={"A": action_voltage, "B": action_voltage},
             pins=GlasgowPin.parse(",".join(pin_list)) if pin_list else [],
             buffer_size = buffer_size,
@@ -85,48 +69,33 @@ class IobeamLauncher(object):
         )  
 
 
-
-        """ iface = applet.build(target, applet_args)
-        plan = target.build_plan()  
-        bitstream, stdout = plan.execute(plan.buildDir, debug=True)
-        plan.execute(plan.buildDir, debug=False)
-        #await device.download_target(plan)
-        index = 0
-        while index * 4096 < len(bitstream):
-            await device.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_FPGA_CFG,
-                                    0, index, bitstream[index * 4096:(index + 1) * 4096])
-            index += 1
-        await asyncio.sleep(0.5)
-        await device.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_BITSTREAM_ID,
-                                0, 0, plan.bitstream_id)
-        await asyncio.sleep(0.2)
-        await device.set_voltage("AB", action_voltage)
-        await asyncio.sleep(0.1)
-        status = await device._status()    
-        if not (status & ST_FPGA_RDY):
-            raise RuntimeError("FPGA did not become ready after configuration")  """
-
         applet.build(target, applet_args)
         plan = target.build_plan()
         plan.execute(plan.buildDir, debug=False)
-
+        
         await device.download_target(plan)
         await device.set_voltage("AB", action_voltage)
 
-        #device.demultiplexer = IobeamDemux(device, target.multiplexer.pipe_count)
-        """ iface = await device.demultiplexer.claim_interface(applet, applet.mux_interface, applet_args,
+        """ device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)
+        iface = await device.demultiplexer.claim_interface(applet, applet.mux_interface, applet_args,
                                                            read_buffer_size=applet_args.buffer_size, #16384*16384, 
                                                            write_buffer_size=applet_args.buffer_size) #16384*16384) 
-        """  
+ """         
         
         device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)      
         iface = await applet.run(device, applet_args)
         await asyncio.sleep(1.5)
 
-        await device.write_register(applet.addr_reset, 1)
-        await asyncio.sleep(0.5)
+        #await device.control_write(usb1.REQUEST_TYPE_VENDOR, 0x01, 0, 0, b'')
 
-        await applet.run_handshake(iface)
+        """ magic_val = await device.read_register(applet.addr_magic)
+        if magic_val != 0xa5:
+            raise RuntimeError(f"FPGA Not Responsive! Expected 0xa5, got {hex(magic_val)}") """
+        #device.clear_usb_stalls()
+        #await device.write_register(applet.addr_reset, 1)
+        #await asyncio.sleep(0.5)
+        #await applet.run_handshake(iface)
+
         return iface  
 
 if __name__ == "__main__":   

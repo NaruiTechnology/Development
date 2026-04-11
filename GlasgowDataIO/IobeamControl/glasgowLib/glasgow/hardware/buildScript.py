@@ -31,38 +31,35 @@ class BuildScriptUtil:
         """
         constraints = """
         # Glasgow iCE40HX1K-TQ144 Constraints       
-        set_io clk       21
+        set_io fx2_ifclk 21 
         set_io led_red   99
         set_io led_green 98
         set_io reset_reg 2
-
-        # Latches - Moved to verified safe GPIOs
         set_io x_latch   1
         set_io y_latch   3
         set_io a_latch   4
 
-        # USB
-        set_io usb_dp    43
-        set_io usb_dm    44
+        # FX2 Interface
+        set_io fx2_slwr   101
+        set_io fx2_slrd   102
+        set_io fx2_sloe   104
+        set_io fx2_pktend 105
+        set_io fx2_addr0  112
+        set_io fx2_addr1  113
 
-        # FX2 Bus (Fixed hardware locations for TQ144)
-        set_io fx2_wen   101
-        set_io fx2_a0    102
-        set_io fx2_a1    104
-        set_io fx2_a2    105
-        set_io fx2_a3    107
-        set_io fx2_a4    112
-        set_io fx2_a5    113
-        set_io fx2_a6    114
-        set_io fx2_a7    115
-        set_io fx2_d0    116
-        set_io fx2_d1    117
-        set_io fx2_d2    118
-        set_io fx2_d3    119
-        set_io fx2_d4    120
-        set_io fx2_d5    121
-        set_io fx2_d6    122
-        set_io fx2_d7    128
+        # FX2 Data Bus
+        set_io fx2_d0     114
+        set_io fx2_d1     115
+        set_io fx2_d2     116
+        set_io fx2_d3     117
+        set_io fx2_d4     118
+        set_io fx2_d5     119
+        set_io fx2_d6     120
+        set_io fx2_d7     121
+
+        # FX2 Handshake
+        set_io fx2_flaga  106
+        set_io fx2_flagb  107
         """
         # Validate the constraints format
         if "set_io" not in constraints:
@@ -137,43 +134,41 @@ class BuildScriptUtil:
         """Generate verilog matching the constraints"""
         return """
         module top(
-            input clk,
-            output led_red,
-            output reset_reg,
-            output x_latch,
-            output y_latch,
-
-            inout usb_dp,
-            inout usb_dm,
-
-            // FX2 Interface
-            input  fx2_wen,
-            input  fx2_a0, input fx2_a1, input fx2_a2, input fx2_a3,
-            input  fx2_a4, input fx2_a5, input fx2_a6, input fx2_a7,
-            input  fx2_d0, input fx2_d1, input fx2_d2, input fx2_d3,
-            input  fx2_d4, input fx2_d5, input fx2_d6, input fx2_d7
+            input fx2_ifclk,
+            output led_red, output led_green,
+            output reset_reg, 
+            output x_latch, output y_latch,
+            input  fx2_slwr,
+            output fx2_slrd, output fx2_sloe, output fx2_pktend,
+            input  fx2_addr0, input fx2_addr1,
+            inout  fx2_d0, inout fx2_d1, inout fx2_d2, inout fx2_d3,
+            inout  fx2_d4, inout fx2_d5, inout fx2_d6, inout fx2_d7,
+            input  fx2_flaga, input fx2_flagb
         );
-            // Bus Reconstruction
-            wire [7:0] bus_addr = {fx2_a7, fx2_a6, fx2_a5, fx2_a4, fx2_a3, fx2_a2, fx2_a1, fx2_a0};
-            wire [7:0] bus_data = {fx2_d7, fx2_d6, fx2_d5, fx2_d4, fx2_d3, fx2_d2, fx2_d1, fx2_d0};
+            wire [1:0] bus_addr = {fx2_addr1, fx2_addr0};
+            wire [7:0] bus_data_in = {fx2_d7, fx2_d6, fx2_d5, fx2_d4, fx2_d3, fx2_d2, fx2_d1, fx2_d0};
 
-            reg [23:0] counter = 0;
-            always @(posedge clk) counter <= counter + 1;
-
-            (* keep *) reg [7:0] reg_control = 8'h00;
-            always @(posedge clk) begin
-                if (fx2_wen && (bus_addr == 8'h02)) begin
-                    reg_control <= bus_data;
+            (* keep *) reg [7:0] reg_control = 8'h00;  
+             always @(posedge fx2_ifclk) begin
+                if (fx2_slwr == 1'b0 && (bus_addr == 2'b00)) begin
+                    reg_control <= bus_data_in;
                 end
-            end
+            end  
 
             assign reset_reg = reg_control[0];
-            assign usb_dp    = 1'bz;
-            assign usb_dm    = 1'bz;
+            assign x_latch   = reg_control[1];
+            assign y_latch   = reg_control[2];
+            assign a_latch   = reg_control[3];
+            assign led_red   = reg_control[0];
+            assign led_green = 1'b1;
+            assign fx2_slrd   = 1'b1; 
+            assign fx2_sloe   = 1'b1;
+            assign fx2_pktend = 1'b1;
 
-            assign reset_reg = reg_storage[0];
-            assign x_latch   = reg_storage[1];
-            assign y_latch   = reg_storage[2];
-            assign a_latch   = reg_storage[3];
+            assign reset_reg = reg_control[0];
+            // Response for read_register(0x02) to verify "Magic" value
+            wire is_magic_read = (fx2_frd == 1'b0 && f_addr == 2'b10);
+            assign {fx2_d7, fx2_d6, fx2_d5, fx2_d4, fx2_d3, fx2_d2, fx2_d1, fx2_d0} = 
+                   is_magic_read ? 8'hA5 : 8'hZZZZZZZZ;
         endmodule
         """

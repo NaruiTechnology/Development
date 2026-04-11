@@ -129,9 +129,8 @@ class GlasgowBuildPlan:
             if proc.returncode != 0:
                 print("--- FULL BUILD LOG ---")
                 print(proc.stdout)  # This will show the exact error from Yosys or nextpnr
-                raise GatewareBuildError(
-                    f"Build failed (code {proc.returncode}):\n"
-                    f"{proc.stdout[-500:]}")
+                raise RuntimeError(
+                    f"Build failed (code {proc.returncode}):\n{proc.stdout[-500:]}")
             
             # Verify output
             bitstream = pathlib.Path(build_dir) / "top.bin"

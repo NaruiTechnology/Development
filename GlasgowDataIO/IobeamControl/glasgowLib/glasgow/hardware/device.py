@@ -724,7 +724,13 @@ class GlasgowDevice:
             await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_REGISTER, addr, 0, value)
         except usb1.USBErrorPipe:
             await self._register_error(addr)
-
+    
+    def clear_usb_stalls(self):
+        for ep in [0x01, 0x81, 0x02, 0x82]: 
+            try:
+                self.usb_handle.clearHalt(ep)
+            except Exception:
+                pass
 
 class GlasgowDeviceConfig:
     """
