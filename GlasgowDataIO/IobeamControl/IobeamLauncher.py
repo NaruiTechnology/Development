@@ -52,6 +52,7 @@ class IobeamLauncher(object):
         actionConfig = stateConfig.get(Consts.ACTION_DATA)
 
         device = GlasgowDevice(deviceId)
+        #await asyncio.sleep(0.1)
         #await device.control_read(usb1.REQUEST_TYPE_VENDOR, 0x13, 0x00, 0, 1)
         target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
         applet = DataStreamApplet()  
@@ -69,27 +70,28 @@ class IobeamLauncher(object):
 
 
         applet.build(target, applet_args)
+        device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)
         plan = target.build_plan()
         plan.execute(plan.buildDir, debug=False)
         
         await device.download_target(plan)
         await device.set_voltage("AB", action_voltage)
 
-        """ device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)
+        #device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)
         iface = await device.demultiplexer.claim_interface(applet, applet.mux_interface, applet_args,
                                                            read_buffer_size=applet_args.buffer_size, #16384*16384, 
                                                            write_buffer_size=applet_args.buffer_size) #16384*16384) 
- """         
+         
         
-        device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)      
-        iface = await applet.run(device, applet_args)
+        #device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)      
+        #iface = await applet.run(device, applet_args)
         await asyncio.sleep(1.5)
-
+        hard_reset_fx2()
         #await device.control_write(usb1.REQUEST_TYPE_VENDOR, 0x01, 0, 0, b'')
 
-        """ magic_val = await device.read_register(applet.addr_magic)
-        if magic_val != 0xa5:
-            raise RuntimeError(f"FPGA Not Responsive! Expected 0xa5, got {hex(magic_val)}") """
+        #magic_val = await device.read_register(applet.addr_magic)
+        #if magic_val != 0xa5:
+            #raise RuntimeError(f"FPGA Not Responsive! Expected 0xa5, got {hex(magic_val)}")
         #device.clear_usb_stalls()
         #await device.write_register(applet.addr_reset, 1)
         #await asyncio.sleep(0.5)

@@ -469,7 +469,7 @@ class GlasgowDevice:
                 
             # Complete configuration by setting bitstream ID. This starts the FPGA.
             try:
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(1.5)
                 await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_BITSTREAM_ID,
                                         0, 0, bitstream_id)
                 await asyncio.sleep(0.2)
