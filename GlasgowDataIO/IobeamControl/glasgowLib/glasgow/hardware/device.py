@@ -7,12 +7,6 @@ import threading
 import importlib.resources
 
 import usb1
-# copied =======================================================
-""" # from /home/henry/snap/code/210/.local/share/pipx/venvs/fx2/lib/python3.12/site-packages/fx2 
-# to /home/henry/Projects/Naruitech/Development/.venv/lib/python3.12/site-packages/glasgow/hardware/fx2/__init__.py
-# ==============================================================
-from glasgow.hardware.fx2 import REQ_RAM, REG_CPUCS 
-from glasgow.hardware.fx2.format import input_data """
 from fx2 import REQ_RAM, REG_CPUCS 
 from fx2.format import input_data
 
@@ -27,7 +21,7 @@ logger = logging.getLogger(__name__)
 VID_QIHW         = 0x20b7
 PID_GLASGOW      = 0x9db1
 
-CUR_API_LEVEL    = 0x04
+CUR_API_LEVEL    = 0x05
 
 REQ_EEPROM       = 0x10
 REQ_FPGA_CFG     = 0x11
