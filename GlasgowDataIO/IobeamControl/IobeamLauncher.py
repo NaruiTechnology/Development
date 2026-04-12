@@ -27,15 +27,14 @@ from .glasgowLib.glasgow.hardware.demultiplexer import DirectDemultiplexer
 logger = logging.getLogger(__name__)
 
 def hard_reset_fx2():
-    context = usb1.USBContext()
-    # Glasgow RevC IDs idVendor=20b7 -a idProduct=9db1
-    handle = context.openByVendorIDAndProductID(0x20b7, 0x9db1)
-    if handle:
-        print("Forcing FX2 CPU Reset...")
-        # 0xE6 is the FX2 CPUCS register address for reset
-        handle.controlWrite(0x40, 0xA0, 0xE600, 0, b'\x01') # Reset ON
-        handle.controlWrite(0x40, 0xA0, 0xE600, 0, b'\x00') # Reset OFF
-        handle.close()
+    
+    with usb1.USBContext() as context: # Use 'with' to ensure context.close()       
+        handle = context.openByVendorIDAndProductID(0x20b7, 0x9db1)
+        if handle:
+            print("Forcing FX2 CPU Reset...")
+            handle.controlWrite(0x40, 0xA0, 0xE600, 0, b'\x01')
+            handle.controlWrite(0x40, 0xA0, 0xE600, 0, b'\x00')
+            handle.close()
 
 class IobeamLauncher(object):
     def __init__(self, config):
