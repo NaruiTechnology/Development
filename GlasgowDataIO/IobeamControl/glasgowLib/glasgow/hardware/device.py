@@ -481,7 +481,7 @@ class GlasgowDevice:
                 print(f"Error during FPGA configuration: {e}")
                 raise GlasgowDeviceError("FPGA configuration failed")
             
-            return
+            #return
 
             MAX_HANDSHAKE_RETRIES = 3
             magic = 0

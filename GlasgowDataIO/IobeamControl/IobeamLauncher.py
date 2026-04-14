@@ -86,7 +86,7 @@ class IobeamLauncher(object):
         #device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)      
         #iface = await applet.run(device, applet_args)
         await asyncio.sleep(1.5)
-        hard_reset_fx2()
+        #hard_reset_fx2()
         #await device.control_write(usb1.REQUEST_TYPE_VENDOR, 0x01, 0, 0, b'')
 
         #magic_val = await device.read_register(applet.addr_magic)

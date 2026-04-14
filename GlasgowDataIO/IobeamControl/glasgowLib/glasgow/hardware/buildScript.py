@@ -35,10 +35,7 @@ class BuildScriptUtil:
         set_io led_red   99
         set_io led_green 98
         set_io reset_reg 2
-        set_io x_latch   73 #1
-        set_io y_latch   74 #3
-        set_io a_latch   75 #4
-
+        
         # FX2 Interface
         set_io fx2_slwr   101
         set_io fx2_slrd   102
@@ -137,9 +134,8 @@ class BuildScriptUtil:
             input fx2_ifclk,
             output led_red, output led_green,
             output reset_reg, 
-            output x_latch, output y_latch,
             input  fx2_slwr,
-            input fx2_slrd, input fx2_sloe, input fx2_pktend,
+            input  fx2_slrd, input fx2_sloe, input fx2_pktend,
             input  fx2_addr0, input fx2_addr1,
             inout  fx2_d0, inout fx2_d1, inout fx2_d2, inout fx2_d3,
             inout  fx2_d4, inout fx2_d5, inout fx2_d6, inout fx2_d7,
@@ -156,9 +152,6 @@ class BuildScriptUtil:
             end  
 
             assign reset_reg = reg_control[0];
-            assign x_latch   = reg_control[1];
-            assign y_latch   = reg_control[2];
-            assign a_latch   = reg_control[3];
             assign led_red   = reg_control[4];
             assign led_green = 1'b1;
 

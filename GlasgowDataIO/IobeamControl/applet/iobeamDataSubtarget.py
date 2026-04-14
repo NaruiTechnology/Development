@@ -97,23 +97,10 @@ class IobeamDataSubtarget(wiring.Component):
         else: 
             self.led = io.SimulationPort("o",1)
             self.control = io.SimulationPort("io",7)
-            self.control.x_latch  = io.SimulationPort("o",1,name="x_latch")
-            self.control.y_latch  = io.SimulationPort("o",1,name="y_latch")
-            self.control.a_latch  = io.SimulationPort("o",1,name="a_latch")
-            self.control.a_enable = io.SimulationPort("o",1,name="a_enable")
-            self.control.d_clock  = io.SimulationPort("o",1,name="d_clock")
-            self.control.a_clock  = io.SimulationPort("o",1,name="a_clock")
             self.data = io.SimulationPort("io", 14)
 
         ### IO buffers
         m.submodules.led_buffer = led = io.Buffer("o", self.led)
-
-        m.submodules.x_latch_buffer  = x_latch  = io.Buffer("o", self.control.x_latch)
-        m.submodules.y_latch_buffer  = y_latch  = io.Buffer("o", self.control.y_latch)
-        m.submodules.a_latch_buffer  = a_latch  = io.Buffer("o", self.control.a_latch)
-        m.submodules.a_enable_buffer = a_enable = io.Buffer("o", self.control.a_enable)
-        m.submodules.d_clock_buffer  = d_clock  = io.Buffer("o", self.control.d_clock)
-        m.submodules.a_clock_buffer  = a_clock  = io.Buffer("o", self.control.a_clock)
 
         m.submodules.data_buffer = data = io.Buffer("io", self.data)
 
@@ -122,18 +109,8 @@ class IobeamDataSubtarget(wiring.Component):
 
         ### connect buffers to data + control signals
         m.d.comb += [
-            x_latch.o.eq(executor.bus.dac_x_le_clk),
-            y_latch.o.eq(executor.bus.dac_y_le_clk),
-            a_latch.o.eq(executor.bus.adc_le_clk),
-            a_enable.o.eq(executor.bus.adc_oe),
-            d_clock.o.eq(executor.bus.dac_clk),
-            a_clock.o.eq(executor.bus.adc_clk),
-
             data.o.eq(executor.bus.data_o),
             data.oe.eq(executor.bus.data_oe),
-
-            #data.oe.eq(~self.control.power_good.i),
-            #control.oe.eq(~self.control.power_good.i)
         ]
 
         #### External IO control logic  

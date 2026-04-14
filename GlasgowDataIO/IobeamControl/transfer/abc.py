@@ -86,6 +86,7 @@ class Connection(metaclass = ABCMeta):
         if not data.endswith(res):
             self._logger.error(f"unexpected synchronization response: {data!r} (expected to end with {res!r})")
             raise TransferError("synchronization failed")
+        
     def _handle_incomplete_read(self, exc):
         self._disconnect()
         raise TransferError("connection closed") from exc
