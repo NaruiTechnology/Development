@@ -1,9 +1,6 @@
 import asyncio
 import logging
 from types import SimpleNamespace
-
-import usb1
-
 from .applet.DataStreamApplet import DataStreamApplet
 from .glasgowLib.glasgow.hardware.device import GlasgowDevice, ST_FPGA_RDY
 from .glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
@@ -79,6 +76,21 @@ class IobeamLauncher:
         await device.download_target(plan, reload=True)
         await device.set_voltage("AB", action_voltage)
 
+        await asyncio.sleep(1.5)
+
+        # ------------------------------------------------------------------ #
+        # 3.  Verify FPGA is alive and open the run gate                      #
+        # ------------------------------------------------------------------ #
+        status = await device._status()
+        if not (status & ST_FPGA_RDY):
+            raise RuntimeError(
+                "FPGA is not ready after bitstream download. "
+                f"Status register = {status:#04x}")
+  
+        await asyncio.sleep(1.2)
+        await device.write_register(applet.addr_reset, 1)
+        logger.info("Run gate open")
+
         # ------------------------------------------------------------------ #
         # 3.  Claim the streaming interface                                   #
         # ------------------------------------------------------------------ #
@@ -90,46 +102,9 @@ class IobeamLauncher:
 
         # Give the FPGA a moment to finish initialising after the bitstream
         # download before touching registers.
-        await asyncio.sleep(1.5)
-
-        # ------------------------------------------------------------------ #
-        # 4.  Verify FPGA is alive and open the run gate                      #
-        # ------------------------------------------------------------------ #
-        status = await device._status()
-        if not (status & ST_FPGA_RDY):
-            raise RuntimeError(
-                "FPGA is not ready after bitstream download. "
-                f"Status register = {status:#04x}")
-
-        """ # Read the magic register (addr_magic, initialised to 0xa5 in HDL).
-        # If this times out the Glasgow register slave is missing from the
-        # bitstream — check that BuildScriptUtil is NOT in the build path.
-        logger.info("addr_magic=%d  addr_reset=%d",
-                    applet.addr_magic, applet.addr_reset)
-        try:
-            magic = await asyncio.wait_for(
-                device.read_register(applet.addr_magic),
-                timeout=3.0)
-        except asyncio.TimeoutError:
-            raise RuntimeError(
-                "Timed out reading magic register — the FPGA bitstream does not "
-                "contain the Glasgow register slave.  Verify that BuildScriptUtil "
-                "is not overwriting Amaranth's generated top.v in the build pipeline.")
-
-        if magic != 0xa5:
-            raise RuntimeError(
-                f"Magic register returned {hex(magic)}, expected 0xa5. "
-                "FPGA register bus is alive but the HDL value is wrong.")
-
-        logger.info("Magic register OK (0xa5) — opening run gate")
-
-        # Write 1 to addr_reset to assert run_enable in the subtarget,
-        # which gates in_fifo.w_en and allows data to flow back to the host.
-        await device.write_register(applet.addr_reset, 1)
- """        
-        await asyncio.sleep(1.2)
-
+        await asyncio.sleep(1.0)        
         logger.info("IobeamLauncher: initialisation complete — returning interface")
+        
         return iface
 
 

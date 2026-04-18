@@ -104,17 +104,20 @@ class TaskQueue:
         return await self.poll()  
     
     """ async def wait_all(self):
-            if self._live:
-                started_at = time.monotonic()
-                await asyncio.wait(self._live, return_when=asyncio.ALL_COMPLETED)
-                self._wait_time += time.monotonic() - started_at
-                self._wait_count += 1
-            await self.poll() """
+        if self._live:
+            await asyncio.wait(self._live)
+        while self._done:
+            self._done.popleft().result() """
     async def wait_all(self):
         if self._live:
             await asyncio.wait(self._live)
         while self._done:
-            self._done.popleft().result()
+            task = self._done.popleft()
+            try:
+                task.result()
+            except Exception as e:
+                logger.warning("USB transfer error during wait_all (may be FX2 FIFO not ready): %s", e)
+                raise   # still raise — caller decides whether to retry
 
     def __bool__(self):
         """Check whether there are any tasks in the queue."""
