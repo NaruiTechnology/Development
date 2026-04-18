@@ -1,23 +1,22 @@
 from typing import Optional, BinaryIO
-import os,time
+import os, time
 import logging
 import hashlib
 import pathlib
 import tempfile
 import shutil
 import subprocess
+import stat
 from pathlib import Path
-
 
 import platformdirs
 from amaranth.build.run import BuildPlan
 
 from .toolchain import Toolchain
-from .buildScript import BuildScriptUtil
-
+# BuildScriptUtil is intentionally NOT imported here.
+# All Verilog, PCF, and build scripts come exclusively from Amaranth's BuildPlan.files.
 
 __all__ = ["GlasgowBuildPlan"]
-
 
 logger = logging.getLogger(__name__)
 
@@ -27,56 +26,37 @@ class GatewareBuildError(Exception):
 
 
 class GlasgowBuildPlan:
-    def __init__(self, inner: BuildPlan, toolchain: Toolchain):       
-        # Always wrap in our adapter
+    def __init__(self, inner: BuildPlan, toolchain: Toolchain):
         self._inner = ToolchainBuildPlan(inner)
         self._toolchain = toolchain
         self._bitstream_id = self._generate_identifier()
-        self.project_path = Path.cwd() # self._detect_project_path()
-        self._buildDir = self._inner._buildDir
+        self.project_path = Path.cwd()
+        # _buildDir is None until execute() is called with debug=True.
+        # Normally the bitstream bytes are returned directly from get_bitstream()
+        # and no on-disk path is needed by callers.
+        self._buildDir = None
 
     @property
-    def buildDir(self):
+    def buildDir(self) -> Optional[Path]:
+        """Path to the last build directory. Only set when execute(debug=True) was used."""
         return self._buildDir
-    
+
     def _generate_identifier(self) -> bytes:
         import sys
-        """Generate a stable identifier for the build configuration.
-            Combines:
-            - Toolchain fingerprint
-            - Build plan digest (if available)
-            - Timestamp for temporal uniqueness
-            - System architecture
-        """
         hasher = hashlib.blake2s()
-
-        # 1. Include toolchain identification
         if hasattr(self._toolchain, 'identifier'):
             toolchain_id = self._toolchain.identifier
             if toolchain_id is not None:
                 hasher.update(toolchain_id)
-        
-        # 2. Include build plan contents if available
-        if hasattr(self._inner, 'digest'):
-            hasher.update(self._inner.digest())
-        elif hasattr(self._inner, 'files'):
-            # Create digest from file contents
-            file_hasher = hashlib.blake2s()
-            for filename, content in sorted(self._inner.files.items()):
-                file_hasher.update(filename.encode())
-                file_hasher.update(content if isinstance(content, bytes) else content.encode())
-            hasher.update(file_hasher.digest())
-        
-        # 3. System and temporal factors
-        hasher.update(str(time.time_ns()).encode())  # Temporal uniqueness
-        hasher.update(sys.platform.encode())         # OS/architecture
-        hasher.update(os.uname().version.encode())   # Kernel version if available
-        
-        # 4. Python environment
-        hasher.update(sys.version.encode())
-        hasher.update(sys.executable.encode())
-        
-        # Return first 16 bytes of the hash
+        # Digest from Amaranth file contents only — no timestamp, so the ID is
+        # deterministic for identical HDL. download_target() uses this to skip
+        # re-flashing when the design hasn't changed.
+        file_hasher = hashlib.blake2s()
+        for filename, content in sorted(self._inner.files.items()):
+            file_hasher.update(filename.encode())
+            file_hasher.update(content if isinstance(content, bytes) else content.encode())
+        hasher.update(file_hasher.digest())
+        hasher.update(sys.platform.encode())
         return hasher.digest()[:16]
 
     @property
@@ -95,172 +75,213 @@ class GlasgowBuildPlan:
         return self._bitstream_id
 
     @staticmethod
-    def get_build_dir():
+    def get_build_dir() -> str:
         return tempfile.mkdtemp(prefix="glasgow_")
-    
+
     def execute(self, build_dir=None, *, debug=False):
-        """Execute the build process"""
+        """
+        Write Amaranth-generated files to build_dir, run the build script,
+        and return (bitstream_bytes, stdout_text).
+
+        If debug=True the directory is preserved after the build and
+        plan.buildDir points to it, so you can inspect top.v, top.bin, etc.
+        If debug=False (default) the directory is deleted after the build.
+
+        Raises RuntimeError on build failure. Never silently swallows errors.
+        """
         if build_dir is None:
-            build_dir = GlasgowBuildPlan.get_build_dir() 
-        
+            build_dir = GlasgowBuildPlan.get_build_dir()
+
+        build_dir = Path(build_dir)
+        build_dir.mkdir(parents=True, exist_ok=True)
+
         try:
-
-            files = self._inner.build_files
-            
-            # Write files
-            for filename, content in files.items():
-                path = pathlib.Path(build_dir) / filename
-                with open(path, 'w') as f:
+            # Write every file that Amaranth generated (top.il, top.v, top.pcf,
+            # the build shell script, etc.)  Nothing from BuildScriptUtil.
+            for filename, content in self._inner.files.items():
+                path = build_dir / filename
+                path.parent.mkdir(parents=True, exist_ok=True)
+                mode = 'wb' if isinstance(content, bytes) else 'w'
+                with open(path, mode) as f:
                     f.write(content)
-                if filename.endswith('.sh'):
-                    path.chmod(0o755)
+                # Make ANY shell script executable, regardless of extension.
+                # Amaranth names its script "build" (no .sh) on Linux.
+                if filename == self._inner.script or filename.endswith('.sh'):
+                    path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-            # Run build
+            script_name = self._inner.script  # "build" from Amaranth iCE40 platform
+            script_path = build_dir / script_name
+            if not script_path.exists():
+                raise GatewareBuildError(
+                    f"Build script '{script_name}' not found in build directory. "
+                    f"Files present: {sorted(self._inner.files.keys())}")
+
+            logger.debug("Running build script '%s' in %s", script_name, build_dir)
             proc = subprocess.run(
-                ["./build.sh"],
+                [f"./{script_name}"],
                 cwd=build_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True
             )
 
-            # print(proc.stdout)  
-            
             if proc.returncode != 0:
-                print("--- FULL BUILD LOG ---")
-                print(proc.stdout)  # This will show the exact error from Yosys or nextpnr
-                raise RuntimeError(
-                    f"Build failed (code {proc.returncode}):\n{proc.stdout[-500:]}")
-            
-            # Verify output
-            bitstream = pathlib.Path(build_dir) / "top.bin"
-            if not bitstream.exists():
-                raise GatewareBuildError("Bitstream not generated")
-            
-            return bitstream.read_bytes(), proc.stdout
-        except Exception as e:
-            print(str(e))
+                logger.error("--- FULL BUILD LOG ---\n%s", proc.stdout)
+                raise GatewareBuildError(
+                    f"Build failed (exit code {proc.returncode}):\n{proc.stdout[-2000:]}")
+
+            bitstream_path = build_dir / "top.bin"
+            if not bitstream_path.exists():
+                raise GatewareBuildError(
+                    "Build completed but top.bin was not produced. "
+                    f"Build output:\n{proc.stdout[-1000:]}")
+
+            bitstream_data = bitstream_path.read_bytes()
+            logger.info(
+                "Build succeeded: %d bytes, SHA256 prefix %s",
+                len(bitstream_data),
+                hashlib.sha256(bitstream_data).hexdigest()[:12])
+
+            if debug:
+                self._buildDir = build_dir
+                logger.info("Build directory preserved at: %s", build_dir)
+
+            return bitstream_data, proc.stdout
+
+        except Exception:
+            # Always clean up on failure even in debug mode to avoid disk leaks,
+            # but only if it's not a debug run where the user wants to inspect.
+            if not debug:
+                shutil.rmtree(build_dir, ignore_errors=True)
+            raise  # Never swallow — let the caller see the real error.
+
         finally:
             if not debug:
                 shutil.rmtree(build_dir, ignore_errors=True)
-    
+
+    @staticmethod
     def check_toolchain():
-        """Add this to your setup"""
         required_tools = {
-            'yosys': ['--version', 'Yosys'],
+            'yosys':         ['--version', 'Yosys'],
             'nextpnr-ice40': ['--version', 'nextpnr-ice40'],
-            'icepack': ['--version', 'icepack']
+            'icepack':       ['--version', 'icepack'],
         }
-        
         missing = []
-        for cmd, check in required_tools.items():
+        for cmd, (flag, marker) in required_tools.items():
             try:
-                result = subprocess.run([cmd, check[0]], 
-                                    capture_output=True, text=True)
-                if check[1] not in result.stdout:
-                    missing.append(f"{cmd} (wrong version)")
+                result = subprocess.run([cmd, flag], capture_output=True, text=True)
+                if marker not in result.stdout and marker not in result.stderr:
+                    missing.append(f"{cmd} (unexpected version output)")
             except FileNotFoundError:
                 missing.append(cmd)
-        
         if missing:
             raise GatewareBuildError(
                 f"Missing required tools: {', '.join(missing)}\n"
-                "On Ubuntu/Debian try:\n"
-                "  sudo apt install yosys nextpnr-ice40")        
+                "On Ubuntu/Debian: sudo apt install yosys nextpnr-ice40 fpga-icestorm")
 
     async def get_bitstream(self, *, debug=False) -> bytes:
-        # locate the caches in the platform-appropriate cache directory; bitstreams aren't large,
-        # but it is good etiquette to indicate to the OS that they can be wiped without concern
+        """
+        Return the bitstream bytes, building if necessary and caching the result.
+        The cache key is plan.bitstream_id, which is a hash of the HDL source files.
+        Pass debug=True to preserve the build directory (accessible via plan.buildDir).
+        """
         cache_path = platformdirs.user_cache_path("GlasgowEmbedded", appauthor=False)
         bitstream_filename = cache_path / "bitstreams" / self.bitstream_id.hex()
         stdout_filename = bitstream_filename.with_suffix(".output")
-        # ensure that the cache and the build log (a) exist, (b) aren't corrupted; if anything goes
-        # wrong at this stage, proceed as-if the cache was never there
-        cache_exists = (bitstream_filename.exists() and stdout_filename.exists())
+
+        cache_exists = bitstream_filename.exists() and stdout_filename.exists()
         if cache_exists:
-            with bitstream_filename.open("rb") as bitstream_file:
-                bitstream_hash = bitstream_file.read(hashlib.blake2s().digest_size)
-                bitstream_data = bitstream_file.read()
-                if hashlib.blake2s(bitstream_data).digest() != bitstream_hash:
-                    cache_exists = False
-            with stdout_filename.open("rb") as stdout_file:
-                stdout_hash = stdout_file.read(hashlib.blake2s().digest_size * 2 + 1)
-                stdout_data = stdout_file.read()
-                if hashlib.blake2s(stdout_data).hexdigest().encode() != stdout_hash.rstrip():
-                    cache_exists = False
+            with bitstream_filename.open("rb") as f:
+                stored_hash = f.read(hashlib.blake2s().digest_size)
+                bitstream_data = f.read()
+            if hashlib.blake2s(bitstream_data).digest() != stored_hash:
+                logger.warning("Cached bitstream hash mismatch — rebuilding")
+                cache_exists = False
+
         if cache_exists:
-            # the cache exists; skip building the bitstream, and reproduce the stdout to our log
-            # if anyone would actually see it
-            logger.debug(f"bitstream ID {self.bitstream_id.hex()} is cached")
-            logger.info(f"bitstream was read from {str(bitstream_filename)!r}")
-            if logger.isEnabledFor(logging.DEBUG):
-                for stdout_line in stdout_data.decode().splitlines():
-                    logger.info(f"build: %s", stdout_line)
-        else:
-            # the cache does not exist; build it (`execute` directs the stdout to our log, so we
-            # don't have to forward it here) and write the artifacts to the platform-appropriate
-            # cache directory
-            logger.debug(f"bitstream ID {self.bitstream_id.hex()} is not cached, executing build")
-            bitstream_data, stdout_data = self.execute(debug=debug) # TODO
-            if bitstream_data:
-                bitstream_hash = hashlib.blake2s(bitstream_data).digest()
-                # stdout_hash = hashlib.blake2s(stdout_data).hexdigest().encode()
-                stdout_hash = hashlib.blake2s(stdout_data.encode('utf-8')).hexdigest()
-                bitstream_filename.parent.mkdir(parents=True, exist_ok=True)
-                with bitstream_filename.open("wb") as bitstream_file:
-                    bitstream_file.write(bitstream_hash)
-                    bitstream_file.write(bitstream_data)
-                with stdout_filename.open("wb") as stdout_file:
-                    stdout_file.write(stdout_hash.encode('utf-8') + b"\n") # keep it a text file
-                    stdout_file.write(stdout_data.encode('utf-8'))
-                logger.info(f"bitstream was written to {str(bitstream_filename)!r}")
-            # finally, we have a bitstream! and chances are, we have obtained it much faster than we
-        # would have otherwise.
+            logger.info("bitstream ID %s read from cache at %r",
+                        self.bitstream_id.hex(), str(bitstream_filename))
+            return bitstream_data
+
+        logger.debug("bitstream ID %s not cached — building", self.bitstream_id.hex())
+        bitstream_data, stdout_text = self.execute(debug=debug)
+
+        bitstream_filename.parent.mkdir(parents=True, exist_ok=True)
+        stored_hash = hashlib.blake2s(bitstream_data).digest()
+        with bitstream_filename.open("wb") as f:
+            f.write(stored_hash)
+            f.write(bitstream_data)
+        with stdout_filename.open("w", encoding="utf-8") as f:
+            f.write(stdout_text)
+        logger.info("bitstream written to cache at %r", str(bitstream_filename))
+
         return bitstream_data
 
-    
+
 class ToolchainBuildPlan:
-    """Complete adapter that handles both BuildPlan and Toolchain cases"""
-    def __init__(self, inner):
+    """
+    Thin wrapper around Amaranth's BuildPlan that exposes the file dict
+    and script name needed by GlasgowBuildPlan.execute().
+
+    IMPORTANT: this class must ONLY use files from the Amaranth BuildPlan.
+    Do not fall back to BuildScriptUtil — that produces a toy Verilog that
+    has no Glasgow register slave and will cause every REQ_REGISTER call to
+    time out.
+    """
+    def __init__(self, inner: BuildPlan):
         self._inner = inner
-        self.script = "build"
-        
-        # Handle different inner types
-        if hasattr(inner, 'files'):
-            self.files = inner.files
+
+        if not hasattr(inner, 'files') or not inner.files:
+            raise GatewareBuildError(
+                "Amaranth BuildPlan has no files. "
+                "Ensure target.build_plan() returns a fully elaborated plan before "
+                "passing it to GlasgowBuildPlan.")
+
+        self.files = inner.files
+        # Amaranth sets BuildPlan.script to "build" for iCE40 (no .sh extension on Linux).
+        #-- self.script = getattr(inner, 'script', 'build')
+        # Amaranth's BuildPlan.script gives the stem ("build_top"), but on Linux
+        # the actual file written is "build_top.sh".  Resolve to whichever variant
+        # is present in the file dict, preferring the bare name for back-compat.
+        raw_script = getattr(inner, 'script', 'build_top')
+        if raw_script in self.files:
+            self.script = raw_script
+        elif raw_script + ".sh" in self.files:
+            self.script = raw_script + ".sh"
         else:
-            self._buildDir = build_dir = GlasgowBuildPlan.get_build_dir()
-            self.files = BuildScriptUtil.prepare_build_environment(build_dir) #_prepare_build_files(buld_dir)
-            
+            # Last resort: pick any .sh file in the plan
+            sh_files = [f for f in self.files if f.endswith('.sh')]
+            if sh_files:
+                self.script = sh_files[0]
+            else:
+                raise GatewareBuildError(
+                    f"Cannot find build script (tried '{raw_script}', '{raw_script}.sh'). "
+                    f"Files present: {sorted(self.files.keys())}")
+
     @property
     def build_files(self):
         return self.files
-            
+
     @property
     def env_vars(self):
-        """Get environment variables from either Toolchain or use empty dict"""
         if hasattr(self._inner, 'env_vars'):
             return self._inner.env_vars
-        elif hasattr(self._inner, 'toolchain') and hasattr(self._inner.toolchain, 'env_vars'):
+        if hasattr(self._inner, 'toolchain') and hasattr(self._inner.toolchain, 'env_vars'):
             return self._inner.toolchain.env_vars
         return {}
 
     def extract(self, build_dir):
-        """Standard extract implementation"""
         os.makedirs(build_dir, exist_ok=True)
         for filename, content in self.files.items():
-            file_path = os.path.join(build_dir, filename)
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            
+            file_path = Path(build_dir) / filename
+            file_path.parent.mkdir(parents=True, exist_ok=True)
             mode = 'wb' if isinstance(content, bytes) else 'w'
             with open(file_path, mode) as f:
                 f.write(content)
-            
-            if filename.endswith('.sh'):
-                os.chmod(file_path, 0o755)
+            if filename == self.script or filename.endswith('.sh'):
+                file_path.chmod(file_path.stat().st_mode | stat.S_IEXEC)
 
     def archive(self, file):
-        """Delegate to inner archive if available"""
         if hasattr(self._inner, 'archive'):
             return self._inner.archive(file)
         raise NotImplementedError("Archive not available")

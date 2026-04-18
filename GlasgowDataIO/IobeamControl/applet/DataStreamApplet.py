@@ -87,7 +87,6 @@ class DataStreamApplet(GlasgowApplet):
                 _addr_reset=self.reset_reg 
             )
         #subtarget = IobeamDataSubtarget(**subtarget_args)
-
         return iface.add_subtarget(subtarget)       
     
     async def run(self, device, args):

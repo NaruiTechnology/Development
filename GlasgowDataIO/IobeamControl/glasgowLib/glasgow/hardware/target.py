@@ -79,6 +79,7 @@ class GlasgowHardwareTarget(Elaboratable):
                     unused_pins.append(request(idx))
                 except ResourceError:
                     pass
+        
         for idx, unused_pin in enumerate(unused_pins):
             if hasattr(unused_pin, "oe"):
                 m.submodules[f"unused_pin_{idx}"] = io.Buffer("o", unused_pin.oe)
@@ -109,4 +110,7 @@ class GlasgowHardwareTarget(Elaboratable):
             "nextpnr_opts": "--placer heap",
         }
         overrides.update(kwargs)
-        return GlasgowBuildPlan(find_toolchain(), self.platform.prepare(self, **overrides))
+        #--return GlasgowBuildPlan(find_toolchain(), self.platform.prepare(self, **overrides))
+        build_plan = self.platform.prepare(self, **overrides)   #-- elaborates design → produces files
+        toolchain  = find_toolchain()
+        return GlasgowBuildPlan(build_plan, toolchain) 

@@ -200,7 +200,7 @@ class SystemTool(Tool):
                 for file in files:
                     yield os.path.join(root, file)
 
-        if self.available:
+        """ if self.available:
             if self.name == "yosys":
                 if yosys_datdir := self.get_output([f"{self.command}-config", "--datdir"]):
                     return iter_files(yosys_datdir)
@@ -213,6 +213,23 @@ class SystemTool(Tool):
                 # Icepack is a self-contained binary. Ecppack is similar to nextpnr.
                 #
                 # This is likely fine.
+                return iter([]) """
+        #-- Claude fix
+        if self.available:
+            if self.name == "yosys":
+                yosys_datdir = self.get_output([f"{self.command}-config", "--datdir"])
+                if not yosys_datdir:
+                    # yosys-config exists but exited non-zero (e.g. missing share dir).
+                    # Fall back to well-known locations before giving up.
+                    for candidate in ["/usr/share/yosys", "/usr/local/share/yosys"]:
+                        if os.path.isdir(candidate):
+                            yosys_datdir = candidate
+                            break
+                if yosys_datdir:
+                    return iter_files(yosys_datdir)
+                # Share dir genuinely not found — hash binary only, no data files.
+                return iter([])
+            else:
                 return iter([])
 
     _identifier_cache = None
