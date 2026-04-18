@@ -93,6 +93,7 @@ class DataStreamApplet(GlasgowApplet):
     async def run(self, device, args):
         # This is the OBI approach: Return the interface 
         # let the Launcher/Connection handle the high-level streaming.
+        await device.write_register(applet.addr_reset, 0x01)
         return await device.demultiplexer.claim_interface(self, self.mux_interface, args)
 
     async def run_handshake(self, iface):

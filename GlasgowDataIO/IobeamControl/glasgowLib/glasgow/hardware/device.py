@@ -225,8 +225,10 @@ class GlasgowDevice:
         self.usb_handle : usb1.USBDeviceHandle = usb_device.open()
         try:
             self.usb_handle.setAutoDetachKernelDriver(True)
+            self.usb_handle.claimInterface(0)
         except usb1.USBErrorNotSupported:
             pass
+
         device_manufacturer = self.usb_handle.getASCIIStringDescriptor(
             usb_device.getManufacturerDescriptor())
         device_product = self.usb_handle.getASCIIStringDescriptor(
@@ -309,7 +311,7 @@ class GlasgowDevice:
             except usb1.USBErrorNoDevice:
                 raise GlasgowDeviceError("device disconnected") from None
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop() #--get_event_loop()
         transfer.setCallback(lambda transfer: loop.call_soon_threadsafe(usb_callback, transfer))
         handle_usb_error(lambda: transfer.submit())
         try:
@@ -481,7 +483,7 @@ class GlasgowDevice:
                 print(f"Error during FPGA configuration: {e}")
                 raise GlasgowDeviceError("FPGA configuration failed")
             
-            #return
+            return
 
             MAX_HANDSHAKE_RETRIES = 3
             magic = 0

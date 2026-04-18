@@ -10,11 +10,13 @@ from GlasgowDataIO.IobeamControl.applet.commandExecutor import CommandExecutor
 from GlasgowDataIO.IobeamControl.applet.imageSerializer import ImageSerializer
 from GlasgowDataIO.IobeamControl.applet.pipelinedLoopbackAdapter import PipelinedLoopbackAdapter
 from GlasgowDataIO.IobeamControl.applet import iobeam_resources
+from amaranth.hdl import Elaboratable, Module
 
-class IobeamDataSubtarget(wiring.Component):
+class IobeamDataSubtarget(Elaboratable): #--wiring.Component):
     def __init__(self, *, ports, out_fifo, in_fifo, led=None, control=None, data=None, 
                         ext_switch_delay=0, transforms: Transforms=None, 
                         benchmark_counters=None, loopback=False, out_only=False, **kwargs):
+        super().__init__()
         self._addr_reset = kwargs.get("_addr_reset", None)
         self.ports            = ports
         self.out_fifo         = out_fifo

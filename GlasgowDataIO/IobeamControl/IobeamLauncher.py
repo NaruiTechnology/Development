@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import usb1
 #from .IobeamDemux import IobeamDemux
 from .applet.DataStreamApplet import DataStreamApplet
-from .glasgowLib.glasgow.hardware.device import REQ_FPGA_CFG, GlasgowDevice
+from .glasgowLib.glasgow.hardware.device import GlasgowDevice
 from .glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
 from .glasgowLib.glasgow.hardware.assembly import HardwareAssembly
 from .glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
@@ -19,9 +19,7 @@ from IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
 from AutomationPy.buildingblocks.workflow.workstate import WorkState
 import logging 
 import usb1
-from .glasgowLib.glasgow.hardware.device import REQ_BITSTREAM_ID, REQ_FPGA_CFG, ST_FPGA_RDY
-
-from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware import device
+from .glasgowLib.glasgow.hardware.device import REQ_REGISTER, REQ_FPGA_CFG, ST_FPGA_RDY
 from .glasgowLib.glasgow.hardware.demultiplexer import DirectDemultiplexer
 
 logger = logging.getLogger(__name__)
@@ -72,9 +70,9 @@ class IobeamLauncher(object):
         applet.build(target, applet_args)
         device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)
         plan = target.build_plan()
-        plan.execute(plan.buildDir, debug=False)
+        plan.execute(plan.buildDir, debug=True)
         
-        await device.download_target(plan)
+        await device.download_target(plan, reload=True)
         await device.set_voltage("AB", action_voltage)
 
         #device.demultiplexer = DirectDemultiplexer(device, target.multiplexer.pipe_count)
@@ -93,8 +91,17 @@ class IobeamLauncher(object):
         #if magic_val != 0xa5:
             #raise RuntimeError(f"FPGA Not Responsive! Expected 0xa5, got {hex(magic_val)}")
         #device.clear_usb_stalls()
-        #await device.write_register(applet.addr_reset, 1)
-        #await asyncio.sleep(0.5)
+
+        status = await device._status()
+        if not (status & ST_FPGA_RDY):
+            raise RuntimeError("FPGA not ready — bitstream did not start correctly")
+
+        magic_data = await asyncio.wait_for(
+                                device.control_read(usb1.REQUEST_TYPE_VENDOR, REQ_REGISTER, 0x00, 0, 1), 
+                                timeout=2.0)
+        logger.info(f"Writing run gate: addr_reset={applet.addr_reset}, addr_magic={applet.addr_magic}")
+        await device.write_register(applet.addr_reset, 1)
+        await asyncio.sleep(0.5)
         #await applet.run_handshake(iface)
 
         return iface  

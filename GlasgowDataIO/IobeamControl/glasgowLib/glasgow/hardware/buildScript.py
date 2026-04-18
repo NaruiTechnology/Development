@@ -151,13 +151,11 @@ class BuildScriptUtil:
                 end
             end  
 
-            assign reset_reg = reg_control[0];
             assign led_red   = reg_control[4];
             assign led_green = 1'b1;
 
-            assign reset_reg = reg_control[0];
             // Response for read_register(0x02) to verify "Magic" value
-            wire is_magic_read = (fx2_frd == 1'b0 && f_addr == 2'b00);
+            wire is_magic_read = (fx2_slrd == 1'b0 && bus_addr == 2'b00);
             // Only drive bus when FX2 Output Enable (sloe) is active (Low)
             wire drive_bus = (fx2_sloe == 1'b0);
             assign {fx2_d7, fx2_d6, fx2_d5, fx2_d4, fx2_d3, fx2_d2, fx2_d1, fx2_d0} = 
