@@ -156,6 +156,10 @@ class DirectDemultiplexer(AccessDemultiplexer):
                                       ", ".join(map(str, device_pull_high)))
 
             await iface.reset()
+        else:
+            #-- No pull resistors, no reset() call — but we still MUST activate
+            # the USB interface or every bulk transfer returns LIBUSB_ERROR_IO (-1).
+            await iface._activate()
         return iface
 
 
@@ -170,6 +174,21 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             self.logger.info("FIFO: cancelling operations")
             await self._in_tasks .cancel()
             await self._out_tasks.cancel()
+            
+    async def _activate(self):
+        self.logger.info("FIFO: activating USB interface (alt setting 1)")
+        try:
+            self.device.usb_handle.setInterfaceAltSetting(self._pipe_num, 1)
+            self.logger.info("FIFO: alt setting 1 set successfully on pipe %d", self._pipe_num)
+        except Exception as e:
+            self.logger.error("FIFO: setInterfaceAltSetting FAILED: %s", e)
+            raise
+        self._in_buffer.clear()
+        self._out_buffer.clear()
+        self.logger.info("FIFO: pipelining initial reads")
+        for _ in range(_xfers_per_queue):
+            self._in_tasks.submit(self._in_task())
+        await asyncio.sleep(0)           
 
     async def reset(self):
         await self.cancel()
@@ -177,22 +196,11 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
         self.logger.info("asserting reset")
         await self.device.write_register(self._addr_reset, 1)
 
-        self.logger.info("FIFO: synchronizing buffers")
-        self.device.usb_handle.setInterfaceAltSetting(self._pipe_num, 1)
-        self._in_buffer .clear()
-        self._out_buffer.clear()
-
-        # Pipeline reads before deasserting reset, so that if the applet immediately starts
-        # streaming data, there are no overflows. (This is perhaps not the best way to implement
-        # an applet, but we can support it easily enough, and it avoids surprise overflows.)
-        self.logger.info("FIFO: pipelining reads")
-        for _ in range(_xfers_per_queue):
-            self._in_tasks.submit(self._in_task())
-        # Give the IN tasks a chance to submit their transfers before deasserting reset.
-        await asyncio.sleep(0)
+        await self._activate()  # sets alt setting, clears buffers, pipelines reads
 
         self.logger.info("deasserting reset")
         await self.device.write_register(self._addr_reset, 0)
+        # ← remove everything after this line that was left from the original body
 
     async def _in_task(self):
         if self._read_buffer_size is not None:

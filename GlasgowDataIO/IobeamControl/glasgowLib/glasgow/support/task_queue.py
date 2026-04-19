@@ -85,17 +85,6 @@ class TaskQueue:
             return self._done.popleft().result()
         return None
 
-    """ async def wait_one(self):
-        if self._exception:
-            raise self._exception # Immediately stop if a hardware error was reported
-
-        if not self._live and not self._done:
-            raise ConnectionError("USB TaskQueue is empty.")
-
-        if not self._done:
-            await asyncio.wait(self._live, return_when=asyncio.FIRST_COMPLETED)
-            
-        return await self.poll() """  
     async def wait_one(self):
         if not self._live and not self._done:
             return None
@@ -103,11 +92,6 @@ class TaskQueue:
             await asyncio.wait(self._live, return_when=asyncio.FIRST_COMPLETED)
         return await self.poll()  
     
-    """ async def wait_all(self):
-        if self._live:
-            await asyncio.wait(self._live)
-        while self._done:
-            self._done.popleft().result() """
     async def wait_all(self):
         if self._live:
             await asyncio.wait(self._live)

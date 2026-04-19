@@ -74,6 +74,9 @@ class IobeamLauncher:
         # reload=True forces re-flash even when bitstream_id hasn't changed.
         # Keep this True while iterating on HDL; switch to False in production.
         await device.download_target(plan, reload=True)
+        
+        self._re_open_usb_handle()
+        
         await device.set_voltage("AB", action_voltage)
 
         await asyncio.sleep(1.5)
@@ -107,6 +110,20 @@ class IobeamLauncher:
         
         return iface
 
+    def _re_open_usb_handle(self):
+        import usb1
+        ctx = usb1.USBContext()
+        for dev in ctx.getDeviceList():
+            if dev.getVendorID() == 0x20b7:   # Glasgow vendor ID
+                print(f"Found Glasgow after download: bus={dev.getBusNumber()} "
+                    f"addr={dev.getDeviceAddress()} "
+                    f"configs={dev.getNumConfigurations()}")
+                for cfg in dev.iterConfigurations():
+                    for iface in cfg:
+                        for setting in iface:
+                            eps = [f"0x{ep.getAddress():02x}" for ep in setting.iterEndpoints()]
+                            if eps:
+                                print(f"  If{setting.getNumber()} Alt{setting.getAlternateSetting()}: {eps}")
 
 if __name__ == "__main__":
     import argparse
