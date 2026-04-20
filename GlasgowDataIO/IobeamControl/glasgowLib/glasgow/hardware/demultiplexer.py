@@ -7,89 +7,96 @@ from ..support.logging import *
 from ..support.chunked_fifo import *
 from ..support.task_queue import *
 from ..access import AccessDemultiplexer, AccessDemultiplexerInterface, AccessMultiplexer
+from .device import GlasgowDeviceError
+import logging
+logger = logging.getLogger(__name__)
 
-
-# On Linux, the total amount of in-flight USB requests for the entire system is limited
-# by usbfs_memory_mb parameter of the module usbcore; it is 16 MB by default. This
-# limitation was introduced in commit add1aaeabe6b08ed26381a2a06e505b2f09c3ba5, with
-# the following (bullshit) justification:
-#
-#   While it is generally a good idea to avoid large transfer buffers
-#   (because the data has to be bounced to/from a contiguous kernel-space
-#   buffer), it's not the kernel's job to enforce such limits.  Programs
-#   should be allowed to submit URBs as large as they like; if there isn't
-#   sufficient contiguous memory available then the submission will fail
-#   with a simple ENOMEM error.
-#
-#   On the other hand, we would like to prevent programs from submitting a
-#   lot of small URBs and using up all the DMA-able kernel memory. [...]
-#
-# In other words, there is a platform-specific limit for USB I/O size, which is not discoverable
-# via libusb, and hitting which does not result in a sensible error returned  from libusb
-# (it returns LIBUSB_ERROR_IO even though USBDEVFS_SUBMITURB ioctl correctly returns -ENOMEM),
-# so it is not even possible to be optimistic and back off after hitting it.
-#
-# To deal with this, use requests of at most 1024 EP buffer sizes (512 KiB with the FX2) as
-# an arbitrary cutoff, and hope for the best.
 _max_packets_per_ep = 1024
+_packets_per_xfer   = 32
+_xfers_per_queue    = min(16, _max_packets_per_ep // _packets_per_xfer)
 
-# USB has the limitation that all transactions are host-initiated. Therefore, if we do not queue
-# reads for the IN endpoints quickly enough, the HC will not even poll the device, and the buffer
-# will quickly overflow (provided it is being filled with data). To address this, we issue many
-# pipelined reads, to compensate for the non-realtime nature of Python and the host OS.
-#
-# This, however, has an inherent tradeoff. If we submit small reads (down to a single EP buffer
-# size), we get the data back as early as possible, but the CPU load is much higher, and we have
-# to submit many more buffers to tolerate the same amount of scheduling latency. If we submit large
-# reads, it's much easier to service the device quickly enough, but the maximum latency of reads
-# rises.
-#
-# The relationship between buffer size and latency is quite complex. If only one 512-byte buffer
-# is available but a 10240-byte read is requested, the read will finish almost immediately with
-# those 512 bytes. On the other hand, if 20 512-byte buffers are available and the HC can read one
-# each time it sends an IN token, they will all be read before the read finishes; if we request
-# a read of dozens of megabytes, this can take seconds.
-#
-# To try and balance these effects, we choose a medium buffer size that should work well with most
-# applications. It's possible that this will need to become customizable later, but for now
-# a single fixed value works.
-_packets_per_xfer = 32
-
-# Queue as many transfers as we can, but no more than 16, as the returns beyond that point
-# are diminishing.
-_xfers_per_queue = min(16, _max_packets_per_ep // _packets_per_xfer)
 
 class DirectDemultiplexer(AccessDemultiplexer):
     def __init__(self, device, pipe_count):
         super().__init__(device)
         self._claimed = set()
-        # # Debug trace the configurations of USB
-        # for config in device.usb_handle.getDevice().iterConfigurations():
-        #     print(f"Config {config.getConfigurationValue()}:")
-        #     for interface in config:
-        #         print(f"  Interface {interface.getNumSettings()}:")
-        #         for setting in interface:
-        #             print(f"    AltSetting {setting.getAlternateSetting()}")
-        #             for endpoint in setting:
-        #                 print(f"      Endpoint 0x{endpoint.getAddress():02x} ({'IN' if endpoint.getAddress() & 0x80 else 'OUT'})")
 
-        # for config in device.usb_handle.getDevice().iterConfigurations():
-        #     if config.getNumInterfaces() == pipe_count:
-        #         try:
-        #             device.usb_handle.setConfiguration(config.getConfigurationValue())
-        #         except (usb1.USBErrorInvalidParam, usb1.USBErrorNotSupported):
-        #             # Neither WinUSB, nor libusbK, nor libusb0 allow selecting any configuration
-        #             # that is not the 1st one. This is a limitation of the KMDF USB target.
-        #             #
-        #             # Some libusb versions report InvalidParam and some NotSupported.
-        #             pass
-        #         break
-        # else:
-        #     assert False
+        # ------------------------------------------------------------------ #
+        # Select the USB configuration that matches pipe_count.
+        #
+        # Glasgow FX2 uses TWO interfaces per pipe (one OUT, one IN on
+        # separate interface numbers):
+        #   pipe_count=1 → Config 2  (2 interfaces: If0=EP2 OUT, If1=EP6 IN)
+        #   pipe_count=2 → Config 1  (4 interfaces: If0/If1=OUT, If2/If3=IN)
+        #
+        # Linux refuses setConfiguration() while any interface is claimed
+        # (LIBUSB_ERROR_BUSY=-6).  GlasgowDevice.__init__ already claimed
+        # If0 for vendor control transfers, so we must release it first,
+        # switch config, then re-claim it.
+        # ------------------------------------------------------------------ #
+        target_iface_count = pipe_count * 2
+        current_config_val = device.usb_handle.getConfiguration()
 
+        target_config = None
+        for cfg in device.usb_handle.getDevice().iterConfigurations():
+            if cfg.getNumInterfaces() == target_iface_count:
+                target_config = cfg
+                break
 
-    async def claim_interface(self, applet, mux_interface, args, pull_low=set(), pull_high=set(),
-                              **kwargs):
+        if target_config is None:
+            available = [c.getNumInterfaces()
+                         for c in device.usb_handle.getDevice().iterConfigurations()]
+            raise GlasgowDeviceError(
+                f"No USB configuration found for {pipe_count} pipe(s) "
+                f"({target_iface_count} interfaces needed). "
+                f"Available interface counts: {available}")
+
+        if target_config.getConfigurationValue() != current_config_val:
+            logger.debug(
+                "switching USB config %d→%d (%d pipe(s), %d interfaces)",
+                current_config_val, target_config.getConfigurationValue(),
+                pipe_count, target_iface_count)
+
+            # Release every interface that may be claimed in the current config.
+            current_iface_count = DirectDemultiplexer._num_interfaces_for_config(
+                device, current_config_val)
+            for intf_num in range(current_iface_count):
+                try:
+                    device.usb_handle.releaseInterface(intf_num)
+                    logger.debug("released interface %d before config switch", intf_num)
+                except (usb1.USBErrorNotFound, usb1.USBErrorNoDevice):
+                    pass
+
+            try:
+                device.usb_handle.setConfiguration(
+                    target_config.getConfigurationValue())
+                logger.debug("USB config %d now active",
+                             target_config.getConfigurationValue())
+            except (usb1.USBErrorInvalidParam, usb1.USBErrorNotSupported):
+                logger.warning(
+                    "setConfiguration() not supported on this platform; "
+                    "continuing with current config")
+
+            # Re-claim If0 so vendor control transfers keep working.
+            try:
+                device.usb_handle.claimInterface(0)
+                logger.debug("re-claimed interface 0 after config switch")
+            except (usb1.USBErrorNotSupported, usb1.USBErrorBusy):
+                pass
+        else:
+            logger.debug("USB config %d already active (%d pipe(s))",
+                         current_config_val, pipe_count)
+
+    @staticmethod
+    def _num_interfaces_for_config(device, config_val):
+        """Return interface count for a given config value, or 0 if not found."""
+        for cfg in device.usb_handle.getDevice().iterConfigurations():
+            if cfg.getConfigurationValue() == config_val:
+                return cfg.getNumInterfaces()
+        return 0
+
+    async def claim_interface(self, applet, mux_interface, args,
+                              pull_low=set(), pull_high=set(), **kwargs):
         assert mux_interface._pipe_num not in self._claimed
         self._claimed.add(mux_interface._pipe_num)
 
@@ -114,25 +121,27 @@ class DirectDemultiplexer(AccessDemultiplexer):
             (device_pull_high if pin_arg.invert else device_pull_low).add(pin_arg.number)
         for pin_arg in pull_high:
             (device_pull_low if pin_arg.invert else device_pull_high).add(pin_arg.number)
+
         if self.device.has_pulls:
             if self.device.revision == "C0":
                 if pull_low or pull_high:
                     applet.logger.error(
                         "Glasgow revC0 has severe restrictions on use of configurable "
                         "pull resistors; device may require power cycling")
-                    await self.device.set_pulls(args.port_spec, device_pull_low, device_pull_high)
+                    await self.device.set_pulls(
+                        args.port_spec, device_pull_low, device_pull_high)
                 else:
-                    # Don't touch the pulls; they're either in the power-on reset high-Z state, or
-                    # they have been touched by the user, and we've warned about that above.
                     pass
-
             elif hasattr(args, "port_spec"):
-                await self.device.set_pulls(args.port_spec, device_pull_low, device_pull_high)
+                await self.device.set_pulls(
+                    args.port_spec, device_pull_low, device_pull_high)
                 device_pull_desc = []
                 if device_pull_high:
-                    device_pull_desc.append(f"pull-up on {', '.join(map(str, device_pull_high))}")
+                    device_pull_desc.append(
+                        f"pull-up on {', '.join(map(str, device_pull_high))}")
                 if device_pull_low:
-                    device_pull_desc.append(f"pull-down on {', '.join(map(str, device_pull_low))}")
+                    device_pull_desc.append(
+                        f"pull-down on {', '.join(map(str, device_pull_low))}")
                 if not device_pull_desc:
                     device_pull_desc.append("disabled")
                 applet.logger.debug("port(s) %s pull resistors: %s",
@@ -140,67 +149,80 @@ class DirectDemultiplexer(AccessDemultiplexer):
                                     "; ".join(device_pull_desc))
 
         elif device_pull_low or device_pull_high:
-            # Some applets request pull resistors for bidirectional pins (e.g. I2C). Such applets
-            # cannot work on revA/B because of the level shifters and the applet should require
-            # an appropriate revision.
-            # Some applets, though, request pull resistors for unidirectional, DUT-controlled pins
-            # (e.g. NAND flash). Such applets can still work on revA/B with appropriate external
-            # pull resistors, so we spend some additional effort to allow for that.
             if device_pull_low:
-                applet.logger.warning("port(s) %s requires external pull-down resistors on pins %s",
-                                      ", ".join(sorted(args.port_spec)),
-                                      ", ".join(map(str, device_pull_low)))
+                applet.logger.warning(
+                    "port(s) %s requires external pull-down resistors on pins %s",
+                    ", ".join(sorted(args.port_spec)),
+                    ", ".join(map(str, device_pull_low)))
             if device_pull_high:
-                applet.logger.warning("port(s) %s requires external pull-up resistors on pins %s",
-                                      ", ".join(sorted(args.port_spec)),
-                                      ", ".join(map(str, device_pull_high)))
-
+                applet.logger.warning(
+                    "port(s) %s requires external pull-up resistors on pins %s",
+                    ", ".join(sorted(args.port_spec)),
+                    ", ".join(map(str, device_pull_high)))
             await iface.reset()
         else:
-            #-- No pull resistors, no reset() call — but we still MUST activate
-            # the USB interface or every bulk transfer returns LIBUSB_ERROR_IO (-1).
             await iface._activate()
+
         return iface
 
 
 class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
     def __init__(self, device, applet, mux_interface,
                  read_buffer_size=None, write_buffer_size=None):
-        super().__init__(device, applet)       
+        super().__init__(device, applet)
         self.set_usb_handle(mux_interface, read_buffer_size, write_buffer_size)
 
     async def cancel(self):
         if self._in_tasks or self._out_tasks:
             self.logger.info("FIFO: cancelling operations")
-            await self._in_tasks .cancel()
+            await self._in_tasks.cancel()
             await self._out_tasks.cancel()
-            
+
     async def _activate(self):
-        self.logger.info("FIFO: activating USB interface (alt setting 1)")
+        # Log at WARNING so it appears in pytest captured output
+        logger.warning(
+            "FIFO: _activate pipe=%d  OUT EP=0x%02x If=%d  IN EP=0x%02x If=%d  config=%d",
+            self._pipe_num,
+            self._endpoint_out, self._out_interface,
+            self._endpoint_in,  self._in_interface,
+            self.device.usb_handle.getConfiguration())
+
+        # Activate IN interface first, OUT interface second.
+        # OUT must be the last SET_INTERFACE sent so its endpoint state
+        # is fresh when the first bulk_write is submitted.
+        for intf_num in [self._in_interface, self._out_interface]:
+            try:
+                self.device.usb_handle.setInterfaceAltSetting(intf_num, 1)
+                logger.warning("setInterfaceAltSetting If%d alt=1 OK", intf_num)
+            except Exception as exc:
+                raise GlasgowDeviceError(
+                    f"setInterfaceAltSetting(interface={intf_num}, alt=1) failed: {exc}") from exc
+
+        # Clear any stall on the OUT endpoint after activation.
         try:
-            self.device.usb_handle.setInterfaceAltSetting(self._pipe_num, 1)
-            self.logger.info("FIFO: alt setting 1 set successfully on pipe %d", self._pipe_num)
-        except Exception as e:
-            self.logger.error("FIFO: setInterfaceAltSetting FAILED: %s", e)
-            raise
+            self.device.usb_handle.clearHalt(self._endpoint_out)
+            logger.warning("clearHalt EP 0x%02x OK", self._endpoint_out)
+        except Exception as exc:
+            logger.warning("clearHalt EP 0x%02x skipped: %s", self._endpoint_out, exc)
+
         self._in_buffer.clear()
         self._out_buffer.clear()
-        self.logger.info("FIFO: pipelining initial reads")
+
+        logger.warning("FIFO: pipelining %d reads on EP 0x%02x",
+                    _xfers_per_queue, self._endpoint_in)
         for _ in range(_xfers_per_queue):
             self._in_tasks.submit(self._in_task())
-        await asyncio.sleep(0)           
 
+        await asyncio.sleep(0)
+        logger.warning("FIFO: _activate complete")
+    
     async def reset(self):
         await self.cancel()
-
         self.logger.info("asserting reset")
         await self.device.write_register(self._addr_reset, 1)
-
-        await self._activate()  # sets alt setting, clears buffers, pipelines reads
-
+        await self._activate()
         self.logger.info("deasserting reset")
         await self.device.write_register(self._addr_reset, 0)
-        # ← remove everything after this line that was left from the original body
 
     async def _in_task(self):
         if self._read_buffer_size is not None:
@@ -212,26 +234,19 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
         size = self._in_packet_size * _packets_per_xfer
         data = await self.device.bulk_read(self._endpoint_in, size)
         self._in_buffer.write(data)
-
         self._in_tasks.submit(self._in_task())
 
     async def read(self, length=None, *, flush=True):
         if flush and len(self._out_buffer) > 0:
-            # Flush the buffer, so that everything written before the read reaches the device.
             await self.flush(wait=False)
 
         if length is None and len(self._in_buffer) > 0:
-            # Just return whatever is in the buffer.
             length = len(self._in_buffer)
         elif length is None:
-            # Return whatever is received in the next transfer, even if it's nothing.
-            # (Gateware doesn't normally submit zero-length packets, so, unless that changes
-            # or customized gateware is used, we'll always get some data here.)
             self._in_stalls += 1
             await self._in_tasks.wait_one()
             length = len(self._in_buffer)
         else:
-            # Return exactly the requested length.
             self._in_stalls += 1
             while len(self._in_buffer) < length:
                 self.logger.info("FIFO: need %d bytes", length - len(self._in_buffer))
@@ -249,25 +264,18 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
                     self._in_pushback.notify_all()
                 chunks.append(chunk)
                 length -= len(chunk)
-            # Always return a memoryview object, to avoid hard to detect edge cases downstream.
             result = memoryview(b"".join(chunks))
 
         self.logger.info("FIFO: read <%s>", dump_hex(result))
         return result
 
     def _out_slice(self):
-        # Fast path: read as much contiguous data as possible, up to our transfer size.
         size = self._out_packet_size * _packets_per_xfer
         data = self._out_buffer.read(size)
-
         if len(data) < self._out_packet_size:
-            # Slow path: USB is very inefficient with small packets, so if we only got a few
-            # bytes from the FIFO, and there is more in it, spend CPU time to aggregate that
-            # into a larger transfer, as this is likely to result in overall speedup.
             data = bytearray(data)
             while len(data) < self._out_packet_size and self._out_buffer:
                 data += self._out_buffer.read(self._out_packet_size - len(data))
-
         self._out_inflight += len(data)
         return data
 
@@ -276,76 +284,37 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
         out_xfer_size = self._out_packet_size * _packets_per_xfer
         if self._write_buffer_size is None:
             return out_xfer_size
-        else:
-            return min(self._write_buffer_size, out_xfer_size)
+        return min(self._write_buffer_size, out_xfer_size)
 
     async def _out_task(self, data):
         assert len(data) > 0
-
         try:
             await self.device.bulk_write(self._endpoint_out, data)
         finally:
             self._out_inflight -= len(data)
-
-        # See the comment in `write` below for an explanation of the following code.
         if len(self._out_buffer) >= self._out_threshold:
             self._out_tasks.submit(self._out_task(self._out_slice()))
 
     async def write(self, data):
         if self._write_buffer_size is not None:
-            # If write buffer is bounded, and we have more inflight requests than the configured
-            # write buffer size, then wait until the inflight requests arrive before continuing.
             if self._out_inflight >= self._write_buffer_size:
                 self._out_stalls += 1
             while self._out_inflight >= self._write_buffer_size:
                 self.logger.info("FIFO: write pushback")
                 await self._out_tasks.wait_one()
-
-        # Eagerly check if any of our previous queued writes errored out.
         await self._out_tasks.poll()
-
         self.logger.info("FIFO: write <%s>", dump_hex(data))
         self._out_buffer.write(data)
-
-        # The write scheduling algorithm attempts to satisfy several partially conflicting goals:
-        #  * We want to schedule writes as early as possible, because this reduces buffer bloat and
-        #    can dramatically improve responsiveness of the system.
-        #  * We want to schedule writes that are as large as possible, up to _packets_per_xfer,
-        #    because this reduces CPU utilization and improves latency.
-        #  * We never want to automatically schedule writes smaller than _out_packet_size,
-        #    because they occupy a whole microframe anyway.
-        #
-        # We use an approach that performs well when fed with a steady sequence of very large
-        # FIFO chunks, yet scales down to packet-size and byte-size FIFO chunks as well.
-        #  * We only submit a write automatically once the buffer level crosses the threshold of
-        #    `_out_packet_size * _packets_per_xfer`. In this case, _slice_packet always returns
-        #    `_out_packet_size * n` bytes, where n is between 1 and _packet_per_xfer.
-        #  * We submit enough writes that there is at least one write for each transfer worth
-        #    of data in the buffer, up to _xfers_per_queue outstanding writes.
-        #  * We submit another write once one finishes, if the buffer level is still above
-        #    the threshold, even if no more explicit write calls are performed.
-        #
-        # This provides predictable write behavior; only _packets_per_xfer packet writes are
-        # automatically submitted, and only the minimum necessary number of tasks are scheduled on
-        # calls to `write`.
-        while len(self._out_tasks) < _xfers_per_queue and \
-                    len(self._out_buffer) >= self._out_threshold:
+        while (len(self._out_tasks) < _xfers_per_queue and
+               len(self._out_buffer) >= self._out_threshold):
             self._out_tasks.submit(self._out_task(self._out_slice()))
 
     async def flush(self, wait=True):
         self.logger.info("FIFO: flush")
-
-        # First, we ensure we can submit one more task. (There can be more tasks than
-        # _xfers_per_queue because a task may spawn another one just before it terminates.)
         if len(self._out_tasks) >= _xfers_per_queue:
             self._out_stalls += 1
         while len(self._out_tasks) >= _xfers_per_queue:
             await self._out_tasks.wait_one()
-
-        # At this point, the buffer can contain at most _packets_per_xfer packets worth
-        # of data, as anything beyond that crosses the threshold of automatic submission.
-        # So, we can simply submit the rest of data, which by definition fits into a single
-        # transfer.
         assert len(self._out_buffer) <= self._out_packet_size * _packets_per_xfer
         if self._out_buffer:
             data = bytearray()
@@ -353,7 +322,6 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
                 data += self._out_buffer.read()
             self._out_inflight += len(data)
             self._out_tasks.submit(self._out_task(data))
-
         if wait:
             self.logger.info("FIFO: wait for flush")
             if self._out_tasks:
@@ -363,19 +331,11 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
 
     def statistics(self):
         self.logger.info("FIFO statistics:")
-        self.logger.info("  read total    : %d B",
-                         self._in_buffer.total_read_bytes)
-        self.logger.info("  written total : %d B",
-                         self._out_buffer.total_written_bytes)
-        self.logger.info("  reads waited  : %.3f s",
-                         self._in_tasks.total_wait_time)
-        self.logger.info("  writes waited : %.3f s",
-                         self._out_tasks.total_wait_time)
-        self.logger.info("  read stalls   : %d",
-                         self._in_stalls)
-        self.logger.info("  write stalls  : %d",
-                         self._out_stalls)
-        self.logger.info("  read wakeups  : %d",
-                         self._in_tasks.total_wait_count)
-        self.logger.info("  write wakeups : %d",
-                         self._out_tasks.total_wait_count)
+        self.logger.info("  read total    : %d B", self._in_buffer.total_read_bytes)
+        self.logger.info("  written total : %d B", self._out_buffer.total_written_bytes)
+        self.logger.info("  reads waited  : %.3f s", self._in_tasks.total_wait_time)
+        self.logger.info("  writes waited : %.3f s", self._out_tasks.total_wait_time)
+        self.logger.info("  read stalls   : %d", self._in_stalls)
+        self.logger.info("  write stalls  : %d", self._out_stalls)
+        self.logger.info("  read wakeups  : %d", self._in_tasks.total_wait_count)
+        self.logger.info("  write wakeups : %d", self._out_tasks.total_wait_count)

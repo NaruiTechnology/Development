@@ -65,7 +65,7 @@ class AccessMultiplexerInterface(Elaboratable, metaclass=ABCMeta):
 
 
 class AccessDemultiplexer(metaclass=ABCMeta):
-    def __init__(self, device): #, read_buffer_size=16384*16384, write_buffer_size=16384*16384):
+    def __init__(self, device):
         self.device = device
         self._interfaces = []
 
@@ -107,7 +107,7 @@ class AccessDemultiplexerInterface(metaclass=ABCMeta):
     def set_usb_handle(self, mux_interface, read_buffer_size=16384*16384, write_buffer_size=16384*16384):
         import asyncio, usb1
         from .support.chunked_fifo import ChunkedFIFO
-        from .support.task_queue import TaskQueue   
+        from .support.task_queue import TaskQueue
 
         self._write_buffer_size = write_buffer_size
         self._read_buffer_size  = read_buffer_size
@@ -117,47 +117,94 @@ class AccessDemultiplexerInterface(metaclass=ABCMeta):
         self._pipe_num   = mux_interface._pipe_num
         self._addr_reset = mux_interface._addr_reset
 
+        # ------------------------------------------------------------------ #
+        # Endpoint scan — pipe-aware                                          #
+        #                                                                     #
+        # Glasgow FX2 firmware lays out endpoints across interfaces in order: #
+        #                                                                     #
+        # Config 2 (1 pipe):                                                  #
+        #   If0 Alt1 → EP 0x02 OUT  (pipe 0)                                 #
+        #   If1 Alt1 → EP 0x86 IN   (pipe 0)                                 #
+        #                                                                     #
+        # Config 1 (2 pipes):                                                 #
+        #   If0 Alt1 → EP 0x02 OUT  (pipe 0)                                 #
+        #   If1 Alt1 → EP 0x04 OUT  (pipe 1)                                 #
+        #   If2 Alt1 → EP 0x86 IN   (pipe 0)                                 #
+        #   If3 Alt1 → EP 0x88 IN   (pipe 1)                                 #
+        #                                                                     #
+        # To get the correct endpoints for pipe N, skip the first N OUT       #
+        # endpoints and the first N IN endpoints encountered in the scan.     #
+        # DirectDemultiplexer.__init__ must call setConfiguration() first     #
+        # so that the right configuration is active before we scan here.      #
+        # ------------------------------------------------------------------ #
         config_num = self.device.usb_handle.getConfiguration()
         config = None
         for cfg in self.device.usb_handle.getDevice().iterConfigurations():
             if cfg.getConfigurationValue() == config_num:
                 config = cfg
                 break
-        assert config is not None
+        assert config is not None, \
+            f"Active USB configuration {config_num} not found in device descriptor"
 
-        self._endpoint_in = None
+        self._endpoint_in  = None
         self._endpoint_out = None
-        self._in_interface = None
+        self._in_interface  = None
         self._out_interface = None
 
-        # Scan all interfaces + altsettings
+        out_seen = 0  # how many OUT endpoints we have passed over
+        in_seen  = 0  # how many IN  endpoints we have passed over
+
         for interface in config.iterInterfaces():
             for setting in interface.iterSettings():
                 intf_num = setting.getNumber()
                 for endpoint in setting.iterEndpoints():
-                    address = endpoint.getAddress()
+                    address     = endpoint.getAddress()
                     packet_size = endpoint.getMaxPacketSize()
-                    direction = address & usb1.ENDPOINT_DIR_MASK
+                    direction   = address & usb1.ENDPOINT_DIR_MASK
 
-                    if direction == usb1.ENDPOINT_OUT and self._endpoint_out is None:
-                        self._endpoint_out = address
-                        self._out_packet_size = packet_size
-                        self._out_interface = intf_num
-                        self.device.usb_handle.claimInterface(self._out_interface)
-                        self.logger.info(f"Using OUT EP {hex(address)} (iface {self._out_interface}, packet {packet_size})")
+                    if direction == usb1.ENDPOINT_OUT:
+                        if out_seen == self._pipe_num and self._endpoint_out is None:
+                            self._endpoint_out   = address
+                            self._out_packet_size = packet_size
+                            self._out_interface  = intf_num
+                            self.device.usb_handle.claimInterface(self._out_interface)
+                            self.logger.info(
+                                "pipe %d: OUT EP 0x%02x on interface %d (packet size %d)",
+                                self._pipe_num, address, intf_num, packet_size)
+                        out_seen += 1
 
-                    elif direction == usb1.ENDPOINT_IN and self._endpoint_in is None:
-                        self._endpoint_in = address
-                        self._in_packet_size = packet_size
-                        self._in_interface = intf_num
-                        self.device.usb_handle.claimInterface(self._in_interface)
-                        self.logger.info(f"Using IN EP {hex(address)} (iface {self._in_interface}, packet {packet_size})")
+                    elif direction == usb1.ENDPOINT_IN:
+                        if in_seen == self._pipe_num and self._endpoint_in is None:
+                            self._endpoint_in    = address
+                            self._in_packet_size = packet_size
+                            self._in_interface   = intf_num
+                            self.device.usb_handle.claimInterface(self._in_interface)
+                            self.logger.info(
+                                "pipe %d: IN  EP 0x%02x on interface %d (packet size %d)",
+                                self._pipe_num, address, intf_num, packet_size)
+                        in_seen += 1
 
-        assert self._endpoint_in is not None and self._endpoint_out is not None, \
-            "Could not find both IN and OUT endpoints!"
+            # Stop scanning once both endpoints for this pipe have been found.
+            if self._endpoint_out is not None and self._endpoint_in is not None:
+                break
 
-        from .support.chunked_fifo import ChunkedFIFO
-        from .support.task_queue import TaskQueue
+        if self._endpoint_out is None or self._endpoint_in is None:
+            # Build a human-readable summary of what was actually found to aid diagnosis.
+            found = []
+            for interface in config.iterInterfaces():
+                for setting in interface.iterSettings():
+                    for ep in setting.iterEndpoints():
+                        dir_str = "IN" if (ep.getAddress() & usb1.ENDPOINT_DIR_MASK) == usb1.ENDPOINT_IN else "OUT"
+                        found.append(
+                            f"If{setting.getNumber()} Alt{setting.getAlternateSetting()} "
+                            f"EP 0x{ep.getAddress():02x} {dir_str}")
+            raise AssertionError(
+                f"Could not find both IN and OUT endpoints for pipe {self._pipe_num} "
+                f"in USB config {config_num}.\n"
+                f"Endpoints present: {found or ['(none)']}\n"
+                f"Hint: DirectDemultiplexer.__init__ must call setConfiguration() before "
+                f"set_usb_handle() is invoked.")
+
         self._in_tasks   = TaskQueue()
         self._in_buffer  = ChunkedFIFO()
         self._out_tasks  = TaskQueue()
@@ -167,29 +214,31 @@ class AccessDemultiplexerInterface(metaclass=ABCMeta):
 
     # -----------------------------------------------------
     # USB I/O methods
+    # Note: DirectDemultiplexerInterface in demultiplexer.py overrides read(),
+    # write(), and flush() with pipelined async implementations. The
+    # synchronous fallbacks below are only used when DirectDemultiplexerInterface
+    # is NOT in the MRO (e.g. in tests or alternative demultiplexer implementations).
     # -----------------------------------------------------
     async def read(self, length=None, *, flush=True, timeout=1000):
         """
-        Read from the IN endpoint. If length is None, try to read one packet.
+        Synchronous-style fallback read. Overridden by DirectDemultiplexerInterface.
         """
         import usb1
         if length is None:
             length = self._in_packet_size
-
         try:
             data = self.device.usb_handle.bulkRead(
-                self._endpoint_in, length, timeout
-            )
+                self._endpoint_in, length, timeout)
             return data
         except usb1.USBErrorTimeout:
             return b""
         except usb1.USBError as e:
-            self.logger.error(f"USB bulkRead error: {e}")
+            self.logger.error("USB bulkRead error on EP 0x%02x: %s", self._endpoint_in, e)
             raise
 
     async def write(self, data, timeout=1000):
         """
-        Write to the OUT endpoint. Handles large buffers by splitting into packets.
+        Synchronous-style fallback write. Overridden by DirectDemultiplexerInterface.
         """
         import usb1
         total_written = 0
@@ -198,13 +247,12 @@ class AccessDemultiplexerInterface(metaclass=ABCMeta):
             chunk = data[offset: offset + self._out_packet_size]
             try:
                 written = self.device.usb_handle.bulkWrite(
-                    self._endpoint_out, chunk, timeout
-                )
+                    self._endpoint_out, chunk, timeout)
             except usb1.USBError as e:
-                self.logger.error(f"USB bulkWrite error: {e}")
+                self.logger.error("USB bulkWrite error on EP 0x%02x: %s", self._endpoint_out, e)
                 raise
             if written <= 0:
                 break
-            offset += written
+            offset        += written
             total_written += written
         return total_written
