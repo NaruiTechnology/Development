@@ -55,34 +55,20 @@ class IobeamLauncher:
         applet.build(target, applet_args)
 
         # ------------------------------------------------------------------ #
-        # 2.  Synthesise bitstream                                            #
-        #                                                                     #
-        # plan.execute() is NOT called here explicitly.                       #
-        # download_target() calls plan.get_bitstream() which calls            #
-        # execute() internally, caches the result, and passes the bytes       #
-        # directly to download_bitstream().  No file path is needed.          #
-        #                                                                     #
-        # If you need to inspect top.v / top.bin after the build, change      #
-        # reload=True  to also pass  debug=True to get_bitstream, or call:    #
-        #   bitstream = await plan.get_bitstream(debug=True)                  #
-        #   logger.info("build dir: %s", plan.buildDir)                       #
+        # 2.  Synthesise and flash bitstream                                  #
         # ------------------------------------------------------------------ #
-        
         plan = target.build_plan()
-         # reload=True forces re-flash even when bitstream_id hasn't changed.
-        # Keep this True while iterating on HDL; switch to False in production.
-        await device.download_target(plan, reload=True)
-        
-        device.demultiplexer = DirectDemultiplexer(device,
-                                                   target.multiplexer.pipe_count)
-        ''' #-- plan = target.build_plan()
 
         # reload=True forces re-flash even when bitstream_id hasn't changed.
-        # Keep this True while iterating on HDL; switch to False in production.
-        await device.download_target(plan, reload=True) '''
-        
-        await device.set_voltage("AB", action_voltage)
+        # Switch to False in production to use the cache.
+        await device.download_target(plan, reload=True)
 
+        # DirectDemultiplexer is constructed AFTER download_target so the USB
+        # configuration switch runs on a fully-enumerated, stable device.
+        device.demultiplexer = DirectDemultiplexer(device,
+                                                   target.multiplexer.pipe_count)
+
+        await device.set_voltage("AB", action_voltage)
         await asyncio.sleep(1.5)
 
         # ------------------------------------------------------------------ #
@@ -93,13 +79,17 @@ class IobeamLauncher:
             raise RuntimeError(
                 "FPGA is not ready after bitstream download. "
                 f"Status register = {status:#04x}")
-  
+
         await asyncio.sleep(1.2)
+
+        # Open the applet run gate (gates in_fifo.w_en in IobeamDataSubtarget).
+        # This must be written before claim_interface so the FPGA can send data
+        # as soon as the demultiplexer reset is deasserted inside _activate().
         await device.write_register(applet.addr_reset, 1)
         logger.info("Run gate open")
 
         # ------------------------------------------------------------------ #
-        # 3.  Claim the streaming interface                                   #
+        # 4.  Claim the streaming interface                                   #
         # ------------------------------------------------------------------ #
         iface = await device.demultiplexer.claim_interface(
             applet, applet.mux_interface, applet_args,
@@ -107,14 +97,11 @@ class IobeamLauncher:
             write_buffer_size = applet_args.buffer_size,
         )
 
-        # Give the FPGA a moment to finish initialising after the bitstream
-        # download before touching registers.
-        await asyncio.sleep(1.0)        
+        await asyncio.sleep(0.5)
         logger.info("IobeamLauncher: initialisation complete — returning interface")
-        
         return iface
 
-    
+
 if __name__ == "__main__":
     import argparse
     import os

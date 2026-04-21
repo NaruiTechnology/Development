@@ -83,7 +83,7 @@ class Connection(metaclass = ABCMeta):
         self._synchronized = True 
         self._logger.debug("synchronization complete")
     
-        if not data.endswith(res):
+        if not bytes(data).endswith(res):
             self._logger.error(f"unexpected synchronization response: {data!r} (expected to end with {res!r})")
             raise TransferError("synchronization failed")
         

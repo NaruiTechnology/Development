@@ -21,19 +21,6 @@ class DirectDemultiplexer(AccessDemultiplexer):
         super().__init__(device)
         self._claimed = set()
 
-        # ------------------------------------------------------------------ #
-        # Select the USB configuration that matches pipe_count.
-        #
-        # Glasgow FX2 uses TWO interfaces per pipe (one OUT, one IN on
-        # separate interface numbers):
-        #   pipe_count=1 → Config 2  (2 interfaces: If0=EP2 OUT, If1=EP6 IN)
-        #   pipe_count=2 → Config 1  (4 interfaces: If0/If1=OUT, If2/If3=IN)
-        #
-        # Linux refuses setConfiguration() while any interface is claimed
-        # (LIBUSB_ERROR_BUSY=-6).  GlasgowDevice.__init__ already claimed
-        # If0 for vendor control transfers, so we must release it first,
-        # switch config, then re-claim it.
-        # ------------------------------------------------------------------ #
         target_iface_count = pipe_count * 2
         current_config_val = device.usb_handle.getConfiguration()
 
@@ -57,7 +44,6 @@ class DirectDemultiplexer(AccessDemultiplexer):
                 current_config_val, target_config.getConfigurationValue(),
                 pipe_count, target_iface_count)
 
-            # Release every interface that may be claimed in the current config.
             current_iface_count = DirectDemultiplexer._num_interfaces_for_config(
                 device, current_config_val)
             for intf_num in range(current_iface_count):
@@ -77,7 +63,6 @@ class DirectDemultiplexer(AccessDemultiplexer):
                     "setConfiguration() not supported on this platform; "
                     "continuing with current config")
 
-            # Re-claim If0 so vendor control transfers keep working.
             try:
                 device.usb_handle.claimInterface(0)
                 logger.debug("re-claimed interface 0 after config switch")
@@ -89,7 +74,6 @@ class DirectDemultiplexer(AccessDemultiplexer):
 
     @staticmethod
     def _num_interfaces_for_config(device, config_val):
-        """Return interface count for a given config value, or 0 if not found."""
         for cfg in device.usb_handle.getDevice().iterConfigurations():
             if cfg.getConfigurationValue() == config_val:
                 return cfg.getNumInterfaces()
@@ -130,8 +114,6 @@ class DirectDemultiplexer(AccessDemultiplexer):
                         "pull resistors; device may require power cycling")
                     await self.device.set_pulls(
                         args.port_spec, device_pull_low, device_pull_high)
-                else:
-                    pass
             elif hasattr(args, "port_spec"):
                 await self.device.set_pulls(
                     args.port_spec, device_pull_low, device_pull_high)
@@ -147,6 +129,7 @@ class DirectDemultiplexer(AccessDemultiplexer):
                 applet.logger.debug("port(s) %s pull resistors: %s",
                                     ", ".join(sorted(args.port_spec)),
                                     "; ".join(device_pull_desc))
+            await iface._activate()
 
         elif device_pull_low or device_pull_high:
             if device_pull_low:
@@ -179,7 +162,6 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             await self._out_tasks.cancel()
 
     async def _activate(self):
-        # Log at WARNING so it appears in pytest captured output
         logger.warning(
             "FIFO: _activate pipe=%d  OUT EP=0x%02x If=%d  IN EP=0x%02x If=%d  config=%d",
             self._pipe_num,
@@ -187,21 +169,17 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             self._endpoint_in,  self._in_interface,
             self.device.usb_handle.getConfiguration())
 
-        # Activate IN interface first, OUT interface second.
-        # OUT must be the last SET_INTERFACE sent so its endpoint state
-        # is fresh when the first bulk_write is submitted.
         for intf_num in [self._in_interface, self._out_interface]:
             try:
                 self.device.usb_handle.setInterfaceAltSetting(intf_num, 1)
                 logger.warning("setInterfaceAltSetting If%d alt=1 OK", intf_num)
             except Exception as exc:
                 raise GlasgowDeviceError(
-                    f"setInterfaceAltSetting(interface={intf_num}, alt=1) failed: {exc}") from exc
+                    f"setInterfaceAltSetting(interface={intf_num}, alt=1) failed: {exc}"
+                ) from exc
 
-        # Clear any stall on the OUT endpoint after activation.
         try:
             self.device.usb_handle.clearHalt(self._endpoint_out)
-            logger.warning("clearHalt EP 0x%02x OK", self._endpoint_out)
         except Exception as exc:
             logger.warning("clearHalt EP 0x%02x skipped: %s", self._endpoint_out, exc)
 
@@ -209,20 +187,24 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
         self._out_buffer.clear()
 
         logger.warning("FIFO: pipelining %d reads on EP 0x%02x",
-                    _xfers_per_queue, self._endpoint_in)
+                       _xfers_per_queue, self._endpoint_in)
         for _ in range(_xfers_per_queue):
             self._in_tasks.submit(self._in_task())
 
         await asyncio.sleep(0)
+
+        # Deassert the multiplexer hardware reset so the subtarget can run.
+        # DirectMultiplexerInterface adds a reset register (init=1) that holds
+        # the subtarget in ResetInserter reset until explicitly cleared here.
+        logger.warning("FIFO: deasserting multiplexer reset (addr=%d)", self._addr_reset)
+        await self.device.write_register(self._addr_reset, 0)
         logger.warning("FIFO: _activate complete")
-    
+
     async def reset(self):
         await self.cancel()
         self.logger.info("asserting reset")
         await self.device.write_register(self._addr_reset, 1)
         await self._activate()
-        self.logger.info("deasserting reset")
-        await self.device.write_register(self._addr_reset, 0)
 
     async def _in_task(self):
         if self._read_buffer_size is not None:
