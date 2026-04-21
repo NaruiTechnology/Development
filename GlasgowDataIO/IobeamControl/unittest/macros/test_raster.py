@@ -36,14 +36,14 @@ class RasterScanTest(unittest.TestCase):
 #==========================================================
     async def scan_wet_run(self):
         if self._config is not None:
-                test_range = DACCodeRange.from_resolution(2048)
+                test_range = DACCodeRange.from_resolution(128) #-- TODO: 2048)
                 test_dwell = 2
                 test_cmd = RasterScanCommand(cookie=123,
                     x_range=test_range, y_range=test_range, dwell_time=test_dwell)
                 conn = GlasgowConnection(self._config)
                 await conn._connect()
                 if conn.connected:
-                    test_range = DACCodeRange.from_resolution(2048)
+                    test_range = DACCodeRange.from_resolution(128) #--TODO: 2048)
                     test_dwell = 2
                     test_cmd = RasterScanCommand(cookie=123,
                         x_range=test_range, y_range=test_range, dwell_time=test_dwell)

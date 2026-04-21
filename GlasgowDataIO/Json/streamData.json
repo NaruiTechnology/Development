@@ -31,5 +31,5 @@
     ],
     "LogName": "WaveformGenerator",
     "Verbose": true,
-    "Simulate": false
+    "Simulate": true
 }

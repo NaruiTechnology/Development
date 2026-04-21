@@ -141,8 +141,10 @@ class IobeamDataSubtarget(Elaboratable):
                 executor.cmd_stream.payload.type == CmdType.RasterPixel)
 
             with m.If(loopback_dwell_time):
+                #-- m.d.comb += loopback_adapter.loopback_stream.eq(
+                #--    executor.supersampler.dac_stream_data.dwell_time)
                 m.d.comb += loopback_adapter.loopback_stream.eq(
-                    executor.supersampler.dac_stream_data.dwell_time)
+                    executor.supersampler.dac_stream.payload.dwell_time)
             with m.Else():
                 m.d.comb += loopback_adapter.loopback_stream.eq(
                     executor.supersampler.super_dac_stream.payload.dac_x_code)

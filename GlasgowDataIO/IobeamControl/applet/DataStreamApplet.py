@@ -68,25 +68,16 @@ class DataStreamApplet(GlasgowApplet):
             # ebeam_blank = args.pin_set_ebeam_blank,
         )
 
-        """ subtarget_args = {
-            "ports": ports,
-            "in_fifo": in_fifo,
-            "out_fifo": out_fifo,
-            #"loopback": args.loopback,
-            #"transforms": Transforms(args.xflip, args.yflip, args.rotate90),
-            #"out_only": args.out_only
-            "magic_reg": self.magic_reg,
-            "_addr_reset": addr_reset
-        } """
-   
+ 
         subtarget = IobeamDataSubtarget(
                 ports=iface.get_port_group(),
                 in_fifo=in_fifo,
                 out_fifo=out_fifo,
                 magic_reg=self.magic_reg,
-                _addr_reset=self.reset_reg 
+                _addr_reset=self.reset_reg,
+                loopback=True
             )
-        #subtarget = IobeamDataSubtarget(**subtarget_args)
+
         return iface.add_subtarget(subtarget)       
     
     async def run(self, device, args):
