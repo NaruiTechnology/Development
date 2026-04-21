@@ -20,7 +20,7 @@
                             "pinList": [0,1,2,3,4,5,6,7]
                         }
                     ],
-                    "bufferSize": "128*128",
+                    "bufferSize": "16384*16384",
                     "frequency": 1000,
                     "point": 100,
                     "waveForm" : "square"

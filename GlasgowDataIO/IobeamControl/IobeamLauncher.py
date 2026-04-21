@@ -69,7 +69,7 @@ class IobeamLauncher:
                                                    target.multiplexer.pipe_count)
 
         await device.set_voltage("AB", action_voltage)
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(3.0)
 
         # ------------------------------------------------------------------ #
         # 3.  Verify FPGA is alive and open the run gate                      #

@@ -81,11 +81,13 @@ class RasterScanCommand(BaseCommand):
                     ## go to a blanked state after an aborted frame
                     commands.extend(bytes(BlankCommand(enable=True, inline=False)))
                 await stream.write(commands)
+                await stream.flush() #--
                 tokens -= 1
                 if self.abort.is_set():
                     break
                 await asyncio.sleep(0)
             await FlushCommand().transfer(stream)
+            print("sender: completed all chunks and final flush")  #--
 
         await SynchronizeCommand(cookie=self._cookie, raster=True, output = self._output_mode).transfer(stream)
         await RasterRegionCommand(x_range=self._x_range, y_range=self._y_range).transfer(stream)

@@ -16,71 +16,84 @@ class GlasgowStream(Stream):
         logger.debug(f"send: data=<{dump_hex(data)}>")
         await self.lower.write(data)
         logger.debug(f"send: done")
+
     async def flush(self):
         logger.debug(f"flush")
         await self.lower.flush()
         logger.debug(f"flush: done")
+
     async def read(self, length):
         return await self.lower.read(length)
+
     async def readexactly(self, length):
         return await self.lower.read(length)
-    
 
     async def readuntil(self, separator=b'\n', *, flush=True, max_count=False):
-        # 1. Define finding logic locally to avoid scope errors
-        def find_sep(buffer, separator):
-            if buffer._chunk is None:
-                if not buffer._queue:
-                    return -1
-                buffer._chunk  = buffer._queue.popleft()
-                buffer._offset = 0
-            # Search within the current active chunk
-            return buffer._chunk.obj.find(separator)
-
-        # 2. Pre-calculate lengths
+        # ------------------------------------------------------------------ #
+        # NOTE: The original implementation used find_sep() which only
+        # searched within the current ChunkedFIFO chunk. The 4-byte sync
+        # separator (\xff\xff + 2-byte cookie) almost always arrives split
+        # across two USB transfer chunks, so find_sep() returned -1 forever
+        # even though all bytes were present — causing the 20s timeout.
+        #
+        # This implementation accumulates bytes into a local bytearray and
+        # searches the full accumulated content, correctly handling separators
+        # that span chunk boundaries.
+        # ------------------------------------------------------------------ #
         seplen = len(separator)
         if seplen == 0:
             raise ValueError('Separator must be at least one byte')
 
-        # 3. Handle pending writes
+        # Flush any pending writes before waiting for a response.
         if flush and len(self.lower._out_buffer) > 0:
             await self.lower.flush(wait=False)
 
-        # 4. The main wait loop
+        accumulated = bytearray()
+
         while True:
-            buflen = len(self.lower._in_buffer)
-            
-            # Check for separator or max_count as before
-            if buflen >= seplen:
-                isep = find_sep(self.lower._in_buffer, separator)
-                if isep != -1:
-                    break
-            
-            if max_count and buflen >= max_count:
-                isep = buflen - seplen
+            # Drain everything currently available in the in_buffer into
+            # our local accumulator so we can search across chunk boundaries.
+            available = len(self.lower._in_buffer)
+            if available > 0:
+                chunk_data = self.lower._in_buffer.read(available)
+                accumulated.extend(bytes(chunk_data))
+
+            # Search the full accumulated content for the separator.
+            isep = accumulated.find(separator)
+            if isep != -1:
                 break
 
-            # PROTECT LINE #73 OF TASK_QUEUE.PY
-            # Instead of a direct await, we verify the queue is still healthy.
-            # If libusb has crashed, _in_tasks will often raise an exception here.
+            # max_count support: if we have enough data, stop searching
+            # and return up to max_count bytes.
+            if max_count and len(accumulated) >= max_count:
+                isep = len(accumulated) - seplen
+                break
+
+            # Need more data — wait for the next IN transfer to complete.
             try:
                 if not self.lower._in_tasks:
-                    # The queue has been cleared/cancelled due to an I/O error
                     raise ConnectionError("USB TaskQueue is empty or crashed.")
-                
-                # We use a timeout to prevent an infinite hang if the hardware 
-                # stops responding without raising a clean exception.
-                await asyncio.wait_for(self.lower._in_tasks.wait_one(), timeout=5.0)
-                
+
+                await asyncio.wait_for(
+                    self.lower._in_tasks.wait_one(), timeout=20.0)
+
             except (asyncio.TimeoutError, Exception) as e:
                 logger.error(f"Failed to wait for USB data: {e}")
-                # This catches the LIBUSB_ERROR_IO bubbling up from the queue
-                raise ConnectionError("Hardware I/O Error: The Glasgow interface disconnected.") from e
+                raise ConnectionError(
+                    "Hardware I/O Error: The Glasgow interface disconnected.") from e
 
-        # Final extraction
-        chunk = self.lower._in_buffer.read(isep + seplen)
-        return memoryview(chunk)
-                 
+        # Separator found at isep. Return everything up to and including it.
+        result    = accumulated[:isep + seplen]
+        remainder = accumulated[isep + seplen:]
+
+        # Put any bytes that arrived after the separator back into the
+        # in_buffer so the next read() call sees them.
+        if remainder:
+            self.lower._in_buffer.write(bytes(remainder))
+
+        return memoryview(bytes(result))
+
+
 class GlasgowConnection(Connection):
     def __init__(self, config):
         super(GlasgowConnection, self).__init__()
@@ -92,15 +105,9 @@ class GlasgowConnection(Connection):
 
     async def _connect(self):
         assert not self.connected
-        """ launcher  = IobeamLauncher(self._config)
-        self._stream = GlasgowStream(await launcher.start()) """
-        # Gemimi suggests that we should separate the concerns of launching and connecting, so that we can have more control over the connection lifecycle. This also allows us to handle cases where the launcher might fail to start or return a None interface.
         launcher = IobeamLauncher(self._config)
         iface = await launcher.start()
         if iface is None:
             raise ConnectionError("Launcher failed to start: Interface is None")
-        
-        # Crucial: Assign the wrapped stream
         self._stream = GlasgowStream(iface)
         logger.debug("Successfully connected and wrapped GlasgowStream")
-
