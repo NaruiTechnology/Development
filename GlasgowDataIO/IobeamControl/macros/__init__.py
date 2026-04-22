@@ -102,7 +102,9 @@ class RasterScanCommand(BaseCommand):
             # pixel_count*2 bytes per real chunk, so these padding bytes  #
             # sit harmlessly in the host _in_buffer until teardown.       #
             # ========================================================== #
-            PADDING_PIXELS = 128
+
+            total_pixels = self._x_range.count * self._y_range.count
+            PADDING_PIXELS = max(128, total_pixels // 200)  # 0.5%, empirical       
             print(f"[sender] draining pipeline with {PADDING_PIXELS} VectorPixels",
                 flush=True)
             padding = bytearray()
