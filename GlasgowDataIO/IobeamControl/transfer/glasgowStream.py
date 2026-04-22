@@ -6,6 +6,7 @@ from IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 
 logger = logging.getLogger('GlasgowStream')
 
+
 class GlasgowStream(Stream):
     def __init__(self, iface):
         if iface is None:
@@ -23,7 +24,18 @@ class GlasgowStream(Stream):
         logger.debug(f"flush: done")
 
     async def read(self, length):
-        return await self.lower.read(length)
+        before = len(self.lower._in_buffer)
+        print(f"[GlasgowStream.read] requested={length}  in_buffer_before={before}", flush=True)
+        try:
+            data = await self.lower.read(length)
+            after = len(self.lower._in_buffer)
+            got = len(data) if data is not None else 0
+            print(f"[GlasgowStream.read] returned={got}  in_buffer_after={after}", flush=True)
+            return data
+        except Exception as e:
+            after = len(self.lower._in_buffer)
+            print(f"[GlasgowStream.read] EXCEPTION  in_buffer_at_fail={after}  type={type(e).__name__}", flush=True)
+            raise
 
     async def readexactly(self, length):
         return await self.lower.read(length)
@@ -51,25 +63,19 @@ class GlasgowStream(Stream):
         accumulated = bytearray()
 
         while True:
-            # Drain everything currently available in the in_buffer into
-            # our local accumulator so we can search across chunk boundaries.
             available = len(self.lower._in_buffer)
             if available > 0:
                 chunk_data = self.lower._in_buffer.read(available)
                 accumulated.extend(bytes(chunk_data))
 
-            # Search the full accumulated content for the separator.
             isep = accumulated.find(separator)
             if isep != -1:
                 break
 
-            # max_count support: if we have enough data, stop searching
-            # and return up to max_count bytes.
             if max_count and len(accumulated) >= max_count:
                 isep = len(accumulated) - seplen
                 break
 
-            # Need more data — wait for the next IN transfer to complete.
             try:
                 if not self.lower._in_tasks:
                     raise ConnectionError("USB TaskQueue is empty or crashed.")
@@ -82,12 +88,9 @@ class GlasgowStream(Stream):
                 raise ConnectionError(
                     "Hardware I/O Error: The Glasgow interface disconnected.") from e
 
-        # Separator found at isep. Return everything up to and including it.
         result    = accumulated[:isep + seplen]
         remainder = accumulated[isep + seplen:]
 
-        # Put any bytes that arrived after the separator back into the
-        # in_buffer so the next read() call sees them.
         if remainder:
             self.lower._in_buffer.write(bytes(remainder))
 

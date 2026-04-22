@@ -72,23 +72,54 @@ class RasterScanCommand(BaseCommand):
 
         async def sender():
             nonlocal tokens
+            print(f"[sender] started", flush=True)
+            sent = 0
             for commands, pixel_count in self._iter_chunks(latency):
+                sent += 1
+                print(f"[sender] chunk #{sent}: pixel_count={pixel_count} "
+                    f"bytes={len(commands)} tokens={tokens}", flush=True)
                 self._logger.debug(f"sender: tokens={tokens}")
                 if tokens == 0:
+                    print(f"[sender] tokens=0, flushing and awaiting token_fut", flush=True)
                     await FlushCommand().transfer(stream)
                     await token_fut
                 if self.frame_blank and self.abort.is_set():
-                    ## go to a blanked state after an aborted frame
                     commands.extend(bytes(BlankCommand(enable=True, inline=False)))
                 await stream.write(commands)
-                await stream.flush() #--
+                await stream.flush()
                 tokens -= 1
+                print(f"[sender] chunk #{sent} written; tokens now {tokens}", flush=True)
                 if self.abort.is_set():
                     break
                 await asyncio.sleep(0)
-            await FlushCommand().transfer(stream)
-            print("sender: completed all chunks and final flush")  #--
 
+            # ========================================================== #
+            # Pipeline-drain padding (diagnostic)                         #
+            # After the real chunks, push 128 VectorPixelCommands so the  #
+            # tail of the scan (last ~54 pixels / 108 bytes) is pushed    #
+            # out of the Supersampler → BusController →                   #
+            # PipelinedLoopbackAdapter loop. The receive loop only reads  #
+            # pixel_count*2 bytes per real chunk, so these padding bytes  #
+            # sit harmlessly in the host _in_buffer until teardown.       #
+            # ========================================================== #
+            PADDING_PIXELS = 128
+            print(f"[sender] draining pipeline with {PADDING_PIXELS} VectorPixels",
+                flush=True)
+            padding = bytearray()
+            for _ in range(PADDING_PIXELS):
+                padding.extend(bytes(VectorPixelCommand(
+                    x_coord=self._x_range.start,
+                    y_coord=self._y_range.start,
+                    dwell_time=2,
+                )))
+            await stream.write(padding)
+            await stream.flush()
+            print(f"[sender] padding sent ({len(padding)} bytes)", flush=True)
+
+            await FlushCommand().transfer(stream)
+            print(f"[sender] completed all {sent} chunks and final flush",
+                flush=True)
+                
         await SynchronizeCommand(cookie=self._cookie, raster=True, output = self._output_mode).transfer(stream)
         await RasterRegionCommand(x_range=self._x_range, y_range=self._y_range).transfer(stream)
         asyncio.create_task(sender())

@@ -35,26 +35,47 @@ class RasterScanTest(unittest.TestCase):
 
     # ================================================================== #
     async def scan_wet_run(self):
-        if self._config is not None:
-            # 128×128 = 16384 pixels × 2 bytes = 32768 bytes.
-            # latency=65536 > 32768 → single trailing chunk (no mid-scan split).
-            # from_resolution(128) gives step = 65536/128 = 512, fits in 16 bits.
-            # TODO: increase to 2048 once multi-chunk transfer is validated.
-            test_range = DACCodeRange.from_resolution(128)
-            test_dwell = 2
-            test_cmd = RasterScanCommand(cookie=123,
-                x_range=test_range, y_range=test_range, dwell_time=test_dwell)
+        self.chunks = []
+        self.chunks_received = 0
 
-            conn = GlasgowConnection(self._config)
-            await conn._connect()
+        if self._config is None:
+            print("[test] no config, skipping")
+            return
 
-            if conn.connected:
-                chunk_num = 0
-                async for chunk in conn.transfer_multiple(test_cmd, latency=16384):
-                    chunk_num += 1
-                    print(f"chunk #{chunk_num} len={len(chunk)}: "
-                          f"{dump_hex(bytes(chunk)[:16])}")
-                print(f"Transfer complete after {chunk_num} chunks")
+        test_range = DACCodeRange.from_resolution(128)   # 128×128 = 16384 pixels
+        test_dwell = 2
+
+        test_cmd = RasterScanCommand(
+            cookie=123,
+            x_range=test_range,
+            y_range=test_range,
+            dwell_time=test_dwell,
+            frame_blank=False,
+        )
+
+        print(f"[test] === Test B: 128x128, dwell=2, latency=16384, "
+            f"frame_blank=False ===", flush=True)
+
+        conn = GlasgowConnection(self._config)
+        await conn._connect()
+        if not conn.connected:
+            print("[test] connection failed")
+            return
+
+        try:
+            async for chunk in conn.transfer_multiple(test_cmd, latency=16384):
+                self.chunks.append(chunk)
+                self.chunks_received += 1
+                preview = dump_hex(bytes(chunk)[:16]) if chunk is not None else "<None>"
+                length = len(chunk) if chunk is not None else 0
+                print(f"[test] chunk #{self.chunks_received} len={length}: {preview}",
+                    flush=True)
+        except Exception as e:
+            print(f"[test] EXCEPTION during transfer_multiple after "
+                f"{self.chunks_received} chunks: {type(e).__name__}: {e}", flush=True)
+            raise
+        print(f"[test] transfer complete after {self.chunks_received} chunks",
+            flush=True)
 
     def test_scan_wet_run(self):
         asyncio.run(self.scan_wet_run())
