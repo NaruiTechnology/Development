@@ -1,3 +1,4 @@
+import csv
 import unittest
 import asyncio
 import time
@@ -9,6 +10,8 @@ from GlasgowDataIO.IobeamControl.transfer.mock import MockConnection
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
+from AutomationPy.buildingblocks.definitions import Consts
+import AutomationPy.buildingblocks.utils as util
 
 logger = logging.getLogger()
 
@@ -29,6 +32,8 @@ class VectorScanTest(unittest.TestCase):
             self._config = AutomationConfig(JSON_PATH)
         else:
             self._config = None
+        self._vectorScanConfig = util.GetStateConfigByName(self._config, 'streamData')[Consts.ACTION_DATA].get('vectorScan')
+        LATENCY = self._vectorScanConfig.get('latency')
 
     # ------------------------------------------------------------------ #
     # Mock / simulation test (no hardware).                              #
@@ -118,6 +123,15 @@ class VectorScanTest(unittest.TestCase):
     def test_scan_wet_run(self):
         asyncio.run(self.scan_wet_run())
 
+        # Dump received chunks to ~/Downloads/vector_latency<LATENCY>.csv for
+        # offline inspection. Run before the assertions so we still get the
+        # file even if the scan failed one of the checks below.
+        # Skipped if the scan was aborted early (no config / no connection).
+        # Layout: one chunk per line, space-separated values — each line is
+        # one USB transfer, which is the unit LATENCY bisects over.
+        if self.chunks:
+            self._exportDataToCsvFile()
+
         # Unlike raster, a vector scan's chunk count is determined by the
         # pre-processed command stream rather than a fixed resolution, so we
         # can't assert an exact count — but we must receive at least one.
@@ -140,3 +154,19 @@ class VectorScanTest(unittest.TestCase):
                 bytes(self.chunks[1])[:16], b"\x00" * 16,
                 "chunk 2 begins with padding zeros (padding leaked into real data)",
             )
+
+    def _exportDataToCsvFile(self):
+        downloads_dir = Path.home() / "Downloads"
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = downloads_dir / f"vector_latency{self.LATENCY}.csv"
+
+        total_values = 0
+        with csv_path.open("w", newline="") as f:
+            writer = csv.writer(f, delimiter=" ")
+            for chunk in self.chunks:
+                writer.writerow(chunk)
+                total_values += len(chunk)
+
+        print(f"[test] wrote CSV: {csv_path} "
+                  f"({total_values} values from {len(self.chunks)} chunks)",
+                  flush=True)

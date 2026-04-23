@@ -1,3 +1,4 @@
+import csv
 import unittest
 import asyncio
 from pathlib import Path
@@ -8,6 +9,8 @@ from GlasgowDataIO.IobeamControl.transfer.mock import MockConnection
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
+from AutomationPy.buildingblocks.definitions import Consts
+import AutomationPy.buildingblocks.utils as util
 
 JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData.json'
 
@@ -29,7 +32,11 @@ class RasterScanTest(unittest.TestCase):
             self._config = AutomationConfig(JSON_PATH)
         else:
             self._config = None
-
+        self._rasterScanConfig = util.GetStateConfigByName(self._config, 'streamData')[Consts.ACTION_DATA].get('rasterScan')
+        CHUNK_BYTES = self._rasterScanConfig.get('pixels') * 2
+        FRAME_BLANK = self._rasterScanConfig.get('frameBlank')
+        RESOLUTION  = self._rasterScanConfig.get('resolution')
+        
     # ------------------------------------------------------------------ #
     # Mock / simulation test (no hardware).                              #
     # ------------------------------------------------------------------ #
@@ -65,7 +72,7 @@ class RasterScanTest(unittest.TestCase):
             return
 
         test_range = DACCodeRange.from_resolution(self.RESOLUTION)
-        test_dwell = 2
+        test_dwell = self._rasterScanConfig.get('dewell', 2)
 
         test_cmd = RasterScanCommand(
             cookie=123,
@@ -111,6 +118,8 @@ class RasterScanTest(unittest.TestCase):
     def test_scan_wet_run(self):
         asyncio.run(self.scan_wet_run())
 
+        self._exportDataToCsvFile()
+
         # Computed from the single RESOLUTION knob above so no drift is possible.
         pixels = self.RESOLUTION * self.RESOLUTION
         expected_chunks = (pixels * 2) // CHUNK_BYTES
@@ -134,3 +143,30 @@ class RasterScanTest(unittest.TestCase):
                 bytes(self.chunks[1])[:16], b"\x00" * 16,
                 "chunk 2 begins with padding zeros (padding leaked into real data)",
             )
+
+    def _exportDataToCsvFile(self):
+        if self.chunks:
+            downloads_dir = Path.home() / "Downloads"
+            downloads_dir.mkdir(parents=True, exist_ok=True)
+            csv_path = downloads_dir / f"raster_{self.RESOLUTION}x{self.RESOLUTION}.csv"
+
+            # Flatten every chunk into one sequence of 16-bit pixel values,
+            # then slice into RESOLUTION-pixel rows. Each chunk is already a
+            # sequence of uint16 values (len(chunk) == CHUNK_BYTES // 2), so
+            # extend() works directly.
+            all_pixels = []
+            for chunk in self.chunks:
+                all_pixels.extend(chunk)
+
+            with csv_path.open("w", newline="") as f:
+                writer = csv.writer(f, delimiter=" ")
+                for row_idx in range(self.RESOLUTION):
+                    start = row_idx * self.RESOLUTION
+                    row = all_pixels[start:start + self.RESOLUTION]
+                    if not row:
+                        break  # short scan — stop writing empty rows
+                    writer.writerow(row)
+
+            print(f"[test] wrote CSV: {csv_path} "
+                  f"({len(all_pixels)} pixels from {len(self.chunks)} chunks)",
+                  flush=True)

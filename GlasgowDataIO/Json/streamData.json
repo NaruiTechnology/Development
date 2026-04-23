@@ -23,7 +23,16 @@
                     "bufferSize": "1024*1024",
                     "frequency": 1000,
                     "point": 100,
-                    "waveForm" : "square"
+                    "waveForm" : "square",
+                    "rasterScan": {
+                        "pixels": 8192,
+                        "frameBlank": false,
+                        "resolution": 1024, 
+                        "dewell": 2
+                    },
+                    "vectorScan": {
+                        "latency": 8196
+                    }
                 },
                 "timeout": 60.0
             }
