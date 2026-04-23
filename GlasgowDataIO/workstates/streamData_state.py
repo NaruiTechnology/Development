@@ -11,7 +11,6 @@ class streamData_state(dataIO_state):
         self._waveForm = waveForm 
         self._data = data
         self._conn = None
-        #self._isSimulation = True
 
     @property
     def Conn(self):

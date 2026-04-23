@@ -53,5 +53,7 @@
         }
     ],    
     "LogName": "DirectIO",
-    "Verbose": true 
+    "Verbose": true,
+    "Simulate": true,
+    "IsProduction" : false
 }

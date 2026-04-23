@@ -29,5 +29,7 @@
         }
     ],
     "LogName": "GlasgowDataIO",
-    "Verbose": false
+    "Verbose": false,
+    "Simulate": true,
+    "IsProduction" : false
 }

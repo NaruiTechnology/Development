@@ -31,29 +31,8 @@ class GlasgowConnectTest(unittest.TestCase):
             self._config = None
 
 
-# real connect to hardware--------------------------------------------------------
-# 
-    def test_raster_scan(self):
-        # pytest.skip('----Temporarily skipped, TODO')
-        try:
-            asyncio.run(self.raster_scan())
-        except Exception as e:
-            print(f'Failed test_scan, error: {e}')
-            self.assertFalse(True)
-        self.assertTrue(True)
-
-    async def raster_scan(self):
-        test_range = DACCodeRange.from_resolution(2048)
-        test_dwell = 2
-        test_cmd = RasterScanCommand(cookie=123,
-            x_range=test_range, y_range=test_range, dwell_time=test_dwell)
-        conn = GlasgowConnection(self._config)
-        await conn._connect()
-        async for chunk in conn.transfer_multiple(test_cmd, latency=65536):
-            logger.debug(f"{dump_hex(chunk)}")
-# -------------------------------------------------------------------
-
     def test_connect(self):
+        #pytest.skip('----Temporarily skipped, TODO')
         asyncio.run(self.connect_test())
 
     def test_mock_connection(self):
@@ -113,7 +92,6 @@ class GlasgowConnectTest(unittest.TestCase):
     async def _transferData(self, conn):
         if conn.connected:
             state = streamData_state(MockThread(self._config), waveForm='square', data=self.sim_data)
-            state._isSimulation = False
             state.Conn = conn
             await state.DoWork()
             self.assertTrue(state._success)          
@@ -127,7 +105,6 @@ class GlasgowConnectTest(unittest.TestCase):
                     await conn._connect()
                     
                     state = streamData_state(MockThread(self._config), waveForm='custom', data=large_data)
-                    state._isSimulation = False
                     state.Conn = conn
 
                     await state.DoWork()
