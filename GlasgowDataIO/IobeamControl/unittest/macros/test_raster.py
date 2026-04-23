@@ -14,7 +14,7 @@ JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData.json'
 # Size of each pixel chunk in bytes (latency parameter to transfer_multiple).
 # 8192 pixels * 2 bytes = 16384 bytes per chunk at SixteenBit output.
 CHUNK_BYTES = 16384
-
+FRAME_BLANK = False
 
 class RasterScanTest(unittest.TestCase):
 
@@ -72,11 +72,11 @@ class RasterScanTest(unittest.TestCase):
             x_range=test_range,
             y_range=test_range,
             dwell_time=test_dwell,
-            frame_blank=False,
+            frame_blank=FRAME_BLANK,
         )
 
         print(f"[test] === {self.RESOLUTION}x{self.RESOLUTION}, dwell={test_dwell}, "
-              f"latency={CHUNK_BYTES}, frame_blank=False ===", flush=True)
+              f"latency={CHUNK_BYTES}, frame_blank={FRAME_BLANK} ===", flush=True)
 
         conn = GlasgowConnection(self._config)
         await conn._connect()

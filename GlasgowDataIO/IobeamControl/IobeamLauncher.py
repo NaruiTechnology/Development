@@ -33,7 +33,7 @@ class IobeamLauncher:
         device = GlasgowDevice(deviceId)
         target = GlasgowHardwareTarget(revision=device.revision,
                                        multiplexer_cls=DirectMultiplexer)
-        applet = DataStreamApplet()
+        applet = DataStreamApplet(self._config)
 
         action_voltage = actionConfig.get("voltage", 2.5)
         buffer_size    = eval(actionConfig.get("bufferSize", "1024*1024"))

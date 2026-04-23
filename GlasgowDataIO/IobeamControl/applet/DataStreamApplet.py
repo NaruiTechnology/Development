@@ -10,7 +10,10 @@ class DataStreamApplet(GlasgowApplet):
     logger = logging.getLogger(__name__)
     help = "IobeamTech ADC data stream Applet"
     description = ""
-
+    def __init__(self, config=None):
+        super(DataStreamApplet, self).__init__()
+        self._config = config
+        
     @classmethod
     def add_build_arguments(cls, parser, access):
         super().add_build_arguments(parser, access)
@@ -68,14 +71,13 @@ class DataStreamApplet(GlasgowApplet):
             # ebeam_blank = args.pin_set_ebeam_blank,
         )
 
- 
         subtarget = IobeamDataSubtarget(
                 ports=iface.get_port_group(),
                 in_fifo=in_fifo,
                 out_fifo=out_fifo,
                 magic_reg=self.magic_reg,
                 _addr_reset=self.reset_reg,
-                loopback=True
+                loopback=True if not self._config.IsProduction else False
             )
 
         return iface.add_subtarget(subtarget)       
