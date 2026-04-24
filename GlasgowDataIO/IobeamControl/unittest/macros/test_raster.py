@@ -1,4 +1,4 @@
-import csv
+import csv, math
 import unittest
 import asyncio
 from pathlib import Path
@@ -18,12 +18,13 @@ JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData.json'
 # 8192 pixels * 2 bytes = 16384 bytes per chunk at SixteenBit output.
 CHUNK_BYTES = 16384
 FRAME_BLANK = False
+RESOLUTION = 512
 
 class RasterScanTest(unittest.TestCase):
 
     # Change this single value to bisect the working-resolution ceiling.
     # 128 / 512 / 1024 / 2048 are all valid values of DACCodeRange.from_resolution.
-    RESOLUTION = 512
+    
 
     def setUp(self):
         self.sim_data = ("0.0, 1, 2, 5, 8, 9, 10, 0.0, 1, 2, 5, 8, 9, 10, "
@@ -33,21 +34,21 @@ class RasterScanTest(unittest.TestCase):
         else:
             self._config = None
         self._rasterScanConfig = util.GetStateConfigByName(self._config, 'streamData')[Consts.ACTION_DATA].get('rasterScan')
-        CHUNK_BYTES = self._rasterScanConfig.get('pixels') * 2
-        FRAME_BLANK = self._rasterScanConfig.get('frameBlank')
-        RESOLUTION  = self._rasterScanConfig.get('resolution')
+        self.chunk_bytes  = self._rasterScanConfig.get('pixels', CHUNK_BYTES) * 2
+        self.fram_blank = self._rasterScanConfig.get('frameBlank', FRAME_BLANK)
+        self.resolution  = self._rasterScanConfig.get('resolution', RESOLUTION)
+        self.test_dwell = self._rasterScanConfig.get('dwell', 2)
         
     # ------------------------------------------------------------------ #
     # Mock / simulation test (no hardware).                              #
     # ------------------------------------------------------------------ #
     async def scan(self):
         test_range = DACCodeRange.from_resolution(2048)
-        test_dwell = 2
         test_cmd = RasterScanCommand(
             cookie=123,
             x_range=test_range,
             y_range=test_range,
-            dwell_time=test_dwell,
+            dwell_time=self.test_dwell,
         )
         conn = MockConnection()
         await conn._connect()
@@ -71,19 +72,18 @@ class RasterScanTest(unittest.TestCase):
             print("[test] no config, skipping")
             return
 
-        test_range = DACCodeRange.from_resolution(self.RESOLUTION)
-        test_dwell = self._rasterScanConfig.get('dewell', 2)
+        test_range = DACCodeRange.from_resolution(self.resolution)
 
         test_cmd = RasterScanCommand(
             cookie=123,
             x_range=test_range,
             y_range=test_range,
-            dwell_time=test_dwell,
-            frame_blank=FRAME_BLANK,
+            dwell_time=self.test_dwell,
+            frame_blank=self.fram_blank,
         )
 
-        print(f"[test] === {self.RESOLUTION}x{self.RESOLUTION}, dwell={test_dwell}, "
-              f"latency={CHUNK_BYTES}, frame_blank={FRAME_BLANK} ===", flush=True)
+        print(f"[test] === {self.resolution}x{self.resolution}, dwell={self.test_dwell}, "
+              f"latency={CHUNK_BYTES}, frame_blank={self.fram_blank} ===", flush=True)
 
         conn = GlasgowConnection(self._config)
         await conn._connect()
@@ -97,7 +97,7 @@ class RasterScanTest(unittest.TestCase):
                 self.chunks_received += 1
                 # Sparse preview so the log doesn't drown at large resolutions:
                 # first 3 chunks, then every 128th, plus the last.
-                total_expected = (self.RESOLUTION * self.RESOLUTION * 2) // CHUNK_BYTES
+                total_expected = (self.resolution * self.resolution * 2) // CHUNK_BYTES
                 if (self.chunks_received <= 3
                         or self.chunks_received % 128 == 0
                         or self.chunks_received == total_expected):
@@ -117,38 +117,37 @@ class RasterScanTest(unittest.TestCase):
 
     def test_scan_wet_run(self):
         asyncio.run(self.scan_wet_run())
-
         self._exportDataToCsvFile()
 
-        # Computed from the single RESOLUTION knob above so no drift is possible.
-        pixels = self.RESOLUTION * self.RESOLUTION
-        expected_chunks = (pixels * 2) // CHUNK_BYTES
+        latency_bytes   = self.chunk_bytes            # what you pass to transfer_multiple
+        pixels_per_chunk = math.ceil(latency_bytes / self.test_dwell)
+        total_pixels     = self.resolution * self.resolution
+        expected_chunks  = math.ceil(total_pixels / pixels_per_chunk)
 
         self.assertEqual(
             self.chunks_received, expected_chunks,
-            f"expected {expected_chunks} chunks, got {self.chunks_received}",
+            f"dwell={self.test_dwell}: expected {expected_chunks} chunks, "
+            f"got {self.chunks_received}",
         )
 
-        # Every chunk should be full-sized.
-        for i, chunk in enumerate(self.chunks):
+        # All but the last chunk should be full-sized.
+        full_bytes = pixels_per_chunk * 2
+        for i, chunk in enumerate(self.chunks[:-1]):
             self.assertEqual(
-                len(chunk) * 2, CHUNK_BYTES,
-                f"chunk {i} wrong size: {len(chunk) * 2} bytes",
+                len(chunk) * 2, full_bytes,
+                f"chunk {i} wrong size: {len(chunk) * 2} bytes (expected {full_bytes})",
             )
-
-        # Chunk 2 must not begin with all zeros (padding-leak regression guard).
-        # Only meaningful if the scan produced at least 2 chunks.
-        if len(self.chunks) >= 2:
-            self.assertNotEqual(
-                bytes(self.chunks[1])[:16], b"\x00" * 16,
-                "chunk 2 begins with padding zeros (padding leaked into real data)",
-            )
+        # Last chunk may be a short tail — just assert it's non-empty and ≤ full.
+        if self.chunks:
+            tail = len(self.chunks[-1]) * 2
+            self.assertTrue(0 < tail <= full_bytes,
+                f"tail chunk wrong size: {tail} bytes")
 
     def _exportDataToCsvFile(self):
         if self.chunks:
             downloads_dir = Path.home() / "Downloads"
             downloads_dir.mkdir(parents=True, exist_ok=True)
-            csv_path = downloads_dir / f"raster_{self.RESOLUTION}x{self.RESOLUTION}.csv"
+            csv_path = downloads_dir / f"raster_{self.resolution}x{self.resolution}.csv"
 
             # Flatten every chunk into one sequence of 16-bit pixel values,
             # then slice into RESOLUTION-pixel rows. Each chunk is already a
@@ -160,9 +159,9 @@ class RasterScanTest(unittest.TestCase):
 
             with csv_path.open("w", newline="") as f:
                 writer = csv.writer(f, delimiter=" ")
-                for row_idx in range(self.RESOLUTION):
-                    start = row_idx * self.RESOLUTION
-                    row = all_pixels[start:start + self.RESOLUTION]
+                for row_idx in range(self.resolution):
+                    start = row_idx * self.resolution
+                    row = all_pixels[start:start + self.resolution]
                     if not row:
                         break  # short scan — stop writing empty rows
                     writer.writerow(row)

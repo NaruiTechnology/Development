@@ -28,7 +28,7 @@
                         "pixels": 8192,
                         "frameBlank": false,
                         "resolution": 1024, 
-                        "dewell": 2
+                        "dwell": 2
                     },
                     "vectorScan": {
                         "latency": 8196
