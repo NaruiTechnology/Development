@@ -10,7 +10,7 @@ from .glasgowLib.glasgow.hardware.demultiplexer import DirectDemultiplexer
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
-from IobeamControl.glasgowLib.glasgow.abstract import GlasgowPin
+from .glasgowLib.glasgow.abstract import GlasgowPin
 
 logger = logging.getLogger(__name__)
 

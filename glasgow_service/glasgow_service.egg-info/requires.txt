@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.5
+
+[examples]
+websockets>=12
+
+[tests]
+pytest>=8

@@ -1,0 +1,22 @@
+[Unit]
+Description=Glasgow device service
+After=network.target
+
+[Service]
+Type=exec
+User=vboxuser
+WorkingDirectory=/home/vboxuser/Project/IobeamTech
+Environment=GLASGOW_CONFIG=/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+# Uncomment to turn on bearer auth:
+# Environment=GLASGOW_TOKEN=change-me
+
+ExecStart=/usr/bin/env uvicorn glasgow_service.api:app \
+          --host 127.0.0.1 --port 8765
+
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
