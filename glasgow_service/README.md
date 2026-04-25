@@ -73,6 +73,10 @@ export GLASGOW_CONFIG=/home/vboxuser/Project/IobeamTech/Development/GlasgowDataI
 # Optional: turn on auth
 # export GLASGOW_TOKEN=$(openssl rand -hex 32)
 
+glasgow token: 376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee
+WkgnwuSK0fFCXPmKkQc-ku4BBDpGB9qZeK_2diBgAyk
+uuid: f960bbee-8797-4946-aa9b-ed2a70c79203
+
 uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
 ```
 
@@ -139,3 +143,30 @@ green, plus per-check breakdown when anything fails.
 
 One scan at a time. Concurrent REST or WebSocket requests return **HTTP
 409** (or an `{"event":"error","code":"busy"}` WebSocket frame).
+
+
+#-------launch.json for lauanching server debug --------------------
+
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "uvicorn: glasgow_service",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "glasgow_service.api:app",
+        "--host", "127.0.0.1",
+        "--port", "8765"
+      ],
+      "env": {
+        "GLASGOW_TOKEN": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
+        "GLASGOW_CONFIG": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
+        "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/Development:${env:PYTHONPATH}"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    }
+  ]
+}
+#------------------------------------------
