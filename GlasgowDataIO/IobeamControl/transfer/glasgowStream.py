@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import logging
 from .abc import Stream, Connection
 from ..IobeamLauncher import IobeamLauncher
@@ -41,22 +42,10 @@ class GlasgowStream(Stream):
         return await self.lower.read(length)
 
     async def readuntil(self, separator=b'\n', *, flush=True, max_count=False):
-        # ------------------------------------------------------------------ #
-        # NOTE: The original implementation used find_sep() which only
-        # searched within the current ChunkedFIFO chunk. The 4-byte sync
-        # separator (\xff\xff + 2-byte cookie) almost always arrives split
-        # across two USB transfer chunks, so find_sep() returned -1 forever
-        # even though all bytes were present — causing the 20s timeout.
-        #
-        # This implementation accumulates bytes into a local bytearray and
-        # searches the full accumulated content, correctly handling separators
-        # that span chunk boundaries.
-        # ------------------------------------------------------------------ #
         seplen = len(separator)
         if seplen == 0:
             raise ValueError('Separator must be at least one byte')
 
-        # Flush any pending writes before waiting for a response.
         if flush and len(self.lower._out_buffer) > 0:
             await self.lower.flush(wait=False)
 
@@ -114,3 +103,79 @@ class GlasgowConnection(Connection):
             raise ConnectionError("Launcher failed to start: Interface is None")
         self._stream = GlasgowStream(iface)
         logger.debug("Successfully connected and wrapped GlasgowStream")
+
+    async def _hard_close(self) -> None:
+        if self._stream is None:
+            return
+
+        iface = self._stream.lower
+        device = iface.device
+
+        # 1) Cancel in-flight bulk_read/bulk_write tasks cleanly, before yanking
+        #    the USB handle out from under them. iface.cancel() is the library's
+        #    documented way to do this and awaits the cancellations to settle.
+        try:
+            print("[CLEANUP] hard_close: cancelling demultiplexer tasks", flush=True)
+            await iface.cancel()
+        except Exception as e:
+            print(f"[CLEANUP] hard_close: iface.cancel() raised "
+                f"{type(e).__name__}: {e} (continuing)", flush=True)
+
+        # 2) Yield once so any orphan background tasks (e.g. the sender task
+        #    spawned by RasterScanCommand.transfer via asyncio.create_task) get
+        #    a chance to observe the cancelled transfers and exit before the
+        #    USB context goes away.
+        await asyncio.sleep(0)
+
+        # 3) Now actually close the USB device.
+        try:
+            print("[CLEANUP] hard_close: calling GlasgowDevice.close()", flush=True)
+            device.close()
+            print("[CLEANUP] hard_close: GlasgowDevice.close() returned", flush=True)
+        except Exception as e:
+            print(f"[CLEANUP] hard_close: device.close() raised "
+                f"{type(e).__name__}: {e} (continuing teardown)", flush=True)
+
+        self._stream = None
+        self._synchronized = False
+        gc.collect()
+        print("[CLEANUP] hard_close: references dropped, GC run", flush=True)
+    
+    async def _post_transfer_cleanup(self):
+        """Tear down and rebuild the connection between transfers.
+
+        Why we don't just call iface.reset() here:
+        --------------------------------------------------------------------
+        iface.reset() cycles only the demultiplexer's ResetInserter, which
+        wraps the multiplexer subtarget. Empirically that is NOT enough to
+        revive the applet's command parser between scans — after a reset
+        the FPGA accepts a SynchronizeCommand byte stream but never produces
+        the cookie response, and the host hits a 20s readuntil timeout in
+        Connection._synchronize().
+
+        The behavior of "kill uvicorn, restart it" is the only proven way
+        to recover the data path. So that's what we do here: a full
+        disconnect (with proper USB handle release) followed by a fresh
+        IobeamLauncher run on the next transfer.
+
+        Cost: each transfer now pays the FPGA flash + voltage settle time
+        (~5 seconds — see IobeamLauncher.run()). For interactive scanning
+        this is acceptable; for high-throughput batch scanning it isn't,
+        and the right fix would be in the applet itself (e.g., adding a
+        soft-reset register that cycles only the command parser).
+
+        Idempotency: this is called from `finally` blocks. If the stream
+        is already torn down (prior cleanup, exception during _connect),
+        we no-op silently. If hard_close itself raises, we swallow it —
+        the next _connect() either succeeds or surfaces a real error.
+        """
+        if self._stream is None:
+            return
+        try:
+            await self._hard_close()
+        except Exception as e:
+            print(f"[CLEANUP] _post_transfer_cleanup unexpected error "
+                  f"{type(e).__name__}: {e}", flush=True)
+            # Force-clear references regardless.
+            self._stream = None
+            self._synchronized = False
