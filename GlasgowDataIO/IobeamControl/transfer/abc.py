@@ -54,7 +54,8 @@ class Connection(metaclass = ABCMeta):
         ...
     
     def _disconnect(self):
-        assert self.connected
+        if not self.connected:
+            return
         self._stream = None
         self._synchronized = False
     
@@ -79,20 +80,24 @@ class Connection(metaclass = ABCMeta):
         await self._stream.flush()
         res = struct.pack(">HH", 0xffff, cookie)
         data = await self._stream.readuntil(res)
-        # Gemini suggests that the response may contain extra data after the cookie, so we check that the cookie is present at the end of the response rather than assuming it is the entire response.
-        self._synchronized = True 
-        self._logger.debug("synchronization complete")
-    
+        # The response may contain extra data preceding the cookie, so we
+        # check that it ends with the cookie rather than equals it. Validate
+        # BEFORE flipping _synchronized — otherwise a failed handshake leaves
+        # the connection looking synced, and subsequent transfers will skip
+        # resync and run on a broken stream.
         if not bytes(data).endswith(res):
             self._logger.error(f"unexpected synchronization response: {data!r} (expected to end with {res!r})")
             raise TransferError("synchronization failed")
+
+        self._synchronized = True
+        self._logger.debug("synchronization complete")
         
     def _handle_incomplete_read(self, exc):
         self._disconnect()
         raise TransferError("connection closed") from exc
 
     def get_cookie(self):
-        cookie, self._next_cookie = self._next_cookie + 1, self._next_cookie + 2 # odd cookie
+        cookie, self._next_cookie = (self._next_cookie + 1) & 0xffff, (self._next_cookie + 2) & 0xffff # odd cookie
         self._logger.debug(f"allocating cookie {cookie:#06x}")
         return cookie
     
@@ -114,10 +119,8 @@ class Connection(metaclass = ABCMeta):
             async for value in command.transfer(self._stream, **kwargs):
                 yield value
                 self._logger.debug(f"yield transfer_multiple")
-        except Exception as e:
-            if isinstance(e, asyncio.IncompleteReadError):
-                self._handle_incomplete_read(e)
-            raise
+        except asyncio.IncompleteReadError as e:
+            self._handle_incomplete_read(e)
 
     async def transfer_raw(self, command, flush:bool = False, **kwargs):
         self._logger.debug(f"transfer {command!r}")

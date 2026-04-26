@@ -144,6 +144,9 @@ class RasterScanTest(unittest.TestCase):
                 f"tail chunk wrong size: {tail} bytes")
 
     def _exportDataToCsvFile(self):
+        if not self._config.DumpData:
+            return
+        
         if self.chunks:
             downloads_dir = Path.home() / "Downloads"
             downloads_dir.mkdir(parents=True, exist_ok=True)

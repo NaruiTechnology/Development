@@ -156,6 +156,9 @@ class VectorScanTest(unittest.TestCase):
             )
 
     def _exportDataToCsvFile(self):
+        if not self._config.DumpData:
+            return
+        
         downloads_dir = Path.home() / "Downloads"
         downloads_dir.mkdir(parents=True, exist_ok=True)
         csv_path = downloads_dir / f"vector_latency{self.LATENCY}.csv"

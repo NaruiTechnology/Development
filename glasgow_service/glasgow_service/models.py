@@ -37,7 +37,7 @@ class RasterRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {"resolution": 512,  "dwell": 2, "latency_bytes": 16384,
-                 "frame_blank": False, "save_csv": True, "do_validate": True},
+                 "frame_blank": False, "save_csv": False, "do_validate": True},
                 {"resolution": 1024, "dwell": 3, "latency_bytes": 16384,
                  "frame_blank": False, "save_csv": False, "do_validate": True},
             ]
@@ -71,7 +71,7 @@ class VectorRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {"pattern": "default", "latency_bytes": 8196,
-                 "pre_process": True, "save_csv": True, "do_validate": True},
+                 "pre_process": True, "save_csv": False, "do_validate": True},
                 {"pattern": "custom",
                  "points": [[0, 0, 2], [100, 100, 2], [200, 100, 2], [200, 200, 2]],
                  "latency_bytes": 8196, "save_csv": False, "do_validate": True},
