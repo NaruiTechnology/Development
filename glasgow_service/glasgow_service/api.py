@@ -18,17 +18,18 @@ from .models  import (
 )
 from .auth    import require_token
 from .config  import find_config_path
-
-log = logging.getLogger("glasgow_service.api")
+from .service import LOG_NAME
+from AutomationPy.buildingblocks.automation_log import AutomationLog
 
 svc: "DeviceService | None" = None
 
+logger      = AutomationLog.GetLogger(LOG_NAME)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global svc
     config_path = find_config_path()
-    log.info("Glasgow config: %s", config_path)
+    logger.info("Glasgow config: %s", config_path)
     svc = DeviceService(str(config_path))
     await svc.start()
     try:
@@ -168,7 +169,7 @@ async def _stream_scan(ws: WebSocket, make_gen):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        log.exception("stream error")
+        logger.exception("stream error")
         try: await ws.send_json({"event": "error", "message": repr(e)})
         except Exception: pass
     finally:

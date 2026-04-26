@@ -29,7 +29,6 @@ Lifecycle decisions and the reasoning behind them:
 """
 import asyncio
 import csv
-import logging
 import math
 import time
 from pathlib import Path
@@ -44,14 +43,15 @@ from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
+from AutomationPy.buildingblocks.automation_log import AutomationLog
 
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, VectorPattern,
     ScanResult, ScanValidation, ValidationCheck,
 )
 
-log = logging.getLogger(__name__)
-
+LOG_NAME = r'GlasgowService'
+logger      = AutomationLog.GetLogger(LOG_NAME)
 
 class DeviceBusy(RuntimeError):     ...
 class DeviceNotReady(RuntimeError): ...
@@ -97,14 +97,15 @@ class DeviceService:
     async def start(self) -> None:
         """No hardware action. Connection is opened lazily on first scan."""
         self._status.state = DeviceState.IDLE
-        log.info("service ready (lazy connect on first scan)")
+        logger.debug("service ready (lazy connect on first scan)")
 
     async def stop(self) -> None:
         """Best-effort: drop the reference. The library has no clean USB
         teardown, so we rely on process exit / GC for actual release."""
         self._conn = None
         self._status.state = DeviceState.DISCONNECTED
-        log.info("service stopped (connection reference dropped)")
+        logger.debug("service stopped (connection reference dropped)")
+        logger.info("service stopped (connection reference dropped)")
 
     async def reconnect(self) -> None:
         """Drop the current connection so the next scan opens a fresh one."""
@@ -112,7 +113,7 @@ class DeviceService:
             self._conn = None
             self._status.state = DeviceState.IDLE
             self._status.last_error = None
-        log.info("connection dropped; next scan will reconnect")
+        logger.debug("connection dropped; next scan will reconnect")
 
     def status(self) -> ServiceStatus:
         return self._status.model_copy()
@@ -130,7 +131,7 @@ class DeviceService:
         if self._conn is not None and self._conn.connected:
             return self._conn
 
-        log.info("opening Glasgow connection")
+        logger.debug("opening Glasgow connection")
         self._status.state = DeviceState.CONNECTING
         try:
             self._conn = GlasgowConnection(self._config)
@@ -192,7 +193,7 @@ class DeviceService:
         async with self._acquire("raster"):
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
-            log.info("[raster] %dx%d dwell=%d latency=%d frame_blank=%s",
+            logger.debug("[raster] %dx%d dwell=%d latency=%d frame_blank=%s",
                      req.resolution, req.resolution, req.dwell,
                      req.latency_bytes, req.frame_blank)
             t0 = time.perf_counter()
@@ -245,9 +246,9 @@ class DeviceService:
                 t0 = time.perf_counter()
                 cmd._pre_process_chunks(latency=req.latency_bytes)
                 process_time = time.perf_counter() - t0
-                log.info("[vector] pre-process %.4fs", process_time)
+                logger.debug("[vector] pre-process %.4fs", process_time)
 
-            log.info("[vector] latency=%d pattern=%s pre_process=%s",
+            logger.debug("[vector] latency=%d pattern=%s pre_process=%s",
                      req.latency_bytes, req.pattern, req.pre_process)
             t0 = time.perf_counter()
             try:
@@ -331,7 +332,7 @@ class DeviceService:
                 if not row:
                     break
                 writer.writerow(row)
-        log.info("wrote raster CSV %s (%d pixels from %d chunks)",
+        logger.debug("wrote raster CSV %s (%d pixels from %d chunks)",
                  path, len(all_pixels), len(chunks))
         return path
 
@@ -343,7 +344,7 @@ class DeviceService:
             for chunk in chunks:
                 writer.writerow(chunk)
                 total_values += len(chunk)
-        log.info("wrote vector CSV %s (%d values from %d chunks)",
+        logger.debug("wrote vector CSV %s (%d values from %d chunks)",
                  path, total_values, len(chunks))
         return path
 
@@ -413,7 +414,7 @@ class DeviceService:
                 await svc._lock.acquire()
                 svc._status.state = DeviceState.BUSY
                 svc._status.chunks_in_flight = 0
-                log.info("scan start kind=%s", kind)
+                logger.debug("scan start kind=%s", kind)
                 return svc
             async def __aexit__(self, exc_type, exc, tb):
                 if exc is None:
@@ -427,6 +428,6 @@ class DeviceService:
                     svc._status.state = DeviceState.IDLE
                 svc._status.chunks_in_flight = 0
                 svc._lock.release()
-                log.info("scan end kind=%s ok=%s", kind, exc is None)
+                logger.debug("scan end kind=%s ok=%s", kind, exc is None)
                 return False
         return _Ctx()
