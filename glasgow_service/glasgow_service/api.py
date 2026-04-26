@@ -7,24 +7,19 @@ Swagger UI:   http://127.0.0.1:8765/docs
 ReDoc:        http://127.0.0.1:8765/redoc
 OpenAPI JSON: http://127.0.0.1:8765/openapi.json
 """
-import os
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
 
-from .service  import DeviceService, DeviceBusy, DeviceNotReady
-from .models   import (
+from .service import DeviceService, DeviceBusy, DeviceNotReady
+from .models  import (
     RasterRequest, VectorRequest, ScanResult, ServiceStatus,
 )
-from .auth     import require_token
+from .auth    import require_token
+from .config  import find_config_path
 
 log = logging.getLogger("glasgow_service.api")
-
-CONFIG_PATH = os.environ.get(
-    "GLASGOW_CONFIG",
-    "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
-)
 
 svc: "DeviceService | None" = None
 
@@ -32,7 +27,9 @@ svc: "DeviceService | None" = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global svc
-    svc = DeviceService(CONFIG_PATH)
+    config_path = find_config_path()
+    log.info("Glasgow config: %s", config_path)
+    svc = DeviceService(str(config_path))
     await svc.start()
     try:
         yield
