@@ -23,7 +23,7 @@ class GlasgowStream(Stream):
 
     async def read(self, length):
         before = len(self.lower._in_buffer)
-        self._logger.debug(f"[GlasgowStream.read] requested={length}  in_buffer_before={before}", flush=True)
+        self._logger.debug(f"[GlasgowStream.read] requested={length}  in_buffer_before={before}")
         try:
             data = await self.lower.read(length)
             after = len(self.lower._in_buffer)
@@ -32,7 +32,7 @@ class GlasgowStream(Stream):
             return data
         except Exception as e:
             after = len(self.lower._in_buffer)
-            self._logger.debug(f"[GlasgowStream.read] EXCEPTION  in_buffer_at_fail={after}  type={type(e).__name__}", flush=True)
+            self._logger.debug(f"[GlasgowStream.read] EXCEPTION  in_buffer_at_fail={after}  type={type(e).__name__}")
             raise
 
     async def readexactly(self, length):
@@ -113,11 +113,11 @@ class GlasgowConnection(Connection):
         #    the USB handle out from under them. iface.cancel() is the library's
         #    documented way to do this and awaits the cancellations to settle.
         try:
-            self._logger.debug("[CLEANUP] hard_close: cancelling demultiplexer tasks", flush=True)
+            self._logger.debug("[CLEANUP] hard_close: cancelling demultiplexer tasks")
             await iface.cancel()
         except Exception as e:
             self._logger.debug(f"[CLEANUP] hard_close: iface.cancel() raised "
-                f"{type(e).__name__}: {e} (continuing)", flush=True)
+                f"{type(e).__name__}: {e} (continuing)")
 
         # 2) Yield once so any orphan background tasks (e.g. the sender task
         #    spawned by RasterScanCommand.transfer via asyncio.create_task) get
@@ -127,17 +127,17 @@ class GlasgowConnection(Connection):
 
         # 3) Now actually close the USB device.
         try:
-            self._logger.debug("[CLEANUP] hard_close: calling GlasgowDevice.close()", flush=True)
+            self._logger.debug("[CLEANUP] hard_close: calling GlasgowDevice.close()")
             device.close()
-            self._logger.debug("[CLEANUP] hard_close: GlasgowDevice.close() returned", flush=True)
+            self._logger.debug("[CLEANUP] hard_close: GlasgowDevice.close() returned")
         except Exception as e:
             self._logger.debug(f"[CLEANUP] hard_close: device.close() raised "
-                f"{type(e).__name__}: {e} (continuing teardown)", flush=True)
+                f"{type(e).__name__}: {e} (continuing teardown)")
 
         self._stream = None
         self._synchronized = False
         gc.collect()
-        self._logger.info("[CLEANUP] hard_close: references dropped, GC run", flush=True)
+        self._logger.info("[CLEANUP] hard_close: references dropped, GC run")
     
     async def _post_transfer_cleanup(self):
         """Tear down and rebuild the connection between transfers.
@@ -173,7 +173,7 @@ class GlasgowConnection(Connection):
             await self._hard_close()
         except Exception as e:
             self._logger.debug(f"[CLEANUP] _post_transfer_cleanup unexpected error "
-                  f"{type(e).__name__}: {e}, flush=True")
+                  f"{type(e).__name__}: {e}")
             # Force-clear references regardless.
             self._stream = None
             self._synchronized = False
