@@ -1,12 +1,9 @@
 import asyncio
 import gc
-import logging
 from .abc import Stream, Connection
 from ..IobeamLauncher import IobeamLauncher
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
-
-logger = logging.getLogger('GlasgowStream')
-
+from AutomationPy.buildingblocks.automation_log import AutomationLog
 
 class GlasgowStream(Stream):
     def __init__(self, iface):
@@ -15,18 +12,18 @@ class GlasgowStream(Stream):
         self.lower = iface
 
     async def write(self, data):
-        logger.debug(f"send: data=<{dump_hex(data)}>")
+        self._logger.debug(f"send: data=<{dump_hex(data)}>")
         await self.lower.write(data)
-        logger.debug(f"send: done")
+        self._logger.debug(f"send: done")
 
     async def flush(self):
-        logger.debug(f"flush")
+        self._logger.debug(f"flush")
         await self.lower.flush()
-        logger.debug(f"flush: done")
+        self._logger.debug(f"flush: done")
 
     async def read(self, length):
         before = len(self.lower._in_buffer)
-        print(f"[GlasgowStream.read] requested={length}  in_buffer_before={before}", flush=True)
+        self._logger.debug(f"[GlasgowStream.read] requested={length}  in_buffer_before={before}", flush=True)
         try:
             data = await self.lower.read(length)
             after = len(self.lower._in_buffer)
@@ -35,7 +32,7 @@ class GlasgowStream(Stream):
             return data
         except Exception as e:
             after = len(self.lower._in_buffer)
-            print(f"[GlasgowStream.read] EXCEPTION  in_buffer_at_fail={after}  type={type(e).__name__}", flush=True)
+            self._logger.debug(f"[GlasgowStream.read] EXCEPTION  in_buffer_at_fail={after}  type={type(e).__name__}", flush=True)
             raise
 
     async def readexactly(self, length):
@@ -91,6 +88,7 @@ class GlasgowConnection(Connection):
         super(GlasgowConnection, self).__init__()
         self._stream = None
         self._config = config
+        self._logger = AutomationLog.GetLogger(config.LogName)
 
     def connect(self, stream):
         self._stream = stream
@@ -102,7 +100,7 @@ class GlasgowConnection(Connection):
         if iface is None:
             raise ConnectionError("Launcher failed to start: Interface is None")
         self._stream = GlasgowStream(iface)
-        logger.debug("Successfully connected and wrapped GlasgowStream")
+        self._logger.debug("Successfully connected and wrapped GlasgowStream")
 
     async def _hard_close(self) -> None:
         if self._stream is None:
@@ -115,10 +113,10 @@ class GlasgowConnection(Connection):
         #    the USB handle out from under them. iface.cancel() is the library's
         #    documented way to do this and awaits the cancellations to settle.
         try:
-            print("[CLEANUP] hard_close: cancelling demultiplexer tasks", flush=True)
+            self._logger.debug("[CLEANUP] hard_close: cancelling demultiplexer tasks", flush=True)
             await iface.cancel()
         except Exception as e:
-            print(f"[CLEANUP] hard_close: iface.cancel() raised "
+            self._logger.debug(f"[CLEANUP] hard_close: iface.cancel() raised "
                 f"{type(e).__name__}: {e} (continuing)", flush=True)
 
         # 2) Yield once so any orphan background tasks (e.g. the sender task
@@ -129,17 +127,17 @@ class GlasgowConnection(Connection):
 
         # 3) Now actually close the USB device.
         try:
-            print("[CLEANUP] hard_close: calling GlasgowDevice.close()", flush=True)
+            self._logger.debug("[CLEANUP] hard_close: calling GlasgowDevice.close()", flush=True)
             device.close()
-            print("[CLEANUP] hard_close: GlasgowDevice.close() returned", flush=True)
+            self._logger.debug("[CLEANUP] hard_close: GlasgowDevice.close() returned", flush=True)
         except Exception as e:
-            print(f"[CLEANUP] hard_close: device.close() raised "
+            self._logger.debug(f"[CLEANUP] hard_close: device.close() raised "
                 f"{type(e).__name__}: {e} (continuing teardown)", flush=True)
 
         self._stream = None
         self._synchronized = False
         gc.collect()
-        print("[CLEANUP] hard_close: references dropped, GC run", flush=True)
+        self._logger.info("[CLEANUP] hard_close: references dropped, GC run", flush=True)
     
     async def _post_transfer_cleanup(self):
         """Tear down and rebuild the connection between transfers.
@@ -174,8 +172,8 @@ class GlasgowConnection(Connection):
         try:
             await self._hard_close()
         except Exception as e:
-            print(f"[CLEANUP] _post_transfer_cleanup unexpected error "
-                  f"{type(e).__name__}: {e}", flush=True)
+            self._logger.debug(f"[CLEANUP] _post_transfer_cleanup unexpected error "
+                  f"{type(e).__name__}: {e}, flush=True")
             # Force-clear references regardless.
             self._stream = None
             self._synchronized = False

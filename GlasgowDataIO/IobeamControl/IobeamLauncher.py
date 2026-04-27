@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from types import SimpleNamespace
 from .applet.DataStreamApplet import DataStreamApplet
 from .glasgowLib.glasgow.hardware.device import GlasgowDevice, ST_FPGA_RDY
@@ -10,14 +9,13 @@ from .glasgowLib.glasgow.hardware.demultiplexer import DirectDemultiplexer
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.definitions import Consts
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
+from AutomationPy.buildingblocks.automation_log import AutomationLog
 from .glasgowLib.glasgow.abstract import GlasgowPin
-
-logger = logging.getLogger(__name__)
-
 
 class IobeamLauncher:
     def __init__(self, config):
         self._config = config
+        self._logger = AutomationLog.GetLogger(name=config.LogName)
 
     async def start(self, deviceId=None):
         return await self.run()
@@ -86,7 +84,7 @@ class IobeamLauncher:
         # This must be written before claim_interface so the FPGA can send data
         # as soon as the demultiplexer reset is deasserted inside _activate().
         await device.write_register(applet.addr_reset, 1)
-        logger.info("Run gate open")
+        self._logger.info("Run gate open")
 
         # ------------------------------------------------------------------ #
         # 4.  Claim the streaming interface                                   #
@@ -98,7 +96,7 @@ class IobeamLauncher:
         )
 
         await asyncio.sleep(0.5)
-        logger.info("IobeamLauncher: initialisation complete — returning interface")
+        self._logger.info("IobeamLauncher: initialisation complete — returning interface")
         return iface
 
 

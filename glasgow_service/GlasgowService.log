@@ -1,0 +1,2527 @@
+04-26 17:06 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:06 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:06 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:06 GlasgowService INFO     service stopped (connection reference dropped)
+04-26 17:15 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:15 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:16 GlasgowService DEBUG    scan start kind=raster
+04-26 17:16 GlasgowService DEBUG    opening Glasgow connection
+04-26 17:16 StreamData   INFO     Run gate open
+04-26 17:16 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-26 17:16 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-26 17:16 GlasgowService DEBUG    [raster] 512x512 dwell=2 latency=16384 frame_blank=False
+04-26 17:16 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-26 17:16 StreamData   DEBUG    synchronizing with cookie 0xb716
+04-26 17:16 StreamData   DEBUG    synchronization complete
+04-26 17:16 StreamData   DEBUG    synchronize transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 StreamData   DEBUG    yield transfer_multiple
+04-26 17:16 GlasgowService DEBUG    scan end kind=raster ok=False
+04-26 17:18 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:18 GlasgowService INFO     service stopped (connection reference dropped)
+04-26 17:19 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:19 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:20 GlasgowService DEBUG    scan start kind=raster
+04-26 17:20 GlasgowService DEBUG    opening Glasgow connection
+04-26 17:20 StreamData   INFO     Run gate open
+04-26 17:20 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-26 17:20 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-26 17:20 GlasgowService DEBUG    [raster] 512x512 dwell=2 latency=16384 frame_blank=False
+04-26 17:20 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-26 17:20 StreamData   DEBUG    synchronizing with cookie 0x79d6
+04-26 17:20 StreamData   DEBUG    synchronization complete
+04-26 17:20 StreamData   DEBUG    synchronize transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 StreamData   DEBUG    yield transfer_multiple
+04-26 17:20 GlasgowService DEBUG    scan end kind=raster ok=False
+04-26 17:20 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:20 GlasgowService INFO     service stopped (connection reference dropped)
+04-26 17:20 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:20 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:20 GlasgowService DEBUG    scan start kind=raster
+04-26 17:20 GlasgowService DEBUG    opening Glasgow connection
+04-26 17:21 StreamData   INFO     Run gate open
+04-26 17:21 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-26 17:21 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-26 17:21 GlasgowService DEBUG    [raster] 512x512 dwell=2 latency=16384 frame_blank=False
+04-26 17:21 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-26 17:21 StreamData   DEBUG    synchronizing with cookie 0x16e6
+04-26 17:21 StreamData   DEBUG    synchronization complete
+04-26 17:21 StreamData   DEBUG    synchronize transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    yield transfer_multiple
+04-26 17:21 StreamData   DEBUG    [CLEANUP] _post_transfer_cleanup unexpected error TypeError: Logger._log() got an unexpected keyword argument 'flush', flush=True
+04-26 17:21 GlasgowService DEBUG    scan end kind=raster ok=True
+04-26 17:23 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:23 GlasgowService INFO     service stopped (connection reference dropped)
+04-26 17:23 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:23 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:23 GlasgowService DEBUG    scan start kind=raster
+04-26 17:23 GlasgowService DEBUG    opening Glasgow connection
+04-26 17:23 StreamData   INFO     Run gate open
+04-26 17:23 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-26 17:23 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-26 17:23 GlasgowService DEBUG    [raster] 512x512 dwell=2 latency=16384 frame_blank=False
+04-26 17:23 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-26 17:23 StreamData   DEBUG    synchronizing with cookie 0x5c2c
+04-26 17:23 StreamData   DEBUG    [CLEANUP] _post_transfer_cleanup unexpected error TypeError: Logger._log() got an unexpected keyword argument 'flush', flush=True
+04-26 17:23 GlasgowService DEBUG    scan end kind=raster ok=False
+04-26 17:23 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:23 GlasgowService INFO     service stopped (connection reference dropped)
+04-26 17:23 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:23 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:23 GlasgowService DEBUG    scan start kind=raster
+04-26 17:23 GlasgowService DEBUG    opening Glasgow connection
+04-26 17:24 StreamData   INFO     Run gate open
+04-26 17:24 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-26 17:24 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-26 17:24 GlasgowService DEBUG    [raster] 512x512 dwell=2 latency=16384 frame_blank=False
+04-26 17:24 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-26 17:24 StreamData   DEBUG    synchronizing with cookie 0xeeb4
+04-26 17:24 StreamData   DEBUG    synchronization complete
+04-26 17:24 StreamData   DEBUG    synchronize transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    yield transfer_multiple
+04-26 17:24 StreamData   DEBUG    [CLEANUP] _post_transfer_cleanup unexpected error TypeError: Logger._log() got an unexpected keyword argument 'flush', flush=True
+04-26 17:24 GlasgowService DEBUG    scan end kind=raster ok=True
+04-26 17:35 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:35 GlasgowService INFO     service stopped (connection reference dropped)
+04-26 17:35 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:35 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:35 GlasgowService DEBUG    scan start kind=raster
+04-26 17:35 GlasgowService DEBUG    opening Glasgow connection
+04-26 17:35 GlasgowService DEBUG    scan end kind=raster ok=False
+04-26 17:38 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:38 GlasgowService INFO     service stopped (connection reference dropped)
+04-26 17:39 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:39 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:39 GlasgowService DEBUG    scan start kind=raster
+04-26 17:39 GlasgowService DEBUG    opening Glasgow connection
+04-26 17:39 StreamData   DEBUG    claimed pipe P
+04-26 17:39 StreamData   DEBUG    adding reset register at address 0x03
+04-26 17:39 StreamData   INFO     Run gate open
+04-26 17:39 StreamData   INFO     pipe 0: OUT EP 0x02 on interface 0 (packet size 512)
+04-26 17:39 StreamData   INFO     pipe 0: IN  EP 0x86 on interface 1 (packet size 512)
+04-26 17:39 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-26 17:39 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-26 17:39 GlasgowService DEBUG    [raster] 512x512 dwell=2 latency=16384 frame_blank=False
+04-26 17:39 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-26 17:39 StreamData   DEBUG    synchronizing with cookie 0xf6f0
+04-26 17:39 StreamData   INFO     FIFO: write <01f6f020>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   DEBUG    synchronization complete
+04-26 17:39 StreamData   DEBUG    synchronize transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: write <01007b>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: write <a0000002002000000002002000>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <ffff007b>
+04-26 17:39 StreamData   INFO     FIFO: need 16384 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 16384 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 16384 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15188 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6346 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <000000800100018002000280030003800400048005000580060006800700078008000880090009800a000a800b000b800c000c800d000d800e000e800f000f80... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14238 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5806 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5452 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5452 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5452 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5452 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <0c800d000d800e000e800f000f80100010801100118012001280130013801400148015001580160016801700178018001880190019801a001a801b001b801c00... (16384 bytes total)>
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13402 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4330 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <1b001b801c001c801d001d801e001e801f001f80200020802100218022002280230023802400248025002580260026802700278028002880290029802a002a80... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12344 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3714 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <2880290029802a002a802b002b802c002c802d002d802e002e802f002f8030003080310031803200328033003380340034803500358036003680370037803800... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14136 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 5456 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5456 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5456 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5456 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5296 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <3700378038003880390039803a003a803b003b803c003c803d003d803e003e803f003f8040004080410041804200428043004380440044804500458046004680... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12750 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7170 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1652 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1652 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1652 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1652 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1652 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1652 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1652 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1652 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 1598 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <45004580460046804700478048004880490049804a004a804b004b804c004c804d004d804e004e804f004f805000508051005180520052805300538054005480... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 352 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <530053805400548055005580560056805700578058005880590059805a005ac05b805c005c805d005d805e005e805f005f806000608061006180620062806300... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 8202 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2622 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <6100618062006280630063806400648065006580660066806700678068006880690069806a006a806b006b806c006c806d006d806e006e806f006f8070007080... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9948 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1306 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <6f80700070807100718072007280730073807400748075007580760076807700778078007880790079807a007a807b007b807c007c807d007d807e007e807f00... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14782 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6394 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6394 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6394 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6394 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6394 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6394 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6340 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <7d807e007e807f007f80800080808100818082008280830083808400848085008580860086808700878088008880890089808a008a808b008b808c008c808d00... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13916 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7810 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 2144 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2144 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <8b808c008c808d008d808e008e808f008f80900090809100918092009280930093809400948095009580960096809700978098009880990099809a009a809b00... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12584 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7004 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7004 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7004 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7004 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7004 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7004 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7004 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3436 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <990099809a009a809b009b809c009c809d009d809e009e809f009f80a000a080a100a180a200a280a300a380a400a480a500a580a600a680a700a780a800a880... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11416 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5734 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5734 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5734 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5734 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5734 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2936 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <a680a700a780a800a880a900a980aa00aa80ab00ab80ac00ac80ad00ad80ae00ae80af00af80b000b080b100b180b200b280b300b380b400b480b500b580b600... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2216 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2216 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2216 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2216 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <b500b580b600b680b700b780b800b880b900b980ba00ba80bb00bb80bc00bc80bd00bd80be00be80bf00bf80c000c080c100c180c200c280c300c380c400c480... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9788 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1308 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <c380c400c480c500c580c600c680c700c780c800c880c900c980ca00ca80cb00cb80cc00cc80cd00cd80ce00ce80cf00cf80d000d080d100d180d200d280d300... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9434 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1636 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1636 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1636 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <d180d200d280d300d380d400d480d500d580d600d680d700d780d800d880d900d980da00da80db00db80dc00dc80dd00dd80de00de80df00df80e000e080e100... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6846 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 586 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <df80e000e080e100e180e200e280e300e380e400e480e500e580e600e680e700e780e800e880e900e980ea40eb00eb80ec00ec80ed00ed80ee00ee80ef00ef80... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 7614 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <ee80ef00ef80f000f080f100f180f200f280f300f380f400f480f500f580f600f680f700f780f800f880f900f980fa00fa80fb00fb80fc00fc80fd00fd80fe00... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 14556 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 6472 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6472 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 6472 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5862 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <fd00fd80fe00fe80ff00ff80000000800100018002000280030003800400048005000580060006800700078008000880090009800a000a800b000b800c000c80... (16384 bytes total)>
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13712 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5160 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <0b800c000c800d000d800e000e800f000f80100010801100118012001280130013801400148015001580160016801700178018001880190019801a001a801b00... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 13598 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 5040 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5040 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5040 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4612 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <1a001a801b001b801c001c801d001d801e001e801f001f8020002080210021802200228023002380240024802500258026002680270027802800288029002980... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12092 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3378 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <28002880290029802a002a802b002b802c002c802d002d802e002e802f002f803000308031003180320032803300338034003480350035803600368037003780... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10986 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 4894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4894 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2016 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <3580360036803700378038003880390039803a003a803b003b803c003c803d003d803e003e803f003f8040004080410041804200428043004380440044804500... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9858 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2230 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <43804400448045004580460046804700478048004880490049804a004a804b004b804c004c804d004d804e004e804f004f805000508051005180520052805300... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11830 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 5536 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5536 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5536 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5536 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2672 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <518052005280530053805400548055005580560056805700578058005880590059805a005a805b005b805c005c805d005d805e005e805f005f80600060806100... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12700 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4088 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <5e005e805f005f80600060806100618062006280630063806400648065006580660066806700678068006880690069806a006a806b006b806c006c806d006d80... (16384 bytes total)>
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 10342 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 1526 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <6b806c006c806d006d806e006e806f006f80700070807100718072007280730073807400748075007580760076807700778078007880790079807a007a807b00... (16384 bytes total)>
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 9520 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 3632 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <790079807a007a807b007b807c007c807d007d807e007e807f007f80800080808100818082008280830083808440850085808600868087008780880088808900... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11708 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 5886 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5886 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5886 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5886 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5886 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5886 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5886 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 370 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <878088008880890089808a008a808b008b808c008c808d008d808e008e808f008f80900090809100918092009280930093809400948095009580960096809700... (16384 bytes total)>
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 11070 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 2442 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <960096809700978098009880990099809a009a809b009b809c009c809d009d809e009e809f009f80a000a080a100a180a200a280a300a380a400a480a500a580... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 15304 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: need 15302 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 5944 bytes
+04-26 17:39 StreamData   INFO     FIFO: write <e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (9170 bytes total)>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   INFO     FIFO: read <a480a500a580a600a680a700a780a800a880a900a980aa00aa80ab00ab80ac00ac80ad00ad80ae00ae80af00af80b000b080b100b180b200b280b300b380b400... (16384 bytes total)>
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 12666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: need 4666 bytes
+04-26 17:39 StreamData   INFO     FIFO: read <b200b280b300b380b400b480b500b580b600b680b700b780b800b880b900b980ba00ba80bb00bb80bc00bc80bd00bd80be00be80bf00bf80c000c080c100c180... (16384 bytes total)>
+04-26 17:39 StreamData   INFO     FIFO: write <20>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: wait for flush
+04-26 17:39 StreamData   DEBUG    yield transfer_multiple
+04-26 17:39 StreamData   INFO     FIFO: write <f000000000>
+04-26 17:39 StreamData   INFO     FIFO: write <20>
+04-26 17:39 StreamData   INFO     FIFO: flush
+04-26 17:39 StreamData   INFO     FIFO: read <0000>
+04-26 17:39 StreamData   DEBUG    [CLEANUP] _post_transfer_cleanup unexpected error TypeError: Logger._log() got an unexpected keyword argument 'flush', flush=True
+04-26 17:39 GlasgowService DEBUG    scan end kind=raster ok=True
+04-26 17:42 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:42 GlasgowService INFO     service stopped (connection reference dropped)
+04-26 17:43 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-26 17:43 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-26 17:43 GlasgowService DEBUG    scan start kind=raster
+04-26 17:43 GlasgowService DEBUG    opening Glasgow connection
+04-26 17:43 StreamData   DEBUG    claimed pipe P
+04-26 17:43 StreamData   DEBUG    adding reset register at address 0x03
+04-26 17:43 StreamData   INFO     Run gate open
+04-26 17:43 StreamData   INFO     pipe 0: OUT EP 0x02 on interface 0 (packet size 512)
+04-26 17:43 StreamData   INFO     pipe 0: IN  EP 0x86 on interface 1 (packet size 512)
+04-26 17:43 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-26 17:43 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-26 17:43 GlasgowService DEBUG    [raster] 512x512 dwell=2 latency=16384 frame_blank=False
+04-26 17:43 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-26 17:43 StreamData   DEBUG    synchronizing with cookie 0x64ec
+04-26 17:43 StreamData   INFO     FIFO: write <0164ec20>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    synchronization complete
+04-26 17:43 StreamData   DEBUG    synchronize transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: write <01007b>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: write <a0000002002000000002002000>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: read <ffff007b>
+04-26 17:43 StreamData   INFO     FIFO: need 16384 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 16384 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 16384 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14308 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6070 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <000000800100018002000280030003800400048005000580060006800700078008000880090009800a000a800b000b800c000c800d000d800e000e800f000f80... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14168 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5328 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <0c000c800d000d800e000e800f000f80100010801100118012001280130013801400148015001580160016801700178018001880190019801a001a801b001b80... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15498 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9512 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9512 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9512 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6476 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <19801a001a801b001b801c001c801d001d801e001e801f001f802000208021002180220022802300238024002480250025802600268027002780280028802900... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13984 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4882 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: read <2700278028002880290029802a002a802b002b802c002c802d002d802e002e802f002f8030003080310031803200328033003380340034803500358036003680... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15378 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6668 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: read <35003580360036803700378038003880390039803a003a803b003b803c003c803d003d803e003e803f003f804000408041004180420042804300438044004480... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4834 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4834 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4730 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4668 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <42004280430043804400448045004580460046804700478048004880490049804a004a804b004b804c004c804d004d804e004e804f004f805000508051005180... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9914 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1496 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <4f80500050805100518052005280530053805400548055005580560056805700578058005880590059805a005a805b005b805c005c805d005d805e005e805f00... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11948 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 11838 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11838 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3072 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <5d005d805e405f005f80600060806100618062006280630063806400648065006580660066806700678068006880690069806a006a806b006b806c006c806d00... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 10444 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4398 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1614 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <6b806c006c806d006d806e006e806f006f80700070807100718072007280730073807400748075007580760076807700778078007880790079807a007a807b00... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12196 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3472 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3410 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3410 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3410 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3410 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 786 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 786 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 786 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 738 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <790079807a007a807b007b807c007c807d007d807e007e807f007f80800080808100818082008280830083808400848085008580860086808700878088008880... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8696 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 3220 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3220 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3220 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3220 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3220 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3220 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3220 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3220 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <878088008880890089808a008a808b008b808c008c808d008d808e008e808f008f80900090809100918092009280930093809400948095009580960096809700... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13976 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11068 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11068 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11068 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11068 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11068 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11068 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11068 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11068 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 8204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5516 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5516 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5516 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5324 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <960096809700978098009880990099809a009a809b009b809c009c809d009d809e009e809f009f80a000a080a100a180a200a280a300a380a400a480a500a580... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12784 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4204 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <a480a500a580a600a680a700a780a800a880a900a980aa00aa80ab00ab80ac00ac80ad00ad80ae00ae80af00af80b000b080b100b180b200b280b300b380b400... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12170 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 3558 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3558 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3558 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 882 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <b280b300b380b400b480b500b580b600b680b700b780b800b880b900b980ba00ba80bb00bb80bc00bc80bd00bd80be00be80bf00bf80c000c080c100c180c200... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8846 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2606 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <c100c180c200c280c300c380c400c480c500c580c600c680c700c780c800c880c900c980ca00ca80cb00cb80cc00cc80cd00cd80ce00ce80cf00cf80d000d080... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 1374 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1374 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1374 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1374 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <cf80d000d080d100d180d200d280d300d380d400d480d500d580d600d680d700d780d800d880d900d980da00da80db00db80dc00dc80dd00dd80de00de80df00... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14914 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6146 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 242 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 242 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 242 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 242 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 242 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <dc80dd00dd80de00de80df00df80e000e080e100e180e200e280e300e380e400e480e500e580e600e680e700e780e800e880e900e980ea00ea80eb00eb80ec00... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7160 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4074 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <ea80eb00eb80ec00ec80ed00ed80ee00ee80ef00ef80f000f080f100f180f200f280f300f380f400f480f500f580f600f680f700f780f800f880f900f980fa00... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11248 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5126 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <f780f800f880f900f980fa00fa80fb00fb80fc00fc80fd00fd80fe00fe80ff00ff80000000800100018002000280030003800400048005000580060006800700... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 13130 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7668 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7668 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4644 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <05000580060006800700078008000880090009800a000a800b000b800c000c800d000d800e000e800f000f801000108011001180120012801300138014001480... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12548 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9600 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3838 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3838 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3838 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3838 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1048 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <13801400148015001580160016801700178018001880190019801a001a801b001b801c001c801d001d801e001e801f001f802000208021002180220022802300... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9098 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 3450 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3450 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3450 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3450 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3450 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3450 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3450 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3450 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 376 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <22002280230023802400248025002580260026802700278028002880290029802a002a802b002b802c002c802d002d802e002e802f002f803000308031003180... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 8366 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2116 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2116 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2116 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2116 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <300030803100318032003280330033803400348035003580360036803700378038003880390039803a003a803b003b803c003c803d003d803e003e803f003f80... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9814 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 7062 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <3e803f003f80400040804100418042004280430043804400448045004580460046804700478048004880490049804a004a804b004b804c004c804d004d804e00... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15028 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6522 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6522 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6522 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6522 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6522 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6522 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3780 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <4c804d004d804e004e804f004f80500050805100518052005280530053805400548055005580560056805700578058005880590059805a005a805b005b805c00... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14342 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5524 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <5b005b805c005c805d005d805e005e805f005f80600060806100618062006280630063806400648065006580660066806700678068006880690069806a006a80... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 15404 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6972 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6972 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6972 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 6972 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5238 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <6880690069806a006a806b006b806c006c806d006d806e006e806f006f8070007080710071807200728073007380740074807500758076007680770077807800... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 14324 bytes
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 5938 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <76807700778078007880790079807a007a807b007b807c007c807d007d807e007e807f007f808000808081008180820082808300838084008480850085808600... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 12962 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 3590 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <85008580860086808700878088008880890089808a008a808b008b808c008c808d008d808e008e808f008f809000908091009180920092809300938094009480... (16384 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: write <e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (9170 bytes total)>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 11094 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 2082 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <930093809400948095009580960096809700978098009880990099809a009a809b009b809c009c809d009d809e009e809f009f80a000a080a100a180a200a280... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9818 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1360 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1360 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1360 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1360 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1360 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1360 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1360 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 1360 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <a000a080a100a180a200a280a300a380a400a480a500a580a600a680a700a780a800a880a900a980aa00aa80ab00ab80ac00ac80ad00ad80ae00ae80af00af80... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 9550 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4624 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4624 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4624 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4624 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4624 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4624 bytes
+04-26 17:43 StreamData   INFO     FIFO: need 4624 bytes
+04-26 17:43 StreamData   INFO     FIFO: read <ae80af00af80b000b080b100b180b200b280b300b380b400b480b500b580b600b680b700b780b800b880b900b980ba00ba80bb00bb80bc00bc80bd00bd80be00... (16384 bytes total)>
+04-26 17:43 StreamData   DEBUG    yield transfer_multiple
+04-26 17:43 StreamData   INFO     FIFO: write <f000000000>
+04-26 17:43 StreamData   INFO     FIFO: write <20>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: read <0000>
+04-26 17:43 StreamData   DEBUG    [CLEANUP] _post_transfer_cleanup unexpected error TypeError: Logger._log() got an unexpected keyword argument 'flush', flush=True
+04-26 17:43 GlasgowService DEBUG    scan end kind=raster ok=True
+04-26 17:43 StreamData   INFO     FIFO: write <20>
+04-26 17:43 StreamData   INFO     FIFO: flush
+04-26 17:43 StreamData   INFO     FIFO: wait for flush
+04-26 17:43 GlasgowService DEBUG    service stopped (connection reference dropped)
+04-26 17:43 GlasgowService INFO     service stopped (connection reference dropped)

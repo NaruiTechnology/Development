@@ -66,8 +66,13 @@ class _hybridmethod:
     """Descriptor: the wrapped function works whether called on the
     class or on an instance.
 
-    * ``Cls.method(...)`` -> first arg is ``Cls._default_instance()``
-      (legacy classmethod-style entry point).
+    * ``Cls.method(...)`` -> first arg is ``Cls._default_instance(...)``
+      (legacy classmethod-style entry point).  When the call carries a
+      ``name`` kwarg or a leading positional name, that name is passed
+      to ``_default_instance`` as a hint, so e.g.
+      ``AutomationLog.GetLogger(name='X')`` lands on (and if needed
+      creates) the instance keyed by ``'X'`` rather than the generic
+      ``automation`` placeholder.
     * ``instance.method(...)`` -> first arg is ``instance``
       (normal method).
     """
@@ -76,11 +81,28 @@ class _hybridmethod:
         self.__doc__ = func.__doc__
         self.__name__ = func.__name__
 
-    def __get__(self, instance, owner):
-        target = instance if instance is not None else owner._default_instance()
+    @staticmethod
+    def _extract_name_hint(args, kwargs):
+        """Best-effort: pull a logger/instance name out of the call.
+        Returns ``None`` when nothing string-shaped is supplied."""
+        hint = kwargs.get('name')
+        if hint is None and args and isinstance(args[0], str):
+            hint = args[0]
+        return hint
 
-        def bound(*args, **kwargs):
-            return self.func(target, *args, **kwargs)
+    def __get__(self, instance, owner):
+        if instance is not None:
+            target = instance
+
+            def bound(*args, **kwargs):
+                return self.func(target, *args, **kwargs)
+        else:
+            # Defer target resolution until we see the call args, so
+            # we can pass a name hint to _default_instance().
+            def bound(*args, **kwargs):
+                hint = self._extract_name_hint(args, kwargs)
+                resolved = owner._default_instance(name_hint=hint)
+                return self.func(resolved, *args, **kwargs)
 
         bound.__name__ = self.func.__name__
         bound.__doc__  = self.func.__doc__
@@ -156,19 +178,32 @@ class AutomationLog(object):
         type(self).TryAddConsole(self._name)
 
     @classmethod
-    def _default_instance(cls) -> "AutomationLog":
+    def _default_instance(cls, name_hint: str = None) -> "AutomationLog":
         """Return the instance used for legacy classmethod-style calls.
 
-        Picks the most recently constructed instance, falling back to
-        the first one in the registry, falling back to auto-creating a
-        default ``automation`` instance.  This mirrors the original
-        module, which silently created a singleton on first touch.
+        Resolution order:
+          1. If ``name_hint`` matches an existing instance, return it.
+             This makes ``AutomationLog.GetLogger(name='X')`` reach the
+             instance keyed by ``'X'`` even if it isn't the most recent.
+          2. The most recently constructed instance (legacy behaviour:
+             ``AutomationLog('App')`` then ``AutomationLog.GetLogger(...)``
+             routes to ``App``).
+          3. The first instance in the registry (covers the unusual case
+             where ``_last_created`` was reset but instances remain).
+          4. Auto-create.  When ``name_hint`` is supplied, use it as the
+             instance name (so the auto-created log file is named after
+             the requested logger -- fixes the case where a caller does
+             ``AutomationLog.GetLogger(name='StreamData')`` without a
+             prior ``AutomationLog('StreamData')`` construction).
+             Otherwise fall back to the generic ``automation`` default.
         """
+        if name_hint and name_hint in cls._instances:
+            return cls._instances[name_hint]
         if cls._last_created is not None:
             return cls._last_created
         if cls._instances:
             return next(iter(cls._instances.values()))
-        return cls()  # default name -> automation.log
+        return cls(name_hint) if name_hint else cls()
 
     # ---- accessors (work as classmethod OR instance method) -------------
 

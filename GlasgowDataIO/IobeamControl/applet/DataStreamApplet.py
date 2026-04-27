@@ -1,18 +1,16 @@
-
-import logging
-
-import struct, time
+import struct
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.applet import GlasgowApplet
+from AutomationPy.buildingblocks.automation_log import AutomationLog
 from .iobeamDataSubtarget import IobeamDataSubtarget
 
 class DataStreamApplet(GlasgowApplet):
     required_revision = "C3"
-    logger = logging.getLogger(__name__)
     help = "IobeamTech ADC data stream Applet"
     description = ""
     def __init__(self, config=None):
         super(DataStreamApplet, self).__init__()
         self._config = config
+        self.logger = AutomationLog.GetLogger(config.LogName)
         
     @classmethod
     def add_build_arguments(cls, parser, access):
@@ -89,7 +87,7 @@ class DataStreamApplet(GlasgowApplet):
         return await device.demultiplexer.claim_interface(self, self.mux_interface, args)
 
     async def run_handshake(self, iface):
-        print("Synchronizing with Glasgow hardware...")
+        self.logger.info("Synchronizing with Glasgow hardware...")
         
         # 1. Generate a unique 16-bit cookie
         cookie_val = 0x1234 
@@ -107,5 +105,5 @@ class DataStreamApplet(GlasgowApplet):
         if len(reply) < 4:
             raise RuntimeError("Handshake failed: No response from hardware")
             
-        print(f"Handshake successful. Hardware echo: {reply.hex()}")
+        self.logger.info(f"Handshake successful. Hardware echo: {reply.hex()}")
 

@@ -38,7 +38,7 @@
             }
         }
     ],
-    "LogName": "WaveformGenerator",
+    "LogName": "StreamData",
     "Verbose": true,
     "Simulate": true,
     "IsProduction" : false,
