@@ -3,10 +3,10 @@ import gc
 from .abc import Stream, Connection
 from ..IobeamLauncher import IobeamLauncher
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
-from AutomationPy.buildingblocks.automation_log import AutomationLog
 
 class GlasgowStream(Stream):
-    def __init__(self, iface):
+    def __init__(self, iface, config):
+        super(GlasgowStream, self).__init__(config)
         if iface is None:
             raise RuntimeError("Cannot initialize GlasgowStream with None interface")
         self.lower = iface
@@ -70,7 +70,7 @@ class GlasgowStream(Stream):
                     self.lower._in_tasks.wait_one(), timeout=20.0)
 
             except (asyncio.TimeoutError, Exception) as e:
-                logger.error(f"Failed to wait for USB data: {e}")
+                self._logger.error(f"Failed to wait for USB data: {e}")
                 raise ConnectionError(
                     "Hardware I/O Error: The Glasgow interface disconnected.") from e
 
@@ -85,10 +85,10 @@ class GlasgowStream(Stream):
 
 class GlasgowConnection(Connection):
     def __init__(self, config):
-        super(GlasgowConnection, self).__init__()
+        super(GlasgowConnection, self).__init__(config)
         self._stream = None
         self._config = config
-        self._logger = AutomationLog.GetLogger(config.LogName)
+        #self._logger = AutomationLog.GetLogger(config.LogName)
 
     def connect(self, stream):
         self._stream = stream
@@ -99,7 +99,7 @@ class GlasgowConnection(Connection):
         iface = await launcher.start()
         if iface is None:
             raise ConnectionError("Launcher failed to start: Interface is None")
-        self._stream = GlasgowStream(iface)
+        self._stream = GlasgowStream(iface, self._config)
         self._logger.debug("Successfully connected and wrapped GlasgowStream")
 
     async def _hard_close(self) -> None:

@@ -8,13 +8,15 @@ logger = logging.getLogger()
 
 from GlasgowDataIO.IobeamControl.commands.low_level_commands import SynchronizeCommand, FlushCommand
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
-
+from AutomationPy.buildingblocks.automation_log import AutomationLog
 
 class TransferError(Exception):
     pass
 
 class Stream(metaclass = ABCMeta):
-    _logger = logger.getChild("Stream")
+    def __init__(self, config):
+        self._logger = AutomationLog.GetLogger(config.LogName) if config is not None else logger.getChild("Stream")
+    
     @abstractmethod
     async def write(self, data: bytes | bytearray | memoryview):
         ...
@@ -29,9 +31,8 @@ class Stream(metaclass = ABCMeta):
         ...
 
 class Connection(metaclass = ABCMeta):
-    _logger = logger.getChild("Connection")
-
-    def __init__(self):
+    def __init__(self, config = None):
+        self._logger = self._logger = AutomationLog.GetLogger(config.LogName) if config is not None else logger.getChild("Connection")
         self._stream = None
         self._synchronized = False
         self._next_cookie = random.randrange(0, 0x10000, 2)
