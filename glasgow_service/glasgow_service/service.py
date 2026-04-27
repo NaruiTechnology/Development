@@ -152,7 +152,7 @@ class DeviceService:
         """Called from a scan's exception path. If the exception looks like
         a USB problem, drop the connection so the next request reconnects."""
         if _is_fatal_usb_error(exc):
-            log.warning("dropping connection after %s: %s",
+            logger.warning("dropping connection after %s: %s",
                         type(exc).__name__, exc)
             self._conn = None
 
