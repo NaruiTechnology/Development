@@ -310,6 +310,9 @@ class DeviceService:
             cookie=req.cookie,
             output_mode=output_mode,
             iter_points=iter_points,
+            # Optional override from streamData.json -> vectorScan.drainFloorPixels.
+            # Missing/None falls back to VectorScanCommand's module default.
+            drain_floor_pixels=self._vector_defaults.get("drainFloorPixels"),
         )
 
     # -------- CSV export / validation (unchanged) -------------------------

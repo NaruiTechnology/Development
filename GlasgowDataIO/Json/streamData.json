@@ -31,7 +31,8 @@
                         "dwell": 2
                     },
                     "vectorScan": {
-                        "latency": 8196
+                        "latency": 8196,
+                        "drainFloorPixels": 21000
                     }
                 },
                 "timeout": 60.0

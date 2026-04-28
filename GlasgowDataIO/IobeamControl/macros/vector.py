@@ -21,6 +21,27 @@ from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, CmdType
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
 
 
+# Drain padding floor for vector transfers.
+#
+# Output for the last ~N pixels stays trapped in the
+# Supersampler → BusController → PipelinedLoopbackAdapter chain until
+# more input arrives behind it. The trailing padding written at the end
+# of every vector transfer must exceed this depth, or the final
+# recv_res calls block forever waiting for data that's physically
+# stuck inside the FPGA.
+#
+# 14_000 was observed empirically on a 2048×2048 sweep where chunks
+# 511–512 timed out with only 128 pad pixels. The 1.5× safety factor
+# covers jitter / future buffer changes; the 0.5% term in transfer()
+# is an additional margin for very large scans. Re-validate this
+# constant whenever the bitstream changes — a regression here will
+# look like vector-tail read timeouts.
+_FPGA_PIPELINE_DEPTH_PIXELS = 14_000
+_DRAIN_SAFETY_FACTOR        = 1.5
+_DEFAULT_DRAIN_FLOOR_PIXELS = int(_FPGA_PIPELINE_DEPTH_PIXELS
+                                  * _DRAIN_SAFETY_FACTOR)   # = 21_000
+
+
 def default_iter():
     for x in range(2048):
         for y in range(2048):
@@ -30,7 +51,8 @@ def default_iter():
 class VectorScanCommand(BaseCommand):
     def __init__(self, cookie: int,
                  output_mode: OutputMode = OutputMode.SixteenBit,
-                 iter_points=None):
+                 iter_points=None,
+                 drain_floor_pixels=None):
         # FIX (housekeeping B): mutable-default-argument trap.
         # Before: `iter_points=default_iter()` — Python evaluates defaults
         # once at class-definition time, so a second VectorScanCommand in
@@ -38,11 +60,16 @@ class VectorScanCommand(BaseCommand):
         # processed zero chunks. Evaluate the default per-call instead.
         if iter_points is None:
             iter_points = default_iter()
+        # `drain_floor_pixels=None` falls back to the module default; pass
+        # an explicit int (e.g. from streamData.json) to override per-build.
+        if drain_floor_pixels is None:
+            drain_floor_pixels = _DEFAULT_DRAIN_FLOOR_PIXELS
         self._iter_points = iter_points
         self._processed_points = []
         self._processed = False
         self._cookie = cookie
         self._output_mode = output_mode
+        self._drain_floor_pixels = int(drain_floor_pixels)
         self.abort = asyncio.Event()
 
     def __repr__(self):
@@ -159,7 +186,18 @@ class VectorScanCommand(BaseCommand):
                 total_pixels = sum(pc for _, pc in self._processed_points)
             else:
                 total_pixels = 0
-            PADDING_PIXELS = max(128, total_pixels // 200)
+            # The floor must exceed FPGA pipeline depth (see module-level
+            # comment near _FPGA_PIPELINE_DEPTH_PIXELS). The 0.5% term is
+            # a safety margin for very large scans where any per-pixel
+            # buffering accumulates; for small scans the floor wins.
+            PADDING_PIXELS = max(self._drain_floor_pixels,
+                                 total_pixels // 200)
+            self._logger.debug(
+                f"drain padding: {PADDING_PIXELS} px "
+                f"(floor={self._drain_floor_pixels}, "
+                f"scan_pixels={total_pixels}, "
+                f"ratio_term={total_pixels // 200})"
+            )
             padding_body = bytearray()
             for _ in range(PADDING_PIXELS):
                 padding_body.extend(struct.pack(">HHH", 0, 0, 1))
