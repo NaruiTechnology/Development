@@ -102,7 +102,6 @@
                         "source = 'pattern' -> built-in test patterns:",
                         "                      ramp / checker / bars / bullseye."
                     ],
-                    "enabled":         true,
                     "imageResolution": 64,
                     "source":          "pattern",
                     "patternKind":     "bullseye",

@@ -84,40 +84,16 @@ class DataStreamApplet(GlasgowApplet):
     def _resolve_simulation(self):
         action_data = util.GetStateConfigByName(self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
         pin_config = action_data.get("pins", {}) or {}
-        sim_config = action_data.get("simulation", {}) or {}
-
-        sim_enabled = bool(sim_config.get("enabled", False))
+        isProduction = bool(self._config.IsProduction) if self._config is not None and hasattr(self._config, "IsProduction") else False 
+        loopback = True if not isProduction else False
         sim_image   = None
-        sim_res     = int(sim_config.get("imageResolution", 64))
-
-        if sim_enabled:
-            try:
-                sim_image, sim_res = get_image_data(sim_config)
-                if self.logger:
-                    self.logger.info(
-                        f"simulation: image source={sim_config.get('source')} "
-                        f"resolution={sim_res}x{sim_res} "
-                        f"size={len(sim_image)}")
-            except Exception as exc:
-                if self.logger:
-                    self.logger.error(
-                        f"simulation: failed to load image: {exc} - "
-                        f"falling back to no image")
-                sim_image = None
-
-        # Loopback decision tree:
-        #   simulation.enabled true  -> loopback always true
-        #   simulation.enabled false -> use IsProduction as before
-        if sim_enabled:
-            loopback = True
-        elif self._config is not None and hasattr(self._config,
-                                                  "IsProduction"):
-            loopback = not self._config.IsProduction
-        else:
-            loopback = True
+        sim_config = action_data.get("simulation", {}) or {}
+        sim_res = int(sim_config.get("imageResolution", 64))
+        if not isProduction:
+            sim_image, sim_res = get_image_data(sim_config)
 
         return pin_config, sim_image, sim_res, loopback
-
+    
     def build(self, target, args):
         args.pipes = "PQ"
 
