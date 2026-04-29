@@ -4,7 +4,7 @@ IobeamControl/macros/scan_display.py
 
 Host-side display helpers for scan results.
 
-Two entry points, one per scan type:
+Three entry points:
 
     display_raster(pixels, x_res, y_res, *, title=None, save_path=None)
         16-bit ADC pixels in raster order -> imshow grid.
@@ -14,25 +14,55 @@ Two entry points, one per scan type:
         Pixels paired with the (x, y, dwell) iteration order from
         VectorScanCommand -> 2-D scatter plot, colour = pixel value.
 
-Both functions accept either a flat sequence of ints/uint16, an
-array.array('H'), or a numpy.ndarray. matplotlib is imported lazily so
-modules that don't actually call display_*() don't pull in the GUI
-dependency at import time (matters for headless CI).
+    save_scan_from_config(chunks, kind, scan_config, *,
+                          iter_points=None, resolution=None)
+        TURNKEY HELPER. Pass it the raw chunks list straight from
+        `async for chunk in conn.transfer_multiple(...)`, plus the
+        scan-section dict from streamData.json. Reads `display.enabled`
+        / `display.saveAs` and writes the PNG. Use this from FastAPI
+        handlers and any other call site that already has chunks +
+        the JSON config in scope.
 
-If matplotlib isn't installed, both functions log a warning and
-return None instead of raising - this keeps test_raster.py able to
-opt-in to display via JSON config without breaking pytest on machines
-that don't have the GUI stack.
+display_raster / display_vector accept either a flat sequence of
+ints/uint16, an `array.array('H')`, or a numpy.ndarray. matplotlib is
+imported lazily so modules that don't actually call display_*() don't
+pull in the GUI dependency at import time.
 
-Both functions accept `save_path=...` to write a PNG to disk
-unconditionally; the on-screen show() only happens when save_path is
-None and matplotlib is available.
+If matplotlib isn't installed, both functions log a warning and return
+None instead of raising - this keeps the FastAPI handler / pytest able
+to opt-in to display via JSON config without breaking on machines that
+don't have the GUI stack.
+
+`save_path=...` writes a PNG to disk; tilde and $VARS are expanded.
+`save_path=None` + matplotlib available opens a blocking GUI window.
 """
 
 import logging
+import os
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------- #
+# Internal helpers
+# ---------------------------------------------------------------------------- #
+def _resolve_path(p):
+    """
+    Expand `~` and environment variables in `p` and return a Path.
+
+    Bug magnet: `Path("~/Downloads/x.png")` does NOT expand `~`. It
+    silently treats `~` as a directory name relative to cwd, and the
+    later `mkdir(parents=True)` cheerfully creates it. The PNG ends up
+    at `./~/Downloads/x.png`, which looks like "no file written"
+    because nobody ever looks there.
+
+    Fix: always run the path through expanduser + expandvars before
+    doing anything else.
+    """
+    if p is None:
+        return None
+    return Path(os.path.expandvars(os.fspath(p))).expanduser()
 
 
 def _to_numpy(seq, dtype="uint16"):
@@ -44,26 +74,80 @@ def _to_numpy(seq, dtype="uint16"):
         return None
     if hasattr(seq, "shape"):  # already ndarray
         return seq.astype(dtype, copy=False)
-    return np.fromiter(seq, dtype=dtype, count=len(seq))
+    # array.array, list, tuple, generator -> ndarray. Use np.asarray for
+    # buffers that already implement __array__; np.fromiter as fallback
+    # for plain generators.
+    try:
+        return np.asarray(seq, dtype=dtype)
+    except (TypeError, ValueError):
+        return np.fromiter(seq, dtype=dtype)
+
+
+def _flatten_chunks(chunks, dtype="uint16"):
+    """
+    Concatenate an iterable of array.array/bytes/list chunks into one
+    flat numpy array. Used by save_scan_from_config to turn the
+    transfer_multiple yield stream into a single buffer.
+
+    Accepts:
+      - list of array.array('H')         (the canonical case)
+      - list of memoryview / bytes       (unflipped 16-bit big-endian)
+      - list of list[int] / numpy.ndarray
+      - a single concatenated array.array / ndarray (passthrough)
+    """
+    try:
+        import numpy as np
+    except ImportError:
+        logger.warning("numpy not installed; cannot flatten chunks")
+        return None
+
+    if chunks is None:
+        return np.zeros(0, dtype=dtype)
+
+    # Already a flat array-like
+    if hasattr(chunks, "shape") or (
+        hasattr(chunks, "typecode") and chunks.typecode in ("H", "B")
+    ):
+        return _to_numpy(chunks, dtype=dtype)
+
+    # Iterable of chunks
+    parts = []
+    for ch in chunks:
+        if ch is None or len(ch) == 0:
+            continue
+        # bytes/bytearray/memoryview of 16-bit big-endian: byteswap on
+        # little-endian hosts. recv_res() already produces native-endian
+        # array.array('H'), so this branch only fires for raw bytes
+        # captured upstream of recv_res.
+        if isinstance(ch, (bytes, bytearray, memoryview)):
+            arr = np.frombuffer(bytes(ch), dtype=">u2").astype(dtype)
+        else:
+            arr = _to_numpy(ch, dtype=dtype)
+        parts.append(arr)
+
+    if not parts:
+        return np.zeros(0, dtype=dtype)
+    return np.concatenate(parts)
 
 
 def _maybe_show(fig, save_path):
     if save_path is not None:
-        save_path = Path(save_path)
+        save_path = _resolve_path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(save_path, dpi=120, bbox_inches="tight")
         logger.info(f"saved scan plot to {save_path}")
-    else:
-        try:
-            import matplotlib.pyplot as plt  # noqa: F401
-            # plt.show() is blocking; OK for interactive use, the test
-            # suite should pass save_path=... so it doesn't hang in CI.
-            import matplotlib.pyplot as plt
-            plt.show()
-        except Exception as exc:
-            logger.warning(f"matplotlib show failed: {exc}")
+        return save_path
+    try:
+        import matplotlib.pyplot as plt
+        plt.show()
+    except Exception as exc:
+        logger.warning(f"matplotlib show failed: {exc}")
+    return None
 
 
+# ---------------------------------------------------------------------------- #
+# Public API: per-scan-type display
+# ---------------------------------------------------------------------------- #
 def display_raster(pixels, x_res, y_res, *, title=None, save_path=None,
                    cmap="gray"):
     """
@@ -71,20 +155,21 @@ def display_raster(pixels, x_res, y_res, *, title=None, save_path=None,
 
     pixels - flat row-major sequence of length x_res*y_res, 16-bit
              ADC values (the high 8 bits carry the actual sample;
-             FakeAdcSimulator returns value << 6).
+             FakeAdcSimulator returns value << 6, CommandExecutor
+             shifts that left 2 more = pixel value in the high byte).
     x_res, y_res - integer resolution of the captured frame.
     title - optional plot title.
     save_path - if set, write PNG to this path instead of showing.
+                `~` and $VARS are expanded.
     cmap - matplotlib colormap name; "gray" matches the SEM aesthetic.
 
-    Returns the figure on success, None if matplotlib/numpy are missing
-    or pixel count doesn't match resolution.
+    Returns the figure on success, None if matplotlib/numpy are missing.
     """
     arr = _to_numpy(pixels, dtype="uint16")
     if arr is None:
         return None
     expected = int(x_res) * int(y_res)
-    got      = len(arr) if arr.ndim == 1 else arr.size
+    got = len(arr) if arr.ndim == 1 else arr.size
     if got != expected:
         logger.warning(
             f"display_raster: got {got} pixels, expected {expected} "
@@ -97,6 +182,11 @@ def display_raster(pixels, x_res, y_res, *, title=None, save_path=None,
     arr = arr.reshape((y_res, x_res))
 
     try:
+        import matplotlib
+        # Use a non-interactive backend when saving to disk so this works
+        # cleanly under uvicorn/FastAPI (no DISPLAY, no Tk required).
+        if save_path is not None:
+            matplotlib.use("Agg", force=False)
         import matplotlib.pyplot as plt
     except ImportError:
         logger.warning("matplotlib not installed; display_raster disabled")
@@ -112,6 +202,8 @@ def display_raster(pixels, x_res, y_res, *, title=None, save_path=None,
     ax.set_ylabel("Y (pixels)")
     fig.tight_layout()
     _maybe_show(fig, save_path)
+    if save_path is not None:
+        plt.close(fig)
     return fig
 
 
@@ -127,10 +219,6 @@ def display_vector(pixels, iter_points, *, x_res=2048, y_res=2048,
                    iterator that was fed to VectorScanCommand.
     x_res, y_res - axis ranges (default 2048x2048 = full DAC range).
     title, save_path, cmap - as for display_raster.
-
-    Each point is plotted as a square at (x, y) coloured by its 8-bit
-    grayscale value. Sparse vector scans render as a scatter; dense
-    ones effectively recover the underlying raster image.
     """
     arr = _to_numpy(pixels, dtype="uint16")
     if arr is None:
@@ -146,6 +234,9 @@ def display_vector(pixels, iter_points, *, x_res=2048, y_res=2048,
 
     try:
         import numpy as np
+        import matplotlib
+        if save_path is not None:
+            matplotlib.use("Agg", force=False)
         import matplotlib.pyplot as plt
     except ImportError:
         logger.warning("matplotlib not installed; display_vector disabled")
@@ -169,9 +260,123 @@ def display_vector(pixels, iter_points, *, x_res=2048, y_res=2048,
     fig.colorbar(sc, ax=ax, label="ADC sample (8-bit)")
     fig.tight_layout()
     _maybe_show(fig, save_path)
+    if save_path is not None:
+        plt.close(fig)
     return fig
 
 
+# ---------------------------------------------------------------------------- #
+# Public API: turnkey config-driven save
+# ---------------------------------------------------------------------------- #
+def save_scan_from_config(chunks, kind, scan_config, *,
+                          iter_points=None,
+                          resolution=None,
+                          x_res=None,
+                          y_res=None):
+    """
+    One-call wrapper that does everything the FastAPI handler / test
+    runner needs after a scan completes:
+
+        1. Reads `display.enabled` and `display.saveAs` from the
+           supplied scan_config dict (typically the rasterScan or
+           vectorScan section of streamData.json's action block).
+        2. If enabled, expands `~` / $VARS in `saveAs`.
+        3. Concatenates `chunks` into a single uint16 buffer.
+        4. Calls display_raster() or display_vector() with save_path.
+        5. Returns the resolved Path on success, or None on any
+           opt-out (display.enabled=false, no display block, missing
+           saveAs, no matplotlib).
+
+    Parameters
+    ----------
+    chunks
+        Either an iterable of `array.array('H')` chunks (the natural
+        output of `async for chunk in conn.transfer_multiple(cmd, ...)`),
+        or a single pre-flattened sequence/ndarray.
+    kind
+        "raster" or "vector".
+    scan_config
+        The dict for this scan type, e.g.
+            action["rasterScan"]   or   action["vectorScan"]
+        Must contain a `display` sub-dict with at least:
+            { "enabled": true, "saveAs": "~/Downloads/last.png" }
+        Tolerates missing keys - returns None silently if `display`
+        is absent or `enabled` is false.
+    iter_points
+        REQUIRED when kind == "vector". Same iterator that was fed to
+        VectorScanCommand (e.g. macros.vector.default_iter()).
+        Ignored for raster.
+    resolution
+        Square scan resolution. For raster, used as both x and y if
+        x_res/y_res aren't given. Defaults to scan_config["resolution"]
+        for raster, 2048 for vector.
+    x_res, y_res
+        Override the inferred axes (mainly for non-square scans).
+
+    Failure modes are logged at INFO/WARNING and never raise: a missing
+    PIL/matplotlib install or a malformed config returns None and lets
+    the caller carry on. This is deliberate - the scan succeeded, the
+    PNG is icing.
+    """
+    if not scan_config:
+        return None
+
+    display_cfg = scan_config.get("display") or {}
+    if not display_cfg.get("enabled"):
+        return None
+
+    save_path = display_cfg.get("saveAs")
+    if not save_path:
+        logger.warning(f"display.enabled=true but display.saveAs is empty "
+                       f"for kind={kind}; skipping save")
+        return None
+    save_path = _resolve_path(save_path)
+
+    # Flatten chunks -> uint16 buffer
+    pixels = _flatten_chunks(chunks)
+    if pixels is None or pixels.size == 0:
+        logger.warning(f"save_scan_from_config: no pixels to save "
+                       f"(kind={kind}); skipping")
+        return None
+
+    if kind == "raster":
+        # Resolve x_res/y_res
+        if x_res is None or y_res is None:
+            res = (resolution
+                   or scan_config.get("resolution")
+                   or int(pixels.size ** 0.5))
+            x_res = x_res or res
+            y_res = y_res or res
+        title = display_cfg.get("title") or (
+            f"Raster scan: {x_res}x{y_res}")
+        fig = display_raster(pixels, x_res, y_res,
+                             title=title,
+                             save_path=save_path,
+                             cmap=display_cfg.get("cmap", "gray"))
+        return save_path if fig is not None else None
+
+    if kind == "vector":
+        if iter_points is None:
+            logger.error("save_scan_from_config: kind='vector' requires "
+                         "iter_points (the same iterator fed to "
+                         "VectorScanCommand)")
+            return None
+        title = display_cfg.get("title") or f"Vector scan: {pixels.size} points"
+        fig = display_vector(pixels, iter_points,
+                             x_res=x_res or 2048,
+                             y_res=y_res or 2048,
+                             title=title,
+                             save_path=save_path,
+                             cmap=display_cfg.get("cmap", "gray"))
+        return save_path if fig is not None else None
+
+    logger.error(f"save_scan_from_config: unknown kind: {kind!r}")
+    return None
+
+
+# ---------------------------------------------------------------------------- #
+# CSV replay (interactive use after the fact)
+# ---------------------------------------------------------------------------- #
 def display_from_csv(csv_path, *, kind="raster", x_res=None, y_res=None,
                      iter_points=None, title=None, save_path=None):
     """
@@ -183,7 +388,7 @@ def display_from_csv(csv_path, *, kind="raster", x_res=None, y_res=None,
     so the caller must supply iter_points (or pass kind="raster" if
     the dump is a uniform vector raster).
     """
-    csv_path = Path(csv_path)
+    csv_path = _resolve_path(csv_path)
     if not csv_path.is_file():
         logger.error(f"display_from_csv: not found: {csv_path}")
         return None
