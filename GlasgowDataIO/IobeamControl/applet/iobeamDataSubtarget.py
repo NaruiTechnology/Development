@@ -59,6 +59,15 @@ _BUS_STROBES = (
 )
 
 
+# Sentinel object passed as `sim_image` when the user wants the
+# loopback path to deliver a constant zero (i.e. "act like a real
+# scan at the actual resolution, but don't waste BRAM on a fake
+# image"). DataStreamApplet imports this so identity comparison
+# works across modules. Use a unique tuple rather than `object()`
+# so it survives reload cycles cleanly.
+_ZERO_FILL = ("__iobeam_zero_fill_sentinel__",)
+
+
 class IobeamDataSubtarget(Elaboratable):
     def __init__(self, *, ports, out_fifo, in_fifo, led=None, control=None,
                  data=None,
@@ -199,7 +208,15 @@ class IobeamDataSubtarget(Elaboratable):
                 PipelinedLoopbackAdapter(executor.adc_latency)
             wiring.connect(m, executor.bus, flipped(loopback_adapter.bus))
 
-            if self.sim_image is not None:
+            if self.sim_image is _ZERO_FILL:
+                # Zero-fill mode: the scan runs at its actual requested
+                # resolution (no decimation, no upsampling), but every
+                # pixel reads back as 0. No BRAM, one comb assignment.
+                # The captured PNG is a pure black frame matching the
+                # exact dimensions of a real production scan, which is
+                # what we want to validate the host pipeline against.
+                m.d.comb += loopback_adapter.loopback_stream.eq(0)
+            elif self.sim_image is not None:
                 # Image-backed fake ADC. Address ROM with the live
                 # super_dac_stream coords (combinational), feed BRAM
                 # output to the loopback shift register.

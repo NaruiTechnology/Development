@@ -72,7 +72,7 @@ class streamData_state(dataIO_state):
                 self._success = False
                 return
             
-            if not self.ParentWorkThread._config.Simulate:
+            if not self.ParentWorkThread._config.DemoWithCLI:
                 if self._conn is not None and self._conn.connected:
                     # Small yield to ensure the event loop handles any pending connection tasks
                     await asyncio.sleep(0.05) 

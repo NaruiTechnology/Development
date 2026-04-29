@@ -100,7 +100,8 @@
                         "                      grayscale.",
                         "source = 'random'  -> RNG-fill, optional 'seed' for repro.",
                         "source = 'pattern' -> built-in test patterns:",
-                        "                      ramp / checker / bars / bullseye."
+                        "                      ramp / checker / bars / bullseye.",
+                        "---Note, If IsProduction=false and mode is not 'zeros', the simulation will be enabled with fake images"
                     ],
                     "imageResolution": 64,
                     "source":          "pattern",
@@ -113,7 +114,8 @@
                     "_alt_random": {
                         "source": "random",
                         "seed":   42
-                    }
+                    },
+                    "mode": "zeros"
                     }
                 },
                 "timeout": 60.0
@@ -122,7 +124,7 @@
     ],
     "LogName": "StreamData",
     "Verbose": true,
-    "Simulate": true,
+    "DemoWithCLI": true,
     "IsProduction" : false,
     "DumpData" : false
 }

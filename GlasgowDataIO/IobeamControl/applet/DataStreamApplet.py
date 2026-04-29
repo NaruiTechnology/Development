@@ -9,17 +9,18 @@ gateware Elaboratable. Adds three things over the previous version:
       subtarget as `pin_config=`. Pin assignments now live in JSON
       instead of being hard-coded in applet/__init__.py.
 
-    * Reads `action.simulation` from streamData.json. When enabled,
-      loads a PNG/BMP (or generates random/pattern data) via
-      imageSource.get_image_data(), and passes the resulting flat
-      pixel list to the subtarget as `sim_image=`. The bitstream
-      synthesises the image into BRAM, FakeAdcSimulator looks it up
-      during scans.
+    * Reads `action.simulation` from streamData.json. When IsProduction
+      is false, the `simulation.mode` key chooses what fills the ADC
+      data path:
+        - "image"    bake a PNG/BMP/pattern into BRAM (default)
+        - "zeros"    tie data_i to 0; scan returns black at the actual
+                     resolution. No BRAM cost. Use this to validate
+                     the production data-path before the PCB arrives.
+        - "loopback" DAC-coordinate echo (connectivity diagnostic)
 
-    * Defaults `loopback=True` whenever `simulation.enabled == true`,
-      regardless of the IsProduction flag. Production builds can still
-      set `simulation.enabled == false` and `loopback=false` to drive
-      a real sub-target board once it exists.
+    * Defaults `loopback=True` whenever `IsProduction == false`.
+      Production builds (IsProduction == true) drive the real ADC
+      path and ignore the `simulation` block.
 
 Backward compatibility: when neither pins nor simulation is configured,
 the applet falls back to loopback=True with no image (same behaviour as
@@ -33,6 +34,15 @@ from GlasgowDataIO.IobeamControl.applet.iobeamDataSubtarget import IobeamDataSub
 from GlasgowDataIO.IobeamControl.applet.imageSource import get_image_data
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 from AutomationPy.buildingblocks.definitions import Consts
+
+
+# Sentinel object used by _resolve_simulation() to tell the subtarget
+# "you're in zero-fill mode": loopback = True, no BRAM, data_i tied to
+# constant 0. Distinct from `None` (which means "no image, fall back
+# to coord-loopback") and from a real image list. We import the same
+# sentinel from iobeamDataSubtarget so identity comparison works
+# across modules.
+from GlasgowDataIO.IobeamControl.applet.iobeamDataSubtarget import _ZERO_FILL
 import AutomationPy.buildingblocks.utils as util
 
 
@@ -82,17 +92,107 @@ class DataStreamApplet(GlasgowApplet):
     # out of the streamData.json action block, with sensible defaults.
     # ------------------------------------------------------------------ #
     def _resolve_simulation(self):
-        action_data = util.GetStateConfigByName(self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
+        """
+        Decide what fills `bus.data_i` for this build.
+
+        Returns (pin_config, sim_image, sim_image_resolution, loopback).
+
+        Decision tree:
+
+            IsProduction = True
+                Real PCB is present. loopback = False, sim_image = None.
+                The subtarget routes data.i from the physical pins.
+
+            IsProduction = False
+                No PCB (or simulation desired). loopback = True. The
+                subtarget instantiates PipelinedLoopbackAdapter; what
+                feeds it is selected by `simulation.mode`:
+
+                    mode = "zeros"   - tie data_i to 0. No BRAM cost.
+                                       Scans complete at the ACTUAL
+                                       requested resolution and the
+                                       saved PNG shows a pure black
+                                       frame. Use this to validate the
+                                       full scan path at production
+                                       resolution before the PCB
+                                       arrives. This is the new mode
+                                       you asked for.
+                    mode = "image"   - load PNG/BMP/pattern into BRAM,
+                                       FakeAdcSimulator drives data_i.
+                                       Bound by the iCE40 BRAM budget,
+                                       so image resolution is decoupled
+                                       from scan resolution (the image
+                                       upsamples into tiles at high
+                                       scan resolutions). This is the
+                                       default if `mode` is absent and
+                                       a `simulation` block exists.
+                    mode = "loopback" - DAC-coordinate echo. No image,
+                                        no BRAM, but the captured
+                                        pixels carry no useful structure
+                                        beyond "the path is alive".
+
+        The `enabled` flag retained from earlier patches still gates
+        the whole simulation block - if `simulation.enabled` is false
+        and IsProduction is false, mode defaults to "loopback" so
+        existing connectivity tests keep working.
+        """
+        action_data = util.GetStateConfigByName(
+            self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
+
         pin_config = action_data.get("pins", {}) or {}
-        isProduction = bool(self._config.IsProduction) if self._config is not None and hasattr(self._config, "IsProduction") else False 
-        loopback = True if not isProduction else False
-        sim_image   = None
         sim_config = action_data.get("simulation", {}) or {}
+
+        is_production = bool(self._config.IsProduction) \
+            if self._config is not None and hasattr(self._config, "IsProduction") \
+            else False
+
+        # Production: real PCB. No simulation, no loopback.
+        if is_production:
+            return pin_config, None, 0, False
+
+        # Non-production: figure out what fills data_i.
+        # `mode` is the new knob; fall back sensibly when it's absent
+        # so older configs keep working.
+        sim_enabled = bool(sim_config.get("enabled", True))
+        if not sim_enabled:
+            # Explicit "no simulation" with no PCB - degenerate case.
+            # Fall through to coord-loopback so the path still moves
+            # bytes, but log so it's obvious in the build output.
+            mode = "loopback"
+        else:
+            mode = sim_config.get("mode", "image")
+
+        sim_image = None
         sim_res = int(sim_config.get("imageResolution", 64))
-        if not isProduction:
+
+        if mode == "image":
+            # Existing behavior: bake an image into BRAM.
+            sim_image, sim_res = get_image_data(sim_config)
+        elif mode == "zeros":
+            # New behavior: no BRAM, no image. The subtarget will see
+            # sim_image=None AND a marker telling it to tie data_i
+            # to 0 instead of falling through to coord-loopback. We
+            # carry that marker by passing sim_image as the special
+            # sentinel object `_ZERO_FILL`. The subtarget recognizes
+            # it and emits one comb assignment instead of a BRAM.
+            sim_image = _ZERO_FILL
+        elif mode == "loopback":
+            # Coord-loopback diagnostic.
+            sim_image = None
+        else:
+            if self.logger is not None:
+                self.logger.warning(
+                    f"Unknown simulation.mode={mode!r}; falling back to "
+                    f"image-loopback")
             sim_image, sim_res = get_image_data(sim_config)
 
-        return pin_config, sim_image, sim_res, loopback
+        if self.logger is not None:
+            self.logger.info(
+                f"simulation: IsProduction={is_production} mode={mode} "
+                f"sim_image={'<image>' if isinstance(sim_image, list) else sim_image} "
+                f"sim_res={sim_res}")
+
+        return pin_config, sim_image, sim_res, True
     
     def build(self, target, args):
         args.pipes = "PQ"
