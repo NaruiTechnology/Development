@@ -37,7 +37,8 @@
                             "instead of opening a window (preferred for CI)."
                             ],
                         "enabled": true,
-                        "saveAs":  "~/Downloads/raster_last_run.png"
+                        "saveAs":  "~/Downloads/raster_last_run.png",
+                        "openViewer": true
                         }
                     },
                     "vectorScan": {
@@ -46,7 +47,8 @@
 
                         "display": {
                         "enabled": true,
-                        "saveAs":  "~/Downloads/vector_last_run.png"
+                        "saveAs":  "~/Downloads/vector_last_run.png",
+                        "openViewer": true
                         }
                     },
 
