@@ -41,6 +41,15 @@ _DRAIN_SAFETY_FACTOR        = 1.5
 _DEFAULT_DRAIN_FLOOR_PIXELS = int(_FPGA_PIPELINE_DEPTH_PIXELS
                                   * _DRAIN_SAFETY_FACTOR)   # = 21_000
 
+# How long to wait for the sender task to finish its drain padding +
+# final flush after the receiver loop has returned. The sender is
+# pumping ~21k pixel commands (~126 KB) into an OUT FIFO that drains
+# at FPGA / FX2 speed; in practice this takes well under a second.
+# A generous ceiling here just bounds the worst case where the FPGA
+# pipeline genuinely stalls — at which point we'd rather surface a
+# warning than hang the test forever.
+_SENDER_DRAIN_TIMEOUT_S = 15.0
+
 
 def default_iter():
     for x in range(2048):
@@ -214,17 +223,55 @@ class VectorScanCommand(BaseCommand):
         await SynchronizeCommand(
             cookie=self._cookie, raster=False, output=self._output_mode,
         ).transfer(stream)
-        asyncio.create_task(sender())
+        sender_task = asyncio.create_task(sender())
 
         cookie = await stream.read(4)  # just assume these are exactly FFFF + cookie, and discard them
         ## TODO: assert against synchronization result
-        for commands, pixel_count in self._iter_chunks(latency):
-            tokens += 1
-            if tokens == 1:
-                token_fut.set_result(None)
-                token_fut = asyncio.Future()
-            if tokens == MAX_PIPELINE + 1:
-                if self.abort.is_set():
-                    break
-            self._logger.debug(f"recver: tokens={tokens}")
-            yield await self.recv_res(pixel_count, stream, self._output_mode)
+        try:
+            for commands, pixel_count in self._iter_chunks(latency):
+                tokens += 1
+                if tokens == 1:
+                    token_fut.set_result(None)
+                    token_fut = asyncio.Future()
+                if tokens == MAX_PIPELINE + 1:
+                    if self.abort.is_set():
+                        break
+                self._logger.debug(f"recver: tokens={tokens}")
+                yield await self.recv_res(pixel_count, stream, self._output_mode)
+        finally:
+            # FIX 4: wait for the sender to finish its drain padding +
+            # final flush before this generator returns.
+            #
+            # The receiver's `for` loop exhausts as soon as the last real
+            # chunk is read back, but the sender at that point is still
+            # pumping ~21k pixel commands (the drain padding) and parked
+            # in `await stream.flush()`. Without this wait, the caller's
+            # `_post_transfer_cleanup` runs `_hard_close` which cancels
+            # the demultiplexer's in-flight `bulk_write`, and the sender
+            # task surfaces 10s later as
+            #     "Task exception was never retrieved: TimeoutError"
+            # via asyncio's default exception handler. Awaiting here
+            # lets the padding flush through cleanly while the USB
+            # stack is still alive.
+            #
+            # A timeout bounds the worst case where the FPGA pipeline
+            # genuinely stalls (e.g. IN FIFO not draining) — we'd
+            # rather log + cancel than hang the test forever.
+            if not sender_task.done():
+                try:
+                    await asyncio.wait_for(
+                        sender_task, timeout=_SENDER_DRAIN_TIMEOUT_S)
+                except asyncio.TimeoutError:
+                    self._logger.warning(
+                        f"sender task did not finish drain in "
+                        f"{_SENDER_DRAIN_TIMEOUT_S:.0f}s; cancelled")
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    # Sender raised something else (e.g. a real USB
+                    # error). Log it but don't re-raise — the receiver
+                    # already delivered its chunks to the caller and
+                    # masking the sender's exception with a re-raise
+                    # here would lose those chunks.
+                    self._logger.exception(
+                        "sender task raised during transfer cleanup")

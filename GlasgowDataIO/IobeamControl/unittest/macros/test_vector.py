@@ -147,13 +147,30 @@ class VectorScanTest(unittest.TestCase):
                 f"chunk {i} is empty",
             )
 
-        # Chunk 2 must not begin with all zeros (padding-leak regression
-        # guard, same check as test_raster).
-        if len(self.chunks) >= 2:
-            self.assertNotEqual(
-                bytes(self.chunks[1])[:16], b"\x00" * 16,
-                "chunk 2 begins with padding zeros (padding leaked into real data)",
-            )
+        # Sanity check: at least one chunk somewhere in the stream contains
+        # non-zero data. This catches catastrophic failures (FPGA never
+        # wakes up, IN path dead, simulator BRAM not initialized) without
+        # the false positives the old "chunk 2 != zeros" guard produced.
+        #
+        # Why the old check was wrong:
+        #   With default_iter() the scan starts at host (x=0, y=0..) and
+        #   FakeAdcSimulator decimates the top 6 bits of the 14-bit DAC
+        #   X for image addressing — so host x in 0..255 all reads
+        #   image column 0. For every pattern in imageSource.pattern_image
+        #   except a custom-loaded photo with a bright left edge, image
+        #   column 0 is dominated by zeros (`ramp`: 0; `bars`: 0;
+        #   `bullseye`: 0 at corners). That makes the first ~64 chunks
+        #   legitimately all-zero, and the old assertion fired on real
+        #   data, not on a padding leak.
+        #
+        # If we ever want a *real* padding-leak guard we'd have to inspect
+        # the *tail* of the stream (where drain padding could plausibly
+        # reach the host) against a known iterator that lands on a
+        # non-zero image cell.
+        self.assertTrue(
+            any(any(v != 0 for v in chunk) for chunk in self.chunks),
+            "every chunk is all zeros — scan returned no real data",
+        )
 
     def _exportDataToCsvFile(self):
         if not self._config.DumpData:
