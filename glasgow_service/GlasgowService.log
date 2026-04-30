@@ -1,0 +1,2756 @@
+04-30 14:24 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-30 14:24 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-30 14:35 GlasgowService DEBUG    scan start kind=raster
+04-30 14:35 GlasgowService DEBUG    opening Glasgow connection
+04-30 14:35 GlasgowService DEBUG    scan end kind=raster ok=False
+04-30 14:35 GlasgowService ERROR    stream error
+Traceback (most recent call last):
+  File "/home/vboxuser/Project/IobeamTech/Development/glasgow_service/glasgow_service/api.py", line 161, in _stream_scan
+    async for chunk in gen:
+  File "/home/vboxuser/Project/IobeamTech/Development/glasgow_service/glasgow_service/service.py", line 163, in raster_scan
+    conn = await self._ensure_conn()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/glasgow_service/glasgow_service/service.py", line 138, in _ensure_conn
+    await self._conn._connect()
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/transfer/glasgowStream.py", line 99, in _connect
+    iface = await launcher.start()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/IobeamLauncher.py", line 21, in start
+    return await self.run()
+           ^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/IobeamLauncher.py", line 31, in run
+    device = GlasgowDevice(deviceId)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/glasgowLib/glasgow/hardware/device.py", line 206, in __init__
+    devices = self._enumerate_devices(usb_context)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/glasgowLib/glasgow/hardware/device.py", line 144, in _enumerate_devices
+    serial = handle.getASCIIStringDescriptor(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/.venv/lib/python3.12/site-packages/usb1/__init__.py", line 1364, in getASCIIStringDescriptor
+    received = mayRaiseUSBError(libusb1.libusb_get_string_descriptor_ascii(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/.venv/lib/python3.12/site-packages/usb1/__init__.py", line 129, in mayRaiseUSBError
+    __raiseUSBError(value)
+  File "/home/vboxuser/Project/IobeamTech/.venv/lib/python3.12/site-packages/usb1/__init__.py", line 121, in raiseUSBError
+    raise __STATUS_TO_EXCEPTION_DICT.get(value, __USBError)(value)
+usb1.USBErrorPipe: LIBUSB_ERROR_PIPE [-9]
+04-30 14:36 GlasgowService DEBUG    scan start kind=raster
+04-30 14:36 GlasgowService DEBUG    opening Glasgow connection
+04-30 14:36 GlasgowService DEBUG    scan end kind=raster ok=False
+04-30 14:36 GlasgowService ERROR    stream error
+Traceback (most recent call last):
+  File "/home/vboxuser/Project/IobeamTech/Development/glasgow_service/glasgow_service/api.py", line 161, in _stream_scan
+    async for chunk in gen:
+  File "/home/vboxuser/Project/IobeamTech/Development/glasgow_service/glasgow_service/service.py", line 163, in raster_scan
+    conn = await self._ensure_conn()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/glasgow_service/glasgow_service/service.py", line 138, in _ensure_conn
+    await self._conn._connect()
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/transfer/glasgowStream.py", line 99, in _connect
+    iface = await launcher.start()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/IobeamLauncher.py", line 21, in start
+    return await self.run()
+           ^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/IobeamLauncher.py", line 31, in run
+    device = GlasgowDevice(deviceId)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/glasgowLib/glasgow/hardware/device.py", line 206, in __init__
+    devices = self._enumerate_devices(usb_context)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/glasgowLib/glasgow/hardware/device.py", line 144, in _enumerate_devices
+    serial = handle.getASCIIStringDescriptor(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/.venv/lib/python3.12/site-packages/usb1/__init__.py", line 1364, in getASCIIStringDescriptor
+    received = mayRaiseUSBError(libusb1.libusb_get_string_descriptor_ascii(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vboxuser/Project/IobeamTech/.venv/lib/python3.12/site-packages/usb1/__init__.py", line 129, in mayRaiseUSBError
+    __raiseUSBError(value)
+  File "/home/vboxuser/Project/IobeamTech/.venv/lib/python3.12/site-packages/usb1/__init__.py", line 121, in raiseUSBError
+    raise __STATUS_TO_EXCEPTION_DICT.get(value, __USBError)(value)
+usb1.USBErrorPipe: LIBUSB_ERROR_PIPE [-9]
+04-30 14:41 GlasgowService INFO     Glasgow config: /home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+04-30 14:41 GlasgowService DEBUG    service ready (lazy connect on first scan)
+04-30 14:43 GlasgowService DEBUG    scan start kind=raster
+04-30 14:43 GlasgowService DEBUG    opening Glasgow connection
+04-30 14:43 StreamData   DEBUG    claimed pipe P
+04-30 14:43 StreamData   DEBUG    adding reset register at address 0x03
+04-30 14:43 StreamData   WARNING  Unknown simulation.mode=''; falling back to image-loopback
+04-30 14:43 StreamData   INFO     simulation: IsProduction=False mode= sim_image=<image> sim_res=64
+04-30 14:43 StreamData   INFO     Run gate open
+04-30 14:43 StreamData   INFO     pipe 0: OUT EP 0x02 on interface 0 (packet size 512)
+04-30 14:43 StreamData   INFO     pipe 0: IN  EP 0x86 on interface 1 (packet size 512)
+04-30 14:43 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-30 14:43 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-30 14:43 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-30 14:43 StreamData   DEBUG    synchronizing with cookie 0x3614
+04-30 14:43 StreamData   DEBUG    send: data=<01361420>
+04-30 14:43 StreamData   INFO     FIFO: write <01361420>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    synchronization complete
+04-30 14:43 StreamData   DEBUG    synchronize transfer_multiple
+04-30 14:43 StreamData   DEBUG    send: data=<01007b>
+04-30 14:43 StreamData   INFO     FIFO: write <01007b>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<a0000002002000000002002000>
+04-30 14:43 StreamData   INFO     FIFO: write <a0000002002000000002002000>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=4
+04-30 14:43 StreamData   INFO     FIFO: read <ffff007b>
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=0
+04-30 14:43 StreamData   INFO     FIFO: need 16384 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16384 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16384 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14620 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 14258 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14258 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14054 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5160 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <0000000000000000000000000000000004000400040004000400040004000400070007000700070007000700070007000b000b000b000b000b000b000b000b00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=3894
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12490 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3708 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 866 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 866 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 866 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 866 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 866 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <14001400140014001400140014001400180018001800180018001800180018001c001c001c001c001c001c001c001c001f001f001f001f001f001f001f001f00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=8220
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8164 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <2800280028002800280028002c002c002c002c002c002c002c002c002f002f002f002f002f002f002f002f003300330033003300330033003300330037003700... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=958
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15426 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9030 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 3380 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3380 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3380 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3380 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3380 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3380 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 246 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: read <3c003c003c004000400040004000400040004000400043004300430043004300430043004300470047004700470047004700470047004a004a004a004a004a00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=8236
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8148 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <53005300530053005300530053005300570057005700570057005700570057005a005a005a005a005a005a005a005a005d005d005d005d005d005d005d005d00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=2846
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 13538 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4708 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <670067006a006a006a006a006a006a006a006a006d006d006d006d006d006d006d006d0070007000700070007000700070007000730073007300730073007300... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4022
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12362 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4916 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <7d007d007d007d007d007d007d008000800080008000800080008000800082008200820082008200820082008200850085008500850085008500850085008700... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=3932
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12452 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4298 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <8f008f008f008f008f00920092009200920092009200920092009400940094009400940094009400950095009500950095009500950095009700970097009700... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4402
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11982 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3364 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <a000a000a200a200a200a200a200a200a200a200a400a400a400a400a400a400a400a400a500a500a500a500a500a500a500a500a500a500a500a500a500a500... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5150
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11234 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2758 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b100b000b000... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5606
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10778 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 2406 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2406 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2398 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <bb00bb00bb00bb00bb00bb00bb00bb00ba00ba00ba00ba00ba00ba00ba00ba00b800b800b800b800b800b800b800b800b600b600b600b600b600b600b600b600... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=8702
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7682 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <c000c000c000bd00bd00bd00bd00bd00bd00bd00bd00b900b900b900b900b900b900b900b900b600b600b600b600b600b600b600b600b200b200b200b200b200... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=872
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 15512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7014 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 1324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1324 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <b900b900b900b900b900b900b500b500b500b500b500b500b500b500b000b000b000b000b000b000b000b000ab00ab00ab00ab00ab00ab00ab00ab00a600a600... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4266
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12118 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6546 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <b000ab00ab00ab00ab00ab00ab00ab00ab00a600a600a600a600a600a600a600a600a000a000a000a000a000a000a000a0009b009b009b009b009b009b009b00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=1960
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14424 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5662 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5662 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5662 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5662 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5662 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5662 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 248 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <9e009e009e009e0098009800980098009800980098009800930093009300930093009300930093008d008d008d008d008d008d008d008d008700870087008700... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5682
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10702 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2272 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <8900890089008900890089008900830083008300830083008300830083007d007d007d007d007d007d007d007d00780078007800780078007800780078007200... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=6300
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10084 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1662 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1662 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1662 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <78007800720072007200720072007200720072006d006d006d006d006d006d006d006d0067006700670067006700670067006700610061006100610061006100... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=6694
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 9690 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6898 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1060 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <600060006000600060005b005b005b005b005b005b005b005b00550055005500550055005500550055004f004f004f004f004f004f004f004f004a004a004a00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=7492
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8892 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3304 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3304 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3304 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3304 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3304 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <48004800480048004800480048004800480048004800480048004800480048004e004e004e004e004e004e004e004e0054005400540054005400540054005400... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=7840
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 8544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5598 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5598 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5598 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5598 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5598 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5598 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5598 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5598 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: read <5200520052005200570057005700570057005700570057005d005d005d005d005d005d005d005d00620062006200620062006200620062006800680068006800... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=348
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 16036 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7324 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4190 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4190 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4190 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4190 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4190 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4190 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4190 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4190 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <65006500650065006500650065006a006a006a006a006a006a006a006a006f006f006f006f006f006f006f006f00750075007500750075007500750075007a00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4160
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12224 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6396 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: read <7000700070007000760076007600760076007600760076007b007b007b007b007b007b007b007b00800080008000800080008000800080008500850085008500... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=2284
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 14100 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5446 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5446 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5446 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5446 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 4766 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: read <7f007f007f007f007f007f007f007f0083008300830083008300830083008300880088008800880088008800880088008d008d008d008d008d008d008d008d00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=3840
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12544 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6494 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6494 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6494 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6494 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6494 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6494 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 3694 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <8500850085008500890089008900890089008900890089008d008d008d008d008d008d008d008d00910091009100910091009100910091009500950095009500... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4872
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11512 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2928 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: read <8b008b008b008b008b008b008b008b008f008f008f008f008f008f008f008f009200920092009200920092009200920094009400940094009400940094009400... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5452
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10932 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 5234 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2454 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: read <8a008a008a008c008c008c008c008c008c008c008c008e008e008e008e008e008e008e008e009000900090009000900090009000900092009200920092009200... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=6210
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10174 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1090 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   INFO     FIFO: read <86008600860086008600860087008700870087008700870087008700880088008800880088008800880088008900890089008900890089008900890089008900... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4804
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11580 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2450 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2450 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2450 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2450 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2450 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2450 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <7d007d007d007e007e007e007e007e007e007e007e007e007e007e007e007e007e007e007e007d007d007d007d007d007d007d007d007d007d007d007d007d00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=6188
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 10196 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7256 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 1038 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <720072007200720072007200720071007100710071007100710071007100700070007000700070007000700070006f006f006f006f006f006f006f006f006d00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5384
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 11000 bytes
+04-30 14:43 StreamData   DEBUG    send: data=<c01fff000251>
+04-30 14:43 StreamData   INFO     FIFO: write <c01fff000251>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 2022 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2022 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2022 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2022 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2022 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2022 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 2022 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <640064006400640062006200620062006200620062006200610061006100610061006100610061005f005f005f005f005f005f005f005f005d005d005d005d00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=3588
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 12796 bytes
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (9170 bytes total)>
+04-30 14:43 StreamData   INFO     FIFO: write <e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (9170 bytes total)>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 7178 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 982 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <540053005300530053005300530053005300510051005100510051005100510051004f004f004f004f004f004f004f004c004c004c004c004c004c004c004c00... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=1642
+04-30 14:43 StreamData   INFO     FIFO: need 14742 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: need 6244 bytes
+04-30 14:43 StreamData   INFO     FIFO: read <42004200420042004200400040004000400040004000400040003d003d003d003d003d003d003d003d003b003b003b003b003b003b003b003800380038003800... (16384 bytes total)>
+04-30 14:43 StreamData   DEBUG    flush: done
+04-30 14:43 StreamData   DEBUG    send: data=<20>
+04-30 14:43 StreamData   INFO     FIFO: write <20>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    flush
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: wait for flush
+04-30 14:43 StreamData   DEBUG    yield transfer_multiple
+04-30 14:43 StreamData   DEBUG    send: data=<f000000000>
+04-30 14:43 StreamData   INFO     FIFO: write <f000000000>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    send: data=<20>
+04-30 14:43 StreamData   INFO     FIFO: write <20>
+04-30 14:43 StreamData   DEBUG    send: done
+04-30 14:43 StreamData   DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=826
+04-30 14:43 StreamData   INFO     FIFO: flush
+04-30 14:43 StreamData   INFO     FIFO: read <0000>
+04-30 14:44 StreamData   DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+04-30 14:44 StreamData   INFO     FIFO: cancelling operations
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+04-30 14:44 StreamData   DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+04-30 14:44 StreamData   INFO     [CLEANUP] hard_close: references dropped, GC run
+04-30 14:44 GlasgowService DEBUG    scan end kind=raster ok=True
+04-30 14:44 GlasgowService DEBUG    scan start kind=raster
+04-30 14:44 GlasgowService DEBUG    opening Glasgow connection
+04-30 14:44 StreamData   DEBUG    claimed pipe P
+04-30 14:44 StreamData   DEBUG    adding reset register at address 0x03
+04-30 14:44 StreamData   WARNING  Unknown simulation.mode=''; falling back to image-loopback
+04-30 14:44 StreamData   INFO     simulation: IsProduction=False mode= sim_image=<image> sim_res=64
+04-30 14:44 StreamData   INFO     Run gate open
+04-30 14:44 StreamData   INFO     pipe 0: OUT EP 0x02 on interface 0 (packet size 512)
+04-30 14:44 StreamData   INFO     pipe 0: IN  EP 0x86 on interface 1 (packet size 512)
+04-30 14:44 StreamData   INFO     IobeamLauncher: initialisation complete — returning interface
+04-30 14:44 StreamData   DEBUG    Successfully connected and wrapped GlasgowStream
+04-30 14:44 GlasgowService DEBUG    [raster] 512x512 dwell=2 latency=16384 frame_blank=True
+04-30 14:44 StreamData   DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000),                 dwell=2, cookie=123, output_mode=0
+04-30 14:44 StreamData   DEBUG    synchronizing with cookie 0xc112
+04-30 14:44 StreamData   DEBUG    send: data=<01c11220>
+04-30 14:44 StreamData   INFO     FIFO: write <01c11220>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    synchronization complete
+04-30 14:44 StreamData   DEBUG    synchronize transfer_multiple
+04-30 14:44 StreamData   DEBUG    send: data=<01007b>
+04-30 14:44 StreamData   INFO     FIFO: write <01007b>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<a0000002002000000002002000>
+04-30 14:44 StreamData   INFO     FIFO: write <a0000002002000000002002000>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=4
+04-30 14:44 StreamData   INFO     FIFO: read <ffff007b>
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=0
+04-30 14:44 StreamData   INFO     FIFO: need 16384 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16384 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16384 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: need 16312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16312 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12006 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2858 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <0000000000000000000000000000000004000400040004000400040004000400070007000700070007000700070007000b000b000b000b000b000b000b000b00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=7176
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9208 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 196 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <14001400140014001400180018001800180018001800180018001c001c001c001c001c001c001c001c001f001f001f001f001f001f001f001f00230023002300... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=8294
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8090 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <2c002c002c002c002c002c002c002c002f002f002f002f002f002f002f002f003300330033003300330033003300330037003700370037003700370037003700... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=374
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16010 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7436 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <40004000400043004300430043004300430043004300470047004700470047004700470047004a004a004a004a004a004a004a004a004d004d004d004d004d00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=1064
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15320 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6096 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <5700570057005700570057005a005a005a005a005a005a005a005a005d005d005d005d005d005d005d005d006000600060006000600060006000600063006300... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=3260
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13124 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4768 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <6a006d006d006d006d006d006d006d006d0070007000700070007000700070007000730073007300730073007300730073007600760076007600760076007600... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4258
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12126 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3774 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <80008000800080008200820082008200820082008200820085008500850085008500850085008500870087008700870087008700870087008900890089008900... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4006
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12378 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 4048 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4048 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4048 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4048 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4048 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1202 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <94009400940094009400940094009500950095009500950095009500950097009700970097009700970097009700980098009800980098009800980098009900... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=7226
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9158 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2972 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <a400a500a500a500a500a500a500a500a500a500a500a500a500a500a500a500a500a600a600a600a600a600a600a600a600a600a600a600a600a600a600a600... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5072
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11312 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 2932 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2932 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2932 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2932 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2932 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2932 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 576 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <b100b100b100b100b100b100b100b100b100b100b100b100b000b000b000b000b000b000b000b000af00af00af00af00af00af00af00af00ad00ad00ad00ad00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5022
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11362 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5740 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5630 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5630 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5630 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5630 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5630 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <b800b800b800b800b800b800b800b600b600b600b600b600b600b600b600b300b300b300b300b300b300b300b300b000b000b000b000b000b000b000b000ad00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=2228
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14156 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2950 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2902 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2902 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2902 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <b900b900b600b600b600b600b600b600b600b600b200b200b200b200b200b200b200b200ad00ad00ad00ad00ad00ad00ad00ad00a900a900a900a900a900a900... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5612
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2174 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <b000b000b000b000b000ab00ab00ab00ab00ab00ab00ab00ab00a600a600a600a600a600a600a600a600a100a100a100a100a100a100a100a1009c009c009c00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=6144
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10240 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1818 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <a000a000a000a000a000a000a000a0009b009b009b009b009b009b009b009b009500950095009500950095009500950090009000900090009000900090009000... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4840
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11544 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3272 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <93009300930093008d008d008d008d008d008d008d008d0087008700870087008700870087008700820082008200820082008200820082007c007c007c007c00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=6388
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9996 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 922 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <7d007d007d007d007d007d007d0078007800780078007800780078007800720072007200720072007200720072006c006c006c006c006c006c006c006c006700... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4810
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11574 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 3206 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3196 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 572 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 572 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <6d006d0067006700670067006700670067006700610061006100610061006100610061005b005b005b005b005b005b005b005b00560056005600560056005600... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=7944
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8440 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <550055005500550055004f004f004f004f004f004f004f004f004a004a004a004a004a004a004a004a004a004a004a004a004a004a004a004a004f004f004f00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=118
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 16266 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 7772 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <4e004e004e004e004e004e004e004e0054005400540054005400540054005400590059005900590059005900590059005f005f005f005f005f005f005f005f00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=760
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15624 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4542 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <5d005d005d005d006200620062006200620062006200620068006800680068006800680068006d006d006d006d006d006d006d006d0073007300730073007300... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4030
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 12354 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 4022 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <6f006f006f006f006f006f006f00750075007500750075007500750075007a007a007a007a007a007a007a007f007f007f007f007f007f007f007f0085008500... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=1848
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14536 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6122 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6122 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5962 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: read <7b007b0080008000800080008000800080008000850085008500850085008500850085008a008a008a008a008a008a008a008a008f008f008f008f008f008f00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5032
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11352 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2934 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <880088008800880088008d008d008d008d008d008d008d008d009100910091009100910091009100910095009500950095009500950095009500990099009900... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=5628
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10756 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2326 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <910091009100910091009100910095009500950095009500950095009500980098009800980098009800980098009b009b009b009b009b009b009b009b009e00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=6232
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10152 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <920092009400940094009400940094009400940097009700970097009700970097009700990099009900990099009900990099009b009b009b009b009b009b00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=922
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15462 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9724 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 1298 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <90009000900090009000920092009200920092009200920092009300930093009300930093009300930094009400940094009400940094009400940094009400... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=4504
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 11880 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 606 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <89008900890089008900890089008900890089008900890089008900890089008900890089008900890089008900890089008900890089008900890089008900... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=7862
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 8522 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 2730 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <7d007d007d007d007d007d007d007d007d007d007d007d007c007c007c007c007c007c007c007c007b007b007b007b007b007b007b007b007a007a007a007a00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=2730
+04-30 14:44 StreamData   INFO     FIFO: need 13654 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13654 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13654 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13654 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13654 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 13654 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff0002>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff0002>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 5284 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <6f006f006f006f006f006f006d006d006d006d006d006d006d006d006c006c006c006c006c006c006c006c006a006a006a006a006a006a006a006a0068006800... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=458
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15926 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 10166 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<c01fff000251>
+04-30 14:44 StreamData   INFO     FIFO: write <c01fff000251>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <5f005d005d005d005d005d005d005d005d005b005b005b005b005b005b005b005b00590059005900590059005900590059005700570057005700570057005700... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=924
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 15460 bytes
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 6992 bytes
+04-30 14:44 StreamData   DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (9170 bytes total)>
+04-30 14:44 StreamData   INFO     FIFO: write <e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (9170 bytes total)>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   INFO     FIFO: read <4c004c004c004c004a004a004a004a004a004a004a004a0047004700470047004700470047004700450045004500450045004500450045004200420042004200... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=16384  in_buffer_before=1508
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 14876 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9330 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9330 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9330 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9330 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9330 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9330 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9330 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 9330 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3604 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3490 bytes
+04-30 14:44 StreamData   INFO     FIFO: need 3490 bytes
+04-30 14:44 StreamData   INFO     FIFO: read <380038003800380038003800380035003500350035003500350035003500320032003200320032003200320032002f002f002f002f002f002f002f002f002c00... (16384 bytes total)>
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    send: data=<20>
+04-30 14:44 StreamData   INFO     FIFO: write <20>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    flush
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: wait for flush
+04-30 14:44 StreamData   DEBUG    yield transfer_multiple
+04-30 14:44 StreamData   DEBUG    send: data=<f000000000>
+04-30 14:44 StreamData   INFO     FIFO: write <f000000000>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    send: data=<20>
+04-30 14:44 StreamData   INFO     FIFO: write <20>
+04-30 14:44 StreamData   DEBUG    send: done
+04-30 14:44 StreamData   DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=766
+04-30 14:44 StreamData   INFO     FIFO: flush
+04-30 14:44 StreamData   INFO     FIFO: read <0000>
+04-30 14:44 StreamData   DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+04-30 14:44 StreamData   INFO     FIFO: cancelling operations
+04-30 14:44 StreamData   DEBUG    flush: done
+04-30 14:44 StreamData   DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+04-30 14:44 StreamData   DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+04-30 14:44 StreamData   INFO     [CLEANUP] hard_close: references dropped, GC run
+04-30 14:44 GlasgowService DEBUG    scan end kind=raster ok=True
+04-30 14:44 GlasgowService DEBUG    wrote raster CSV /home/vboxuser/Downloads/raster_512x512.csv (262144 pixels from 32 chunks)

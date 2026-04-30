@@ -8,6 +8,16 @@
  * handler, which calls gen.aclose() and cancels the in-flight scan
  * cleanly. That is the "stop" path.
  *
+ * IMPORTANT — text vs binary:
+ *   The 'ws' library's `message` event delivers data as Buffer regardless
+ *   of frame type, and `ws.send(buffer)` defaults to BINARY. The FastAPI
+ *   service uses `await ws.receive_json()`, which is Starlette's text-only
+ *   helper (it does `message["text"]` and KeyErrors on binary frames). So
+ *   we MUST forward the original isBinary flag in BOTH directions; without
+ *   it the browser's JSON request reaches the service as binary and
+ *   crashes, and the service's text replies (done/error events) reach the
+ *   browser as ArrayBuffer and get painted as if they were pixel data.
+ *
  * In MOCK=1 mode we never connect upstream; we synthesise frames in this
  * process instead.
  */
@@ -18,6 +28,7 @@ import { config } from "./config";
 import { streamMockRaster, streamMockVector } from "./mockHardware";
 
 type ScanKind = "raster" | "vector";
+type RawData = Buffer | ArrayBuffer | Buffer[];
 
 const STREAM_PATHS: Record<string, ScanKind> = {
   "/ws/scan/raster/stream": "raster",
@@ -67,17 +78,16 @@ function handleProxy(
   const upstream = new WebSocket(upstreamUrl, { headers });
 
   // Buffer client frames sent before upstream is open. Almost always this
-  // is just the first JSON request, but bufferless drop loses scan params.
-  // (Type matches WebSocket.RawData in @types/ws; inlined to keep the
-  //  named-import style.)
-  const earlyFrames: Array<Buffer | ArrayBuffer | Buffer[]> = [];
+  // is just the first JSON request; bufferless drop loses scan params.
+  // Tracked with isBinary so we can replay with the correct frame type.
+  const earlyFrames: Array<{ data: RawData; isBinary: boolean }> = [];
   let upstreamOpen = false;
 
-  client.on("message", (data) => {
+  client.on("message", (data: RawData, isBinary: boolean) => {
     if (upstreamOpen) {
-      upstream.send(data);
+      upstream.send(data, { binary: isBinary });
     } else {
-      earlyFrames.push(data);
+      earlyFrames.push({ data, isBinary });
     }
   });
 
@@ -96,12 +106,14 @@ function handleProxy(
 
   upstream.on("open", () => {
     upstreamOpen = true;
-    for (const f of earlyFrames) upstream.send(f);
+    for (const f of earlyFrames) upstream.send(f.data, { binary: f.isBinary });
     earlyFrames.length = 0;
   });
 
-  upstream.on("message", (data) => {
-    if (client.readyState === WebSocket.OPEN) client.send(data);
+  upstream.on("message", (data: RawData, isBinary: boolean) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data, { binary: isBinary });
+    }
   });
 
   upstream.on("close", (code, reason) => {
@@ -115,12 +127,15 @@ function handleProxy(
 
   upstream.on("error", (err) => {
     if (client.readyState === WebSocket.OPEN) {
+      // Always send error metadata as a TEXT frame so the browser parses
+      // it as JSON, not as pixels.
       client.send(
         JSON.stringify({
           event: "error",
           code: "upstream_unreachable",
           detail: err.message,
-        })
+        }),
+        { binary: false }
       );
       client.close(1011, "upstream_error");
     }
@@ -142,10 +157,11 @@ function handleMock(
   req: IncomingMessage
 ): void {
   console.log(`[ws][mock] ${req.socket.remoteAddress} -> ${kind} stream`);
-  client.once("message", async (raw) => {
-    let req: any;
+  client.once("message", async (raw: RawData) => {
+    let body: any;
     try {
-      req = JSON.parse(raw.toString());
+      const text = Buffer.isBuffer(raw) ? raw.toString("utf8") : String(raw);
+      body = JSON.parse(text);
     } catch {
       client.send(JSON.stringify({ event: "error", code: "bad_json" }));
       client.close(1003, "bad json");
@@ -154,15 +170,15 @@ function handleMock(
     try {
       if (kind === "raster") {
         await streamMockRaster(client, {
-          resolution: Number(req.resolution ?? 256),
-          dwell: Number(req.dwell ?? 2),
-          latency_bytes: Number(req.latency_bytes ?? 16384),
+          resolution: Number(body.resolution ?? 256),
+          dwell: Number(body.dwell ?? 2),
+          latency_bytes: Number(body.latency_bytes ?? 16384),
         });
       } else {
         await streamMockVector(client, {
-          pattern: req.pattern === "custom" ? "custom" : "default",
-          points: Array.isArray(req.points) ? req.points : undefined,
-          latency_bytes: Number(req.latency_bytes ?? 8196),
+          pattern: body.pattern === "custom" ? "custom" : "default",
+          points: Array.isArray(body.points) ? body.points : undefined,
+          latency_bytes: Number(body.latency_bytes ?? 8196),
         });
       }
     } catch (e: any) {
