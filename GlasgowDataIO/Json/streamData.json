@@ -82,9 +82,10 @@
                             "Shared 14-bit bidirectional bus carrying DAC writes and",
                             "ADC reads. Pin string is space-separated, LSB-first.",
                             "Empty string ('' or omitted) -> no Resource emitted; the",
-                            "internal data_o / data_i still drive FakeAdcSimulator."
+                            "internal data_o / data_i still drive FakeAdcSimulator.",
+                            ""
                             ],
-                            "pins":      "",
+                            "pins":      "B2 C4 B1 C3 C2 C1 D3 D1 F4 G2 E3 F1 E2 F2",
                             "direction": "io",
                             "attrs":     { "IO_STANDARD": "SB_LVCMOS33" }
                         }
@@ -115,7 +116,7 @@
                         "source": "random",
                         "seed":   42
                     },
-                    "mode": "zeros"
+                    "mode": ""
                     }
                 },
                 "timeout": 60.0
