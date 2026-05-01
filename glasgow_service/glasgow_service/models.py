@@ -8,7 +8,7 @@ download buttons can be enabled.
 """
 from enum import Enum
 from typing import List, Optional, Tuple
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DeviceState(str, Enum):
@@ -62,6 +62,17 @@ class VectorRequest(BaseModel):
         description="For `custom`: list of (x, y, dwell) tuples. Capped at 1M points.",
         max_length=1_000_000,
     )
+    # Density of the default sweep across the 2048-DAC range. Stride is
+    # derived as 2048 // vector_resolution; only divisors of 2048 produce
+    # an integer stride. Ignored when pattern=custom.
+    vector_resolution: int = Field(
+        2048,
+        description=(
+            "Default-pattern sample density on each axis. Allowed: 256, 512, 1024, 2048. "
+            "Coverage is always full DAC range; smaller values just sample sparser. "
+            "Ignored when pattern=custom."
+        ),
+    )
     latency_bytes:  int  = Field(8196, ge=2, description="Matches `vectorScan.latency` in streamData.json.")
     output_mode:    str  = Field("SixteenBit", description="SixteenBit or EightBit.")
     cookie:         int  = Field(123, ge=0, le=0xFFFF)
@@ -70,11 +81,23 @@ class VectorRequest(BaseModel):
     pre_process:    bool = Field(False, description="Call _pre_process_chunks before transfer; time it separately.")
     do_validate:    bool = Field(True,  description="Run non-empty / padding checks and return the report.")
 
+    @field_validator("vector_resolution")
+    @classmethod
+    def _check_vector_resolution(cls, v: int) -> int:
+        # Whitelist rather than range — anything outside {256,512,1024,2048}
+        # would either produce a non-integer stride or oversample the DAC
+        # range (which we don't support here; that'd be a different feature).
+        if v not in (256, 512, 1024, 2048):
+            raise ValueError(f"vector_resolution must be 256, 512, 1024, or 2048; got {v}")
+        return v
+
     model_config = {
         "json_schema_extra": {
             "examples": [
-                {"pattern": "default", "latency_bytes": 8196,
-                 "pre_process": True, "do_validate": True},
+                {"pattern": "default", "vector_resolution": 2048,
+                 "latency_bytes": 8196, "pre_process": True, "do_validate": True},
+                {"pattern": "default", "vector_resolution": 512,
+                 "latency_bytes": 8196, "pre_process": True, "do_validate": True},
                 {"pattern": "custom",
                  "points": [[0, 0, 2], [100, 100, 2], [200, 100, 2], [200, 200, 2]],
                  "latency_bytes": 8196, "do_validate": True},

@@ -59,10 +59,41 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
             )
           }
         >
-          <option value="default">Default (2048×2048 sweep)</option>
+          <option value="default">Default sweep (full DAC range)</option>
           <option value="custom">Custom points</option>
         </select>
       </div>
+
+      {v.pattern === "default" && (
+        <div className="field">
+          <label>Resolution (samples per axis)</label>
+          <select
+            className="select"
+            value={String(v.vector_resolution)}
+            disabled={disabled}
+            onChange={(e) =>
+              dispatch(
+                updateVector({ vector_resolution: Number(e.target.value) })
+              )
+            }
+            title={(() => {
+              const stride = 2048 / v.vector_resolution;
+              return stride === 1
+                ? "Native: every DAC code is sampled."
+                : `Stride ${stride}: every ${stride}th DAC code is sampled. Full DAC range still covered.`;
+            })()}
+          >
+            <option value="2048">2048 × 2048 — native (stride 1)</option>
+            <option value="1024">1024 × 1024 — stride 2</option>
+            <option value="512">512 × 512 — stride 4</option>
+            <option value="256">256 × 256 — stride 8</option>
+          </select>
+          <small className="muted">
+            Smaller resolution → faster scan, sparser sampling. Coverage is
+            always the full 0..2047 DAC range.
+          </small>
+        </div>
+      )}
 
       <div className="field-row">
         <div className="field">

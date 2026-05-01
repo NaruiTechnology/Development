@@ -18,6 +18,8 @@ export type ScanPhase =
   | "completed"
   | "error";
 
+export type VectorRenderMode = "native" | "decimated";
+
 interface ScanState {
   kind: ScanKind;
   phase: ScanPhase;
@@ -31,6 +33,11 @@ interface ScanState {
   /** Most recent params, kept editable in state. */
   raster: RasterRequest;
   vector: VectorRequest;
+
+  /** How the vector image is rendered onto the canvas. Per-session — not
+   *  persisted to localStorage — because the right choice depends on the
+   *  current scan, not a long-term preference. */
+  vectorRenderMode: VectorRenderMode;
 }
 
 const defaultRaster: RasterRequest = {
@@ -45,6 +52,7 @@ const defaultRaster: RasterRequest = {
 const defaultVector: VectorRequest = {
   pattern: "default",
   points: null,
+  vector_resolution: 2048,
   latency_bytes: 8196,
   output_mode: "SixteenBit",
   cookie: 123,
@@ -61,6 +69,7 @@ const initialState: ScanState = {
   errorMessage: null,
   raster: defaultRaster,
   vector: defaultVector,
+  vectorRenderMode: "decimated",
 };
 
 /* -------- blocking REST runs ------------------------------------------- */
@@ -103,6 +112,9 @@ const slice = createSlice({
     },
     updateVector(s, a: PayloadAction<Partial<VectorRequest>>) {
       s.vector = { ...s.vector, ...a.payload };
+    },
+    setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
+      s.vectorRenderMode = a.payload;
     },
     /** Live-stream lifecycle markers. The actual WS lives in a hook. */
     streamStarted(s) {
@@ -185,6 +197,7 @@ export const {
   setKind,
   updateRaster,
   updateVector,
+  setVectorRenderMode,
   streamStarted,
   streamProgress,
   streamPaused,

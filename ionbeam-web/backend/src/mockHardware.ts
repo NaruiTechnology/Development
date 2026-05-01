@@ -27,6 +27,9 @@ interface VectorParams {
   pattern: "default" | "custom";
   points?: Array<[number, number, number]>;
   latency_bytes: number;
+  /** Edge length for default-pattern sweeps (256 / 512 / 1024 / 2048).
+   *  Total samples = edge². Coverage is always the full DAC range. */
+  vector_resolution?: number;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -95,20 +98,22 @@ export async function streamMockVector(
   ws: WebSocket,
   p: VectorParams
 ): Promise<void> {
-  // For the default pattern, walk a Lissajous figure across 2048x2048.
-  // For custom, replay the points the client sent.
-  const pts: Array<[number, number, number]> =
-    p.pattern === "custom" && p.points && p.points.length
-      ? p.points
-      : (() => {
-          const out: Array<[number, number, number]> = [];
-          for (let t = 0; t < 4096; t++) {
-            const x = Math.floor(1024 + 1000 * Math.sin((3 * t * Math.PI) / 2048));
-            const y = Math.floor(1024 + 1000 * Math.sin((4 * t * Math.PI) / 2048 + 1));
-            out.push([x, y, 1]);
-          }
-          return out;
-        })();
+  // Default pattern: synthesise edge² points in the same (x, y) order
+  // the real FPGA emits, scaled by stride = 2048 / edge so coverage
+  // matches a real default sweep. Custom: replay the client's points.
+  let pts: Array<[number, number, number]>;
+  if (p.pattern === "custom" && p.points && p.points.length) {
+    pts = p.points;
+  } else {
+    const edge = p.vector_resolution ?? 2048;
+    const stride = Math.max(1, Math.floor(2048 / edge));
+    pts = new Array(edge * edge);
+    for (let x = 0; x < edge; x++) {
+      for (let y = 0; y < edge; y++) {
+        pts[x * edge + y] = [x * stride, y * stride, 1];
+      }
+    }
+  }
 
   const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 4));
   let i = 0;
@@ -199,11 +204,24 @@ export const mockRest = {
     };
   },
   runVector(req: VectorParams & { do_validate?: boolean; pre_process?: boolean }) {
-    const chunks = req.pattern === "custom" && req.points ? Math.ceil(req.points.length / 256) : 16;
+    // Default-pattern total samples = edge². Custom-pattern uses the
+    // provided point list. Pick valuesPerChunk to match what the WS
+    // streamer would produce (latency_bytes / 4 per the synthetic
+    // 4-uint16-per-point format we still emit there).
+    let totalSamples: number;
+    if (req.pattern === "custom" && req.points) {
+      totalSamples = req.points.length;
+    } else {
+      const edge = req.vector_resolution ?? 2048;
+      totalSamples = edge * edge;
+    }
+    const valuesPerChunk = Math.max(64, Math.floor(req.latency_bytes / 4));
+    const chunks = Math.max(1, Math.ceil(totalSamples / valuesPerChunk));
     mockLastScan = {
       kind: "vector",
       latency_bytes: req.latency_bytes,
       pattern: req.pattern,
+      vector_resolution: req.vector_resolution,
       source: "validated",
     };
     return {
@@ -254,6 +272,7 @@ let mockLastScan:
       resolution?: number;
       latency_bytes?: number;
       pattern?: string;
+      vector_resolution?: number;
       source: "validated" | "stream";
     }
   | null = null;

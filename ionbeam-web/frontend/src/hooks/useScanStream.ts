@@ -106,10 +106,16 @@ export function useScanStream() {
   const startVector = useCallback(
     (req: VectorRequest) => {
       stopExisting(wsRef);
+      // Default-pattern scans store an edge x edge dense buffer (where
+      // edge = vector_resolution: 256/512/1024/2048). Custom scans need
+      // the full 2048-DAC space because the operator's points use
+      // those coordinates directly.
+      const edge = req.pattern === "custom" ? 2048 : req.vector_resolution;
       dispatch(
         setupVector({
           pattern: req.pattern,
           points: req.points,
+          edge,
         })
       );
       dispatch(streamStarted());

@@ -58,10 +58,17 @@ class DeviceBusy(RuntimeError):     ...
 class DeviceNotReady(RuntimeError): ...
 
 
-def _default_vector_iter() -> Iterable[Tuple[int, int, int]]:
-    for x in range(2048):
-        for y in range(2048):
-            yield x, y, 1
+def _default_vector_iter(edge: int = 2048) -> Iterable[Tuple[int, int, int]]:
+    """Yield (x, y, dwell) triples for a default sweep at the given edge
+    resolution. Coverage is always the full 0..2047 DAC range; smaller
+    edge values produce sparser sampling with stride = 2048 // edge.
+    Caller is responsible for passing an edge that divides 2048 evenly
+    (the Pydantic validator on VectorRequest.vector_resolution enforces
+    this for the public API)."""
+    stride = 2048 // edge
+    for x in range(edge):
+        for y in range(edge):
+            yield x * stride, y * stride, 1
 
 
 # Exception types that indicate the USB connection is dead and we should
@@ -241,6 +248,7 @@ class DeviceService:
                     "latency_bytes": req.latency_bytes,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                     "points": req.points,
+                    "vector_resolution": req.vector_resolution,
                     "source": "stream",
                 }
 
@@ -335,6 +343,7 @@ class DeviceService:
                 "latency_bytes": req.latency_bytes,
                 "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                 "points": req.points,
+                "vector_resolution": req.vector_resolution,
                 "source": "validated",
             }
 
@@ -369,7 +378,7 @@ class DeviceService:
                 raise ValueError("pattern=custom requires non-empty `points`")
             iter_points: Iterable[Tuple[int, int, int]] = iter(req.points)
         else:
-            iter_points = _default_vector_iter()
+            iter_points = _default_vector_iter(req.vector_resolution)
 
         try:
             output_mode = OutputMode[req.output_mode]
@@ -403,6 +412,7 @@ class DeviceService:
             "resolution": last.get("resolution"),
             "latency_bytes": last.get("latency_bytes"),
             "pattern": last.get("pattern"),
+            "vector_resolution": last.get("vector_resolution"),
         }
 
     def last_csv_filename(self) -> str:
@@ -452,10 +462,22 @@ class DeviceService:
             return f"raster_{r}x{r}_{ts}.png"
         return f"vector_latency{last.get('latency_bytes') or 0}_{ts}.png"
 
-    def last_figure_png(self) -> bytes:
+    def last_figure_png(self, render_mode: str = "decimated") -> bytes:
         """Render the last scan as a publication-quality PNG using
         matplotlib. Mirrors the layout of the matplotlib figures the
-        operator was generating manually before this endpoint existed."""
+        operator was generating manually before this endpoint existed.
+
+        `render_mode` is "native" or "decimated" (vector only; raster
+        scans ignore it):
+          - native:   render a 2048x2048 image with stride-block fill
+                      so the image is dense even for low-resolution scans.
+                      Pixel coords correspond to DAC codes 1:1.
+          - decimated: render an edge x edge image where edge is the
+                       scan's vector_resolution. Pixel coords correspond
+                       to scan indices, NOT DAC codes — but we use
+                       imshow's `extent=` to keep the axis labels in DAC
+                       coordinates so the figure stays legible.
+        """
         if not self.has_last():
             raise DeviceNotReady("no scan data cached")
 
@@ -499,38 +521,70 @@ class DeviceService:
             cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
             cbar.set_label(f"ADC sample (uint16, p1={lo} p99={hi})")
         else:
-            # Vector: reconstruct image from sample order. Default sweep
-            # walks for x: for y:; custom uses the host point list.
-            edge = 2048
+            # ---------- vector ----------------------------------------
+            DAC_RANGE = 2048
+            edge = int(last.get("vector_resolution") or DAC_RANGE)
+            stride = DAC_RANGE // edge if edge else 1
             samples = np.fromiter(
                 (v for chunk in last["chunks"] for v in chunk),
                 dtype=np.uint16,
             )
-            img = np.zeros((edge, edge), dtype=np.uint16)
             pattern = last.get("pattern", "default")
             points = last.get("points")
-            if pattern == "custom" and points:
-                n = min(len(samples), len(points))
-                xs = np.fromiter((p[0] for p in points[:n]), dtype=np.int32, count=n)
-                ys = np.fromiter((p[1] for p in points[:n]), dtype=np.int32, count=n)
-                mask = (xs >= 0) & (xs < edge) & (ys >= 0) & (ys < edge)
-                img[ys[mask], xs[mask]] = samples[:n][mask]
-            else:
-                # Default sweep: sample i -> (col=i//edge, row=i%edge)
+
+            mode = render_mode if render_mode in ("native", "decimated") else "decimated"
+
+            if mode == "decimated" and pattern == "default":
+                # Dense edge x edge image. Sample order is the FPGA's
+                # for x: for y:, so sample i -> (col=i//edge, row=i%edge).
+                img = np.zeros((edge, edge), dtype=np.uint16)
                 n = min(samples.size, edge * edge)
                 idx = np.arange(n)
                 cols = idx // edge
                 rows = idx % edge
                 img[rows, cols] = samples[:n]
+                # Use `extent` so axis labels stay in DAC coordinates
+                # even though the image is edge x edge pixels.
+                imshow_kwargs = dict(extent=(0, DAC_RANGE - 1, DAC_RANGE - 1, 0))
+                title_extra = f" (decimated, edge={edge}, stride={stride})"
+            else:
+                # Native 2048x2048 with block-fill. For stride=1 (the
+                # full-resolution scan) this is the original behavior.
+                img = np.zeros((DAC_RANGE, DAC_RANGE), dtype=np.uint16)
+                if pattern == "custom" and points:
+                    n = min(len(samples), len(points))
+                    xs = np.fromiter((p[0] for p in points[:n]), dtype=np.int32, count=n)
+                    ys = np.fromiter((p[1] for p in points[:n]), dtype=np.int32, count=n)
+                    mask = (xs >= 0) & (xs < DAC_RANGE) & (ys >= 0) & (ys < DAC_RANGE)
+                    img[ys[mask], xs[mask]] = samples[:n][mask]
+                else:
+                    # Default sweep: each sample i lands at DAC
+                    # (col*stride, row*stride). Block-fill the whole
+                    # stride x stride cell so the image is dense.
+                    n = min(samples.size, edge * edge)
+                    idx = np.arange(n)
+                    cols = (idx // edge) * stride
+                    rows = (idx % edge) * stride
+                    if stride == 1:
+                        img[rows, cols] = samples[:n]
+                    else:
+                        # Vectorized block-fill via broadcast.
+                        for dy in range(stride):
+                            for dx in range(stride):
+                                img[rows + dy, cols + dx] = samples[:n]
+                imshow_kwargs = {}
+                title_extra = (f" (native 2048, stride={stride} block-fill)"
+                               if pattern == "default" and stride > 1 else "")
 
             # Percentile clip on the populated samples (excluding the
-            # all-zero unfilled region of custom scans, which would
-            # dominate the lower percentile).
-            populated_samples = samples[: min(samples.size, edge * edge)]
+            # all-zero unfilled region, which would dominate the lower
+            # percentile).
+            n_pop = min(samples.size, edge * edge if pattern == "default" else samples.size)
+            populated_samples = samples[:n_pop]
             lo, hi = _percentile_clip_uint16(populated_samples)
             fig, ax = plt.subplots(figsize=(7, 7))
-            im = ax.imshow(img, cmap="gray", vmin=lo, vmax=hi)
-            ax.set_title(f"Vector scan: {samples.size} points")
+            im = ax.imshow(img, cmap="gray", vmin=lo, vmax=hi, **imshow_kwargs)
+            ax.set_title(f"Vector scan: {samples.size} points{title_extra}")
             ax.set_xlabel("X (DAC code)")
             ax.set_ylabel("Y (DAC code)")
             cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)

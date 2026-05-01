@@ -38,6 +38,10 @@ export function ValidationPanel() {
   const vectorImage = useAppSelector((s) => s.image.vectorImage);
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
+  // For vector scans the operator picks a render mode in the canvas
+  // toolbar. The figure download honours that choice so the PNG matches
+  // what they're currently looking at.
+  const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
 
   const [csvState, setCsvState] = useState<DownloadState>("idle");
   const [figState, setFigState] = useState<DownloadState>("idle");
@@ -109,7 +113,14 @@ export function ValidationPanel() {
     setFigState("fetching");
     setFigErr(null);
     try {
-      const r = await fetch("/api/scan/last/figure");
+      // Render mode applies to vector only. Raster ignores it server-side,
+      // so passing it unconditionally is harmless and keeps the URL shape
+      // consistent across both kinds.
+      const url =
+        kind === "vector"
+          ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`
+          : "/api/scan/last/figure";
+      const r = await fetch(url);
       if (!r.ok) {
         // Server returns 404 if the cache is empty (e.g., the live
         // stream was paused and nothing landed there yet) or 500 if

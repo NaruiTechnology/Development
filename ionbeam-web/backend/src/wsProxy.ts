@@ -179,6 +179,9 @@ function handleMock(
           pattern: body.pattern === "custom" ? "custom" : "default",
           points: Array.isArray(body.points) ? body.points : undefined,
           latency_bytes: Number(body.latency_bytes ?? 8196),
+          vector_resolution: body.vector_resolution
+            ? Number(body.vector_resolution)
+            : undefined,
         });
       }
     } catch (e: any) {
