@@ -1,25 +1,59 @@
 /* -----------------------------------------------------------------------
- * Ion Beam Technology — control panel theme.
- * Dark navy + steel blue + signal cyan, with monospaced numeric chrome.
- * Designed to feel like instrument software rather than a marketing page.
+ * Ion Beam Technology — control panel themes.
+ *
+ * Three themes ship: navy (default), black (OLED), light. Theme is
+ * applied by setting [data-theme="..."] on <html>; see themeSlice.ts.
+ * The default :root block defines the navy theme; the bottom of the
+ * file overrides specific variables for the other two.
+ *
+ * Adding a new theme = adding a new [data-theme="..."] block. All actual
+ * styling rules in this file go through CSS variables, so themes never
+ * fight the layout.
  * --------------------------------------------------------------------- */
 
-:root {
+:root,
+[data-theme="navy"] {
+  /* surface */
   --c-bg:           #0b1320;
   --c-bg-elev:      #11203a;
   --c-bg-elev-2:    #16294a;
+  --c-bg-deep:      #050a14;        /* canvas backdrop */
+  --c-bg-input:     #0b1828;
+  --c-bg-header:    linear-gradient(90deg, #08111e 0%, #11203a 60%, #0b1320 100%);
+  --c-bg-footer:    #08111e;
   --c-border:       #21385f;
   --c-border-soft:  #1b2c4d;
+  --c-pixel-grid:   #102036;
+
+  /* text */
   --c-text:         #e6eef9;
   --c-text-dim:     #8aa1c4;
   --c-text-muted:   #5d749a;
+
+  /* accents & semantics */
   --c-accent:       #5fb8ff;
   --c-accent-hot:   #88d3ff;
   --c-success:      #4ade80;
   --c-warn:         #facc15;
   --c-danger:       #f87171;
+  --c-warn-border:  #5b4a14;
+  --c-danger-border:#5a1f1f;
 
-  --c-pixel-grid:   #102036;
+  /* button-specific */
+  --c-btn-hover:        #1c3463;
+  --c-btn-primary-grad: linear-gradient(180deg, #2b78c2 0%, #1f5fa0 100%);
+  --c-btn-primary-hover:linear-gradient(180deg, #2e88dc 0%, #2068b0 100%);
+  --c-btn-primary-bord: #3d8ed5;
+  --c-btn-primary-text: #fff;
+
+  /* progress bar fill */
+  --c-progress-fill:    linear-gradient(90deg, #2b78c2, #5fb8ff);
+
+  /* logo gradient stops (referenced by Header SVG via currentColor where possible) */
+  --c-logo-stop-0:  #88d3ff;
+  --c-logo-stop-1:  #1a6fb0;
+  --c-logo-stop-2:  #0b1d2e;
+  --c-logo-stroke:  #5fb8ff;
 
   --shadow-card:    0 4px 18px rgba(0, 0, 0, 0.45);
   --r-md:           6px;
@@ -27,6 +61,98 @@
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+}
+
+/* ---------- Black (OLED) theme --------------------------------------- *
+ * For lab-floor monitors run at low ambient. Pure black surface, dark
+ * gray elevation steps, same cyan accent so semantic states stay
+ * legible. Heavier shadows would look fake against pure black, so
+ * they're tuned down.
+ * --------------------------------------------------------------------- */
+[data-theme="black"] {
+  --c-bg:           #000000;
+  --c-bg-elev:      #0c0c0c;
+  --c-bg-elev-2:    #161616;
+  --c-bg-deep:      #000000;
+  --c-bg-input:     #0a0a0a;
+  --c-bg-header:    linear-gradient(90deg, #000 0%, #0c0c0c 60%, #000 100%);
+  --c-bg-footer:    #000000;
+  --c-border:       #2a2a2a;
+  --c-border-soft:  #1a1a1a;
+  --c-pixel-grid:   #0d0d0d;
+
+  --c-text:         #f4f4f5;
+  --c-text-dim:     #a1a1aa;
+  --c-text-muted:   #71717a;
+
+  --c-accent:       #5fb8ff;
+  --c-accent-hot:   #88d3ff;
+  --c-success:      #4ade80;
+  --c-warn:         #facc15;
+  --c-danger:       #f87171;
+  --c-warn-border:  #4a3d10;
+  --c-danger-border:#4a1818;
+
+  --c-btn-hover:        #1f1f1f;
+  --c-btn-primary-grad: linear-gradient(180deg, #2b78c2 0%, #1f5fa0 100%);
+  --c-btn-primary-hover:linear-gradient(180deg, #2e88dc 0%, #2068b0 100%);
+  --c-btn-primary-bord: #3d8ed5;
+  --c-btn-primary-text: #fff;
+
+  --c-progress-fill:    linear-gradient(90deg, #2b78c2, #5fb8ff);
+
+  --c-logo-stop-0:  #88d3ff;
+  --c-logo-stop-1:  #1a6fb0;
+  --c-logo-stop-2:  #000000;
+  --c-logo-stroke:  #5fb8ff;
+
+  --shadow-card:    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ---------- Light theme ---------------------------------------------- *
+ * Paper-white instrument-software palette. The canvas backdrop stays
+ * dark (#0e1620) because grayscale FPGA output is read against a dark
+ * field — flipping that would invert the mental model operators have
+ * coming from the PyQt UI.
+ * --------------------------------------------------------------------- */
+[data-theme="light"] {
+  --c-bg:           #f6f7fa;
+  --c-bg-elev:      #ffffff;
+  --c-bg-elev-2:    #eef2f7;
+  --c-bg-deep:      #0e1620;        /* keep canvas dark — see note above */
+  --c-bg-input:     #ffffff;
+  --c-bg-header:    linear-gradient(90deg, #ffffff 0%, #eef2f7 60%, #ffffff 100%);
+  --c-bg-footer:    #ffffff;
+  --c-border:       #cdd5e0;
+  --c-border-soft:  #e2e7ee;
+  --c-pixel-grid:   #d6dbe3;
+
+  --c-text:         #1a2233;
+  --c-text-dim:     #5d6b82;
+  --c-text-muted:   #8a96a8;
+
+  --c-accent:       #1f6fc2;
+  --c-accent-hot:   #1556a0;
+  --c-success:      #16a34a;
+  --c-warn:         #b45309;
+  --c-danger:       #b91c1c;
+  --c-warn-border:  #f4d089;
+  --c-danger-border:#f4b8b8;
+
+  --c-btn-hover:        #e2eaf3;
+  --c-btn-primary-grad: linear-gradient(180deg, #2b78c2 0%, #1f5fa0 100%);
+  --c-btn-primary-hover:linear-gradient(180deg, #3187d6 0%, #2068b0 100%);
+  --c-btn-primary-bord: #1f5fa0;
+  --c-btn-primary-text: #ffffff;
+
+  --c-progress-fill:    linear-gradient(90deg, #1f6fc2, #5fb8ff);
+
+  --c-logo-stop-0:  #4aa3e8;
+  --c-logo-stop-1:  #1f5fa0;
+  --c-logo-stop-2:  #ffffff;
+  --c-logo-stroke:  #1f6fc2;
+
+  --shadow-card:    0 1px 3px rgba(15, 32, 60, 0.08), 0 4px 12px rgba(15, 32, 60, 0.04);
 }
 
 * { box-sizing: border-box; }
@@ -41,6 +167,8 @@ body {
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  /* Smooth out the jarring flash when switching themes mid-scan. */
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 /* ---------- layout ---------------------------------------------------- */
@@ -56,7 +184,7 @@ body {
   align-items: center;
   gap: 16px;
   padding: 12px 24px;
-  background: linear-gradient(90deg, #08111e 0%, #11203a 60%, #0b1320 100%);
+  background: var(--c-bg-header);
   border-bottom: 1px solid var(--c-border);
 }
 
@@ -97,7 +225,7 @@ body {
   font-size: 12px;
   color: var(--c-text-muted);
   border-top: 1px solid var(--c-border-soft);
-  background: #08111e;
+  background: var(--c-bg-footer);
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -170,7 +298,7 @@ body {
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--c-text);
-  background: #0b1828;
+  background: var(--c-bg-input);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   outline: none;
@@ -213,19 +341,19 @@ body {
   transition: background 0.12s ease, border-color 0.12s ease, transform 0.05s ease;
 }
 
-.btn:hover:not(:disabled) { background: #1c3463; border-color: var(--c-accent); }
+.btn:hover:not(:disabled) { background: var(--c-btn-hover); border-color: var(--c-accent); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn--primary {
-  background: linear-gradient(180deg, #2b78c2 0%, #1f5fa0 100%);
-  border-color: #3d8ed5;
-  color: #fff;
+  background: var(--c-btn-primary-grad);
+  border-color: var(--c-btn-primary-bord);
+  color: var(--c-btn-primary-text);
 }
-.btn--primary:hover:not(:disabled) { background: linear-gradient(180deg, #2e88dc 0%, #2068b0 100%); }
+.btn--primary:hover:not(:disabled) { background: var(--c-btn-primary-hover); }
 
-.btn--warn   { border-color: #5b4a14; color: var(--c-warn); }
-.btn--danger { border-color: #5a1f1f; color: var(--c-danger); }
+.btn--warn   { border-color: var(--c-warn-border); color: var(--c-warn); }
+.btn--danger { border-color: var(--c-danger-border); color: var(--c-danger); }
 
 .btn--ghost { background: transparent; }
 
@@ -256,6 +384,41 @@ body {
   border-bottom-color: var(--c-accent);
 }
 
+/* ---------- segmented control (used by theme picker) ----------------- */
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--c-bg-elev-2);
+}
+
+.segmented__btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: transparent;
+  border: none;
+  color: var(--c-text-dim);
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.segmented__btn + .segmented__btn {
+  border-left: 1px solid var(--c-border);
+}
+
+.segmented__btn[aria-pressed="true"] {
+  background: var(--c-bg);
+  color: var(--c-accent);
+}
+
+.segmented__btn:hover:not([aria-pressed="true"]) {
+  color: var(--c-text);
+}
+
 /* ---------- status pill ---------------------------------------------- */
 
 .status-pill {
@@ -283,11 +446,11 @@ body {
 
 .status-pill[data-state="idle"]         { color: var(--c-text); }
 .status-pill[data-state="idle"]::before { background: var(--c-text-dim); }
-.status-pill[data-state="busy"]         { color: var(--c-warn); border-color: #5b4a14; }
+.status-pill[data-state="busy"]         { color: var(--c-warn); border-color: var(--c-warn-border); }
 .status-pill[data-state="busy"]::before { background: var(--c-warn); animation: pulse 1.2s infinite; }
 .status-pill[data-state="connecting"]   { color: var(--c-accent); }
 .status-pill[data-state="connecting"]::before { background: var(--c-accent); animation: pulse 1s infinite; }
-.status-pill[data-state="error"]        { color: var(--c-danger); border-color: #5a1f1f; }
+.status-pill[data-state="error"]        { color: var(--c-danger); border-color: var(--c-danger-border); }
 .status-pill[data-state="error"]::before { background: var(--c-danger); }
 .status-pill[data-state="disconnected"] { color: var(--c-text-muted); }
 
@@ -302,7 +465,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #050a14;
+  background: var(--c-bg-deep);
   border-radius: var(--r-md);
   border: 1px solid var(--c-border);
   padding: 12px;
@@ -314,7 +477,7 @@ body {
   background:
     linear-gradient(45deg, var(--c-pixel-grid) 25%, transparent 25%, transparent 75%, var(--c-pixel-grid) 75%) 0 0 / 16px 16px,
     linear-gradient(45deg, var(--c-pixel-grid) 25%, transparent 25%, transparent 75%, var(--c-pixel-grid) 75%) 8px 8px / 16px 16px,
-    #07101e;
+    var(--c-bg-deep);
   max-width: 100%;
   max-height: 70vh;
 }
@@ -346,7 +509,7 @@ body {
 .progress > span {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #2b78c2, #5fb8ff);
+  background: var(--c-progress-fill);
   transition: width 0.15s linear;
 }
 
@@ -378,7 +541,7 @@ body {
 .log-pane {
   font-family: var(--font-mono);
   font-size: 12px;
-  background: #050a14;
+  background: var(--c-bg-deep);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   padding: 8px;

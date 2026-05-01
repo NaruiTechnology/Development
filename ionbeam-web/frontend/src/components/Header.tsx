@@ -1,6 +1,12 @@
 import { useEffect } from "react";
 
 import { fetchStatus, reconnectDevice } from "../store/statusSlice";
+import {
+  ALL_THEMES,
+  applyThemeToDocument,
+  setTheme,
+  type ThemeName,
+} from "../store/themeSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 
 const STATE_LABELS: Record<string, string> = {
@@ -11,9 +17,29 @@ const STATE_LABELS: Record<string, string> = {
   disconnected: "Disconnected",
 };
 
+const THEME_LABELS: Record<ThemeName, string> = {
+  navy: "Navy",
+  black: "Black",
+  light: "Light",
+};
+
+const THEME_TITLES: Record<ThemeName, string> = {
+  navy: "Default Ion Beam navy theme",
+  black: "OLED-friendly black theme for low-ambient labs",
+  light: "Light theme for daylight monitors",
+};
+
 export function Header() {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
+  const theme = useAppSelector((s) => s.theme.theme);
+
+  // Apply theme to <html> on every change. Runs on first mount with the
+  // hydrated value too, so a page reload restores the persisted choice
+  // before the first paint of the body.
+  useEffect(() => {
+    applyThemeToDocument(theme);
+  }, [theme]);
 
   // Refresh status while idle/error so the pill stays current. We pause it
   // during 'busy' to avoid hammering the FastAPI service mid-scan; the WS
@@ -35,15 +61,17 @@ export function Header() {
       <div className="app-header__logo">
         <svg viewBox="0 0 64 64" aria-hidden>
           <defs>
+            {/* Logo gradient stops are theme variables so the mark adapts
+                per-theme without needing a separate SVG per palette. */}
             <radialGradient id="hg" cx="50%" cy="40%" r="60%">
-              <stop offset="0%" stopColor="#88d3ff" />
-              <stop offset="60%" stopColor="#1a6fb0" />
-              <stop offset="100%" stopColor="#0b1d2e" />
+              <stop offset="0%" stopColor="var(--c-logo-stop-0)" />
+              <stop offset="60%" stopColor="var(--c-logo-stop-1)" />
+              <stop offset="100%" stopColor="var(--c-logo-stop-2)" />
             </radialGradient>
           </defs>
           <circle cx="32" cy="28" r="14" fill="url(#hg)" />
-          <path d="M32 14 L32 50" stroke="#5fb8ff" strokeWidth="2.4" strokeLinecap="round" />
-          <path d="M22 50 L42 50" stroke="#5fb8ff" strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M32 14 L32 50" stroke="var(--c-logo-stroke)" strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M22 50 L42 50" stroke="var(--c-logo-stroke)" strokeWidth="2.4" strokeLinecap="round" />
         </svg>
         <div className="app-header__title">
           <b>Ion Beam Technology</b>
@@ -52,6 +80,30 @@ export function Header() {
       </div>
 
       <div className="app-header__spacer" />
+
+      {/* Theme picker — segmented control so the active theme is always
+          visible without a click. Persisted to localStorage by the
+          themeSlice helper. */}
+      <div
+        className="segmented"
+        role="radiogroup"
+        aria-label="Theme"
+      >
+        {ALL_THEMES.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={theme === t}
+            aria-pressed={theme === t}
+            className="segmented__btn"
+            title={THEME_TITLES[t]}
+            onClick={() => dispatch(setTheme(t))}
+          >
+            {THEME_LABELS[t]}
+          </button>
+        ))}
+      </div>
 
       <span className="status-pill" data-state={state}>
         {STATE_LABELS[state] ?? state}
