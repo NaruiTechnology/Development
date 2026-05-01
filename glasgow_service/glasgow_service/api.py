@@ -10,7 +10,8 @@ OpenAPI JSON: http://127.0.0.1:8765/openapi.json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
+from typing import Literal
 
 from .service import DeviceService, DeviceBusy, DeviceNotReady
 from .models  import (
@@ -189,11 +190,21 @@ async def get_last_csv():
             404: {"description": "No scan data cached"},
             500: {"description": "matplotlib not installed or render failed"},
         })
-async def get_last_figure():
+async def get_last_figure(
+    render: Literal["native", "decimated"] = Query(
+        "decimated",
+        description=(
+            "Vector-scan render mode. 'decimated' draws an edge x edge image "
+            "(dense, fills the canvas). 'native' draws a 2048x2048 image "
+            "with stride block-fill so pixel coordinates equal DAC codes. "
+            "Raster scans ignore this parameter."
+        ),
+    ),
+):
     if not svc.has_last():
         raise HTTPException(404, "no scan data cached")
     try:
-        body = svc.last_figure_png()
+        body = svc.last_figure_png(render_mode=render)
     except ModuleNotFoundError as e:
         raise HTTPException(500, f"figure rendering needs matplotlib + numpy: {e}")
     fname = svc.last_figure_filename()
