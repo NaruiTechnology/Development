@@ -140,7 +140,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
           </>
         )}
         {stats.populated > 0 && (
-          <span title="Auto-level: min/max of received uint16 samples stretched to 0..255 on display">
+          <span title="Display level: 1st..99th percentile of received uint16 samples, stretched to 0..255. Outliers clip to black/white.">
             level <b>{stats.min}..{stats.max}</b>
           </span>
         )}
@@ -152,10 +152,32 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
 /* -------- painters ----------------------------------------------------- */
 
 /**
- * Paint a Uint16 image with auto-leveling. `populated` indicates how much
- * of the buffer has real data; the rest is rendered as faint navy so the
- * operator can tell "no data" from "received zeros".
+ * Paint a Uint16 image with percentile-based auto-leveling. The earlier
+ * implementation used absolute min/max, which collapses to near-black
+ * when even a few outlier pixels (hardware glitches, dead-zone-zero
+ * pixels, saturated samples) pull the range from ~700 to ~33000 — the
+ * useful 99% of data then maps to gray values 0..2.
+ *
+ * Percentile clipping is the standard trick (pyqtgraph's
+ * HistogramLUTItem, ImageJ, matplotlib's robust=True): stretch the
+ * 1st..99th percentile of received pixels to 0..255 and clip outliers
+ * to 0/255. Robust to outliers, no sort needed.
+ *
+ * Implementation: 1024-bucket histogram (each bucket = 64 uint16 codes
+ * wide), walk the cumulative count to find p1 and p99 buckets, take the
+ * bucket midpoints as cut-off values. Linear pass over `populated`
+ * pixels — same complexity as the old min/max.
+ *
+ * `populated` indicates how much of the buffer has real data; the rest
+ * is rendered as faint navy so the operator can tell "no data" from
+ * "received zeros".
  */
+
+const HIST_BUCKETS = 1024;
+const HIST_SHIFT = 6; // 65536 / 1024 = 64 values per bucket; >> 6
+const PERCENTILE_LO = 0.01;
+const PERCENTILE_HI = 0.99;
+
 function paintGrayscale(
   canvas: HTMLCanvasElement,
   buf: Uint16Array,
@@ -169,35 +191,54 @@ function paintGrayscale(
   const ctx = canvas.getContext("2d");
   if (!ctx) return { min: 0, max: 0, populated: 0 };
 
-  // Scan the populated region for min/max. For sparse / scattered fills
-  // (custom vector) `populated` may exceed valid data, but every cell in
-  // the image is initialized to 0 and zeros only widen the min so the
-  // visualization stays consistent.
-  let min = 0xffff;
-  let max = 0;
   const limit = Math.min(populated, buf.length);
+
+  // Build a histogram of received values. Each bucket covers 64 codes,
+  // which is finer than display precision (256 gray levels) so the
+  // percentile cut-offs map cleanly back to gray afterward.
+  const hist = new Uint32Array(HIST_BUCKETS);
   for (let i = 0; i < limit; i++) {
-    const v = buf[i];
-    if (v < min) min = v;
-    if (v > max) max = v;
+    hist[buf[i] >> HIST_SHIFT]++;
   }
-  if (limit === 0) {
-    min = 0;
-    max = 0;
+
+  // Find p1 and p99 cut-off uint16 values. Walk cumulative count.
+  let lo = 0;
+  let hi = 0xffff;
+  if (limit > 0) {
+    const target_lo = limit * PERCENTILE_LO;
+    const target_hi = limit * PERCENTILE_HI;
+    let cum = 0;
+    let found_lo = false;
+    for (let b = 0; b < HIST_BUCKETS; b++) {
+      cum += hist[b];
+      if (!found_lo && cum >= target_lo) {
+        lo = b << HIST_SHIFT;
+        found_lo = true;
+      }
+      if (cum >= target_hi) {
+        hi = ((b + 1) << HIST_SHIFT) - 1;
+        break;
+      }
+    }
+    // Pathological cases (uniform field, single-bucket data): collapse
+    // span to 1 so we don't divide by zero. The image then renders as
+    // mid-gray, which is the right answer for "all pixels equal".
+    if (hi <= lo) hi = lo + 1;
   }
-  const span = max > min ? max - min : 1;
+  const span = hi > lo ? hi - lo : 1;
 
   const img = ctx.createImageData(edge, edge);
   const data = img.data;
 
-  // Paint the entire buffer. For sparse / unfilled areas the value is 0,
-  // which after auto-level becomes black — visually distinct from the
-  // navy "not yet scanned" tint we apply below for purely raster mode.
   const totalPx = edge * edge;
   const reg = limit < totalPx ? limit : totalPx;
   for (let i = 0; i < reg; i++) {
     const v = buf[i];
-    const g = ((v - min) * 255 / span) | 0;
+    // Clamp into [lo, hi] then linearly map to [0, 255].
+    let g: number;
+    if (v <= lo) g = 0;
+    else if (v >= hi) g = 255;
+    else g = ((v - lo) * 255 / span) | 0;
     const p = i * 4;
     data[p + 0] = g;
     data[p + 1] = g;
@@ -214,5 +255,5 @@ function paintGrayscale(
   }
   ctx.putImageData(img, 0, 0);
 
-  return { min, max, populated: limit };
+  return { min: lo, max: hi, populated: limit };
 }

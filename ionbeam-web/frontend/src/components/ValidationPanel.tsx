@@ -239,26 +239,43 @@ function fmtSec(s: number): string {
   return `${s.toFixed(3)} s`;
 }
 
+/** Local-time timestamp suffix for downloaded files. Matches the format
+ *  the Python service uses (time.strftime "%Y%m%d_%H%M%S") so naming is
+ *  consistent across the two paths. Note the Python timestamp uses the
+ *  server's local time; ours uses the browser's. They diverge only when
+ *  the two run in different timezones, which is rare and not worth
+ *  fancy reconciliation logic. */
+function timestampSuffix(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  );
+}
+
 function defaultCsvFilename(
   kind: "raster" | "vector",
   result: { resolution?: number | null } | null
 ): string {
+  const ts = timestampSuffix();
   if (kind === "raster") {
     const r = result?.resolution ?? 0;
-    return r ? `raster_${r}x${r}.csv` : "raster.csv";
+    return r ? `raster_${r}x${r}_${ts}.csv` : `raster_${ts}.csv`;
   }
-  return "vector.csv";
+  return `vector_${ts}.csv`;
 }
 
 function defaultFigureFilename(
   kind: "raster" | "vector",
   result: { resolution?: number | null } | null
 ): string {
+  const ts = timestampSuffix();
   if (kind === "raster") {
     const r = result?.resolution ?? 0;
-    return r ? `raster_${r}x${r}.png` : "raster.png";
+    return r ? `raster_${r}x${r}_${ts}.png` : `raster_${ts}.png`;
   }
-  return "vector.png";
+  return `vector_${ts}.png`;
 }
 
 /** Pull the filename out of a Content-Disposition header. Tolerates the

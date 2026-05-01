@@ -78,6 +78,27 @@ def _is_fatal_usb_error(exc: BaseException) -> bool:
     return type(exc).__name__ in _FATAL_EXC_NAMES
 
 
+def _percentile_clip_uint16(values, lo_pct: float = 1.0, hi_pct: float = 99.0):
+    """Return (lo, hi) cut-off values for percentile-based display
+    auto-leveling. Pure helper, used by the matplotlib figure renderer
+    to set imshow's vmin/vmax. numpy is imported lazily by the caller.
+
+    Returns (0, 1) when given an empty array, so downstream imshow
+    doesn't error. When all values are equal, returns (v, v+1) so the
+    image renders as uniform mid-gray rather than blowing up the
+    color-mapper.
+    """
+    import numpy as np
+    arr = np.asarray(values)
+    if arr.size == 0:
+        return 0, 1
+    lo = int(np.percentile(arr, lo_pct))
+    hi = int(np.percentile(arr, hi_pct))
+    if hi <= lo:
+        hi = lo + 1
+    return lo, hi
+
+
 class DeviceService:
     """One scan at a time. One USB connection, lazily opened, dropped on error."""
 
@@ -388,10 +409,11 @@ class DeviceService:
         if not self.has_last():
             return "scan.csv"
         last = self._last
+        ts = time.strftime("%Y%m%d_%H%M%S")
         if last["kind"] == "raster":
             r = last.get("resolution") or 0
-            return f"raster_{r}x{r}.csv"
-        return f"vector_latency{last.get('latency_bytes') or 0}.csv"
+            return f"raster_{r}x{r}_{ts}.csv"
+        return f"vector_latency{last.get('latency_bytes') or 0}_{ts}.csv"
 
     def last_csv_bytes(self) -> bytes:
         """Render the last scan as CSV (UTF-8). Format identical to the
@@ -424,10 +446,11 @@ class DeviceService:
         if not self.has_last():
             return "scan.png"
         last = self._last
+        ts = time.strftime("%Y%m%d_%H%M%S")
         if last["kind"] == "raster":
             r = last.get("resolution") or 0
-            return f"raster_{r}x{r}.png"
-        return f"vector_latency{last.get('latency_bytes') or 0}.png"
+            return f"raster_{r}x{r}_{ts}.png"
+        return f"vector_latency{last.get('latency_bytes') or 0}_{ts}.png"
 
     def last_figure_png(self) -> bytes:
         """Render the last scan as a publication-quality PNG using
@@ -459,15 +482,22 @@ class DeviceService:
             else:
                 flat = flat[: res * res]
             img = flat.reshape(res, res)
-            display = (img >> 8).astype(np.uint8)  # 8-bit display value
+            # Percentile-based auto-level. The earlier code did a fixed
+            # >> 8 then vmin/vmax=0/255, which collapsed dim ADC outputs
+            # (low-12-bit signal) to near-black and let single saturated
+            # pixels dictate the upper limit. Clipping to the 1st..99th
+            # percentile of received values matches what
+            # pyqtgraph's HistogramLUTItem and matplotlib's
+            # robust=True imshow do.
+            lo, hi = _percentile_clip_uint16(flat)
 
             fig, ax = plt.subplots(figsize=(7, 7))
-            im = ax.imshow(display, cmap="gray", vmin=0, vmax=255)
+            im = ax.imshow(img, cmap="gray", vmin=lo, vmax=hi)
             ax.set_title(f"Raster scan: {res}x{res}")
             ax.set_xlabel("X (pixels)")
             ax.set_ylabel("Y (pixels)")
             cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label("ADC sample (8-bit)")
+            cbar.set_label(f"ADC sample (uint16, p1={lo} p99={hi})")
         else:
             # Vector: reconstruct image from sample order. Default sweep
             # walks for x: for y:; custom uses the host point list.
@@ -493,14 +523,18 @@ class DeviceService:
                 rows = idx % edge
                 img[rows, cols] = samples[:n]
 
-            display = (img >> 8).astype(np.uint8)
+            # Percentile clip on the populated samples (excluding the
+            # all-zero unfilled region of custom scans, which would
+            # dominate the lower percentile).
+            populated_samples = samples[: min(samples.size, edge * edge)]
+            lo, hi = _percentile_clip_uint16(populated_samples)
             fig, ax = plt.subplots(figsize=(7, 7))
-            im = ax.imshow(display, cmap="gray", vmin=0, vmax=255)
+            im = ax.imshow(img, cmap="gray", vmin=lo, vmax=hi)
             ax.set_title(f"Vector scan: {samples.size} points")
             ax.set_xlabel("X (DAC code)")
             ax.set_ylabel("Y (DAC code)")
             cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label("ADC sample (8-bit)")
+            cbar.set_label(f"ADC sample (uint16, p1={lo} p99={hi})")
 
         out = io.BytesIO()
         fig.tight_layout()
