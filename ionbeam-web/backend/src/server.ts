@@ -42,6 +42,29 @@ if (config.mock) {
   app.post("/api/scan/raster/run", (req, res) => res.json(mockRest.runRaster(req.body)));
   app.post("/api/scan/vector/run", (req, res) => res.json(mockRest.runVector(req.body)));
   app.post("/api/admin/reconnect", (_req, res) => res.json(mockRest.status()));
+
+  // Last-scan downloads. The CSV is generated synthetically in-process;
+  // the figure endpoint returns 501 because matplotlib only runs on the
+  // Python side, and pulling in a Node image-rendering lib just for the
+  // demo path would bloat the proxy. The real backend always serves
+  // figures regardless of MOCK on the Node side.
+  app.get("/api/scan/last/meta", (_req, res) => res.json(mockRest.lastMeta()));
+  app.get("/api/scan/last/csv", (_req, res) => {
+    const out = mockRest.lastCsv();
+    if (!out) {
+      res.status(404).json({ detail: "no scan data cached" });
+      return;
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${out.filename}"`);
+    res.send(out.body);
+  });
+  app.get("/api/scan/last/figure", (_req, res) => {
+    res.status(501).json({
+      detail:
+        "figure rendering is not available in MOCK=1 mode (matplotlib runs on the Python service only)",
+    });
+  });
 } else {
   app.use("/api", buildRestProxy());
 }

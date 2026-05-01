@@ -39,8 +39,6 @@ const defaultRaster: RasterRequest = {
   latency_bytes: 16384,
   frame_blank: false,
   cookie: 123,
-  save_csv: false,
-  csv_dir: null,
   do_validate: true,
 };
 
@@ -51,8 +49,6 @@ const defaultVector: VectorRequest = {
   output_mode: "SixteenBit",
   cookie: 123,
   pre_process: true,
-  save_csv: false,
-  csv_dir: null,
   do_validate: true,
 };
 
@@ -123,9 +119,18 @@ const slice = createSlice({
       s.chunksReceived += a.payload.chunks;
     },
     streamPaused(s) {
-      // Hardware can't actually pause mid-frame, but the UI distinguishes
-      // "stream stopped, image preserved" from "stream stopped, image reset".
-      if (s.phase === "running") s.phase = "paused";
+      // Pause is dispatched by the WS onclose handler. By that point
+      // streamStopping has already moved phase to "stopping" — the
+      // previous "phase === 'running'" guard rejected this case and left
+      // the UI stuck on "stopping" forever.
+      //
+      // Hardware can't actually pause mid-frame. Pause is a UI concept
+      // meaning "the stream is closed but the partial frame is kept on
+      // the canvas". Accept transitions only from the active states; if
+      // a "done" or "error" already landed we shouldn't downgrade them.
+      if (s.phase === "running" || s.phase === "stopping") {
+        s.phase = "paused";
+      }
     },
     streamStopping(s) {
       s.phase = "stopping";

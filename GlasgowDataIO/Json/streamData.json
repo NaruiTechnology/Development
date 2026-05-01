@@ -38,7 +38,7 @@
                             ],
                         "enabled": true,
                         "saveAs":  "~/Downloads/raster_last_run.png",
-                        "openViewer": true
+                        "openViewer": false
                         }
                     },
                     "vectorScan": {
@@ -48,7 +48,7 @@
                         "display": {
                         "enabled": true,
                         "saveAs":  "~/Downloads/vector_last_run.png",
-                        "openViewer": true
+                        "openViewer": false
                         }
                     },
 

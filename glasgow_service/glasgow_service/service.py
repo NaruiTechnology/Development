@@ -29,6 +29,7 @@ Lifecycle decisions and the reasoning behind them:
 """
 import asyncio
 import csv
+import io
 import math
 import time
 from pathlib import Path
@@ -91,6 +92,13 @@ class DeviceService:
         self._conn: Optional[GlasgowConnection] = None
         self._lock = asyncio.Lock()
         self._status = ServiceStatus(state=DeviceState.IDLE)  # IDLE = "ready, not yet connected"
+
+        # In-memory cache of the most recent completed scan. Populated by
+        # both run_raster/run_vector (validated) AND the streaming
+        # generators (live), so the browser can pull a CSV or PNG figure
+        # from /scan/last/* regardless of which path produced the data.
+        # Worst case ~16 MB (2048x2048 vector + 2048x2048 raster).
+        self._last: Optional[dict] = None
 
     # -------- lifecycle ---------------------------------------------------
 
@@ -159,6 +167,11 @@ class DeviceService:
     # -------- streaming (for WebSocket) -----------------------------------
 
     async def raster_scan(self, req: RasterRequest) -> AsyncIterator[bytes]:
+        # Buffer chunks for the /scan/last/* download endpoints. We hold
+        # references to the chunks already-yielded; the bytes are still
+        # in memory anyway because the WebSocket frame keeps them until
+        # the network layer flushes.
+        captured: List = []
         async with self._acquire("raster"):
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
@@ -166,12 +179,26 @@ class DeviceService:
                 async for chunk in conn.transfer_multiple(
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
+                    captured.append(chunk)
                     yield bytes(chunk)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 raise
+            finally:
+                # On normal completion AND on cancellation (Pause/Stop),
+                # snapshot whatever we got. Partial captures are still
+                # downloadable — better than nothing for a paused scan.
+                self._last = {
+                    "kind": "raster",
+                    "chunks": captured,
+                    "resolution": req.resolution,
+                    "dwell": req.dwell,
+                    "latency_bytes": req.latency_bytes,
+                    "source": "stream",
+                }
 
     async def vector_scan(self, req: VectorRequest) -> AsyncIterator[bytes]:
+        captured: List = []
         async with self._acquire("vector"):
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(req)
@@ -181,10 +208,20 @@ class DeviceService:
                 async for chunk in conn.transfer_multiple(
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
+                    captured.append(chunk)
                     yield bytes(chunk)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 raise
+            finally:
+                self._last = {
+                    "kind": "vector",
+                    "chunks": captured,
+                    "latency_bytes": req.latency_bytes,
+                    "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                    "points": req.points,
+                    "source": "stream",
+                }
 
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
@@ -212,9 +249,16 @@ class DeviceService:
         expected_chunks  = math.ceil(total_pixels / pixels_per_chunk)
         total_bytes      = sum(len(c) * 2 for c in chunks)
 
-        csv_path = None
-        if req.save_csv and chunks:
-            csv_path = self._export_raster_csv(chunks, req)
+        # Cache for /scan/last/csv and /scan/last/figure.
+        if chunks:
+            self._last = {
+                "kind": "raster",
+                "chunks": chunks,
+                "resolution": req.resolution,
+                "dwell": req.dwell,
+                "latency_bytes": req.latency_bytes,
+                "source": "validated",
+            }
 
         validation = None
         if req.do_validate:
@@ -230,7 +274,7 @@ class DeviceService:
             expected_chunks=expected_chunks,
             pixels_per_chunk=pixels_per_chunk,
             send_time_s=send_time,
-            csv_path=str(csv_path) if csv_path else None,
+            has_data=bool(chunks),
             validation=validation,
         )
 
@@ -263,9 +307,15 @@ class DeviceService:
 
         total_bytes = sum(len(c) * 2 for c in chunks)
 
-        csv_path = None
-        if req.save_csv and chunks:
-            csv_path = self._export_vector_csv(chunks, req)
+        if chunks:
+            self._last = {
+                "kind": "vector",
+                "chunks": chunks,
+                "latency_bytes": req.latency_bytes,
+                "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                "points": req.points,
+                "source": "validated",
+            }
 
         validation = None
         if req.do_validate:
@@ -277,7 +327,7 @@ class DeviceService:
             bytes=total_bytes,
             process_time_s=process_time if req.pre_process else None,
             send_time_s=send_time,
-            csv_path=str(csv_path) if csv_path else None,
+            has_data=bool(chunks),
             validation=validation,
         )
 
@@ -315,41 +365,150 @@ class DeviceService:
             drain_floor_pixels=self._vector_defaults.get("drainFloorPixels"),
         )
 
-    # -------- CSV export / validation (unchanged) -------------------------
+    # -------- on-demand download bytes (CSV / PNG figure) -----------------
 
-    def _csv_dir(self, override: Optional[str]) -> Path:
-        p = Path(override) if override else Path.home() / "Downloads"
-        p.mkdir(parents=True, exist_ok=True)
-        return p
+    def has_last(self) -> bool:
+        return self._last is not None and bool(self._last.get("chunks"))
 
-    def _export_raster_csv(self, chunks: List, req: RasterRequest) -> Path:
-        path = self._csv_dir(req.csv_dir) / f"raster_{req.resolution}x{req.resolution}.csv"
-        all_pixels: list = []
-        for chunk in chunks:
-            all_pixels.extend(chunk)
-        with path.open("w", newline="") as f:
-            writer = csv.writer(f, delimiter=" ")
-            for row_idx in range(req.resolution):
-                start = row_idx * req.resolution
-                row = all_pixels[start:start + req.resolution]
+    def last_meta(self) -> Optional[dict]:
+        """Lightweight metadata for the UI to display next to the buttons."""
+        if not self.has_last():
+            return None
+        last = self._last
+        return {
+            "kind": last["kind"],
+            "chunks": len(last["chunks"]),
+            "source": last.get("source"),
+            "resolution": last.get("resolution"),
+            "latency_bytes": last.get("latency_bytes"),
+            "pattern": last.get("pattern"),
+        }
+
+    def last_csv_filename(self) -> str:
+        if not self.has_last():
+            return "scan.csv"
+        last = self._last
+        if last["kind"] == "raster":
+            r = last.get("resolution") or 0
+            return f"raster_{r}x{r}.csv"
+        return f"vector_latency{last.get('latency_bytes') or 0}.csv"
+
+    def last_csv_bytes(self) -> bytes:
+        """Render the last scan as CSV (UTF-8). Format identical to the
+        on-disk CSV the previous `save_csv=True` code path produced, so
+        downstream tooling that already parses those files keeps working."""
+        if not self.has_last():
+            raise DeviceNotReady("no scan data cached")
+        last = self._last
+        buf = io.StringIO()
+        writer = csv.writer(buf, delimiter=" ")
+
+        if last["kind"] == "raster":
+            res = last["resolution"]
+            all_pixels: list = []
+            for chunk in last["chunks"]:
+                all_pixels.extend(chunk)
+            for row_idx in range(res):
+                start = row_idx * res
+                row = all_pixels[start:start + res]
                 if not row:
                     break
                 writer.writerow(row)
-        logger.debug("wrote raster CSV %s (%d pixels from %d chunks)",
-                 path, len(all_pixels), len(chunks))
-        return path
-
-    def _export_vector_csv(self, chunks: List, req: VectorRequest) -> Path:
-        path = self._csv_dir(req.csv_dir) / f"vector_latency{req.latency_bytes}.csv"
-        total_values = 0
-        with path.open("w", newline="") as f:
-            writer = csv.writer(f, delimiter=" ")
-            for chunk in chunks:
+        else:
+            for chunk in last["chunks"]:
                 writer.writerow(chunk)
-                total_values += len(chunk)
-        logger.debug("wrote vector CSV %s (%d values from %d chunks)",
-                 path, total_values, len(chunks))
-        return path
+
+        return buf.getvalue().encode("utf-8")
+
+    def last_figure_filename(self) -> str:
+        if not self.has_last():
+            return "scan.png"
+        last = self._last
+        if last["kind"] == "raster":
+            r = last.get("resolution") or 0
+            return f"raster_{r}x{r}.png"
+        return f"vector_latency{last.get('latency_bytes') or 0}.png"
+
+    def last_figure_png(self) -> bytes:
+        """Render the last scan as a publication-quality PNG using
+        matplotlib. Mirrors the layout of the matplotlib figures the
+        operator was generating manually before this endpoint existed."""
+        if not self.has_last():
+            raise DeviceNotReady("no scan data cached")
+
+        # Imported lazily so the service still boots without matplotlib
+        # installed — only this endpoint will fail.
+        import numpy as np
+        import matplotlib
+        matplotlib.use("Agg")  # headless backend; required when no display
+        import matplotlib.pyplot as plt
+
+        last = self._last
+        if last["kind"] == "raster":
+            res = last["resolution"]
+            flat = np.fromiter(
+                (v for chunk in last["chunks"] for v in chunk),
+                dtype=np.uint16,
+                count=res * res if sum(len(c) for c in last["chunks"]) >= res * res else -1,
+            )
+            # If the scan was truncated (paused mid-frame), pad with zeros
+            # so reshape works; downstream display tools tolerate zeros.
+            if flat.size < res * res:
+                pad = np.zeros(res * res - flat.size, dtype=np.uint16)
+                flat = np.concatenate([flat, pad])
+            else:
+                flat = flat[: res * res]
+            img = flat.reshape(res, res)
+            display = (img >> 8).astype(np.uint8)  # 8-bit display value
+
+            fig, ax = plt.subplots(figsize=(7, 7))
+            im = ax.imshow(display, cmap="gray", vmin=0, vmax=255)
+            ax.set_title(f"Raster scan: {res}x{res}")
+            ax.set_xlabel("X (pixels)")
+            ax.set_ylabel("Y (pixels)")
+            cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label("ADC sample (8-bit)")
+        else:
+            # Vector: reconstruct image from sample order. Default sweep
+            # walks for x: for y:; custom uses the host point list.
+            edge = 2048
+            samples = np.fromiter(
+                (v for chunk in last["chunks"] for v in chunk),
+                dtype=np.uint16,
+            )
+            img = np.zeros((edge, edge), dtype=np.uint16)
+            pattern = last.get("pattern", "default")
+            points = last.get("points")
+            if pattern == "custom" and points:
+                n = min(len(samples), len(points))
+                xs = np.fromiter((p[0] for p in points[:n]), dtype=np.int32, count=n)
+                ys = np.fromiter((p[1] for p in points[:n]), dtype=np.int32, count=n)
+                mask = (xs >= 0) & (xs < edge) & (ys >= 0) & (ys < edge)
+                img[ys[mask], xs[mask]] = samples[:n][mask]
+            else:
+                # Default sweep: sample i -> (col=i//edge, row=i%edge)
+                n = min(samples.size, edge * edge)
+                idx = np.arange(n)
+                cols = idx // edge
+                rows = idx % edge
+                img[rows, cols] = samples[:n]
+
+            display = (img >> 8).astype(np.uint8)
+            fig, ax = plt.subplots(figsize=(7, 7))
+            im = ax.imshow(display, cmap="gray", vmin=0, vmax=255)
+            ax.set_title(f"Vector scan: {samples.size} points")
+            ax.set_xlabel("X (DAC code)")
+            ax.set_ylabel("Y (DAC code)")
+            cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label("ADC sample (8-bit)")
+
+        out = io.BytesIO()
+        fig.tight_layout()
+        fig.savefig(out, format="png", dpi=120, bbox_inches="tight")
+        plt.close(fig)
+        return out.getvalue()
+
+    # -------- validation (unchanged) --------------------------------------
 
     def _validate_raster(self, chunks: List, pixels_per_chunk: int,
                          expected_chunks: int) -> ScanValidation:

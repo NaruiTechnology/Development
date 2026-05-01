@@ -5,3 +5,6 @@ uvicorn[standard]>=0.27
 pydantic>=2.5
 websockets>=12   # for the example WebSocket client
 pytest>=8       # for tests/test_wet_run.py
+# Last-scan PNG figure rendering (lazy-imported in service.last_figure_png)
+matplotlib>=3.8
+numpy>=1.26

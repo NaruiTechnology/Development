@@ -94,20 +94,10 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         Run chunk-count / size / padding checks
       </label>
 
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={r.save_csv}
-          disabled={disabled}
-          onChange={(e) => dispatch(updateRaster({ save_csv: e.target.checked }))}
-        />
-        Save CSV (raster_NxN.csv in ~/Downloads)
-      </label>
-
       <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
-        Validation and CSV apply to <b>Run validated</b>. Live streaming
-        ignores them — that path mirrors the WebSocket endpoint behaviour
-        in <code>glasgow_service.api</code>.
+        Validation applies to <b>Run validated</b>. After any scan
+        completes, use the <b>Download CSV</b> / <b>Download figure</b>
+        buttons in the Run report to export the data.
       </p>
     </div>
   );

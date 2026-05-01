@@ -165,16 +165,6 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
         />
         Run non-empty / padding checks
       </label>
-
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={v.save_csv}
-          disabled={disabled}
-          onChange={(e) => dispatch(updateVector({ save_csv: e.target.checked }))}
-        />
-        Save CSV (vector_latencyN.csv in ~/Downloads)
-      </label>
     </div>
   );
 }

@@ -40,20 +40,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Glasgow Device Service",
-    version="0.2.0",
+    version="0.3.0",
     description=(
         "Long-lived HTTP/WebSocket interface to a single Glasgow device.\n\n"
         "**Concurrency:** one scan at a time. Concurrent requests return 409.\n\n"
         "**Blocking REST endpoints** (`/scan/raster/run`, `/scan/vector/run`) buffer all "
-        "chunks, optionally save CSV, and run the same validation checks as the stand-alone "
-        "pytest wet-run tests. Use these when you care about the validation report.\n\n"
+        "chunks and run the same validation checks as the stand-alone pytest wet-run tests. "
+        "Use these when you care about the validation report.\n\n"
         "**WebSocket endpoints** (`/scan/raster/stream`, `/scan/vector/stream`) stream chunks "
-        "live; CSV/validation flags are ignored there."
+        "live; validate flag is ignored there.\n\n"
+        "**Last-scan downloads** (`/scan/last/csv`, `/scan/last/figure`) serve the most "
+        "recently completed scan as a CSV or matplotlib PNG. Both blocking and streaming "
+        "scans populate the cache."
     ),
     lifespan=lifespan,
     openapi_tags=[
         {"name": "status", "description": "Service health, configuration defaults."},
-        {"name": "scan",   "description": "Raster and vector scan execution."},
+        {"name": "scan",   "description": "Raster and vector scan execution, last-scan downloads."},
         {"name": "admin",  "description": "Lifecycle: reconnect the device."},
     ],
 )
@@ -79,7 +82,7 @@ async def get_defaults():
     "/scan/raster/run",
     response_model=ScanResult,
     tags=["scan"],
-    summary="Run one raster scan (blocking); returns timing, CSV path, validation report",
+    summary="Run one raster scan (blocking); returns timing and validation report",
     responses={
         409: {"description": "Device busy — another scan is running"},
         503: {"description": "Device not ready (disconnected or error state)"},
@@ -99,7 +102,8 @@ async def run_raster(req: RasterRequest):
 async def stream_raster(ws: WebSocket):
     """Client sends RasterRequest as JSON, then receives binary chunk frames,
     terminated by `{"event":"done","chunks":N}` or an error event.
-    CSV/validate flags in the request are ignored here."""
+    The validate flag in the request is ignored here; the live stream is
+    cached for /scan/last/* downloads."""
     await _stream_scan(ws, lambda p: svc.raster_scan(RasterRequest(**p)))
 
 
@@ -109,7 +113,7 @@ async def stream_raster(ws: WebSocket):
     "/scan/vector/run",
     response_model=ScanResult,
     tags=["scan"],
-    summary="Run one vector scan (blocking); returns timing, CSV path, validation report",
+    summary="Run one vector scan (blocking); returns timing and validation report",
     description=(
         "`pattern=default` generates the built-in 2048x2048 sweep with dwell=1.\n\n"
         "`pattern=custom` consumes the `points` array (capped at 1M points per request).\n\n"
@@ -147,6 +151,57 @@ async def stream_vector(ws: WebSocket):
 async def reconnect():
     await svc.reconnect()
     return svc.status()
+
+
+# ---------- last-scan downloads -------------------------------------------
+
+from fastapi import Response
+
+
+@app.get("/scan/last/meta", tags=["scan"],
+         summary="Metadata for the last completed scan (chunks, kind, source)")
+async def get_last_meta():
+    """Returns null if nothing has been scanned yet. The browser uses
+    this to decide whether to enable the download buttons."""
+    return svc.last_meta()
+
+
+@app.get("/scan/last/csv", tags=["scan"],
+        summary="Download the last scan as CSV (space-delimited uint16)",
+        responses={
+            404: {"description": "No scan data cached"},
+        })
+async def get_last_csv():
+    if not svc.has_last():
+        raise HTTPException(404, "no scan data cached")
+    body = svc.last_csv_bytes()
+    fname = svc.last_csv_filename()
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.get("/scan/last/figure", tags=["scan"],
+        summary="Download the last scan as a publication-quality PNG figure",
+        responses={
+            404: {"description": "No scan data cached"},
+            500: {"description": "matplotlib not installed or render failed"},
+        })
+async def get_last_figure():
+    if not svc.has_last():
+        raise HTTPException(404, "no scan data cached")
+    try:
+        body = svc.last_figure_png()
+    except ModuleNotFoundError as e:
+        raise HTTPException(500, f"figure rendering needs matplotlib + numpy: {e}")
+    fname = svc.last_figure_filename()
+    return Response(
+        content=body,
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 # ---------- shared WS plumbing --------------------------------------------

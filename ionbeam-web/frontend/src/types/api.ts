@@ -24,8 +24,6 @@ export interface RasterRequest {
   latency_bytes: number;  // >= 2
   frame_blank: boolean;
   cookie: number;         // 0..65535
-  save_csv: boolean;
-  csv_dir: string | null;
   do_validate: boolean;
 }
 
@@ -38,8 +36,6 @@ export interface VectorRequest {
   output_mode: "SixteenBit" | "EightBit";
   cookie: number;
   pre_process: boolean;
-  save_csv: boolean;
-  csv_dir: string | null;
   do_validate: boolean;
 }
 
@@ -70,8 +66,20 @@ export interface ScanResult {
 
   // shared:
   send_time_s?: number | null;
-  csv_path?: string | null;
+  /** True when the server is holding the chunk buffer for this scan,
+   *  enabling the /scan/last/csv and /scan/last/figure downloads. */
+  has_data?: boolean;
   validation?: ScanValidation | null;
+}
+
+/** Returned by GET /scan/last/meta. Null when no scan has run yet. */
+export interface LastScanMeta {
+  kind: "raster" | "vector";
+  chunks: number;
+  source: "validated" | "stream" | null;
+  resolution?: number | null;
+  latency_bytes?: number | null;
+  pattern?: string | null;
 }
 
 /** Server defaults harvested from streamData.json by GET /defaults. */

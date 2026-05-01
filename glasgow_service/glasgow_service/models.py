@@ -1,4 +1,11 @@
-"""Pydantic models shared between the service and the API layer."""
+"""Pydantic models shared between the service and the API layer.
+
+API change in this revision: CSV output is no longer a side effect of a
+scan run. The browser pulls CSV / PNG figure bytes on demand from
+/scan/last/* endpoints. So `save_csv`, `csv_dir`, and `csv_path` are
+gone, replaced by `has_data` on the result so the UI knows when the
+download buttons can be enabled.
+"""
 from enum import Enum
 from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field
@@ -29,17 +36,15 @@ class RasterRequest(BaseModel):
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
 
     # Wet-run extras (REST only; WebSocket streaming ignores these):
-    save_csv:    bool = Field(False, description="Export received pixels as a CSV file.")
-    csv_dir:     Optional[str] = Field(None, description="Override default CSV directory (~/Downloads).")
-    do_validate: bool = Field(True,  description="Run chunk-count / size / padding checks and return the report.")
+    do_validate: bool = Field(True, description="Run chunk-count / size / padding checks and return the report.")
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {"resolution": 512,  "dwell": 2, "latency_bytes": 16384,
-                 "frame_blank": False, "save_csv": False, "do_validate": True},
+                 "frame_blank": False, "do_validate": True},
                 {"resolution": 1024, "dwell": 3, "latency_bytes": 16384,
-                 "frame_blank": False, "save_csv": False, "do_validate": True},
+                 "frame_blank": False, "do_validate": True},
             ]
         }
     }
@@ -63,18 +68,16 @@ class VectorRequest(BaseModel):
 
     # Wet-run extras (REST only):
     pre_process:    bool = Field(False, description="Call _pre_process_chunks before transfer; time it separately.")
-    save_csv:       bool = Field(False, description="Export received chunks as a CSV file.")
-    csv_dir:        Optional[str] = Field(None, description="Override default CSV directory (~/Downloads).")
     do_validate:    bool = Field(True,  description="Run non-empty / padding checks and return the report.")
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {"pattern": "default", "latency_bytes": 8196,
-                 "pre_process": True, "save_csv": False, "do_validate": True},
+                 "pre_process": True, "do_validate": True},
                 {"pattern": "custom",
                  "points": [[0, 0, 2], [100, 100, 2], [200, 100, 2], [200, 200, 2]],
-                 "latency_bytes": 8196, "save_csv": False, "do_validate": True},
+                 "latency_bytes": 8196, "do_validate": True},
             ]
         }
     }
@@ -94,7 +97,12 @@ class ScanValidation(BaseModel):
 
 
 class ScanResult(BaseModel):
-    """Unified result for both raster and vector blocking scans."""
+    """Unified result for both raster and vector blocking scans.
+
+    `has_data=True` means the server is holding the chunk buffer for this
+    scan in memory, so /scan/last/csv and /scan/last/figure will return
+    its contents.
+    """
     kind:             str              # "raster" or "vector"
     chunks:           int
     bytes:            int
@@ -110,5 +118,5 @@ class ScanResult(BaseModel):
 
     # shared:
     send_time_s:      Optional[float] = None
-    csv_path:         Optional[str]   = None
+    has_data:         bool            = False
     validation:       Optional[ScanValidation] = None

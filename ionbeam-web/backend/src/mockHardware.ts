@@ -164,10 +164,17 @@ export const mockRest = {
       },
     };
   },
-  runRaster(req: RasterParams & { do_validate?: boolean; save_csv?: boolean }) {
+  runRaster(req: RasterParams & { do_validate?: boolean }) {
     const total = req.resolution * req.resolution;
     const pixelsPerChunk = Math.max(1, Math.floor(req.latency_bytes / Math.max(1, req.dwell)));
     const expected = Math.ceil(total / pixelsPerChunk);
+    // Cache so /scan/last/* mock endpoints have something to return.
+    mockLastScan = {
+      kind: "raster",
+      resolution: req.resolution,
+      latency_bytes: req.latency_bytes,
+      source: "validated",
+    };
     return {
       kind: "raster",
       chunks: expected,
@@ -177,7 +184,7 @@ export const mockRest = {
       expected_chunks: expected,
       pixels_per_chunk: pixelsPerChunk,
       send_time_s: total / 1_500_000,
-      csv_path: req.save_csv ? "/tmp/mock_raster.csv" : null,
+      has_data: true,
       validation: req.do_validate
         ? {
             passed: true,
@@ -191,15 +198,21 @@ export const mockRest = {
         : null,
     };
   },
-  runVector(req: VectorParams & { do_validate?: boolean; save_csv?: boolean; pre_process?: boolean }) {
+  runVector(req: VectorParams & { do_validate?: boolean; pre_process?: boolean }) {
     const chunks = req.pattern === "custom" && req.points ? Math.ceil(req.points.length / 256) : 16;
+    mockLastScan = {
+      kind: "vector",
+      latency_bytes: req.latency_bytes,
+      pattern: req.pattern,
+      source: "validated",
+    };
     return {
       kind: "vector",
       chunks,
       bytes: chunks * req.latency_bytes,
       process_time_s: req.pre_process ? 0.012 : null,
       send_time_s: 0.4,
-      csv_path: req.save_csv ? "/tmp/mock_vector.csv" : null,
+      has_data: true,
       validation: req.do_validate
         ? {
             passed: true,
@@ -212,4 +225,35 @@ export const mockRest = {
         : null,
     };
   },
+  lastMeta() {
+    return mockLastScan;
+  },
+  /** Generate a tiny synthetic CSV so the download button works in MOCK
+   *  mode. Real shape would be res*res numbers; we emit just a 4x4 grid
+   *  to keep the demo fast. The button still works end-to-end. */
+  lastCsv(): { filename: string; body: string } | null {
+    if (!mockLastScan) return null;
+    const rows: string[] = [];
+    for (let r = 0; r < 4; r++) {
+      const row: number[] = [];
+      for (let c = 0; c < 4; c++) row.push((r * 17 + c * 31) & 0xffff);
+      rows.push(row.join(" "));
+    }
+    const filename =
+      mockLastScan.kind === "raster"
+        ? `raster_${mockLastScan.resolution}x${mockLastScan.resolution}.csv`
+        : `vector_latency${mockLastScan.latency_bytes}.csv`;
+    return { filename, body: rows.join("\r\n") + "\r\n" };
+  },
 };
+
+/** Module-level state for the mock /scan/last/* endpoints. */
+let mockLastScan:
+  | {
+      kind: "raster" | "vector";
+      resolution?: number;
+      latency_bytes?: number;
+      pattern?: string;
+      source: "validated" | "stream";
+    }
+  | null = null;
