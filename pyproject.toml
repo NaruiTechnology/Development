@@ -12,7 +12,7 @@ dependencies = []
 
 [tool.setuptools]
 # Explicitly defining the packages prevents the "Multiple top-level packages" error
-packages = ["AutomationPy", "EsmBeamController", "LoadFPGAImage", "GlasgowDataIO"]
+packages = ["AutomationPy", "LoadFPGAImage", "GlasgowDataIO"]
 
 [tool.pytest.ini_options]
 pythonpath = [
