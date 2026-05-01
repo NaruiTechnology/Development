@@ -83,26 +83,32 @@ export function Header() {
 
       {/* Theme picker — segmented control so the active theme is always
           visible without a click. Persisted to localStorage by the
-          themeSlice helper. */}
-      <div
-        className="segmented"
-        role="radiogroup"
-        aria-label="Theme"
-      >
-        {ALL_THEMES.map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="radio"
-            aria-checked={theme === t}
-            aria-pressed={theme === t}
-            className="segmented__btn"
-            title={THEME_TITLES[t]}
-            onClick={() => dispatch(setTheme(t))}
-          >
-            {THEME_LABELS[t]}
-          </button>
-        ))}
+          themeSlice helper. The visible "Theme" label matches the
+          card__title typography used elsewhere (small caps, dim color)
+          so this group reads as one labeled control rather than three
+          orphan buttons. */}
+      <div className="row" style={{ gap: 8 }}>
+        <span className="card__title" id="theme-picker-label">Theme</span>
+        <div
+          className="segmented"
+          role="radiogroup"
+          aria-labelledby="theme-picker-label"
+        >
+          {ALL_THEMES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={theme === t}
+              aria-pressed={theme === t}
+              className="segmented__btn"
+              title={THEME_TITLES[t]}
+              onClick={() => dispatch(setTheme(t))}
+            >
+              {THEME_LABELS[t]}
+            </button>
+          ))}
+        </div>
       </div>
 
       <span className="status-pill" data-state={state}>
