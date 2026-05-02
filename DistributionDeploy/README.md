@@ -122,13 +122,47 @@ sequences that share state across stages (nvm install).
 ### Build only:
 
 ```bash
-python3 buidCompiledDist.py                      # default: dist_app/ + dist_app.zip
+python3 buidCompiledDist.py                      # default: Cython -> .so, dist_app/ + dist_app.zip
+python3 buidCompiledDist.py --use-pyc            # legacy: bytecode .pyc instead
 python3 buidCompiledDist.py --no-zip             # folder only
 python3 buidCompiledDist.py --no-venv            # skip copying .venv
+python3 buidCompiledDist.py --verbose            # log every file as it compiles
+python3 buidCompiledDist.py --keep-py 'tests/*'  # extra patterns to leave as .py
 python3 buidCompiledDist.py --source . \
                             --dist  ./dist_app \
                             --output ./dist_app.zip
 ```
+
+#### Compile modes
+
+* **`--use-cython` (default)** runs each `.py` through `cython -3` to produce
+  C, then compiles that C with `cc` to a native `.so`. Result: ELF shared
+  objects whose source is **not** recoverable. Bytecode decompilers like
+  `decompyle3` / `uncompyle6` don't apply (wrong file format), and
+  `inspect.getsource` returns "source not available".
+  Build-host needs: `cython` (`pip install Cython`), a C compiler
+  (`apt install build-essential`), and Python headers
+  (`apt install python3-dev`).
+  **Deploy-host constraint**: the target's Python major.minor must match
+  the build host's. A `.cpython-312-x86_64-linux-gnu.so` will only load
+  under Python 3.12 on x86_64 Linux.
+
+* **`--use-pyc`** is the legacy bytecode mode kept as a fast iteration
+  fallback. Trivially decompiled, so don't ship it externally.
+
+#### What's kept as `.py`
+
+Files matching `DEFAULT_KEEP_PY` (or `--keep-py PATTERN`) are copied
+verbatim instead of compiled, so they remain directly invokable with
+`python3 <file>`:
+
+* `buidCompiledDist.py` (this script — needed if the deploy host re-builds)
+* `*App.py` (project entry-point convention: `loadFPGAImageApp.py`,
+  `distributionDeployApp.py`)
+* `setup.py`, `__main__.py`
+
+Empty `__init__.py` files (whitespace / comments only) are also copied
+as-is — they have no IP to protect.
 
 ### Full deploy:
 

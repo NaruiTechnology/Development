@@ -108,9 +108,10 @@
                 "actionData": {
                     "commandFormat": "iterative",
                     "aptOptions": "-y --no-install-recommends",
-                    "aptPackages": ["git", "pipx", "yosys", "uuid-runtime"],
+                    "aptPackages": ["git", "pipx", "yosys", "uuid-runtime", "build-essential", "python3-dev"],
                     "pipxBootstrap": ["pipx ensurepath"],
                     "pipPackages": [
+                        "Cython",
                         "debugpy",
                         "fx2",
                         "asyncio",
