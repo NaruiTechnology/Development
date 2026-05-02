@@ -62,7 +62,8 @@ quick path.
 
 ```bash
 # 1) Glasgow FastAPI service (your existing project) — port 8765
-export GLASGOW_CONFIG=/path/to/streamData.json
+export GLASGOW_CONFIG=/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+
 # Optional: turn on bearer auth
 # export GLASGOW_TOKEN=$(openssl rand -hex 32)
 uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
