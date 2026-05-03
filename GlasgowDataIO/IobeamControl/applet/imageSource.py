@@ -141,9 +141,10 @@ def get_image_data(sim_config):
     sim_config = sim_config or {}
     resolution = int(sim_config.get("imageResolution", 64))
     source = sim_config.get("source", "pattern")
+    img_path = sim_config.get("_alt_file").get('path') if source == "file" else None
 
-    if source == "file" and sim_config.get("path"):
-        return (load_image(sim_config["path"],
+    if source == "file" and img_path:
+        return (load_image(img_path,
                            resolution=resolution,
                            invert=bool(sim_config.get("invert", False))),
                 resolution)
