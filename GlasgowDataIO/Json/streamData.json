@@ -38,7 +38,7 @@
                             ],
                         "enabled": true,
                         "saveAs":  "~/Downloads/raster_last_run.png",
-                        "openViewer": false
+                        "openViewer": true
                         }
                     },
                     "vectorScan": {
@@ -48,7 +48,7 @@
                         "display": {
                         "enabled": true,
                         "saveAs":  "~/Downloads/vector_last_run.png",
-                        "openViewer": false
+                        "openViewer": true
                         }
                     },
 
@@ -105,18 +105,18 @@
                         "---Note, If IsProduction=false and mode is not 'zeros', the simulation will be enabled with fake images"
                     ],
                     "imageResolution": 64,
-                    "source":          "pattern",
+                    "source":          "file",
                     "patternKind":     "bullseye",
                     "_alt_file": {
                         "source": "file",
-                        "path":   "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
+                        "path":   "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/unittest/testData/8_8_256.jpeg",
                         "invert": false
                     },
                     "_alt_random": {
                         "source": "random",
                         "seed":   42
                     },
-                    "mode": ""
+                    "mode": "image"
                     }
                 },
                 "timeout": 60.0
