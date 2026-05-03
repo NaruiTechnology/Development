@@ -109,7 +109,7 @@
                     "patternKind":     "bullseye",
                     "_alt_file": {
                         "source": "file",
-                        "path":   "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.png",
+                        "path":   "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false
                     },
                     "_alt_random": {
