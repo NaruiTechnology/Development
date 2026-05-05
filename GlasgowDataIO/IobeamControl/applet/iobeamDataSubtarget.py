@@ -11,7 +11,7 @@ The top-level Amaranth Elaboratable that ties everything together:
     executor.bus  <->  PipelinedLoopbackAdapter  (when loopback=True)
                             ^
                             |  loopback_value
-                       FakeAdcSimulator  <- super_dac_stream coords
+                       FakeAdcSimulator  <- BusController latched DAC coords
 
 What changed (vs. the previous version)
 ---------------------------------------
@@ -217,18 +217,16 @@ class IobeamDataSubtarget(Elaboratable):
                 # what we want to validate the host pipeline against.
                 m.d.comb += loopback_adapter.loopback_stream.eq(0)
             elif self.sim_image is not None:
-                # Image-backed fake ADC. Address ROM with the live
-                # super_dac_stream coords (combinational), feed BRAM
-                # output to the loopback shift register.
+                # Image-backed fake ADC. Address ROM with the DAC codes
+                # latched by BusController for the physical DAC write,
+                # then feed the result to the loopback shift register.
                 m.submodules.fake_adc = fake_adc = FakeAdcSimulator(
                     image_data=self.sim_image,
                     image_resolution=self.sim_image_resolution,
                 )
                 m.d.comb += [
-                    fake_adc.dac_x_code.eq(
-                        executor.supersampler.super_dac_stream.payload.dac_x_code),
-                    fake_adc.dac_y_code.eq(
-                        executor.supersampler.super_dac_stream.payload.dac_y_code),
+                    fake_adc.dac_x_code.eq(executor.dac_x_code_transformed),
+                    fake_adc.dac_y_code.eq(executor.dac_y_code_transformed),
                     loopback_adapter.loopback_stream.eq(fake_adc.loopback_value),
                 ]
             else:

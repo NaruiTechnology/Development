@@ -92,23 +92,22 @@ class BusController(wiring.Component):
                     m.d.sync += dac_stream_data.eq(self.dac_stream.payload)
                     # Transforms
                     # Rotate first so that x is x and y is y, then flip x and y as needed
-                    if self.transforms is not None and hasattr(self.transforms.rotate90, 'rotate90') and self.transforms.rotate90:
+                    if self.transforms is not None and self.transforms.rotate90:
                         m.d.comb += x.eq(self.dac_stream.payload.dac_y_code)
                         m.d.comb += y.eq(self.dac_stream.payload.dac_x_code)
                     else:
                         m.d.comb += x.eq(self.dac_stream.payload.dac_x_code)
                         m.d.comb += y.eq(self.dac_stream.payload.dac_y_code)
-                    
-                    if self.transforms is not None:
-                        if self.transforms.xflip:
-                            m.d.sync += self.dac_x_code_transformed.eq(16383-x)
-                        else:
-                            m.d.sync += self.dac_x_code_transformed.eq(x)
 
-                        if self.transforms.yflip:
-                            m.d.sync += self.dac_y_code_transformed.eq(16383-y)
-                        else:
-                            m.d.sync += self.dac_y_code_transformed.eq(y)
+                    if self.transforms is not None and self.transforms.xflip:
+                        m.d.sync += self.dac_x_code_transformed.eq(16383-x)
+                    else:
+                        m.d.sync += self.dac_x_code_transformed.eq(x)
+
+                    if self.transforms is not None and self.transforms.yflip:
+                        m.d.sync += self.dac_y_code_transformed.eq(16383-y)
+                    else:
+                        m.d.sync += self.dac_y_code_transformed.eq(y)
 
                     # Transmit blanking state from input stream
                     m.d.comb += self.inline_blank.eq(self.dac_stream.payload.blank)

@@ -29,6 +29,7 @@
                         "pixels": 8192,
                         "frameBlank": false,
                         "resolution": 1024, 
+                        "adcLatency": 8,
                         "dwell": 2,
                         "display": {
                         "_comment": [
@@ -38,17 +39,19 @@
                             ],
                         "enabled": true,
                         "saveAs":  "~/Downloads/raster_last_run.png",
-                        "openViewer": false
+                        "openViewer": true
                         }
                     },
                     "vectorScan": {
                         "latency": 8196,
+                        "adcLatency": 8,
+                        "lineShiftPerXRow": 5.5,
                         "drainFloorPixels": 21000,
 
                         "display": {
                         "enabled": true,
                         "saveAs":  "~/Downloads/vector_last_run.png",
-                        "openViewer": false
+                        "openViewer": true
                         }
                     },
 
@@ -116,7 +119,7 @@
                         "source": "random",
                         "seed":   42
                     },
-                    "mode": ""
+                    "mode": "image"
                     }
                 },
                 "timeout": 60.0

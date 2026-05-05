@@ -115,7 +115,7 @@ class Frame:
     
     @staticmethod
     def fill_vector(pixels: array.array, iterpoints, x_res:int=2048, y_res:int=2048):
-        newframe = np.zeros((x_res, y_res))
+        newframe = np.zeros((y_res, x_res))
         for (x, y, dwell), data in zip(iterpoints, pixels):
             newframe[y,x] = data
         return newframe
@@ -362,5 +362,4 @@ class FrameBuffer:
         print(f"pre-process time: {end_proc-start_proc:04f}, send time: {stop_send-start_send:04f}, process time: {end_process-start_process:04f}")
         #self.current_frame.canvas = newframe
         return newframe
-
 

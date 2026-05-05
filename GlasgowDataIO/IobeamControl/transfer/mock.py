@@ -7,6 +7,9 @@ from .support import dump_hex
 class MockStream(Stream):
     _logger = logger.getChild("Stream")
 
+    def __init__(self):
+        super().__init__(None)
+
     async def write(self, data: bytes | bytearray | memoryview):
         self._logger.debug(f"write {dump_hex(data)}")
 
@@ -28,5 +31,4 @@ class MockConnection(Connection):
     async def _connect(self):
         assert not self.connected
         self._stream = MockStream()
-
 

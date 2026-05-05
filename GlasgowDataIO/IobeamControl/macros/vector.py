@@ -16,6 +16,7 @@ from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
     BlankCommand, FlushCommand, SynchronizeCommand, ArrayCommand,
 )
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, CmdType
+from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 
 
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
@@ -51,9 +52,13 @@ _DEFAULT_DRAIN_FLOOR_PIXELS = int(_FPGA_PIPELINE_DEPTH_PIXELS
 _SENDER_DRAIN_TIMEOUT_S = 15.0
 
 
-def default_iter():
-    for x in range(2048):
-        for y in range(2048):
+def default_iter(resolution=2048):
+    x_range = DACCodeRange.from_resolution(resolution)
+    y_range = DACCodeRange.from_resolution(resolution)
+    for x_idx in range(x_range.count):
+        x = x_range.start + ((x_idx * x_range.step) >> 8)
+        for y_idx in range(y_range.count):
+            y = y_range.start + ((y_idx * y_range.step) >> 8)
             yield x, y, 1
 
 

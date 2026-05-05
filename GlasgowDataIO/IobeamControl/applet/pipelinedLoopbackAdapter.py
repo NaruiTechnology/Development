@@ -16,16 +16,15 @@ class PipelinedLoopbackAdapter(wiring.Component):
         m = Module()
 
         prev_bus_adc_oe = Signal()
-        adc_oe_falling = Signal()
+        adc_oe_rising = Signal()
         m.d.sync += prev_bus_adc_oe.eq(self.bus.adc_oe)
-        m.d.comb += adc_oe_falling.eq(prev_bus_adc_oe & ~self.bus.adc_oe)
+        m.d.comb += adc_oe_rising.eq(~prev_bus_adc_oe & self.bus.adc_oe)
 
         shift_register = Signal(14*self.adc_latency)
 
-        with m.If(adc_oe_falling):
+        with m.If(adc_oe_rising):
             m.d.sync += shift_register.eq((shift_register << 14) | self.loopback_stream)
 
         m.d.comb += self.bus.data_i.eq(shift_register.word_select(self.adc_latency-1, 14))
 
         return m
-

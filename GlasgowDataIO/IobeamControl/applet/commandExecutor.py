@@ -41,6 +41,8 @@ class CommandExecutor(wiring.Component):
         self.transforms = transforms
 
         self.supersampler = Supersampler()
+        self.dac_x_code_transformed = Signal(14)
+        self.dac_y_code_transformed = Signal(14)
 
         self.out_only = out_only
         super().__init__()
@@ -59,6 +61,12 @@ class CommandExecutor(wiring.Component):
             m.submodules.bus_controller = bus_controller = BusController(adc_half_period=3, adc_latency=self.adc_latency, transforms=self.transforms)
         m.submodules.raster_scanner = self.raster_scanner = RasterScanner()
         m.submodules.supersampler = self.supersampler
+
+        if not self.out_only:
+            m.d.comb += [
+                self.dac_x_code_transformed.eq(bus_controller.dac_x_code_transformed),
+                self.dac_y_code_transformed.eq(bus_controller.dac_y_code_transformed),
+            ]
 
         wiring.connect(m, self.supersampler.super_dac_stream, bus_controller.dac_stream)
         wiring.connect(m, bus_controller.adc_stream, self.supersampler.super_adc_stream)

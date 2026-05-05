@@ -134,6 +134,31 @@ def _flatten_chunks(chunks, dtype="uint16"):
     return np.concatenate(parts)
 
 
+def _delay_iter_points(iter_points, adc_delay_cycles):
+    iter_list = list(iter_points)
+    if not adc_delay_cycles:
+        return iter_list
+
+    starts = []
+    total = 0
+    for point in iter_list:
+        starts.append(total)
+        total += max(1, int(point[2]))
+
+    delayed = []
+    src_idx = 0
+    delay = int(adc_delay_cycles)
+    for start in starts:
+        target = start + delay
+        while src_idx < len(starts) and starts[src_idx] < target:
+            src_idx += 1
+        if src_idx < len(iter_list):
+            delayed.append(iter_list[src_idx])
+        else:
+            break
+    return delayed
+
+
 def _open_in_viewer(path):
     """
     Launch the OS default image viewer on `path`, non-blocking.
@@ -216,7 +241,7 @@ def _maybe_show(fig, save_path):
 # Public API: per-scan-type display
 # ---------------------------------------------------------------------------- #
 def display_raster(pixels, x_res, y_res, *, title=None, save_path=None,
-                   cmap="gray"):
+                   cmap="gray", line_shift_per_row=0):
     """
     Render `pixels` as an x_res x y_res image.
 
@@ -247,6 +272,15 @@ def display_raster(pixels, x_res, y_res, *, title=None, save_path=None,
             import numpy as np
             arr = np.concatenate([arr, np.zeros(expected - got, dtype="uint16")])
     arr = arr.reshape((y_res, x_res))
+    if line_shift_per_row:
+        try:
+            import numpy as np
+            corrected = np.empty_like(arr)
+            for y in range(int(y_res)):
+                corrected[y] = np.roll(arr[y], int(round(y * line_shift_per_row)))
+            arr = corrected
+        except ImportError:
+            logger.warning("numpy not installed; raster line-shift correction skipped")
 
     try:
         import matplotlib
@@ -274,8 +308,42 @@ def display_raster(pixels, x_res, y_res, *, title=None, save_path=None,
     return fig
 
 
-def display_vector(pixels, iter_points, *, x_res=2048, y_res=2048,
-                   title=None, save_path=None, cmap="gray"):
+def _roll_regular_vector_rows(arr, iter_list, line_shift_per_x_row):
+    if not line_shift_per_x_row or not iter_list:
+        return arr
+
+    first_x = iter_list[0][0]
+    row_len = 0
+    for point in iter_list:
+        if point[0] != first_x:
+            break
+        row_len += 1
+
+    if row_len <= 0 or len(iter_list) % row_len:
+        logger.warning("vector line-shift correction skipped: irregular point grid")
+        return arr
+
+    try:
+        import numpy as np
+        rows = len(iter_list) // row_len
+        corrected = arr.reshape((rows, row_len)).copy()
+        for x_row in range(rows):
+            corrected[x_row] = np.roll(
+                corrected[x_row],
+                int(round(x_row * line_shift_per_x_row)),
+            )
+        return corrected.reshape(arr.shape)
+    except ValueError:
+        logger.warning("vector line-shift correction skipped: pixel/grid size mismatch")
+        return arr
+    except ImportError:
+        logger.warning("numpy not installed; vector line-shift correction skipped")
+        return arr
+
+
+def display_vector(pixels, iter_points, *, x_res=16384, y_res=16384,
+                   title=None, save_path=None, cmap="gray",
+                   adc_delay_cycles=0, line_shift_per_x_row=0):
     """
     Render `pixels` as a scatter plot at the (x, y) coords from
     `iter_points`.
@@ -284,13 +352,14 @@ def display_vector(pixels, iter_points, *, x_res=2048, y_res=2048,
                    point, in the same order iter_points yields them.
     iter_points  - iterable yielding (x, y, dwell) triples. Same
                    iterator that was fed to VectorScanCommand.
-    x_res, y_res - axis ranges (default 2048x2048 = full DAC range).
+    x_res, y_res - axis ranges (default 16384x16384 = full DAC range).
     title, save_path, cmap - as for display_raster.
     """
     arr = _to_numpy(pixels, dtype="uint16")
     if arr is None:
         return None
-    iter_list = list(iter_points)
+    iter_list = _delay_iter_points(iter_points, adc_delay_cycles)
+
     if len(iter_list) < arr.size:
         logger.warning(
             f"display_vector: {len(iter_list)} iter points < "
@@ -298,6 +367,8 @@ def display_vector(pixels, iter_points, *, x_res=2048, y_res=2048,
         arr = arr[:len(iter_list)]
     elif len(iter_list) > arr.size:
         iter_list = iter_list[:arr.size]
+
+    arr = _roll_regular_vector_rows(arr, iter_list, line_shift_per_x_row)
 
     try:
         import numpy as np
@@ -416,10 +487,16 @@ def save_scan_from_config(chunks, kind, scan_config, *,
             y_res = y_res or res
         title = display_cfg.get("title") or (
             f"Raster scan: {x_res}x{y_res}")
+        dwell = scan_config.get("dwell") or 0
+        adc_latency = scan_config.get("adcLatency", 8)
+        line_shift_per_row = 0
+        if dwell:
+            line_shift_per_row = (int(adc_latency) - 1) / int(dwell)
         fig = display_raster(pixels, x_res, y_res,
                              title=title,
                              save_path=save_path,
-                             cmap=display_cfg.get("cmap", "gray"))
+                             cmap=display_cfg.get("cmap", "gray"),
+                             line_shift_per_row=line_shift_per_row)
         result = save_path if fig is not None else None
 
     elif kind == "vector":
@@ -429,12 +506,15 @@ def save_scan_from_config(chunks, kind, scan_config, *,
                          "VectorScanCommand)")
             return None
         title = display_cfg.get("title") or f"Vector scan: {pixels.size} points"
+        line_shift_per_x_row = scan_config.get("lineShiftPerXRow", 0)
         fig = display_vector(pixels, iter_points,
-                             x_res=x_res or 2048,
-                             y_res=y_res or 2048,
+                             x_res=x_res or scan_config.get("xResolution") or 16384,
+                             y_res=y_res or scan_config.get("yResolution") or 16384,
                              title=title,
                              save_path=save_path,
-                             cmap=display_cfg.get("cmap", "gray"))
+                             cmap=display_cfg.get("cmap", "gray"),
+                             adc_delay_cycles=0,
+                             line_shift_per_x_row=line_shift_per_x_row)
         result = save_path if fig is not None else None
 
     else:
@@ -455,7 +535,8 @@ def save_scan_from_config(chunks, kind, scan_config, *,
 # CSV replay (interactive use after the fact)
 # ---------------------------------------------------------------------------- #
 def display_from_csv(csv_path, *, kind="raster", x_res=None, y_res=None,
-                     iter_points=None, title=None, save_path=None):
+                     iter_points=None, title=None, save_path=None,
+                     line_shift_per_x_row=0):
     """
     Convenience wrapper for the existing _exportDataToCsvFile() output.
 
@@ -493,5 +574,6 @@ def display_from_csv(csv_path, *, kind="raster", x_res=None, y_res=None,
             raise ValueError("kind='vector' requires iter_points")
         return display_vector(flat, iter_points,
                               title=title or csv_path.name,
-                              save_path=save_path)
+                              save_path=save_path,
+                              line_shift_per_x_row=line_shift_per_x_row)
     raise ValueError(f"unknown kind: {kind}")
