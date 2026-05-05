@@ -7,22 +7,17 @@ import fnmatch
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = ['*.ihex', 'requirements.txt', 'README.md']
 
-# Directories to skip when walking the source tree
+# Updated: Added ".pytest_cache" to skip list. Removed ".venv" from output goals.
 SKIP_DIRS = {
-    '__pycache__', 
-    '.venv', 
-    '.git', 
-    '.pytest_cache', 
-    'dist_app',
-    'EsmBeamController', 
-    'Open-Beam-Interface',
+    '__pycache__', '.venv', '.git', '.pytest_cache', 'dist_app',
+    'EsmBeamController', 'Open-Beam-Interface',
 }
 
 def copy_matching_assets(src_dir, dist_dir, patterns):
     """Walk src_dir and copy any files matching patterns into dist_dir."""
     abs_dist = os.path.abspath(dist_dir)
     for root, dirs, files in os.walk(src_dir):
-        # Prune skipped dirs in-place
+        # Prune skipped dirs
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         
         if os.path.abspath(root).startswith(abs_dist):
@@ -92,13 +87,10 @@ def build_compiled_dist(src_dir, dist_dir):
     shutil.make_archive(zip_name, 'zip', dist_dir)
     print(f"Archive created successfully.")
 
-    # 7. Final Cleanup: Remove the dist_dir tree
-    print(f"Removing temporary build folder {dist_dir}...")
-    shutil.rmtree(dist_dir, ignore_errors=True)
-
 if __name__ == "__main__":
     try:
+        # Focusing exclusively on .pyc distribution
         build_compiled_dist('.', './dist_app')
-        print("\nBuild complete! The final package is 'disp_app.zip'.")
+        print("\nBuild complete! Output materials are in 'disp_app.zip'.")
     except Exception as e:
         print(f"\nBuild failed with error: {e}")
