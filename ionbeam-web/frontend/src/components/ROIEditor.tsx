@@ -356,14 +356,17 @@ function drawScale(
 
     if (roi.show_grid && isMajor) {
       ctx.save();
-      ctx.strokeStyle = "rgba(95, 184, 255, 0.35)";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([1, 4]);
       ctx.beginPath();
       ctx.moveTo(p, 0);
       ctx.lineTo(p, EDGE);
       ctx.moveTo(0, p);
       ctx.lineTo(EDGE, p);
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(95, 184, 255, 0.95)";
+      ctx.lineWidth = 1;
       ctx.stroke();
       ctx.restore();
     }
