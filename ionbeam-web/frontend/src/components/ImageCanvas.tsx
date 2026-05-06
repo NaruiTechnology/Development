@@ -17,8 +17,10 @@ import { useAppDispatch, useAppSelector } from "../store";
 import {
   setVectorRenderMode,
   type ScanKind,
+  type ROIState,
   type VectorRenderMode,
 } from "../store/scanSlice";
+import type { ROIRequest } from "../types/api";
 
 const DAC_RANGE = 2048;
 
@@ -51,6 +53,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
+  const roi = useAppSelector((s) => s.scan.roi);
 
   const phase = useAppSelector((s) => s.scan.phase);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
@@ -152,6 +155,20 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   const totalRasterPx = resolution * resolution;
   const totalVectorSamples =
     vectorPattern === "default" ? vectorEdge * vectorEdge : vectorCustomCount;
+  const activeRegion = activeROIRegion(roi);
+  const current = currentBeamPosition({
+    kind,
+    roi,
+    region: activeRegion,
+    rasterFrame: frame,
+    rasterResolution: resolution,
+    rasterCursor: cursor,
+    vectorImage,
+    vectorEdge,
+    vectorCursor,
+    vectorPattern,
+    vectorCustomPoints,
+  });
 
   const pct =
     kind === "raster" && totalRasterPx > 0
@@ -259,6 +276,9 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
         <span>
           bytes <b>{bytesReceived.toLocaleString()}</b>
         </span>
+        <span>
+          resolution <b>{nativeEdge.toLocaleString()}×{nativeEdge.toLocaleString()}</b>
+        </span>
         {kind === "raster" ? (
           <>
             <span>
@@ -285,6 +305,23 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
             </span>
           </>
         )}
+        <span title="Active 2-D DUT-mapped scan region from the ROI editor.">
+          ROI{" "}
+          <b>
+            {formatPoint(activeRegion.x_start, activeRegion.y_start, roi.scale_unit)} →{" "}
+            {formatPoint(activeRegion.x_end, activeRegion.y_end, roi.scale_unit)}
+          </b>
+        </span>
+        {current && (
+          <span title="Current beam position derived from the latest received ADC sample index.">
+            beam <b>{formatPoint(current.x, current.y, roi.scale_unit)}</b>
+          </span>
+        )}
+        {current && (
+          <span title="ADC value at the current beam position.">
+            ADC now <b>{current.adc}</b>
+          </span>
+        )}
         {stats.populated > 0 && (
           <span title="Raw ADC range in the received samples. Canvas auto-scales this range into visible grayscale.">
             ADC <b>{stats.min}..{stats.max}</b>
@@ -293,6 +330,98 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       </div>
     </div>
   );
+}
+
+/* -------- scan metadata helpers --------------------------------------- */
+
+interface CurrentBeamArgs {
+  kind: ScanKind;
+  roi: ROIState;
+  region: ROIRequest;
+  rasterFrame: Uint16Array;
+  rasterResolution: number;
+  rasterCursor: number;
+  vectorImage: Uint16Array;
+  vectorEdge: number;
+  vectorCursor: number;
+  vectorPattern: "default" | "custom";
+  vectorCustomPoints: Float32Array | null;
+}
+
+interface CurrentBeamPosition {
+  x: number;
+  y: number;
+  adc: number;
+}
+
+function activeROIRegion(roi: ROIState): ROIRequest {
+  return roi.selection ?? {
+    x_start: roi.x_origin,
+    x_end: roi.x_end,
+    y_start: roi.y_origin,
+    y_end: roi.y_end,
+  };
+}
+
+function currentBeamPosition(args: CurrentBeamArgs): CurrentBeamPosition | null {
+  if (args.kind === "raster") {
+    if (args.rasterCursor <= 0 || args.rasterResolution <= 0) return null;
+    const idx = Math.min(args.rasterCursor, args.rasterFrame.length) - 1;
+    const col = idx % args.rasterResolution;
+    const row = Math.floor(idx / args.rasterResolution);
+    return {
+      ...mapIndexToRegion(col, row, args.rasterResolution, args.region),
+      adc: args.rasterFrame[idx] ?? 0,
+    };
+  }
+
+  if (args.vectorCursor <= 0 || args.vectorEdge <= 0) return null;
+  const idx = args.vectorCursor - 1;
+  if (args.vectorPattern === "custom" && args.vectorCustomPoints) {
+    const pointCount = args.vectorCustomPoints.length / 2;
+    if (idx >= pointCount) return null;
+    const col = args.vectorCustomPoints[2 * idx] | 0;
+    const row = args.vectorCustomPoints[2 * idx + 1] | 0;
+    const safeCol = Math.max(0, Math.min(args.vectorEdge - 1, col));
+    const safeRow = Math.max(0, Math.min(args.vectorEdge - 1, row));
+    return {
+      ...mapIndexToRegion(safeCol, safeRow, args.vectorEdge, activeROIRegion(args.roi)),
+      adc: args.vectorImage[safeRow * args.vectorEdge + safeCol] ?? 0,
+    };
+  }
+
+  const col = Math.floor(idx / args.vectorEdge);
+  const row = idx % args.vectorEdge;
+  if (col >= args.vectorEdge) return null;
+  return {
+    ...mapIndexToRegion(col, row, args.vectorEdge, args.region),
+    adc: args.vectorImage[row * args.vectorEdge + col] ?? 0,
+  };
+}
+
+function mapIndexToRegion(
+  col: number,
+  row: number,
+  edge: number,
+  region: ROIRequest
+): { x: number; y: number } {
+  const denom = Math.max(1, edge - 1);
+  return {
+    x: lerp(region.x_start, region.x_end, col / denom),
+    y: lerp(region.y_start, region.y_end, row / denom),
+  };
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function formatPoint(x: number, y: number, unit: string): string {
+  return `(${formatCoord(x)}, ${formatCoord(y)}) ${unit}`;
+}
+
+function formatCoord(v: number): string {
+  return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2);
 }
 
 /* -------- painters ----------------------------------------------------- */

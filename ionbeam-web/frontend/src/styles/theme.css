@@ -309,6 +309,20 @@ body {
   box-shadow: 0 0 0 2px rgba(95, 184, 255, 0.18);
 }
 
+.input--invalid {
+  border-color: var(--c-danger);
+}
+
+.input--invalid:focus {
+  border-color: var(--c-danger);
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.18);
+}
+
+.field-warning {
+  font-size: 11px;
+  color: var(--c-danger);
+}
+
 .checkbox {
   display: flex;
   align-items: center;
@@ -527,6 +541,7 @@ body {
 
 .canvas-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-top: 10px;
   font-family: var(--font-mono);

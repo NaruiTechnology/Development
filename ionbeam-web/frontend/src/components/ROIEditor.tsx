@@ -145,12 +145,44 @@ export function ROIEditor({
           </div>
 
           <div className="field-row">
-            <Num label="X origin" value={roi.x_origin} disabled={disabled} onChange={(v) => dispatch(updateROI({ x_origin: v }))} />
-            <Num label="X end" value={roi.x_end} disabled={disabled} onChange={(v) => dispatch(updateROI({ x_end: v }))} />
+            <Num
+              label="X origin"
+              value={roi.x_origin}
+              min={0}
+              max={Math.max(0, roi.x_end - 1)}
+              rangeLabel={`0 and ${Math.max(0, roi.x_end - 1)} (less than X end)`}
+              disabled={disabled}
+              onChange={(v) => dispatch(updateROI({ x_origin: v }))}
+            />
+            <Num
+              label="X end"
+              value={roi.x_end}
+              min={Math.min(16383, roi.x_origin + 1)}
+              max={16383}
+              rangeLabel={`${Math.min(16383, roi.x_origin + 1)} and 16383 (greater than X origin)`}
+              disabled={disabled}
+              onChange={(v) => dispatch(updateROI({ x_end: v }))}
+            />
           </div>
           <div className="field-row">
-            <Num label="Y origin" value={roi.y_origin} disabled={disabled} onChange={(v) => dispatch(updateROI({ y_origin: v }))} />
-            <Num label="Y end" value={roi.y_end} disabled={disabled} onChange={(v) => dispatch(updateROI({ y_end: v }))} />
+            <Num
+              label="Y origin"
+              value={roi.y_origin}
+              min={0}
+              max={Math.max(0, roi.y_end - 1)}
+              rangeLabel={`0 and ${Math.max(0, roi.y_end - 1)} (less than Y end)`}
+              disabled={disabled}
+              onChange={(v) => dispatch(updateROI({ y_origin: v }))}
+            />
+            <Num
+              label="Y end"
+              value={roi.y_end}
+              min={Math.min(16383, roi.y_origin + 1)}
+              max={16383}
+              rangeLabel={`${Math.min(16383, roi.y_origin + 1)} and 16383 (greater than Y origin)`}
+              disabled={disabled}
+              onChange={(v) => dispatch(updateROI({ y_end: v }))}
+            />
           </div>
 
           <label className="checkbox">
@@ -164,21 +196,43 @@ export function ROIEditor({
           </label>
 
           <div className="field-row">
-            <Num
-              label="X scale length"
-              value={roi.x_scale_length}
-              min={0}
-              max={1_000_000}
+            <CoordinateField
+              label="Start (x, y)"
+              value={selectionStart(roi)}
               disabled={disabled}
-              onChange={(v) => dispatch(updateROI({ x_scale_length: v, x_origin: 0, x_end: v }))}
+              validate={(p) => validateStartPoint(p, roi)}
+              onChange={(p) => {
+                const end = selectionEnd(roi);
+                dispatch(
+                  updateROI({
+                    selection: {
+                      x_start: p.x,
+                      y_start: p.y,
+                      x_end: end.x,
+                      y_end: end.y,
+                    },
+                  })
+                );
+              }}
             />
-            <Num
-              label="Y scale length"
-              value={roi.y_scale_length}
-              min={0}
-              max={1_000_000}
+            <CoordinateField
+              label="End (x, y)"
+              value={selectionEnd(roi)}
               disabled={disabled}
-              onChange={(v) => dispatch(updateROI({ y_scale_length: v, y_origin: 0, y_end: v }))}
+              validate={(p) => validateEndPoint(p, roi)}
+              onChange={(p) => {
+                const start = selectionStart(roi);
+                dispatch(
+                  updateROI({
+                    selection: {
+                      x_start: start.x,
+                      y_start: start.y,
+                      x_end: p.x,
+                      y_end: p.y,
+                    },
+                  })
+                );
+              }}
             />
           </div>
           <div className="field">
@@ -241,12 +295,6 @@ export function ROIEditor({
         </div>
       )}
 
-      {(variant === "controls" || variant === "all") && roi.selection && (
-          <div className="canvas-meta" style={{ marginTop: 8, flexWrap: "wrap" }}>
-            <span>ROI X <b>{roi.selection.x_start}..{roi.selection.x_end}</b></span>
-            <span>Y <b>{roi.selection.y_start}..{roi.selection.y_end}</b></span>
-          </div>
-        )}
     </div>
   );
 }
@@ -258,33 +306,103 @@ function Num(props: {
   onChange: (v: number) => void;
   min?: number;
   max?: number;
+  rangeLabel?: string;
 }) {
   const min = props.min ?? 0;
   const max = props.max ?? 16383;
   const [text, setText] = useState(String(props.value));
+  const [warning, setWarning] = useState<string | null>(null);
 
   useEffect(() => {
     setText(String(props.value));
+    setWarning(null);
   }, [props.value]);
+
+  function commit(next: string) {
+    setText(next);
+    if (next === "") {
+      setWarning(`! ${props.label} is required.`);
+      return;
+    }
+
+    const parsed = Number(next);
+    if (!Number.isFinite(parsed)) {
+      setWarning(`! ${props.label} must be a number.`);
+      return;
+    }
+    if (!Number.isInteger(parsed)) {
+      setWarning(`! ${props.label} must be a whole number.`);
+      return;
+    }
+    if (parsed < min || parsed > max) {
+      setWarning(`! ${props.label} must be between ${props.rangeLabel ?? `${min} and ${max}`}.`);
+      return;
+    }
+
+    setWarning(null);
+    props.onChange(parsed);
+  }
 
   return (
     <div className="field">
       <label>{props.label}</label>
       <input
-        className="input"
+        className={`input${warning ? " input--invalid" : ""}`}
         type="number"
         value={text}
         disabled={props.disabled}
-        onChange={(e) => {
-          const next = e.target.value;
-          setText(next);
-          if (next === "") return;
-          props.onChange(clamp(Number(next), min, max));
-        }}
-        onBlur={() => {
-          if (text === "") setText(String(props.value));
-        }}
+        aria-invalid={warning ? "true" : "false"}
+        onChange={(e) => commit(e.target.value)}
       />
+      {warning && <div className="field-warning">{warning}</div>}
+    </div>
+  );
+}
+
+function CoordinateField(props: {
+  label: string;
+  value: { x: number; y: number };
+  disabled: boolean;
+  validate: (p: { x: number; y: number }) => string | null;
+  onChange: (p: { x: number; y: number }) => void;
+}) {
+  const [text, setText] = useState(formatPointText(props.value));
+  const [warning, setWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    setText(formatPointText(props.value));
+    setWarning(null);
+  }, [props.value.x, props.value.y]);
+
+  function commit(next: string) {
+    setText(next);
+    const parsed = parsePointText(next);
+    if (!parsed) {
+      setWarning(`! ${props.label} must use x, y whole numbers.`);
+      return;
+    }
+
+    const validation = props.validate(parsed);
+    if (validation) {
+      setWarning(`! ${validation}`);
+      return;
+    }
+
+    setWarning(null);
+    props.onChange(parsed);
+  }
+
+  return (
+    <div className="field">
+      <label>{props.label}</label>
+      <input
+        className={`input${warning ? " input--invalid" : ""}`}
+        value={text}
+        disabled={props.disabled}
+        aria-invalid={warning ? "true" : "false"}
+        onChange={(e) => commit(e.target.value)}
+      />
+      {warning && <div className="field-warning">{warning}</div>}
     </div>
   );
 }
@@ -366,7 +484,7 @@ function drawScale(
       ctx.lineWidth = 2.2;
       ctx.stroke();
       ctx.strokeStyle = "rgba(95, 184, 255, 0.95)";
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.5;
       ctx.stroke();
       ctx.restore();
     }
@@ -380,9 +498,68 @@ function drawScale(
     }
   }
 
-  drawLabel(ctx, EDGE - 150, axisPad + 42, `X ${roi.x_scale_length} ${unit}`);
-  drawLabel(ctx, axisPad + 14, EDGE - 8, `Y ${roi.y_scale_length} ${unit}`);
+  drawLabel(ctx, EDGE - 180, axisPad + 42, `Start ${formatROIStart(roi)} ${unit}`);
+  drawLabel(ctx, axisPad + 14, EDGE - 8, `End ${formatROIEnd(roi)} ${unit}`);
   ctx.restore();
+}
+
+function selectionStart(roi: ROIState) {
+  const r = roi.selection;
+  return r ? { x: r.x_start, y: r.y_start } : { x: roi.x_origin, y: roi.y_origin };
+}
+
+function selectionEnd(roi: ROIState) {
+  const r = roi.selection;
+  return r ? { x: r.x_end, y: r.y_end } : { x: roi.x_end, y: roi.y_end };
+}
+
+function formatROIStart(roi: ROIState) {
+  return formatPointText(selectionStart(roi));
+}
+
+function formatROIEnd(roi: ROIState) {
+  return formatPointText(selectionEnd(roi));
+}
+
+function formatPointText(p: { x: number; y: number }) {
+  return `(${p.x}, ${p.y})`;
+}
+
+function parsePointText(text: string): { x: number; y: number } | null {
+  const cleaned = text.trim().replace(/[()]/g, "");
+  const parts = cleaned.split(/[,\s]+/).filter(Boolean);
+  if (parts.length !== 2) return null;
+  const x = Number(parts[0]);
+  const y = Number(parts[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
+  return { x, y };
+}
+
+function validateStartPoint(p: { x: number; y: number }, roi: ROIState) {
+  const end = selectionEnd(roi);
+  if (p.x < roi.x_origin || p.x > roi.x_end) {
+    return `Start x must be between X origin ${roi.x_origin} and X end ${roi.x_end}.`;
+  }
+  if (p.y < roi.y_origin || p.y > roi.y_end) {
+    return `Start y must be between Y origin ${roi.y_origin} and Y end ${roi.y_end}.`;
+  }
+  if (p.x >= end.x) return `Start x must be less than End x ${end.x}.`;
+  if (p.y >= end.y) return `Start y must be less than End y ${end.y}.`;
+  return null;
+}
+
+function validateEndPoint(p: { x: number; y: number }, roi: ROIState) {
+  const start = selectionStart(roi);
+  if (p.x < roi.x_origin || p.x > roi.x_end) {
+    return `End x must be between X origin ${roi.x_origin} and X end ${roi.x_end}.`;
+  }
+  if (p.y < roi.y_origin || p.y > roi.y_end) {
+    return `End y must be between Y origin ${roi.y_origin} and Y end ${roi.y_end}.`;
+  }
+  if (p.x <= start.x) return `End x must be greater than Start x ${start.x}.`;
+  if (p.y <= start.y) return `End y must be greater than Start y ${start.y}.`;
+  return null;
 }
 
 function roundScale(v: number) {

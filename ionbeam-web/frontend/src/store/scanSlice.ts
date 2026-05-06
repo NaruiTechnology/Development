@@ -184,6 +184,10 @@ const slice = createSlice({
     },
     updateROI(s, a: PayloadAction<Partial<ROIState>>) {
       s.roi = { ...s.roi, ...a.payload };
+      if ("selection" in a.payload) {
+        s.raster.roi = a.payload.selection ?? null;
+        s.vector.roi = a.payload.selection ?? null;
+      }
     },
     setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
       s.vectorRenderMode = a.payload;
