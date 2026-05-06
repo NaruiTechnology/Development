@@ -116,7 +116,7 @@ export function ROIEditor({
     ctx.save();
     ctx.strokeStyle = "#ff2d2d";
     ctx.fillStyle = "#ff2d2d";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 0.8;
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     drawLabel(ctx, x0 + 4, y0 + 14, `S(${selected.x_start}, ${selected.y_start})`);
     drawLabel(ctx, x1 + 4, y1 - 6, `E(${selected.x_end}, ${selected.y_end})`);
@@ -261,15 +261,29 @@ function Num(props: {
 }) {
   const min = props.min ?? 0;
   const max = props.max ?? 16383;
+  const [text, setText] = useState(String(props.value));
+
+  useEffect(() => {
+    setText(String(props.value));
+  }, [props.value]);
+
   return (
     <div className="field">
       <label>{props.label}</label>
       <input
         className="input"
         type="number"
-        value={props.value}
+        value={text}
         disabled={props.disabled}
-        onChange={(e) => props.onChange(clamp(Number(e.target.value), min, max))}
+        onChange={(e) => {
+          const next = e.target.value;
+          setText(next);
+          if (next === "") return;
+          props.onChange(clamp(Number(next), min, max));
+        }}
+        onBlur={() => {
+          if (text === "") setText(String(props.value));
+        }}
       />
     </div>
   );
