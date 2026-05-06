@@ -8,10 +8,11 @@ import type {
   ScanResult,
   ServerDefaults,
   VectorRequest,
+  ROIRequest,
 } from "../types/api";
 import { fetchDefaults } from "./statusSlice";
 
-export type ScanKind = "raster" | "vector";
+export type ScanKind = "raster" | "vector" | "roi";
 export type ScanPhase =
   | "idle"
   | "running"
@@ -35,11 +36,26 @@ interface ScanState {
   /** Most recent params, kept editable in state. */
   raster: RasterRequest;
   vector: VectorRequest;
+  roi: ROIState;
 
   /** How the vector image is rendered onto the canvas. Per-session — not
    *  persisted to localStorage — because the right choice depends on the
    *  current scan, not a long-term preference. */
   vectorRenderMode: VectorRenderMode;
+}
+
+export interface ROIState {
+  x_origin: number;
+  x_end: number;
+  y_origin: number;
+  y_end: number;
+  x_scale_length: number;
+  y_scale_length: number;
+  scale_unit: string;
+  show_grid: boolean;
+  selection: ROIRequest | null;
+  imageName: string;
+  imageDataUrl: string | null;
 }
 
 const defaultRaster: RasterRequest = {
@@ -71,6 +87,19 @@ const initialState: ScanState = {
   errorMessage: null,
   raster: defaultRaster,
   vector: defaultVector,
+  roi: {
+    x_origin: 0,
+    x_end: 100,
+    y_origin: 0,
+    y_end: 100,
+    x_scale_length: 100,
+    y_scale_length: 100,
+    scale_unit: "um",
+    show_grid: false,
+    selection: null,
+    imageName: "No image selected",
+    imageDataUrl: null,
+  },
   vectorRenderMode: "decimated",
 };
 
@@ -152,6 +181,9 @@ const slice = createSlice({
     },
     updateVector(s, a: PayloadAction<Partial<VectorRequest>>) {
       s.vector = { ...s.vector, ...a.payload };
+    },
+    updateROI(s, a: PayloadAction<Partial<ROIState>>) {
+      s.roi = { ...s.roi, ...a.payload };
     },
     setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
       s.vectorRenderMode = a.payload;
@@ -240,6 +272,7 @@ export const {
   setKind,
   updateRaster,
   updateVector,
+  updateROI,
   setVectorRenderMode,
   streamStarted,
   streamProgress,

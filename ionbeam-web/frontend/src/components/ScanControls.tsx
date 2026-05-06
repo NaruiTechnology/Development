@@ -37,6 +37,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   const phase = useAppSelector((s) => s.scan.phase);
   const raster = useAppSelector((s) => s.scan.raster);
   const vector = useAppSelector((s) => s.scan.vector);
+  const roi = useAppSelector((s) => s.scan.roi.selection);
   const stream = useScanStream();
 
   // Phase taxonomy:
@@ -49,8 +50,9 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   const paused = phase === "paused";
 
   function onRun() {
-    if (kind === "raster") stream.startRaster(raster);
-    else stream.startVector(vector);
+    if (kind === "roi") return;
+    if (kind === "raster") stream.startRaster({ ...raster, roi });
+    else stream.startVector({ ...vector, roi });
   }
 
   function onPause() {
@@ -64,8 +66,9 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   }
 
   function onRunValidated() {
-    if (kind === "raster") dispatch(runRasterValidated(raster));
-    else dispatch(runVectorValidated(vector));
+    if (kind === "roi") return;
+    if (kind === "raster") dispatch(runRasterValidated({ ...raster, roi }));
+    else dispatch(runVectorValidated({ ...vector, roi }));
   }
 
   function onClear() {
@@ -93,7 +96,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
     <div className="button-row">
       <button
         className="btn btn--primary"
-        disabled={runDisabled}
+        disabled={runDisabled || kind === "roi"}
         onClick={onRun}
         title={
           paused
@@ -124,7 +127,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
 
       <button
         className="btn"
-        disabled={runDisabled}
+        disabled={runDisabled || kind === "roi"}
         onClick={onRunValidated}
         title="POST /scan/{kind}/run — returns timing + validation report"
       >

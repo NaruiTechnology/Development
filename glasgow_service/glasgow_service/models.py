@@ -37,6 +37,10 @@ class RasterRequest(BaseModel):
 
     # Wet-run extras (REST only; WebSocket streaming ignores these):
     do_validate: bool = Field(True, description="Run chunk-count / size / padding checks and return the report.")
+    roi: Optional["ROIRequest"] = Field(
+        default=None,
+        description="Optional DAC-code ROI bounds. Coordinates are inclusive 0..16383.",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -80,6 +84,10 @@ class VectorRequest(BaseModel):
     # Wet-run extras (REST only):
     pre_process:    bool = Field(False, description="Call _pre_process_chunks before transfer; time it separately.")
     do_validate:    bool = Field(True,  description="Run non-empty / padding checks and return the report.")
+    roi:            Optional["ROIRequest"] = Field(
+        default=None,
+        description="Optional DAC-code ROI bounds. Coordinates are inclusive 0..16383.",
+    )
 
     @field_validator("vector_resolution")
     @classmethod
@@ -143,3 +151,30 @@ class ScanResult(BaseModel):
     send_time_s:      Optional[float] = None
     has_data:         bool            = False
     validation:       Optional[ScanValidation] = None
+
+
+class ROIRequest(BaseModel):
+    x_start: int = Field(..., ge=0, le=16383)
+    x_end:   int = Field(..., ge=0, le=16383)
+    y_start: int = Field(..., ge=0, le=16383)
+    y_end:   int = Field(..., ge=0, le=16383)
+
+    @field_validator("x_end")
+    @classmethod
+    def _x_nonempty(cls, v: int, info) -> int:
+        start = info.data.get("x_start")
+        if start is not None and v == start:
+            raise ValueError("x_end must differ from x_start")
+        return v
+
+    @field_validator("y_end")
+    @classmethod
+    def _y_nonempty(cls, v: int, info) -> int:
+        start = info.data.get("y_start")
+        if start is not None and v == start:
+            raise ValueError("y_end must differ from y_start")
+        return v
+
+
+RasterRequest.model_rebuild()
+VectorRequest.model_rebuild()

@@ -25,6 +25,7 @@ export interface RasterRequest {
   frame_blank: boolean;
   cookie: number;         // 0..65535
   do_validate: boolean;
+  roi?: ROIRequest | null;
 }
 
 export type VectorPattern = "default" | "custom";
@@ -41,6 +42,14 @@ export interface VectorRequest {
   cookie: number;
   pre_process: boolean;
   do_validate: boolean;
+  roi?: ROIRequest | null;
+}
+
+export interface ROIRequest {
+  x_start: number;
+  x_end: number;
+  y_start: number;
+  y_end: number;
 }
 
 export interface ValidationCheck {

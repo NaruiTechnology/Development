@@ -73,6 +73,35 @@ def _default_vector_iter(edge: int = 2048) -> Iterable[Tuple[int, int, int]]:
             yield x * stride, y * stride, 1
 
 
+def _roi_bounds(roi) -> Optional[Tuple[int, int, int, int]]:
+    if roi is None:
+        return None
+    x0, x1 = sorted((int(roi.x_start), int(roi.x_end)))
+    y0, y1 = sorted((int(roi.y_start), int(roi.y_end)))
+    return x0, x1, y0, y1
+
+
+def _dac_range_for_bounds(start: int, end: int, count: int) -> DACCodeRange:
+    lo, hi = sorted((int(start), int(end)))
+    span = max(1, hi - lo + 1)
+    return DACCodeRange(start=lo, count=count, step=max(1, int((span / count) * 256)))
+
+
+def _roi_vector_iter(edge: int, roi) -> Iterable[Tuple[int, int, int]]:
+    bounds = _roi_bounds(roi)
+    if bounds is None:
+        yield from _default_vector_iter(edge)
+        return
+    x0, x1, y0, y1 = bounds
+    x_range = _dac_range_for_bounds(x0, x1, edge)
+    y_range = _dac_range_for_bounds(y0, y1, edge)
+    for x_idx in range(edge):
+        x = x_range.start + ((x_idx * x_range.step) >> 8)
+        for y_idx in range(edge):
+            y = y_range.start + ((y_idx * y_range.step) >> 8)
+            yield x, y, 1
+
+
 # Exception types that indicate the USB connection is dead and we should
 # drop our reference so the next request reconnects. Matched by name to
 # avoid importing classes that might not be public.
@@ -269,6 +298,7 @@ class DeviceService:
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
+                    "roi": req.roi,
                     "source": "stream",
                 })
 
@@ -364,6 +394,7 @@ class DeviceService:
                 "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                 "points": req.points,
                 "vector_resolution": req.vector_resolution,
+                "roi": req.roi,
                 "source": "validated",
             })
 
@@ -384,10 +415,16 @@ class DeviceService:
     # -------- command construction (unchanged) ----------------------------
 
     def _build_raster_cmd(self, req: RasterRequest) -> RasterScanCommand:
-        rng = DACCodeRange.from_resolution(req.resolution)
+        bounds = _roi_bounds(req.roi)
+        if bounds is None:
+            x_rng = y_rng = DACCodeRange.from_resolution(req.resolution)
+        else:
+            x0, x1, y0, y1 = bounds
+            x_rng = _dac_range_for_bounds(x0, x1, req.resolution)
+            y_rng = _dac_range_for_bounds(y0, y1, req.resolution)
         return RasterScanCommand(
             cookie=req.cookie,
-            x_range=rng, y_range=rng,
+            x_range=x_rng, y_range=y_rng,
             dwell_time=req.dwell,
             frame_blank=req.frame_blank,
         )
@@ -398,7 +435,7 @@ class DeviceService:
                 raise ValueError("pattern=custom requires non-empty `points`")
             iter_points: Iterable[Tuple[int, int, int]] = iter(req.points)
         else:
-            iter_points = _default_vector_iter(req.vector_resolution)
+            iter_points = _roi_vector_iter(req.vector_resolution, req.roi)
 
         try:
             output_mode = OutputMode[req.output_mode]
@@ -587,9 +624,9 @@ class DeviceService:
             if pattern == "custom" and points:
                 iter_list = list(points)
             else:
-                iter_list = list(_default_vector_iter(edge))
+                iter_list = list(_roi_vector_iter(edge, last.get("roi")))
                 if len(iter_list) < samples.size and edge != DEFAULT_EDGE:
-                    iter_list = list(_default_vector_iter(DEFAULT_EDGE))
+                    iter_list = list(_roi_vector_iter(DEFAULT_EDGE, last.get("roi")))
 
             if len(iter_list) < samples.size:
                 samples = samples[:len(iter_list)]

@@ -17,6 +17,7 @@ import { RasterParameters } from "./components/RasterParameters";
 import { VectorParameters } from "./components/VectorParameters";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
+import { ROIEditor } from "./components/ROIEditor";
 
 import { setKind, type ScanKind } from "./store/scanSlice";
 import { fetchDefaults } from "./store/statusSlice";
@@ -58,24 +59,36 @@ export function App() {
               >
                 Vector
               </button>
+              <button
+                role="tab"
+                className="tab"
+                aria-selected={kind === "roi"}
+                onClick={() => dispatch(setKind("roi"))}
+              >
+                ROI
+              </button>
             </div>
             <div className="card__body">
               {kind === "raster" ? (
                 <RasterParameters disabled={formDisabled} />
-              ) : (
+              ) : kind === "vector" ? (
                 <VectorParameters disabled={formDisabled} />
+              ) : (
+                <ROIEditor disabled={formDisabled} variant="controls" />
               )}
             </div>
           </div>
 
-          <div className="card">
-            <div className="card__header">
-              <span className="card__title">Controls</span>
+          {kind !== "roi" && (
+            <div className="card">
+              <div className="card__header">
+                <span className="card__title">Controls</span>
+              </div>
+              <div className="card__body">
+                <ScanControls kind={kind as ScanKind} />
+              </div>
             </div>
-            <div className="card__body">
-              <ScanControls kind={kind as ScanKind} />
-            </div>
-          </div>
+          )}
         </section>
 
         {/* right column */}
@@ -83,20 +96,24 @@ export function App() {
           <div className="card">
             <div className="card__header">
               <span className="card__title">
-                {kind === "raster" ? "Raster image" : "Vector pattern"}
+                {kind === "raster" ? "Raster image" : kind === "vector" ? "Vector pattern" : "ROI preview"}
               </span>
             </div>
             <div className="card__body">
-              <ImageCanvas kind={kind as ScanKind} />
+              {kind === "roi" ? (
+                <ROIEditor disabled={formDisabled} variant="canvas" />
+              ) : (
+                <ImageCanvas kind={kind as ScanKind} />
+              )}
             </div>
           </div>
 
-          <div className="card">
+          {kind !== "roi" && <div className="card">
             <div className="card__header">
               <span className="card__title">Run report</span>
             </div>
             <ValidationPanel />
-          </div>
+          </div>}
         </section>
       </main>
 

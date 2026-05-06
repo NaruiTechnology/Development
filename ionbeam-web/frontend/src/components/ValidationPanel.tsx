@@ -29,6 +29,7 @@ export function ValidationPanel() {
   const error = useAppSelector((s) => s.scan.errorMessage);
   const phase = useAppSelector((s) => s.scan.phase);
   const kind = useAppSelector((s) => s.scan.kind);
+  const scanKind = kind === "vector" ? "vector" : "raster";
 
   // Live-stream pixel state. Used as the source for client-side CSV
   // export when the user ran the stream (not validated).
@@ -92,14 +93,14 @@ export function ValidationPanel() {
         if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
         const blob = await r.blob();
         const filename = filenameFromContentDisposition(r.headers.get("content-disposition"))
-          ?? defaultCsvFilename(kind, result);
+          ?? defaultCsvFilename(scanKind, result);
         downloadBlob(blob, filename);
       } else {
         // Live stream: generate from the imageSlice buffer.
         const blob = kind === "raster"
           ? rasterCsvBlob(rasterFrame, rasterRes)
           : vectorCsvBlob(vectorImage, vectorEdge);
-        const filename = defaultCsvFilename(kind, null);
+        const filename = defaultCsvFilename(scanKind, null);
         downloadBlob(blob, filename);
       }
       setCsvState("idle");
@@ -130,7 +131,7 @@ export function ValidationPanel() {
       }
       const blob = await r.blob();
       const filename = filenameFromContentDisposition(r.headers.get("content-disposition"))
-        ?? defaultFigureFilename(kind, result);
+        ?? defaultFigureFilename(scanKind, result);
       downloadBlob(blob, filename);
       setFigState("idle");
     } catch (e: any) {
