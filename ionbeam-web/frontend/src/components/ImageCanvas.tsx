@@ -1,17 +1,15 @@
 /**
  * Renders the raster grayscale frame or vector ADC image onto a canvas.
  *
- * Both modes share the same painter: a flat Uint16Array of edge*edge
- * samples rendered as the high byte (`sample >> 8`) with a fixed
- * 0..255 grayscale range. This intentionally mirrors
- * macros.scan_display.display_raster/display_vector so the browser
- * canvas matches unit-test PNG/CSV inspection instead of applying a
- * separate browser-only contrast stretch.
+ * Raster and vector scans are stored as flat Uint16Array buffers and
+ * rendered as auto-scaled grayscale. The hardware returns 16-bit ADC
+ * samples, and real signals can live mostly below the high byte; a fixed
+ * `sample >> 8` display can look blank even while data is arriving.
  *
- * For raster the buffer is fully populated row-major as the FPGA emits
- * samples. For vector default it's populated densely too, just in
- * column-major order. For vector custom it's sparse — only the points
- * the host requested have data; unpopulated cells stay zero.
+ * For raster the buffer is populated row-major as the FPGA emits samples.
+ * For vector default, samples arrive x-major/y-inner and are painted back
+ * to their actual populated cells. For vector custom, only requested
+ * point coordinates are painted; unpopulated cells stay transparent.
  */
 import { useEffect, useRef, useState } from "react";
 
@@ -48,6 +46,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   // Vector fields
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
   const vectorImage = useAppSelector((s) => s.image.vectorImage);
+  const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
@@ -81,11 +80,16 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       // Block-fill into a 2048x2048 canvas. Each buffer cell paints a
       // stride x stride square. For stride==1 this is identical to
       // decimated, so we fall through to the dense-paint path.
-      const s = paintGrayscaleBlockFill(canvas, vectorImage, vectorEdge, vectorCursor, stride);
+      const s = paintVectorDefaultBlockFill(canvas, vectorImage, vectorEdge, vectorCursor, stride);
+      setStats(s);
+    } else if (kind === "vector" && vectorPattern === "default") {
+      const s = paintVectorDefault(canvas, vectorImage, vectorEdge, vectorCursor);
+      setStats(s);
+    } else if (kind === "vector" && vectorCustomPoints) {
+      const s = paintVectorCustom(canvas, vectorImage, vectorEdge, vectorCustomPoints, vectorCursor);
       setStats(s);
     } else {
-      // Vector decimated, OR vector custom (which uses 2048-wide buffer
-      // already), OR default at native resolution (stride==1 == decimated).
+      // Empty custom-vector setup, before points have been loaded.
       const s = paintGrayscale(canvas, vectorImage, vectorEdge, vectorCursor);
       setStats(s);
     }
@@ -282,8 +286,8 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
           </>
         )}
         {stats.populated > 0 && (
-          <span title="Display range of received high-byte samples. Canvas maps each uint16 sample as sample >> 8, matching scan_display.py.">
-            high byte <b>{stats.min}..{stats.max}</b>
+          <span title="Raw ADC range in the received samples. Canvas auto-scales this range into visible grayscale.">
+            ADC <b>{stats.min}..{stats.max}</b>
           </span>
         )}
       </div>
@@ -312,12 +316,12 @@ function paintGrayscale(
 
   const limit = Math.min(populated, buf.length);
 
-  let lo = 255;
+  let lo = 65535;
   let hi = 0;
   for (let i = 0; i < limit; i++) {
-    const g = buf[i] >> 8;
-    if (g < lo) lo = g;
-    if (g > hi) hi = g;
+    const v = buf[i];
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
   }
   if (limit === 0) {
     lo = 0;
@@ -330,7 +334,7 @@ function paintGrayscale(
   const totalPx = edge * edge;
   const reg = limit < totalPx ? limit : totalPx;
   for (let i = 0; i < reg; i++) {
-    const g = buf[i] >> 8;
+    const g = scaleSample(buf[i], lo, hi);
     const p = i * 4;
     data[p + 0] = g;
     data[p + 1] = g;
@@ -359,10 +363,94 @@ function paintGrayscale(
  * region with the cell's value. Result: a dense 2048x2048 image where
  * pixel coordinates correspond 1:1 to DAC codes.
  *
- * The high-byte range is computed once over the compact buffer (not over
+ * The raw ADC range is computed once over the compact buffer (not over
  * the post-block-fill canvas), so each unique cell counts equally.
  */
-function paintGrayscaleBlockFill(
+function paintVectorDefault(
+  canvas: HTMLCanvasElement,
+  buf: Uint16Array,
+  edge: number,
+  populated: number
+): PaintStats {
+  if (canvas.width !== edge || canvas.height !== edge) {
+    canvas.width = edge;
+    canvas.height = edge;
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { min: 0, max: 0, populated: 0 };
+
+  const limit = Math.min(populated, buf.length);
+  const range = vectorDefaultRange(buf, edge, limit);
+  const img = ctx.createImageData(edge, edge);
+  const data = img.data;
+
+  for (let i = 0; i < limit; i++) {
+    const col = (i / edge) | 0;
+    const row = i % edge;
+    if (col >= edge) break;
+    const idx = row * edge + col;
+    const g = scaleSample(buf[idx], range.min, range.max);
+    const p = idx * 4;
+    data[p + 0] = g;
+    data[p + 1] = g;
+    data[p + 2] = g;
+    data[p + 3] = 255;
+  }
+
+  ctx.putImageData(img, 0, 0);
+  return range;
+}
+
+function paintVectorCustom(
+  canvas: HTMLCanvasElement,
+  buf: Uint16Array,
+  edge: number,
+  points: Float32Array,
+  populated: number
+): PaintStats {
+  if (canvas.width !== edge || canvas.height !== edge) {
+    canvas.width = edge;
+    canvas.height = edge;
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { min: 0, max: 0, populated: 0 };
+
+  const limit = Math.min(populated, points.length / 2);
+  let lo = 65535;
+  let hi = 0;
+  for (let i = 0; i < limit; i++) {
+    const x = points[2 * i] | 0;
+    const y = points[2 * i + 1] | 0;
+    if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
+    const v = buf[y * edge + x];
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  if (limit === 0) {
+    lo = 0;
+    hi = 0;
+  }
+
+  const img = ctx.createImageData(edge, edge);
+  const data = img.data;
+  for (let i = 0; i < limit; i++) {
+    const x = points[2 * i] | 0;
+    const y = points[2 * i + 1] | 0;
+    if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
+    const idx = y * edge + x;
+    const g = scaleSample(buf[idx], lo, hi);
+    const p = idx * 4;
+    data[p + 0] = g;
+    data[p + 1] = g;
+    data[p + 2] = g;
+    data[p + 3] = 255;
+  }
+
+  ctx.putImageData(img, 0, 0);
+  return { min: lo, max: hi, populated: limit };
+}
+
+function paintVectorDefaultBlockFill(
   canvas: HTMLCanvasElement,
   buf: Uint16Array,
   edge: number,
@@ -379,17 +467,7 @@ function paintGrayscaleBlockFill(
 
   const limit = Math.min(populated, buf.length);
 
-  let lo = 255;
-  let hi = 0;
-  for (let i = 0; i < limit; i++) {
-    const g = buf[i] >> 8;
-    if (g < lo) lo = g;
-    if (g > hi) hi = g;
-  }
-  if (limit === 0) {
-    lo = 0;
-    hi = 0;
-  }
+  const range = vectorDefaultRange(buf, edge, limit);
 
   const img = ctx.createImageData(nativeSize, nativeSize);
   const data = img.data;
@@ -403,12 +481,12 @@ function paintGrayscaleBlockFill(
   }
 
   // Paint each populated buffer cell as a stride x stride block.
-  for (let cellIdx = 0; cellIdx < limit; cellIdx++) {
-    const g = buf[cellIdx] >> 8;
-
-    // Buffer is row-major: cellIdx = row * edge + col
-    const cellRow = (cellIdx / edge) | 0;
-    const cellCol = cellIdx % edge;
+  for (let i = 0; i < limit; i++) {
+    const cellCol = (i / edge) | 0;
+    const cellRow = i % edge;
+    if (cellCol >= edge) break;
+    const cellIdx = cellRow * edge + cellCol;
+    const g = scaleSample(buf[cellIdx], range.min, range.max);
     const baseY = cellRow * stride;
     const baseX = cellCol * stride;
 
@@ -428,5 +506,28 @@ function paintGrayscaleBlockFill(
   }
 
   ctx.putImageData(img, 0, 0);
+  return range;
+}
+
+function vectorDefaultRange(buf: Uint16Array, edge: number, limit: number): PaintStats {
+  let lo = 65535;
+  let hi = 0;
+  for (let i = 0; i < limit; i++) {
+    const col = (i / edge) | 0;
+    const row = i % edge;
+    if (col >= edge) break;
+    const v = buf[row * edge + col];
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  if (limit === 0) {
+    lo = 0;
+    hi = 0;
+  }
   return { min: lo, max: hi, populated: limit };
+}
+
+function scaleSample(value: number, lo: number, hi: number): number {
+  if (hi <= lo) return hi > 0 ? 255 : 0;
+  return Math.max(0, Math.min(255, Math.round(((value - lo) * 255) / (hi - lo))));
 }
