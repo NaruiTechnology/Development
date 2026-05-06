@@ -6,8 +6,10 @@ import {
 import type {
   RasterRequest,
   ScanResult,
+  ServerDefaults,
   VectorRequest,
 } from "../types/api";
+import { fetchDefaults } from "./statusSlice";
 
 export type ScanKind = "raster" | "vector";
 export type ScanPhase =
@@ -71,6 +73,44 @@ const initialState: ScanState = {
   vector: defaultVector,
   vectorRenderMode: "decimated",
 };
+
+function numberDefault(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+
+function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"]): VectorRequest["output_mode"] {
+  return value === "EightBit" || value === "SixteenBit" ? value : fallback;
+}
+
+function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
+  const raster = defaults.raster ?? {};
+  const vector = defaults.vector ?? {};
+  const rasterLatency =
+    raster.latency_bytes ??
+    raster.latency ??
+    (raster.pixels !== undefined ? numberDefault(raster.pixels, 8192) * 2 : undefined);
+
+  state.raster = {
+    ...state.raster,
+    resolution: numberDefault(raster.resolution, state.raster.resolution),
+    dwell: numberDefault(raster.dwell, state.raster.dwell),
+    latency_bytes: numberDefault(rasterLatency, state.raster.latency_bytes),
+    frame_blank: Boolean(raster.frame_blank ?? raster.frameBlank ?? state.raster.frame_blank),
+  };
+
+  state.vector = {
+    ...state.vector,
+    latency_bytes: numberDefault(
+      vector.latency_bytes ?? vector.latency,
+      state.vector.latency_bytes
+    ),
+    output_mode: outputModeDefault(
+      vector.output_mode ?? vector.outputMode,
+      state.vector.output_mode
+    ),
+  };
+}
 
 /* -------- blocking REST runs ------------------------------------------- */
 
@@ -189,6 +229,9 @@ const slice = createSlice({
     b.addCase(runVectorValidated.rejected, (s, a) => {
       s.phase = "error";
       s.errorMessage = a.error.message ?? "vector run failed";
+    });
+    b.addCase(fetchDefaults.fulfilled, (s, a) => {
+      applyServerDefaults(s, a.payload);
     });
   },
 });

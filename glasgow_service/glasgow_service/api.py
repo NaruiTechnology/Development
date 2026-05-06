@@ -200,11 +200,18 @@ async def get_last_figure(
             "Raster scans ignore this parameter."
         ),
     ),
+    view: Literal["figure", "texture"] = Query(
+        "figure",
+        description=(
+            "'figure' includes matplotlib title/axes/colorbar. 'texture' "
+            "returns only the scan image pixels, intended for the live UI panel."
+        ),
+    ),
 ):
     if not svc.has_last():
         raise HTTPException(404, "no scan data cached")
     try:
-        body = svc.last_figure_png(render_mode=render)
+        body = svc.last_figure_png(render_mode=render, view=view)
     except ModuleNotFoundError as e:
         raise HTTPException(500, f"figure rendering needs matplotlib + numpy: {e}")
     fname = svc.last_figure_filename()

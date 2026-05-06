@@ -3,16 +3,19 @@
  * FastAPI service emits, so the front-end has exactly one code path to
  * handle real and synthetic data.
  *
- * Format reminder (matches glasgow_service.service.raster_scan):
+ * Format reminder (matches glasgow_service.service.{raster,vector}_scan):
  *
- *   Each WS frame is bytes(chunk) where chunk is a uint16 array. The FPGA's
- *   ImageSerializer emits HIGH byte first then LOW byte, so byte 0 of every
- *   pair is the most-significant 8 bits — i.e. the "8-bit display value"
- *   you'd want to show as grayscale. The front-end samples those high bytes.
+ *   Each WS frame is bytes(chunk) where chunk is a uint16 ADC-sample array.
+ *   The FPGA ImageSerializer emits HIGH byte first then LOW byte for every
+ *   sample. Vector samples do NOT carry inline x/y/dwell fields; the UI
+ *   reconstructs coordinates from the submitted vector script.
  *
  * Termination message is the same JSON the FastAPI service sends:
  *   {"event":"done","chunks":N}
  */
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import type { WebSocket } from "ws";
 
 interface RasterParams {
@@ -34,23 +37,186 @@ interface VectorParams {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** Mandelbrot-ish mock raster so visual differences from real scans are obvious. */
-function pixelValue(x: number, y: number, res: number): number {
-  // Map (x,y) -> complex plane and run a tiny mandelbrot iteration so the
-  // user gets a recognisable, animated image rather than uniform gray.
-  const cx = (x / res) * 3.5 - 2.5;
-  const cy = (y / res) * 2.0 - 1.0;
-  let zx = 0,
-    zy = 0;
-  let i = 0;
-  const max = 64;
-  while (i < max && zx * zx + zy * zy < 4) {
-    const nx = zx * zx - zy * zy + cx;
-    zy = 2 * zx * zy + cy;
-    zx = nx;
-    i++;
+const DAC_BITS = 14;
+const DAC_RANGE = 2048;
+const ADC_MAX = (1 << DAC_BITS) - 1;
+
+interface SimulationImage {
+  resolution: number;
+  pixels: Uint8Array;
+}
+
+let cachedSimulationImage: SimulationImage | null = null;
+let cachedActionData: any | null = null;
+
+function loadSimulationImage(): SimulationImage {
+  if (cachedSimulationImage) return cachedSimulationImage;
+
+  const sim = loadActionData().simulation ?? {};
+  const resolution = validateImageResolution(Number(sim?.imageResolution ?? 64));
+  const source = String(sim?.source ?? "pattern");
+
+  if (source === "random") {
+    cachedSimulationImage = {
+      resolution,
+      pixels: randomImage(resolution, Number(sim?.seed ?? 1)),
+    };
+    return cachedSimulationImage;
   }
-  return Math.floor((i / max) * 65535);
+
+  if (source === "file") {
+    const filePath = sim?._alt_file?.path ?? sim?.path;
+    const loaded = typeof filePath === "string"
+      ? loadImageFile(filePath, resolution, Boolean(sim?.invert ?? sim?._alt_file?.invert))
+      : null;
+    if (loaded) {
+      cachedSimulationImage = loaded;
+      return cachedSimulationImage;
+    }
+  }
+
+  // Pattern fallback keeps MOCK=1 on the current FakeAdcSimulator DAC
+  // mapping even when the configured file cannot be decoded locally.
+  cachedSimulationImage = {
+    resolution,
+    pixels: patternImage(resolution, String(sim?.patternKind ?? "ramp")),
+  };
+  return cachedSimulationImage;
+}
+
+function streamDataConfigPath(): string {
+  return (
+    process.env.STREAM_DATA_JSON ??
+    path.resolve(__dirname, "..", "..", "..", "GlasgowDataIO", "Json", "streamData.json")
+  );
+}
+
+function loadActionData(): any {
+  if (cachedActionData) return cachedActionData;
+  cachedActionData = readActionData(streamDataConfigPath());
+  return cachedActionData;
+}
+
+function readActionData(configPath: string): any {
+  try {
+    const raw = fs.readFileSync(configPath, "utf8");
+    const parsed = JSON.parse(raw);
+    const states = parsed?.Actions ?? parsed?.WorkStates ?? parsed?.workStates ?? parsed?.states ?? [];
+    const streamData = Array.isArray(states)
+      ? states.find((s: any) => s?.streamData || s?.name === "streamData" || s?.Name === "streamData")
+      : null;
+    return (
+      streamData?.streamData?.actionData ??
+      streamData?.actionData ??
+      streamData?.ActionData ??
+      streamData?.action_data ??
+      parsed?.actionData ??
+      {}
+    );
+  } catch {
+    return {};
+  }
+}
+
+function validateImageResolution(value: number): number {
+  if (Number.isInteger(value) && value >= 16 && value <= 256 && (value & (value - 1)) === 0) {
+    return value;
+  }
+  return 64;
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function patternImage(resolution: number, kind: string): Uint8Array {
+  const out = new Uint8Array(resolution * resolution);
+  if (kind === "checker") {
+    const cell = Math.max(1, Math.floor(resolution / 8));
+    for (let y = 0; y < resolution; y++) {
+      for (let x = 0; x < resolution; x++) {
+        out[y * resolution + x] = ((Math.floor(x / cell) + Math.floor(y / cell)) & 1) ? 255 : 0;
+      }
+    }
+  } else if (kind === "bars") {
+    for (let y = 0; y < resolution; y++) {
+      for (let x = 0; x < resolution; x++) {
+        out[y * resolution + x] = Math.floor((x * 8) / resolution) * 32;
+      }
+    }
+  } else if (kind === "bullseye") {
+    const c = (resolution - 1) / 2;
+    const maxR = Math.sqrt(c * c + c * c);
+    for (let y = 0; y < resolution; y++) {
+      for (let x = 0; x < resolution; x++) {
+        const r = Math.sqrt((x - c) * (x - c) + (y - c) * (y - c));
+        out[y * resolution + x] = Math.max(0, Math.floor(255 * (1 - r / maxR)));
+      }
+    }
+  } else {
+    for (let y = 0; y < resolution; y++) {
+      for (let x = 0; x < resolution; x++) {
+        out[y * resolution + x] = Math.floor((x * 255) / (resolution - 1));
+      }
+    }
+  }
+  return out;
+}
+
+function randomImage(resolution: number, seed: number): Uint8Array {
+  const out = new Uint8Array(resolution * resolution);
+  let state = (seed >>> 0) || 1;
+  for (let i = 0; i < out.length; i++) {
+    state = (1664525 * state + 1013904223) >>> 0;
+    out[i] = (state >>> 24) & 0xff;
+  }
+  return out;
+}
+
+function loadImageFile(filePath: string, resolution: number, invert: boolean): SimulationImage | null {
+  if (!fs.existsSync(filePath)) return null;
+
+  const script = [
+    "import json, sys",
+    "from PIL import Image",
+    "path=sys.argv[1]",
+    "res=int(sys.argv[2])",
+    "invert=sys.argv[3].lower() in ('1','true','yes','on')",
+    "im=Image.open(path).convert('L').resize((res,res), resample=Image.Resampling.NEAREST)",
+    "px=list(im.getdata())",
+    "if invert: px=[255-v for v in px]",
+    "json.dump(px, sys.stdout)",
+  ].join("; ");
+
+  const result = spawnSync("python3", ["-c", script, filePath, String(resolution), String(invert)], {
+    encoding: "utf8",
+    maxBuffer: resolution * resolution * 8,
+  });
+  if (result.status !== 0 || !result.stdout) return null;
+
+  try {
+    const data = JSON.parse(result.stdout);
+    if (!Array.isArray(data) || data.length !== resolution * resolution) return null;
+    return { resolution, pixels: Uint8Array.from(data.map((v) => Number(v) & 0xff)) };
+  } catch {
+    return null;
+  }
+}
+
+function sampleFakeAdc(dacX: number, dacY: number): number {
+  const img = loadSimulationImage();
+  const bits = Math.log2(img.resolution);
+  const shift = DAC_BITS - bits;
+  const xIdx = Math.max(0, Math.min(img.resolution - 1, dacX >> shift));
+  const yIdx = Math.max(0, Math.min(img.resolution - 1, dacY >> shift));
+  return Math.min(img.pixels[yIdx * img.resolution + xIdx] * 64, ADC_MAX);
+}
+
+function writeSampleBE(buf: Buffer, sampleIndex: number, value: number): void {
+  const o = sampleIndex * 2;
+  buf[o] = (value >> 8) & 0xff;
+  buf[o + 1] = value & 0xff;
 }
 
 export async function streamMockRaster(
@@ -75,10 +241,9 @@ export async function streamMockRaster(
       const idx = sent + k;
       const x = idx % p.resolution;
       const y = Math.floor(idx / p.resolution);
-      const v = pixelValue(x, y, p.resolution);
-      // HIGH byte first, then LOW — matches FPGA ImageSerializer order.
-      buf[k * 2] = (v >> 8) & 0xff;
-      buf[k * 2 + 1] = v & 0xff;
+      const dacX = Math.floor((x * (1 << DAC_BITS)) / p.resolution);
+      const dacY = Math.floor((y * (1 << DAC_BITS)) / p.resolution);
+      writeSampleBE(buf, k, sampleFakeAdc(dacX, dacY));
     }
     ws.send(buf);
     sent += n;
@@ -115,23 +280,17 @@ export async function streamMockVector(
     }
   }
 
-  const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 4));
+  const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
   let i = 0;
   let chunks = 0;
 
   while (i < pts.length) {
     if (ws.readyState !== ws.OPEN) return;
     const slice = pts.slice(i, i + valuesPerChunk);
-    // 4 uint16 per point: x, y, dwell, value (synthetic pixel reading)
-    const buf = Buffer.alloc(slice.length * 4 * 2);
+    const buf = Buffer.alloc(slice.length * 2);
     for (let k = 0; k < slice.length; k++) {
-      const [x, y, d] = slice[k];
-      const v = ((x ^ y) * 17) & 0xffff;
-      const o = k * 8;
-      buf.writeUInt16BE(x & 0xffff, o + 0);
-      buf.writeUInt16BE(y & 0xffff, o + 2);
-      buf.writeUInt16BE(d & 0xffff, o + 4);
-      buf.writeUInt16BE(v, o + 6);
+      const [x, y] = slice[k];
+      writeSampleBE(buf, k, sampleFakeAdc(x * 8, y * 8));
     }
     ws.send(buf);
     i += valuesPerChunk;
@@ -155,17 +314,21 @@ export const mockRest = {
     };
   },
   defaults() {
+    const action = loadActionData();
+    const raster = action.rasterScan ?? {};
+    const vector = action.vectorScan ?? {};
     return {
       raster: {
-        resolution: 512,
-        dwell: 2,
-        latency: 16384,
-        frameBlank: false,
+        ...raster,
+        resolution: finiteNumber(raster.resolution, 512),
+        dwell: finiteNumber(raster.dwell, 2),
+        latency: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
+        frameBlank: Boolean(raster.frameBlank ?? false),
       },
       vector: {
-        latency: 8196,
-        outputMode: "SixteenBit",
-        drainFloorPixels: 128,
+        ...vector,
+        latency: finiteNumber(vector.latency, 8196),
+        outputMode: vector.outputMode ?? "SixteenBit",
       },
     };
   },
@@ -206,8 +369,7 @@ export const mockRest = {
   runVector(req: VectorParams & { do_validate?: boolean; pre_process?: boolean }) {
     // Default-pattern total samples = edge². Custom-pattern uses the
     // provided point list. Pick valuesPerChunk to match what the WS
-    // streamer would produce (latency_bytes / 4 per the synthetic
-    // 4-uint16-per-point format we still emit there).
+    // streamer would produce (2 bytes per ADC sample).
     let totalSamples: number;
     if (req.pattern === "custom" && req.points) {
       totalSamples = req.points.length;
@@ -215,7 +377,7 @@ export const mockRest = {
       const edge = req.vector_resolution ?? 2048;
       totalSamples = edge * edge;
     }
-    const valuesPerChunk = Math.max(64, Math.floor(req.latency_bytes / 4));
+    const valuesPerChunk = Math.max(64, Math.floor(req.latency_bytes / 2));
     const chunks = Math.max(1, Math.ceil(totalSamples / valuesPerChunk));
     mockLastScan = {
       kind: "vector",

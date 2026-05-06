@@ -465,21 +465,28 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--c-bg-deep);
+  background: transparent;
   border-radius: var(--r-md);
-  border: 1px solid var(--c-border);
-  padding: 12px;
+  border: 1px solid transparent;
+  padding: 0;
   min-height: 320px;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  overflow: hidden;
 }
 
 .canvas-frame canvas {
   image-rendering: pixelated;
-  background:
-    linear-gradient(45deg, var(--c-pixel-grid) 25%, transparent 25%, transparent 75%, var(--c-pixel-grid) 75%) 0 0 / 16px 16px,
-    linear-gradient(45deg, var(--c-pixel-grid) 25%, transparent 25%, transparent 75%, var(--c-pixel-grid) 75%) 8px 8px / 16px 16px,
-    var(--c-bg-deep);
+  background: transparent;
   max-width: 100%;
   max-height: 70vh;
+}
+
+.server-figure {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
 }
 
 .canvas-meta {

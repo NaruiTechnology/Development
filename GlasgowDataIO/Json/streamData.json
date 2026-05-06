@@ -39,7 +39,7 @@
                             ],
                         "enabled": true,
                         "saveAs":  "~/Downloads/raster_last_run.png",
-                        "openViewer": true
+                        "openViewer": false
                         }
                     },
                     "vectorScan": {
@@ -51,7 +51,7 @@
                         "display": {
                         "enabled": true,
                         "saveAs":  "~/Downloads/vector_last_run.png",
-                        "openViewer": true
+                        "openViewer": false
                         }
                     },
 
@@ -108,7 +108,7 @@
                         "---Note, If IsProduction=false and mode is not 'zeros', the simulation will be enabled with fake images"
                     ],
                     "imageResolution": 64,
-                    "source":          "file",
+                    "source":          "pattern",
                     "patternKind":     "bullseye",
                     "_alt_file": {
                         "source": "file",
@@ -130,5 +130,5 @@
     "Verbose": true,
     "DemoWithCLI": true,
     "IsProduction" : false,
-    "DumpData" : false
+    "DumpData" : true
 }

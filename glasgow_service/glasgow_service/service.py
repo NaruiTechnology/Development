@@ -28,9 +28,11 @@ Lifecycle decisions and the reasoning behind them:
   the uvicorn process.
 """
 import asyncio
+import array
 import csv
 import io
 import math
+import sys
 import time
 from pathlib import Path
 from typing import AsyncIterator, Iterable, List, Optional, Tuple
@@ -60,12 +62,12 @@ class DeviceNotReady(RuntimeError): ...
 
 def _default_vector_iter(edge: int = 2048) -> Iterable[Tuple[int, int, int]]:
     """Yield (x, y, dwell) triples for a default sweep at the given edge
-    resolution. Coverage is always the full 0..2047 DAC range; smaller
-    edge values produce sparser sampling with stride = 2048 // edge.
+    resolution. Coverage is always the full 14-bit DAC range; smaller
+    edge values produce sparser sampling with stride = 16384 // edge.
     Caller is responsible for passing an edge that divides 2048 evenly
     (the Pydantic validator on VectorRequest.vector_resolution enforces
     this for the public API)."""
-    stride = 2048 // edge
+    stride = 16384 // edge
     for x in range(edge):
         for y in range(edge):
             yield x * stride, y * stride, 1
@@ -104,6 +106,24 @@ def _percentile_clip_uint16(values, lo_pct: float = 1.0, hi_pct: float = 99.0):
     if hi <= lo:
         hi = lo + 1
     return lo, hi
+
+
+def _uint16_chunk_to_wire_bytes(chunk) -> bytes:
+    """Return explicit big-endian uint16 sample bytes for WebSocket frames.
+
+    Unit tests and CSV paths work with array('H') numeric values. Calling
+    bytes(array('H')) directly serializes in host byte order, which is
+    little-endian on the dev machine and makes the browser decode swapped
+    samples. The FPGA/ImageSerializer wire contract is high byte first, so
+    normalize chunks here without mutating the captured array used by CSV
+    and validation.
+    """
+    if isinstance(chunk, (bytes, bytearray, memoryview)):
+        return bytes(chunk)
+    out = array.array("H", chunk)
+    if sys.byteorder == "little":
+        out.byteswap()
+    return out.tobytes()
 
 
 class DeviceService:
@@ -208,7 +228,7 @@ class DeviceService:
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
-                    yield bytes(chunk)
+                    yield _uint16_chunk_to_wire_bytes(chunk)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 raise
@@ -216,14 +236,14 @@ class DeviceService:
                 # On normal completion AND on cancellation (Pause/Stop),
                 # snapshot whatever we got. Partial captures are still
                 # downloadable — better than nothing for a paused scan.
-                self._last = {
+                self._set_last_scan({
                     "kind": "raster",
                     "chunks": captured,
                     "resolution": req.resolution,
                     "dwell": req.dwell,
                     "latency_bytes": req.latency_bytes,
                     "source": "stream",
-                }
+                })
 
     async def vector_scan(self, req: VectorRequest) -> AsyncIterator[bytes]:
         captured: List = []
@@ -237,12 +257,12 @@ class DeviceService:
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
-                    yield bytes(chunk)
+                    yield _uint16_chunk_to_wire_bytes(chunk)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 raise
             finally:
-                self._last = {
+                self._set_last_scan({
                     "kind": "vector",
                     "chunks": captured,
                     "latency_bytes": req.latency_bytes,
@@ -250,7 +270,7 @@ class DeviceService:
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
                     "source": "stream",
-                }
+                })
 
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
@@ -280,14 +300,14 @@ class DeviceService:
 
         # Cache for /scan/last/csv and /scan/last/figure.
         if chunks:
-            self._last = {
+            self._set_last_scan({
                 "kind": "raster",
                 "chunks": chunks,
                 "resolution": req.resolution,
                 "dwell": req.dwell,
                 "latency_bytes": req.latency_bytes,
                 "source": "validated",
-            }
+            })
 
         validation = None
         if req.do_validate:
@@ -337,7 +357,7 @@ class DeviceService:
         total_bytes = sum(len(c) * 2 for c in chunks)
 
         if chunks:
-            self._last = {
+            self._set_last_scan({
                 "kind": "vector",
                 "chunks": chunks,
                 "latency_bytes": req.latency_bytes,
@@ -345,7 +365,7 @@ class DeviceService:
                 "points": req.points,
                 "vector_resolution": req.vector_resolution,
                 "source": "validated",
-            }
+            })
 
         validation = None
         if req.do_validate:
@@ -396,6 +416,34 @@ class DeviceService:
         )
 
     # -------- on-demand download bytes (CSV / PNG figure) -----------------
+
+    def _set_last_scan(self, last: dict) -> None:
+        self._last = last
+        self._maybe_dump_last_csv()
+
+    def _dump_csv_filename(self) -> str:
+        if not self.has_last():
+            return "scan.csv"
+        last = self._last
+        if last["kind"] == "raster":
+            r = last.get("resolution") or 0
+            return f"raster_{r}x{r}.csv"
+        return f"vector_latency{last.get('latency_bytes') or 0}.csv"
+
+    def _maybe_dump_last_csv(self) -> None:
+        """Mirror the unit-test DumpData behavior for service/UI scans."""
+        if not getattr(self._config, "DumpData", False):
+            return
+        if not self.has_last():
+            return
+        try:
+            downloads_dir = Path.home() / "Downloads"
+            downloads_dir.mkdir(parents=True, exist_ok=True)
+            csv_path = downloads_dir / self._dump_csv_filename()
+            csv_path.write_bytes(self.last_csv_bytes())
+            logger.info("wrote CSV dump: %s", csv_path)
+        except Exception as exc:
+            logger.warning("failed to write CSV dump: %s", exc)
 
     def has_last(self) -> bool:
         return self._last is not None and bool(self._last.get("chunks"))
@@ -462,7 +510,8 @@ class DeviceService:
             return f"raster_{r}x{r}_{ts}.png"
         return f"vector_latency{last.get('latency_bytes') or 0}_{ts}.png"
 
-    def last_figure_png(self, render_mode: str = "decimated") -> bytes:
+    def last_figure_png(self, render_mode: str = "decimated",
+                        view: str = "figure") -> bytes:
         """Render the last scan as a publication-quality PNG using
         matplotlib. Mirrors the layout of the matplotlib figures the
         operator was generating manually before this endpoint existed.
@@ -504,95 +553,98 @@ class DeviceService:
             else:
                 flat = flat[: res * res]
             img = flat.reshape(res, res)
-            # Percentile-based auto-level. The earlier code did a fixed
-            # >> 8 then vmin/vmax=0/255, which collapsed dim ADC outputs
-            # (low-12-bit signal) to near-black and let single saturated
-            # pixels dictate the upper limit. Clipping to the 1st..99th
-            # percentile of received values matches what
-            # pyqtgraph's HistogramLUTItem and matplotlib's
-            # robust=True imshow do.
-            lo, hi = _percentile_clip_uint16(flat)
+            dwell = int(last.get("dwell") or self._raster_defaults.get("dwell") or 0)
+            adc_latency = int(self._raster_defaults.get("adcLatency", 8))
+            line_shift_per_row = ((adc_latency - 1) / dwell) if dwell else 0
+            if line_shift_per_row:
+                corrected = np.empty_like(img)
+                for y in range(res):
+                    corrected[y] = np.roll(img[y], int(round(y * line_shift_per_row)))
+                img = corrected
 
-            fig, ax = plt.subplots(figsize=(7, 7))
-            im = ax.imshow(img, cmap="gray", vmin=lo, vmax=hi)
-            ax.set_title(f"Raster scan: {res}x{res}")
-            ax.set_xlabel("X (pixels)")
-            ax.set_ylabel("Y (pixels)")
-            cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label(f"ADC sample (uint16, p1={lo} p99={hi})")
+            fig, ax = plt.subplots(figsize=(6, 6))
+            im = ax.imshow(img >> 8, cmap="gray", interpolation="nearest",
+                           aspect="equal", vmin=0, vmax=255)
+            if view == "texture":
+                ax.set_axis_off()
+                fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+            else:
+                ax.set_title(f"Raster scan: {res}x{res}")
+                ax.set_xlabel("X (pixels)")
+                ax.set_ylabel("Y (pixels)")
+                fig.colorbar(im, ax=ax, label="ADC sample (8-bit)")
         else:
             # ---------- vector ----------------------------------------
-            DAC_RANGE = 2048
-            edge = int(last.get("vector_resolution") or DAC_RANGE)
-            stride = DAC_RANGE // edge if edge else 1
+            DAC_RANGE = 16384
+            DEFAULT_EDGE = 2048
+            edge = int(last.get("vector_resolution") or DEFAULT_EDGE)
             samples = np.fromiter(
                 (v for chunk in last["chunks"] for v in chunk),
                 dtype=np.uint16,
             )
             pattern = last.get("pattern", "default")
             points = last.get("points")
-
-            mode = render_mode if render_mode in ("native", "decimated") else "decimated"
-
-            if mode == "decimated" and pattern == "default":
-                # Dense edge x edge image. Sample order is the FPGA's
-                # for x: for y:, so sample i -> (col=i//edge, row=i%edge).
-                img = np.zeros((edge, edge), dtype=np.uint16)
-                n = min(samples.size, edge * edge)
-                idx = np.arange(n)
-                cols = idx // edge
-                rows = idx % edge
-                img[rows, cols] = samples[:n]
-                # Use `extent` so axis labels stay in DAC coordinates
-                # even though the image is edge x edge pixels.
-                imshow_kwargs = dict(extent=(0, DAC_RANGE - 1, DAC_RANGE - 1, 0))
-                title_extra = f" (decimated, edge={edge}, stride={stride})"
+            if pattern == "custom" and points:
+                iter_list = list(points)
             else:
-                # Native 2048x2048 with block-fill. For stride=1 (the
-                # full-resolution scan) this is the original behavior.
-                img = np.zeros((DAC_RANGE, DAC_RANGE), dtype=np.uint16)
-                if pattern == "custom" and points:
-                    n = min(len(samples), len(points))
-                    xs = np.fromiter((p[0] for p in points[:n]), dtype=np.int32, count=n)
-                    ys = np.fromiter((p[1] for p in points[:n]), dtype=np.int32, count=n)
-                    mask = (xs >= 0) & (xs < DAC_RANGE) & (ys >= 0) & (ys < DAC_RANGE)
-                    img[ys[mask], xs[mask]] = samples[:n][mask]
-                else:
-                    # Default sweep: each sample i lands at DAC
-                    # (col*stride, row*stride). Block-fill the whole
-                    # stride x stride cell so the image is dense.
-                    n = min(samples.size, edge * edge)
-                    idx = np.arange(n)
-                    cols = (idx // edge) * stride
-                    rows = (idx % edge) * stride
-                    if stride == 1:
-                        img[rows, cols] = samples[:n]
-                    else:
-                        # Vectorized block-fill via broadcast.
-                        for dy in range(stride):
-                            for dx in range(stride):
-                                img[rows + dy, cols + dx] = samples[:n]
-                imshow_kwargs = {}
-                title_extra = (f" (native 2048, stride={stride} block-fill)"
-                               if pattern == "default" and stride > 1 else "")
+                iter_list = list(_default_vector_iter(edge))
+                if len(iter_list) < samples.size and edge != DEFAULT_EDGE:
+                    iter_list = list(_default_vector_iter(DEFAULT_EDGE))
 
-            # Percentile clip on the populated samples (excluding the
-            # all-zero unfilled region, which would dominate the lower
-            # percentile).
-            n_pop = min(samples.size, edge * edge if pattern == "default" else samples.size)
-            populated_samples = samples[:n_pop]
-            lo, hi = _percentile_clip_uint16(populated_samples)
-            fig, ax = plt.subplots(figsize=(7, 7))
-            im = ax.imshow(img, cmap="gray", vmin=lo, vmax=hi, **imshow_kwargs)
-            ax.set_title(f"Vector scan: {samples.size} points{title_extra}")
-            ax.set_xlabel("X (DAC code)")
-            ax.set_ylabel("Y (DAC code)")
-            cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label(f"ADC sample (uint16, p1={lo} p99={hi})")
+            if len(iter_list) < samples.size:
+                samples = samples[:len(iter_list)]
+            elif len(iter_list) > samples.size:
+                iter_list = iter_list[:samples.size]
+
+            line_shift = self._vector_defaults.get("lineShiftPerXRow", 0)
+            if line_shift and iter_list:
+                first_x = iter_list[0][0]
+                row_len = 0
+                for point in iter_list:
+                    if point[0] != first_x:
+                        break
+                    row_len += 1
+                if row_len > 0 and len(iter_list) % row_len == 0:
+                    rows = len(iter_list) // row_len
+                    corrected = samples.reshape((rows, row_len)).copy()
+                    for x_row in range(rows):
+                        corrected[x_row] = np.roll(
+                            corrected[x_row],
+                            int(round(x_row * float(line_shift))),
+                        )
+                    samples = corrected.reshape(samples.shape)
+
+            xs = np.fromiter((p[0] for p in iter_list), dtype="float32",
+                             count=len(iter_list))
+            ys = np.fromiter((p[1] for p in iter_list), dtype="float32",
+                             count=len(iter_list))
+            cs = (samples >> 8).astype("uint8")
+            fig, ax = plt.subplots(figsize=(6, 6))
+            im = ax.scatter(xs, ys, c=cs, cmap="gray", s=2, vmin=0, vmax=255,
+                            marker="s")
+            ax.set_xlim(0, self._vector_defaults.get("xResolution") or 16384)
+            ax.set_ylim(self._vector_defaults.get("yResolution") or 16384, 0)
+            ax.set_aspect("equal")
+            if view == "texture":
+                ax.set_axis_off()
+                fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+            else:
+                ax.set_title(f"Vector scan: {len(iter_list)} points")
+                ax.set_xlabel("X (DAC code)")
+                ax.set_ylabel("Y (DAC code)")
+                fig.colorbar(im, ax=ax, label="ADC sample (8-bit)")
 
         out = io.BytesIO()
-        fig.tight_layout()
-        fig.savefig(out, format="png", dpi=120, bbox_inches="tight")
+        if view != "texture":
+            fig.tight_layout()
+        fig.savefig(
+            out,
+            format="png",
+            dpi=120,
+            bbox_inches=None if view == "texture" else "tight",
+            pad_inches=0 if view == "texture" else 0.1,
+            transparent=view == "texture",
+        )
         plt.close(fig)
         return out.getvalue()
 
