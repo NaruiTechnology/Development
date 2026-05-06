@@ -18,6 +18,7 @@ import { VectorParameters } from "./components/VectorParameters";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
+import { ErrorWedge } from "./components/ErrorWedge";
 
 import { setKind, type ScanKind } from "./store/scanSlice";
 import { fetchDefaults } from "./store/statusSlice";
@@ -80,14 +81,17 @@ export function App() {
           </div>
 
           {kind !== "roi" && (
-            <div className="card">
-              <div className="card__header">
-                <span className="card__title">Controls</span>
+            <>
+              <div className="card">
+                <div className="card__header">
+                  <span className="card__title">Controls</span>
+                </div>
+                <div className="card__body">
+                  <ScanControls kind={kind as ScanKind} />
+                </div>
               </div>
-              <div className="card__body">
-                <ScanControls kind={kind as ScanKind} />
-              </div>
-            </div>
+              <ErrorWedge />
+            </>
           )}
         </section>
 

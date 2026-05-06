@@ -61,9 +61,14 @@ const slice = createSlice({
     });
     b.addCase(fetchDefaults.fulfilled, (s, a) => {
       s.defaults = a.payload;
+      s.lastError = null;
+    });
+    b.addCase(fetchDefaults.rejected, (s, a) => {
+      s.lastError = a.error.message ?? "defaults fetch failed";
     });
     b.addCase(reconnectDevice.fulfilled, (s, a) => {
       s.service = a.payload;
+      s.lastError = null;
     });
     b.addCase(reconnectDevice.rejected, (s, a) => {
       s.lastError = a.error.message ?? "reconnect failed";
