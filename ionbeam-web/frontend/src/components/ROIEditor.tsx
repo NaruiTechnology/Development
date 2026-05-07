@@ -310,11 +310,11 @@ function Num(props: {
 }) {
   const min = props.min ?? 0;
   const max = props.max ?? 16383;
-  const [text, setText] = useState(String(props.value));
+  const [text, setText] = useState(formatOneDecimal(props.value));
   const [warning, setWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    setText(String(props.value));
+    setText(formatOneDecimal(props.value));
     setWarning(null);
   }, [props.value]);
 
@@ -330,8 +330,8 @@ function Num(props: {
       setWarning(`! ${props.label} must be a number.`);
       return;
     }
-    if (!Number.isInteger(parsed)) {
-      setWarning(`! ${props.label} must be a whole number.`);
+    if (!hasAtMostOneDecimal(next)) {
+      setWarning(`! ${props.label} must use at most 1 decimal place.`);
       return;
     }
     if (parsed < min || parsed > max) {
@@ -340,6 +340,7 @@ function Num(props: {
     }
 
     setWarning(null);
+    setText(formatOneDecimal(parsed));
     props.onChange(parsed);
   }
 
@@ -349,6 +350,7 @@ function Num(props: {
       <input
         className={`input${warning ? " input--invalid" : ""}`}
         type="number"
+        step={0.1}
         value={text}
         disabled={props.disabled}
         aria-invalid={warning ? "true" : "false"}
@@ -378,7 +380,7 @@ function CoordinateField(props: {
     setText(next);
     const parsed = parsePointText(next);
     if (!parsed) {
-      setWarning(`! ${props.label} must use x, y whole numbers.`);
+      setWarning(`! ${props.label} must use x, y numbers with up to 1 decimal place.`);
       return;
     }
 
@@ -409,7 +411,7 @@ function CoordinateField(props: {
 
 function clamp(n: number, lo: number, hi: number) {
   if (!Number.isFinite(n)) return lo;
-  return Math.min(hi, Math.max(lo, Math.floor(n)));
+  return Math.min(hi, Math.max(lo, n));
 }
 
 function lerp(a: number, b: number, t: number) {
@@ -522,7 +524,7 @@ function formatROIEnd(roi: ROIState) {
 }
 
 function formatPointText(p: { x: number; y: number }) {
-  return `(${p.x}, ${p.y})`;
+  return `(${formatOneDecimal(p.x)}, ${formatOneDecimal(p.y)})`;
 }
 
 function parsePointText(text: string): { x: number; y: number } | null {
@@ -532,7 +534,7 @@ function parsePointText(text: string): { x: number; y: number } | null {
   const x = Number(parts[0]);
   const y = Number(parts[1]);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
+  if (!hasAtMostOneDecimal(parts[0]) || !hasAtMostOneDecimal(parts[1])) return null;
   return { x, y };
 }
 
@@ -563,5 +565,13 @@ function validateEndPoint(p: { x: number; y: number }, roi: ROIState) {
 }
 
 function roundScale(v: number) {
-  return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/, "");
+  return formatOneDecimal(v);
+}
+
+function formatOneDecimal(v: number): string {
+  return Number.isFinite(v) ? v.toFixed(1) : "0.0";
+}
+
+function hasAtMostOneDecimal(text: string): boolean {
+  return /^-?\d+(?:\.\d)?$/.test(text.trim());
 }

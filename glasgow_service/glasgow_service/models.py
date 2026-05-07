@@ -182,10 +182,10 @@ class ScanResult(BaseModel):
 
 
 class ROIRequest(BaseModel):
-    x_start: int = Field(..., ge=0, le=16383)
-    x_end:   int = Field(..., ge=0, le=16383)
-    y_start: int = Field(..., ge=0, le=16383)
-    y_end:   int = Field(..., ge=0, le=16383)
+    x_start: float = Field(..., ge=0, le=16383)
+    x_end:   float = Field(..., ge=0, le=16383)
+    y_start: float = Field(..., ge=0, le=16383)
+    y_end:   float = Field(..., ge=0, le=16383)
 
     @field_validator("x_end")
     @classmethod
