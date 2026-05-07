@@ -39,7 +39,7 @@
                             ],
                         "enabled": true,
                         "saveAs":  "~/Downloads/raster_last_run.png",
-                        "openViewer": false
+                        "openViewer": true
                         }
                     },
                     "vectorScan": {
@@ -108,7 +108,7 @@
                         "---Note, If IsProduction=false and mode is not 'zeros', the simulation will be enabled with fake images"
                     ],
                     "imageResolution": 64,
-                    "source":          "file",
+                    "source":          "pattern",
                     "patternKind":     "bullseye",
                     "_alt_file": {
                         "source": "file",

@@ -40,6 +40,7 @@ export function ValidationPanel() {
   const vectorImage = useAppSelector((s) => s.image.vectorImage);
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
+  const vectorLatency = useAppSelector((s) => s.scan.vector.latency_bytes);
   // For vector scans the operator picks a render mode in the canvas
   // toolbar. The figure download honours that choice so the PNG matches
   // what they're currently looking at.
@@ -93,16 +94,19 @@ export function ValidationPanel() {
         const r = await fetch("/api/scan/last/csv");
         if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
         const blob = await r.blob();
-        const filename = filenameFromContentDisposition(r.headers.get("content-disposition"))
-          ?? defaultCsvFilename(scanKind, result);
-        downloadBlob(blob, filename);
+        downloadBlob(blob, defaultDownloadFilename(scanKind, "csv", {
+          resolution: result?.resolution ?? rasterRes,
+          latency_bytes: vectorLatency,
+        }));
       } else {
         // Live stream: generate from the imageSlice buffer.
         const blob = kind === "raster"
           ? rasterCsvBlob(rasterFrame, rasterRes)
           : vectorCsvBlob(vectorImage, vectorEdge);
-        const filename = defaultCsvFilename(scanKind, null);
-        downloadBlob(blob, filename);
+        downloadBlob(blob, defaultDownloadFilename(scanKind, "csv", {
+          resolution: rasterRes,
+          latency_bytes: vectorLatency,
+        }));
       }
       setCsvState("idle");
     } catch (e: any) {
@@ -131,9 +135,10 @@ export function ValidationPanel() {
         throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);
       }
       const blob = await r.blob();
-      const filename = filenameFromContentDisposition(r.headers.get("content-disposition"))
-        ?? defaultFigureFilename(scanKind, result);
-      downloadBlob(blob, filename);
+      downloadBlob(blob, defaultDownloadFilename(scanKind, "png", {
+        resolution: result?.resolution ?? rasterRes,
+        latency_bytes: vectorLatency,
+      }));
       setFigState("idle");
     } catch (e: any) {
       setFigState("error");
@@ -254,50 +259,26 @@ function fmtSec(s: number): string {
   return `${s.toFixed(3)} s`;
 }
 
-/** Local-time timestamp suffix for downloaded files. Matches the format
- *  the Python service uses (time.strftime "%Y%m%d_%H%M%S") so naming is
- *  consistent across the two paths. Note the Python timestamp uses the
- *  server's local time; ours uses the browser's. They diverge only when
- *  the two run in different timezones, which is rare and not worth
- *  fancy reconciliation logic. */
-function timestampSuffix(): string {
+/** Short local-time timestamp suffix for downloaded files. Matches the
+ *  Python service's "%y%m%d_%H%M%S" format. */
+function shortTimestampSuffix(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return (
-    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `${String(d.getFullYear()).slice(-2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
     `_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
   );
 }
 
-function defaultCsvFilename(
+function defaultDownloadFilename(
   kind: "raster" | "vector",
-  result: { resolution?: number | null } | null
+  fileType: "csv" | "png",
+  result: { resolution?: number | null; latency_bytes?: number | null } | null
 ): string {
-  const ts = timestampSuffix();
+  const ts = shortTimestampSuffix();
   if (kind === "raster") {
     const r = result?.resolution ?? 0;
-    return r ? `raster_${r}x${r}_${ts}.csv` : `raster_${ts}.csv`;
+    return `raster_${r}x${r}_${ts}.${fileType}`;
   }
-  return `vector_${ts}.csv`;
-}
-
-function defaultFigureFilename(
-  kind: "raster" | "vector",
-  result: { resolution?: number | null } | null
-): string {
-  const ts = timestampSuffix();
-  if (kind === "raster") {
-    const r = result?.resolution ?? 0;
-    return r ? `raster_${r}x${r}_${ts}.png` : `raster_${ts}.png`;
-  }
-  return `vector_${ts}.png`;
-}
-
-/** Pull the filename out of a Content-Disposition header. Tolerates the
- *  basic form `attachment; filename="x.csv"`; doesn't try to handle
- *  RFC 5987's filename* parameter (server doesn't emit it). */
-function filenameFromContentDisposition(h: string | null): string | null {
-  if (!h) return null;
-  const match = h.match(/filename="([^"]+)"/i);
-  return match ? match[1] : null;
+  return `vector_latency_${result?.latency_bytes ?? 0}_${ts}.${fileType}`;
 }

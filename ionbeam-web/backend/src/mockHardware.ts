@@ -481,13 +481,23 @@ export const mockRest = {
       for (let c = 0; c < 4; c++) row.push((r * 17 + c * 31) & 0xffff);
       rows.push(row.join(" "));
     }
+    const ts = shortTimestampSuffix();
     const filename =
       mockLastScan.kind === "raster"
-        ? `raster_${mockLastScan.resolution}x${mockLastScan.resolution}.csv`
-        : `vector_latency${mockLastScan.latency_bytes}.csv`;
+        ? `raster_${mockLastScan.resolution}x${mockLastScan.resolution}_${ts}.csv`
+        : `vector_latency_${mockLastScan.latency_bytes}_${ts}.csv`;
     return { filename, body: rows.join("\r\n") + "\r\n" };
   },
 };
+
+function shortTimestampSuffix(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${String(d.getFullYear()).slice(-2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  );
+}
 
 /** Module-level state for the mock /scan/last/* endpoints. */
 let mockLastScan:

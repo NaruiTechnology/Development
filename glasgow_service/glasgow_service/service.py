@@ -649,31 +649,46 @@ class DeviceService:
 
     def _set_last_scan(self, last: dict) -> None:
         self._last = last
-        self._maybe_dump_last_csv()
+        self._maybe_dump_last_outputs()
 
-    def _dump_csv_filename(self) -> str:
+    def _dump_filename(self, file_type: str, timestamp: str) -> str:
         if not self.has_last():
-            return "scan.csv"
+            return f"scan.{file_type}"
         last = self._last
+        return self._last_filename(file_type, timestamp)
+
+    def _last_filename(self, file_type: str, timestamp: str) -> str:
+        last = self._last
+        if not last:
+            return f"scan.{file_type}"
         if last["kind"] == "raster":
             r = last.get("resolution") or 0
-            return f"raster_{r}x{r}.csv"
-        return f"vector_latency{last.get('latency_bytes') or 0}.csv"
+            return f"raster_{r}x{r}_{timestamp}.{file_type}"
+        return f"vector_latency_{last.get('latency_bytes') or 0}_{timestamp}.{file_type}"
 
-    def _maybe_dump_last_csv(self) -> None:
+    def _maybe_dump_last_outputs(self) -> None:
         """Mirror the unit-test DumpData behavior for service/UI scans."""
         if not getattr(self._config, "DumpData", False):
             return
         if not self.has_last():
             return
+        timestamp = time.strftime("%y%m%d_%H%M%S")
         try:
-            downloads_dir = Path.home() / "Downloads"
-            downloads_dir.mkdir(parents=True, exist_ok=True)
-            csv_path = downloads_dir / self._dump_csv_filename()
+            output_dir = Path.home() / "Output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            csv_path = output_dir / self._dump_filename("csv", timestamp)
             csv_path.write_bytes(self.last_csv_bytes())
             logger.info("wrote CSV dump: %s", csv_path)
         except Exception as exc:
             logger.warning("failed to write CSV dump: %s", exc)
+        try:
+            output_dir = Path.home() / "Output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            png_path = output_dir / self._dump_filename("png", timestamp)
+            png_path.write_bytes(self.last_figure_png())
+            logger.info("wrote PNG dump: %s", png_path)
+        except Exception as exc:
+            logger.warning("failed to write PNG dump: %s", exc)
 
     def has_last(self) -> bool:
         return self._last is not None and bool(self._last.get("chunks"))
@@ -696,12 +711,7 @@ class DeviceService:
     def last_csv_filename(self) -> str:
         if not self.has_last():
             return "scan.csv"
-        last = self._last
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        if last["kind"] == "raster":
-            r = last.get("resolution") or 0
-            return f"raster_{r}x{r}_{ts}.csv"
-        return f"vector_latency{last.get('latency_bytes') or 0}_{ts}.csv"
+        return self._last_filename("csv", time.strftime("%y%m%d_%H%M%S"))
 
     def last_csv_bytes(self) -> bytes:
         """Render the last scan as CSV (UTF-8). Format identical to the
@@ -733,12 +743,7 @@ class DeviceService:
     def last_figure_filename(self) -> str:
         if not self.has_last():
             return "scan.png"
-        last = self._last
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        if last["kind"] == "raster":
-            r = last.get("resolution") or 0
-            return f"raster_{r}x{r}_{ts}.png"
-        return f"vector_latency{last.get('latency_bytes') or 0}_{ts}.png"
+        return self._last_filename("png", time.strftime("%y%m%d_%H%M%S"))
 
     def last_figure_png(self, render_mode: str = "decimated",
                         view: str = "figure") -> bytes:

@@ -60,7 +60,7 @@ def main():
     ap.add_argument("--latency-bytes", type=int, default=16384)
     ap.add_argument("--frame-blank",   action="store_true")
     ap.add_argument("--save-csv",      action="store_true",
-                    help="write the raster CSV (~/Downloads by default)")
+                    help="write the raster CSV (~/Output by default)")
     ap.add_argument("--no-validate",   action="store_true")
     args = ap.parse_args()
 
