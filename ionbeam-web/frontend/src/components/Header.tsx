@@ -112,7 +112,7 @@ export function Header() {
               title={THEME_TITLES[t]}
               onClick={() => dispatch(setTheme(t))}
             >
-              <Icon name={THEME_ICONS[t]} />
+              <Icon name={THEME_ICONS[t]} tone="accent" />
               {THEME_LABELS[t]}
             </button>
           ))}
@@ -130,7 +130,7 @@ export function Header() {
         onClick={() => dispatch(reconnectDevice())}
         title="Drop and re-establish the USB connection (POST /admin/reconnect)"
       >
-        <Icon name="refresh" />
+        <Icon name="refresh" tone="accent" />
         Reconnect
       </button>
     </header>

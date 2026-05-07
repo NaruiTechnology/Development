@@ -51,7 +51,7 @@ export function App() {
                 aria-selected={kind === "roi"}
                 onClick={() => dispatch(setKind("roi"))}
               >
-                <Icon name="target" />
+                <Icon name="target" tone="tab" />
                 ROI
               </button>
               <button
@@ -60,7 +60,7 @@ export function App() {
                 aria-selected={kind === "raster"}
                 onClick={() => dispatch(setKind("raster"))}
               >
-                <Icon name="grid" />
+                <Icon name="grid" tone="tab" />
                 Raster
               </button>
               <button
@@ -69,7 +69,7 @@ export function App() {
                 aria-selected={kind === "vector"}
                 onClick={() => dispatch(setKind("vector"))}
               >
-                <Icon name="route" />
+                <Icon name="route" tone="tab" />
                 Vector
               </button>
             </div>

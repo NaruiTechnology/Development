@@ -146,15 +146,15 @@ export function ROIEditor({
         <>
           <div className="button-row" style={{ marginBottom: 10 }}>
             <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
-              <Icon name="upload" />
+              <Icon name="upload" tone="accent" />
               SELECT
             </button>
             <button className="btn btn--ghost" disabled={disabled || !hasLoadedImage} onClick={clearLoadedImage}>
-              <Icon name="trash" />
+              <Icon name="trash" tone="danger" />
               Clear image
             </button>
             <button className="btn btn--ghost" disabled={disabled || !hasPartialRegion} onClick={clearPartialRegion}>
-              <Icon name="crop" />
+              <Icon name="crop" tone="warn" />
               Clear region
             </button>
             <span className="muted" style={{ fontSize: 12 }}>{roi.imageName}</span>

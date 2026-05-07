@@ -29,6 +29,7 @@
   --c-text:         #e6eef9;
   --c-text-dim:     #8aa1c4;
   --c-text-muted:   #5d749a;
+  --c-tab-icon:     #ffffff;
 
   /* accents & semantics */
   --c-accent:       #5fb8ff;
@@ -84,6 +85,7 @@
   --c-text:         #f4f4f5;
   --c-text-dim:     #a1a1aa;
   --c-text-muted:   #71717a;
+  --c-tab-icon:     #ffffff;
 
   --c-accent:       #5fb8ff;
   --c-accent-hot:   #88d3ff;
@@ -130,6 +132,7 @@
   --c-text:         #1a2233;
   --c-text-dim:     #5d6b82;
   --c-text-muted:   #8a96a8;
+  --c-tab-icon:     #1a2233;
 
   --c-accent:       #1f6fc2;
   --c-accent-hot:   #1556a0;
@@ -383,6 +386,12 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+.icon--accent { color: var(--c-accent); }
+.icon--danger { color: var(--c-danger); }
+.icon--success { color: var(--c-success); }
+.icon--tab { color: var(--c-tab-icon); }
+.icon--warn { color: var(--c-warn); }
 
 /* ---------- tabs ------------------------------------------------------ */
 

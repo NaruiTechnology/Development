@@ -230,7 +230,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
                 }
                 onClick={() => dispatch(setVectorRenderMode(m))}
               >
-                <Icon name={m === "decimated" ? "scan" : "grid"} />
+                <Icon name={m === "decimated" ? "scan" : "grid"} tone="accent" />
                 {m === "decimated"
                   ? `Decimated (${vectorEdge}×${vectorEdge})`
                   : `Native (${DAC_RANGE}×${DAC_RANGE})`}

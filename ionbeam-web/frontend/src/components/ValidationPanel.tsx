@@ -193,7 +193,7 @@ export function ValidationPanel() {
           onClick={downloadCsv}
           title="Download the most recent scan's data as CSV"
         >
-          <Icon name="download" />
+          <Icon name="download" tone="success" />
           {csvState === "fetching" ? "Fetching CSV..." : "Download CSV"}
         </button>
         <button
@@ -202,7 +202,7 @@ export function ValidationPanel() {
           onClick={downloadFigure}
           title="Render the most recent scan as a matplotlib PNG and download"
         >
-          <Icon name="image" />
+          <Icon name="image" tone="success" />
           {figState === "fetching" ? "Rendering..." : "Download figure (PNG)"}
         </button>
       </div>

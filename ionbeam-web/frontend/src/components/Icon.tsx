@@ -18,9 +18,15 @@ type IconName =
   | "upload"
   | "x";
 
-export function Icon({ name }: { name: IconName }) {
+export function Icon({
+  name,
+  tone,
+}: {
+  name: IconName;
+  tone?: "accent" | "danger" | "success" | "tab" | "warn";
+}) {
   return (
-    <svg className="icon" viewBox="0 0 24 24" aria-hidden>
+    <svg className={tone ? `icon icon--${tone}` : "icon"} viewBox="0 0 24 24" aria-hidden>
       {paths[name]}
     </svg>
   );

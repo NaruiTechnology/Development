@@ -158,7 +158,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
             : "Open a WebSocket and stream chunks live"
         }
       >
-        <Icon name="play" />
+        <Icon name="play" tone="success" />
         Run
       </button>
       <button
@@ -167,7 +167,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         onClick={onPause}
         title="End the scan but keep the partial image on the canvas"
       >
-        <Icon name="pause" />
+        <Icon name="pause" tone="warn" />
         {closing ? "Pausing..." : "Pause"}
       </button>
       <button
@@ -176,7 +176,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         onClick={onStop}
         title="End the scan and clear the canvas"
       >
-        <Icon name="square" />
+        <Icon name="square" tone="danger" />
         Stop
       </button>
 
@@ -188,11 +188,11 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         onClick={onRunValidated}
         title="POST /scan/{kind}/run — returns timing + validation report"
       >
-        <Icon name="check" />
+        <Icon name="check" tone="success" />
         Run validated
       </button>
       <button className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
-        <Icon name="x" />
+        <Icon name="x" tone="danger" />
         Clear
       </button>
     </div>
