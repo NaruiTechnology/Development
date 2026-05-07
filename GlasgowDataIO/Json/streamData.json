@@ -51,7 +51,7 @@
                         "display": {
                         "enabled": true,
                         "saveAs":  "~/Downloads/vector_last_run.png",
-                        "openViewer": false
+                        "openViewer": true
                         }
                     },
 

@@ -600,8 +600,13 @@ class DeviceService:
                 img = corrected
 
             fig, ax = plt.subplots(figsize=(6, 6))
-            im = ax.imshow(img >> 8, cmap="gray", interpolation="nearest",
-                           aspect="equal", vmin=0, vmax=255)
+            if view == "texture":
+                vmin, vmax = _percentile_clip_uint16(img)
+                im = ax.imshow(img, cmap="gray", interpolation="nearest",
+                               aspect="equal", vmin=vmin, vmax=vmax)
+            else:
+                im = ax.imshow(img >> 8, cmap="gray", interpolation="nearest",
+                               aspect="equal", vmin=0, vmax=255)
             if view == "texture":
                 ax.set_axis_off()
                 fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
@@ -657,10 +662,23 @@ class DeviceService:
                              count=len(iter_list))
             cs = (samples >> 8).astype("uint8")
             fig, ax = plt.subplots(figsize=(6, 6))
-            im = ax.scatter(xs, ys, c=cs, cmap="gray", s=2, vmin=0, vmax=255,
-                            marker="s")
-            ax.set_xlim(0, self._vector_defaults.get("xResolution") or 16384)
-            ax.set_ylim(self._vector_defaults.get("yResolution") or 16384, 0)
+            if view == "texture":
+                cs = samples
+                vmin, vmax = _percentile_clip_uint16(samples)
+                marker_size = 8
+            else:
+                vmin, vmax = 0, 255
+                marker_size = 2
+            im = ax.scatter(xs, ys, c=cs, cmap="gray", s=marker_size,
+                            vmin=vmin, vmax=vmax, marker="s")
+            bounds = _roi_bounds(last.get("roi"))
+            if view == "texture" and bounds is not None:
+                x0, x1, y0, y1 = bounds
+                ax.set_xlim(x0, x1)
+                ax.set_ylim(y1, y0)
+            else:
+                ax.set_xlim(0, self._vector_defaults.get("xResolution") or 16384)
+                ax.set_ylim(self._vector_defaults.get("yResolution") or 16384, 0)
             ax.set_aspect("equal")
             if view == "texture":
                 ax.set_axis_off()

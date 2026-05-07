@@ -26,6 +26,7 @@ export const store = configureStore({
           "image.frame",
           "image.vectorImage",
           "image.vectorCustomPoints",
+          "image.vectorCustomRenderPoints",
         ],
         ignoredActions: [
           "image/resetRaster",

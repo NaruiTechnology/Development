@@ -1,4 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import type { ROIRequest } from "../types/api";
 
 /**
  * Image / pixel buffers, kept here (outside the serialisability check)
@@ -35,6 +36,8 @@ interface ImageState {
   vectorImage: Uint16Array;
   /** For custom pattern only: flat (x, y) pairs, length 2*N. */
   vectorCustomPoints: Float32Array | null;
+  /** For custom pattern only: flat render-space (x, y) pairs, length 2*N. */
+  vectorCustomRenderPoints: Float32Array | null;
   vectorCustomCount: number;
   /** Number of ADC samples received so far. */
   vectorCursor: number;
@@ -55,6 +58,7 @@ const initialState: ImageState = {
   vectorEdge: VEC_EDGE,
   vectorImage: new Uint16Array(VEC_EDGE * VEC_EDGE),
   vectorCustomPoints: null,
+  vectorCustomRenderPoints: null,
   vectorCustomCount: 0,
   vectorCursor: 0,
 
@@ -67,6 +71,8 @@ interface SetupVectorPayload {
   points?: Array<[number, number, number]> | null;
   /** Edge of the render target. Defaults to 2048 (FPGA DAC range). */
   edge?: number;
+  /** Active ROI in 14-bit DAC coordinates. Used to map custom points to pixels. */
+  roi?: ROIRequest | null;
 }
 
 const slice = createSlice({
@@ -107,14 +113,20 @@ const slice = createSlice({
       if (pattern === "custom" && a.payload.points && a.payload.points.length) {
         const pts = a.payload.points;
         const flat = new Float32Array(pts.length * 2);
+        const renderFlat = new Float32Array(pts.length * 2);
+        const bounds = customPointBounds(pts, a.payload.roi);
         for (let i = 0; i < pts.length; i++) {
           flat[2 * i] = pts[i][0];
           flat[2 * i + 1] = pts[i][1];
+          renderFlat[2 * i] = mapCoordToPixel(pts[i][0], bounds.x0, bounds.x1, edge);
+          renderFlat[2 * i + 1] = mapCoordToPixel(pts[i][1], bounds.y0, bounds.y1, edge);
         }
         state.vectorCustomPoints = flat;
+        state.vectorCustomRenderPoints = renderFlat;
         state.vectorCustomCount = pts.length;
       } else {
         state.vectorCustomPoints = null;
+        state.vectorCustomRenderPoints = null;
         state.vectorCustomCount = 0;
       }
       state.revision++;
@@ -149,7 +161,7 @@ const slice = createSlice({
           }
         }
       } else {
-        const pts = state.vectorCustomPoints;
+        const pts = state.vectorCustomRenderPoints;
         const pcnt = state.vectorCustomCount;
         if (pts) {
           for (let k = 0; k < N; k++) {
@@ -186,3 +198,43 @@ export const {
 } = slice.actions;
 
 export default slice.reducer;
+
+function customPointBounds(
+  points: Array<[number, number, number]>,
+  roi?: ROIRequest | null
+): { x0: number; x1: number; y0: number; y1: number } {
+  if (roi) {
+    const x0 = Math.min(roi.x_start, roi.x_end);
+    const x1 = Math.max(roi.x_start, roi.x_end);
+    const y0 = Math.min(roi.y_start, roi.y_end);
+    const y1 = Math.max(roi.y_start, roi.y_end);
+    return { x0, x1, y0, y1 };
+  }
+
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (const [x, y] of points) {
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  if (!Number.isFinite(x0) || x0 === x1) {
+    x0 = 0;
+    x1 = 16383;
+  }
+  if (!Number.isFinite(y0) || y0 === y1) {
+    y0 = 0;
+    y1 = 16383;
+  }
+  return { x0, x1, y0, y1 };
+}
+
+function mapCoordToPixel(value: number, start: number, end: number, edge: number): number {
+  const denom = end - start;
+  if (edge <= 1 || denom === 0) return 0;
+  const t = (value - start) / denom;
+  return Math.max(0, Math.min(edge - 1, Math.round(t * (edge - 1))));
+}

@@ -49,6 +49,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
   const vectorImage = useAppSelector((s) => s.image.vectorImage);
   const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
+  const vectorCustomRenderPoints = useAppSelector((s) => s.image.vectorCustomRenderPoints);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
@@ -88,8 +89,8 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
     } else if (kind === "vector" && vectorPattern === "default") {
       const s = paintVectorDefault(canvas, vectorImage, vectorEdge, vectorCursor);
       setStats(s);
-    } else if (kind === "vector" && vectorCustomPoints) {
-      const s = paintVectorCustom(canvas, vectorImage, vectorEdge, vectorCustomPoints, vectorCursor);
+    } else if (kind === "vector" && vectorCustomRenderPoints) {
+      const s = paintVectorCustom(canvas, vectorImage, vectorEdge, vectorCustomRenderPoints, vectorCursor);
       setStats(s);
     } else {
       // Empty custom-vector setup, before points have been loaded.
@@ -168,6 +169,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
     vectorCursor,
     vectorPattern,
     vectorCustomPoints,
+    vectorCustomRenderPoints,
   });
 
   const pct =
@@ -346,6 +348,7 @@ interface CurrentBeamArgs {
   vectorCursor: number;
   vectorPattern: "default" | "custom";
   vectorCustomPoints: Float32Array | null;
+  vectorCustomRenderPoints: Float32Array | null;
 }
 
 interface CurrentBeamPosition {
@@ -380,12 +383,15 @@ function currentBeamPosition(args: CurrentBeamArgs): CurrentBeamPosition | null 
   if (args.vectorPattern === "custom" && args.vectorCustomPoints) {
     const pointCount = args.vectorCustomPoints.length / 2;
     if (idx >= pointCount) return null;
-    const col = args.vectorCustomPoints[2 * idx] | 0;
-    const row = args.vectorCustomPoints[2 * idx + 1] | 0;
-    const safeCol = Math.max(0, Math.min(args.vectorEdge - 1, col));
-    const safeRow = Math.max(0, Math.min(args.vectorEdge - 1, row));
+    const x = args.vectorCustomPoints[2 * idx] | 0;
+    const y = args.vectorCustomPoints[2 * idx + 1] | 0;
+    const renderCol = args.vectorCustomRenderPoints?.[2 * idx] ?? x;
+    const renderRow = args.vectorCustomRenderPoints?.[2 * idx + 1] ?? y;
+    const safeCol = Math.max(0, Math.min(args.vectorEdge - 1, renderCol | 0));
+    const safeRow = Math.max(0, Math.min(args.vectorEdge - 1, renderRow | 0));
     return {
-      ...mapIndexToRegion(safeCol, safeRow, args.vectorEdge, activeROIRegion(args.roi)),
+      x,
+      y,
       adc: args.vectorImage[safeRow * args.vectorEdge + safeCol] ?? 0,
     };
   }

@@ -116,6 +116,7 @@ export function useScanStream() {
           pattern: req.pattern,
           points: req.points,
           edge,
+          roi: req.roi,
         })
       );
       dispatch(streamStarted());
