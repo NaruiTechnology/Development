@@ -185,7 +185,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
     kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
   const preferServerFigure =
     Boolean(serverFigureUrl) &&
-    (phase === "completed" || !hasLiveCanvasData || (lastResult?.kind === kind && chunksReceived === 0));
+    phase === "completed";
 
   // Canvas native size depends on mode for vector:
   //   raster:                                 resolution
@@ -244,18 +244,21 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       )}
 
       <div className="canvas-frame">
-        {preferServerFigure && serverFigureUrl ? (
+        <canvas
+          ref={canvasRef}
+          width={nativeEdge}
+          height={nativeEdge}
+          style={{
+            width: canvasSize,
+            height: canvasSize,
+            display: preferServerFigure ? "none" : undefined,
+          }}
+        />
+        {preferServerFigure && serverFigureUrl && (
           <img
             className="server-figure"
             src={serverFigureUrl}
             alt={`${kind} scan rendered by glasgow_service`}
-          />
-        ) : (
-          <canvas
-            ref={canvasRef}
-            width={nativeEdge}
-            height={nativeEdge}
-            style={{ width: canvasSize, height: canvasSize }}
           />
         )}
       </div>
