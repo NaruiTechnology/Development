@@ -382,7 +382,7 @@ body {
 }
 
 .tab {
-  padding: 10px 16px;
+  padding: 10px 12px;
   font-size: 12px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -391,6 +391,10 @@ body {
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
+}
+
+.tab--roi {
+  margin-right: 18px;
 }
 
 .tab[aria-selected="true"] {

@@ -46,6 +46,14 @@ export function App() {
             <div className="tabs" role="tablist" aria-label="Scan kind">
               <button
                 role="tab"
+                className="tab tab--roi"
+                aria-selected={kind === "roi"}
+                onClick={() => dispatch(setKind("roi"))}
+              >
+                ROI
+              </button>
+              <button
+                role="tab"
                 className="tab"
                 aria-selected={kind === "raster"}
                 onClick={() => dispatch(setKind("raster"))}
@@ -59,14 +67,6 @@ export function App() {
                 onClick={() => dispatch(setKind("vector"))}
               >
                 Vector
-              </button>
-              <button
-                role="tab"
-                className="tab"
-                aria-selected={kind === "roi"}
-                onClick={() => dispatch(setKind("roi"))}
-              >
-                ROI
               </button>
             </div>
             <div className="card__body">
@@ -90,6 +90,12 @@ export function App() {
                   <ScanControls kind={kind as ScanKind} />
                 </div>
               </div>
+              <div className="card">
+                <div className="card__header">
+                  <span className="card__title">Run report</span>
+                </div>
+                <ValidationPanel />
+              </div>
               <ErrorWedge />
             </>
           )}
@@ -112,12 +118,6 @@ export function App() {
             </div>
           </div>
 
-          {kind !== "roi" && <div className="card">
-            <div className="card__header">
-              <span className="card__title">Run report</span>
-            </div>
-            <ValidationPanel />
-          </div>}
         </section>
       </main>
 

@@ -197,6 +197,7 @@ const slice = createSlice({
       s.phase = "running";
       s.bytesReceived = 0;
       s.chunksReceived = 0;
+      s.lastResult = null;
       s.errorMessage = null;
     },
     streamProgress(
@@ -244,6 +245,9 @@ const slice = createSlice({
   extraReducers: (b) => {
     b.addCase(runRasterValidated.pending, (s) => {
       s.phase = "running";
+      s.bytesReceived = 0;
+      s.chunksReceived = 0;
+      s.lastResult = null;
       s.errorMessage = null;
     });
     b.addCase(runRasterValidated.fulfilled, (s, a) => {
@@ -256,6 +260,9 @@ const slice = createSlice({
     });
     b.addCase(runVectorValidated.pending, (s) => {
       s.phase = "running";
+      s.bytesReceived = 0;
+      s.chunksReceived = 0;
+      s.lastResult = null;
       s.errorMessage = null;
     });
     b.addCase(runVectorValidated.fulfilled, (s, a) => {

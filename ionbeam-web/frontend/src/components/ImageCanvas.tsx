@@ -57,6 +57,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   const roi = useAppSelector((s) => s.scan.roi);
 
   const phase = useAppSelector((s) => s.scan.phase);
+  const lastResult = useAppSelector((s) => s.scan.lastResult);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
   const showServerFigure = phase === "completed" || phase === "paused";
@@ -180,6 +181,11 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       : phase === "completed"
       ? 100
       : 0;
+  const hasLiveCanvasData =
+    kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
+  const preferServerFigure =
+    Boolean(serverFigureUrl) &&
+    (phase === "completed" || !hasLiveCanvasData || (lastResult?.kind === kind && chunksReceived === 0));
 
   // Canvas native size depends on mode for vector:
   //   raster:                                 resolution
@@ -238,7 +244,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       )}
 
       <div className="canvas-frame">
-        {serverFigureUrl ? (
+        {preferServerFigure && serverFigureUrl ? (
           <img
             className="server-figure"
             src={serverFigureUrl}
