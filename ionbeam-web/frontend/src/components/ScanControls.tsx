@@ -26,18 +26,24 @@ import { useAppDispatch, useAppSelector } from "../store";
 import {
   runRasterValidated,
   runVectorValidated,
+  streamErrored,
   streamReset,
   type ScanKind,
 } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
 import { useScanStream } from "../hooks/useScanStream";
+import {
+  rasterRequestWithBitmapSelection,
+  vectorRequestWithBitmapSelection,
+} from "../lib/bitmapVector";
 
 export function ScanControls({ kind }: { kind: ScanKind }) {
   const dispatch = useAppDispatch();
   const phase = useAppSelector((s) => s.scan.phase);
   const raster = useAppSelector((s) => s.scan.raster);
   const vector = useAppSelector((s) => s.scan.vector);
-  const roi = useAppSelector((s) => s.scan.roi.selection);
+  const roiState = useAppSelector((s) => s.scan.roi);
+  const roi = roiState.selection;
   const stream = useScanStream();
 
   // Phase taxonomy:
@@ -49,10 +55,24 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   const closing = phase === "stopping";
   const paused = phase === "paused";
 
-  function onRun() {
+  async function onRun() {
     if (kind === "roi") return;
-    if (kind === "raster") stream.startRaster({ ...raster, roi });
-    else stream.startVector({ ...vector, roi });
+    if (kind === "raster") {
+      try {
+        const req = await rasterRequestWithBitmapSelection({ ...raster, roi }, roiState);
+        stream.startRaster(req);
+      } catch (e: any) {
+        dispatch(streamErrored(e?.message ?? String(e)));
+      }
+    }
+    else {
+      try {
+        const req = await vectorRequestWithBitmapSelection({ ...vector, roi }, roiState);
+        stream.startVector(req);
+      } catch (e: any) {
+        dispatch(streamErrored(e?.message ?? String(e)));
+      }
+    }
   }
 
   function onPause() {
@@ -65,10 +85,24 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
     else dispatch(resetVector());
   }
 
-  function onRunValidated() {
+  async function onRunValidated() {
     if (kind === "roi") return;
-    if (kind === "raster") dispatch(runRasterValidated({ ...raster, roi }));
-    else dispatch(runVectorValidated({ ...vector, roi }));
+    if (kind === "raster") {
+      try {
+        const req = await rasterRequestWithBitmapSelection({ ...raster, roi }, roiState);
+        dispatch(runRasterValidated(req));
+      } catch (e: any) {
+        dispatch(streamErrored(e?.message ?? String(e)));
+      }
+    }
+    else {
+      try {
+        const req = await vectorRequestWithBitmapSelection({ ...vector, roi }, roiState);
+        dispatch(runVectorValidated(req));
+      } catch (e: any) {
+        dispatch(streamErrored(e?.message ?? String(e)));
+      }
+    }
   }
 
   function onClear() {

@@ -108,11 +108,11 @@
                         "---Note, If IsProduction=false and mode is not 'zeros', the simulation will be enabled with fake images"
                     ],
                     "imageResolution": 64,
-                    "source":          "pattern",
+                    "source":          "file",
                     "patternKind":     "bullseye",
                     "_alt_file": {
                         "source": "file",
-                        "path":   "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/unittest/testData/8_8_256.jpeg",
+                        "path":   "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false
                     },
                     "_alt_random": {

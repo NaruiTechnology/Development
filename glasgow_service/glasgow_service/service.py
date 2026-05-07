@@ -155,6 +155,86 @@ def _uint16_chunk_to_wire_bytes(chunk) -> bytes:
     return out.tobytes()
 
 
+def _simulation_enabled(config) -> bool:
+    return not bool(getattr(config, "IsProduction", True))
+
+
+def _bitmap_sample(bitmap, x_norm: float, y_norm: float) -> int:
+    x_norm = min(1.0, max(0.0, x_norm if math.isfinite(x_norm) else 0.0))
+    y_norm = min(1.0, max(0.0, y_norm if math.isfinite(y_norm) else 0.0))
+    x = min(bitmap.width - 1, max(0, round(x_norm * (bitmap.width - 1))))
+    y = min(bitmap.height - 1, max(0, round(y_norm * (bitmap.height - 1))))
+    return min(int(bitmap.pixels[y * bitmap.width + x]) * 64, 0x3FFF)
+
+
+def _bitmap_sample_point(bitmap, roi, x: int, y: int) -> int:
+    if roi is None:
+        return _bitmap_sample(bitmap, x / 0x3FFF, y / 0x3FFF)
+    x0, x1 = sorted((int(roi.x_start), int(roi.x_end)))
+    y0, y1 = sorted((int(roi.y_start), int(roi.y_end)))
+    return _bitmap_sample(
+        bitmap,
+        (int(x) - x0) / max(1, x1 - x0),
+        (int(y) - y0) / max(1, y1 - y0),
+    )
+
+
+def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
+    bitmap = getattr(req, "simulation_bitmap", None)
+    if bitmap is None or not bitmap.pixels:
+        return None
+
+    pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
+    total = req.resolution * req.resolution
+    chunks: List[array.array] = []
+    for start in range(0, total, pixels_per_chunk):
+        samples = array.array("H")
+        for idx in range(start, min(start + pixels_per_chunk, total)):
+            x = idx % req.resolution
+            y = idx // req.resolution
+            samples.append(_bitmap_sample(
+                bitmap,
+                0.0 if req.resolution <= 1 else x / (req.resolution - 1),
+                0.0 if req.resolution <= 1 else y / (req.resolution - 1),
+            ))
+        chunks.append(samples)
+    return chunks
+
+
+def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
+    bitmap = getattr(req, "simulation_bitmap", None)
+    if (
+        req.pattern is not VectorPattern.custom
+        or bitmap is None
+        or not bitmap.pixels
+    ):
+        return None
+
+    values_per_chunk = max(64, req.latency_bytes // 2)
+    chunks: List[array.array] = []
+    if req.points:
+        total = len(req.points)
+        for start in range(0, total, values_per_chunk):
+            samples = array.array("H")
+            for x, y, _dwell in req.points[start:start + values_per_chunk]:
+                samples.append(_bitmap_sample_point(bitmap, req.roi, x, y))
+            chunks.append(samples)
+    else:
+        total = bitmap.width * bitmap.height
+        for start in range(0, total, values_per_chunk):
+            samples = array.array("H")
+            for idx in range(start, min(start + values_per_chunk, total)):
+                x = idx // bitmap.height
+                y = idx % bitmap.height
+                samples.append(_bitmap_sample(
+                    bitmap,
+                    0.0 if bitmap.width <= 1 else x / (bitmap.width - 1),
+                    0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
+                ))
+            chunks.append(samples)
+    return chunks
+
+
 class DeviceService:
     """One scan at a time. One USB connection, lazily opened, dropped on error."""
 
@@ -244,6 +324,25 @@ class DeviceService:
     # -------- streaming (for WebSocket) -----------------------------------
 
     async def raster_scan(self, req: RasterRequest) -> AsyncIterator[bytes]:
+        simulated_chunks = (
+            _bitmap_raster_chunks(req) if _simulation_enabled(self._config) else None
+        )
+        if simulated_chunks is not None:
+            async with self._acquire("raster"):
+                self._set_last_scan({
+                    "kind": "raster",
+                    "chunks": simulated_chunks,
+                    "resolution": req.resolution,
+                    "dwell": req.dwell,
+                    "latency_bytes": req.latency_bytes,
+                    "simulation_bitmap": req.simulation_bitmap,
+                    "source": "stream",
+                })
+                for chunk in simulated_chunks:
+                    self._status.chunks_in_flight += 1
+                    yield _uint16_chunk_to_wire_bytes(chunk)
+            return
+
         # Buffer chunks for the /scan/last/* download endpoints. We hold
         # references to the chunks already-yielded; the bytes are still
         # in memory anyway because the WebSocket frame keeps them until
@@ -275,6 +374,27 @@ class DeviceService:
                 })
 
     async def vector_scan(self, req: VectorRequest) -> AsyncIterator[bytes]:
+        simulated_chunks = (
+            _bitmap_vector_chunks(req) if _simulation_enabled(self._config) else None
+        )
+        if simulated_chunks is not None:
+            async with self._acquire("vector"):
+                self._set_last_scan({
+                    "kind": "vector",
+                    "chunks": simulated_chunks,
+                    "latency_bytes": req.latency_bytes,
+                    "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                    "points": req.points,
+                    "vector_resolution": req.vector_resolution,
+                    "roi": req.roi,
+                    "simulation_bitmap": req.simulation_bitmap,
+                    "source": "stream",
+                })
+                for chunk in simulated_chunks:
+                    self._status.chunks_in_flight += 1
+                    yield _uint16_chunk_to_wire_bytes(chunk)
+            return
+
         captured: List = []
         async with self._acquire("vector"):
             conn = await self._ensure_conn()
@@ -305,6 +425,40 @@ class DeviceService:
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
     async def run_raster(self, req: RasterRequest) -> ScanResult:
+        simulated_chunks = (
+            _bitmap_raster_chunks(req) if _simulation_enabled(self._config) else None
+        )
+        if simulated_chunks is not None:
+            async with self._acquire("raster"):
+                pixels_per_chunk = math.ceil(req.latency_bytes / req.dwell)
+                total_pixels = req.resolution * req.resolution
+                expected_chunks = math.ceil(total_pixels / pixels_per_chunk)
+                self._set_last_scan({
+                    "kind": "raster",
+                    "chunks": simulated_chunks,
+                    "resolution": req.resolution,
+                    "dwell": req.dwell,
+                    "latency_bytes": req.latency_bytes,
+                    "simulation_bitmap": req.simulation_bitmap,
+                    "source": "validated",
+                })
+                validation = (
+                    self._validate_raster(simulated_chunks, pixels_per_chunk, expected_chunks)
+                    if req.do_validate else None
+                )
+                return ScanResult(
+                    kind="raster",
+                    chunks=len(simulated_chunks),
+                    bytes=sum(len(c) * 2 for c in simulated_chunks),
+                    resolution=req.resolution,
+                    dwell=req.dwell,
+                    expected_chunks=expected_chunks,
+                    pixels_per_chunk=pixels_per_chunk,
+                    send_time_s=0.0,
+                    has_data=bool(simulated_chunks),
+                    validation=validation,
+                )
+
         chunks: List = []
         async with self._acquire("raster"):
             conn = await self._ensure_conn()
@@ -358,6 +512,33 @@ class DeviceService:
         )
 
     async def run_vector(self, req: VectorRequest) -> ScanResult:
+        simulated_chunks = (
+            _bitmap_vector_chunks(req) if _simulation_enabled(self._config) else None
+        )
+        if simulated_chunks is not None:
+            async with self._acquire("vector"):
+                self._set_last_scan({
+                    "kind": "vector",
+                    "chunks": simulated_chunks,
+                    "latency_bytes": req.latency_bytes,
+                    "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                    "points": req.points,
+                    "vector_resolution": req.vector_resolution,
+                    "roi": req.roi,
+                    "simulation_bitmap": req.simulation_bitmap,
+                    "source": "validated",
+                })
+                validation = self._validate_vector(simulated_chunks) if req.do_validate else None
+                return ScanResult(
+                    kind="vector",
+                    chunks=len(simulated_chunks),
+                    bytes=sum(len(c) * 2 for c in simulated_chunks),
+                    process_time_s=0.0 if req.pre_process else None,
+                    send_time_s=0.0,
+                    has_data=bool(simulated_chunks),
+                    validation=validation,
+                )
+
         chunks: List = []
         process_time = 0.0
 
@@ -575,7 +756,39 @@ class DeviceService:
         import matplotlib.pyplot as plt
 
         last = self._last
-        if last["kind"] == "raster":
+        simulation_bitmap = last.get("simulation_bitmap")
+        if simulation_bitmap is not None and getattr(simulation_bitmap, "pixels", None):
+            img = np.asarray(simulation_bitmap.pixels, dtype=np.uint16).reshape(
+                int(simulation_bitmap.height),
+                int(simulation_bitmap.width),
+            ) * 64
+            fig, ax = plt.subplots(figsize=(6, 6))
+            vmin, vmax = _percentile_clip_uint16(img)
+            if view == "texture":
+                ax.imshow(img, cmap="gray", interpolation="nearest",
+                          aspect="equal", vmin=vmin, vmax=vmax)
+                ax.set_axis_off()
+                fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+            else:
+                bounds = _roi_bounds(last.get("roi"))
+                extent = None
+                if bounds is not None:
+                    x0, x1, y0, y1 = bounds
+                    extent = [x0, x1, y1, y0]
+                im = ax.imshow(
+                    img >> 8,
+                    cmap="gray",
+                    interpolation="nearest",
+                    aspect="equal",
+                    vmin=0,
+                    vmax=255,
+                    extent=extent,
+                )
+                ax.set_title(f"{last['kind'].title()} scan: extracted ROI source")
+                ax.set_xlabel("X (DAC code)" if bounds is not None else "X (pixels)")
+                ax.set_ylabel("Y (DAC code)" if bounds is not None else "Y (pixels)")
+                fig.colorbar(im, ax=ax, label="ADC sample (8-bit)")
+        elif last["kind"] == "raster":
             res = last["resolution"]
             flat = np.fromiter(
                 (v for chunk in last["chunks"] for v in chunk),

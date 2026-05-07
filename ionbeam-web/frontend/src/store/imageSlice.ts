@@ -73,6 +73,7 @@ interface SetupVectorPayload {
   edge?: number;
   /** Active ROI in 14-bit DAC coordinates. Used to map custom points to pixels. */
   roi?: ROIRequest | null;
+  simulationBitmap?: { width: number; height: number } | null;
 }
 
 const slice = createSlice({
@@ -124,6 +125,32 @@ const slice = createSlice({
         state.vectorCustomPoints = flat;
         state.vectorCustomRenderPoints = renderFlat;
         state.vectorCustomCount = pts.length;
+      } else if (pattern === "custom" && a.payload.simulationBitmap) {
+        const width = Math.max(1, a.payload.simulationBitmap.width | 0);
+        const height = Math.max(1, a.payload.simulationBitmap.height | 0);
+        const count = width * height;
+        const flat = new Float32Array(count * 2);
+        const renderFlat = new Float32Array(count * 2);
+        const bounds = a.payload.roi
+          ? {
+              x0: Math.min(a.payload.roi.x_start, a.payload.roi.x_end),
+              x1: Math.max(a.payload.roi.x_start, a.payload.roi.x_end),
+              y0: Math.min(a.payload.roi.y_start, a.payload.roi.y_end),
+              y1: Math.max(a.payload.roi.y_start, a.payload.roi.y_end),
+            }
+          : { x0: 0, x1: 16383, y0: 0, y1: 16383 };
+        for (let x = 0; x < width; x++) {
+          for (let y = 0; y < height; y++) {
+            const i = x * height + y;
+            flat[2 * i] = lerp(bounds.x0, bounds.x1, width <= 1 ? 0 : x / (width - 1));
+            flat[2 * i + 1] = lerp(bounds.y0, bounds.y1, height <= 1 ? 0 : y / (height - 1));
+            renderFlat[2 * i] = mapCoordToPixel(x, 0, Math.max(1, width - 1), edge);
+            renderFlat[2 * i + 1] = mapCoordToPixel(y, 0, Math.max(1, height - 1), edge);
+          }
+        }
+        state.vectorCustomPoints = flat;
+        state.vectorCustomRenderPoints = renderFlat;
+        state.vectorCustomCount = count;
       } else {
         state.vectorCustomPoints = null;
         state.vectorCustomRenderPoints = null;
@@ -237,4 +264,8 @@ function mapCoordToPixel(value: number, start: number, end: number, edge: number
   if (edge <= 1 || denom === 0) return 0;
   const t = (value - start) / denom;
   return Math.max(0, Math.min(edge - 1, Math.round(t * (edge - 1))));
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }

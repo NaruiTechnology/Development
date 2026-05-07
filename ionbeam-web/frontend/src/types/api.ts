@@ -26,6 +26,9 @@ export interface RasterRequest {
   cookie: number;         // 0..65535
   do_validate: boolean;
   roi?: ROIRequest | null;
+  /** Browser-provided grayscale crop for simulation-only raster scans.
+   *  Production hardware ignores it and uses the DAC ROI normally. */
+  simulation_bitmap?: SimulationBitmap | null;
 }
 
 export type VectorPattern = "default" | "custom";
@@ -43,6 +46,15 @@ export interface VectorRequest {
   pre_process: boolean;
   do_validate: boolean;
   roi?: ROIRequest | null;
+  /** Browser-provided grayscale crop for simulation-only vector scans.
+   *  Production hardware ignores it and uses the DAC points normally. */
+  simulation_bitmap?: SimulationBitmap | null;
+}
+
+export interface SimulationBitmap {
+  width: number;
+  height: number;
+  pixels: number[];
 }
 
 export interface ROIRequest {

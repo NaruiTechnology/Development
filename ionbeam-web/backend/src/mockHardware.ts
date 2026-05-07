@@ -24,6 +24,7 @@ interface RasterParams {
   latency_bytes: number;
   cookie?: number;
   frame_blank?: boolean;
+  simulation_bitmap?: SimulationBitmapPayload | null;
 }
 
 interface VectorParams {
@@ -33,12 +34,19 @@ interface VectorParams {
   /** Edge length for default-pattern sweeps (256 / 512 / 1024 / 2048).
    *  Total samples = edge². Coverage is always the full DAC range. */
   vector_resolution?: number;
+  roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
+  simulation_bitmap?: SimulationBitmapPayload | null;
+}
+
+interface SimulationBitmapPayload {
+  width: number;
+  height: number;
+  pixels: number[];
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 const DAC_BITS = 14;
-const DAC_RANGE = 2048;
 const ADC_MAX = (1 << DAC_BITS) - 1;
 
 interface SimulationImage {
@@ -213,6 +221,35 @@ function sampleFakeAdc(dacX: number, dacY: number): number {
   return Math.min(img.pixels[yIdx * img.resolution + xIdx] * 64, ADC_MAX);
 }
 
+function sampleSimulationBitmap(
+  bitmap: SimulationBitmapPayload,
+  xNorm: number,
+  yNorm: number
+): number {
+  const x = Math.max(0, Math.min(bitmap.width - 1, Math.round(xNorm * (bitmap.width - 1))));
+  const y = Math.max(0, Math.min(bitmap.height - 1, Math.round(yNorm * (bitmap.height - 1))));
+  const px = bitmap.pixels[y * bitmap.width + x] ?? 0;
+  return Math.min(Math.max(0, Number(px) & 0xff) * 64, ADC_MAX);
+}
+
+function sampleSimulationBitmapPoint(
+  bitmap: SimulationBitmapPayload,
+  roi: VectorParams["roi"],
+  x: number,
+  y: number
+): number {
+  if (!roi) return sampleSimulationBitmap(bitmap, x / ADC_MAX, y / ADC_MAX);
+  const x0 = Math.min(roi.x_start, roi.x_end);
+  const x1 = Math.max(roi.x_start, roi.x_end);
+  const y0 = Math.min(roi.y_start, roi.y_end);
+  const y1 = Math.max(roi.y_start, roi.y_end);
+  return sampleSimulationBitmap(
+    bitmap,
+    (x - x0) / Math.max(1, x1 - x0),
+    (y - y0) / Math.max(1, y1 - y0)
+  );
+}
+
 function writeSampleBE(buf: Buffer, sampleIndex: number, value: number): void {
   const o = sampleIndex * 2;
   buf[o] = (value >> 8) & 0xff;
@@ -243,7 +280,14 @@ export async function streamMockRaster(
       const y = Math.floor(idx / p.resolution);
       const dacX = Math.floor((x * (1 << DAC_BITS)) / p.resolution);
       const dacY = Math.floor((y * (1 << DAC_BITS)) / p.resolution);
-      writeSampleBE(buf, k, sampleFakeAdc(dacX, dacY));
+      const sample = p.simulation_bitmap
+        ? sampleSimulationBitmap(
+            p.simulation_bitmap,
+            p.resolution <= 1 ? 0 : x / (p.resolution - 1),
+            p.resolution <= 1 ? 0 : y / (p.resolution - 1)
+          )
+        : sampleFakeAdc(dacX, dacY);
+      writeSampleBE(buf, k, sample);
     }
     ws.send(buf);
     sent += n;
@@ -263,15 +307,23 @@ export async function streamMockVector(
   ws: WebSocket,
   p: VectorParams
 ): Promise<void> {
-  // Default pattern: synthesise edge² points in the same (x, y) order
-  // the real FPGA emits, scaled by stride = 2048 / edge so coverage
-  // matches a real default sweep. Custom: replay the client's points.
+  // Default pattern: synthesise edge² 14-bit DAC points in the same
+  // (x, y) order the real FPGA emits. Custom replays the client's
+  // already-14-bit DAC tuples.
   let pts: Array<[number, number, number]>;
   if (p.pattern === "custom" && p.points && p.points.length) {
     pts = p.points;
+  } else if (p.pattern === "custom" && p.simulation_bitmap) {
+    const bitmap = p.simulation_bitmap;
+    pts = new Array(bitmap.width * bitmap.height);
+    for (let x = 0; x < bitmap.width; x++) {
+      for (let y = 0; y < bitmap.height; y++) {
+        pts[x * bitmap.height + y] = [x, y, 1];
+      }
+    }
   } else {
     const edge = p.vector_resolution ?? 2048;
-    const stride = Math.max(1, Math.floor(2048 / edge));
+    const stride = Math.max(1, Math.floor((1 << DAC_BITS) / edge));
     pts = new Array(edge * edge);
     for (let x = 0; x < edge; x++) {
       for (let y = 0; y < edge; y++) {
@@ -290,7 +342,16 @@ export async function streamMockVector(
     const buf = Buffer.alloc(slice.length * 2);
     for (let k = 0; k < slice.length; k++) {
       const [x, y] = slice[k];
-      writeSampleBE(buf, k, sampleFakeAdc(x * 8, y * 8));
+      const sample = p.simulation_bitmap
+        ? p.points && p.points.length
+          ? sampleSimulationBitmapPoint(p.simulation_bitmap, p.roi, x, y)
+          : sampleSimulationBitmap(
+              p.simulation_bitmap,
+              p.simulation_bitmap.width <= 1 ? 0 : x / (p.simulation_bitmap.width - 1),
+              p.simulation_bitmap.height <= 1 ? 0 : y / (p.simulation_bitmap.height - 1)
+            )
+        : sampleFakeAdc(x, y);
+      writeSampleBE(buf, k, sample);
     }
     ws.send(buf);
     i += valuesPerChunk;

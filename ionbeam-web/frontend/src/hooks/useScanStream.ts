@@ -106,17 +106,27 @@ export function useScanStream() {
   const startVector = useCallback(
     (req: VectorRequest) => {
       stopExisting(wsRef);
-      // Default-pattern scans store an edge x edge dense buffer (where
-      // edge = vector_resolution: 256/512/1024/2048). Custom scans need
-      // the full 2048-DAC space because the operator's points use
-      // those coordinates directly.
-      const edge = req.pattern === "custom" ? 2048 : req.vector_resolution;
+      // Default-pattern scans store an edge x edge dense buffer. Extracted
+      // ROI simulations are custom scans but render in compact bitmap space
+      // so the scan can start without first generating/transmitting a huge
+      // point list.
+      const edge = req.simulation_bitmap
+        ? Math.max(req.simulation_bitmap.width, req.simulation_bitmap.height)
+        : req.pattern === "custom"
+        ? 2048
+        : req.vector_resolution;
       dispatch(
         setupVector({
           pattern: req.pattern,
           points: req.points,
           edge,
           roi: req.roi,
+          simulationBitmap: req.simulation_bitmap
+            ? {
+                width: req.simulation_bitmap.width,
+                height: req.simulation_bitmap.height,
+              }
+            : undefined,
         })
       );
       dispatch(streamStarted());

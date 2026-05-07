@@ -41,6 +41,13 @@ class RasterRequest(BaseModel):
         default=None,
         description="Optional DAC-code ROI bounds. Coordinates are inclusive 0..16383.",
     )
+    simulation_bitmap: Optional["SimulationBitmap"] = Field(
+        default=None,
+        description=(
+            "Optional browser-provided grayscale crop for simulation-only raster scans. "
+            "Ignored for production hardware."
+        ),
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -57,6 +64,20 @@ class RasterRequest(BaseModel):
 class VectorPattern(str, Enum):
     default = "default"
     custom  = "custom"
+
+
+class SimulationBitmap(BaseModel):
+    width:  int = Field(..., ge=1, le=4096)
+    height: int = Field(..., ge=1, le=4096)
+    pixels: List[int] = Field(..., max_length=1_000_000)
+
+    @field_validator("pixels")
+    @classmethod
+    def _pixels_are_bytes(cls, v: List[int]) -> List[int]:
+        for px in v:
+            if px < 0 or px > 255:
+                raise ValueError("simulation_bitmap pixels must be 0..255")
+        return v
 
 
 class VectorRequest(BaseModel):
@@ -87,6 +108,13 @@ class VectorRequest(BaseModel):
     roi:            Optional["ROIRequest"] = Field(
         default=None,
         description="Optional DAC-code ROI bounds. Coordinates are inclusive 0..16383.",
+    )
+    simulation_bitmap: Optional[SimulationBitmap] = Field(
+        default=None,
+        description=(
+            "Optional browser-provided grayscale crop for simulation-only vector scans. "
+            "Ignored for production hardware."
+        ),
     )
 
     @field_validator("vector_resolution")
