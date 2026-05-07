@@ -48,9 +48,11 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   const raster = useAppSelector((s) => s.scan.raster);
   const vector = useAppSelector((s) => s.scan.vector);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const defaults = useAppSelector((s) => s.status.defaults);
   const roi = roiState.selection;
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
+  const isProduction = defaults?.is_production !== false;
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one
@@ -65,7 +67,11 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
     if (kind === "roi") return;
     if (kind === "raster") {
       try {
-        const req = await rasterRequestWithBitmapSelection({ ...raster, roi }, roiState);
+        const req = await rasterRequestWithBitmapSelection(
+          { ...raster, roi },
+          roiState,
+          { isProduction }
+        );
         stream.startRaster(req);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -73,7 +79,11 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
     }
     else {
       try {
-        const req = await vectorRequestWithBitmapSelection({ ...vector, roi }, roiState);
+        const req = await vectorRequestWithBitmapSelection(
+          { ...vector, roi },
+          roiState,
+          { isProduction }
+        );
         stream.startVector(req);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -95,7 +105,11 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
     if (kind === "roi") return;
     if (kind === "raster") {
       try {
-        const req = await rasterRequestWithBitmapSelection({ ...raster, roi }, roiState);
+        const req = await rasterRequestWithBitmapSelection(
+          { ...raster, roi },
+          roiState,
+          { isProduction }
+        );
         dispatch(runRasterValidated(req));
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -103,7 +117,11 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
     }
     else {
       try {
-        const req = await vectorRequestWithBitmapSelection({ ...vector, roi }, roiState);
+        const req = await vectorRequestWithBitmapSelection(
+          { ...vector, roi },
+          roiState,
+          { isProduction }
+        );
         dispatch(runVectorValidated(req));
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));

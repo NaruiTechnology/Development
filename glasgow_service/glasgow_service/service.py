@@ -287,6 +287,7 @@ class DeviceService:
         return {
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
+            "is_production": bool(getattr(self._config, "IsProduction", True)),
         }
 
     # -------- internal: lazy connect / drop-on-error ----------------------
@@ -612,9 +613,20 @@ class DeviceService:
 
     def _build_vector_cmd(self, req: VectorRequest) -> VectorScanCommand:
         if req.pattern is VectorPattern.custom:
-            if not req.points:
+            if not req.points and not (
+                req.simulation_bitmap is not None
+                and req.roi is not None
+                and not _simulation_enabled(self._config)
+            ):
                 raise ValueError("pattern=custom requires non-empty `points`")
-            iter_points: Iterable[Tuple[int, int, int]] = iter(req.points)
+            if req.points:
+                iter_points: Iterable[Tuple[int, int, int]] = iter(req.points)
+            else:
+                # Production compatibility for browser ROI bitmap scans:
+                # simulation_bitmap is ignored by hardware, so fall back to
+                # the regular ROI vector sweep rather than rejecting the
+                # request as custom-without-points.
+                iter_points = _roi_vector_iter(req.vector_resolution, req.roi)
         else:
             iter_points = _roi_vector_iter(req.vector_resolution, req.roi)
 

@@ -25,7 +25,8 @@ export function clearBitmapSelectionCache(): void {
 
 export async function rasterRequestWithBitmapSelection(
   req: RasterRequest,
-  roi: ROIState
+  roi: ROIState,
+  options: { isProduction?: boolean } = {}
 ): Promise<RasterRequest> {
   if (!roi.imageDataUrl || !roi.selection || !isPartialSelection(roi)) {
     return req;
@@ -39,13 +40,14 @@ export async function rasterRequestWithBitmapSelection(
   return {
     ...req,
     roi: converted.roi,
-    simulation_bitmap: converted.simulationBitmap,
+    simulation_bitmap: options.isProduction ? null : converted.simulationBitmap,
   };
 }
 
 export async function vectorRequestWithBitmapSelection(
   req: VectorRequest,
-  roi: ROIState
+  roi: ROIState,
+  options: { isProduction?: boolean } = {}
 ): Promise<VectorRequest> {
   if (!roi.imageDataUrl || !roi.selection || !isPartialSelection(roi)) {
     return req;
@@ -54,6 +56,16 @@ export async function vectorRequestWithBitmapSelection(
   const converted = await bitmapSelectionToVector(roi);
   if (!converted.simulationBitmap.pixels.length) {
     return req;
+  }
+
+  if (options.isProduction) {
+    return {
+      ...req,
+      pattern: "default",
+      points: null,
+      roi: converted.roi,
+      simulation_bitmap: null,
+    };
   }
 
   return {

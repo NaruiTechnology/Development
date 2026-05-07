@@ -379,6 +379,7 @@ export const mockRest = {
     const raster = action.rasterScan ?? {};
     const vector = action.vectorScan ?? {};
     return {
+      is_production: false,
       raster: {
         ...raster,
         resolution: finiteNumber(raster.resolution, 512),
