@@ -56,6 +56,7 @@ export interface ROIState {
   selection: ROIRequest | null;
   imageName: string;
   imageDataUrl: string | null;
+  keep_loaded_bitmap_after_scan: boolean;
 }
 
 const defaultRaster: RasterRequest = {
@@ -99,6 +100,7 @@ const initialState: ScanState = {
     selection: null,
     imageName: "No image selected",
     imageDataUrl: null,
+    keep_loaded_bitmap_after_scan: true,
   },
   vectorRenderMode: "decimated",
 };
@@ -188,6 +190,15 @@ const slice = createSlice({
         s.raster.roi = a.payload.selection ?? null;
         s.vector.roi = a.payload.selection ?? null;
       }
+    },
+    clearROIImage(s) {
+      s.roi.imageName = "No image selected";
+      s.roi.imageDataUrl = null;
+    },
+    clearROISelection(s) {
+      s.roi.selection = null;
+      s.raster.roi = null;
+      s.vector.roi = null;
     },
     setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
       s.vectorRenderMode = a.payload;
@@ -284,6 +295,8 @@ export const {
   updateRaster,
   updateVector,
   updateROI,
+  clearROIImage,
+  clearROISelection,
   setVectorRenderMode,
   streamStarted,
   streamProgress,

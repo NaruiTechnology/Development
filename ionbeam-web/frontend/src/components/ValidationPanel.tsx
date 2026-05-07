@@ -21,6 +21,7 @@ import {
   vectorCsvBlob,
   downloadBlob,
 } from "../lib/csvExport";
+import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
 
@@ -192,7 +193,8 @@ export function ValidationPanel() {
           onClick={downloadCsv}
           title="Download the most recent scan's data as CSV"
         >
-          {csvState === "fetching" ? "Fetching CSV…" : "📥 Download CSV"}
+          <Icon name="download" />
+          {csvState === "fetching" ? "Fetching CSV..." : "Download CSV"}
         </button>
         <button
           className="btn"
@@ -200,7 +202,8 @@ export function ValidationPanel() {
           onClick={downloadFigure}
           title="Render the most recent scan as a matplotlib PNG and download"
         >
-          {figState === "fetching" ? "Rendering…" : "📥 Download figure (PNG)"}
+          <Icon name="image" />
+          {figState === "fetching" ? "Rendering..." : "Download figure (PNG)"}
         </button>
       </div>
 

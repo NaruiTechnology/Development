@@ -8,6 +8,7 @@ import {
   type ThemeName,
 } from "../store/themeSlice";
 import { useAppDispatch, useAppSelector } from "../store";
+import { Icon } from "./Icon";
 
 const STATE_LABELS: Record<string, string> = {
   idle: "Idle",
@@ -27,6 +28,12 @@ const THEME_TITLES: Record<ThemeName, string> = {
   navy: "Default Ion Beam navy theme",
   black: "OLED-friendly black theme for low-ambient labs",
   light: "Light theme for daylight monitors",
+};
+
+const THEME_ICONS: Record<ThemeName, Parameters<typeof Icon>[0]["name"]> = {
+  navy: "layers",
+  black: "moon",
+  light: "sun",
 };
 
 export function Header() {
@@ -105,6 +112,7 @@ export function Header() {
               title={THEME_TITLES[t]}
               onClick={() => dispatch(setTheme(t))}
             >
+              <Icon name={THEME_ICONS[t]} />
               {THEME_LABELS[t]}
             </button>
           ))}
@@ -122,6 +130,7 @@ export function Header() {
         onClick={() => dispatch(reconnectDevice())}
         title="Drop and re-establish the USB connection (POST /admin/reconnect)"
       >
+        <Icon name="refresh" />
         Reconnect
       </button>
     </header>

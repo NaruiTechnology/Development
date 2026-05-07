@@ -19,6 +19,10 @@ let cachedExtraction:
     }
   | null = null;
 
+export function clearBitmapSelectionCache(): void {
+  cachedExtraction = null;
+}
+
 export async function rasterRequestWithBitmapSelection(
   req: RasterRequest,
   roi: ROIState

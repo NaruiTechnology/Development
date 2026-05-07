@@ -22,8 +22,11 @@
  * from where it left off — which was never true. The button stays
  * labeled "Run" so the operator knows what it actually does.
  */
+import { useEffect, useRef } from "react";
+
 import { useAppDispatch, useAppSelector } from "../store";
 import {
+  clearROIImage,
   runRasterValidated,
   runVectorValidated,
   streamErrored,
@@ -33,9 +36,11 @@ import {
 import { resetRaster, resetVector } from "../store/imageSlice";
 import { useScanStream } from "../hooks/useScanStream";
 import {
+  clearBitmapSelectionCache,
   rasterRequestWithBitmapSelection,
   vectorRequestWithBitmapSelection,
 } from "../lib/bitmapVector";
+import { Icon } from "./Icon";
 
 export function ScanControls({ kind }: { kind: ScanKind }) {
   const dispatch = useAppDispatch();
@@ -45,6 +50,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   const roiState = useAppSelector((s) => s.scan.roi);
   const roi = roiState.selection;
   const stream = useScanStream();
+  const prevPhaseRef = useRef(phase);
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one
@@ -126,6 +132,20 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   // attempt would race the first.
   const stopDisabled = !(streaming || paused);
 
+  useEffect(() => {
+    const completedNow = phase === "completed" && prevPhaseRef.current !== "completed";
+    prevPhaseRef.current = phase;
+    if (
+      completedNow &&
+      roiState.imageDataUrl &&
+      roiState.selection &&
+      !roiState.keep_loaded_bitmap_after_scan
+    ) {
+      clearBitmapSelectionCache();
+      dispatch(clearROIImage());
+    }
+  }, [dispatch, phase, roiState.imageDataUrl, roiState.keep_loaded_bitmap_after_scan, roiState.selection]);
+
   return (
     <div className="button-row">
       <button
@@ -138,7 +158,8 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
             : "Open a WebSocket and stream chunks live"
         }
       >
-        ▶ Run
+        <Icon name="play" />
+        Run
       </button>
       <button
         className="btn btn--warn"
@@ -146,7 +167,8 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         onClick={onPause}
         title="End the scan but keep the partial image on the canvas"
       >
-        {closing ? "❙❙ Pausing…" : "❙❙ Pause"}
+        <Icon name="pause" />
+        {closing ? "Pausing..." : "Pause"}
       </button>
       <button
         className="btn btn--danger"
@@ -154,7 +176,8 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         onClick={onStop}
         title="End the scan and clear the canvas"
       >
-        ■ Stop
+        <Icon name="square" />
+        Stop
       </button>
 
       <span className="spacer" />
@@ -165,9 +188,11 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         onClick={onRunValidated}
         title="POST /scan/{kind}/run — returns timing + validation report"
       >
+        <Icon name="check" />
         Run validated
       </button>
       <button className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
+        <Icon name="x" />
         Clear
       </button>
     </div>

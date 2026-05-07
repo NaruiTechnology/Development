@@ -21,6 +21,7 @@ import {
   type VectorRenderMode,
 } from "../store/scanSlice";
 import type { ROIRequest } from "../types/api";
+import { Icon } from "./Icon";
 
 const DAC_RANGE = 2048;
 
@@ -229,6 +230,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
                 }
                 onClick={() => dispatch(setVectorRenderMode(m))}
               >
+                <Icon name={m === "decimated" ? "scan" : "grid"} />
                 {m === "decimated"
                   ? `Decimated (${vectorEdge}×${vectorEdge})`
                   : `Native (${DAC_RANGE}×${DAC_RANGE})`}

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
-import { updateROI, type ROIState } from "../store/scanSlice";
+import { clearROIImage, clearROISelection, updateROI, type ROIState } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
+import { clearBitmapSelectionCache } from "../lib/bitmapVector";
+import { Icon } from "./Icon";
 
 const EDGE = 640;
 const UNITS = [
@@ -27,6 +29,9 @@ export function ROIEditor({
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const [draft, setDraft] = useState<ROIRequest | null>(roi.selection);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const hasLoadedImage = Boolean(roi.imageDataUrl);
+  const hasPartialRegion = Boolean(roi.selection);
+  const bitmapCleanupDisabled = !hasLoadedImage || !hasPartialRegion;
 
   useEffect(() => {
     if (!roi.imageDataUrl) {
@@ -52,6 +57,7 @@ export function ROIEditor({
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
+        clearBitmapSelectionCache();
         dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result }));
       }
     };
@@ -123,13 +129,33 @@ export function ROIEditor({
     ctx.restore();
   }
 
+  function clearLoadedImage() {
+    clearBitmapSelectionCache();
+    imageRef.current = null;
+    dispatch(clearROIImage());
+  }
+
+  function clearPartialRegion() {
+    clearBitmapSelectionCache();
+    dispatch(clearROISelection());
+  }
+
   return (
     <div>
       {(variant === "controls" || variant === "all") && (
         <>
           <div className="button-row" style={{ marginBottom: 10 }}>
             <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
+              <Icon name="upload" />
               SELECT
+            </button>
+            <button className="btn btn--ghost" disabled={disabled || !hasLoadedImage} onClick={clearLoadedImage}>
+              <Icon name="trash" />
+              Clear image
+            </button>
+            <button className="btn btn--ghost" disabled={disabled || !hasPartialRegion} onClick={clearPartialRegion}>
+              <Icon name="crop" />
+              Clear region
             </button>
             <span className="muted" style={{ fontSize: 12 }}>{roi.imageName}</span>
             <input
@@ -152,7 +178,10 @@ export function ROIEditor({
               max={Math.max(0, roi.x_end - 1)}
               rangeLabel={`0 and ${Math.max(0, roi.x_end - 1)} (less than X end)`}
               disabled={disabled}
-              onChange={(v) => dispatch(updateROI({ x_origin: v }))}
+              onChange={(v) => {
+                clearBitmapSelectionCache();
+                dispatch(updateROI({ x_origin: v }));
+              }}
             />
             <Num
               label="X end"
@@ -161,7 +190,10 @@ export function ROIEditor({
               max={16383}
               rangeLabel={`${Math.min(16383, roi.x_origin + 1)} and 16383 (greater than X origin)`}
               disabled={disabled}
-              onChange={(v) => dispatch(updateROI({ x_end: v }))}
+              onChange={(v) => {
+                clearBitmapSelectionCache();
+                dispatch(updateROI({ x_end: v }));
+              }}
             />
           </div>
           <div className="field-row">
@@ -172,7 +204,10 @@ export function ROIEditor({
               max={Math.max(0, roi.y_end - 1)}
               rangeLabel={`0 and ${Math.max(0, roi.y_end - 1)} (less than Y end)`}
               disabled={disabled}
-              onChange={(v) => dispatch(updateROI({ y_origin: v }))}
+              onChange={(v) => {
+                clearBitmapSelectionCache();
+                dispatch(updateROI({ y_origin: v }));
+              }}
             />
             <Num
               label="Y end"
@@ -181,7 +216,10 @@ export function ROIEditor({
               max={16383}
               rangeLabel={`${Math.min(16383, roi.y_origin + 1)} and 16383 (greater than Y origin)`}
               disabled={disabled}
-              onChange={(v) => dispatch(updateROI({ y_end: v }))}
+              onChange={(v) => {
+                clearBitmapSelectionCache();
+                dispatch(updateROI({ y_end: v }));
+              }}
             />
           </div>
 
@@ -195,6 +233,16 @@ export function ROIEditor({
             Display grid line
           </label>
 
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={roi.keep_loaded_bitmap_after_scan}
+              disabled={disabled || bitmapCleanupDisabled}
+              onChange={(e) => dispatch(updateROI({ keep_loaded_bitmap_after_scan: e.target.checked }))}
+            />
+            Keep loaded bitmap after scan
+          </label>
+
           <div className="field-row">
             <CoordinateField
               label="Start (x, y)"
@@ -203,6 +251,7 @@ export function ROIEditor({
               validate={(p) => validateStartPoint(p, roi)}
               onChange={(p) => {
                 const end = selectionEnd(roi);
+                clearBitmapSelectionCache();
                 dispatch(
                   updateROI({
                     selection: {
@@ -222,6 +271,7 @@ export function ROIEditor({
               validate={(p) => validateEndPoint(p, roi)}
               onChange={(p) => {
                 const start = selectionStart(roi);
+                clearBitmapSelectionCache();
                 dispatch(
                   updateROI({
                     selection: {
@@ -278,6 +328,7 @@ export function ROIEditor({
               const next = rectFromPoints(dragStartRef.current, canvasPoint(e));
               dragStartRef.current = null;
               setDraft(null);
+              clearBitmapSelectionCache();
               dispatch(updateROI({ selection: next }));
               setTip(null);
             }}

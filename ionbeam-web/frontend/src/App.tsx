@@ -19,6 +19,7 @@ import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { ErrorWedge } from "./components/ErrorWedge";
+import { Icon } from "./components/Icon";
 
 import { setKind, type ScanKind } from "./store/scanSlice";
 import { fetchDefaults } from "./store/statusSlice";
@@ -50,6 +51,7 @@ export function App() {
                 aria-selected={kind === "roi"}
                 onClick={() => dispatch(setKind("roi"))}
               >
+                <Icon name="target" />
                 ROI
               </button>
               <button
@@ -58,6 +60,7 @@ export function App() {
                 aria-selected={kind === "raster"}
                 onClick={() => dispatch(setKind("raster"))}
               >
+                <Icon name="grid" />
                 Raster
               </button>
               <button
@@ -66,6 +69,7 @@ export function App() {
                 aria-selected={kind === "vector"}
                 onClick={() => dispatch(setKind("vector"))}
               >
+                <Icon name="route" />
                 Vector
               </button>
             </div>
