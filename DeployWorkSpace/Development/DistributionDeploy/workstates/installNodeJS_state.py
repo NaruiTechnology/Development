@@ -24,8 +24,8 @@ import os
 import stat
 import tempfile
 
-from AutomationPy.buildingblocks.decorators import overrides
-from AutomationPy.buildingblocks.definitions import Consts
+from buildingblocks.decorators import overrides
+from buildingblocks.definitions import Consts
 
 from .distributionDeploy_state import distributionDeploy_state
 

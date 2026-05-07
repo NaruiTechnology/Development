@@ -23,7 +23,7 @@ def main():
     parser.add_argument(
         '-j', action='store', dest='jsonfile',
         help="Config Json file path",
-        default=os.path.realpath(r'./DistributionDeploy/Json/DistributionDeploy.json'))
+        default=os.path.realpath(r'./Json/DistributionDeploy.json'))
     parser.add_argument(
         '-r', action='store', dest='deployRoot',
         help="Override the deploy root directory on the target host",

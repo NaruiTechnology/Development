@@ -14,8 +14,8 @@
 #-------------------------------------------------------------------------------
 import os
 
-from AutomationPy.buildingblocks.decorators import overrides
-from AutomationPy.buildingblocks.definitions import Consts
+from buildingblocks.decorators import overrides
+from buildingblocks.definitions import Consts
 
 from .distributionDeploy_state import distributionDeploy_state
 
@@ -70,10 +70,10 @@ class exportEnv_state(distributionDeploy_state):
                 self.info("[{}] appended {} export(s) to {}"
                           .format(type(self).__name__, len(appended), bashrcPath))
 
-            self.Success = True
+            self._success = True
         except Exception as e:
             self.error("[{}] error: {}".format(type(self).__name__, e))
-            self.Success = False
+            self._success = False
 
 
 def _shquote(value):

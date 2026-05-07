@@ -20,14 +20,23 @@
 #   nodeVersion      version arg passed to `nvm install` (default '--lts')
 #-------------------------------------------------------------------------------
 import asyncio
+import os
+import stat
+import tempfile
 
-from AutomationPy.buildingblocks.decorators import overrides
-from AutomationPy.buildingblocks.definitions import Consts
+from buildingblocks.decorators import overrides
+from buildingblocks.definitions import Consts
 
 from .distributionDeploy_state import distributionDeploy_state
 
 
 _DEFAULT_NVM_URL = "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh"
+
+# Standard system PATH guaranteed to contain curl, bash, etc.
+# asyncio.create_subprocess_shell inherits the Python process env, which on
+# some systems (systemd services, minimal containers) strips PATH down to
+# nothing useful.  We re-export a sane default before running anything.
+_SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 
 class installNodeJS_state(distributionDeploy_state):
@@ -36,28 +45,50 @@ class installNodeJS_state(distributionDeploy_state):
 
     @overrides(distributionDeploy_state)
     async def DoWork(self):
+        script_path = None
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
-            nvmUrl = actionData.get("nvmInstaller", _DEFAULT_NVM_URL)
+            nvmUrl  = actionData.get("nvmInstaller", _DEFAULT_NVM_URL)
             nodeVer = actionData.get("nodeVersion", "--lts")
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
-            # Single bash -c so all three steps share one shell, one $NVM_DIR,
-            # and one PATH. We deliberately source nvm.sh directly rather than
-            # ~/.bashrc to dodge the non-interactive early-exit.
-            script = (
-                "set -e; "
-                "curl -fsSL -o- {url} | bash; "
-                "export NVM_DIR=\"$HOME/.nvm\"; "
-                "[ -s \"$NVM_DIR/nvm.sh\" ] && \\. \"$NVM_DIR/nvm.sh\"; "
-                "nvm install {ver}; "
-                "nvm alias default {ver}; "
-                "node --version; "
-                "npm --version"
-            ).format(url=nvmUrl, ver=nodeVer)
+            # Write the install logic to a temp file so there are zero quoting
+            # issues and PATH is explicitly bootstrapped before curl/nvm run.
+            # nvm alias needs a concrete version (e.g. v22.1.0), not the flag
+            # "--lts", so we resolve it with `nvm current` after install.
+            script_lines = [
+                "#!/usr/bin/env bash",
+                "set -e",
+                # Bootstrap PATH so standard tools are reachable even when this
+                # process was spawned with a stripped environment (systemd, etc.)
+                "export PATH={safe}:$PATH".format(safe=_SAFE_PATH),
+                # curl may not be present on a fresh/minimal system -- install it
+                # before attempting to fetch the nvm installer.
+                "command -v curl >/dev/null 2>&1 || { "
+                    "sudo apt-get update -qq && "
+                    "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl; "
+                "}",
+                "curl -fsSL -o- {url} | bash".format(url=nvmUrl),
+                'export NVM_DIR="$HOME/.nvm"',
+                '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"',
+                "nvm install {ver}".format(ver=nodeVer),
+                # $(nvm current) gives the concrete version string (e.g. v22.1.0)
+                # that nvm alias requires -- passing {ver} directly fails when
+                # nodeVer is a flag like --lts.
+                "nvm alias default $(nvm current)",
+                "node --version",
+                "npm --version",
+            ]
 
-            cmd = "bash -lc '{}'".format(script.replace("'", "'\"'\"'"))
+            with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".sh", delete=False) as f:
+                f.write("\n".join(script_lines) + "\n")
+                script_path = f.name
+
+            os.chmod(script_path, stat.S_IRWXU)
+
+            cmd = "bash {}".format(script_path)
             self.info("[{}] installing Node.js via nvm ({})..."
                       .format(type(self).__name__, nodeVer))
 
@@ -70,6 +101,9 @@ class installNodeJS_state(distributionDeploy_state):
         except Exception as e:
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self.Success = False
+        finally:
+            if script_path and os.path.exists(script_path):
+                os.unlink(script_path)
 
     async def _runWithTimeout(self, cmd, runDir, timeout):
         if timeout and timeout > 0:

@@ -1,32 +1,20 @@
 #-------------------------------------------------------------------------------
 # installPipRequirements_state.py
 #
-# Walks the deploy root (post-unzip) looking for every requirements.txt, and
-# pip-installs each of them. The example dist contains glasgow_service/
-# requirements.txt, but the project may grow more, so we discover them
-# dynamically rather than hard-coding the list.
-#
-# Action data fields recognised:
-#   root                    deploy root to walk (defaults to thread.deployRoot)
-#   requirementsName        filename to match (default: requirements.txt)
-#   skipDirs                directories never descended into
-#   stopOnError             if True, the first failing pip aborts the workflow
-#   useBreakSystemPackages  if True, append --break-system-packages (Ubuntu 24.04
-#                           PEP-668-protected system Python defaults to refusing
-#                           pip install -- this flag opts back in)
+# Install deployed Python requirements inside the project venv.
+# The distribution requirements can contain an editable dependency pointing back
+# to the private NaruiTechnology/Development repository. In a deploy zip that
+# source is already present locally, so cloning it again over HTTPS is both
+# unnecessary and likely to fail without a token.
 #-------------------------------------------------------------------------------
 import asyncio
 import os
+import tempfile
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
 
 from .distributionDeploy_state import distributionDeploy_state
-
-
-DEFAULT_SKIP_DIRS = {
-    "node_modules", ".venv", "__pycache__", ".git", "dist_app",
-}
 
 
 class installPipRequirements_state(distributionDeploy_state):
@@ -35,52 +23,66 @@ class installPipRequirements_state(distributionDeploy_state):
 
     @overrides(distributionDeploy_state)
     async def DoWork(self):
+        tempFiles = []
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
-
-            root = actionData.get("root") or self.deployRoot()
-            reqName = actionData.get("requirementsName", "requirements.txt")
-            skipDirs = set(actionData.get("skipDirs", []) or []) or DEFAULT_SKIP_DIRS
-            stopOnError = bool(actionData.get("stopOnError", False))
-            breakSys = bool(actionData.get("useBreakSystemPackages", True))
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
-            if not os.path.isdir(root):
-                self.warn("[{}] deploy root '{}' does not exist; nothing to do."
-                          .format(type(self).__name__, root))
-                self.Success = True
+            root = actionData.get("root") or os.path.join(self.deployRoot(), "Development")
+            requirementsName = actionData.get("requirementsName", "requirements.txt")
+            venvDir = actionData.get(
+                "venvDir",
+                os.path.join(self.deployRoot(), getattr(self.ParentWorkThread, "venvDir", ".venv")))
+            stopOnError = bool(actionData.get("stopOnError", True))
+            skipPrivateGit = bool(actionData.get("skipPrivateGitEditable", True))
+            breakSys = bool(actionData.get("useBreakSystemPackages", False))
+
+            reqFiles = [os.path.join(root, requirementsName)]
+            extraReqs = actionData.get("extraRequirements")
+            if extraReqs is None:
+                extraReqs = [os.path.join(root, "glasgow_service", "requirements.txt")]
+            for req in extraReqs:
+                reqFiles.append(req if os.path.isabs(req) else os.path.join(root, req))
+
+            reqFiles = [req for req in reqFiles if os.path.isfile(req)]
+            if not reqFiles:
+                self.error("[{}] no requirements files found under {}"
+                           .format(type(self).__name__, root))
+                self._success = False
                 return
 
-            # Discover all requirements.txt
-            found = []
-            for r, dirs, files in os.walk(root):
-                dirs[:] = [d for d in dirs if d not in skipDirs]
-                if reqName in files:
-                    found.append(os.path.join(r, reqName))
-
-            if not found:
-                self.info("[{}] no '{}' files under '{}'; nothing to install."
-                          .format(type(self).__name__, reqName, root))
-                self.Success = True
-                return
+            pythonExe = os.path.join(venvDir, "bin", "python")
+            if os.path.isfile(pythonExe):
+                pipPrefix = "{} -m pip".format(pythonExe)
+            else:
+                self.warn("[{}] venv python not found at {}; using python3"
+                          .format(type(self).__name__, pythonExe))
+                pipPrefix = "python3 -m pip"
 
             self.info("[{}] found {} requirement file(s):"
-                      .format(type(self).__name__, len(found)))
-            for f in found:
-                self.info("   - {}".format(f))
+                      .format(type(self).__name__, len(reqFiles)))
+            for req in reqFiles:
+                self.info("   - {}".format(req))
 
             allOk = True
-            for reqFile in found:
-                cmd = "python3 -m pip install -r {}".format(reqFile)
-                if breakSys:
+            for req in reqFiles:
+                installReq = req
+                if skipPrivateGit:
+                    installReq = self._writeFilteredRequirements(req)
+                    tempFiles.append(installReq)
+
+                cmd = "{} install -r {}".format(pipPrefix, installReq)
+                if pipPrefix.startswith("python3 ") and breakSys:
                     cmd += " --break-system-packages"
+
                 self.info("[{}] >> {}".format(type(self).__name__, cmd))
-                ok = await self._runWithTimeout(cmd, root, timeout)
+                ok = await self._runWithTimeout(cmd, self.deployRoot(), timeout)
                 if not ok:
-                    self.error("[{}] pip install failed for {}\n{}".format(
-                        type(self).__name__, reqFile,
-                        self._stderr.decode(errors="replace") if self._stderr else "<no stderr>"))
+                    self.error("[{}] pip install failed for {}\n{}"
+                               .format(type(self).__name__, req,
+                                       self._stderr.decode(errors="replace")
+                                       if self._stderr else "<no stderr>"))
                     allOk = False
                     if stopOnError:
                         break
@@ -89,6 +91,35 @@ class installPipRequirements_state(distributionDeploy_state):
         except Exception as e:
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
+        finally:
+            for path in tempFiles:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+
+    def _writeFilteredRequirements(self, reqPath):
+        skipped = []
+        kept = []
+        with open(reqPath, "r") as src:
+            for line in src:
+                normalized = line.strip().lower()
+                if ("git+https://github.com/naruitechnology/development.git" in normalized or
+                        "#egg=iobeam_development" in normalized):
+                    skipped.append(line.rstrip())
+                    continue
+                kept.append(line)
+
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix="-requirements.txt", prefix="distribution-deploy-",
+            delete=False)
+        with tmp:
+            tmp.writelines(kept)
+
+        for line in skipped:
+            self.warn("[{}] skipped private editable dependency already present "
+                      "in deploy tree: {}".format(type(self).__name__, line))
+        return tmp.name
 
     async def _runWithTimeout(self, cmd, runDir, timeout):
         if timeout and timeout > 0:

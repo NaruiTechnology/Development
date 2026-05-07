@@ -10,10 +10,11 @@ TRANSACTION_COMPLETE = "transactionComplete"
 
 class DistributionDeployThread(WorkThread):
     """Workflow driver for the project distribution deploy."""
-
+            
     def __init__(self, config):
         super(DistributionDeployThread, self).__init__()
         self._config = config
+        self._venvPath = None
 
         # Logger: mirror LoadFPGAThread
         self._logName = getattr(config, "LogName", None) or type(self).__name__
@@ -144,3 +145,8 @@ class DistributionDeployThread(WorkThread):
         except Exception as e:
             self._logger.warning("Could not mark '{}' complete: {}"
                                  .format(actionName, e))
+
+    def activateVirtualEnv(self):
+        if self._venvPath is not None:
+            activate_cmd = f"source {self._venvPath}/bin/activate"
+            self._logger.info(f"Activating virtual environment with command: {activate_cmd}")

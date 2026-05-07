@@ -30,8 +30,8 @@
 import asyncio
 import os
 
-from AutomationPy.buildingblocks.decorators import overrides
-from AutomationPy.buildingblocks.definitions import Consts
+from buildingblocks.decorators import overrides
+from buildingblocks.definitions import Consts
 
 from .distributionDeploy_state import distributionDeploy_state
 
@@ -112,10 +112,10 @@ class setupGlasgow_state(distributionDeploy_state):
                     if stopOnError:
                         break
 
-            self.Success = allOk
+            self._success = allOk
         except Exception as e:
             self.error("[{}] error: {}".format(type(self).__name__, e))
-            self.Success = False
+            self._success = False
 
     async def _runWithTimeout(self, cmd, runDir, timeout):
         if timeout and timeout > 0:

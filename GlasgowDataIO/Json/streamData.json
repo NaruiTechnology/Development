@@ -38,7 +38,6 @@
                             "instead of opening a window (preferred for CI)."
                             ],
                         "enabled": true,
-                        "saveAs":  "~/Downloads/raster_last_run.png",
                         "openViewer": true
                         }
                     },
@@ -50,7 +49,6 @@
 
                         "display": {
                         "enabled": true,
-                        "saveAs":  "~/Downloads/vector_last_run.png",
                         "openViewer": false
                         }
                     },

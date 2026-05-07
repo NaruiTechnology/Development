@@ -44,25 +44,10 @@
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "unzip -o {} -d {}",
-                    "zip": "dist_app.zip",
+                    "zip": "/home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/dist_app.zip",
                     "dest": "/home/vboxuser/Project/IobeamTech"
                 },
                 "timeout": 120.0
-            }
-        },
-        {
-            "installPipRequirements": {
-                "skip": false,
-                "transactionComplete": false,
-                "actionData": {
-                    "commandFormat": "python3 -m pip install -r {}",
-                    "root": "/home/vboxuser/Project/IobeamTech",
-                    "requirementsName": "requirements.txt",
-                    "skipDirs": ["node_modules", ".venv", "__pycache__", ".git", "dist_app"],
-                    "stopOnError": false,
-                    "useBreakSystemPackages": true
-                },
-                "timeout": 600.0
             }
         },
         {
@@ -78,6 +63,26 @@
                 "timeout": 180.0
             }
         },
+        {
+            "installPipRequirements": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "python3 -m pip install -r {}/{}",
+                    "root": "/home/vboxuser/Project/IobeamTech/Development",
+                    "requirementsName": "requirements.txt",
+                    "extraRequirements": [
+                        "glasgow_service/requirements.txt"
+                    ],
+                    "venvDir": "/home/vboxuser/Project/IobeamTech/.venv",
+                    "skipPrivateGitEditable": true,
+                    "stopOnError": false,
+                    "useBreakSystemPackages": true
+                },
+                "timeout": 600.0
+            }
+        },
+
         {
             "installNodeJS": {
                 "skip": false,
@@ -123,7 +128,8 @@
                         "PyQt6",
                         "tifffile",
                         "qasync",
-                        "pyusb"
+                        "pyusb",
+                        "debugpy"
                     ],
                     "useVenv": true,
                     "venvActivate": "/home/vboxuser/Project/IobeamTech/.venv/bin/activate",
@@ -170,10 +176,17 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "commandFormat": "bash -c 'cd {} && nohup bash -c \"{} uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --log-level debug\" >{} 2>&1 & echo $! > /tmp/glasgow.pid'",
-                    "root": "/home/vboxuser/Project/IobeamTech",
-                    "pythonPrefix": ". .venv/bin/activate &&",
-                    "log": "/tmp/glasgow.log"
+                    "root": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/",
+                    "venvActivate": "/home/vboxuser/Project/IobeamTech/.venv/bin/activate",
+                    "exports": {
+                        "GLASGOW_CONFIG": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
+                        "PYTHONPATH": "/home/vboxuser/Project/IobeamTech/Development:/home/vboxuser/Project/IobeamTech/Development/glasgow_service"
+                    },
+                    "command": "uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --log-level debug",
+                    "log": "/tmp/glasgow.log",
+                    "pid": "/tmp/glasgow.pid",
+                    "title": "Glasgow Service",
+                    "spawnTerminal": true
                 },
                 "timeout": 30.0,
                 "args": {
@@ -195,13 +208,32 @@
             }
         },
         {
+            "setupIonbeamWeb": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "webRoot": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web",
+                    "backendDir": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/backend",
+                    "frontendDir": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/frontend",
+                    "createBackendEnv": true,
+                    "npmInstall": true,
+                    "useNvm": true
+                },
+                "timeout": 600.0
+            }
+        },
+        {
             "launchIonbeamWebBackend": {
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "commandFormat": "bash -c 'cd {} && nohup npm run dev >{} 2>&1 & echo $! > /tmp/ionbeam-backend.pid'",
-                    "dir": "/home/vboxuser/Project/IobeamTech/ionbeam-web/backend",
-                    "log": "/tmp/ionbeam-backend.log"
+                    "dir": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/backend",
+                    "command": "npm run dev",
+                    "useNvm": true,
+                    "log": "/tmp/ionbeam-backend.log",
+                    "pid": "/tmp/ionbeam-backend.pid",
+                    "title": "Ionbeam Web Backend",
+                    "spawnTerminal": true
                 },
                 "timeout": 60.0
             }
@@ -211,11 +243,30 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "commandFormat": "bash -c 'cd {} && nohup npm run dev >{} 2>&1 & echo $! > /tmp/ionbeam-frontend.pid'",
-                    "dir": "/home/vboxuser/Project/IobeamTech/ionbeam-web/frontend",
-                    "log": "/tmp/ionbeam-frontend.log"
+                    "dir": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/frontend",
+                    "command": "npm run dev -- --host 127.0.0.1",
+                    "useNvm": true,
+                    "log": "/tmp/ionbeam-frontend.log",
+                    "pid": "/tmp/ionbeam-frontend.pid",
+                    "title": "Ionbeam Web Frontend",
+                    "spawnTerminal": true
                 },
                 "timeout": 60.0
+            }
+        },
+        {
+            "verifyIonbeamWeb": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "initialDelay": 3.0,
+                    "pollInterval": 1.0,
+                    "urls": [
+                        "http://127.0.0.1:4000/healthz",
+                        "http://127.0.0.1:5173/"
+                    ]
+                },
+                "timeout": 45.0
             }
         }
     ],

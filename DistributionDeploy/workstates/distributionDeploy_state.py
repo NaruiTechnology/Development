@@ -13,7 +13,7 @@
 #-------------------------------------------------------------------------------
 from abc import abstractmethod
 
-from AutomationPy.buildingblocks.workflow.workstate import WorkState
+from buildingblocks.workflow.workstate import WorkState
 
 
 @abstractmethod

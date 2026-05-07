@@ -15,8 +15,8 @@
 #-------------------------------------------------------------------------------
 import asyncio
 
-from AutomationPy.buildingblocks.decorators import overrides
-from AutomationPy.buildingblocks.definitions import Consts
+from buildingblocks.decorators import overrides
+from buildingblocks.definitions import Consts
 
 from .distributionDeploy_state import distributionDeploy_state
 
@@ -46,12 +46,17 @@ class executeShellCommand_state(distributionDeploy_state):
 
             self.info("[{}] >> {}".format(type(self).__name__, cmd))
 
+            self.ParentWorkThread.activateVirtualEnv()
+            
             timeout = float(stateConfig.get(Consts.TIMEOUT, 0.0) or 0.0)
-            ok = await self._run(cmd, timeout)
-
-            self.Success = ok
-            if ok:
+            self._success = await self._run(cmd, timeout)
+            
+            if self._success:
                 self.info("[{}] OK".format(type(self).__name__))
+                from .setupVirtualEnv_state import setupVirtualEnv_state
+                if isinstance(self, setupVirtualEnv_state):
+                    actionData = stateConfig.get(Consts.ACTION_DATA, {})
+                    self.ParentWorkThread._venvPath = f'{actionData.get("venvPath", ".venv")}/{actionData.get("venvAct", ".venv")}'
             else:
                 self.error("[{}] FAILED. stderr:\n{}"
                            .format(type(self).__name__,
@@ -61,7 +66,8 @@ class executeShellCommand_state(distributionDeploy_state):
             self.Success = False
 
     async def _run(self, cmd, timeout):
-        runDir = self.deployRoot()
+        import os
+        runDir = os.getcwd() #self.deployRoot()
         if timeout and timeout > 0:
             try:
                 return await asyncio.wait_for(

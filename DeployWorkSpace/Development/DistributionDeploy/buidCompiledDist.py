@@ -72,6 +72,11 @@ DEFAULT_JSON_SOURCES = [
     os.path.join('DistributionDeploy', 'Json'),
 ]
 
+# Non-Python application trees copied as source/assets.
+DEFAULT_COPY_TREES = [
+    os.path.join('Development', 'ionbeam-web'),
+]
+
 # Files NOT compiled by Cython -- copied as plain .py so they remain
 # directly invokable with `python3 <file>`. Glob patterns matched against
 # paths relative to --source.
@@ -333,6 +338,21 @@ def copy_venv(src_dir, dist_dir):
         print("No .venv to copy (skipping).")
 
 
+def copy_source_trees(src_dir, dist_dir, copy_trees, skip_dirs):
+    ignore = shutil.ignore_patterns(*skip_dirs)
+    for rel_tree in copy_trees:
+        src_tree = os.path.join(src_dir, rel_tree)
+        if not os.path.isdir(src_tree):
+            print(f"Source tree [{rel_tree}] not found (skipping).")
+            continue
+
+        dst_tree = os.path.join(dist_dir, rel_tree)
+        if os.path.exists(dst_tree):
+            shutil.rmtree(dst_tree)
+        shutil.copytree(src_tree, dst_tree, ignore=ignore)
+        print(f"Copied source tree [{rel_tree}].")
+
+
 def zip_dist(dist_dir, output_zip):
     if os.path.exists(output_zip):
         os.remove(output_zip)
@@ -358,11 +378,12 @@ def build_compiled_dist(src_dir, dist_dir, output_zip=None,
                         mode='cython',
                         asset_patterns=None, skip_dirs=None,
                         json_sources=None, copy_venv_flag=True,
-                        keep_patterns=None, verbose=False):
+                        keep_patterns=None, copy_trees=None, verbose=False):
     asset_patterns = asset_patterns or DEFAULT_ASSET_PATTERNS
     skip_dirs = skip_dirs or DEFAULT_SKIP_DIRS
     json_sources = json_sources if json_sources is not None else DEFAULT_JSON_SOURCES
     keep_patterns = keep_patterns or DEFAULT_KEEP_PY
+    copy_trees = copy_trees if copy_trees is not None else DEFAULT_COPY_TREES
 
     if os.path.exists(dist_dir):
         shutil.rmtree(dist_dir)
@@ -377,6 +398,7 @@ def build_compiled_dist(src_dir, dist_dir, output_zip=None,
         raise ValueError(f"Unknown compile mode: {mode!r}. Use 'cython' or 'pyc'.")
 
     copy_json_sources(src_dir, dist_dir, json_sources)
+    copy_source_trees(src_dir, dist_dir, copy_trees, skip_dirs)
     copy_matching_assets(src_dir, dist_dir, asset_patterns, skip_dirs)
 
     if copy_venv_flag:

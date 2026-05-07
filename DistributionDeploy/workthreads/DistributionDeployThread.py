@@ -1,39 +1,20 @@
-#-------------------------------------------------------------------------------
-# DistributionDeployThread.py
-#
-# Mirrors LoadFPGAImage/workthreads/LoadFPGAThread.py.
-#
-#  - Iterates config.Actions in IntialWork(), instantiates each action's
-#    work-state dynamically via util.CreateInstance("{key}_state", self),
-#    drops them into a FIFO queue.
-#  - StateFactory pops the next state on success, terminates on failure.
-#  - Honors two control flags on each action node:
-#       skip                : True => don't enqueue
-#       transactionComplete : True => already finished, don't re-run
-#-------------------------------------------------------------------------------
-from AutomationPy.buildingblocks.decorators import overrides
-from AutomationPy.buildingblocks.definitions import Consts
-from AutomationPy.buildingblocks.workflow.work_thread import WorkThread
-from AutomationPy.buildingblocks.automation_log import AutomationLog
-import AutomationPy.buildingblocks.utils as util
+from buildingblocks.decorators import overrides
+from buildingblocks.definitions import Consts
+from buildingblocks.workflow.work_thread import WorkThread
+from buildingblocks.automation_log import AutomationLog
+import buildingblocks.utils as util
+import queue
 
-try:
-    import queue
-except ImportError:
-    import Queue as queue
-
-
-# Optional flag name (not in Consts on older AutomationPy builds, so define
-# locally and reuse the literal string the example JSON already carries).
 TRANSACTION_COMPLETE = "transactionComplete"
 
 
 class DistributionDeployThread(WorkThread):
     """Workflow driver for the project distribution deploy."""
-
+            
     def __init__(self, config):
         super(DistributionDeployThread, self).__init__()
         self._config = config
+        self._venvPath = None
 
         # Logger: mirror LoadFPGAThread
         self._logName = getattr(config, "LogName", None) or type(self).__name__
@@ -105,7 +86,6 @@ class DistributionDeployThread(WorkThread):
                     type(workState).__name__.replace(Consts.STATE_OBJ_SUFFIX, '')))
             state = None
 
-        if state is not None:
             self._logger.info('Calling {}'.format(
                 type(state).__name__.replace(Consts.STATE_OBJ_SUFFIX, '')))
         return state
@@ -165,3 +145,8 @@ class DistributionDeployThread(WorkThread):
         except Exception as e:
             self._logger.warning("Could not mark '{}' complete: {}"
                                  .format(actionName, e))
+
+    def activateVirtualEnv(self):
+        if self._venvPath is not None:
+            activate_cmd = f"source {self._venvPath}/bin/activate"
+            self._logger.info(f"Activating virtual environment with command: {activate_cmd}")

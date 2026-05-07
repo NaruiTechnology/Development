@@ -46,11 +46,17 @@ class executeShellCommand_state(distributionDeploy_state):
 
             self.info("[{}] >> {}".format(type(self).__name__, cmd))
 
+            self.ParentWorkThread.activateVirtualEnv()
+            
             timeout = float(stateConfig.get(Consts.TIMEOUT, 0.0) or 0.0)
             self._success = await self._run(cmd, timeout)
             
             if self._success:
                 self.info("[{}] OK".format(type(self).__name__))
+                from .setupVirtualEnv_state import setupVirtualEnv_state
+                if isinstance(self, setupVirtualEnv_state):
+                    actionData = stateConfig.get(Consts.ACTION_DATA, {})
+                    self.ParentWorkThread._venvPath = f'{actionData.get("venvPath", ".venv")}/{actionData.get("venvAct", ".venv")}'
             else:
                 self.error("[{}] FAILED. stderr:\n{}"
                            .format(type(self).__name__,

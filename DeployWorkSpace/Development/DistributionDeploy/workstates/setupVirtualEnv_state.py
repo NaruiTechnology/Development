@@ -6,7 +6,6 @@
 #-------------------------------------------------------------------------------
 from .executeShellCommand_state import executeShellCommand_state
 
-
 class setupVirtualEnv_state(executeShellCommand_state):
     def __init__(self, parent):
-        super(setupVirtualEnv_state, self).__init__(parent)
+        super(executeShellCommand_state, self).__init__(parent)
