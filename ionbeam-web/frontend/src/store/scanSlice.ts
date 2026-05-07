@@ -79,7 +79,7 @@ const defaultVector: VectorRequest = {
 };
 
 const initialState: ScanState = {
-  kind: "raster",
+  kind: "roi",
   phase: "idle",
   bytesReceived: 0,
   chunksReceived: 0,
@@ -95,7 +95,7 @@ const initialState: ScanState = {
     x_scale_length: 100,
     y_scale_length: 100,
     scale_unit: "um",
-    show_grid: false,
+    show_grid: true,
     selection: null,
     imageName: "No image selected",
     imageDataUrl: null,

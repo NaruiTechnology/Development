@@ -481,10 +481,10 @@ function drawScale(
       ctx.lineTo(EDGE, p);
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 0.3;
       ctx.stroke();
       ctx.strokeStyle = "rgba(95, 184, 255, 0.95)";
-      ctx.lineWidth = 0.5;
+      ctx.lineWidth = 0.3;
       ctx.stroke();
       ctx.restore();
     }
