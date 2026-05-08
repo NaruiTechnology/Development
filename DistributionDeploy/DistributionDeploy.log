@@ -1,0 +1,74 @@
+05-03 18:34 DistributionDeploy INFO     [skip=true] 'buildDistribution' skipped.
+05-03 18:34 DistributionDeploy INFO     [unzipDistribution_state] >> unzip -o dist_app.zip -d /home/vboxuser/Project/IobeamTech
+05-03 18:34 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-03 18:34 DistributionDeploy INFO     [installPipRequirements_state] found 2 requirement file(s):
+05-03 18:34 DistributionDeploy INFO        - /home/vboxuser/Project/IobeamTech/Development/requirements.txt
+05-03 18:34 DistributionDeploy INFO        - /home/vboxuser/Project/IobeamTech/Development/glasgow_service/requirements.txt
+05-03 18:34 DistributionDeploy INFO     [installPipRequirements_state] >> python3 -m pip install -r /home/vboxuser/Project/IobeamTech/Development/requirements.txt --break-system-packages
+05-03 18:35 DistributionDeploy ERROR    [installPipRequirements_state] pip install failed for /home/vboxuser/Project/IobeamTech/Development/requirements.txt
+  Running command git clone --filter=blob:none --quiet https://github.com/NaruiTechnology/Development.git /home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/.venv/src/iobeam-development
+  remote: Invalid username or token. Password authentication is not supported for Git operations.
+  fatal: Authentication failed for 'https://github.com/NaruiTechnology/Development.git/'
+  error: subprocess-exited-with-error
+  
+  × git clone --filter=blob:none --quiet https://github.com/NaruiTechnology/Development.git /home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/.venv/src/iobeam-development did not run successfully.
+  │ exit code: 128
+  ╰─> See above for output.
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+error: subprocess-exited-with-error
+
+× git clone --filter=blob:none --quiet https://github.com/NaruiTechnology/Development.git /home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/.venv/src/iobeam-development did not run successfully.
+│ exit code: 128
+╰─> See above for output.
+
+note: This error originates from a subprocess, and is likely not a problem with pip.
+
+05-03 18:35 DistributionDeploy INFO     [installPipRequirements_state] >> python3 -m pip install -r /home/vboxuser/Project/IobeamTech/Development/glasgow_service/requirements.txt --break-system-packages
+05-03 18:35 DistributionDeploy ERROR    State 'installPipRequirements' did not succeed; aborting workflow.
+05-03 18:35 DistributionDeploy INFO     Calling NoneType
+05-03 19:17 DistributionDeploy INFO     [skip=true] 'buildDistribution' skipped.
+05-03 19:17 DistributionDeploy INFO     [unzipDistribution_state] >> unzip -o dist_app.zip -d /home/vboxuser/Project/IobeamTech
+05-03 19:17 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-03 19:17 DistributionDeploy ERROR    State 'installPipRequirements' did not succeed; aborting workflow.
+05-03 19:17 DistributionDeploy INFO     Calling NoneType
+05-04 22:07 DistributionDeploy INFO     [skip=true] 'buildDistribution' skipped.
+05-04 22:07 DistributionDeploy INFO     [unzipDistribution_state] >> unzip -o dist_app.zip -d /home/vboxuser/Project/IobeamTech
+05-04 22:07 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-04 22:07 DistributionDeploy ERROR    State 'installPipRequirements' did not succeed; aborting workflow.
+05-04 22:07 DistributionDeploy INFO     Calling NoneType
+05-04 22:11 DistributionDeploy INFO     [skip=true] 'buildDistribution' skipped.
+05-04 22:11 DistributionDeploy INFO     [unzipDistribution_state] >> unzip -o dist_app.zip -d /home/vboxuser/Project/IobeamTech
+05-04 22:11 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-04 22:11 DistributionDeploy INFO     [installPipRequirements_state] >> python3 -m pip install -r /home/vboxuser/Project/IobeamTech
+05-04 22:11 DistributionDeploy ERROR    [installPipRequirements_state] FAILED. stderr:
+ERROR: Could not open requirements file: [Errno 21] Is a directory: '/home/vboxuser/Project/IobeamTech'
+
+05-04 22:11 DistributionDeploy ERROR    State 'installPipRequirements' did not succeed; aborting workflow.
+05-04 22:11 DistributionDeploy INFO     Calling NoneType
+05-04 22:52 DistributionDeploy INFO     [skip=true] 'buildDistribution' skipped.
+05-04 22:52 DistributionDeploy INFO     [skip=true] 'unzipDistribution' skipped.
+05-04 22:52 DistributionDeploy INFO     [setupVirtualEnv_state] >> bash -c 'cd /home/vboxuser/Project/IobeamTech && python3 -m venv .venv && . .venv/bin/activate && python -m pip install --upgrade pip'
+05-04 22:52 DistributionDeploy INFO     [setupVirtualEnv_state] OK
+05-04 22:52 DistributionDeploy INFO     [installPipRequirements_state] >> python3 -m pip install -r /home/vboxuser/Project/IobeamTech/Development/requirements.txt
+05-04 22:53 DistributionDeploy ERROR    [installPipRequirements_state] FAILED. stderr:
+  Running command git clone --filter=blob:none --quiet https://github.com/NaruiTechnology/Development.git /home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/.venv/src/iobeam-development
+  remote: Invalid username or token. Password authentication is not supported for Git operations.
+  fatal: Authentication failed for 'https://github.com/NaruiTechnology/Development.git/'
+  error: subprocess-exited-with-error
+  
+  × git clone --filter=blob:none --quiet https://github.com/NaruiTechnology/Development.git /home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/.venv/src/iobeam-development did not run successfully.
+  │ exit code: 128
+  ╰─> See above for output.
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+error: subprocess-exited-with-error
+
+× git clone --filter=blob:none --quiet https://github.com/NaruiTechnology/Development.git /home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/.venv/src/iobeam-development did not run successfully.
+│ exit code: 128
+╰─> See above for output.
+
+note: This error originates from a subprocess, and is likely not a problem with pip.
+
+05-04 22:53 DistributionDeploy ERROR    State 'installPipRequirements' did not succeed; aborting workflow.
+05-04 22:53 DistributionDeploy INFO     Calling NoneType

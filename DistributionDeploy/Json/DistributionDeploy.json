@@ -113,7 +113,7 @@
                 "actionData": {
                     "commandFormat": "iterative",
                     "aptOptions": "-y --no-install-recommends",
-                    "aptPackages": ["git", "pipx", "yosys", "uuid-runtime", "build-essential", "python3-dev"],
+                    "aptPackages": ["git", "pipx", "yosys", "nextpnr-ice40", "fpga-icestorm", "uuid-runtime", "build-essential", "python3-dev"],
                     "pipxBootstrap": ["pipx ensurepath"],
                     "pipPackages": [
                         "Cython",
