@@ -13,7 +13,7 @@
  *          runs server-side). Both validated and streaming scans
  *          populate the server's last-scan cache.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAppSelector } from "../store";
 import {
@@ -24,6 +24,18 @@ import {
 import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
+type DirectoryHandle = {
+  name: string;
+  getFileHandle: (
+    name: string,
+    options?: { create?: boolean }
+  ) => Promise<{
+    createWritable: () => Promise<{
+      write: (data: Blob) => Promise<void>;
+      close: () => Promise<void>;
+    }>;
+  }>;
+};
 
 export function ValidationPanel() {
   const result = useAppSelector((s) => s.scan.lastResult);
@@ -50,6 +62,11 @@ export function ValidationPanel() {
   const [figState, setFigState] = useState<DownloadState>("idle");
   const [csvErr, setCsvErr] = useState<string | null>(null);
   const [figErr, setFigErr] = useState<string | null>(null);
+  const [autoDownload, setAutoDownload] = useState(false);
+  const [downloadDir, setDownloadDir] = useState<DirectoryHandle | null>(null);
+  const [downloadDirLabel, setDownloadDirLabel] = useState("~/Downloads");
+  const [autoErr, setAutoErr] = useState<string | null>(null);
+  const lastAutoDownloadKeyRef = useRef<string | null>(null);
 
   // True when there's anything worth downloading: a validated result
   // with has_data, OR a completed/paused live stream with pixels in the
@@ -62,52 +79,137 @@ export function ValidationPanel() {
     haveValidatedData ||
     (haveStreamData && (phase === "completed" || phase === "paused"));
 
-  if (error) {
-    return (
-      <div className="card__body">
-        <div style={{ color: "var(--c-danger)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-          {error}
-        </div>
-      </div>
-    );
+  async function selectDownloadFolder() {
+    setAutoErr(null);
+    const picker = (window as any).showDirectoryPicker as
+      | (() => Promise<DirectoryHandle>)
+      | undefined;
+    if (!picker) {
+      setAutoErr("Folder selection is unavailable in this browser; using the browser Downloads folder.");
+      setDownloadDir(null);
+      setDownloadDirLabel("~/Downloads");
+      return;
+    }
+
+    try {
+      const dir = await picker();
+      setDownloadDir(dir);
+      setDownloadDirLabel(dir.name || "~/Downloads");
+    } catch (e: any) {
+      if (e?.name !== "AbortError") {
+        setAutoErr(e?.message ?? String(e));
+      }
+    }
   }
 
-  if (!result && !haveAnyData) {
-    return (
-      <div className="card__body muted" style={{ fontSize: 12 }}>
-        No completed scan yet. Press <b>Run</b> for a live stream, or
-        <b> Run validated</b> for timing + checks. After either, you'll
-        be able to download CSV and PNG figure here.
+  const autoDownloadControls = (
+    <>
+      <div className="button-row" style={{ marginTop: 12, alignItems: "center" }}>
+        <label className="checkbox" style={{ padding: 0 }}>
+          <input
+            type="checkbox"
+            checked={autoDownload}
+            onChange={(e) => {
+              setAutoDownload(e.target.checked);
+              setAutoErr(null);
+            }}
+          />
+          Auto download
+        </label>
+        {autoDownload && (
+          <>
+            <button className="btn btn--ghost" onClick={selectDownloadFolder}>
+              <Icon name="download" tone="accent" />
+              Select folder
+            </button>
+            <span className="muted" style={{ fontSize: 12 }}>
+              {downloadDirLabel}
+            </span>
+          </>
+        )}
       </div>
-    );
-  }
+      {autoErr && (
+        <div style={{ color: "var(--c-warn)", fontSize: 12, marginTop: 6 }}>
+          Auto download: {autoErr}
+        </div>
+      )}
+    </>
+  );
 
   /* -------- download handlers ------------------------------------------ */
+
+  async function csvDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
+    if (haveValidatedData) {
+      // Server has the validated bytes — use them as the source of
+      // truth so the CSV matches the validation report exactly.
+      const r = await fetch("/api/scan/last/csv");
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+      const blob = await r.blob();
+      return {
+        blob,
+        filename: defaultDownloadFilename(scanKind, "csv", {
+          resolution: result?.resolution ?? rasterRes,
+          latency_bytes: vectorLatency,
+        }),
+      };
+    }
+
+    // Live stream: generate from the imageSlice buffer.
+    const blob = kind === "raster"
+      ? rasterCsvBlob(rasterFrame, rasterRes)
+      : vectorCsvBlob(vectorImage, vectorEdge);
+    return {
+      blob,
+      filename: defaultDownloadFilename(scanKind, "csv", {
+        resolution: rasterRes,
+        latency_bytes: vectorLatency,
+      }),
+    };
+  }
+
+  async function figureDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
+    // Render mode applies to vector only. Raster ignores it server-side,
+    // so passing it unconditionally is harmless and keeps the URL shape
+    // consistent across both kinds.
+    const url =
+      kind === "vector"
+        ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`
+        : "/api/scan/last/figure";
+    const r = await fetch(url);
+    if (!r.ok) {
+      // Server returns 404 if the cache is empty (e.g., the live
+      // stream was paused and nothing landed there yet) or 500 if
+      // matplotlib is missing.
+      const detail = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);
+    }
+    const blob = await r.blob();
+    return {
+      blob,
+      filename: defaultDownloadFilename(scanKind, "png", {
+        resolution: result?.resolution ?? rasterRes,
+        latency_bytes: vectorLatency,
+      }),
+    };
+  }
+
+  async function saveDownload(blob: Blob, filename: string) {
+    if (!downloadDir) {
+      downloadBlob(blob, filename);
+      return;
+    }
+    const fileHandle = await downloadDir.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  }
 
   async function downloadCsv() {
     setCsvState("fetching");
     setCsvErr(null);
     try {
-      if (haveValidatedData) {
-        // Server has the validated bytes — use them as the source of
-        // truth so the CSV matches the validation report exactly.
-        const r = await fetch("/api/scan/last/csv");
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-        const blob = await r.blob();
-        downloadBlob(blob, defaultDownloadFilename(scanKind, "csv", {
-          resolution: result?.resolution ?? rasterRes,
-          latency_bytes: vectorLatency,
-        }));
-      } else {
-        // Live stream: generate from the imageSlice buffer.
-        const blob = kind === "raster"
-          ? rasterCsvBlob(rasterFrame, rasterRes)
-          : vectorCsvBlob(vectorImage, vectorEdge);
-        downloadBlob(blob, defaultDownloadFilename(scanKind, "csv", {
-          resolution: rasterRes,
-          latency_bytes: vectorLatency,
-        }));
-      }
+      const { blob, filename } = await csvDownloadBlob();
+      await saveDownload(blob, filename);
       setCsvState("idle");
     } catch (e: any) {
       setCsvState("error");
@@ -119,26 +221,8 @@ export function ValidationPanel() {
     setFigState("fetching");
     setFigErr(null);
     try {
-      // Render mode applies to vector only. Raster ignores it server-side,
-      // so passing it unconditionally is harmless and keeps the URL shape
-      // consistent across both kinds.
-      const url =
-        kind === "vector"
-          ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`
-          : "/api/scan/last/figure";
-      const r = await fetch(url);
-      if (!r.ok) {
-        // Server returns 404 if the cache is empty (e.g., the live
-        // stream was paused and nothing landed there yet) or 500 if
-        // matplotlib is missing.
-        const detail = await r.text().catch(() => "");
-        throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);
-      }
-      const blob = await r.blob();
-      downloadBlob(blob, defaultDownloadFilename(scanKind, "png", {
-        resolution: result?.resolution ?? rasterRes,
-        latency_bytes: vectorLatency,
-      }));
+      const { blob, filename } = await figureDownloadBlob();
+      await saveDownload(blob, filename);
       setFigState("idle");
     } catch (e: any) {
       setFigState("error");
@@ -146,7 +230,80 @@ export function ValidationPanel() {
     }
   }
 
+  useEffect(() => {
+    if (!autoDownload || phase !== "completed" || !haveAnyData) return;
+
+    const key = [
+      scanKind,
+      result?.chunks ?? "stream",
+      result?.bytes ?? "stream",
+      rasterCursor,
+      vectorCursor,
+      vectorRenderMode,
+    ].join(":");
+    if (lastAutoDownloadKeyRef.current === key) return;
+    lastAutoDownloadKeyRef.current = key;
+
+    let cancelled = false;
+    async function runAutoDownload() {
+      setCsvState("fetching");
+      setFigState("fetching");
+      setCsvErr(null);
+      setFigErr(null);
+      setAutoErr(null);
+      try {
+        const csv = await csvDownloadBlob();
+        if (cancelled) return;
+        await saveDownload(csv.blob, csv.filename);
+
+        const figure = await figureDownloadBlob();
+        if (cancelled) return;
+        await saveDownload(figure.blob, figure.filename);
+
+        setCsvState("idle");
+        setFigState("idle");
+      } catch (e: any) {
+        if (!cancelled) {
+          const msg = e?.message ?? String(e);
+          setCsvState("error");
+          setFigState("error");
+          setAutoErr(msg);
+        }
+      }
+    }
+
+    runAutoDownload();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode]);
+
   /* -------- render ------------------------------------------------------ */
+
+  if (error) {
+    return (
+      <div className="card__body">
+        {autoDownloadControls}
+        <div style={{ color: "var(--c-danger)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!result && !haveAnyData) {
+    return (
+      <div className="card__body">
+        <div className="muted" style={{ fontSize: 12 }}>
+          No completed scan yet. Press <b>Run</b> for a live stream, or
+          <b> Run validated</b> for timing + checks. After either, you'll
+          be able to download CSV and PNG figure here.
+        </div>
+        {autoDownloadControls}
+      </div>
+    );
+  }
 
   const v = result?.validation;
 
@@ -191,26 +348,30 @@ export function ValidationPanel() {
         </div>
       )}
 
-      <div className="button-row" style={{ marginTop: 12 }}>
-        <button
-          className="btn"
-          disabled={!haveAnyData || csvState === "fetching"}
-          onClick={downloadCsv}
-          title="Download the most recent scan's data as CSV"
-        >
-          <Icon name="download" tone="success" />
-          {csvState === "fetching" ? "Fetching CSV..." : "Download CSV"}
-        </button>
-        <button
-          className="btn"
-          disabled={!haveAnyData || figState === "fetching"}
-          onClick={downloadFigure}
-          title="Render the most recent scan as a matplotlib PNG and download"
-        >
-          <Icon name="image" tone="success" />
-          {figState === "fetching" ? "Rendering..." : "Download figure (PNG)"}
-        </button>
-      </div>
+      {autoDownloadControls}
+
+      {!autoDownload && (
+        <div className="button-row" style={{ marginTop: 12 }}>
+          <button
+            className="btn"
+            disabled={!haveAnyData || csvState === "fetching"}
+            onClick={downloadCsv}
+            title="Download the most recent scan's data as CSV"
+          >
+            <Icon name="download" tone="success" />
+            {csvState === "fetching" ? "Fetching CSV..." : "Download CSV"}
+          </button>
+          <button
+            className="btn"
+            disabled={!haveAnyData || figState === "fetching"}
+            onClick={downloadFigure}
+            title="Render the most recent scan as a matplotlib PNG and download"
+          >
+            <Icon name="image" tone="success" />
+            {figState === "fetching" ? "Rendering..." : "Download figure (PNG)"}
+          </button>
+        </div>
+      )}
 
       {csvErr && (
         <div style={{ color: "var(--c-danger)", fontSize: 12, marginTop: 6 }}>
