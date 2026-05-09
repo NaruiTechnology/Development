@@ -62,6 +62,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   const streaming = phase === "running";
   const closing = phase === "stopping";
   const paused = phase === "paused";
+  const busy = streaming || closing;
 
   async function onRun() {
     if (kind === "roi") return;
@@ -213,6 +214,14 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         <Icon name="x" tone="danger" />
         Clear
       </button>
+      <span
+        className="scan-busy"
+        data-visible={busy ? "true" : "false"}
+        aria-hidden={!busy}
+        title="Scan in progress"
+      >
+        <span className="scan-busy__spinner" />
+      </span>
     </div>
   );
 }

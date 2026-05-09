@@ -8,7 +8,7 @@
  * but pulls everything into one window because there is no off-screen
  * "console" surface in a browser context.
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
@@ -21,7 +21,8 @@ import { ROIEditor } from "./components/ROIEditor";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 
-import { setKind, type ScanKind } from "./store/scanSlice";
+import { setKind, streamReset, type ScanKind } from "./store/scanSlice";
+import { resetRaster, resetVector } from "./store/imageSlice";
 import { fetchDefaults } from "./store/statusSlice";
 import { useAppDispatch, useAppSelector } from "./store";
 
@@ -29,12 +30,51 @@ export function App() {
   const dispatch = useAppDispatch();
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
+  const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
+  const rasterCursor = useAppSelector((s) => s.image.cursor);
+  const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
+  const lastResult = useAppSelector((s) => s.scan.lastResult);
+  const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
+  const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
 
   useEffect(() => {
     dispatch(fetchDefaults());
   }, [dispatch]);
 
-  const formDisabled = phase === "running" || phase === "stopping";
+  useEffect(() => {
+    if (kind === "raster" || kind === "vector") {
+      setLastScanKind(kind);
+    }
+  }, [kind]);
+
+  const scanActive = phase === "running" || phase === "stopping";
+  const formDisabled = scanActive;
+  const hasPriorScanImage =
+    (lastScanKind === "raster" && rasterCursor > 0) ||
+    (lastScanKind === "vector" && vectorCursor > 0) ||
+    lastResult?.kind === lastScanKind;
+  const roiScanImageUrl =
+    kind === "roi" && hasPriorScanImage
+      ? lastScanKind === "vector"
+        ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}&view=texture&_=${vectorCursor}`
+        : `/api/scan/last/figure?view=texture&_=${rasterCursor}`
+      : null;
+
+  function selectKind(nextKind: ScanKind) {
+    if (nextKind === kind) return;
+    if (scanActive) return;
+
+    const nextScanKind = nextKind === "raster" || nextKind === "vector" ? nextKind : null;
+    const currentScanKind = kind === "raster" || kind === "vector" ? kind : hasPriorScanImage ? lastScanKind : null;
+
+    if (currentScanKind && nextScanKind && currentScanKind !== nextScanKind) {
+      dispatch(streamReset());
+      dispatch(resetRaster({ resolution: rasterResolution }));
+      dispatch(resetVector());
+    }
+
+    dispatch(setKind(nextKind));
+  }
 
   return (
     <div className="app-shell">
@@ -49,7 +89,9 @@ export function App() {
                 role="tab"
                 className="tab tab--roi"
                 aria-selected={kind === "roi"}
-                onClick={() => dispatch(setKind("roi"))}
+                disabled={scanActive}
+                onClick={() => selectKind("roi")}
+                title={scanActive ? "ROI is inactive while a scan is running" : "Edit ROI"}
               >
                 <Icon name="target" tone="tab" />
                 ROI
@@ -58,7 +100,8 @@ export function App() {
                 role="tab"
                 className="tab"
                 aria-selected={kind === "raster"}
-                onClick={() => dispatch(setKind("raster"))}
+                disabled={scanActive}
+                onClick={() => selectKind("raster")}
               >
                 <Icon name="grid" tone="tab" />
                 Raster
@@ -67,7 +110,8 @@ export function App() {
                 role="tab"
                 className="tab"
                 aria-selected={kind === "vector"}
-                onClick={() => dispatch(setKind("vector"))}
+                disabled={scanActive}
+                onClick={() => selectKind("vector")}
               >
                 <Icon name="route" tone="tab" />
                 Vector
@@ -115,7 +159,11 @@ export function App() {
             </div>
             <div className="card__body">
               {kind === "roi" ? (
-                <ROIEditor disabled={formDisabled} variant="canvas" />
+                <ROIEditor
+                  disabled={formDisabled}
+                  variant="canvas"
+                  backgroundImageUrl={roiScanImageUrl}
+                />
               ) : (
                 <ImageCanvas kind={kind as ScanKind} />
               )}

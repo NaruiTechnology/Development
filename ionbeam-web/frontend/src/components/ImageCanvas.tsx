@@ -250,6 +250,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
           ref={canvasRef}
           width={nativeEdge}
           height={nativeEdge}
+          onDragStart={(e) => e.preventDefault()}
           style={{
             width: canvasSize,
             height: canvasSize,
@@ -261,6 +262,8 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
             className="server-figure"
             src={serverFigureUrl}
             alt={`${kind} scan rendered by glasgow_service`}
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
           />
         )}
       </div>

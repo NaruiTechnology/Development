@@ -28,13 +28,17 @@ export async function rasterRequestWithBitmapSelection(
   roi: ROIState,
   options: { isProduction?: boolean } = {}
 ): Promise<RasterRequest> {
-  if (!roi.imageDataUrl || !roi.selection || !isPartialSelection(roi)) {
-    return req;
+  if (!roi.imageDataUrl) {
+    return withoutBitmapROI(req);
+  }
+
+  if (!roi.selection || !isPartialSelection(roi)) {
+    return withoutBitmapROI(req);
   }
 
   const converted = await bitmapSelectionToVector(roi);
   if (!converted.simulationBitmap.pixels.length) {
-    return req;
+    return withoutBitmapROI(req);
   }
 
   return {
@@ -49,13 +53,17 @@ export async function vectorRequestWithBitmapSelection(
   roi: ROIState,
   options: { isProduction?: boolean } = {}
 ): Promise<VectorRequest> {
-  if (!roi.imageDataUrl || !roi.selection || !isPartialSelection(roi)) {
-    return req;
+  if (!roi.imageDataUrl) {
+    return withoutBitmapROI(req);
+  }
+
+  if (!roi.selection || !isPartialSelection(roi)) {
+    return withoutBitmapROI(req);
   }
 
   const converted = await bitmapSelectionToVector(roi);
   if (!converted.simulationBitmap.pixels.length) {
-    return req;
+    return withoutBitmapROI(req);
   }
 
   if (options.isProduction) {
@@ -74,6 +82,14 @@ export async function vectorRequestWithBitmapSelection(
     points: null,
     roi: converted.roi,
     simulation_bitmap: converted.simulationBitmap,
+  };
+}
+
+function withoutBitmapROI<T extends RasterRequest | VectorRequest>(req: T): T {
+  return {
+    ...req,
+    roi: null,
+    simulation_bitmap: null,
   };
 }
 

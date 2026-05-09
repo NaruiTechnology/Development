@@ -17,9 +17,11 @@ const UNITS = [
 export function ROIEditor({
   disabled,
   variant = "all",
+  backgroundImageUrl = null,
 }: {
   disabled: boolean;
   variant?: "controls" | "canvas" | "all";
+  backgroundImageUrl?: string | null;
 }) {
   const dispatch = useAppDispatch();
   const roi = useAppSelector((s) => s.scan.roi);
@@ -27,14 +29,21 @@ export function ROIEditor({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const [draft, setDraft] = useState<ROIRequest | null>(roi.selection);
+  const promotedBackgroundRef = useRef<string | null>(null);
+  const [draft, setDraft] = useState<ROIRequest | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
   const bitmapCleanupDisabled = !hasLoadedImage || !hasPartialRegion;
+  const imageSource =
+    roi.imageDataUrl ??
+    (backgroundImageUrl && backgroundImageUrl !== suppressedBackgroundUrl
+      ? backgroundImageUrl
+      : null);
 
   useEffect(() => {
-    if (!roi.imageDataUrl) {
+    if (!imageSource) {
       imageRef.current = null;
       draw();
       return;
@@ -42,22 +51,47 @@ export function ROIEditor({
     const img = new Image();
     img.onload = () => {
       imageRef.current = img;
+      if (
+        backgroundImageUrl &&
+        imageSource === backgroundImageUrl &&
+        promotedBackgroundRef.current !== backgroundImageUrl
+      ) {
+        const fillStyle = canvasRef.current
+          ? getCssColor(canvasRef.current, "--c-bg-elev", "#11203a")
+          : "#11203a";
+        const dataUrl = imageToDataUrl(img, fillStyle);
+        if (dataUrl) {
+          promotedBackgroundRef.current = backgroundImageUrl;
+          dispatch(updateROI({ imageName: "Last scan image", imageDataUrl: dataUrl }));
+        }
+      }
       draw();
     };
-    img.src = roi.imageDataUrl;
+    img.onerror = () => {
+      imageRef.current = null;
+      draw();
+    };
+    img.src = imageSource;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roi.imageDataUrl]);
+  }, [imageSource]);
 
   useEffect(() => {
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roi, draft]);
 
+  useEffect(() => {
+    if (!dragStartRef.current) {
+      setDraft(null);
+    }
+  }, [roi.selection]);
+
   function loadFile(file: File) {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
         clearBitmapSelectionCache();
+        setSuppressedBackgroundUrl(null);
         dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result }));
       }
     };
@@ -95,7 +129,7 @@ export function ROIEditor({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, EDGE, EDGE);
+    fillCanvasBackground(canvas, ctx);
 
     const img = imageRef.current;
     if (img) {
@@ -132,11 +166,13 @@ export function ROIEditor({
   function clearLoadedImage() {
     clearBitmapSelectionCache();
     imageRef.current = null;
+    setSuppressedBackgroundUrl(backgroundImageUrl);
     dispatch(clearROIImage());
   }
 
   function clearPartialRegion() {
     clearBitmapSelectionCache();
+    setDraft(null);
     dispatch(clearROISelection());
   }
 
@@ -305,16 +341,21 @@ export function ROIEditor({
         <div className="roi-canvas-wrap">
           <canvas
             ref={canvasRef}
+            className={disabled ? "is-disabled" : undefined}
             width={EDGE}
             height={EDGE}
             onPointerDown={(e) => {
               if (disabled) return;
+              e.preventDefault();
+              e.currentTarget.setPointerCapture(e.pointerId);
               const p = canvasPoint(e);
               dragStartRef.current = p;
               const d = toDut(p);
               setTip({ x: e.clientX, y: e.clientY, text: `(${d.x}, ${d.y})` });
             }}
             onPointerMove={(e) => {
+              if (disabled) return;
+              e.preventDefault();
               const p = canvasPoint(e);
               const d = toDut(p);
               if (dragStartRef.current) {
@@ -324,6 +365,8 @@ export function ROIEditor({
               }
             }}
             onPointerUp={(e) => {
+              if (disabled) return;
+              e.preventDefault();
               if (!dragStartRef.current) return;
               const next = rectFromPoints(dragStartRef.current, canvasPoint(e));
               dragStartRef.current = null;
@@ -348,6 +391,41 @@ export function ROIEditor({
 
     </div>
   );
+}
+
+function imageToDataUrl(img: HTMLImageElement, fillStyle = "#11203a"): string | null {
+  const width = img.naturalWidth || img.width;
+  const height = img.naturalHeight || img.height;
+  if (width <= 0 || height <= 0) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  try {
+    ctx.fillStyle = fillStyle;
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+function fillCanvasBackground(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D
+): void {
+  const fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
+  ctx.fillStyle = fillStyle;
+  ctx.fillRect(0, 0, EDGE, EDGE);
+}
+
+function getCssColor(el: Element, variable: string, fallback: string): string {
+  const value = getComputedStyle(el).getPropertyValue(variable).trim();
+  return value || fallback;
 }
 
 function Num(props: {
