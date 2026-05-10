@@ -5,6 +5,7 @@
 # additional terms of your license agreement.
 #
 ## @file
+# Auther: Henry Li
 #
 
 # This software and associated documentation (if any) is furnished
@@ -16,12 +17,12 @@
 
 #-------------- -----------------------------------------------------------------
 import time
-from unittest import TestCase, expectedFailure
+import unittest 
 from abc import abstractmethod
-from buildingblocks.decorators import hierarchyValidation, declarative, initializer
-from buildingblocks.decorators import callCount
-from buildingblocks.decorators import timeElapseTimer
-from buildingblocks.decorators import messageBuffer
+from ..decorators import declarative, initializer, overrides
+from ..decorators import callCount
+from ..decorators import timeElapseTimer
+from ..decorators import messageBuffer
 
 
 class my_class_with_timeout_function:
@@ -61,24 +62,24 @@ class my_class_with_timeout_function:
 
 
 class myDerivedClass(my_class_with_timeout_function):
-    @hierarchyValidation(my_class_with_timeout_function)
+    @overrides(my_class_with_timeout_function)
     def DoWork(self):
-        print("In hierarchyValidation methods.")
+        print("In overrides methods.")
     '''
-    This is the usage for hierarchyValidation decorater when a derived class
+    This is the usage for overrides decorater when a derived class
     missing the parameter of its base class and the mistakes will be caught at run time
     '''
 
     try:
         class myDerivedClassInError(my_class_with_timeout_function):
-            @hierarchyValidation() # missing the base calss as parameter
+            @overrides() # missing the base calss as parameter
             def DoWork(self):
                 pass
     except Exception as e:
         print(str(e))
 
 
-class test_decoders(TestCase, my_class_with_timeout_function):
+class test_decoders(unittest.TestCase, my_class_with_timeout_function):
     def test_intializerDecorator(self):
         myderivedCls = myDerivedClass()
         conn = myderivedCls.SerialPortConnection
@@ -94,7 +95,7 @@ class test_decoders(TestCase, my_class_with_timeout_function):
         self.assertFalse(concretClass is None)
         concretClass.DoWork()
 
-    @expectedFailure
+    @unittest.expectedFailure
     def test_callAbstractMethod(self):
         baseClass = my_class_with_timeout_function()
         self.assertFalse(baseClass is None)

@@ -5,6 +5,7 @@
 # additional terms of your license agreement.
 #
 ## @file
+# Auther: Henry Li
 #
 
 # This software and associated documentation (if any) is furnished
@@ -17,9 +18,10 @@
 #-------------- -----------------------------------------------------------------
 
 from abc import abstractmethod
-from buildingblocks.event_handler import EventHandler
-from buildingblocks.definitions import Consts
-import buildingblocks.utils as util
+from ..event_handler import EventHandler
+from ..definitions import Consts
+from ..utils import *
+import inspect, subprocess, asyncio
 
 
 class WorkstateMetaClass(type):
@@ -35,16 +37,16 @@ class WorkState(object):# abstract base class
     __metaclass__ = WorkstateMetaClass
     file = __file__
 
-    def __init__(self, *args, **kwargs):
-        self._success = True
-        self._id = repr("WorkState_" + util.IdGenerator())
-        self._parentWorkThread = None
+    def __init__(self, parent, *args, **kwargs):
+        self._success = False
+        self._id = repr("WorkState_" + IdGenerator())
+        self._parentWorkThread = parent
         self._configTest = None
         self._outfile = None
         self._invokeFactory = None
+        self._stdout = None
+        self._stderr = None
 
-    # def __str__(self):
-    #     return repr("WorkState_" + self._id)
     @property
     def Id(self):
         return self._id
@@ -61,6 +63,13 @@ class WorkState(object):# abstract base class
     def ParentWorkThread(self):
         return self._parentWorkThread
 
+    @ParentWorkThread.setter
+    def ParentWorkThread(self, val):
+        if val is not None and type(val).__name__.lower().endswith('thread'):
+            self._parentWorkThread = val
+            #self._invokeFactory = val.GetInvokeFactory()
+            self._config = val._config
+
     @property
     def Success(self):
         self._success
@@ -69,29 +78,101 @@ class WorkState(object):# abstract base class
     def Success(self, val):
         self._success = val
 
-    def GetParentWorkThread(self):
-        return self._parentWorkThread
-
-    def SetParentWorkThread(self, val):
-        if val is not None and type(val).__name__.lower().endswith('thread'):
-            self._parentWorkThread = val
-            self._invokeFactory = val.GetInvokeFactory()
-            self._config = val._config
-
-    def Excute(self):
+    async def Execute(self):
         try:
-            self.DoWork()
+            if inspect.iscoroutinefunction(self.DoWork):
+                await self.DoWork()
+            else:
+                self.DoWork()
         except Exception as e:
-            print("!!!! error at Excute, error %s" % str(e))
+            print("!!!! error at Execute, error %s" % str(e))
             self._success = False
-        finally:
-            EventHandler().callback(Consts.STATE_COMPLETE_EVENT, self)
 
     def LogMessage(self, msg):
         print (msg)
         if self._outfile is not None:
             self._outfile.write(msg)
             self._outfile.flush()
+
+    def formatCommand(self, stateConfig):
+        if not stateConfig or Consts.COMMAND_FORMAT not in stateConfig[Consts.ACTION_DATA]:
+            return None
+        
+        command_format = stateConfig[Consts.ACTION_DATA][Consts.COMMAND_FORMAT]
+        positional_values = [v for k, v in stateConfig[Consts.ACTION_DATA].items() if k != Consts.COMMAND_FORMAT]
+        try:
+            formatted_command = command_format.format(*positional_values)
+            return formatted_command
+        except (IndexError, KeyError) as e:
+            print(f"Error formatting command: {e}")
+            return None
+    
+    async def runCommand(self, cmd, dirFrom = None):
+        success = True
+        cwd = os.getcwd()
+        runfrom = cwd
+        proc = None
+        if dirFrom is not None and os.path.isdir(dirFrom):
+            runfrom = dirFrom
+        command = cmd
+        try:
+            os.chdir(runfrom)
+            
+            params = command.split(" ")
+            proc = subprocess.Popen(params,
+                                    cwd=runfrom,
+                                    stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    text=True)
+            if proc.returncode != 0:
+                self._last_output = proc.stdout 
+            success = proc.returncode == 0
+        except Exception as e:
+            self._last_output = str(e)
+            print("Error running command: {}, error:{}".format(command, e))
+            success = False
+        finally:
+            os.chdir(cwd)
+            self._stdout = proc.stdout if proc is not None else None
+            self._stderr = proc.stderr if proc is not None else None
+        return success
+
+    async def commandAsyncio(self, cmd, dirFrom = None, verbose=False): #*args):
+        success = True
+        cwd = os.getcwd()
+        runfrom = cwd
+        stdout = b""
+        stderr = b""
+        if dirFrom is not None and os.path.isdir(dirFrom):
+            runfrom = dirFrom
+
+        try:
+            os.chdir(runfrom)
+            
+            proc = await asyncio.create_subprocess_shell(
+                        cmd,
+                        cwd=runfrom,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        env=os.environ.copy() # Ensures toolchain paths are inherited
+                    )
+            stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                self._last_output = stderr.decode() 
+            else:
+                if verbose:
+                    print(stdout.decode())
+            success = proc.returncode == 0
+        except Exception as e:
+            self._last_output = str(e)
+            print("Error running command: {}, error:{}".format(cmd, e))
+            success = False
+        finally:
+            os.chdir(cwd)
+            self._stdout = stdout
+            self._stderr = stderr
+        return success
 
     @abstractmethod
     def DoWork(self):

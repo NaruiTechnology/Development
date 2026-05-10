@@ -1,0 +1,165 @@
+Metadata-Version: 2.4
+Name: glasgow-service
+Version: 0.2.0
+Summary: Long-lived HTTP/WebSocket service wrapping a single Glasgow device.
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.27
+Requires-Dist: pydantic>=2.5
+Provides-Extra: examples
+Requires-Dist: websockets>=12; extra == "examples"
+Provides-Extra: tests
+Requires-Dist: pytest>=8; extra == "tests"
+
+# Glasgow Device Service
+
+A long-lived HTTP/WebSocket interface that keeps one Glasgow device connected
+for the lifetime of the process, with Swagger/OpenAPI docs, CSV export,
+and chunk-level validation equivalent to the stand-alone pytest wet-run
+tests — all integrated with your existing `GlasgowDataIO.IobeamControl`
+and `AutomationPy` packages.
+
+## Layout
+
+```
+glasgow_service/
+├── README.md
+├── pyproject.toml
+├── requirements.txt
+├── glasgow_service/
+│   ├── __init__.py
+│   ├── models.py     Pydantic schemas (requests + ScanResult + validation)
+│   ├── service.py    DeviceService — owns the Glasgow; streaming + blocking APIs
+│   ├── auth.py       Bearer-token dependency (opt-in via GLASGOW_TOKEN)
+│   └── api.py        FastAPI app
+├── tests/
+│   └── test_wet_run.py   Pytest replacement for test_scan_wet_run (raster + vector)
+├── examples/
+│   ├── raster_custom.py  REST client for raster scans, with sweep mode
+│   ├── vector_custom.py  REST client for vector scans
+│   └── ws_client.py      WebSocket streaming client
+└── deploy/
+    └── glasgow-svc.service   systemd unit
+```
+
+## What the wet-run integration does
+
+`DeviceService` exposes two blocking methods that replicate the behavior of
+your `test_scan_wet_run` methods exactly, only as library calls rather than
+standalone tests:
+
+- `run_raster(req: RasterRequest) -> ScanResult`
+- `run_vector(req: VectorRequest) -> ScanResult`
+
+Each of these:
+
+1. Runs the scan to completion against the live Glasgow.
+2. Times the USB transfer (`send_time_s`), and for vector with
+   `pre_process=True` also times `_pre_process_chunks` (`process_time_s`).
+3. If `save_csv=true`: writes the same CSV your old test wrote (raster →
+   `raster_RxR.csv`, one row per raster line; vector →
+   `vector_latencyN.csv`, one row per received chunk).
+4. If `do_validate=true`: runs the same chunk-count / chunk-size /
+   padding-leak checks the old `assertEqual`/`assertNotEqual` blocks ran,
+   and returns the results as a structured `ScanValidation` report (not
+   exceptions).
+
+The same logic powers the REST endpoints (`/scan/raster/run`,
+`/scan/vector/run`) and the pytest suite (`tests/test_wet_run.py`), so
+there's one authoritative implementation.
+
+## Install
+
+```bash
+pip install -r requirements.txt
+# or (pip-installable):
+pip install -e .
+```
+
+Your existing `GlasgowDataIO` and `AutomationPy` packages must be importable
+in the same environment.
+
+## Run the service
+
+```bash
+export GLASGOW_CONFIG=/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+# Optional: turn on auth
+# export GLASGOW_TOKEN=$(openssl rand -hex 32)
+
+uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
+```
+
+## Run the pytest wet-run suite
+
+The new tests do **not** need the server running — they instantiate
+`DeviceService` directly:
+
+```bash
+export GLASGOW_CONFIG=...      # same path as above
+pytest tests/test_wet_run.py -s
+```
+
+To override specific request fields without editing the test, modify the
+`REQUEST_OVERRIDES` dict at the top of each test class. All unspecified
+fields fall back to the values in your `streamData.json`.
+
+## Swagger / OpenAPI
+
+Once the server is up:
+
+| URL                                     | What                        |
+| --------------------------------------- | --------------------------- |
+| http://127.0.0.1:8765/docs              | Swagger UI (Try it out)     |
+| http://127.0.0.1:8765/redoc             | ReDoc                       |
+| http://127.0.0.1:8765/openapi.json      | Raw OpenAPI 3 schema        |
+
+The `ScanResult` response model is fully documented, so Swagger shows the
+validation-report shape, CSV path field, timing fields, etc., with
+realistic examples for both scan kinds.
+
+## Endpoints
+
+| Method | Path                      | Returns         | Notes                               |
+| ------ | ------------------------- | --------------- | ----------------------------------- |
+| GET    | `/status`                 | `ServiceStatus` | Device state, scan counter.         |
+| GET    | `/defaults`               | dict            | `rasterScan`/`vectorScan` from JSON.|
+| POST   | `/scan/raster/run`        | `ScanResult`    | Wet run + optional CSV + validation.|
+| POST   | `/scan/vector/run`        | `ScanResult`    | Wet run + optional CSV + validation.|
+| WS     | `/scan/raster/stream`     | binary frames   | Live chunks; ignores save_csv.      |
+| WS     | `/scan/vector/stream`     | binary frames   | Live chunks; ignores save_csv.      |
+| POST   | `/admin/reconnect`        | `ServiceStatus` | Drop + reopen USB.                  |
+
+## Quick smoke test
+
+```bash
+# Run a raster wet scan with CSV + validation; parse the result
+curl -s -X POST http://127.0.0.1:8765/scan/raster/run \
+     -H 'content-type: application/json' \
+     -d '{"resolution":512,"dwell":2,"latency_bytes":16384,
+          "save_csv":true,"do_validate":true}' | jq
+
+# Vector wet scan with pre-processing timing
+curl -s -X POST http://127.0.0.1:8765/scan/vector/run \
+     -H 'content-type: application/json' \
+     -d '{"pattern":"default","latency_bytes":8196,
+          "pre_process":true,"save_csv":true,"do_validate":true}' | jq
+```
+
+Both return a `ScanResult` whose `validation.passed` field is `true` on
+green, plus per-check breakdown when anything fails.
+
+## Known issue in the standalone test_vector.py
+
+Your current `test_vector.py` has the same shadowing bug we already fixed
+in raster: `setUp()` assigns `LATENCY = self._vectorScanConfig.get('latency')`
+as a bare local, which is discarded. `self.LATENCY` keeps the class-level
+`8196`. Either delete that line or change it to
+`self.LATENCY = self._vectorScanConfig.get('latency', 8196)`. The pytest
+replacement in `tests/test_wet_run.py` reads from `svc.defaults()` so it
+doesn't have this problem.
+
+## Concurrency
+
+One scan at a time. Concurrent REST or WebSocket requests return **HTTP
+409** (or an `{"event":"error","code":"busy"}` WebSocket frame).

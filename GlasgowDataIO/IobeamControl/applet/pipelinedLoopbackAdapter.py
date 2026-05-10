@@ -1,0 +1,30 @@
+from amaranth import *
+from amaranth.lib import wiring
+from amaranth.lib.wiring import In, Out, flipped
+from amaranth.build import *
+from . import *
+
+class PipelinedLoopbackAdapter(wiring.Component):
+    loopback_stream: In(unsigned(14)) # type: ignore
+    bus: Out(BusSignature) # type: ignore
+
+    def __init__(self, adc_latency: int):
+        self.adc_latency = adc_latency
+        super().__init__()
+
+    def elaborate(self, platform):
+        m = Module()
+
+        prev_bus_adc_oe = Signal()
+        adc_oe_rising = Signal()
+        m.d.sync += prev_bus_adc_oe.eq(self.bus.adc_oe)
+        m.d.comb += adc_oe_rising.eq(~prev_bus_adc_oe & self.bus.adc_oe)
+
+        shift_register = Signal(14*self.adc_latency)
+
+        with m.If(adc_oe_rising):
+            m.d.sync += shift_register.eq((shift_register << 14) | self.loopback_stream)
+
+        m.d.comb += self.bus.data_i.eq(shift_register.word_select(self.adc_latency-1, 14))
+
+        return m

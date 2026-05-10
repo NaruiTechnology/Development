@@ -5,6 +5,7 @@
 # additional terms of your license agreement.
 #
 ## @file
+# Auther: Henry Li
 #
 
 # This software and associated documentation (if any) is furnished
@@ -143,10 +144,8 @@ def FindUnInstalledPackages(checklist):
 
 
 
-def CreateInstance(key, package, *args, **kwargs):
-    classname = '{}_{}_state'.format(package.lower().replace('_state', ''), key)
+def CreateInstance(classname, *args, **kwargs):
     namespaces = ['workstates']
-    namespaces.append(package)
     namespaces.append(classname)
     q = queue.Queue()
     instance = None
@@ -184,18 +183,14 @@ class Bcolors(Enum):
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 def PrintMessage(msg, color):
-    if not(msg is None or len(msg) is 0):
+    if not(msg is None or len(msg) == 0):
         sys.stdout.write(color.value)
         print(msg)
         sys.stdout.write(Bcolors.RESET.value)
-'''
-    try:
-        sitepackagepath = os.path.join(sys.executable.replace('python.exe', ''), 'lib\\site-packages')
-        dirs = os.listdir(GetSitePackagePath())
-    except:pass
-    if not dirs is None:
-        uninstalledPackages = [x for x in checklist if x not in dirs]
-    return uninstalledPackages
 
-'''
-
+def GetStateConfigByName(config, stateName):
+    if config is not None and stateName is not None:
+        for action in config.Actions:
+            if stateName in action:
+                return action[stateName]
+    return None
