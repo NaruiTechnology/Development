@@ -127,6 +127,28 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
         else:
             creationFlags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
+        if spawnTerminal:
+            # CREATE_NEW_CONSOLE allocates a fresh console for cmd.exe and
+            # wires the child's std handles to that console -- but only if
+            # the parent does NOT pass explicit handles. Passing DEVNULL
+            # for stdin/stdout/stderr forces CPython to set
+            # STARTF_USESTDHANDLES, which overrides the new console and
+            # binds cmd.exe's stdin/stdout/stderr to NUL. The window pops
+            # up, but every `echo` in the wrapper script and every line
+            # the inner service prints goes to NUL -- which looks exactly
+            # like "service runs but the prompt shows nothing". Leaving
+            # the handles unset (Popen default = inherit, with no
+            # STARTF_USESTDHANDLES) lets cmd.exe attach to the new
+            # console naturally.
+            return subprocess.Popen(
+                ["cmd.exe", "/d", "/k", scriptPath],
+                creationflags=creationFlags,
+                close_fds=True)
+
+        # Hidden cmd.exe (CREATE_NO_WINDOW): there is no console to display
+        # anything anyway, and the wrapper redirects everything to the log
+        # file via `>> {logPath} 2>&1`. DEVNULL the parent-side handles to
+        # keep them from dangling.
         return subprocess.Popen(
             ["cmd.exe", "/d", "/k", scriptPath],
             stdin=subprocess.DEVNULL,
