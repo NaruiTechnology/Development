@@ -7,19 +7,59 @@ import fnmatch
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = ['*.ihex', 'requirements.txt', 'README.md']
 
-# Directories to skip when walking the source tree
+# Directories to skip when walking the source tree for the per-file passes
+# (.py/.pyc packaging and ASSET_PATTERNS scan). Non-Python source projects
+# listed in COPY_TREES are excluded here because they're handled wholesale
+# by copy_source_trees().
 SKIP_DIRS = {
-    '__pycache__', 
-    '.venv', 
-    '.git', 
-    '.pytest_cache', 
+    '__pycache__',
+    '.venv',
+    '.git',
+    '.pytest_cache',
     'dist_app',
-    'EsmBeamController', 
+    'EsmBeamController',
     'Open-Beam-Interface',
     'DistributionDeploy',
     'DeployWorkSpace',
     'LoadFPGAImage',
+    'ionbeam-web',  # handled by copy_source_trees, don't double-walk
 }
+
+# Non-Python source trees copied verbatim. Paths are relative to src_dir.
+# Anything in here is packaged in full, preserving every file regardless of
+# extension (package.json, package-lock.json, tsconfig.json, vite.config.*,
+# .env.example, index.html, src/, public/, etc.).
+COPY_TREES = [
+    os.path.join('Development', 'ionbeam-web'),
+]
+
+# Patterns excluded while copying a tree from COPY_TREES. Keeps the zip
+# small by dropping dependency installs and build output -- the deploy
+# host will regenerate node_modules via `npm install`.
+TREE_COPY_IGNORE = (
+    '__pycache__', '.git', '.venv', '.cache', '.pytest_cache',
+    'node_modules', 'dist', 'build', '.next', '.turbo',
+)
+
+
+def copy_source_trees(src_dir, dist_dir, trees):
+    """Copy listed source trees verbatim from src_dir into dist_dir.
+
+    Skips dependency installs and build artifacts (see TREE_COPY_IGNORE)
+    so the resulting zip stays small. All other files in the tree --
+    including non-Python ones like package.json, tsconfig.json,
+    vite.config.*, .env.example -- are preserved.
+    """
+    ignore = shutil.ignore_patterns(*TREE_COPY_IGNORE)
+    for rel_tree in trees:
+        src_tree = os.path.join(src_dir, rel_tree)
+        if not os.path.isdir(src_tree):
+            print(f"Source tree [{rel_tree}] not found (skipping).")
+            continue
+        dst_tree = os.path.join(dist_dir, rel_tree)
+        shutil.copytree(src_tree, dst_tree, ignore=ignore, dirs_exist_ok=True)
+        print(f"Copied source tree: {rel_tree}")
+
 
 def copy_matching_assets(src_dir, dist_dir, patterns):
     """Walk src_dir and copy any files matching patterns into dist_dir."""
@@ -27,7 +67,7 @@ def copy_matching_assets(src_dir, dist_dir, patterns):
     for root, dirs, files in os.walk(src_dir):
         # Prune skipped dirs in-place
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-        
+
         if os.path.abspath(root).startswith(abs_dist):
             continue
 
@@ -53,6 +93,11 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
     if os.path.exists(dist_dir):
         shutil.rmtree(dist_dir, ignore_errors=True) 
     os.makedirs(dist_dir, exist_ok=True)
+
+    # 2.5. Copy non-Python source trees wholesale (Node projects, etc.)
+    # Done before the .py walk so SKIP_DIRS cleanly excludes these paths
+    # from per-file processing.
+    copy_source_trees(src_dir, dist_dir, COPY_TREES)
 
     # 3. Package source files: raw .py files OR extracted/flattened .pyc files
     abs_dist = os.path.abspath(dist_dir)
