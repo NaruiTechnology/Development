@@ -311,6 +311,20 @@
                                                                 },
                                                  "timeout":  45.0
                                              }
+                    },
+                    {
+                        "launchUI": {
+                            "skip": false,
+                            "transactionComplete": false,
+                            "actionData": {
+                                "commandFormat": "internal",
+                                "url": "http://127.0.0.1:5173",
+                                "readinessTimeout": 30.0,
+                                "pollInterval": 0.5,
+                                "failOnNotReady": false
+                            },
+                            "timeout": 60.0
+                        }
                     }
                 ],
     "LogName":  "DistributionDeploy"
