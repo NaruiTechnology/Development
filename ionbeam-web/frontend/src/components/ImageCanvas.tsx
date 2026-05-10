@@ -56,6 +56,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roi = useAppSelector((s) => s.scan.roi);
+  const theme = useAppSelector((s) => s.theme.theme);
 
   const phase = useAppSelector((s) => s.scan.phase);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
@@ -100,7 +101,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       setStats(s);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revision, kind, renderMode]);
+  }, [revision, kind, renderMode, theme]);
 
   useEffect(() => {
     if (!showServerFigure) {
@@ -200,11 +201,6 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   } else {
     nativeEdge = vectorEdge;
   }
-  const canvasSize = Math.min(
-    nativeEdge * Math.max(1, Math.floor(640 / nativeEdge)),
-    768
-  );
-
   return (
     <div>
       {showModeToggle && (
@@ -252,8 +248,6 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
           height={nativeEdge}
           onDragStart={(e) => e.preventDefault()}
           style={{
-            width: canvasSize,
-            height: canvasSize,
             display: preferServerFigure ? "none" : undefined,
           }}
         />

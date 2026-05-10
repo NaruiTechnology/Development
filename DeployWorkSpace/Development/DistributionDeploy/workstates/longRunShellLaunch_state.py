@@ -53,7 +53,7 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
                 return
 
             scriptPath = self._writeWindowsHostScript(
-                runDir, command, logPath, venvActivate, exports, title)
+                runDir, command, logPath, venvActivate, exports, title, spawnTerminal)
             proc = self._launchWindowsHostShell(scriptPath, title, spawnTerminal)
 
             if pidPath:
@@ -68,7 +68,8 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
 
-    def _writeWindowsHostScript(self, runDir, command, logPath, venvActivate, exports, title):
+    def _writeWindowsHostScript(self, runDir, command, logPath, venvActivate, exports, title,
+                                showOutput):
         logDir = os.path.dirname(logPath) or "."
         os.makedirs(logDir, exist_ok=True)
 
@@ -77,6 +78,7 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
 
         lines = [
             "@echo off",
+            "title {}".format(title),
             "setlocal",
             "cd /d {}".format(self._cmdQuote(runDir)),
             "set \"IONBEAM_SERVICE_TITLE={}\"".format(title),
@@ -96,15 +98,27 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
             "echo [%DATE% %TIME%] Starting %IONBEAM_SERVICE_TITLE% >> {}".format(self._cmdQuote(logPath)),
             "echo Working directory: %CD% >> {}".format(self._cmdQuote(logPath)),
             "echo Command: {} >> {}".format(command, self._cmdQuote(logPath)),
-            "call {} >> {} 2>&1".format(command, self._cmdQuote(logPath)),
+            "echo ==================================================",
+            "echo [%DATE% %TIME%] Starting %IONBEAM_SERVICE_TITLE%",
+            "echo Working directory: %CD%",
+            "echo Command: {}".format(command),
+            "echo.",
+            self._hostCommand(command, logPath, showOutput),
             "set \"IONBEAM_EXITCODE=%ERRORLEVEL%\"",
             "echo [%DATE% %TIME%] %IONBEAM_SERVICE_TITLE% exited with %IONBEAM_EXITCODE% >> {}".format(self._cmdQuote(logPath)),
-            "exit /b %IONBEAM_EXITCODE%",
+            "echo.",
+            "echo [%DATE% %TIME%] %IONBEAM_SERVICE_TITLE% exited with %IONBEAM_EXITCODE%",
+            "echo This host shell remains open for diagnostics. Close this window to stop reviewing it.",
         ])
 
         with open(scriptPath, "w", newline="\r\n") as f:
             f.write("\n".join(lines) + "\n")
         return scriptPath
+
+    def _hostCommand(self, command, logPath, showOutput):
+        if showOutput:
+            return "call {}".format(command)
+        return "call {} >> {} 2>&1".format(command, self._cmdQuote(logPath))
 
     def _launchWindowsHostShell(self, scriptPath, title, spawnTerminal):
         creationFlags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)

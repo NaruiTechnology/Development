@@ -8,7 +8,7 @@
  * but pulls everything into one window because there is no off-screen
  * "console" surface in a browser context.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
@@ -26,8 +26,15 @@ import { resetRaster, resetVector } from "./store/imageSlice";
 import { fetchDefaults } from "./store/statusSlice";
 import { useAppDispatch, useAppSelector } from "./store";
 
+const RIGHT_PANEL_STORAGE_KEY = "ionbeam:rightPanelWidth";
+const DEFAULT_RIGHT_PANEL_WIDTH = 720;
+const MIN_LEFT_PANEL_WIDTH = 320;
+const MIN_RIGHT_PANEL_WIDTH = 380;
+const SPLITTER_SPACE = 32;
+
 export function App() {
   const dispatch = useAppDispatch();
+  const mainRef = useRef<HTMLElement | null>(null);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
@@ -36,6 +43,12 @@ export function App() {
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => {
+    const raw = window.localStorage.getItem(RIGHT_PANEL_STORAGE_KEY);
+    const parsed = raw ? Number(raw) : DEFAULT_RIGHT_PANEL_WIDTH;
+    return Number.isFinite(parsed) ? parsed : DEFAULT_RIGHT_PANEL_WIDTH;
+  });
+  const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
     dispatch(fetchDefaults());
@@ -46,6 +59,42 @@ export function App() {
       setLastScanKind(kind);
     }
   }, [kind]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    function resizeFromPointer(clientX: number) {
+      const main = mainRef.current;
+      if (!main) return;
+      const rect = main.getBoundingClientRect();
+      const maxRight = Math.max(
+        MIN_RIGHT_PANEL_WIDTH,
+        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE
+      );
+      const next = Math.min(
+        maxRight,
+        Math.max(MIN_RIGHT_PANEL_WIDTH, rect.right - clientX)
+      );
+      setRightPanelWidth(next);
+      window.localStorage.setItem(RIGHT_PANEL_STORAGE_KEY, String(Math.round(next)));
+    }
+
+    function onPointerMove(event: PointerEvent) {
+      event.preventDefault();
+      resizeFromPointer(event.clientX);
+    }
+
+    function onPointerUp() {
+      setIsResizing(false);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [isResizing]);
 
   const scanActive = phase === "running" || phase === "stopping";
   const formDisabled = scanActive;
@@ -76,11 +125,32 @@ export function App() {
     dispatch(setKind(nextKind));
   }
 
+  function resizeRightPanel(delta: number) {
+    const main = mainRef.current;
+    if (!main) return;
+    const rect = main.getBoundingClientRect();
+    const maxRight = Math.max(
+      MIN_RIGHT_PANEL_WIDTH,
+      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE
+    );
+    const next = Math.min(maxRight, Math.max(MIN_RIGHT_PANEL_WIDTH, rightPanelWidth + delta));
+    setRightPanelWidth(next);
+    window.localStorage.setItem(RIGHT_PANEL_STORAGE_KEY, String(Math.round(next)));
+  }
+
+  const layoutStyle = {
+    "--right-panel-width": `${Math.round(rightPanelWidth)}px`,
+  } as CSSProperties;
+
   return (
     <div className="app-shell">
       <Header />
 
-      <main className="app-main">
+      <main
+        ref={mainRef}
+        className={`app-main${isResizing ? " app-main--resizing" : ""}`}
+        style={layoutStyle}
+      >
         {/* left column */}
         <section>
           <div className="card">
@@ -149,9 +219,37 @@ export function App() {
           )}
         </section>
 
+        <div
+          className="panel-resizer"
+          role="separator"
+          aria-label="Resize image panel"
+          aria-orientation="vertical"
+          tabIndex={0}
+          onPointerDown={(event) => {
+            if (window.matchMedia("(max-width: 1024px)").matches) return;
+            event.preventDefault();
+            setIsResizing(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              resizeRightPanel(32);
+            } else if (event.key === "ArrowRight") {
+              event.preventDefault();
+              resizeRightPanel(-32);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              resizeRightPanel(9999);
+            } else if (event.key === "End") {
+              event.preventDefault();
+              resizeRightPanel(-9999);
+            }
+          }}
+        />
+
         {/* right column */}
         <section>
-          <div className="card">
+          <div className="card image-panel-card">
             <div className="card__header">
               <span className="card__title">
                 {kind === "raster" ? "Raster image" : kind === "vector" ? "Vector pattern" : "ROI preview"}

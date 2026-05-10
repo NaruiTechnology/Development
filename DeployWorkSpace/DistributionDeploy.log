@@ -294,3 +294,283 @@ Usage: yowasp-icepack [options] [input-file [output-file]]
 05-09 17:39 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:4000/healthz
 05-09 17:39 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:5173/
 05-09 17:39 DistributionDeploy INFO     DistributionDeployThread completed.
+05-09 17:56 DistributionDeploy INFO     [skip=true] 'installUuidRuntime' skipped.
+05-09 17:56 DistributionDeploy INFO     [buildDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$s='C:\Project\IobeamTech\Development\buidCompiledDist.py'; $src='C:\Project\IobeamTech\Development'; $dist='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app'; $out='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip'; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 $s --source $src --dist $dist --output $out } else { & python $s --source $src --dist $dist --output $out }"
+05-09 17:56 DistributionDeploy INFO     [buildDistribution_state] OK
+05-09 17:56 DistributionDeploy INFO     [unzipDistribution_state] using zip: C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip
+05-09 17:56 DistributionDeploy INFO     [unzipDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath 'C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip' -DestinationPath 'C:\Project\Iobeam\Deploy' -Force"
+05-09 17:56 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-09 17:56 DistributionDeploy INFO     [setupVirtualEnv_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$root='C:\Project\Iobeam\Deploy'; $venv='.venv'; $venvAct='.venv'; Set-Location -LiteralPath $root; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 -m venv $venv } else { & python -m venv $venv }; & (Join-Path $root (Join-Path $venvAct 'Scripts\python.exe')) -m pip install --upgrade pip"
+05-09 17:56 DistributionDeploy INFO     [setupVirtualEnv_state] OK
+05-09 17:56 DistributionDeploy INFO     [installPipRequirements_state] found 2 requirement file(s):
+05-09 17:56 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\requirements.txt
+05-09 17:56 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\glasgow_service/requirements.txt
+05-09 17:56 DistributionDeploy WARNING  [installPipRequirements_state] skipped private editable dependency already present in deploy tree: -e git+https://github.com/NaruiTechnology/Development.git@a592305d95eebaf4b5860b311b16c57d094dbb9b#egg=iobeam_development
+05-09 17:56 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-l0vdmyfq-requirements.txt"
+05-09 17:56 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-4h86ztgg-requirements.txt"
+05-09 17:56 DistributionDeploy INFO     [installNodeJS_state] Node.js already available: node=C:\Program Files\nodejs\node.EXE, npm=C:\Program Files\nodejs\npm.CMD
+05-09 17:56 DistributionDeploy INFO     [installToolchain_state] running 20 install commands (apt=0, pipx=0, pip=17)...
+05-09 17:56 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "Cython"
+05-09 17:56 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 17:56 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "fx2"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "asyncio"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "libusb1"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "amaranth"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tomlkit"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "numpy"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "matplotlib"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "PyQt6"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tifffile"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "qasync"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "pyusb"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-runtime"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-yosys"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-nextpnr-ice40"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 17:57 DistributionDeploy INFO     [installToolchain_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 17:57 DistributionDeploy INFO     [setupGlasgow_state] Windows: using GLASGOW_TOOLCHAIN=builtin
+05-09 17:57 DistributionDeploy INFO     [setupGlasgow_state] Windows USB note: install/associate a WinUSB/libusb driver for the Glasgow device if PyUSB cannot open it.
+05-09 17:57 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" "-c" "import fx2, usb1, usb.core, amaranth"
+05-09 17:57 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 17:57 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 17:57 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 17:57 DistributionDeploy INFO     [exportEnv_state] os.environ[GLASGOW_CONFIG] = C:\Project\Iobeam\Deploy\GlasgowDataIO\Json\streamData.json
+05-09 17:57 DistributionDeploy INFO     [exportEnv_state] 'GLASGOW_CONFIG' already present in C:\Users\yingh/.bashrc, skipping.
+05-09 17:57 DistributionDeploy INFO     [launchGlasgowService_state] launched long-running Windows shell. pid=42116 log=C:\Project\Iobeam\Deploy\Logs\glasgow.log host=C:\Project\Iobeam\Deploy\Logs\Glasgow-Service.cmd
+05-09 17:57 DistributionDeploy INFO     [verifyGlasgowService_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; if (Test-Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log') { Select-String -Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log' -Pattern 'chunk|valid|drain|in_flight|Application startup complete' -Quiet } else { exit 1 }"
+05-09 17:57 DistributionDeploy INFO     Activating virtual environment with command: source .venv/.venv/bin/activate
+05-09 17:57 DistributionDeploy INFO     [verifyGlasgowService_state] OK
+05-09 17:57 DistributionDeploy INFO     [setupIonbeamWeb_state] C:\Project\Iobeam\Deploy\ionbeam-web\backend\.env already exists
+05-09 17:57 DistributionDeploy INFO     [setupIonbeamWeb_state][backend] >> npm install
+05-09 17:57 DistributionDeploy INFO     [setupIonbeamWeb_state][frontend] >> npm install
+05-09 17:57 DistributionDeploy INFO     [launchIonbeamWebBackend_state] launched long-running Windows shell. pid=3088 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-backend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Backend.cmd
+05-09 17:57 DistributionDeploy INFO     [launchIonbeamWebFrontend_state] launched long-running Windows shell. pid=43772 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-frontend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Frontend.cmd
+05-09 17:57 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:4000/healthz
+05-09 17:57 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:5173/
+05-09 17:57 DistributionDeploy INFO     DistributionDeployThread completed.
+05-09 18:24 DistributionDeploy INFO     [skip=true] 'installUuidRuntime' skipped.
+05-09 18:24 DistributionDeploy INFO     [buildDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$s='C:\Project\IobeamTech\Development\buidCompiledDist.py'; $src='C:\Project\IobeamTech\Development'; $dist='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app'; $out='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip'; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 $s --source $src --dist $dist --output $out } else { & python $s --source $src --dist $dist --output $out }"
+05-09 18:24 DistributionDeploy INFO     [buildDistribution_state] OK
+05-09 18:24 DistributionDeploy INFO     [unzipDistribution_state] using zip: C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip
+05-09 18:24 DistributionDeploy INFO     [unzipDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath 'C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip' -DestinationPath 'C:\Project\Iobeam\Deploy' -Force"
+05-09 18:24 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-09 18:24 DistributionDeploy INFO     [setupVirtualEnv_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$root='C:\Project\Iobeam\Deploy'; $venv='.venv'; $venvAct='.venv'; Set-Location -LiteralPath $root; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 -m venv $venv } else { & python -m venv $venv }; & (Join-Path $root (Join-Path $venvAct 'Scripts\python.exe')) -m pip install --upgrade pip"
+05-09 18:24 DistributionDeploy INFO     [setupVirtualEnv_state] OK
+05-09 18:24 DistributionDeploy INFO     [installPipRequirements_state] found 2 requirement file(s):
+05-09 18:24 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\requirements.txt
+05-09 18:24 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\glasgow_service/requirements.txt
+05-09 18:24 DistributionDeploy WARNING  [installPipRequirements_state] skipped private editable dependency already present in deploy tree: -e git+https://github.com/NaruiTechnology/Development.git@a592305d95eebaf4b5860b311b16c57d094dbb9b#egg=iobeam_development
+05-09 18:24 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-cfu24h8_-requirements.txt"
+05-09 18:24 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-fr9ozql4-requirements.txt"
+05-09 18:24 DistributionDeploy INFO     [installNodeJS_state] Node.js already available: node=C:\Program Files\nodejs\node.EXE, npm=C:\Program Files\nodejs\npm.CMD
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state] running 20 install commands (apt=0, pipx=0, pip=17)...
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "Cython"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "fx2"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "asyncio"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "libusb1"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "amaranth"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tomlkit"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "numpy"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "matplotlib"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "PyQt6"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tifffile"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "qasync"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "pyusb"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-runtime"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-yosys"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-nextpnr-ice40"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 18:24 DistributionDeploy INFO     [installToolchain_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 18:24 DistributionDeploy INFO     [setupGlasgow_state] Windows: using GLASGOW_TOOLCHAIN=builtin
+05-09 18:24 DistributionDeploy INFO     [setupGlasgow_state] Windows USB note: install/associate a WinUSB/libusb driver for the Glasgow device if PyUSB cannot open it.
+05-09 18:24 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" "-c" "import fx2, usb1, usb.core, amaranth"
+05-09 18:24 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 18:24 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 18:24 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 18:24 DistributionDeploy INFO     [exportEnv_state] os.environ[GLASGOW_CONFIG] = C:\Project\Iobeam\Deploy\GlasgowDataIO\Json\streamData.json
+05-09 18:24 DistributionDeploy INFO     [exportEnv_state] 'GLASGOW_CONFIG' already present in C:\Users\yingh/.bashrc, skipping.
+05-09 18:24 DistributionDeploy INFO     [launchGlasgowService_state] launched long-running Windows shell. pid=39272 log=C:\Project\Iobeam\Deploy\Logs\glasgow.log host=C:\Project\Iobeam\Deploy\Logs\Glasgow-Service.cmd
+05-09 18:24 DistributionDeploy INFO     [verifyGlasgowService_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; if (Test-Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log') { Select-String -Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log' -Pattern 'chunk|valid|drain|in_flight|Application startup complete' -Quiet } else { exit 1 }"
+05-09 18:24 DistributionDeploy INFO     Activating virtual environment with command: source .venv/.venv/bin/activate
+05-09 18:24 DistributionDeploy INFO     [verifyGlasgowService_state] OK
+05-09 18:24 DistributionDeploy INFO     [setupIonbeamWeb_state] C:\Project\Iobeam\Deploy\ionbeam-web\backend\.env already exists
+05-09 18:24 DistributionDeploy INFO     [setupIonbeamWeb_state][backend] >> npm install
+05-09 18:24 DistributionDeploy INFO     [setupIonbeamWeb_state][frontend] >> npm install
+05-09 18:24 DistributionDeploy INFO     [launchIonbeamWebBackend_state] launched long-running Windows shell. pid=1020 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-backend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Backend.cmd
+05-09 18:24 DistributionDeploy INFO     [launchIonbeamWebFrontend_state] launched long-running Windows shell. pid=37248 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-frontend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Frontend.cmd
+05-09 18:24 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:5173/
+05-09 18:24 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:4000/healthz
+05-09 18:24 DistributionDeploy INFO     DistributionDeployThread completed.
+05-09 18:34 DistributionDeploy INFO     [skip=true] 'installUuidRuntime' skipped.
+05-09 18:34 DistributionDeploy INFO     [buildDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$s='C:\Project\IobeamTech\Development\buidCompiledDist.py'; $src='C:\Project\IobeamTech\Development'; $dist='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app'; $out='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip'; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 $s --source $src --dist $dist --output $out } else { & python $s --source $src --dist $dist --output $out }"
+05-09 18:34 DistributionDeploy INFO     [buildDistribution_state] OK
+05-09 18:34 DistributionDeploy INFO     [unzipDistribution_state] using zip: C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip
+05-09 18:34 DistributionDeploy INFO     [unzipDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath 'C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip' -DestinationPath 'C:\Project\Iobeam\Deploy' -Force"
+05-09 18:34 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-09 18:34 DistributionDeploy INFO     [setupVirtualEnv_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$root='C:\Project\Iobeam\Deploy'; $venv='.venv'; $venvAct='.venv'; Set-Location -LiteralPath $root; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 -m venv $venv } else { & python -m venv $venv }; & (Join-Path $root (Join-Path $venvAct 'Scripts\python.exe')) -m pip install --upgrade pip"
+05-09 18:34 DistributionDeploy INFO     [setupVirtualEnv_state] OK
+05-09 18:34 DistributionDeploy INFO     [installPipRequirements_state] found 2 requirement file(s):
+05-09 18:34 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\requirements.txt
+05-09 18:34 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\glasgow_service/requirements.txt
+05-09 18:34 DistributionDeploy WARNING  [installPipRequirements_state] skipped private editable dependency already present in deploy tree: -e git+https://github.com/NaruiTechnology/Development.git@a592305d95eebaf4b5860b311b16c57d094dbb9b#egg=iobeam_development
+05-09 18:34 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-27qnb4mc-requirements.txt"
+05-09 18:34 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-2t5xd6o8-requirements.txt"
+05-09 18:34 DistributionDeploy INFO     [installNodeJS_state] Node.js already available: node=C:\Program Files\nodejs\node.EXE, npm=C:\Program Files\nodejs\npm.CMD
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state] running 20 install commands (apt=0, pipx=0, pip=17)...
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "Cython"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "fx2"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "asyncio"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "libusb1"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "amaranth"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tomlkit"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "numpy"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "matplotlib"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "PyQt6"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tifffile"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "qasync"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "pyusb"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-runtime"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-yosys"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-nextpnr-ice40"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 18:34 DistributionDeploy INFO     [installToolchain_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 18:34 DistributionDeploy INFO     [setupGlasgow_state] Windows: using GLASGOW_TOOLCHAIN=builtin
+05-09 18:34 DistributionDeploy INFO     [setupGlasgow_state] Windows USB note: install/associate a WinUSB/libusb driver for the Glasgow device if PyUSB cannot open it.
+05-09 18:34 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" "-c" "import fx2, usb1, usb.core, amaranth"
+05-09 18:34 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 18:34 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 18:34 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 18:34 DistributionDeploy INFO     [exportEnv_state] os.environ[GLASGOW_CONFIG] = C:\Project\Iobeam\Deploy\GlasgowDataIO\Json\streamData.json
+05-09 18:34 DistributionDeploy INFO     [exportEnv_state] 'GLASGOW_CONFIG' already present in C:\Users\yingh/.bashrc, skipping.
+05-09 18:35 DistributionDeploy INFO     [launchGlasgowService_state] launched long-running Windows shell. pid=49944 log=C:\Project\Iobeam\Deploy\Logs\glasgow.log host=C:\Project\Iobeam\Deploy\Logs\Glasgow-Service.cmd
+05-09 18:35 DistributionDeploy INFO     [verifyGlasgowService_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; if (Test-Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log') { Select-String -Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log' -Pattern 'chunk|valid|drain|in_flight|Application startup complete' -Quiet } else { exit 1 }"
+05-09 18:35 DistributionDeploy INFO     Activating virtual environment with command: source .venv/.venv/bin/activate
+05-09 18:35 DistributionDeploy INFO     [verifyGlasgowService_state] OK
+05-09 18:35 DistributionDeploy INFO     [setupIonbeamWeb_state] C:\Project\Iobeam\Deploy\ionbeam-web\backend\.env already exists
+05-09 18:35 DistributionDeploy INFO     [setupIonbeamWeb_state][backend] >> npm install
+05-09 18:35 DistributionDeploy INFO     [setupIonbeamWeb_state][frontend] >> npm install
+05-09 18:35 DistributionDeploy INFO     [launchIonbeamWebBackend_state] launched long-running Windows shell. pid=49360 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-backend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Backend.cmd
+05-09 18:35 DistributionDeploy INFO     [launchIonbeamWebFrontend_state] launched long-running Windows shell. pid=24092 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-frontend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Frontend.cmd
+05-09 18:35 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:4000/healthz
+05-09 18:35 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:5173/
+05-09 18:35 DistributionDeploy INFO     DistributionDeployThread completed.
+05-09 18:46 DistributionDeploy INFO     [skip=true] 'installUuidRuntime' skipped.
+05-09 18:46 DistributionDeploy INFO     [buildDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$s='C:\Project\IobeamTech\Development\buidCompiledDist.py'; $src='C:\Project\IobeamTech\Development'; $dist='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app'; $out='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip'; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 $s --source $src --dist $dist --output $out } else { & python $s --source $src --dist $dist --output $out }"
+05-09 18:46 DistributionDeploy INFO     [buildDistribution_state] OK
+05-09 18:46 DistributionDeploy INFO     [unzipDistribution_state] using zip: C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip
+05-09 18:46 DistributionDeploy INFO     [unzipDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath 'C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip' -DestinationPath 'C:\Project\Iobeam\Deploy' -Force"
+05-09 18:46 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-09 18:46 DistributionDeploy INFO     [setupVirtualEnv_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$root='C:\Project\Iobeam\Deploy'; $venv='.venv'; $venvAct='.venv'; Set-Location -LiteralPath $root; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 -m venv $venv } else { & python -m venv $venv }; & (Join-Path $root (Join-Path $venvAct 'Scripts\python.exe')) -m pip install --upgrade pip"
+05-09 18:46 DistributionDeploy INFO     [setupVirtualEnv_state] OK
+05-09 18:46 DistributionDeploy INFO     [installPipRequirements_state] found 2 requirement file(s):
+05-09 18:46 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\requirements.txt
+05-09 18:46 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\glasgow_service/requirements.txt
+05-09 18:46 DistributionDeploy WARNING  [installPipRequirements_state] skipped private editable dependency already present in deploy tree: -e git+https://github.com/NaruiTechnology/Development.git@a592305d95eebaf4b5860b311b16c57d094dbb9b#egg=iobeam_development
+05-09 18:46 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-tagtgkj8-requirements.txt"
+05-09 18:46 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-o1449860-requirements.txt"
+05-09 18:46 DistributionDeploy INFO     [installNodeJS_state] Node.js already available: node=C:\Program Files\nodejs\node.EXE, npm=C:\Program Files\nodejs\npm.CMD
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state] running 20 install commands (apt=0, pipx=0, pip=17)...
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "Cython"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "fx2"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "asyncio"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "libusb1"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "amaranth"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tomlkit"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "numpy"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "matplotlib"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "PyQt6"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tifffile"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "qasync"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "pyusb"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-runtime"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-yosys"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-nextpnr-ice40"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 18:46 DistributionDeploy INFO     [installToolchain_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 18:46 DistributionDeploy INFO     [setupGlasgow_state] Windows: using GLASGOW_TOOLCHAIN=builtin
+05-09 18:46 DistributionDeploy INFO     [setupGlasgow_state] Windows USB note: install/associate a WinUSB/libusb driver for the Glasgow device if PyUSB cannot open it.
+05-09 18:46 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" "-c" "import fx2, usb1, usb.core, amaranth"
+05-09 18:46 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 18:46 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 18:46 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 18:46 DistributionDeploy INFO     [exportEnv_state] os.environ[GLASGOW_CONFIG] = C:\Project\Iobeam\Deploy\GlasgowDataIO\Json\streamData.json
+05-09 18:46 DistributionDeploy INFO     [exportEnv_state] 'GLASGOW_CONFIG' already present in C:\Users\yingh/.bashrc, skipping.
+05-09 18:46 DistributionDeploy INFO     [launchGlasgowService_state] launched long-running Windows shell. pid=31912 log=C:\Project\Iobeam\Deploy\Logs\glasgow.log host=C:\Project\Iobeam\Deploy\Logs\Glasgow-Service.cmd
+05-09 18:46 DistributionDeploy INFO     [verifyGlasgowService_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; if (Test-Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log') { Select-String -Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log' -Pattern 'chunk|valid|drain|in_flight|Application startup complete' -Quiet } else { exit 1 }"
+05-09 18:46 DistributionDeploy INFO     Activating virtual environment with command: source .venv/.venv/bin/activate
+05-09 18:46 DistributionDeploy INFO     [verifyGlasgowService_state] OK
+05-09 18:46 DistributionDeploy INFO     [setupIonbeamWeb_state] C:\Project\Iobeam\Deploy\ionbeam-web\backend\.env already exists
+05-09 18:46 DistributionDeploy INFO     [setupIonbeamWeb_state][backend] >> npm install
+05-09 18:46 DistributionDeploy INFO     [setupIonbeamWeb_state][frontend] >> npm install
+05-09 18:46 DistributionDeploy INFO     [launchIonbeamWebBackend_state] launched long-running Windows shell. pid=36460 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-backend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Backend.cmd
+05-09 18:46 DistributionDeploy INFO     [launchIonbeamWebFrontend_state] launched long-running Windows shell. pid=41532 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-frontend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Frontend.cmd
+05-09 18:46 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:4000/healthz
+05-09 18:46 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:5173/
+05-09 18:46 DistributionDeploy INFO     DistributionDeployThread completed.
+05-09 19:09 DistributionDeploy INFO     [skip=true] 'installUuidRuntime' skipped.
+05-09 19:09 DistributionDeploy INFO     [buildDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$s='C:\Project\IobeamTech\Development\buidCompiledDist.py'; $src='C:\Project\IobeamTech\Development'; $dist='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app'; $out='C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip'; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 $s --source $src --dist $dist --output $out } else { & python $s --source $src --dist $dist --output $out }"
+05-09 19:09 DistributionDeploy INFO     [buildDistribution_state] OK
+05-09 19:09 DistributionDeploy INFO     [unzipDistribution_state] using zip: C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip
+05-09 19:09 DistributionDeploy INFO     [unzipDistribution_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath 'C:\Project\IobeamTech\Development\DeployWorkSpace\Development\DistributionDeploy\dist_app.zip' -DestinationPath 'C:\Project\Iobeam\Deploy' -Force"
+05-09 19:09 DistributionDeploy INFO     [unzipDistribution_state] OK
+05-09 19:09 DistributionDeploy INFO     [setupVirtualEnv_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "$root='C:\Project\Iobeam\Deploy'; $venv='.venv'; $venvAct='.venv'; Set-Location -LiteralPath $root; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) { & py -3 -m venv $venv } else { & python -m venv $venv }; & (Join-Path $root (Join-Path $venvAct 'Scripts\python.exe')) -m pip install --upgrade pip"
+05-09 19:09 DistributionDeploy INFO     [setupVirtualEnv_state] OK
+05-09 19:09 DistributionDeploy INFO     [installPipRequirements_state] found 2 requirement file(s):
+05-09 19:09 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\requirements.txt
+05-09 19:09 DistributionDeploy INFO        - C:\Project\Iobeam\Deploy\glasgow_service/requirements.txt
+05-09 19:09 DistributionDeploy WARNING  [installPipRequirements_state] skipped private editable dependency already present in deploy tree: -e git+https://github.com/NaruiTechnology/Development.git@a592305d95eebaf4b5860b311b16c57d094dbb9b#egg=iobeam_development
+05-09 19:09 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-ussr2pjk-requirements.txt"
+05-09 19:09 DistributionDeploy INFO     [installPipRequirements_state] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install -r "C:\Users\yingh\AppData\Local\Temp\distribution-deploy-4d06ic75-requirements.txt"
+05-09 19:09 DistributionDeploy INFO     [installNodeJS_state] Node.js already available: node=C:\Program Files\nodejs\node.EXE, npm=C:\Program Files\nodejs\npm.CMD
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state] running 20 install commands (apt=0, pipx=0, pip=17)...
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "Cython"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "fx2"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "asyncio"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "libusb1"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "amaranth"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tomlkit"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "numpy"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "matplotlib"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "PyQt6"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "tifffile"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "qasync"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "pyusb"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "debugpy"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-runtime"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-yosys"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][pip] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" -m pip install "yowasp-nextpnr-ice40"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 19:09 DistributionDeploy INFO     [installToolchain_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 19:09 DistributionDeploy INFO     [setupGlasgow_state] Windows: using GLASGOW_TOOLCHAIN=builtin
+05-09 19:09 DistributionDeploy INFO     [setupGlasgow_state] Windows USB note: install/associate a WinUSB/libusb driver for the Glasgow device if PyUSB cannot open it.
+05-09 19:09 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\python.exe" "-c" "import fx2, usb1, usb.core, amaranth"
+05-09 19:09 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-yosys.exe" "--version"
+05-09 19:09 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-nextpnr-ice40.exe" "--version"
+05-09 19:09 DistributionDeploy INFO     [setupGlasgow_state][verify] >> "powershell" "-NoProfile" "-Command" "if (Test-Path -LiteralPath 'C:\Project\Iobeam\Deploy\.venv\Scripts\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
+05-09 19:10 DistributionDeploy INFO     [exportEnv_state] os.environ[GLASGOW_CONFIG] = C:\Project\Iobeam\Deploy\GlasgowDataIO\Json\streamData.json
+05-09 19:10 DistributionDeploy INFO     [exportEnv_state] 'GLASGOW_CONFIG' already present in C:\Users\yingh/.bashrc, skipping.
+05-09 19:10 DistributionDeploy INFO     [launchGlasgowService_state] launched long-running Windows shell. pid=52364 log=C:\Project\Iobeam\Deploy\Logs\glasgow.log host=C:\Project\Iobeam\Deploy\Logs\Glasgow-Service.cmd
+05-09 19:10 DistributionDeploy INFO     [verifyGlasgowService_state] >> powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; if (Test-Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log') { Select-String -Path 'C:\Project\Iobeam\Deploy\Logs\glasgow.log' -Pattern 'chunk|valid|drain|in_flight|Application startup complete' -Quiet } else { exit 1 }"
+05-09 19:10 DistributionDeploy INFO     Activating virtual environment with command: source .venv/.venv/bin/activate
+05-09 19:10 DistributionDeploy INFO     [verifyGlasgowService_state] OK
+05-09 19:10 DistributionDeploy INFO     [setupIonbeamWeb_state] C:\Project\Iobeam\Deploy\ionbeam-web\backend\.env already exists
+05-09 19:10 DistributionDeploy INFO     [setupIonbeamWeb_state][backend] >> npm install
+05-09 19:10 DistributionDeploy INFO     [setupIonbeamWeb_state][frontend] >> npm install
+05-09 19:10 DistributionDeploy INFO     [launchIonbeamWebBackend_state] launched long-running Windows shell. pid=52092 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-backend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Backend.cmd
+05-09 19:10 DistributionDeploy INFO     [launchIonbeamWebFrontend_state] launched long-running Windows shell. pid=26068 log=C:\Project\Iobeam\Deploy\Logs\ionbeam-frontend.log host=C:\Project\Iobeam\Deploy\Logs\Ionbeam-Web-Frontend.cmd
+05-09 19:10 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:5173/
+05-09 19:10 DistributionDeploy INFO     [verifyIonbeamWeb_state] OK http://127.0.0.1:4000/healthz
+05-09 19:10 DistributionDeploy INFO     DistributionDeployThread completed.
