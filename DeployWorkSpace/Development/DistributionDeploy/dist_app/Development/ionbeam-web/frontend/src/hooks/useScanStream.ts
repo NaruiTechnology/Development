@@ -1,0 +1,267 @@
+/**
+ * useScanStream — opens the WebSocket to /ws/scan/{raster,vector}/stream,
+ * sends the request body, and dispatches Redux actions for each frame
+ * received. Exposes start / pause / stop callbacks.
+ *
+ * Pixel byte format (raster AND vector): the FPGA's ImageSerializer emits
+ * HIGH byte then LOW byte for each uint16 ADC sample (see
+ * applet/imageSerializer.py — "High" state outputs payload[8:16], then
+ * transitions to "Low" state which outputs the saved low byte). We
+ * reconstruct the full uint16 here and store it; the canvas painter
+ * auto-levels at display time. Quantising to the high byte alone would
+ * lose 8 bits of dynamic range and render typical ADC outputs (whose
+ * values often sit in the low ~12 bits) as near-black.
+ *
+ * Vector format: the service streams uint16 ADC samples in the same
+ * order the host's point script sent (x, y) commands. So bytes-per-sample
+ * is 2, not 8, and (x, y) is reconstructed from sample index + pattern
+ * by the imageSlice reducer — NOT carried inline with each sample.
+ *
+ * Pause and Stop both close the WS with code 1000. The FastAPI service
+ * maps that to its WebSocketDisconnect handler which calls gen.aclose() —
+ * the same path examples/ws_client.py relies on for clean cancel.
+ *
+ * Close-handler invariant: after the WS closes, the scan phase MUST have
+ * left "running"/"stopping". Three paths get us there:
+ *   - "done" event arrived first (server completed the scan)
+ *   - user closed it (closureKind = pause | stop)
+ *   - upstream/server closed unexpectedly  -> we mark phase = error
+ */
+import { useCallback, useEffect, useRef } from "react";
+
+import {
+  streamCompleted,
+  streamErrored,
+  streamPaused,
+  streamProgress,
+  streamReset,
+  streamStarted,
+  streamStopping,
+} from "../store/scanSlice";
+import { useAppDispatch, useAppSelector } from "../store";
+import {
+  appendRaster,
+  appendVectorSamples,
+  resetRaster,
+  setupVector,
+} from "../store/imageSlice";
+import type { RasterRequest, VectorRequest } from "../types/api";
+import type { RootState } from "../store";
+
+type Closure = "pause" | "stop";
+
+export function useScanStream() {
+  const dispatch = useAppDispatch();
+  const wsRef = useRef<WebSocket | null>(null);
+  const closureKindRef = useRef<Closure | null>(null);
+  // Captures whether the server delivered a clean "done" event before
+  // the socket closed; if so, we don't downgrade to "error" on close.
+  const sawDoneRef = useRef<boolean>(false);
+
+  // Read current phase reactively so the close handler can decide whether
+  // to transition to error. Reading from store at close time avoids a
+  // stale-closure bug where the dispatch fires after a user-initiated
+  // reset.
+  const phase = useAppSelector((s: RootState) => s.scan.phase);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+
+  // Ensure WS is closed when the component using this hook unmounts so we
+  // don't leak streams across page navigations.
+  useEffect(() => {
+    return () => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState <= WebSocket.OPEN) ws.close(1000);
+      wsRef.current = null;
+    };
+  }, []);
+
+  const startRaster = useCallback(
+    (req: RasterRequest) => {
+      stopExisting(wsRef);
+      dispatch(resetRaster({ resolution: req.resolution }));
+      dispatch(streamStarted());
+      const ws = openWs("/ws/scan/raster/stream");
+      wsRef.current = ws;
+      closureKindRef.current = null;
+      sawDoneRef.current = false;
+
+      ws.binaryType = "arraybuffer";
+      ws.onopen = () => {
+        ws.send(JSON.stringify(req));
+      };
+      ws.onmessage = (ev) => handleRasterMessage(ev, dispatch, sawDoneRef);
+      ws.onerror = () => {
+        // The browser only emits a generic error event; details come via
+        // the close handler. Don't transition phase here — onclose will.
+      };
+      ws.onclose = (ev) => {
+        finalize(closureKindRef.current, sawDoneRef.current, phaseRef.current, ev, dispatch);
+        wsRef.current = null;
+      };
+    },
+    [dispatch]
+  );
+
+  const startVector = useCallback(
+    (req: VectorRequest) => {
+      stopExisting(wsRef);
+      // Default-pattern scans store an edge x edge dense buffer (where
+      // edge = vector_resolution: 256/512/1024/2048). Custom scans need
+      // the full 2048-DAC space because the operator's points use
+      // those coordinates directly.
+      const edge = req.pattern === "custom" ? 2048 : req.vector_resolution;
+      dispatch(
+        setupVector({
+          pattern: req.pattern,
+          points: req.points,
+          edge,
+        })
+      );
+      dispatch(streamStarted());
+      const ws = openWs("/ws/scan/vector/stream");
+      wsRef.current = ws;
+      closureKindRef.current = null;
+      sawDoneRef.current = false;
+
+      ws.binaryType = "arraybuffer";
+      ws.onopen = () => {
+        ws.send(JSON.stringify(req));
+      };
+      ws.onmessage = (ev) => handleVectorMessage(ev, dispatch, sawDoneRef);
+      ws.onerror = () => {
+        /* see startRaster */
+      };
+      ws.onclose = (ev) => {
+        finalize(closureKindRef.current, sawDoneRef.current, phaseRef.current, ev, dispatch);
+        wsRef.current = null;
+      };
+    },
+    [dispatch]
+  );
+
+  const pause = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws) return;
+    closureKindRef.current = "pause";
+    dispatch(streamStopping());
+    ws.close(1000, "pause");
+  }, [dispatch]);
+
+  const stop = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws) {
+      dispatch(streamReset());
+      return;
+    }
+    closureKindRef.current = "stop";
+    dispatch(streamStopping());
+    ws.close(1000, "stop");
+  }, [dispatch]);
+
+  return { startRaster, startVector, pause, stop };
+}
+
+/* -------- helpers ------------------------------------------------------ */
+
+function openWs(path: string): WebSocket {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return new WebSocket(`${proto}//${window.location.host}${path}`);
+}
+
+function stopExisting(ref: React.MutableRefObject<WebSocket | null>): void {
+  const ws = ref.current;
+  if (ws && ws.readyState <= WebSocket.OPEN) {
+    ws.close(1000, "restart");
+  }
+  ref.current = null;
+}
+
+/** Reconstruct uint16 samples from a [hi, lo, hi, lo, ...] byte stream. */
+function decodeUint16BE(buf: ArrayBuffer): Uint16Array {
+  const view = new Uint8Array(buf);
+  const n = view.length >> 1;
+  const out = new Uint16Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 2) {
+    out[i] = (view[j] << 8) | view[j + 1];
+  }
+  return out;
+}
+
+function handleRasterMessage(
+  ev: MessageEvent,
+  dispatch: ReturnType<typeof useAppDispatch>,
+  sawDoneRef: React.MutableRefObject<boolean>
+): void {
+  if (typeof ev.data === "string") {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg.event === "done") {
+        sawDoneRef.current = true;
+        dispatch(streamCompleted({ chunks: msg.chunks }));
+      } else if (msg.event === "error") {
+        dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
+      }
+    } catch {
+      /* ignore non-JSON text frames */
+    }
+    return;
+  }
+  const buf = ev.data as ArrayBuffer;
+  const px = decodeUint16BE(buf);
+  dispatch(appendRaster({ pixels: px }));
+  dispatch(streamProgress({ bytes: buf.byteLength, chunks: 1 }));
+}
+
+function handleVectorMessage(
+  ev: MessageEvent,
+  dispatch: ReturnType<typeof useAppDispatch>,
+  sawDoneRef: React.MutableRefObject<boolean>
+): void {
+  if (typeof ev.data === "string") {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg.event === "done") {
+        sawDoneRef.current = true;
+        dispatch(streamCompleted({ chunks: msg.chunks }));
+      } else if (msg.event === "error") {
+        dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
+      }
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  // Vector chunks are uint16 ADC samples in the same order the host's
+  // point script generated commands — same wire format as raster, just
+  // a different (x, y) → sample-index mapping (handled by the reducer).
+  const buf = ev.data as ArrayBuffer;
+  const values = decodeUint16BE(buf);
+  dispatch(appendVectorSamples({ values }));
+  dispatch(streamProgress({ bytes: buf.byteLength, chunks: 1 }));
+}
+
+function finalize(
+  closure: Closure | null,
+  sawDone: boolean,
+  currentPhase: string,
+  ev: CloseEvent,
+  dispatch: ReturnType<typeof useAppDispatch>
+): void {
+  if (closure === "pause") {
+    dispatch(streamPaused());
+    return;
+  }
+  if (closure === "stop") {
+    dispatch(streamReset());
+    return;
+  }
+  // Server-side closure. If a "done" event already moved phase to
+  // "completed", or the user already saw an explicit error message, leave
+  // it. Otherwise the close itself is the news, so transition to error.
+  if (sawDone) return;
+  if (currentPhase === "running" || currentPhase === "stopping") {
+    const reason = ev.reason || `WebSocket closed (code ${ev.code})`;
+    dispatch(streamErrored(reason));
+  }
+}

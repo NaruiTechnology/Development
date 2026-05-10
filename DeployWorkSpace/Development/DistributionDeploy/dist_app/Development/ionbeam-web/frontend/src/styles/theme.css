@@ -1,0 +1,563 @@
+/* -----------------------------------------------------------------------
+ * Ion Beam Technology — control panel themes.
+ *
+ * Three themes ship: navy (default), black (OLED), light. Theme is
+ * applied by setting [data-theme="..."] on <html>; see themeSlice.ts.
+ * The default :root block defines the navy theme; the bottom of the
+ * file overrides specific variables for the other two.
+ *
+ * Adding a new theme = adding a new [data-theme="..."] block. All actual
+ * styling rules in this file go through CSS variables, so themes never
+ * fight the layout.
+ * --------------------------------------------------------------------- */
+
+:root,
+[data-theme="navy"] {
+  /* surface */
+  --c-bg:           #0b1320;
+  --c-bg-elev:      #11203a;
+  --c-bg-elev-2:    #16294a;
+  --c-bg-deep:      #050a14;        /* canvas backdrop */
+  --c-bg-input:     #0b1828;
+  --c-bg-header:    linear-gradient(90deg, #08111e 0%, #11203a 60%, #0b1320 100%);
+  --c-bg-footer:    #08111e;
+  --c-border:       #21385f;
+  --c-border-soft:  #1b2c4d;
+  --c-pixel-grid:   #102036;
+
+  /* text */
+  --c-text:         #e6eef9;
+  --c-text-dim:     #8aa1c4;
+  --c-text-muted:   #5d749a;
+
+  /* accents & semantics */
+  --c-accent:       #5fb8ff;
+  --c-accent-hot:   #88d3ff;
+  --c-success:      #4ade80;
+  --c-warn:         #facc15;
+  --c-danger:       #f87171;
+  --c-warn-border:  #5b4a14;
+  --c-danger-border:#5a1f1f;
+
+  /* button-specific */
+  --c-btn-hover:        #1c3463;
+  --c-btn-primary-grad: linear-gradient(180deg, #2b78c2 0%, #1f5fa0 100%);
+  --c-btn-primary-hover:linear-gradient(180deg, #2e88dc 0%, #2068b0 100%);
+  --c-btn-primary-bord: #3d8ed5;
+  --c-btn-primary-text: #fff;
+
+  /* progress bar fill */
+  --c-progress-fill:    linear-gradient(90deg, #2b78c2, #5fb8ff);
+
+  /* logo gradient stops (referenced by Header SVG via currentColor where possible) */
+  --c-logo-stop-0:  #88d3ff;
+  --c-logo-stop-1:  #1a6fb0;
+  --c-logo-stop-2:  #0b1d2e;
+  --c-logo-stroke:  #5fb8ff;
+
+  --shadow-card:    0 4px 18px rgba(0, 0, 0, 0.45);
+  --r-md:           6px;
+  --r-lg:           10px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+}
+
+/* ---------- Black (OLED) theme --------------------------------------- *
+ * For lab-floor monitors run at low ambient. Pure black surface, dark
+ * gray elevation steps, same cyan accent so semantic states stay
+ * legible. Heavier shadows would look fake against pure black, so
+ * they're tuned down.
+ * --------------------------------------------------------------------- */
+[data-theme="black"] {
+  --c-bg:           #000000;
+  --c-bg-elev:      #0c0c0c;
+  --c-bg-elev-2:    #161616;
+  --c-bg-deep:      #000000;
+  --c-bg-input:     #0a0a0a;
+  --c-bg-header:    linear-gradient(90deg, #000 0%, #0c0c0c 60%, #000 100%);
+  --c-bg-footer:    #000000;
+  --c-border:       #2a2a2a;
+  --c-border-soft:  #1a1a1a;
+  --c-pixel-grid:   #0d0d0d;
+
+  --c-text:         #f4f4f5;
+  --c-text-dim:     #a1a1aa;
+  --c-text-muted:   #71717a;
+
+  --c-accent:       #5fb8ff;
+  --c-accent-hot:   #88d3ff;
+  --c-success:      #4ade80;
+  --c-warn:         #facc15;
+  --c-danger:       #f87171;
+  --c-warn-border:  #4a3d10;
+  --c-danger-border:#4a1818;
+
+  --c-btn-hover:        #1f1f1f;
+  --c-btn-primary-grad: linear-gradient(180deg, #2b78c2 0%, #1f5fa0 100%);
+  --c-btn-primary-hover:linear-gradient(180deg, #2e88dc 0%, #2068b0 100%);
+  --c-btn-primary-bord: #3d8ed5;
+  --c-btn-primary-text: #fff;
+
+  --c-progress-fill:    linear-gradient(90deg, #2b78c2, #5fb8ff);
+
+  --c-logo-stop-0:  #88d3ff;
+  --c-logo-stop-1:  #1a6fb0;
+  --c-logo-stop-2:  #000000;
+  --c-logo-stroke:  #5fb8ff;
+
+  --shadow-card:    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ---------- Light theme ---------------------------------------------- *
+ * Paper-white instrument-software palette. The canvas backdrop stays
+ * dark (#0e1620) because grayscale FPGA output is read against a dark
+ * field — flipping that would invert the mental model operators have
+ * coming from the PyQt UI.
+ * --------------------------------------------------------------------- */
+[data-theme="light"] {
+  --c-bg:           #f6f7fa;
+  --c-bg-elev:      #ffffff;
+  --c-bg-elev-2:    #eef2f7;
+  --c-bg-deep:      #0e1620;        /* keep canvas dark — see note above */
+  --c-bg-input:     #ffffff;
+  --c-bg-header:    linear-gradient(90deg, #ffffff 0%, #eef2f7 60%, #ffffff 100%);
+  --c-bg-footer:    #ffffff;
+  --c-border:       #cdd5e0;
+  --c-border-soft:  #e2e7ee;
+  --c-pixel-grid:   #d6dbe3;
+
+  --c-text:         #1a2233;
+  --c-text-dim:     #5d6b82;
+  --c-text-muted:   #8a96a8;
+
+  --c-accent:       #1f6fc2;
+  --c-accent-hot:   #1556a0;
+  --c-success:      #16a34a;
+  --c-warn:         #b45309;
+  --c-danger:       #b91c1c;
+  --c-warn-border:  #f4d089;
+  --c-danger-border:#f4b8b8;
+
+  --c-btn-hover:        #e2eaf3;
+  --c-btn-primary-grad: linear-gradient(180deg, #2b78c2 0%, #1f5fa0 100%);
+  --c-btn-primary-hover:linear-gradient(180deg, #3187d6 0%, #2068b0 100%);
+  --c-btn-primary-bord: #1f5fa0;
+  --c-btn-primary-text: #ffffff;
+
+  --c-progress-fill:    linear-gradient(90deg, #1f6fc2, #5fb8ff);
+
+  --c-logo-stop-0:  #4aa3e8;
+  --c-logo-stop-1:  #1f5fa0;
+  --c-logo-stop-2:  #ffffff;
+  --c-logo-stroke:  #1f6fc2;
+
+  --shadow-card:    0 1px 3px rgba(15, 32, 60, 0.08), 0 4px 12px rgba(15, 32, 60, 0.04);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  /* Smooth out the jarring flash when switching themes mid-scan. */
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* ---------- layout ---------------------------------------------------- */
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--c-bg-header);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.app-header__logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header__logo svg {
+  height: 32px;
+  width: 32px;
+}
+
+.app-header__title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.app-header__title b {
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: var(--c-text);
+}
+
+.app-header__title small {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+}
+
+.app-header__spacer { flex: 1 1 auto; }
+
+.app-footer {
+  padding: 8px 24px;
+  font-size: 12px;
+  color: var(--c-text-muted);
+  border-top: 1px solid var(--c-border-soft);
+  background: var(--c-bg-footer);
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.app-main {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 16px;
+  padding: 16px 24px;
+  align-items: start;
+  min-height: 0;
+}
+
+@media (max-width: 1024px) {
+  .app-main { grid-template-columns: 1fr; }
+}
+
+/* ---------- cards ----------------------------------------------------- */
+
+.card {
+  background: var(--c-bg-elev);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.card + .card { margin-top: 16px; }
+
+.card__header {
+  padding: 10px 14px;
+  background: var(--c-bg-elev-2);
+  border-bottom: 1px solid var(--c-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card__title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+}
+
+.card__body { padding: 14px; }
+
+/* ---------- form controls -------------------------------------------- */
+
+.field { display: grid; gap: 4px; margin-bottom: 10px; }
+
+.field > label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.input, .select {
+  width: 100%;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--c-text);
+  background: var(--c-bg-input);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  outline: none;
+}
+
+.input:focus, .select:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px rgba(95, 184, 255, 0.18);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--c-text);
+  user-select: none;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.checkbox input { accent-color: var(--c-accent); }
+
+/* ---------- buttons --------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg-elev-2);
+  color: var(--c-text);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.05s ease;
+}
+
+.btn:hover:not(:disabled) { background: var(--c-btn-hover); border-color: var(--c-accent); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn--primary {
+  background: var(--c-btn-primary-grad);
+  border-color: var(--c-btn-primary-bord);
+  color: var(--c-btn-primary-text);
+}
+.btn--primary:hover:not(:disabled) { background: var(--c-btn-primary-hover); }
+
+.btn--warn   { border-color: var(--c-warn-border); color: var(--c-warn); }
+.btn--danger { border-color: var(--c-danger-border); color: var(--c-danger); }
+
+.btn--ghost { background: transparent; }
+
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- tabs ------------------------------------------------------ */
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg-elev-2);
+}
+
+.tab {
+  padding: 10px 16px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--c-accent);
+  border-bottom-color: var(--c-accent);
+}
+
+/* ---------- segmented control (used by theme picker) ----------------- */
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--c-bg-elev-2);
+}
+
+.segmented__btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: transparent;
+  border: none;
+  color: var(--c-text-dim);
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.segmented__btn + .segmented__btn {
+  border-left: 1px solid var(--c-border);
+}
+
+.segmented__btn[aria-pressed="true"] {
+  background: var(--c-bg);
+  color: var(--c-accent);
+}
+
+.segmented__btn:hover:not([aria-pressed="true"]) {
+  color: var(--c-text);
+}
+
+/* ---------- status pill ---------------------------------------------- */
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text-dim);
+}
+
+.status-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-text-dim);
+}
+
+.status-pill[data-state="idle"]         { color: var(--c-text); }
+.status-pill[data-state="idle"]::before { background: var(--c-text-dim); }
+.status-pill[data-state="busy"]         { color: var(--c-warn); border-color: var(--c-warn-border); }
+.status-pill[data-state="busy"]::before { background: var(--c-warn); animation: pulse 1.2s infinite; }
+.status-pill[data-state="connecting"]   { color: var(--c-accent); }
+.status-pill[data-state="connecting"]::before { background: var(--c-accent); animation: pulse 1s infinite; }
+.status-pill[data-state="error"]        { color: var(--c-danger); border-color: var(--c-danger-border); }
+.status-pill[data-state="error"]::before { background: var(--c-danger); }
+.status-pill[data-state="disconnected"] { color: var(--c-text-muted); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+/* ---------- canvas ---------------------------------------------------- */
+
+.canvas-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-bg-deep);
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-border);
+  padding: 12px;
+  min-height: 320px;
+}
+
+.canvas-frame canvas {
+  image-rendering: pixelated;
+  background:
+    linear-gradient(45deg, var(--c-pixel-grid) 25%, transparent 25%, transparent 75%, var(--c-pixel-grid) 75%) 0 0 / 16px 16px,
+    linear-gradient(45deg, var(--c-pixel-grid) 25%, transparent 25%, transparent 75%, var(--c-pixel-grid) 75%) 8px 8px / 16px 16px,
+    var(--c-bg-deep);
+  max-width: 100%;
+  max-height: 70vh;
+}
+
+.canvas-meta {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--c-text-dim);
+}
+
+.canvas-meta b {
+  color: var(--c-text);
+  font-weight: 500;
+}
+
+/* ---------- progress bar --------------------------------------------- */
+
+.progress {
+  height: 6px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--c-progress-fill);
+  transition: width 0.15s linear;
+}
+
+/* ---------- validation list ------------------------------------------ */
+
+.validation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.validation-list li {
+  display: grid;
+  grid-template-columns: 60px 160px 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--c-border-soft);
+}
+
+.validation-list li:last-child { border-bottom: 0; }
+
+.validation-list .pass { color: var(--c-success); }
+.validation-list .fail { color: var(--c-danger); }
+
+/* ---------- log ------------------------------------------------------- */
+
+.log-pane {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--c-bg-deep);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: 8px;
+  max-height: 180px;
+  overflow: auto;
+  color: var(--c-text-dim);
+}
+
+.log-pane .log-error { color: var(--c-danger); }
+.log-pane .log-warn  { color: var(--c-warn); }
+.log-pane .log-ok    { color: var(--c-success); }
+
+/* ---------- misc utility --------------------------------------------- */
+
+.muted    { color: var(--c-text-muted); }
+.mono     { font-family: var(--font-mono); }
+.row      { display: flex; gap: 8px; align-items: center; }
+.spacer   { flex: 1; }
+.divider  { height: 1px; background: var(--c-border-soft); margin: 12px 0; }

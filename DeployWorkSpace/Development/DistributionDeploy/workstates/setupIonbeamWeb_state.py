@@ -34,6 +34,29 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             install = bool(actionData.get("npmInstall", True))
             useNvm = bool(actionData.get("useNvm", True))
 
+            # Optional extra args appended to `npm install` per target.
+            # e.g. "--legacy-peer-deps", "--force", "--no-audit --no-fund".
+            backendInstallArgs = str(actionData.get("backendInstallArgs", "") or "").strip()
+            frontendInstallArgs = str(actionData.get("frontendInstallArgs", "") or "").strip()
+
+            # Layered check: report the highest missing level so the user
+            # can tell stale-zip from missing-subdirs from missing-manifests.
+            if not os.path.isdir(webRoot):
+                self.error("[{}] webRoot does not exist: {}\n"
+                           "  hint: dist_app.zip may have been built without "
+                           "Development/ionbeam-web, or buildDistribution was "
+                           "skipped with a stale zip."
+                           .format(type(self).__name__, webRoot))
+                self._success = False
+                return
+
+            try:
+                webRootContents = sorted(os.listdir(webRoot))
+            except OSError as e:
+                webRootContents = []
+                self.warn("[{}] could not list {}: {}"
+                          .format(type(self).__name__, webRoot, e))
+
             required = [
                 (backendDir, "backend directory"),
                 (frontendDir, "frontend directory"),
@@ -43,8 +66,13 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             missing = [label + ": " + path for path, label in required
                        if not os.path.exists(path)]
             if missing:
-                self.error("[{}] ionbeam-web is incomplete:\n{}"
-                           .format(type(self).__name__, "\n".join(missing)))
+                self.error(
+                    "[{}] ionbeam-web is incomplete under {}\n"
+                    "  webRoot contents: {}\n"
+                    "  missing:\n    {}"
+                    .format(type(self).__name__, webRoot,
+                            webRootContents or "<empty>",
+                            "\n    ".join(missing)))
                 self._success = False
                 return
 
@@ -64,9 +92,12 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 self._success = True
                 return
 
+            def buildInstallCmd(extra):
+                return "npm install" if not extra else "npm install {}".format(extra)
+
             commands = [
-                ("backend", backendDir, "npm install"),
-                ("frontend", frontendDir, "npm install"),
+                ("backend", backendDir, buildInstallCmd(backendInstallArgs)),
+                ("frontend", frontendDir, buildInstallCmd(frontendInstallArgs)),
             ]
 
             allOk = True
