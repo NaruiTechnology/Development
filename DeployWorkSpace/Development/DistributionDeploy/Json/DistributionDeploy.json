@@ -44,7 +44,7 @@
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "unzip -o {} -d {}",
-                    "zip": "/home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/dist_app.zip",
+                    "zip": "/home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/dist_app*.zip",
                     "dest": "/home/vboxuser/Project/IobeamTech"
                 },
                 "timeout": 120.0

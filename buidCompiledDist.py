@@ -1,8 +1,10 @@
 import os
+import sys
 import shutil
 import compileall
 import re
 import fnmatch
+import argparse
 
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = ['*.ihex', 'requirements.txt', 'README.md']
@@ -22,7 +24,6 @@ SKIP_DIRS = {
     'DistributionDeploy',
     'DeployWorkSpace',
     'LoadFPGAImage',
-    'ionbeam-web',  # handled by copy_source_trees, don't double-walk
 }
 
 # Non-Python source trees copied verbatim. Paths are relative to src_dir.
@@ -162,16 +163,135 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
     print(f"Removing temporary build folder {dist_dir}...")
     shutil.rmtree(dist_dir, ignore_errors=True)
 
+
+def clear_zips_in(folder):
+    """Remove every *.zip from folder (non-recursive). Creates folder if missing."""
+    os.makedirs(folder, exist_ok=True)
+    removed = 0
+    for fn in os.listdir(folder):
+        if fn.lower().endswith('.zip'):
+            path = os.path.join(folder, fn)
+            try:
+                os.remove(path)
+                print(f"Removed existing zip: {path}")
+                removed += 1
+            except OSError as e:
+                print(f"Could not remove {path}: {e}")
+    if removed == 0:
+        print(f"No existing zips to clear in {folder}.")
+
+
+def clean_pycache_under(folder):
+    """Recursively delete *.pyc files and __pycache__ directories under folder."""
+    if not os.path.isdir(folder):
+        print(f"Cleanup target not found, skipping: {folder}")
+        return
+    pyc_count, cache_count = 0, 0
+    # topdown=False so we delete inner __pycache__ before walking past them
+    for root, dirs, files in os.walk(folder, topdown=False):
+        for fn in files:
+            if fn.endswith('.pyc'):
+                try:
+                    os.remove(os.path.join(root, fn))
+                    pyc_count += 1
+                except OSError as e:
+                    print(f"Could not remove {fn}: {e}")
+        for d in list(dirs):
+            if d == '__pycache__':
+                cache_path = os.path.join(root, d)
+                shutil.rmtree(cache_path, ignore_errors=True)
+                cache_count += 1
+    print(f"Cleanup: removed {pyc_count} .pyc file(s) and "
+          f"{cache_count} __pycache__ folder(s) under {folder}.")
+
+
+def zip_folder(folder):
+    """Zip `folder` into <basename>.zip in the current working directory.
+
+    The archive preserves the folder itself as the top-level entry (so
+    extracting reproduces the directory rather than spraying its contents
+    into the cwd). Returns the archive path.
+    """
+    folder = os.path.normpath(folder)
+    if not os.path.isdir(folder):
+        raise FileNotFoundError(f"Cannot zip missing folder: {folder}")
+    base = os.path.basename(folder)
+    parent = os.path.dirname(folder) or '.'
+    archive_base = base  # writes <base>.zip in cwd
+    if os.path.exists(f"{archive_base}.zip"):
+        os.remove(f"{archive_base}.zip")
+    print(f"\nCreating workspace archive {archive_base}.zip from {folder}...")
+    shutil.make_archive(archive_base, 'zip', root_dir=parent, base_dir=base)
+    final_path = os.path.abspath(f"{archive_base}.zip")
+    print(f"Workspace archive created: {final_path}")
+    return final_path
+
+
+def post_build_deploy(zip_name, deploy_dir, workspace_dir):
+    """Post-build pipeline run after a successful build:
+       1. clear any existing .zip files from deploy_dir
+       2. move <zip_name>.zip into deploy_dir
+       3. strip *.pyc and __pycache__ from workspace_dir
+       4. zip workspace_dir into <basename>.zip alongside the cwd
+
+    Step 4 picks up the freshly-placed dist zip from step 2 because
+    deploy_dir lives inside workspace_dir.
+    """
+    archive_name = f"{zip_name}.zip"
+
+    # 1. Clear existing zips from the deploy slot
+    print(f"\n--- Post-build: clearing zips in {deploy_dir} ---")
+    clear_zips_in(deploy_dir)
+
+    # 2. Move freshly built archive into the deploy slot
+    if not os.path.isfile(archive_name):
+        raise FileNotFoundError(f"Build output not found: {archive_name}")
+    moved_path = os.path.join(deploy_dir, archive_name)
+    shutil.move(archive_name, moved_path)
+    print(f"Moved {archive_name} -> {moved_path}")
+
+    # 3. Strip bytecode droppings from the workspace before zipping it
+    print(f"\n--- Post-build: cleaning bytecode under {workspace_dir} ---")
+    clean_pycache_under(workspace_dir)
+
+    # 4. Zip the entire workspace for handoff
+    zip_folder(workspace_dir)
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Deploy source code.')
+    parser.add_argument('-r', '--raw', action='store_true', dest='raw',
+                        help="Deliver raw python code (skip byte-compilation)", default=False)
+    args = parser.parse_args()
+
+    exit_code = 0
     try:
-        import argparse
-        parser = argparse.ArgumentParser(description='Deploy source code.')
-        parser.add_argument('-r', '--raw', action='store_true', dest='raw',
-                            help="Deliver raw python code (skip byte-compilation)", default=False)
-        args = parser.parse_args()
-        build_compiled_dist('.', './dist_app', deliver_raw=bool(args.raw))  
+        build_compiled_dist('.', './dist_app', deliver_raw=bool(args.raw))
         mode = "raw source" if args.raw else "compiled .pyc"
-        archive = "dist_app_raw.zip" if args.raw else "dist_app.zip"
+        zip_name = "dist_app_raw" if args.raw else "dist_app"
+        archive = f"{zip_name}.zip"
         print(f"\nBuild complete ({mode})! The final package is '{archive}'.")
+
+        # Post-build deploy: drop the dist archive into DistributionDeploy,
+        # scrub bytecode, then zip the whole DeployWorkSpace for handoff.
+        deploy_dir = os.path.join('.', 'Development', 'DeployWorkSpace',
+                                  'Development', 'DistributionDeploy')
+        workspace_dir = os.path.join('.', 'Development', 'DeployWorkSpace')
+        post_build_deploy(zip_name, deploy_dir, workspace_dir)
+        print("\nAll steps complete.")
     except Exception as e:
         print(f"\nBuild failed with error: {e}")
+        exit_code = 1
+
+    # Flush so any final output reaches the terminal even if the runner is
+    # buffering, then return an explicit code. Some launchers won't release
+    # the terminal until the process delivers a definitive exit signal.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.exit(exit_code)
+    # If sys.exit still doesn't terminate (i.e. something is blocking
+    # interpreter shutdown -- non-daemon thread, lingering subprocess, etc.),
+    # uncomment the line below. os._exit skips interpreter cleanup and
+    # always terminates immediately. Using it is a diagnostic signal that
+    # something else needs investigating.
+    # os._exit(exit_code)
