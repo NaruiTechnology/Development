@@ -129,7 +129,11 @@ export function ROIEditor({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    fillCanvasBackground(canvas, ctx);
+    // Clear to transparent. The visible backdrop comes from the
+    // .roi-canvas-wrap CSS background (var(--c-bg-elev)), which makes
+    // the canvas inherently theme-aware via CSS — no JS sampling of
+    // computed styles, no re-paint required on theme change.
+    ctx.clearRect(0, 0, EDGE, EDGE);
 
     const img = imageRef.current;
     if (img) {
@@ -412,15 +416,6 @@ function imageToDataUrl(img: HTMLImageElement, fillStyle = "#11203a"): string | 
   } catch {
     return null;
   }
-}
-
-function fillCanvasBackground(
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D
-): void {
-  const fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
-  ctx.fillStyle = fillStyle;
-  ctx.fillRect(0, 0, EDGE, EDGE);
 }
 
 function getCssColor(el: Element, variable: string, fallback: string): string {

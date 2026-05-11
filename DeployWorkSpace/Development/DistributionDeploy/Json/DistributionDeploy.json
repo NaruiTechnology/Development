@@ -47,6 +47,11 @@
 				"actionData":{
 					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath \u0027{}\u0027 -DestinationPath \u0027{}\u0027 -Force\"",
 					"zip":"C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app.zip",
+					"acceptedNames":[
+						"dist_app.zip",
+						"dist_app_raw.zip",
+						"dist_app*.zip"
+					],
 					"dest":"C:\\Project\\Iobeam\\Deploy"
 				},
 				"timeout":120.0

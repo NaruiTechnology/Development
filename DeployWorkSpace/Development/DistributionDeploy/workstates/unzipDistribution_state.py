@@ -4,6 +4,7 @@
 # Unpack dist_app.zip into the deploy root on the target host.
 # Driven by `unzip -o {zip} -d {dest}` in the JSON template.
 #-------------------------------------------------------------------------------
+import fnmatch
 import os
  
 from buildingblocks.decorators import overrides
@@ -26,6 +27,12 @@ class unzipDistribution_state(executeShellCommand_state):
             dest = actionData.get("dest")
             commandFormat = actionData.get(
                 Consts.COMMAND_FORMAT, "unzip -o {} -d {}")
+            # Optional list of additional acceptable zip filenames or glob
+            # patterns. Lets one JSON cover both compiled and raw builds, e.g.
+            # ["dist_app.zip", "dist_app_raw.zip", "dist_app*.zip"].
+            acceptedNames = actionData.get("acceptedNames") or []
+            if isinstance(acceptedNames, str):
+                acceptedNames = [acceptedNames]
  
             if not zipHint or not dest:
                 self.error("[{}] missing 'zip' or 'dest' in actionData."
@@ -41,24 +48,40 @@ class unzipDistribution_state(executeShellCommand_state):
                 self._success = False
                 return
  
-            # 2. Find a usable .zip inside that folder.
+            # 2. Build the preference list: hint basename first, then any
+            #    extras from acceptedNames (de-duplicated, order preserved).
             preferred = os.path.basename(zipHint)
-            zipPath = self._findZipFile(searchFolder, preferred)
+            preferredNames = []
+            for name in [preferred] + list(acceptedNames):
+                if name and name not in preferredNames:
+                    preferredNames.append(name)
+ 
+            # 3. Find a usable .zip inside that folder.
+            zipPath = self._findZipFile(searchFolder, preferredNames)
             if not zipPath:
                 self.error("[{}] no .zip file found in {}"
                            .format(type(self).__name__, searchFolder))
                 self._success = False
                 return
  
-            if preferred and os.path.basename(zipPath) != preferred:
-                self.warn("[{}] expected '{}' in {}, using '{}' instead"
+            chosenBase = os.path.basename(zipPath)
+            if chosenBase == preferred:
+                pass  # primary match — no message needed.
+            elif self._matchesAnyName(chosenBase, acceptedNames):
+                self.info("[{}] '{}' not found in {}, using accepted "
+                          "alternative '{}'"
                           .format(type(self).__name__, preferred,
-                                  searchFolder, os.path.basename(zipPath)))
+                                  searchFolder, chosenBase))
+            else:
+                self.warn("[{}] no preferred name matched in {}; falling back "
+                          "to newest zip '{}'"
+                          .format(type(self).__name__, searchFolder,
+                                  chosenBase))
  
             self.info("[{}] using zip: {}"
                       .format(type(self).__name__, zipPath))
  
-            # 3. Build and run the unzip command.
+            # 4. Build and run the unzip command.
             cmd = commandFormat.format(zipPath, dest)
             self.info("[{}] >> {}".format(type(self).__name__, cmd))
  
@@ -94,25 +117,71 @@ class unzipDistribution_state(executeShellCommand_state):
         return os.path.abspath(parent) if parent else os.path.abspath(".")
  
     @staticmethod
-    def _findZipFile(folder, preferredName):
+    def _findZipFile(folder, preferredNames):
         """
-        Pick a .zip from `folder`:
-          1. exact match on `preferredName` (if it exists), else
-          2. the most recently modified .zip in `folder`.
-        Returns an absolute path, or None if no .zip is present.
+        Pick a .zip from `folder` using a preference order:
+          1. exact filename match against each literal name in `preferredNames`
+             (in the order given), then
+          2. glob match against each pattern in `preferredNames`
+             (fnmatch syntax, e.g. 'dist_app*.zip'); newest match wins, then
+          3. most recently modified .zip in `folder` (last-resort fallback).
+        `preferredNames` may be a string or list of strings. Returns an
+        absolute path, or None if no .zip is present.
         """
-        if preferredName:
-            candidate = os.path.join(folder, preferredName)
+        if preferredNames is None:
+            preferredNames = []
+        elif isinstance(preferredNames, str):
+            preferredNames = [preferredNames]
+ 
+        try:
+            allEntries = os.listdir(folder)
+        except OSError:
+            return None
+ 
+        allZips = []
+        for name in allEntries:
+            full = os.path.join(folder, name)
+            if name.lower().endswith(".zip") and os.path.isfile(full):
+                allZips.append(full)
+        if not allZips:
+            return None
+ 
+        def _isGlob(s):
+            return any(ch in s for ch in "*?[")
+ 
+        # Pass 1: exact filename matches, in caller's order.
+        for pref in preferredNames:
+            if not pref or _isGlob(pref):
+                continue
+            candidate = os.path.join(folder, pref)
             if (os.path.isfile(candidate)
                     and candidate.lower().endswith(".zip")):
                 return os.path.abspath(candidate)
  
-        zips = []
-        for name in os.listdir(folder):
-            full = os.path.join(folder, name)
-            if name.lower().endswith(".zip") and os.path.isfile(full):
-                zips.append(full)
-        if not zips:
-            return None
-        zips.sort(key=os.path.getmtime, reverse=True)
-        return os.path.abspath(zips[0])
+        # Pass 2: glob matches, in caller's order; newest match per pattern.
+        for pref in preferredNames:
+            if not pref or not _isGlob(pref):
+                continue
+            matches = [z for z in allZips
+                       if fnmatch.fnmatch(os.path.basename(z), pref)]
+            if matches:
+                matches.sort(key=os.path.getmtime, reverse=True)
+                return os.path.abspath(matches[0])
+ 
+        # Pass 3: newest .zip in the folder.
+        allZips.sort(key=os.path.getmtime, reverse=True)
+        return os.path.abspath(allZips[0])
+ 
+    @staticmethod
+    def _matchesAnyName(filename, names):
+        """True if `filename` exactly matches a literal name in `names`
+        or fnmatches a glob pattern in `names`."""
+        for n in names or []:
+            if not n:
+                continue
+            if any(ch in n for ch in "*?["):
+                if fnmatch.fnmatch(filename, n):
+                    return True
+            elif filename == n:
+                return True
+        return False
