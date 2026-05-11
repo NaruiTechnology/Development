@@ -129,7 +129,8 @@
                         "tifffile",
                         "qasync",
                         "pyusb",
-                        "debugpy"
+                        "debugpy",
+                        "amaranth"
                     ],
                     "useVenv": true,
                     "venvActivate": "/home/vboxuser/Project/IobeamTech/.venv/bin/activate",
