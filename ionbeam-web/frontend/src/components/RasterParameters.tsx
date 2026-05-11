@@ -26,8 +26,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           label="Resolution"
           value={r.resolution}
           presets={RES_PRESETS}
-          min={1}
-          max={2048}
           disabled={disabled}
           onChange={(v) => dispatch(updateRaster({ resolution: v }))}
         />
@@ -35,8 +33,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           label="Dwell"
           value={r.dwell}
           presets={DWELL_PRESETS}
-          min={1}
-          max={65535}
           disabled={disabled}
           onChange={(v) => dispatch(updateRaster({ dwell: v }))}
         />
@@ -47,8 +43,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           label="Latency (bytes)"
           value={r.latency_bytes}
           presets={LATENCY_PRESETS}
-          min={2}
-          max={1 << 20}
           disabled={disabled}
           onChange={(v) => dispatch(updateRaster({ latency_bytes: v }))}
         />
@@ -107,44 +101,25 @@ function PresetField(props: {
   label: string;
   value: number;
   presets: number[];
-  min: number;
-  max: number;
   disabled: boolean;
   onChange: (v: number) => void;
 }) {
-  const { label, value, presets, min, max, disabled, onChange } = props;
-  const inPresets = presets.includes(value);
+  const { label, value, presets, disabled, onChange } = props;
   return (
     <div className="field">
       <label>{label}</label>
-      <div className="row" style={{ gap: 6 }}>
-        <select
-          className="select"
-          style={{ flex: "0 0 100px" }}
-          value={inPresets ? String(value) : "custom"}
-          disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v !== "custom") onChange(Number(v));
-          }}
-        >
-          {presets.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-          <option value="custom">Custom…</option>
-        </select>
-        <input
-          className="input"
-          type="number"
-          min={min}
-          max={max}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(clamp(e.target.value, min, max, value))}
-        />
-      </div>
+      <select
+        className="select"
+        value={String(value)}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+      >
+        {presets.map((p) => (
+          <option key={p} value={p}>
+            {p}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
