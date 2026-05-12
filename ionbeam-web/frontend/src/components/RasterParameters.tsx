@@ -1,7 +1,6 @@
 /**
  * Raster scan parameter form. Fields map 1:1 to RasterRequest in
- * glasgow_service.models. The "Resolution" and "Dwell Time" presets mirror
- * the dropdowns in the existing PyQt scan_parameters.py.
+ * glasgow_service.models.
  *
  * Bounds match the Pydantic field validators:
  *   resolution    1..2048
@@ -9,14 +8,15 @@
  *   latency_bytes >= 2
  *
  * Every parameter has an inline "?" help button next to its label,
- * opening a modal with a technical explanation. Help components
- * live in their own files (one per parameter, e.g. ResolutionHelp,
- * LatencyHelp, …), following the original DwellHelp convention.
+ * opening a modal with a technical explanation. Help components live
+ * in their own files (one per parameter), now thin shells over the
+ * per-locale body registry.
  */
 import { type ReactNode } from "react";
 
 import { updateRaster } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
+import { useTranslation, type TranslationKey } from "../i18n";
 import { DwellHelp } from "./DwellHelp";
 import { ResolutionHelp } from "./ResolutionHelp";
 import { LatencyHelp } from "./LatencyHelp";
@@ -31,13 +31,25 @@ const LATENCY_PRESETS = [4096, 8192, 16384, 32768];
 
 export function RasterParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
   const r = useAppSelector((s) => s.scan.raster);
+
+  // The footnote in the original code interpolates two <b> spans into a
+  // sentence. Localised text reorders those spans (e.g. zh-CN puts
+  // the action before the modifier), so we render the footnote as
+  // a single key and post-process the `<Download CSV>` / `<Download
+  // figure>` / `<Run validated>` brackets into <b>…</b> at render
+  // time. This keeps the translator's job sentence-level rather than
+  // span-level. The angle-bracket markers are deliberately chosen to
+  // be unmistakable in a flat-string editor (vs HTML, which a
+  // translator might accidentally edit).
+  const footnoteParts = renderBracketedBold(t("raster.footnote"));
 
   return (
     <div>
       <div className="field-row">
         <PresetField
-          label="Resolution"
+          labelKey="raster.resolution"
           labelAdornment={<ResolutionHelp />}
           value={r.resolution}
           presets={RES_PRESETS}
@@ -45,7 +57,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           onChange={(v) => dispatch(updateRaster({ resolution: v }))}
         />
         <PresetField
-          label="Dwell"
+          labelKey="raster.dwell"
           labelAdornment={<DwellHelp />}
           value={r.dwell}
           presets={DWELL_PRESETS}
@@ -56,7 +68,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
 
       <div className="field-row">
         <PresetField
-          label="Latency (bytes)"
+          labelKey="raster.latencyBytes"
           labelAdornment={<LatencyHelp />}
           value={r.latency_bytes}
           presets={LATENCY_PRESETS}
@@ -65,7 +77,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         />
         <div className="field">
           <label>
-            Cookie
+            {t("raster.cookie")}
             <CookieHelp />
           </label>
           <input
@@ -82,11 +94,9 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         </div>
       </div>
 
-      {/* output_mode is new — see types/api.ts. Optional on the wire, so
-          existing scans without it keep working. */}
       <div className="field">
         <label>
-          Output mode
+          {t("raster.outputMode")}
           <OutputModeHelp />
         </label>
         <select
@@ -101,14 +111,13 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
             )
           }
         >
+          {/* Output mode values are FPGA-side enums, not user-facing
+              prose; they stay in English in every locale. */}
           <option value="SixteenBit">SixteenBit</option>
           <option value="EightBit">EightBit</option>
         </select>
       </div>
 
-      {/* Help button placement on a checkbox: inline at the end of the
-          label text. The .field > label flex rule keeps it on the same
-          baseline as the label. */}
       <label className="checkbox">
         <input
           type="checkbox"
@@ -116,14 +125,14 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           disabled={disabled}
           onChange={(e) => dispatch(updateRaster({ frame_blank: e.target.checked }))}
         />
-        Frame blank (start and end blanked)
+        {t("raster.frameBlank")}
         <FrameBlankHelp />
       </label>
 
       <div className="divider" />
 
       <div className="card__title" style={{ marginBottom: 6 }}>
-        Validated run options
+        {t("card.validatedRunOptions")}
       </div>
 
       <label className="checkbox">
@@ -133,32 +142,31 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           disabled={disabled}
           onChange={(e) => dispatch(updateRaster({ do_validate: e.target.checked }))}
         />
-        Run chunk-count / size / padding checks
+        {t("raster.doValidate")}
         <ValidationHelp />
       </label>
 
       <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
-        Validation applies to <b>Run validated</b>. After any scan
-        completes, use the <b>Download CSV</b> / <b>Download figure</b>
-        buttons in the Run report to export the data.
+        {footnoteParts}
       </p>
     </div>
   );
 }
 
 function PresetField(props: {
-  label: string;
+  labelKey: TranslationKey;
   value: number;
   presets: number[];
   disabled: boolean;
   onChange: (v: number) => void;
   labelAdornment?: ReactNode;
 }) {
-  const { label, value, presets, disabled, onChange, labelAdornment } = props;
+  const { labelKey, value, presets, disabled, onChange, labelAdornment } = props;
+  const { t } = useTranslation();
   return (
     <div className="field">
       <label>
-        {label}
+        {t(labelKey)}
         {labelAdornment}
       </label>
       <select
@@ -181,4 +189,22 @@ function clamp(s: string, lo: number, hi: number, fallback: number): number {
   const n = Number(s);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(hi, Math.max(lo, Math.floor(n)));
+}
+
+/** Convert "...the <Run validated> button..." into a fragment with
+ *  bracketed segments wrapped in <b>. Localisation-safe; both the
+ *  English and Chinese tables use the same `<…>` delimiters. */
+function renderBracketedBold(s: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  const re = /<([^<>]+)>/g;
+  let last = 0;
+  let i = 0;
+  for (const m of s.matchAll(re)) {
+    const start = m.index ?? 0;
+    if (start > last) out.push(s.slice(last, start));
+    out.push(<b key={i++}>{m[1]}</b>);
+    last = start + m[0].length;
+  }
+  if (last < s.length) out.push(s.slice(last));
+  return out;
 }

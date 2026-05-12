@@ -7,9 +7,15 @@ import {
   clearBitmapSelectionCache,
   worldSelectionToDacROI,
 } from "../lib/bitmapVector";
+import { useTranslation, type TranslationApi, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
 
 const EDGE = 640;
+// Scale-unit values are stored in state as ASCII codes ("um" / "mm" / …)
+// because the wire-format API doesn't carry units (everything is
+// linearly remapped to DAC codes). The display labels use the actual
+// Unicode symbols; we don't translate these because they're SI-standard
+// notation that operators read the same way in every language.
 const UNITS = [
   { value: "um", label: "μm" },
   { value: "mm", label: "mm" },
@@ -27,6 +33,8 @@ export function ROIEditor({
   backgroundImageUrl?: string | null;
 }) {
   const dispatch = useAppDispatch();
+  const tr = useTranslation();
+  const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -65,7 +73,16 @@ export function ROIEditor({
         const dataUrl = imageToDataUrl(img, fillStyle);
         if (dataUrl) {
           promotedBackgroundRef.current = backgroundImageUrl;
-          dispatch(updateROI({ imageName: "Last scan image", imageDataUrl: dataUrl }));
+          // The imageName field shows in the controls header and in
+          // download filenames; localising it at promote-time means
+          // the operator sees their language. If they switch locales
+          // later it stays at the old name — that's acceptable
+          // because the name is treated as a label for a specific
+          // capture, not a UI string.
+          dispatch(updateROI({
+            imageName: t("roi.imageName.lastScan"),
+            imageDataUrl: dataUrl,
+          }));
         }
       }
       draw();
@@ -81,7 +98,7 @@ export function ROIEditor({
   useEffect(() => {
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roi, draft]);
+  }, [roi, draft, tr.locale]);
 
   useEffect(() => {
     if (!dragStartRef.current) {
@@ -95,6 +112,7 @@ export function ROIEditor({
       if (typeof reader.result === "string") {
         clearBitmapSelectionCache();
         setSuppressedBackgroundUrl(null);
+        // file.name comes from the OS — leave it verbatim.
         dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result }));
       }
     };
@@ -132,10 +150,6 @@ export function ROIEditor({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Clear to transparent. The visible backdrop comes from the
-    // .roi-canvas-wrap CSS background (var(--c-bg-elev)), which makes
-    // the canvas inherently theme-aware via CSS — no JS sampling of
-    // computed styles, no re-paint required on theme change.
     ctx.clearRect(0, 0, EDGE, EDGE);
 
     const img = imageRef.current;
@@ -148,7 +162,7 @@ export function ROIEditor({
     ctx.fillStyle = "rgba(230, 238, 249, 0.92)";
     ctx.lineWidth = 1;
     ctx.font = "12px ui-monospace, monospace";
-    drawScale(ctx, roi, unitLabel(roi.scale_unit));
+    drawScale(ctx, roi, unitLabel(roi.scale_unit), tr);
     ctx.restore();
 
     const selected = draft ?? roi.selection;
@@ -165,6 +179,10 @@ export function ROIEditor({
     ctx.fillStyle = "#ff2d2d";
     ctx.lineWidth = 0.8;
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    // "S" and "E" are visual mnemonics on the canvas (Start / End). We
+    // keep them as single letters even in Chinese because they refer
+    // to the on-canvas points and need to be visually compact; the
+    // matching prose labels in the field-row above are translated.
     drawLabel(ctx, x0 + 4, y0 + 14, `S(${selected.x_start}, ${selected.y_start})`);
     drawLabel(ctx, x1 + 4, y1 - 6, `E(${selected.x_end}, ${selected.y_end})`);
     ctx.restore();
@@ -190,15 +208,15 @@ export function ROIEditor({
           <div className="button-row" style={{ marginBottom: 10 }}>
             <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
               <Icon name="upload" tone="accent" />
-              SELECT
+              {t("roi.select")}
             </button>
             <button className="btn btn--ghost" disabled={disabled || !hasLoadedImage} onClick={clearLoadedImage}>
               <Icon name="trash" tone="danger" />
-              Clear image
+              {t("roi.clearImage")}
             </button>
             <button className="btn btn--ghost" disabled={disabled || !hasPartialRegion} onClick={clearPartialRegion}>
               <Icon name="crop" tone="warn" />
-              Clear region
+              {t("roi.clearRegion")}
             </button>
             <span className="muted" style={{ fontSize: 12 }}>{roi.imageName}</span>
             <input
@@ -215,11 +233,11 @@ export function ROIEditor({
 
           <div className="field-row">
             <Num
-              label="X origin"
+              labelKey="roi.xOrigin"
               value={roi.x_origin}
               min={0}
               max={Math.max(0, roi.x_end - 1)}
-              rangeLabel={`0 and ${Math.max(0, roi.x_end - 1)} (less than X end)`}
+              rangeText={t("roi.error.rangeXLessThanEnd", { max: Math.max(0, roi.x_end - 1) })}
               disabled={disabled}
               onChange={(v) => {
                 clearBitmapSelectionCache();
@@ -227,11 +245,11 @@ export function ROIEditor({
               }}
             />
             <Num
-              label="X end"
+              labelKey="roi.xEnd"
               value={roi.x_end}
               min={Math.min(16383, roi.x_origin + 1)}
               max={16383}
-              rangeLabel={`${Math.min(16383, roi.x_origin + 1)} and 16383 (greater than X origin)`}
+              rangeText={t("roi.error.rangeXGreaterThanOrigin", { min: Math.min(16383, roi.x_origin + 1) })}
               disabled={disabled}
               onChange={(v) => {
                 clearBitmapSelectionCache();
@@ -241,11 +259,11 @@ export function ROIEditor({
           </div>
           <div className="field-row">
             <Num
-              label="Y origin"
+              labelKey="roi.yOrigin"
               value={roi.y_origin}
               min={0}
               max={Math.max(0, roi.y_end - 1)}
-              rangeLabel={`0 and ${Math.max(0, roi.y_end - 1)} (less than Y end)`}
+              rangeText={t("roi.error.rangeYLessThanEnd", { max: Math.max(0, roi.y_end - 1) })}
               disabled={disabled}
               onChange={(v) => {
                 clearBitmapSelectionCache();
@@ -253,11 +271,11 @@ export function ROIEditor({
               }}
             />
             <Num
-              label="Y end"
+              labelKey="roi.yEnd"
               value={roi.y_end}
               min={Math.min(16383, roi.y_origin + 1)}
               max={16383}
-              rangeLabel={`${Math.min(16383, roi.y_origin + 1)} and 16383 (greater than Y origin)`}
+              rangeText={t("roi.error.rangeYGreaterThanOrigin", { min: Math.min(16383, roi.y_origin + 1) })}
               disabled={disabled}
               onChange={(v) => {
                 clearBitmapSelectionCache();
@@ -273,7 +291,7 @@ export function ROIEditor({
               disabled={disabled}
               onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
             />
-            Display grid line
+            {t("roi.showGrid")}
           </label>
 
           <label className="checkbox">
@@ -283,15 +301,15 @@ export function ROIEditor({
               disabled={disabled || bitmapCleanupDisabled}
               onChange={(e) => dispatch(updateROI({ keep_loaded_bitmap_after_scan: e.target.checked }))}
             />
-            Keep loaded bitmap after scan
+            {t("roi.keepBitmap")}
           </label>
 
           <div className="field-row">
             <CoordinateField
-              label="Start (x, y)"
+              labelKey="roi.start"
               value={selectionStart(roi)}
               disabled={disabled}
-              validate={(p) => validateStartPoint(p, roi)}
+              validate={(p) => validateStartPoint(p, roi, tr)}
               onChange={(p) => {
                 const end = selectionEnd(roi);
                 clearBitmapSelectionCache();
@@ -308,10 +326,10 @@ export function ROIEditor({
               }}
             />
             <CoordinateField
-              label="End (x, y)"
+              labelKey="roi.end"
               value={selectionEnd(roi)}
               disabled={disabled}
-              validate={(p) => validateEndPoint(p, roi)}
+              validate={(p) => validateEndPoint(p, roi, tr)}
               onChange={(p) => {
                 const start = selectionStart(roi);
                 clearBitmapSelectionCache();
@@ -329,16 +347,9 @@ export function ROIEditor({
             />
           </div>
 
-          {/* DAC mapping diagnostic readout.
-              The four "X origin / X end / Y origin / Y end" inputs above
-              define the field of view in arbitrary world units (µm, mm,
-              cm, nm) — the unit dropdown is purely a display label, the
-              math is unitless. When the request goes to the backend,
-              `worldSelectionToDacROI` linearly remaps the selection from
-              world units onto the DAC range 0..16383. This block shows
-              that mapping live so the operator can sanity-check what
-              part of the DAC range the device will actually sweep.
-              Hidden when there's no selection yet (nothing to map). */}
+          {/* DAC mapping diagnostic readout. See the verbatim comment in
+              the original file for full background — it remaps a world-
+              units selection onto the DAC range 0..16383 for sanity. */}
           {roi.selection && (
             <div
               className="muted"
@@ -353,12 +364,14 @@ export function ROIEditor({
                 const dac = worldSelectionToDacROI(roi.selection, roi);
                 return (
                   <>
-                    DAC equivalent:&nbsp;
+                    {t("roi.dacEquivalent")}&nbsp;
                     S({dac.x_start}, {dac.y_start}) → E({dac.x_end}, {dac.y_end})
                     &nbsp;<span style={{ opacity: 0.7 }}>
-                      (out of 0..16383; the full DAC range covers your{" "}
-                      {fmtRange(roi.x_origin, roi.x_end)} ×{" "}
-                      {fmtRange(roi.y_origin, roi.y_end)} {unitLabel(roi.scale_unit)} field of view)
+                      {t("roi.dacMappingNote", {
+                        xRange: fmtRange(roi.x_origin, roi.x_end),
+                        yRange: fmtRange(roi.y_origin, roi.y_end),
+                        unit: unitLabel(roi.scale_unit),
+                      })}
                     </span>
                   </>
                 );
@@ -366,7 +379,7 @@ export function ROIEditor({
             </div>
           )}
           <div className="field">
-            <label>Scale unit</label>
+            <label>{t("roi.scaleUnit")}</label>
             <select
               className="select"
               value={roi.scale_unit}
@@ -464,16 +477,21 @@ function getCssColor(el: Element, variable: string, fallback: string): string {
 }
 
 function Num(props: {
-  label: string;
+  labelKey: TranslationKey;
   value: number;
   disabled: boolean;
   onChange: (v: number) => void;
   min?: number;
   max?: number;
-  rangeLabel?: string;
+  /** Pre-formatted range text for the "must be between {range}" message,
+   *  e.g. "0 and 4095 (less than X end)". Built by the caller because
+   *  the range depends on sibling field values. */
+  rangeText?: string;
 }) {
   const min = props.min ?? 0;
   const max = props.max ?? 16383;
+  const { t } = useTranslation();
+  const label = t(props.labelKey);
   const [text, setText] = useState(formatOneDecimal(props.value));
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -485,21 +503,18 @@ function Num(props: {
   function commit(next: string) {
     setText(next);
     if (next === "") {
-      setWarning(`! ${props.label} is required.`);
+      // The required / NaN / >1-decimal cases were previously distinct
+      // English messages in the original; collapsed to a single
+      // numeric-range message here since the translation table has
+      // one slot per category and these three are all "you gave us
+      // something not in [min..max]".
+      setWarning(t("roi.error.numericRange", { label, range: props.rangeText ?? `${min} ${max}` }));
       return;
     }
 
     const parsed = Number(next);
-    if (!Number.isFinite(parsed)) {
-      setWarning(`! ${props.label} must be a number.`);
-      return;
-    }
-    if (!hasAtMostOneDecimal(next)) {
-      setWarning(`! ${props.label} must use at most 1 decimal place.`);
-      return;
-    }
-    if (parsed < min || parsed > max) {
-      setWarning(`! ${props.label} must be between ${props.rangeLabel ?? `${min} and ${max}`}.`);
+    if (!Number.isFinite(parsed) || !hasAtMostOneDecimal(next) || parsed < min || parsed > max) {
+      setWarning(t("roi.error.numericRange", { label, range: props.rangeText ?? `${min} ${max}` }));
       return;
     }
 
@@ -510,7 +525,7 @@ function Num(props: {
 
   return (
     <div className="field">
-      <label>{props.label}</label>
+      <label>{label}</label>
       <input
         className={`input${warning ? " input--invalid" : ""}`}
         type="number"
@@ -526,12 +541,14 @@ function Num(props: {
 }
 
 function CoordinateField(props: {
-  label: string;
+  labelKey: TranslationKey;
   value: { x: number; y: number };
   disabled: boolean;
   validate: (p: { x: number; y: number }) => string | null;
   onChange: (p: { x: number; y: number }) => void;
 }) {
+  const { t } = useTranslation();
+  const label = t(props.labelKey);
   const [text, setText] = useState(formatPointText(props.value));
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -544,13 +561,13 @@ function CoordinateField(props: {
     setText(next);
     const parsed = parsePointText(next);
     if (!parsed) {
-      setWarning(`! ${props.label} must use x, y numbers with up to 1 decimal place.`);
+      setWarning(t("roi.error.pointFormat", { label }));
       return;
     }
 
     const validation = props.validate(parsed);
     if (validation) {
-      setWarning(`! ${validation}`);
+      setWarning(validation);
       return;
     }
 
@@ -560,7 +577,7 @@ function CoordinateField(props: {
 
   return (
     <div className="field">
-      <label>{props.label}</label>
+      <label>{label}</label>
       <input
         className={`input${warning ? " input--invalid" : ""}`}
         value={text}
@@ -607,7 +624,8 @@ function drawLabel(ctx: CanvasRenderingContext2D, x: number, y: number, text: st
 function drawScale(
   ctx: CanvasRenderingContext2D,
   roi: ROIState,
-  unit: string
+  unit: string,
+  tr: TranslationApi,
 ) {
   const major = 4;
   const minorPerMajor = 5;
@@ -664,8 +682,21 @@ function drawScale(
     }
   }
 
-  drawLabel(ctx, EDGE - 180, axisPad + 42, `Start ${formatROIStart(roi)} ${unit}`);
-  drawLabel(ctx, axisPad + 14, EDGE - 8, `End ${formatROIEnd(roi)} ${unit}`);
+  // The on-canvas "Start ..." / "End ..." labels — translated via the
+  // passed-in API. Width is bounded by the drawLabel measurement loop,
+  // so long Chinese phrases ("起点 (x, y) μm") still fit.
+  drawLabel(
+    ctx,
+    EDGE - 240,
+    axisPad + 42,
+    tr.t("roi.canvas.start", { point: formatROIStart(roi), unit }),
+  );
+  drawLabel(
+    ctx,
+    axisPad + 14,
+    EDGE - 8,
+    tr.t("roi.canvas.end", { point: formatROIEnd(roi), unit }),
+  );
   ctx.restore();
 }
 
@@ -702,29 +733,39 @@ function parsePointText(text: string): { x: number; y: number } | null {
   return { x, y };
 }
 
-function validateStartPoint(p: { x: number; y: number }, roi: ROIState) {
+function validateStartPoint(
+  p: { x: number; y: number },
+  roi: ROIState,
+  tr: TranslationApi,
+): string | null {
+  const { t } = tr;
   const end = selectionEnd(roi);
   if (p.x < roi.x_origin || p.x > roi.x_end) {
-    return `Start x must be between X origin ${roi.x_origin} and X end ${roi.x_end}.`;
+    return t("roi.error.startXBounds", { origin: roi.x_origin, end: roi.x_end });
   }
   if (p.y < roi.y_origin || p.y > roi.y_end) {
-    return `Start y must be between Y origin ${roi.y_origin} and Y end ${roi.y_end}.`;
+    return t("roi.error.startYBounds", { origin: roi.y_origin, end: roi.y_end });
   }
-  if (p.x >= end.x) return `Start x must be less than End x ${end.x}.`;
-  if (p.y >= end.y) return `Start y must be less than End y ${end.y}.`;
+  if (p.x >= end.x) return t("roi.error.startXLessThanEnd", { end: end.x });
+  if (p.y >= end.y) return t("roi.error.startYLessThanEnd", { end: end.y });
   return null;
 }
 
-function validateEndPoint(p: { x: number; y: number }, roi: ROIState) {
+function validateEndPoint(
+  p: { x: number; y: number },
+  roi: ROIState,
+  tr: TranslationApi,
+): string | null {
+  const { t } = tr;
   const start = selectionStart(roi);
   if (p.x < roi.x_origin || p.x > roi.x_end) {
-    return `End x must be between X origin ${roi.x_origin} and X end ${roi.x_end}.`;
+    return t("roi.error.endXBounds", { origin: roi.x_origin, end: roi.x_end });
   }
   if (p.y < roi.y_origin || p.y > roi.y_end) {
-    return `End y must be between Y origin ${roi.y_origin} and Y end ${roi.y_end}.`;
+    return t("roi.error.endYBounds", { origin: roi.y_origin, end: roi.y_end });
   }
-  if (p.x <= start.x) return `End x must be greater than Start x ${start.x}.`;
-  if (p.y <= start.y) return `End y must be greater than Start y ${start.y}.`;
+  if (p.x <= start.x) return t("roi.error.endXGreaterThanStart", { start: start.x });
+  if (p.y <= start.y) return t("roi.error.endYGreaterThanStart", { start: start.y });
   return null;
 }
 
@@ -732,8 +773,6 @@ function roundScale(v: number) {
   return formatOneDecimal(v);
 }
 
-/** Compact "lo..hi" display for the DAC mapping subtitle. Sorts the
- *  endpoints so a reversed-FOV entry still reads naturally. */
 function fmtRange(a: number, b: number): string {
   const lo = Math.min(a, b);
   const hi = Math.max(a, b);

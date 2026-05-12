@@ -4,17 +4,12 @@
  *
  * Custom-points input accepts CSV-like text: one "x,y,dwell" triple per
  * line. We cap at 1 000 000 points to match the Pydantic max_length.
- *
- * Every parameter has an inline "?" help button next to its label,
- * opening a modal with a technical explanation. Help components
- * live in their own files (Pattern, VectorResolutionHelp, …) and
- * are shared with RasterParameters where the field has the same
- * meaning (LatencyHelp, CookieHelp, OutputModeHelp, ValidationHelp).
  */
 import { useState } from "react";
 
 import { updateVector } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
+import { useTranslation, type TranslationKey } from "../i18n";
 import { LatencyHelp } from "./LatencyHelp";
 import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
@@ -26,8 +21,19 @@ import { ValidationHelp } from "./ValidationHelp";
 
 const MAX_POINTS = 1_000_000;
 
+// vector_resolution → translation-key + stride map. Defined here, not
+// in i18n/locales/en.ts, because the canonical schema there only
+// stores the labels — the stride numbers are app logic.
+const VECTOR_RES_OPTIONS: Array<{ value: number; labelKey: TranslationKey }> = [
+  { value: 2048, labelKey: "vector.resolution.option.2048" },
+  { value: 1024, labelKey: "vector.resolution.option.1024" },
+  { value: 512, labelKey: "vector.resolution.option.512" },
+  { value: 256, labelKey: "vector.resolution.option.256" },
+];
+
 export function VectorParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
+  const { t, fmt } = useTranslation();
   const v = useAppSelector((s) => s.scan.vector);
   const [pointsText, setPointsText] = useState<string>(
     v.points ? v.points.map((p) => p.join(",")).join("\n") : ""
@@ -43,14 +49,22 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
     }
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length > MAX_POINTS) {
-      setPointsErr(`too many points: ${lines.length} > ${MAX_POINTS}`);
+      // Error messages are user-visible, so they go through t() with
+      // numeric interpolation. fmt() applies locale-appropriate digit
+      // grouping (or absence thereof in zh-CN/zh-TW).
+      setPointsErr(
+        t("vector.customPoints.error.tooMany", {
+          count: fmt(lines.length),
+          max: fmt(MAX_POINTS),
+        })
+      );
       return;
     }
     const out: Array<[number, number, number]> = [];
     for (let i = 0; i < lines.length; i++) {
       const parts = lines[i].split(/[,\s]+/).map(Number);
       if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) {
-        setPointsErr(`line ${i + 1}: expected "x,y,dwell"`);
+        setPointsErr(t("vector.customPoints.error.format", { line: i + 1 }));
         return;
       }
       out.push([parts[0] | 0, parts[1] | 0, parts[2] | 0]);
@@ -59,11 +73,18 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
     dispatch(updateVector({ points: out }));
   }
 
+  // Build the stride tooltip for the resolution select once per render.
+  const stride = 2048 / v.vector_resolution;
+  const resolutionTitle =
+    stride === 1
+      ? t("vector.resolution.title.native")
+      : t("vector.resolution.title.stride", { stride });
+
   return (
     <div>
       <div className="field">
         <label>
-          Pattern
+          {t("vector.pattern")}
           <PatternHelp />
         </label>
         <select
@@ -76,15 +97,15 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
             )
           }
         >
-          <option value="default">Default sweep (full DAC range)</option>
-          <option value="custom">Custom points</option>
+          <option value="default">{t("vector.pattern.default")}</option>
+          <option value="custom">{t("vector.pattern.custom")}</option>
         </select>
       </div>
 
       {v.pattern === "default" && (
         <div className="field">
           <label>
-            Resolution (samples per axis)
+            {t("vector.resolution")}
             <VectorResolutionHelp />
           </label>
           <select
@@ -96,29 +117,22 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
                 updateVector({ vector_resolution: Number(e.target.value) })
               )
             }
-            title={(() => {
-              const stride = 2048 / v.vector_resolution;
-              return stride === 1
-                ? "Native: every DAC code is sampled."
-                : `Stride ${stride}: every ${stride}th DAC code is sampled. Full DAC range still covered.`;
-            })()}
+            title={resolutionTitle}
           >
-            <option value="2048">2048 × 2048 — native (stride 1)</option>
-            <option value="1024">1024 × 1024 — stride 2</option>
-            <option value="512">512 × 512 — stride 4</option>
-            <option value="256">256 × 256 — stride 8</option>
+            {VECTOR_RES_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {t(o.labelKey)}
+              </option>
+            ))}
           </select>
-          <small className="muted">
-            Smaller resolution → faster scan, sparser sampling. Coverage is
-            always the full 0..2047 DAC range.
-          </small>
+          <small className="muted">{t("vector.resolution.help")}</small>
         </div>
       )}
 
       <div className="field-row">
         <div className="field">
           <label>
-            Latency (bytes)
+            {t("vector.latencyBytes")}
             <LatencyHelp />
           </label>
           <input
@@ -138,7 +152,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
         </div>
         <div className="field">
           <label>
-            Output mode
+            {t("vector.outputMode")}
             <OutputModeHelp />
           </label>
           <select
@@ -161,7 +175,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
 
       <div className="field">
         <label>
-          Cookie
+          {t("vector.cookie")}
           <CookieHelp />
         </label>
         <input
@@ -180,12 +194,14 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
       {v.pattern === "custom" && (
         <div className="field">
           <label>
-            Custom points (x,y,dwell per line)
+            {t("vector.customPoints.label")}
             <CustomPointsHelp />
           </label>
           <textarea
             className="input"
             style={{ minHeight: 110, fontFamily: "var(--font-mono)" }}
+            // Placeholder is example numeric data, not prose; doesn't
+            // need translation.
             placeholder={"0,0,2\n100,100,2\n200,100,2"}
             value={pointsText}
             disabled={disabled}
@@ -195,9 +211,9 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
             {pointsErr ? (
               <span style={{ color: "var(--c-danger)" }}>{pointsErr}</span>
             ) : v.points ? (
-              `${v.points.length.toLocaleString()} points`
+              t("vector.customPoints.count", { count: fmt(v.points.length) })
             ) : (
-              "0 points"
+              t("vector.customPoints.empty")
             )}
           </small>
         </div>
@@ -206,7 +222,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
       <div className="divider" />
 
       <div className="card__title" style={{ marginBottom: 6 }}>
-        Validated run options
+        {t("card.validatedRunOptions")}
       </div>
 
       <label className="checkbox">
@@ -216,7 +232,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           disabled={disabled}
           onChange={(e) => dispatch(updateVector({ pre_process: e.target.checked }))}
         />
-        Pre-process chunks (timed separately as <code>process_time_s</code>)
+        {t("vector.preProcess")}
         <PreProcessHelp />
       </label>
 
@@ -227,7 +243,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           disabled={disabled}
           onChange={(e) => dispatch(updateVector({ do_validate: e.target.checked }))}
         />
-        Run non-empty / padding checks
+        {t("vector.doValidate")}
         <ValidationHelp />
       </label>
     </div>

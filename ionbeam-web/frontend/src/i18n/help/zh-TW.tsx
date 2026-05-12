@@ -1,0 +1,441 @@
+/**
+ * Traditional Chinese (zh-TW) help body content.
+ *
+ * As with the locale table: traditional character forms throughout,
+ * Taiwan-Mandarin lexical choices (解析度 not 分辨率, 預設 not 默认,
+ * 資料 not 数据, 連線 not 连接, 點陣圖 not 位图, etc.). Technical
+ * tokens inside <code> stay unchanged. The "boustrophedon" sweep is
+ * rendered as 牛耕式 here as well — same loanword reading.
+ */
+import type { ReactNode } from "react";
+
+import type { HelpKey } from "./en";
+
+export const helpBodies: Record<HelpKey, () => ReactNode> = {
+  dwell: () => (
+    <>
+      <div className="dwell-help__rule">
+        <strong>請選擇 2 的冪次。</strong>如果每像素的有效取樣數不是 2 的冪次，
+        閘級電路只會對最後 2 的冪次個取樣取平均，多餘的取樣會被捨棄。
+        例如 7 個取樣的像素只會平均其中 4 個；9 個取樣只會平均其中 8 個。
+        因此請始終選擇能使每像素取樣數為 2、4、8、16、32、64…… 的{" "}
+        <code>dwell_time</code>。
+      </div>
+
+      <p><code>dwell</code> 欄位是超取樣控制。各取值含義：</p>
+
+      <ul className="dwell-help__list">
+        <li><code>"dwell": 1</code> → 超取樣器不工作，掃描最快，像素率為完整的 8 MSPS</li>
+        <li><code>"dwell": 2</code> → 2 倍平均，像素率減半（4 Mpix/s），SNR 增益 √2</li>
+        <li><code>"dwell": 4</code> → 4 倍平均（2 Mpix/s），SNR 增益 2 倍</li>
+        <li><code>"dwell": 8</code> → 8 倍平均（1 Mpix/s），SNR 增益約 2.8 倍</li>
+        <li><code>"dwell": 16</code> → 16 倍平均（500 kpix/s），SNR 增益 4 倍</li>
+        <li>…… 直至 <code>dwell = 65535</code>（約每像素 8.19 ms）</li>
+      </ul>
+
+      <div className="dwell-help__table-wrap">
+        <table className="dwell-help__table">
+          <thead>
+            <tr>
+              <th>dwell</th><th>每像素取樣數</th><th>像素率</th>
+              <th>SNR 增益<br /><span className="muted">（相對 dwell=1）</span></th>
+              <th>1024² 畫面時長</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>1</td><td>8.0 MPix/s</td><td>1.00×</td><td>131 ms</td></tr>
+            <tr><td>2</td><td>2</td><td>4.0 MPix/s</td><td>1.41×</td><td>262 ms</td></tr>
+            <tr><td>4</td><td>4</td><td>2.0 MPix/s</td><td>2.00×</td><td>524 ms</td></tr>
+            <tr><td>8</td><td>8</td><td>1.0 MPix/s</td><td>2.83×</td><td>1.05 s</td></tr>
+            <tr><td>16</td><td>16</td><td>500 kPix/s</td><td>4.00×</td><td>2.10 s</td></tr>
+            <tr><td>32</td><td>32</td><td>250 kPix/s</td><td>5.66×</td><td>4.19 s</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </>
+  ),
+
+  resolution: () => (
+    <>
+      <p>
+        將光柵網格設定為 <code>N × N</code> 像素。無論選擇何值，束流始終在相同的實體 DAC
+        範圍內掃描；解析度越小，每個軸向上的取樣點就越少。DAC 共有 16 384 個碼值（0..16383）；
+        當 <code>N = 2048</code> 時，每隔 8 個 DAC 碼值取樣一次；
+        當 <code>N = 256</code> 時，每隔 64 個取樣一次。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>僅限 2 的冪次。</strong> DACCodeRange 輔助類別以整數運算將 16 384 個 DAC
+        碼值範圍除以 <code>N</code>；非 2 的冪次的解析度會產生不均勻的步長以及影像偽影。
+        請僅使用 256、512、1024、2048。
+      </div>
+
+      <p>解析度會影響通常關心的三個量：</p>
+
+      <ul className="dwell-help__list">
+        <li><strong>畫面時長</strong> — 按 <code>N² × dwell × 125 ns</code> 縮放。解析度加倍，時間變為四倍。</li>
+        <li><strong>CSV / 影像的像素數</strong> — <code>N²</code> 個值。2048² 的 16 位元光柵在傳輸線上為 8 MB，展開為 CSV 後約為 32 MB。</li>
+        <li><strong>空間取樣率</strong> — 網格越細可解析越小的特徵，但在總駐留預算相同的情況下，解析度越高代表每像素時間越短，除非同時增大 dwell。</li>
+      </ul>
+
+      <div className="dwell-help__table-wrap">
+        <table className="dwell-help__table">
+          <thead>
+            <tr>
+              <th>解析度</th><th>DAC 步長</th><th>總像素數</th>
+              <th>畫面時長<br /><span className="muted">（dwell = 2）</span></th>
+              <th>16 位元輸出</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>256</td><td>64</td><td>65 536</td><td>16 ms</td><td>128 KB</td></tr>
+            <tr><td>512</td><td>32</td><td>262 144</td><td>66 ms</td><td>512 KB</td></tr>
+            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>262 ms</td><td>2 MB</td></tr>
+            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>1.05 s</td><td>8 MB</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        上述畫面時長假設以超取樣器的 8 MSPS 取樣率連續串流。實際數值會略長，
+        因為每個資料區塊都有 USB 額外開銷，並且每次掃描末尾還有用於排空流水線的填充。
+      </p>
+    </>
+  ),
+
+  latency: () => (
+    <>
+      <p>
+        設定 USB OUT 路徑上每個資料區塊的大小（位元組）。巨集發送器將掃描按此大小切分成若干資料區塊，
+        並等待接收方排空後再排入下一批。&ldquo;延遲&rdquo;這一名稱沿襲自歷史 — FPGA
+        韌體用同一欄位表示&ldquo;在停下等待更多輸入之前最多回傳這麼多位元組的結果&rdquo;，
+        而這正是最壞情況下端到端延遲的上限。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>必須是像素大小的整數倍。</strong>每個 16 位元（SixteenBit）輸出像素 2 位元組；
+        每個 8 位元像素 1 位元組。無法整除的大小會產生截斷的資料區塊，並觸發驗證檢查。
+      </div>
+
+      <p>
+        每區塊像素數 = <code>latency_bytes / sample_size</code>，其中 SixteenBit 的{" "}
+        <code>sample_size</code> 為 2，EightBit 為 1。在預設 16 384 位元組、16 位元輸出下，
+        每區塊為 8 192 像素。
+      </p>
+
+      <p>取捨：</p>
+
+      <ul className="dwell-help__list">
+        <li><strong>較小的延遲（如 4 096）</strong> — 資料區塊更多，每次掃描 USB 往返次數更多，吞吐量較低。中止與掃描中的 UI 更新回應更快，因為接收方在兩區塊之間會檢查中止旗標。</li>
+        <li><strong>較大的延遲（如 32 768）</strong> — 資料區塊更少，吞吐量更高，傳輸中峰值主機記憶體略高。掃描中的中止回應可能延後最多一個區塊的時間。</li>
+        <li><strong>發送器流水線</strong> — OUT 端點上同一時刻最多可以有 <code>max_pipeline</code> 個資料區塊在傳輸中（光柵 32，矢量 4）。當延遲與 max_pipeline 都很大時，傳輸中視窗可能超過 FX2 OUT FIFO 並停滯 — 巨集已為此做了預先調整，通常無需手動更動 max_pipeline。</li>
+      </ul>
+
+      <div className="dwell-help__table-wrap">
+        <table className="dwell-help__table">
+          <thead>
+            <tr>
+              <th>latency_bytes</th>
+              <th>每區塊像素數<br /><span className="muted">（SixteenBit）</span></th>
+              <th>每 1024² 畫面的區塊數</th>
+              <th>備註</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>4 096</td><td>2 048</td><td>512</td><td>中止回應最快</td></tr>
+            <tr><td>8 192</td><td>4 096</td><td>256</td><td>矢量近似預設</td></tr>
+            <tr><td>16 384</td><td>8 192</td><td>128</td><td>光柵預設</td></tr>
+            <tr><td>32 768</td><td>16 384</td><td>64</td><td>吞吐量最高</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </>
+  ),
+
+  cookie: () => (
+    <>
+      <p>
+        16 位元標記（0..65535），巨集在每次掃描開始時將其嵌入 <code>SynchronizeCommand</code>。
+        FPGA 在回應串流的前 4 位元組將其回傳：<code>0xFFFF</code> 後接 cookie。
+        主機在消耗像素資料之前會讀取並丟棄這 4 位元組。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>用於串流衛生，與安全無關。</strong> Cookie 與身分驗證或工作階段狀態毫無關係。
+        它的存在只是為了讓主機能偵測出&ldquo;我正在讀取錯誤掃描的資料&rdquo;的情況 —
+        例如，上次中止的掃描在 FX2 IN FIFO 中殘留了未排空的位元組，而下次掃描已經開始。
+      </div>
+
+      <p>實用建議：</p>
+
+      <ul className="dwell-help__list">
+        <li><strong>慣例使用 123。</strong>本程式碼庫歷史上一直如此；保留即可。</li>
+        <li><strong>更改它</strong>的情境：懷疑掃描間存在殘留資料汙染時；或在多工具流水線中希望為不同的掃描類型打指紋（例如校準掃描使用 0xCA11，量產掃描使用 0xFAB0），以便後處理依據回傳的 cookie 進行分流。</li>
+        <li><strong>逐請求覆寫。</strong>若 JSON 預設值與 UI 表單都設定了 cookie，則以 UI 的值為準 — 詳見服務中的 <code>RasterParams.override(…)</code>。</li>
+      </ul>
+
+      <p>
+        如果掃描回傳亂碼且第一個區塊並非以 <code>0xFFFF &lt;cookie&gt;</code> 開頭，
+        表示讀取到的位元組來源不對 — 要麼上次掃描沒有排空完畢，要麼傳輸過程中發生了 USB 重置。
+        這兩種情況都應當重新連線，而非在同一連線上重試。
+      </p>
+    </>
+  ),
+
+  outputMode: () => (
+    <>
+      <p>
+        選擇 FPGA 在 USB IN 路徑上將每個 ADC 樣本回傳給主機的序列化方式。兩種模式始終使用完整的
+        14 位元 ADC；差別僅在於這些位元如何在線路上封裝。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>SixteenBit</strong> — 每像素 2 位元組。原始 14 位元 ADC 讀數零擴充至 uint16，小端序。這是唯一能在後處理中還原完整 ADC 動態範圍的模式。</li>
+        <li><strong>EightBit</strong> — 每像素 1 位元組。FPGA 捨棄低 6 位元，僅回傳高 8 位元。USB 頻寬減半，但會損失 6 位元的動態範圍 — 依賴那些低位元的微弱特徵將無法還原。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>頻寬與資料區塊計算會隨此欄位變化。</strong>在 <code>latency_bytes = 16 384</code> 下，
+        SixteenBit 每區塊 8 192 像素；EightBit 每區塊 16 384 像素 — 為前者的兩倍。比較&ldquo;預期區塊數&rdquo;
+        與&ldquo;實際接收區塊數&rdquo;的驗證檢查已計入此因素；如果您自行核算，
+        請記得：EightBit 時位元組數除以 1，SixteenBit 時除以 2。
+      </div>
+
+      <p>如何選擇：</p>
+
+      <ul className="dwell-help__list">
+        <li><strong>SixteenBit（預設）</strong> — 任何在意影像品質的場合。定量 SEM、EBIC，以及任何需要後期做對比度調整或雜訊分析的工作。</li>
+        <li><strong>EightBit</strong> — 當 USB 頻寬成為瓶頸、僅需預覽時。大型矢量掃描（數百萬點）且 dwell 較高，會超出 480 Mbps USB 2.0 連結時使用。螢幕顯示效果仍然良好；只是無法定量還原微弱訊號。</li>
+      </ul>
+
+      <div className="dwell-help__table-wrap">
+        <table className="dwell-help__table">
+          <thead>
+            <tr><th>模式</th><th>每像素位元組數</th><th>1024² 畫面大小</th><th>動態範圍</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SixteenBit</td><td>2</td><td>2 MB</td><td>14 位元（16 384 階）</td></tr>
+            <tr><td>EightBit</td><td>1</td><td>1 MB</td><td>8 位元（256 階）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </>
+  ),
+
+  frameBlank: () => (
+    <>
+      <p>
+        控制電子 / 離子束在一個畫面結束到下一個畫面開始之間的閒置時段內的行為。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>未勾選（false，預設）</strong> — 畫面間束流保持不消隱。重啟延遲最低：下一個畫面可立即開始。適合需要連續掃描並即時觀測結果的即時聚焦 / 成像情境。</li>
+        <li><strong>勾選（true）</strong> — 巨集在畫面的最後一個像素之後追加 <code>BlankCommand(enable=True)</code>，在回掃期間以及到下次掃描之前的任何閒置期消隱束流。當掃描在畫面內被中止時也會消隱。適合束流敏感樣品（輻射敏感樣品、光刻過程中的光阻劑），或任何不希望在拍攝之間持續曝光的情境。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>不影響畫面內消隱。</strong>畫面內的像素始終不消隱；此核取方塊只控制邊界狀態。
+        若需要在掃描內部進行逐像素或逐區域的消隱，請建構矢量圖樣並在點列中嵌入{" "}
+        <code>BlankCommand</code>。
+      </div>
+
+      <p>
+        中止時的細微差別：若在畫面內按下<strong>停止</strong>且畫面消隱<strong>關閉</strong>，
+        則束流停留在最後完成的像素位置，直到下次掃描開始。若畫面消隱<strong>開啟</strong>，
+        巨集會在下一個資料區塊邊界注入 BlankCommand，在中止後數十毫秒內消隱束流。
+      </p>
+    </>
+  ),
+
+  validation: () => (
+    <>
+      <p>
+        啟用時，服務會在掃描完成後、回傳結果前，對擷取的位元組串流執行一組輕量級檢查。
+        典型掃描下耗時 &lt; 100 ms，不會觸碰裝置 — 只檢查記憶體中的資料區塊清單。
+      </p>
+
+      <p>光柵檢查：</p>
+
+      <ul className="dwell-help__list">
+        <li><strong>資料區塊計數</strong> — 接收方收到了由 <code>ceil(resolution² / pixels_per_chunk)</code> 預測的資料區塊數量。不相符通常代表 FPGA 發生了背壓停頓，或排空填充被截短。</li>
+        <li><strong>資料區塊大小</strong> — 除最後一個區塊外，每一個皆恰為 <code>latency_bytes / sample_size</code> 個樣本。截斷的資料區塊通常代表 output_mode 與 latency_bytes 對齊不相符。</li>
+        <li><strong>填充存在</strong> — 末尾用於排空流水線的填充（至少約 128 像素，外加畫面大小的 0.5 %）已由發送方正確發出。缺少填充會導致最後幾個真實像素被困在 FPGA 流水線中。</li>
+      </ul>
+
+      <p>矢量檢查：</p>
+
+      <ul className="dwell-help__list">
+        <li><strong>非空</strong> — 每一個區塊都至少包含一個樣本。完全空的串流通常代表掃描從未真正觸發（例如 FPGA 沒有看到 SynchronizeCommand）。</li>
+        <li><strong>填充存在</strong> — 與光柵相同的排空填充檢查。這對矢量尤為重要，因為其排空底線高得多（預設設定下約 21 000 像素）。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>驗證報告驅動結果面板。</strong>停用時，執行報告仍包含資料區塊計數與耗時，
+        但會省略逐項的通過 / 失敗清單，執行面板僅顯示&ldquo;validation: off&rdquo;。
+      </div>
+
+      <p>何時關閉：</p>
+
+      <ul className="dwell-help__list">
+        <li><strong>高速率重複掃描</strong>：已確認環境正常、無需每次執行皆檢視報告時。</li>
+        <li><strong>極致吞吐量的串流</strong> — 雖然檢查很輕量（&lt; 100 ms），仍需在記憶體中保留結果以便掃描。停用可省略此保留時段。</li>
+      </ul>
+
+      <p>
+        在初次部署、排查鬆動的 USB 線纜或驗證新位元串流時，請保持開啟。這些檢查正是為了捕捉
+        &ldquo;掃描完成但資料悄悄出錯&rdquo;這類成本高昂、否則難以察覺的失敗模式而設計的。
+      </p>
+    </>
+  ),
+
+  pattern: () => (
+    <>
+      <p>
+        矢量模式允許主機向 FPGA 發送顯式的點列 — 每個像素一個 <code>(x, y, dwell)</code> 三元組 —
+        而非讓閘級電路在內部自行產生光柵掃描。此欄位決定該點列的來源。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>預設掃描</strong> — 巨集按<strong>解析度</strong>所設密度，在完整 DAC 範圍內逐列產生掃描。等同於光柵掃描，但走的是矢量命令路徑。適合需要在相同涵蓋範圍內比較光柵與矢量的 A/B 測試，或因某些閘級因素導致光柵模式不可用的情形。</li>
+        <li><strong>自訂點列</strong> — 您在下方文字方塊中提供點列。造訪順序與書寫順序完全一致。所有非光柵掃描皆走此模式：純 ROI 掃描、稀疏成像、光刻路徑、校準點，以及任何帶有客製化造訪順序的情境。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>矢量的每像素速度慢於光柵。</strong>每個矢量像素都攜帶一個顯式的 (x, y, dwell) 三元組 —
+        OUT 路徑上 6 位元組 — 而光柵像素使用游程編碼（RasterPixelRunCommand），
+        約每整列 5 位元組。在 2048² 下，預設圖樣的矢量發送速度大約比相同涵蓋範圍的光柵慢一個數量級。
+        請僅在需要矢量的彈性時使用，而非在光柵同樣可行時使用。
+      </div>
+
+      <p>
+        兩種模式都經過相同的 SynchronizeCommand cookie 握手、相同的 SixteenBit/EightBit 輸出路徑，
+        以及掃描末尾相同的排空填充。會話內隨時切換無任何成本；FPGA 無需重新設定。
+      </p>
+    </>
+  ),
+
+  vectorResolution: () => (
+    <>
+      <p>
+        當<strong>圖樣</strong>為 <code>default</code> 時，此項決定內建掃描對 DAC 範圍取樣的稠密程度。
+        涵蓋範圍<em>始終</em>是完整 DAC 範圍 — 解析度越小只是次取樣。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>2048 — 原生（步長 1）</strong>：造訪每個 DAC 碼值。等同於 2048 解析度的光柵，但走矢量路徑。</li>
+        <li><strong>1024 — 步長 2</strong>：每隔 2 個 DAC 碼值造訪一次。點數為 ¼，掃描時間亦為 ¼。</li>
+        <li><strong>512 — 步長 4</strong>：每隔 4 個 DAC 碼值。點數與時間為 1/16。</li>
+        <li><strong>256 — 步長 8</strong>：每隔 8 個 DAC 碼值。點數為 1/64；適用於快速預覽掃描。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>允許值為 256、512、1024、2048。</strong>後端會拒絕其他取值 —
+        步長必須是 2048 的整數因子，否則掃描在 DAC 範圍兩端無法整齊閉合。
+      </div>
+
+      <p>
+        與光柵解析度不同，此欄位<em>對自訂圖樣掃描無任何影響</em>。
+        當將圖樣設為 <code>custom</code> 時，造訪清單完全來自下方文字方塊 — 此欄位被忽略。
+      </p>
+
+      <div className="dwell-help__table-wrap">
+        <table className="dwell-help__table">
+          <thead>
+            <tr><th>解析度</th><th>步長</th><th>總點數</th><th>大致掃描時間<br /><span className="muted">（dwell=1）</span></th></tr>
+          </thead>
+          <tbody>
+            <tr><td>256</td><td>8</td><td>65 536</td><td>~8 ms</td></tr>
+            <tr><td>512</td><td>4</td><td>262 144</td><td>~33 ms</td></tr>
+            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~131 ms</td></tr>
+            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~524 ms</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        掃描時間為數量級估計；矢量模式每像素都有 USB 額外開銷（每點攜帶一條 6 位元組命令，
+        而光柵使用游程編碼），因此實際數值會略長一些。
+      </p>
+    </>
+  ),
+
+  customPoints: () => (
+    <>
+      <p>
+        每行一個 <code>(x, y, dwell)</code> 三元組。各值可用逗號或空白分隔；兩者皆可。空白行會被忽略。
+      </p>
+
+      <pre style={{
+        padding: "8px 10px", margin: "8px 0",
+        background: "var(--c-bg-input)",
+        border: "1px solid var(--c-border-soft)",
+        borderRadius: "var(--r-md)",
+        fontFamily: "var(--font-mono)", fontSize: 12,
+        whiteSpace: "pre",
+      }}>
+{`# 合法：
+0,0,2
+100,100,2
+200 100 2
+8192,8192,8
+
+# 不合法（提交時會被拒絕）：
+1.5,2.0,2      # 小數會被截斷為整數
+0,0            # 缺少 dwell`}
+      </pre>
+
+      <ul className="dwell-help__list">
+        <li><strong><code>x</code>、<code>y</code></strong> — DAC 碼值，閉區間 0..16383。超出範圍的值會在裝置上被截斷，但無法產生有用輸出。</li>
+        <li><strong><code>dwell</code></strong> — 單位與光柵 dwell 一致：125 ns 取樣週期的個數。1 最快（無超取樣）；2/4/8/16/…… 是 SNR 平均的實用值。最大可至 65535（約每像素 8.19 ms）。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>硬性上限：1 000 000 個點。</strong>與 API 請求上 Pydantic 的{" "}
+        <code>max_length</code> 一致。後端會在觸碰裝置之前以 422 拒絕過大的點列。
+      </div>
+
+      <p>大點列的效能建議：</p>
+
+      <ul className="dwell-help__list">
+        <li>啟用下方的<strong>預先處理資料區塊</strong> — 對於超過約 100k 點的點列，可將總掃描時間減少 50 % 或更多。</li>
+        <li>對點列排序以減少相鄰像素之間的束流移動 — 大的 DAC 跳變會在類比通路上耗費整定時間。如無更具體的計畫，牛耕式（之字形）順序是個不錯的預設。</li>
+        <li>造訪順序被嚴格保留。巨集不會重排、去重複或最佳化。若兩個連續點的 <code>(x, y)</code> 相同，束流在該處的駐留時間為兩段 dwell 之和。</li>
+      </ul>
+
+      <p>
+        如需以程式產生，可從任何能輸出 CSV 的來源貼上：試算表、Python 腳本、Jupyter 筆記本皆可。
+        在瀏覽器開始遲緩之前，文字方塊約可承載 50 MB 的文字，遠高於 100 萬點上限。
+      </p>
+    </>
+  ),
+
+  preProcess: () => (
+    <>
+      <p>
+        每個矢量像素在 OUT 路徑上以一條 6 位元組命令發送：<code>x</code>（2 B）+ <code>y</code>（2 B）
+        + <code>dwell</code>（2 B），大端序。巨集將其按<strong>延遲</strong>大小批次封裝成資料區塊。
+        本核取方塊控制的是<em>何時</em>進行這一批次封裝。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>未勾選（按需，串流預設）</strong> — 資料區塊在發送協程內隨傳輸消耗而按需編碼。記憶體佔用最低：同一時刻 RAM 中只有傳輸中視窗（max_pipeline × latency_bytes）這麼多。但主機 CPU 需要跟上 USB；若產生點列的迭代器較慢，裝置就會因等待下一個區塊而停滯。</li>
+        <li><strong>勾選（預先處理）</strong> — 巨集的 <code>_pre_process_chunks()</code> 在掃描開始時執行一次，將每個資料區塊實體化為命令物件持有的 memoryview。此時傳輸僅受 USB 吞吐量限制，與主機端編碼速度無關。代價：峰值 RAM 約為 <code>6 × total_pixels</code> 位元組（即百萬點掃描約 6 MB）。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>實際執行的預先處理時間會單獨回報。</strong>執行報告中的 <code>process_time_s</code>{" "}
+        顯示預先處理耗時；<code>send_time_s</code> 只顯示 USB 傳輸耗時。
+        舊版 UI 曾將兩者混為一談。
+      </div>
+
+      <p>何時啟用：</p>
+
+      <ul className="dwell-help__list">
+        <li><strong>建議啟用：</strong>任何超過約 100k 點的自訂點列，尤其是點列迭代器需要大量運算時（計算路徑、基於影像的光柵化等）。</li>
+        <li><strong>建議啟用：</strong>關心總吞吐量時，高解析度（1024+）下的預設掃描。</li>
+        <li><strong>不建議：</strong>非常長的掃描中，峰值 RAM 比總耗時更重要時（≥ 1000 萬點且執行在記憶體受限的主機上）。</li>
+        <li><strong>不建議：</strong>低於約 10k 點的小型掃描 — 預先處理開銷與所節省的時間相當。</li>
+      </ul>
+    </>
+  ),
+};
