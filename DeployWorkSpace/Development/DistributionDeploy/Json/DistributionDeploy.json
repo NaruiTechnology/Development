@@ -23,7 +23,7 @@
 	"Actions":[
 		{
 			"buildDistribution":{
-				"skip":false,
+				"skip":true,
 				"transactionComplete":false,
 				"actionData":{
 					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$s=\u0027{}\u0027; $src=\u0027{}\u0027; $dist=\u0027{}\u0027; $out=\u0027{}\u0027; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) {{ \u0026 py -3 $s --source $src --dist $dist --output $out }} else {{ \u0026 python $s --source $src --dist $dist --output $out }}\"",
@@ -46,7 +46,7 @@
 				"transactionComplete":false,
 				"actionData":{
 					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath \u0027{}\u0027 -DestinationPath \u0027{}\u0027 -Force\"",
-					"zip":"C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app.zip",
+					"zip":".\\Development\\DistributionDeploy\\dist_app.zip",
 					"acceptedNames":[
 						"dist_app.zip",
 						"dist_app_raw.zip",
@@ -77,7 +77,7 @@
 				"actionData":{
 					"commandFormat":"py -3 -m pip install -r {}\\{}",
 					"root":"C:\\Project\\Iobeam\\Deploy",
-					"requirementsName":"requirements.txt",
+					"requirementsName":".\\Development\\requirements.txt",
 					"extraRequirements":[
 						"glasgow_service/requirements.txt"
 					],
