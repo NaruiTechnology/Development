@@ -15,7 +15,7 @@ import { useAppDispatch, useAppSelector } from "../store";
 import { DwellHelp } from "./DwellHelp";
 
 const RES_PRESETS = [256, 512, 1024, 2048];
-const DWELL_PRESETS = [1, 2, 4, 8, 16];
+const DWELL_PRESETS = [1, 2, 4, 8, 16, 32];
 const LATENCY_PRESETS = [4096, 8192, 16384, 32768];
 
 export function RasterParameters({ disabled }: { disabled: boolean }) {
