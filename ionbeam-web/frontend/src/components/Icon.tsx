@@ -3,6 +3,7 @@ type IconName =
   | "crop"
   | "download"
   | "grid"
+  | "help"
   | "image"
   | "layers"
   | "moon"
@@ -40,6 +41,13 @@ const paths: Record<IconName, JSX.Element> = {
     <>
       <path d="M4 4h16v16H4z" />
       <path d="M9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16" />
+    </>
+  ),
+  help: (
+    <>
+      <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
     </>
   ),
   image: (
