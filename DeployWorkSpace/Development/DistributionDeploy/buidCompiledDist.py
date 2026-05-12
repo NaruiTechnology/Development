@@ -74,7 +74,7 @@ DEFAULT_JSON_SOURCES = [
 
 # Non-Python application trees copied as source/assets.
 DEFAULT_COPY_TREES = [
-    os.path.join('Development', 'ionbeam-web'),
+    'ionbeam-web',
 ]
 
 # Files NOT compiled by Cython -- copied as plain .py so they remain
@@ -339,17 +339,18 @@ def copy_venv(src_dir, dist_dir):
 
 
 def copy_source_trees(src_dir, dist_dir, copy_trees, skip_dirs):
-    ignore = shutil.ignore_patterns(*skip_dirs)
     for rel_tree in copy_trees:
         src_tree = os.path.join(src_dir, rel_tree)
+        if not os.path.isdir(src_tree) and rel_tree.startswith(f'Development{os.sep}'):
+            src_tree = os.path.join(src_dir, os.path.relpath(rel_tree, 'Development'))
         if not os.path.isdir(src_tree):
             print(f"Source tree [{rel_tree}] not found (skipping).")
             continue
 
-        dst_tree = os.path.join(dist_dir, rel_tree)
+        dst_tree = os.path.join(dist_dir, os.path.basename(rel_tree))
         if os.path.exists(dst_tree):
             shutil.rmtree(dst_tree)
-        shutil.copytree(src_tree, dst_tree, ignore=ignore)
+        shutil.copytree(src_tree, dst_tree)
         print(f"Copied source tree [{rel_tree}].")
 
 
