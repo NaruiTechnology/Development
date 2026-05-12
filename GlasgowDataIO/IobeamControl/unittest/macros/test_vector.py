@@ -9,9 +9,11 @@ from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
 from GlasgowDataIO.IobeamControl.transfer.mock import MockConnection
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
+from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
+from AutomationPy.buildingblocks.scan_params import VectorParams
 
 logger = logging.getLogger()
 
@@ -19,37 +21,61 @@ JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData.json'
 
 
 class VectorScanTest(unittest.TestCase):
+    """Wet-run vector scan test, parameterized through VectorParams.
 
-    # Change this single value to bisect the working-latency ceiling.
-    # 65536 currently deadlocks on hardware (host bulk_write to device OUT
-    # endpoint times out at 10 s because MAX_PIPELINE=32 chunks × LATENCY
-    # saturates the FPGA's OUT FIFO faster than it can drain).
-    # Try 4096 / 8192 / 16384 / 32768 to find where it starts failing.
-    LATENCY = 8196
+    Previously this test reassigned a *local* LATENCY in setUp, which
+    didn't override the class-level LATENCY=8196 the rest of the test
+    used. (Classic Python "you assigned to a local, not a class attr"
+    bug.) Now VectorParams.from_json provides defaults and PARAM_OVERRIDES
+    customizes them in one place.
+    """
+
+    PARAM_OVERRIDES: dict = {}
 
     def setUp(self):
         if Path(JSON_PATH).is_file():
             self._config = AutomationConfig(JSON_PATH)
+            vector_block = (
+                util.GetStateConfigByName(self._config, 'streamData')
+                [Consts.ACTION_DATA].get('vectorScan')
+            )
         else:
             self._config = None
-        self._vectorScanConfig = util.GetStateConfigByName(self._config, 'streamData')[Consts.ACTION_DATA].get('vectorScan')
-        LATENCY = self._vectorScanConfig.get('latency')
+            vector_block = None
+
+        self.params: VectorParams = VectorParams.from_json(vector_block).override(
+            **self.PARAM_OVERRIDES,
+        )
 
     # ------------------------------------------------------------------ #
     # Mock / simulation test (no hardware).                              #
     # ------------------------------------------------------------------ #
     async def scan(self):
-        test_cmd = VectorScanCommand(cookie=123)
+        try:
+            output_mode = OutputMode[self.params.output_mode]
+        except KeyError:
+            output_mode = OutputMode.SixteenBit
+
+        test_cmd = VectorScanCommand(
+            cookie=self.params.cookie,
+            output_mode=output_mode,
+            max_pipeline=self.params.max_pipeline,
+            fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
+            drain_safety_factor=self.params.drain_safety_factor,
+            sender_drain_timeout_s=self.params.sender_drain_timeout_s,
+            drain_floor_pixels=self.params.effective_drain_floor_pixels,
+        )
 
         start_process = time.perf_counter()
-        test_cmd._pre_process_chunks(latency=self.LATENCY)
+        test_cmd._pre_process_chunks(latency=self.params.latency_bytes)
         end_process = time.perf_counter()
 
         conn = MockConnection()
         await conn._connect()
 
         start_send = time.perf_counter()
-        async for chunk in conn.transfer_multiple(test_cmd, latency=self.LATENCY):
+        async for chunk in conn.transfer_multiple(
+                test_cmd, latency=self.params.latency_bytes):
             print(f"chunk: {dump_hex(chunk)}")
         end_send = time.perf_counter()
 
@@ -62,8 +88,6 @@ class VectorScanTest(unittest.TestCase):
 
     # ------------------------------------------------------------------ #
     # Wet-run test: real Glasgow hardware.                               #
-    # Pre-processes the command stream at latency=LATENCY, then streams  #
-    # it to the device, accumulating chunks for assertions below.        #
     # ------------------------------------------------------------------ #
     async def scan_wet_run(self):
         self.chunks = []
@@ -75,14 +99,30 @@ class VectorScanTest(unittest.TestCase):
             print("[test] no config, skipping")
             return
 
-        test_cmd = VectorScanCommand(cookie=123)
+        try:
+            output_mode = OutputMode[self.params.output_mode]
+        except KeyError:
+            output_mode = OutputMode.SixteenBit
 
-        print(f"[test] === VectorScan, latency={self.LATENCY} ===", flush=True)
+        test_cmd = VectorScanCommand(
+            cookie=self.params.cookie,
+            output_mode=output_mode,
+            max_pipeline=self.params.max_pipeline,
+            fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
+            drain_safety_factor=self.params.drain_safety_factor,
+            sender_drain_timeout_s=self.params.sender_drain_timeout_s,
+            drain_floor_pixels=self.params.effective_drain_floor_pixels,
+        )
+
+        print(f"[test] === VectorScan, latency={self.params.latency_bytes}, "
+              f"max_pipeline={self.params.max_pipeline}, "
+              f"drain_floor={self.params.effective_drain_floor_pixels} ===",
+              flush=True)
 
         # Pre-processing is host-side CPU work, independent of the USB
         # transfer itself, so time it separately.
         start_process = time.perf_counter()
-        test_cmd._pre_process_chunks(latency=self.LATENCY)
+        test_cmd._pre_process_chunks(latency=self.params.latency_bytes)
         end_process = time.perf_counter()
         self.process_time = end_process - start_process
         print(f"[test] pre-process time: {self.process_time:04f}s", flush=True)
@@ -95,7 +135,8 @@ class VectorScanTest(unittest.TestCase):
 
         start_send = time.perf_counter()
         try:
-            async for chunk in conn.transfer_multiple(test_cmd, latency=self.LATENCY):
+            async for chunk in conn.transfer_multiple(
+                    test_cmd, latency=self.params.latency_bytes):
                 self.chunks.append(chunk)
                 self.chunks_received += 1
                 # Sparse preview so the log doesn't drown on large streams:
@@ -123,18 +164,11 @@ class VectorScanTest(unittest.TestCase):
     def test_scan_wet_run(self):
         asyncio.run(self.scan_wet_run())
 
-        # Dump received chunks to ~/Downloads/vector_latency<LATENCY>.csv for
-        # offline inspection. Run before the assertions so we still get the
-        # file even if the scan failed one of the checks below.
-        # Skipped if the scan was aborted early (no config / no connection).
-        # Layout: one chunk per line, space-separated values — each line is
-        # one USB transfer, which is the unit LATENCY bisects over.
+        # Dump received chunks before assertions so we still get the file
+        # even if a check below fails. Skipped if the scan aborted early.
         if self.chunks:
             self._exportDataToCsvFile()
 
-        # Unlike raster, a vector scan's chunk count is determined by the
-        # pre-processed command stream rather than a fixed resolution, so we
-        # can't assert an exact count — but we must receive at least one.
         self.assertGreater(
             self.chunks_received, 0,
             f"expected at least one chunk, got {self.chunks_received}",
@@ -148,37 +182,22 @@ class VectorScanTest(unittest.TestCase):
             )
 
         # Sanity check: at least one chunk somewhere in the stream contains
-        # non-zero data. This catches catastrophic failures (FPGA never
-        # wakes up, IN path dead, simulator BRAM not initialized) without
-        # the false positives the old "chunk 2 != zeros" guard produced.
-        #
-        # Why the old check was wrong:
-        #   With default_iter() the scan starts at host (x=0, y=0..) and
-        #   FakeAdcSimulator decimates the top 6 bits of the 14-bit DAC
-        #   X for image addressing — so host x in 0..255 all reads
-        #   image column 0. For every pattern in imageSource.pattern_image
-        #   except a custom-loaded photo with a bright left edge, image
-        #   column 0 is dominated by zeros (`ramp`: 0; `bars`: 0;
-        #   `bullseye`: 0 at corners). That makes the first ~64 chunks
-        #   legitimately all-zero, and the old assertion fired on real
-        #   data, not on a padding leak.
-        #
-        # If we ever want a *real* padding-leak guard we'd have to inspect
-        # the *tail* of the stream (where drain padding could plausibly
-        # reach the host) against a known iterator that lands on a
-        # non-zero image cell.
+        # non-zero data. (See history comment in the original test for why
+        # we don't assert "chunk 2 != all zeros" — with default_iter() the
+        # first ~64 chunks are legitimately all-zero on FakeAdcSimulator
+        # patterns because host x in 0..255 all reads image column 0.)
         self.assertTrue(
             any(any(v != 0 for v in chunk) for chunk in self.chunks),
             "every chunk is all zeros — scan returned no real data",
         )
 
     def _exportDataToCsvFile(self):
-        if not self._config.DumpData:
+        if not self._config or not getattr(self._config, "DumpData", False):
             return
-        
+
         downloads_dir = Path.home() / "Downloads"
         downloads_dir.mkdir(parents=True, exist_ok=True)
-        csv_path = downloads_dir / f"vector_latency{self.LATENCY}.csv"
+        csv_path = downloads_dir / f"vector_latency{self.params.latency_bytes}.csv"
 
         total_values = 0
         with csv_path.open("w", newline="") as f:
@@ -188,5 +207,5 @@ class VectorScanTest(unittest.TestCase):
                 total_values += len(chunk)
 
         print(f"[test] wrote CSV: {csv_path} "
-                  f"({total_values} values from {len(self.chunks)} chunks)",
-                  flush=True)
+              f"({total_values} values from {len(self.chunks)} chunks)",
+              flush=True)

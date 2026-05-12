@@ -1,16 +1,25 @@
+"""VectorScanCommand — parameterized.
+
+Previously module-level constants encoded the FPGA pipeline depth, the
+drain safety factor, the sender drain timeout, and MAX_PIPELINE. Each was
+documented as "re-validate this when the bitstream changes" but had no
+runtime override hook — meaning a per-build change required editing this
+file. They're now constructor parameters with the same defaults, so any
+caller can override per-request (from the UI/REST) or per-deployment
+(from streamData.json), without editing macro source.
+
+JSON / API → VectorParams → VectorScanCommand is the new flow; see
+AutomationPy.buildingblocks.scan_params for the dataclass.
+"""
+
 import asyncio
 import struct
-import array
 
-# FIX (housekeeping A): import paths aligned with the rest of the project.
-# Before:
-#   from IobeamControl.commands import BaseCommand
-#   from IobeamControl.commands.low_level_commands import ...
-#   from IobeamControl.commands.structs import ...
-# The rest of the project — test_vector.py, the raster macro, abc.py — all
-# import via `GlasgowDataIO.IobeamControl.*`. With both paths resolvable
-# Python can import the same module twice under two different names, which
-# silently breaks isinstance checks and registry lookups.
+# Import path note: must match the prefix used by callers
+# (GlasgowDataIO.IobeamControl.*) so isinstance checks line up across
+# imports. macros/raster.py uses the un-prefixed `IobeamControl.*`
+# because __init__.py uses the same; here we keep the prefixed form
+# because it's what every existing caller of macros.vector uses.
 from GlasgowDataIO.IobeamControl.commands import BaseCommand
 from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
     BlankCommand, FlushCommand, SynchronizeCommand, ArrayCommand,
@@ -22,8 +31,11 @@ from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
 
 
-# Drain padding floor for vector transfers.
+# Module-level defaults. Single source of truth lives in
+# AutomationPy.buildingblocks.scan_params; these mirror that file so
+# macros.vector stays importable without the AutomationPy dependency.
 #
+# Drain padding floor for vector transfers ----------------------------
 # Output for the last ~N pixels stays trapped in the
 # Supersampler → BusController → PipelinedLoopbackAdapter chain until
 # more input arrives behind it. The trailing padding written at the end
@@ -37,10 +49,8 @@ BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
 # is an additional margin for very large scans. Re-validate this
 # constant whenever the bitstream changes — a regression here will
 # look like vector-tail read timeouts.
-_FPGA_PIPELINE_DEPTH_PIXELS = 14_000
-_DRAIN_SAFETY_FACTOR        = 1.5
-_DEFAULT_DRAIN_FLOOR_PIXELS = int(_FPGA_PIPELINE_DEPTH_PIXELS
-                                  * _DRAIN_SAFETY_FACTOR)   # = 21_000
+DEFAULT_FPGA_PIPELINE_DEPTH_PIXELS = 14_000
+DEFAULT_DRAIN_SAFETY_FACTOR        = 1.5
 
 # How long to wait for the sender task to finish its drain padding +
 # final flush after the receiver loop has returned. The sender is
@@ -49,7 +59,13 @@ _DEFAULT_DRAIN_FLOOR_PIXELS = int(_FPGA_PIPELINE_DEPTH_PIXELS
 # A generous ceiling here just bounds the worst case where the FPGA
 # pipeline genuinely stalls — at which point we'd rather surface a
 # warning than hang the test forever.
-_SENDER_DRAIN_TIMEOUT_S = 15.0
+DEFAULT_SENDER_DRAIN_TIMEOUT_S = 15.0
+
+# Vector chunks are much larger than raster chunks (every pixel
+# carries x/y/dwell triples), so MAX_PIPELINE has historically been
+# tuned much lower for vector than the 32 used by raster. See the
+# block comment inside transfer() below for the full story.
+DEFAULT_MAX_PIPELINE = 4
 
 
 def default_iter(resolution=2048):
@@ -63,32 +79,74 @@ def default_iter(resolution=2048):
 
 
 class VectorScanCommand(BaseCommand):
-    def __init__(self, cookie: int,
-                 output_mode: OutputMode = OutputMode.SixteenBit,
-                 iter_points=None,
-                 drain_floor_pixels=None):
-        # FIX (housekeeping B): mutable-default-argument trap.
-        # Before: `iter_points=default_iter()` — Python evaluates defaults
-        # once at class-definition time, so a second VectorScanCommand in
-        # the same session got an already-exhausted generator and pre-
-        # processed zero chunks. Evaluate the default per-call instead.
+    def __init__(
+        self,
+        cookie: int,
+        output_mode: OutputMode = OutputMode.SixteenBit,
+        iter_points=None,
+        drain_floor_pixels=None,
+        *,
+        # --- pipeline tuning (overridable per-build via VectorParams) -----
+        max_pipeline: int               = DEFAULT_MAX_PIPELINE,
+        fpga_pipeline_depth_pixels: int = DEFAULT_FPGA_PIPELINE_DEPTH_PIXELS,
+        drain_safety_factor: float      = DEFAULT_DRAIN_SAFETY_FACTOR,
+        sender_drain_timeout_s: float   = DEFAULT_SENDER_DRAIN_TIMEOUT_S,
+    ):
+        """
+        Args:
+            cookie (int):
+            output_mode (OutputMode, optional): Defaults to SixteenBit.
+            iter_points (iterable, optional): (x, y, dwell) triples.
+                Defaults to the full-DAC sweep at resolution=2048.
+            drain_floor_pixels (int, optional): Explicit override for the
+                drain padding floor. If None, derived from
+                `fpga_pipeline_depth_pixels * drain_safety_factor`. Allows
+                streamData.json to keep working unchanged.
+            max_pipeline (int): Outstanding-chunks cap on the OUT path.
+                Previously hardcoded at 4 (down from 32 inherited from
+                raster). Surfaced so the right value can come from JSON
+                without editing macro source.
+            fpga_pipeline_depth_pixels (int): Empirically observed FPGA
+                pipeline depth that drain padding must exceed.
+            drain_safety_factor (float): Multiplier on the pipeline
+                depth before the floor is applied.
+            sender_drain_timeout_s (float): Bound on how long transfer()
+                waits for the sender task to drain after the receiver
+                loop ends, before logging a warning and cancelling.
+        """
+        # Avoid the mutable-default trap: Python evaluates defaults once
+        # at class-definition time, so a second VectorScanCommand in the
+        # same session would have received an already-exhausted generator
+        # and pre-processed zero chunks. Evaluate per-call instead.
         if iter_points is None:
             iter_points = default_iter()
-        # `drain_floor_pixels=None` falls back to the module default; pass
-        # an explicit int (e.g. from streamData.json) to override per-build.
-        if drain_floor_pixels is None:
-            drain_floor_pixels = _DEFAULT_DRAIN_FLOOR_PIXELS
+
         self._iter_points = iter_points
         self._processed_points = []
         self._processed = False
         self._cookie = cookie
         self._output_mode = output_mode
+
+        self._max_pipeline               = int(max_pipeline)
+        self._fpga_pipeline_depth_pixels = int(fpga_pipeline_depth_pixels)
+        self._drain_safety_factor        = float(drain_safety_factor)
+        self._sender_drain_timeout_s     = float(sender_drain_timeout_s)
+
+        # Resolve the drain floor: explicit override wins, otherwise
+        # derive from FPGA pipeline depth × safety factor.
+        if drain_floor_pixels is None:
+            drain_floor_pixels = int(
+                self._fpga_pipeline_depth_pixels * self._drain_safety_factor
+            )
         self._drain_floor_pixels = int(drain_floor_pixels)
+
         self.abort = asyncio.Event()
 
     def __repr__(self):
         return (f"VectorScanCommand: cookie={self._cookie}, "
-                f"output_mode={self._output_mode}")
+                f"output_mode={self._output_mode}, "
+                f"max_pipeline={self._max_pipeline}, "
+                f"drain_floor_pixels={self._drain_floor_pixels}")
 
     def _pre_process_chunks(self, latency):
         print("Pre-processing commands...")
@@ -134,21 +192,25 @@ class VectorScanCommand(BaseCommand):
 
     @BaseCommand.log_transfer
     async def transfer(self, stream, *, latency: int = 65536 * 65536):
-        self._logger.debug(f"transfer - {latency=}")
+        self._logger.debug(
+            f"transfer - {latency=} max_pipeline={self._max_pipeline} "
+            f"drain_floor={self._drain_floor_pixels}"
+        )
 
-        # FIX 1: MAX_PIPELINE reduced 32 → 4.
+        # MAX_PIPELINE — historically 32 (inherited from raster); reduced
+        # to 4 for vector because the per-chunk size is dramatically larger.
         # Raster's chunks are ~5 bytes each (RasterPixelRunCommand is
         # run-length-encoded), so 32 chunks × 5 bytes = ~160 bytes queued on
         # OUT before the first token release. Vector carries x/y/dwell
         # triples for every pixel, so at latency=8196 each chunk is ~49 KB
-        # and at latency=65536 each is ~393 KB. MAX_PIPELINE=32 inherited
-        # from raster puts 1.5 MB – 12 MB on the OUT path before any token
-        # returns, which either stalls bulk_write (TimeoutError) or trips
-        # the demultiplexer _out_buffer assertion. 4 keeps the in-flight
-        # window bounded while still hiding USB round-trip latency.
-        MAX_PIPELINE = 4
+        # and at latency=65536 each is ~393 KB. max_pipeline=32 would put
+        # 1.5 MB – 12 MB on the OUT path before any token returns, which
+        # either stalls bulk_write (TimeoutError) or trips the demultiplexer
+        # _out_buffer assertion. 4 keeps the in-flight window bounded while
+        # still hiding USB round-trip latency.
+        max_pipeline = self._max_pipeline
 
-        tokens = MAX_PIPELINE
+        tokens = max_pipeline
         token_fut = asyncio.Future()
 
         async def sender():
@@ -159,65 +221,58 @@ class VectorScanCommand(BaseCommand):
                     await FlushCommand().transfer(stream)
                     await token_fut
                 if self.abort.is_set():
-                    ## go to a blanked state after an aborted frame
+                    # go to a blanked state after an aborted frame
                     commands.extend(bytes(BlankCommand(enable=True,
                                                        inline=False)))
                 await stream.write(commands)
-                # FIX 2: per-chunk host-side flush, matching
-                # RasterScanCommand.sender. Without this, stream.write()
+                # Per-chunk host-side flush. Without this, stream.write()
                 # only appends to the demultiplexer _out_buffer and the
                 # data doesn't reach the device until something else
                 # flushes (a FlushCommand or an auto-flush threshold).
                 # The token-based pacing then loses sync with the actual
-                # device-visible state, which is why the previous run
-                # froze at exactly MAX_PIPELINE+1 = 33 chunks.
+                # device-visible state, freezing exactly at
+                # max_pipeline+1 chunks.
                 await stream.flush()
                 tokens -= 1
                 if self.abort.is_set():
                     break
                 await asyncio.sleep(0)
 
-            # FIX 3: pipeline-drain padding, mirroring
-            # RasterScanCommand.sender's tail. After the last real chunk
-            # the Supersampler → BusController → PipelinedLoopbackAdapter
-            # still holds pixels of scan output; they only get pushed out
-            # once more pixel commands flow in behind them. Without this
-            # padding, the final recv_res on the host blocks forever
-            # waiting for data that's physically stuck in FPGA FIFOs.
+            # ---------- pipeline-drain padding -----------------------------
+            # Mirrors RasterScanCommand.sender's tail. After the last real
+            # chunk the Supersampler → BusController →
+            # PipelinedLoopbackAdapter still holds pixels of scan output;
+            # they only get pushed out once more pixel commands flow in
+            # behind them. Without this padding, the final recv_res on
+            # the host blocks forever waiting for data physically stuck
+            # in FPGA FIFOs.
+            #
             # These padding pixels produce output too, but the receiver
             # loop iterates self._processed_points and stops before
             # reading them — so they sit harmlessly in the host
             # _in_buffer until teardown.
             #
-            # Padding size uses raster's empirical 0.5% rule. A fixed
-            # floor of 128 was too small: on the 2048×2048 run it only
-            # drained 128 pixels, leaving chunks 511–512 (~14k pixels)
-            # trapped and timing out the final reads. Scaling with total
-            # scan size matches how raster sizes the drain for a 512×512
-            # frame (1310 pixels) and puts us at ~21k padding for a
-            # 2048×2048 vector scan, which covers the observed tail.
+            # Padding size: floor (drain_floor_pixels) OR 0.5% of total
+            # scan pixels, whichever is larger. The 0.5% term covers
+            # very large scans where per-pixel buffering accumulates;
+            # for small scans the floor wins.
             if self._processed:
                 total_pixels = sum(pc for _, pc in self._processed_points)
             else:
                 total_pixels = 0
-            # The floor must exceed FPGA pipeline depth (see module-level
-            # comment near _FPGA_PIPELINE_DEPTH_PIXELS). The 0.5% term is
-            # a safety margin for very large scans where any per-pixel
-            # buffering accumulates; for small scans the floor wins.
-            PADDING_PIXELS = max(self._drain_floor_pixels,
-                                 total_pixels // 200)
+            padding_pixels = max(self._drain_floor_pixels, total_pixels // 200)
             self._logger.debug(
-                f"drain padding: {PADDING_PIXELS} px "
+                f"vector drain padding: {padding_pixels} px "
                 f"(floor={self._drain_floor_pixels}, "
                 f"scan_pixels={total_pixels}, "
                 f"ratio_term={total_pixels // 200})"
             )
             padding_body = bytearray()
-            for _ in range(PADDING_PIXELS):
+            for _ in range(padding_pixels):
                 padding_body.extend(struct.pack(">HHH", 0, 0, 1))
             padding = (
                 bytes(ArrayCommand(cmdtype=CmdType.VectorPixel,
-                                   array_length=PADDING_PIXELS - 1))
+                                   array_length=padding_pixels - 1))
                 + bytes(padding_body)
             )
             await stream.write(padding)
@@ -230,46 +285,47 @@ class VectorScanCommand(BaseCommand):
         ).transfer(stream)
         sender_task = asyncio.create_task(sender())
 
-        cookie = await stream.read(4)  # just assume these are exactly FFFF + cookie, and discard them
-        ## TODO: assert against synchronization result
+        # Discard the FFFF + cookie reply.
+        # TODO: assert against synchronization result
+        cookie = await stream.read(4)
         try:
             for commands, pixel_count in self._iter_chunks(latency):
                 tokens += 1
                 if tokens == 1:
                     token_fut.set_result(None)
                     token_fut = asyncio.Future()
-                if tokens == MAX_PIPELINE + 1:
+                if tokens == max_pipeline + 1:
                     if self.abort.is_set():
                         break
                 self._logger.debug(f"recver: tokens={tokens}")
                 yield await self.recv_res(pixel_count, stream, self._output_mode)
         finally:
-            # FIX 4: wait for the sender to finish its drain padding +
-            # final flush before this generator returns.
+            # Wait for the sender to finish its drain padding + final
+            # flush before this generator returns.
             #
             # The receiver's `for` loop exhausts as soon as the last real
             # chunk is read back, but the sender at that point is still
-            # pumping ~21k pixel commands (the drain padding) and parked
-            # in `await stream.flush()`. Without this wait, the caller's
+            # pumping ~drain_floor_pixels pixel commands and parked in
+            # `await stream.flush()`. Without this wait, the caller's
             # `_post_transfer_cleanup` runs `_hard_close` which cancels
             # the demultiplexer's in-flight `bulk_write`, and the sender
-            # task surfaces 10s later as
+            # task surfaces 10 s later as
             #     "Task exception was never retrieved: TimeoutError"
             # via asyncio's default exception handler. Awaiting here
             # lets the padding flush through cleanly while the USB
             # stack is still alive.
             #
-            # A timeout bounds the worst case where the FPGA pipeline
-            # genuinely stalls (e.g. IN FIFO not draining) — we'd
-            # rather log + cancel than hang the test forever.
+            # The timeout bounds the worst case where the FPGA pipeline
+            # genuinely stalls (e.g. IN FIFO not draining) — we'd rather
+            # log + cancel than hang the test forever.
             if not sender_task.done():
                 try:
                     await asyncio.wait_for(
-                        sender_task, timeout=_SENDER_DRAIN_TIMEOUT_S)
+                        sender_task, timeout=self._sender_drain_timeout_s)
                 except asyncio.TimeoutError:
                     self._logger.warning(
                         f"sender task did not finish drain in "
-                        f"{_SENDER_DRAIN_TIMEOUT_S:.0f}s; cancelled")
+                        f"{self._sender_drain_timeout_s:.0f}s; cancelled")
                 except asyncio.CancelledError:
                     raise
                 except Exception:

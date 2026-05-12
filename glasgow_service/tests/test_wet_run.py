@@ -1,20 +1,33 @@
+"""Service-layer wet-run tests.
+
+Runs one raster and one vector scan via DeviceService.run_raster /
+run_vector, with parameters sourced from streamData.json overridden by
+PARAM_OVERRIDES below. Asserts the full validation report passes.
+
+Two things were broken in the previous version and have been fixed here:
+  * `save_csv` / `csv_path` no longer exist on RasterRequest / ScanResult
+    (CSV is on-demand from /scan/last/csv now). References to them are
+    removed.
+  * Defaults were pulled from the camelCase JSON keys directly
+    (`pixels`, `frameBlank`, `latency`). They now come through
+    DeviceService.defaults()["raster_params"] / ["vector_params"], which
+    are normalized snake_case from RasterParams / VectorParams — so this
+    test is a check that the JSON-to-API translation is intact.
+"""
 import asyncio
 import os
 import unittest
 from pathlib import Path
 
-from glasgow_service.config import find_config_path
 from glasgow_service.service import DeviceService
-from glasgow_service.models  import (
+from glasgow_service.models import (
     RasterRequest, VectorRequest, VectorPattern,
 )
 
-CONFIG_PATH = os.environ.get("GLASGOW_CONFIG")
-if CONFIG_PATH is None:
-    resolved = find_config_path(required=False)
-    CONFIG_PATH = str(resolved) if resolved else str(
-        Path(__file__).resolve().parents[2] / "GlasgowDataIO" / "Json" / "streamData.json"
-    )
+CONFIG_PATH = os.environ.get(
+    "GLASGOW_CONFIG",
+    "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
+)
 
 
 def _service_available() -> bool:
@@ -23,14 +36,13 @@ def _service_available() -> bool:
 
 @unittest.skipUnless(_service_available(), f"no config at {CONFIG_PATH}")
 class WetRunRasterTest(unittest.TestCase):
-    """Replaces the raster test_scan_wet_run: runs one raster scan with
-    values from streamData.json (or overrides below), writes the CSV,
-    and asserts the full validation report passes."""
+    """Runs one raster scan with values from streamData.json overridden by
+    PARAM_OVERRIDES, asserts the validation report passes, and confirms
+    the in-memory cache for /scan/last/csv was populated."""
 
-    # Override individual request fields here; anything omitted falls back
-    # to the streamData.json defaults via RasterRequest field defaults.
-    REQUEST_OVERRIDES: dict = {
-        "save_csv": True,
+    # Anything in here wins over streamData.json. The Pydantic model
+    # supplies its own defaults for anything missing from both sides.
+    PARAM_OVERRIDES: dict = {
         "do_validate": True,
     }
 
@@ -42,14 +54,19 @@ class WetRunRasterTest(unittest.TestCase):
         asyncio.run(self.svc.stop())
 
     def _build_request(self) -> RasterRequest:
-        defaults = self.svc.defaults()["raster"]
+        # Pull normalized snake_case defaults from the service. The raw
+        # camelCase JSON block is also under defaults()["raster"] for any
+        # caller that needs it, but this test wants the API shape.
+        params = self.svc.defaults().get("raster_params", {}) or {}
         payload = {
-            "resolution":    defaults.get("resolution", 512),
-            "dwell":         defaults.get("dwell", 2),
-            "latency_bytes": defaults.get("pixels", 8192) * 2,
-            "frame_blank":   defaults.get("frameBlank", False),
+            "resolution":    params.get("resolution", 512),
+            "dwell":         params.get("dwell", 2),
+            "latency_bytes": params.get("latency_bytes", 16384),
+            "frame_blank":   params.get("frame_blank", False),
+            "output_mode":   params.get("output_mode", "SixteenBit"),
+            "cookie":        params.get("cookie", 123),
         }
-        payload.update(self.REQUEST_OVERRIDES)
+        payload.update(self.PARAM_OVERRIDES)
         return RasterRequest(**payload)
 
     def test_scan_wet_run(self):
@@ -58,12 +75,18 @@ class WetRunRasterTest(unittest.TestCase):
 
         result = asyncio.run(self.svc.run_raster(req))
 
+        # csv_path was removed from ScanResult; CSV is on-demand from
+        # /scan/last/csv and the in-memory cache. has_data tells us
+        # the cache is populated.
         print(f"[test] result chunks={result.chunks} "
               f"expected={result.expected_chunks} "
               f"pixels_per_chunk={result.pixels_per_chunk} "
               f"send_time={result.send_time_s:.3f}s "
-              f"csv={result.csv_path}", flush=True)
+              f"has_data={result.has_data}", flush=True)
 
+        self.assertTrue(result.has_data,
+                        "result.has_data is False — in-memory cache not populated, "
+                        "so /scan/last/csv would 404")
         self.assertIsNotNone(result.validation)
         for check in result.validation.checks:
             print(f"  [{'PASS' if check.passed else 'FAIL'}] "
@@ -78,14 +101,12 @@ class WetRunRasterTest(unittest.TestCase):
 
 @unittest.skipUnless(_service_available(), f"no config at {CONFIG_PATH}")
 class WetRunVectorTest(unittest.TestCase):
-    """Replaces the vector test_scan_wet_run: runs one default-pattern
-    vector scan, optionally pre-processes, writes the CSV, asserts
-    validation passes."""
+    """Runs one default-pattern vector scan with pre-processing on,
+    asserts validation passes."""
 
-    REQUEST_OVERRIDES: dict = {
+    PARAM_OVERRIDES: dict = {
         "pattern":     VectorPattern.default,
         "pre_process": True,
-        "save_csv":    True,
         "do_validate": True,
     }
 
@@ -97,9 +118,14 @@ class WetRunVectorTest(unittest.TestCase):
         asyncio.run(self.svc.stop())
 
     def _build_request(self) -> VectorRequest:
-        defaults = self.svc.defaults()["vector"]
-        payload = {"latency_bytes": defaults.get("latency", 8196)}
-        payload.update(self.REQUEST_OVERRIDES)
+        params = self.svc.defaults().get("vector_params", {}) or {}
+        payload = {
+            "latency_bytes":     params.get("latency_bytes", 8196),
+            "vector_resolution": params.get("vector_resolution", 2048),
+            "output_mode":       params.get("output_mode", "SixteenBit"),
+            "cookie":            params.get("cookie", 123),
+        }
+        payload.update(self.PARAM_OVERRIDES)
         return VectorRequest(**payload)
 
     def test_scan_wet_run(self):
@@ -113,8 +139,10 @@ class WetRunVectorTest(unittest.TestCase):
         print(f"[test] result chunks={result.chunks} bytes={result.bytes} "
               f"process_time={process_s} "
               f"send_time={result.send_time_s:.3f}s "
-              f"csv={result.csv_path}", flush=True)
+              f"has_data={result.has_data}", flush=True)
 
+        self.assertTrue(result.has_data,
+                        "result.has_data is False — in-memory cache not populated")
         self.assertIsNotNone(result.validation)
         for check in result.validation.checks:
             print(f"  [{'PASS' if check.passed else 'FAIL'}] "

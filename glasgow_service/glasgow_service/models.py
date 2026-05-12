@@ -5,6 +5,13 @@ scan run. The browser pulls CSV / PNG figure bytes on demand from
 /scan/last/* endpoints. So `save_csv`, `csv_dir`, and `csv_path` are
 gone, replaced by `has_data` on the result so the UI knows when the
 download buttons can be enabled.
+
+`output_mode` was added to RasterRequest in the scan-params refactor.
+It was already a field on RasterScanCommand (defaulting to SixteenBit)
+but had no way to flow through the REST API — VectorRequest had it,
+RasterRequest didn't, so hardware always got the default. Adding it
+here closes that gap. Defaulting to "SixteenBit" keeps the wire format
+backward compatible with frontends that don't send the field yet.
 """
 from enum import Enum
 from typing import List, Optional, Tuple
@@ -34,6 +41,9 @@ class RasterRequest(BaseModel):
     latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
     frame_blank:   bool = False
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
+    # New in scan-params refactor. Was previously hardcoded to SixteenBit
+    # inside the macro because the API had no field for it.
+    output_mode:   str  = Field("SixteenBit", description="SixteenBit or EightBit.")
 
     # Wet-run extras (REST only; WebSocket streaming ignores these):
     do_validate: bool = Field(True, description="Run chunk-count / size / padding checks and return the report.")
@@ -53,9 +63,11 @@ class RasterRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {"resolution": 512,  "dwell": 2, "latency_bytes": 16384,
-                 "frame_blank": False, "do_validate": True},
+                 "frame_blank": False, "output_mode": "SixteenBit",
+                 "do_validate": True},
                 {"resolution": 1024, "dwell": 3, "latency_bytes": 16384,
-                 "frame_blank": False, "do_validate": True},
+                 "frame_blank": False, "output_mode": "SixteenBit",
+                 "do_validate": True},
             ]
         }
     }

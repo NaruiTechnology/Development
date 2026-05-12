@@ -229,7 +229,7 @@ class FrameBuffer:
         else:
             return False
 
-    async def _capture_frame_iter_fill(self, *, frame: Frame, x_range:DACCodeRange, y_range:DACCodeRange, dwell_time: int, latency:int=65536):
+    async def _capture_frame_iter_fill(self, *, frame: Frame, x_range:DACCodeRange, y_range:DACCodeRange, dwell_time: int, latency:int=65536, cookie:int=123, output_mode:OutputMode=OutputMode.SixteenBit, frame_blank:bool=False):
         """
         Core function for capturing image data produced by a raster scan into a 2D array.
 
@@ -240,6 +240,11 @@ class FrameBuffer:
             dwell_time
             latency (optional): Send chunks of pixels that will take no longer \
                                     than this many dwell times to execute. Defaults to 65536.
+            cookie (optional): Synchronization cookie for the RasterScanCommand. Was previously
+                hardcoded to 123, which silently ignored anything passed in via **kwargs.
+            output_mode (optional): Output bit depth. Default SixteenBit matches the previous
+                implicit default in RasterScanCommand.
+            frame_blank (optional): Blank between frames. Default False matches the API.
         Yields:
             :class:`Frame`: A :class:`Frame` object is yielded each time new pixels are added
         """
@@ -249,7 +254,20 @@ class FrameBuffer:
 
         await self.conn.transfer(BlankCommand(enable=False, inline=True))
 
-        cmd = RasterScanCommand(cookie=123,x_range=x_range, y_range=y_range, dwell_time=dwell_time)
+        # cookie / output_mode / frame_blank now flow through as explicit
+        # params (with sensible defaults) instead of being baked into a
+        # `cookie=123` literal here. Callers that don't care still get
+        # exactly the previous behavior; callers that do pass their own
+        # values (the service, validated tests) now have those values
+        # respected end-to-end.
+        cmd = RasterScanCommand(
+            cookie=cookie,
+            x_range=x_range,
+            y_range=y_range,
+            dwell_time=dwell_time,
+            output_mode=output_mode,
+            frame_blank=frame_blank,
+        )
         self.abort = cmd.abort
         #self.conn._synchronized = False
         async for chunk in self.conn.transfer_multiple(cmd, latency=latency):
@@ -343,12 +361,28 @@ class FrameBuffer:
             self.current_frame = frame
             yield frame
     
-    async def capture_vector_frame(self, *, iter_points=default_iter()):
+    async def capture_vector_frame(self, *, iter_points=None,
+                                   cookie:int=123,
+                                   output_mode:OutputMode=OutputMode.SixteenBit,
+                                   latency:int=65536,
+                                   x_res:int=2048, y_res:int=2048):
+        """Capture a vector scan into a Frame.
+
+        cookie, output_mode, latency, x_res, y_res were previously hardcoded
+        inline (cookie=123, output_mode=SixteenBit, latency=65536, frame size
+        2048x2048). They are now explicit parameters so the service / tests
+        can pass values from RasterParams/VectorParams without editing this
+        file. iter_points default is evaluated per-call to avoid the
+        mutable-default-argument trap (previously a generator was bound at
+        class-definition time and exhausted on second use)."""
+        if iter_points is None:
+            iter_points = default_iter()
         send_iter, recv_iter = itertools.tee(iter_points)
         import time
-        cmd = VectorScanCommand(cookie=123, output_mode=OutputMode.SixteenBit, iter_points=send_iter)
+        cmd = VectorScanCommand(cookie=cookie, output_mode=output_mode,
+                                iter_points=send_iter)
         start_proc = time.perf_counter()
-        cmd._pre_process_chunks(latency=65536)
+        cmd._pre_process_chunks(latency=latency)
         end_proc = time.perf_counter()
         res = array.array('H')
         start_send = time.perf_counter()
@@ -357,7 +391,7 @@ class FrameBuffer:
         stop_send = time.perf_counter()
         print(f"{len(res)=}")
         start_process = time.perf_counter()
-        newframe = Frame.fill_vector(res, recv_iter, 2048, 2048)
+        newframe = Frame.fill_vector(res, recv_iter, x_res, y_res)
         end_process = time.perf_counter()
         print(f"pre-process time: {end_proc-start_proc:04f}, send time: {stop_send-start_send:04f}, process time: {end_process-start_process:04f}")
         #self.current_frame.canvas = newframe
