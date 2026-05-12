@@ -7,12 +7,23 @@
  *   resolution    1..2048
  *   dwell         1..65535
  *   latency_bytes >= 2
+ *
+ * Every parameter has an inline "?" help button next to its label,
+ * opening a modal with a technical explanation. Help components
+ * live in their own files (one per parameter, e.g. ResolutionHelp,
+ * LatencyHelp, …), following the original DwellHelp convention.
  */
 import { type ReactNode } from "react";
 
 import { updateRaster } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { DwellHelp } from "./DwellHelp";
+import { ResolutionHelp } from "./ResolutionHelp";
+import { LatencyHelp } from "./LatencyHelp";
+import { CookieHelp } from "./CookieHelp";
+import { OutputModeHelp } from "./OutputModeHelp";
+import { FrameBlankHelp } from "./FrameBlankHelp";
+import { ValidationHelp } from "./ValidationHelp";
 
 const RES_PRESETS = [256, 512, 1024, 2048];
 const DWELL_PRESETS = [1, 2, 4, 8, 16, 32];
@@ -27,6 +38,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
       <div className="field-row">
         <PresetField
           label="Resolution"
+          labelAdornment={<ResolutionHelp />}
           value={r.resolution}
           presets={RES_PRESETS}
           disabled={disabled}
@@ -45,13 +57,17 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
       <div className="field-row">
         <PresetField
           label="Latency (bytes)"
+          labelAdornment={<LatencyHelp />}
           value={r.latency_bytes}
           presets={LATENCY_PRESETS}
           disabled={disabled}
           onChange={(v) => dispatch(updateRaster({ latency_bytes: v }))}
         />
         <div className="field">
-          <label>Cookie</label>
+          <label>
+            Cookie
+            <CookieHelp />
+          </label>
           <input
             className="input"
             type="number"
@@ -69,7 +85,10 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
       {/* output_mode is new — see types/api.ts. Optional on the wire, so
           existing scans without it keep working. */}
       <div className="field">
-        <label>Output mode</label>
+        <label>
+          Output mode
+          <OutputModeHelp />
+        </label>
         <select
           className="select"
           value={r.output_mode ?? "SixteenBit"}
@@ -87,6 +106,9 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         </select>
       </div>
 
+      {/* Help button placement on a checkbox: inline at the end of the
+          label text. The .field > label flex rule keeps it on the same
+          baseline as the label. */}
       <label className="checkbox">
         <input
           type="checkbox"
@@ -95,6 +117,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           onChange={(e) => dispatch(updateRaster({ frame_blank: e.target.checked }))}
         />
         Frame blank (start and end blanked)
+        <FrameBlankHelp />
       </label>
 
       <div className="divider" />
@@ -111,6 +134,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           onChange={(e) => dispatch(updateRaster({ do_validate: e.target.checked }))}
         />
         Run chunk-count / size / padding checks
+        <ValidationHelp />
       </label>
 
       <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>

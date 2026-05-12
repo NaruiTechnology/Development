@@ -4,11 +4,25 @@
  *
  * Custom-points input accepts CSV-like text: one "x,y,dwell" triple per
  * line. We cap at 1 000 000 points to match the Pydantic max_length.
+ *
+ * Every parameter has an inline "?" help button next to its label,
+ * opening a modal with a technical explanation. Help components
+ * live in their own files (Pattern, VectorResolutionHelp, …) and
+ * are shared with RasterParameters where the field has the same
+ * meaning (LatencyHelp, CookieHelp, OutputModeHelp, ValidationHelp).
  */
 import { useState } from "react";
 
 import { updateVector } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
+import { LatencyHelp } from "./LatencyHelp";
+import { CookieHelp } from "./CookieHelp";
+import { OutputModeHelp } from "./OutputModeHelp";
+import { PatternHelp } from "./PatternHelp";
+import { VectorResolutionHelp } from "./VectorResolutionHelp";
+import { CustomPointsHelp } from "./CustomPointsHelp";
+import { PreProcessHelp } from "./PreProcessHelp";
+import { ValidationHelp } from "./ValidationHelp";
 
 const MAX_POINTS = 1_000_000;
 
@@ -48,7 +62,10 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
   return (
     <div>
       <div className="field">
-        <label>Pattern</label>
+        <label>
+          Pattern
+          <PatternHelp />
+        </label>
         <select
           className="select"
           value={v.pattern}
@@ -66,7 +83,10 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
 
       {v.pattern === "default" && (
         <div className="field">
-          <label>Resolution (samples per axis)</label>
+          <label>
+            Resolution (samples per axis)
+            <VectorResolutionHelp />
+          </label>
           <select
             className="select"
             value={String(v.vector_resolution)}
@@ -97,7 +117,10 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
 
       <div className="field-row">
         <div className="field">
-          <label>Latency (bytes)</label>
+          <label>
+            Latency (bytes)
+            <LatencyHelp />
+          </label>
           <input
             className="input"
             type="number"
@@ -114,7 +137,10 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           />
         </div>
         <div className="field">
-          <label>Output mode</label>
+          <label>
+            Output mode
+            <OutputModeHelp />
+          </label>
           <select
             className="select"
             value={v.output_mode}
@@ -134,7 +160,10 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
       </div>
 
       <div className="field">
-        <label>Cookie</label>
+        <label>
+          Cookie
+          <CookieHelp />
+        </label>
         <input
           className="input"
           type="number"
@@ -150,7 +179,10 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
 
       {v.pattern === "custom" && (
         <div className="field">
-          <label>Custom points (x,y,dwell per line)</label>
+          <label>
+            Custom points (x,y,dwell per line)
+            <CustomPointsHelp />
+          </label>
           <textarea
             className="input"
             style={{ minHeight: 110, fontFamily: "var(--font-mono)" }}
@@ -185,6 +217,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           onChange={(e) => dispatch(updateVector({ pre_process: e.target.checked }))}
         />
         Pre-process chunks (timed separately as <code>process_time_s</code>)
+        <PreProcessHelp />
       </label>
 
       <label className="checkbox">
@@ -195,6 +228,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           onChange={(e) => dispatch(updateVector({ do_validate: e.target.checked }))}
         />
         Run non-empty / padding checks
+        <ValidationHelp />
       </label>
     </div>
   );
