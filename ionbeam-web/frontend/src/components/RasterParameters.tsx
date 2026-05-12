@@ -8,8 +8,11 @@
  *   dwell         1..65535
  *   latency_bytes >= 2
  */
+import { type ReactNode } from "react";
+
 import { updateRaster } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
+import { DwellHelp } from "./DwellHelp";
 
 const RES_PRESETS = [256, 512, 1024, 2048];
 const DWELL_PRESETS = [1, 2, 4, 8, 16];
@@ -31,6 +34,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         />
         <PresetField
           label="Dwell"
+          labelAdornment={<DwellHelp />}
           value={r.dwell}
           presets={DWELL_PRESETS}
           disabled={disabled}
@@ -103,11 +107,15 @@ function PresetField(props: {
   presets: number[];
   disabled: boolean;
   onChange: (v: number) => void;
+  labelAdornment?: ReactNode;
 }) {
-  const { label, value, presets, disabled, onChange } = props;
+  const { label, value, presets, disabled, onChange, labelAdornment } = props;
   return (
     <div className="field">
-      <label>{label}</label>
+      <label>
+        {label}
+        {labelAdornment}
+      </label>
       <select
         className="select"
         value={String(value)}
