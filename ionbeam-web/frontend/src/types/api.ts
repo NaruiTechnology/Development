@@ -61,6 +61,22 @@ export interface SimulationBitmap {
   pixels: number[];
 }
 
+/**
+ * ROI bounds, in DAC codes (0..16383). The backend feeds these
+ * directly into `DACCodeRange(start=lo, count=N, step=…)` — no
+ * scaling, no unit conversion. The frontend is responsible for
+ * mapping any user-facing world units (µm, mm, etc. — entered in
+ * the ROI editor's "X origin / X end / Y origin / Y end" inputs)
+ * into this DAC range before sending the request.
+ *
+ * See `worldSelectionToDacROI` in `lib/bitmapVector.ts` for the
+ * mapping. The full FOV (`x_origin..x_end`, `y_origin..y_end` in
+ * world units) corresponds to the full DAC range 0..16383.
+ *
+ * Pydantic enforces `0 ≤ x_start, x_end ≤ 16383` and rejects
+ * `x_start == x_end` (zero-width ROI) — see ROIRequest in
+ * glasgow_service.models.
+ */
 export interface ROIRequest {
   x_start: number;
   x_end: number;
