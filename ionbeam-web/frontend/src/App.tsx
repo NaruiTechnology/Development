@@ -25,6 +25,7 @@ import { setKind, streamReset, type ScanKind } from "./store/scanSlice";
 import { resetRaster, resetVector } from "./store/imageSlice";
 import { fetchDefaults } from "./store/statusSlice";
 import { useAppDispatch, useAppSelector } from "./store";
+import { useTranslation } from "./i18n";
 
 const RIGHT_PANEL_STORAGE_KEY = "ionbeam:rightPanelWidth";
 const DEFAULT_RIGHT_PANEL_WIDTH = 720;
@@ -34,6 +35,7 @@ const SPLITTER_SPACE = 32;
 
 export function App() {
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
@@ -142,6 +144,15 @@ export function App() {
     "--right-panel-width": `${Math.round(rightPanelWidth)}px`,
   } as CSSProperties;
 
+  // The image-panel title key flips with the active tab. Picking it
+  // up front rather than inline below means the JSX stays readable.
+  const imagePanelTitleKey =
+    kind === "raster"
+      ? "card.rasterImage"
+      : kind === "vector"
+      ? "card.vectorPattern"
+      : "card.roiPreview";
+
   return (
     <div className="app-shell">
       <Header />
@@ -154,17 +165,17 @@ export function App() {
         {/* left column */}
         <section>
           <div className="card">
-            <div className="tabs" role="tablist" aria-label="Scan kind">
+            <div className="tabs" role="tablist" aria-label={t("tabs.aria")}>
               <button
                 role="tab"
                 className="tab tab--roi"
                 aria-selected={kind === "roi"}
                 disabled={scanActive}
                 onClick={() => selectKind("roi")}
-                title={scanActive ? "ROI is inactive while a scan is running" : "Edit ROI"}
+                title={scanActive ? t("tabs.roi.title.disabled") : t("tabs.roi.title")}
               >
                 <Icon name="target" tone="tab" />
-                ROI
+                {t("tabs.roi")}
               </button>
               <button
                 role="tab"
@@ -174,7 +185,7 @@ export function App() {
                 onClick={() => selectKind("raster")}
               >
                 <Icon name="grid" tone="tab" />
-                Raster
+                {t("tabs.raster")}
               </button>
               <button
                 role="tab"
@@ -184,7 +195,7 @@ export function App() {
                 onClick={() => selectKind("vector")}
               >
                 <Icon name="route" tone="tab" />
-                Vector
+                {t("tabs.vector")}
               </button>
             </div>
             <div className="card__body">
@@ -202,7 +213,7 @@ export function App() {
             <>
               <div className="card">
                 <div className="card__header">
-                  <span className="card__title">Controls</span>
+                  <span className="card__title">{t("card.controls")}</span>
                 </div>
                 <div className="card__body">
                   <ScanControls kind={kind as ScanKind} />
@@ -210,7 +221,7 @@ export function App() {
               </div>
               <div className="card">
                 <div className="card__header">
-                  <span className="card__title">Run report</span>
+                  <span className="card__title">{t("card.runReport")}</span>
                 </div>
                 <ValidationPanel />
               </div>
@@ -222,7 +233,7 @@ export function App() {
         <div
           className="panel-resizer"
           role="separator"
-          aria-label="Resize image panel"
+          aria-label={t("card.rasterImage")  /* generic; not user-visible string */}
           aria-orientation="vertical"
           tabIndex={0}
           onPointerDown={(event) => {
@@ -251,9 +262,7 @@ export function App() {
         <section>
           <div className="card image-panel-card">
             <div className="card__header">
-              <span className="card__title">
-                {kind === "raster" ? "Raster image" : kind === "vector" ? "Vector pattern" : "ROI preview"}
-              </span>
+              <span className="card__title">{t(imagePanelTitleKey)}</span>
             </div>
             <div className="card__body">
               {kind === "roi" ? (

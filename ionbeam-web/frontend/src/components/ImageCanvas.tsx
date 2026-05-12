@@ -21,6 +21,7 @@ import {
   type VectorRenderMode,
 } from "../store/scanSlice";
 import type { ROIRequest } from "../types/api";
+import { useTranslation, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
 
 const DAC_RANGE = 2048;
@@ -31,8 +32,28 @@ interface PaintStats {
   populated: number;
 }
 
+// Phase values from the scan slice are stable wire-format strings. Map
+// each to a translation key here so the meta row can show them in the
+// operator's language while the slice stays language-agnostic.
+const PHASE_KEYS: Record<string, TranslationKey> = {
+  idle: "phase.idle",
+  running: "phase.running",
+  stopping: "phase.stopping",
+  paused: "phase.paused",
+  completed: "phase.completed",
+  error: "phase.error",
+};
+
+// Same for the kind label in the server-figure alt attribute.
+const KIND_KEYS: Record<string, TranslationKey> = {
+  raster: "tabs.raster",
+  vector: "tabs.vector",
+  roi: "tabs.roi",
+};
+
 export function ImageCanvas({ kind }: { kind: ScanKind }) {
   const dispatch = useAppDispatch();
+  const { t, fmt } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [stats, setStats] = useState<PaintStats>({ min: 0, max: 0, populated: 0 });
   const [serverFigureUrl, setServerFigureUrl] = useState<string | null>(null);
@@ -64,13 +85,8 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
   const showServerFigure = phase === "completed" || phase === "paused";
 
-  // Render-mode picker shows only for vector + default pattern. In
-  // custom mode the buffer is already 2048-wide and "decimated" doesn't
-  // mean anything; the toggle stays hidden to avoid confusion.
   const showModeToggle = kind === "vector" && vectorPattern === "default";
 
-  // Native-mode block-fill stride. Only meaningful for default pattern;
-  // custom always paints at 1:1 since coordinates are already DAC codes.
   const stride =
     kind === "vector" && vectorPattern === "default" && vectorEdge > 0
       ? Math.max(1, Math.floor(DAC_RANGE / vectorEdge))
@@ -84,9 +100,6 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       const s = paintGrayscale(canvas, frame, resolution, cursor);
       setStats(s);
     } else if (kind === "vector" && vectorPattern === "default" && renderMode === "native" && stride > 1) {
-      // Block-fill into a 2048x2048 canvas. Each buffer cell paints a
-      // stride x stride square. For stride==1 this is identical to
-      // decimated, so we fall through to the dense-paint path.
       const s = paintVectorDefaultBlockFill(canvas, vectorImage, vectorEdge, vectorCursor, stride);
       setStats(s);
     } else if (kind === "vector" && vectorPattern === "default") {
@@ -96,7 +109,6 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       const s = paintVectorCustom(canvas, vectorImage, vectorEdge, vectorCustomRenderPoints, vectorCursor);
       setStats(s);
     } else {
-      // Empty custom-vector setup, before points have been loaded.
       const s = paintGrayscale(canvas, vectorImage, vectorEdge, vectorCursor);
       setStats(s);
     }
@@ -189,10 +201,6 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
     Boolean(serverFigureUrl) &&
     phase === "completed";
 
-  // Canvas native size depends on mode for vector:
-  //   raster:                                 resolution
-  //   vector decimated, or default stride==1: vectorEdge
-  //   vector native (default with stride>1):  DAC_RANGE
   let nativeEdge: number;
   if (kind === "raster") {
     nativeEdge = resolution;
@@ -201,11 +209,17 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   } else {
     nativeEdge = vectorEdge;
   }
+
+  const phaseKey = PHASE_KEYS[phase];
+  const kindKey = KIND_KEYS[kind];
+  const phaseLabel = phaseKey ? t(phaseKey) : phase;
+  const kindLabel = kindKey ? t(kindKey) : kind;
+
   return (
     <div>
       {showModeToggle && (
         <div className="row" style={{ marginBottom: 10, gap: 8 }}>
-          <span className="card__title" id="render-mode-label">View</span>
+          <span className="card__title" id="render-mode-label">{t("canvas.view")}</span>
           <div
             className="segmented"
             role="radiogroup"
@@ -221,21 +235,21 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
                 className="segmented__btn"
                 title={
                   m === "decimated"
-                    ? `Dense ${vectorEdge}×${vectorEdge} image — pixels = sample indices`
-                    : `Native ${DAC_RANGE}×${DAC_RANGE} with stride ${stride} block-fill — pixels = DAC codes`
+                    ? t("canvas.view.decimated.title", { edge: vectorEdge })
+                    : t("canvas.view.native.title", { edge: DAC_RANGE, stride })
                 }
                 onClick={() => dispatch(setVectorRenderMode(m))}
               >
                 <Icon name={m === "decimated" ? "scan" : "grid"} tone="accent" />
                 {m === "decimated"
-                  ? `Decimated (${vectorEdge}×${vectorEdge})`
-                  : `Native (${DAC_RANGE}×${DAC_RANGE})`}
+                  ? t("canvas.view.decimated", { edge: vectorEdge })
+                  : t("canvas.view.native", { edge: DAC_RANGE })}
               </button>
             ))}
           </div>
           {stride === 1 && (
             <span className="muted" style={{ fontSize: 11 }}>
-              stride 1 — both views are identical
+              {t("canvas.view.identical")}
             </span>
           )}
         </div>
@@ -255,7 +269,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
           <img
             className="server-figure"
             src={serverFigureUrl}
-            alt={`${kind} scan rendered by glasgow_service`}
+            alt={t("canvas.serverFigure.alt", { kind: kindLabel })}
             draggable={false}
             onDragStart={(e) => e.preventDefault()}
           />
@@ -265,10 +279,10 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
       {showServerFigure && !serverFigureUrl && (
         <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
           {serverFigureBusy
-            ? "Rendering server figure..."
+            ? t("canvas.serverFigure.rendering")
             : serverFigureError
-            ? `Server figure unavailable: ${serverFigureError}`
-            : "Using live preview."}
+            ? t("canvas.serverFigure.unavailable", { detail: serverFigureError })
+            : t("canvas.serverFigure.livePreview")}
         </div>
       )}
 
@@ -278,63 +292,67 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
 
       <div className="canvas-meta">
         <span>
-          phase <b>{phase}</b>
+          {t("canvas.meta.phase")} <b>{phaseLabel}</b>
         </span>
         <span>
-          chunks <b>{chunksReceived.toLocaleString()}</b>
+          {t("canvas.meta.chunks")} <b>{fmt(chunksReceived)}</b>
         </span>
         <span>
-          bytes <b>{bytesReceived.toLocaleString()}</b>
+          {t("canvas.meta.bytes")} <b>{fmt(bytesReceived)}</b>
         </span>
         <span>
-          resolution <b>{nativeEdge.toLocaleString()}×{nativeEdge.toLocaleString()}</b>
+          {t("canvas.meta.resolution")} <b>{fmt(nativeEdge)}×{fmt(nativeEdge)}</b>
         </span>
         {kind === "raster" ? (
           <>
             <span>
-              pixels{" "}
+              {t("canvas.meta.pixels")}{" "}
               <b>
-                {cursor.toLocaleString()} / {totalRasterPx.toLocaleString()}
+                {fmt(cursor)} / {fmt(totalRasterPx)}
               </b>
             </span>
           </>
         ) : (
           <>
             <span>
-              samples{" "}
+              {t("canvas.meta.samples")}{" "}
               <b>
-                {vectorCursor.toLocaleString()}
+                {fmt(vectorCursor)}
                 {totalVectorSamples > 0
-                  ? ` / ${totalVectorSamples.toLocaleString()}`
+                  ? ` / ${fmt(totalVectorSamples)}`
                   : ""}
               </b>
             </span>
             <span className="muted" style={{ fontSize: 11 }}>
-              {vectorPattern}
+              {/* vectorPattern is "default" / "custom" — pull the
+                  matching translated noun. */}
+              {vectorPattern === "default"
+                ? t("vector.pattern.default")
+                : t("vector.pattern.custom")}
               {vectorPattern === "default" && ` ${vectorEdge}×${vectorEdge}`}
             </span>
           </>
         )}
-        <span title="Active 2-D DUT-mapped scan region from the ROI editor.">
-          ROI{" "}
+        <span title={t("canvas.meta.roi.title")}>
+          {t("canvas.meta.roi")}{" "}
           <b>
             {formatPoint(activeRegion.x_start, activeRegion.y_start, roi.scale_unit)} →{" "}
             {formatPoint(activeRegion.x_end, activeRegion.y_end, roi.scale_unit)}
           </b>
         </span>
         {current && (
-          <span title="Current beam position derived from the latest received ADC sample index.">
-            beam <b>{formatPoint(current.x, current.y, roi.scale_unit)}</b>
+          <span title={t("canvas.meta.beam.title")}>
+            {t("canvas.meta.beam")} <b>{formatPoint(current.x, current.y, roi.scale_unit)}</b>
           </span>
         )}
         {current && (
-          <span title="ADC value at the current beam position.">
-            ADC now <b>{current.adc}</b>
+          <span title={t("canvas.meta.adcNow.title")}>
+            {t("canvas.meta.adcNow")} <b>{current.adc}</b>
           </span>
         )}
         {stats.populated > 0 && (
-          <span title="Raw ADC range in the received samples. Canvas auto-scales this range into visible grayscale.">
-            ADC <b>{stats.min}..{stats.max}</b>
+          <span title={t("canvas.meta.adcRange.title")}>
+            {t("canvas.meta.adcRange")} <b>{stats.min}..{stats.max}</b>
           </span>
         )}
       </div>
@@ -342,7 +360,14 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   );
 }
 
-/* -------- scan metadata helpers --------------------------------------- */
+/* -------- scan metadata helpers --------------------------------------- *
+ *
+ * Everything below is pure math / canvas rendering — no user-visible
+ * strings, no Redux access. Copied verbatim from the original. The
+ * paint functions operate on raw buffers and would only need
+ * translation if we ever surface their internal warnings/diagnostics,
+ * which we don't.
+ * --------------------------------------------------------------------- */
 
 interface CurrentBeamArgs {
   kind: ScanKind;
@@ -440,10 +465,6 @@ function formatCoord(v: number): string {
 
 /* -------- painters ----------------------------------------------------- */
 
-/**
- * `populated` indicates how much of the buffer has real data; the rest
- * is transparent so the surrounding UI background shows through.
- */
 function paintGrayscale(
   canvas: HTMLCanvasElement,
   buf: Uint16Array,
@@ -484,7 +505,6 @@ function paintGrayscale(
     data[p + 2] = g;
     data[p + 3] = 255;
   }
-  // Trailing unscanned region remains transparent.
   for (let p = reg * 4; p < data.length; p += 4) {
     data[p + 0] = 0;
     data[p + 1] = 0;
@@ -496,19 +516,6 @@ function paintGrayscale(
   return { min: lo, max: hi, populated: limit };
 }
 
-/**
- * Paint the vector buffer at native DAC resolution (2048x2048) with
- * stride x stride block-fill per buffer cell.
- *
- * The buffer holds an `edge x edge` dense image (e.g. 256x256 for a
- * default scan with vector_resolution=256). In native render mode each
- * cell represents an 8x8 region of DAC space, so we fill that entire
- * region with the cell's value. Result: a dense 2048x2048 image where
- * pixel coordinates correspond 1:1 to DAC codes.
- *
- * The raw ADC range is computed once over the compact buffer (not over
- * the post-block-fill canvas), so each unique cell counts equally.
- */
 function paintVectorDefault(
   canvas: HTMLCanvasElement,
   buf: Uint16Array,
@@ -600,7 +607,7 @@ function paintVectorDefaultBlockFill(
   populated: number,
   stride: number
 ): PaintStats {
-  const nativeSize = edge * stride; // = DAC_RANGE
+  const nativeSize = edge * stride;
   if (canvas.width !== nativeSize || canvas.height !== nativeSize) {
     canvas.width = nativeSize;
     canvas.height = nativeSize;
@@ -615,7 +622,6 @@ function paintVectorDefaultBlockFill(
   const img = ctx.createImageData(nativeSize, nativeSize);
   const data = img.data;
 
-  // Pre-fill background as transparent (consistent with raster).
   for (let p = 0; p < data.length; p += 4) {
     data[p + 0] = 0;
     data[p + 1] = 0;
@@ -623,7 +629,6 @@ function paintVectorDefaultBlockFill(
     data[p + 3] = 0;
   }
 
-  // Paint each populated buffer cell as a stride x stride block.
   for (let i = 0; i < limit; i++) {
     const cellCol = (i / edge) | 0;
     const cellRow = i % edge;
@@ -633,9 +638,6 @@ function paintVectorDefaultBlockFill(
     const baseY = cellRow * stride;
     const baseX = cellCol * stride;
 
-    // Paint the stride x stride block. Inner loop is unrolled across
-    // canvas-row steps because successive pixels in a canvas row are
-    // contiguous in `data`.
     for (let dy = 0; dy < stride; dy++) {
       let p = ((baseY + dy) * nativeSize + baseX) * 4;
       for (let dx = 0; dx < stride; dx++) {

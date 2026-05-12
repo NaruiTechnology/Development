@@ -5,6 +5,7 @@ import statusReducer from "./statusSlice";
 import scanReducer from "./scanSlice";
 import imageReducer from "./imageSlice";
 import themeReducer from "./themeSlice";
+import localeReducer from "./localeSlice";
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     scan: scanReducer,
     image: imageReducer,
     theme: themeReducer,
+    locale: localeReducer,
   },
   // The image slice carries large typed arrays (Uint16Array up to 8 MB for
   // the 2048x2048 vector render target) plus an ArrayBuffer of points for

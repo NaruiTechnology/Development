@@ -8,26 +8,23 @@ import {
   type ThemeName,
 } from "../store/themeSlice";
 import { useAppDispatch, useAppSelector } from "../store";
+import { useTranslation, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
+import { LanguagePicker } from "./LanguagePicker";
 
-const STATE_LABELS: Record<string, string> = {
-  idle: "Idle",
-  busy: "Scanning",
-  connecting: "Connecting",
-  error: "Error",
-  disconnected: "Disconnected",
+// Per-theme labels and tooltips are now translation KEYS, not the
+// literal strings. The keys resolve through t() inside the component
+// so a language switch repaints the picker without remounting it.
+const THEME_LABEL_KEYS: Record<ThemeName, TranslationKey> = {
+  navy: "header.theme.navy",
+  black: "header.theme.black",
+  light: "header.theme.light",
 };
 
-const THEME_LABELS: Record<ThemeName, string> = {
-  navy: "Navy",
-  black: "Black",
-  light: "Light",
-};
-
-const THEME_TITLES: Record<ThemeName, string> = {
-  navy: "Default Ion Beam navy theme",
-  black: "OLED-friendly black theme for low-ambient labs",
-  light: "Light theme for daylight monitors",
+const THEME_TITLE_KEYS: Record<ThemeName, TranslationKey> = {
+  navy: "header.theme.navy.title",
+  black: "header.theme.black.title",
+  light: "header.theme.light.title",
 };
 
 const THEME_ICONS: Record<ThemeName, Parameters<typeof Icon>[0]["name"]> = {
@@ -36,40 +33,45 @@ const THEME_ICONS: Record<ThemeName, Parameters<typeof Icon>[0]["name"]> = {
   light: "sun",
 };
 
+// The set of service states is closed; mapping each to its translation
+// key here lets t() handle the lookup with type-safe keys instead of an
+// indexed object of strings.
+const STATE_LABEL_KEYS: Record<string, TranslationKey> = {
+  idle: "header.state.idle",
+  busy: "header.state.busy",
+  connecting: "header.state.connecting",
+  error: "header.state.error",
+  disconnected: "header.state.disconnected",
+};
+
 export function Header() {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
   const theme = useAppSelector((s) => s.theme.theme);
+  const { t, fmt } = useTranslation();
 
-  // Apply theme to <html> on every change. Runs on first mount with the
-  // hydrated value too, so a page reload restores the persisted choice
-  // before the first paint of the body.
   useEffect(() => {
     applyThemeToDocument(theme);
   }, [theme]);
 
-  // Refresh status while idle/error so the pill stays current. We pause it
-  // during 'busy' to avoid hammering the FastAPI service mid-scan; the WS
-  // 'done' event already updates the UI when a stream completes.
   useEffect(() => {
     dispatch(fetchStatus());
-    const t = setInterval(() => {
+    const tHandle = setInterval(() => {
       const s = status?.state;
       if (s === "busy" || s === "connecting") return;
       dispatch(fetchStatus());
     }, 4000);
-    return () => clearInterval(t);
+    return () => clearInterval(tHandle);
   }, [dispatch, status?.state]);
 
   const state = status?.state ?? "disconnected";
+  const stateKey = STATE_LABEL_KEYS[state];
 
   return (
     <header className="app-header">
       <div className="app-header__logo">
         <svg viewBox="0 0 64 64" aria-hidden>
           <defs>
-            {/* Logo gradient stops are theme variables so the mark adapts
-                per-theme without needing a separate SVG per palette. */}
             <radialGradient id="hg" cx="50%" cy="40%" r="60%">
               <stop offset="0%" stopColor="var(--c-logo-stop-0)" />
               <stop offset="60%" stopColor="var(--c-logo-stop-1)" />
@@ -81,57 +83,60 @@ export function Header() {
           <path d="M22 50 L42 50" stroke="var(--c-logo-stroke)" strokeWidth="2.4" strokeLinecap="round" />
         </svg>
         <div className="app-header__title">
-          <b>Ion Beam Technology</b>
-          <small>Beam Control Console</small>
+          {/* Brand name stays unlocalised — it's a trademark. The
+              tagline below is the localised descriptor. */}
+          <b>{t("app.brand.name")}</b>
+          <small>{t("app.brand.tagline")}</small>
         </div>
       </div>
 
       <div className="app-header__spacer" />
 
-      {/* Theme picker — segmented control so the active theme is always
-          visible without a click. Persisted to localStorage by the
-          themeSlice helper. The visible "Theme" label matches the
-          card__title typography used elsewhere (small caps, dim color)
-          so this group reads as one labeled control rather than three
-          orphan buttons. */}
+      {/* Language picker first, then theme picker. Putting language
+          first matches the user's mental model: "I want to read the
+          UI" comes before "I want it tinted differently". */}
+      <LanguagePicker />
+
       <div className="row" style={{ gap: 8 }}>
-        <span className="card__title" id="theme-picker-label">Theme</span>
+        <span className="card__title" id="theme-picker-label">
+          {t("header.theme.label")}
+        </span>
         <div
           className="segmented"
           role="radiogroup"
           aria-labelledby="theme-picker-label"
         >
-          {ALL_THEMES.map((t) => (
+          {ALL_THEMES.map((th) => (
             <button
-              key={t}
+              key={th}
               type="button"
               role="radio"
-              aria-checked={theme === t}
-              aria-pressed={theme === t}
+              aria-checked={theme === th}
+              aria-pressed={theme === th}
               className="segmented__btn"
-              title={THEME_TITLES[t]}
-              onClick={() => dispatch(setTheme(t))}
+              title={t(THEME_TITLE_KEYS[th])}
+              onClick={() => dispatch(setTheme(th))}
             >
-              <Icon name={THEME_ICONS[t]} tone="accent" />
-              {THEME_LABELS[t]}
+              <Icon name={THEME_ICONS[th]} tone="accent" />
+              {t(THEME_LABEL_KEYS[th])}
             </button>
           ))}
         </div>
       </div>
 
       <span className="status-pill" data-state={state}>
-        {STATE_LABELS[state] ?? state}
+        {stateKey ? t(stateKey) : state}
       </span>
       <span className="muted mono" style={{ fontSize: 12 }}>
-        scans: {status?.scans_completed ?? 0}
+        {t("header.scans", { count: fmt(status?.scans_completed ?? 0) })}
       </span>
       <button
         className="btn btn--ghost"
         onClick={() => dispatch(reconnectDevice())}
-        title="Drop and re-establish the USB connection (POST /admin/reconnect)"
+        title={t("header.reconnect.title")}
       >
         <Icon name="refresh" tone="accent" />
-        Reconnect
+        {t("header.reconnect")}
       </button>
     </header>
   );

@@ -40,10 +40,12 @@ import {
   rasterRequestWithBitmapSelection,
   vectorRequestWithBitmapSelection,
 } from "../lib/bitmapVector";
+import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 
 export function ScanControls({ kind }: { kind: ScanKind }) {
   const dispatch = useAppDispatch();
+  const { t } = useTranslation();
   const phase = useAppSelector((s) => s.scan.phase);
   const raster = useAppSelector((s) => s.scan.raster);
   const vector = useAppSelector((s) => s.scan.vector);
@@ -136,19 +138,8 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
     else dispatch(resetVector());
   }
 
-  // Run is enabled when not actively streaming or closing. Includes
-  // paused so the operator can start a fresh scan after inspecting a
-  // captured partial frame.
   const runDisabled = streaming || closing;
-
-  // Pause only makes sense while a stream is actively delivering chunks.
-  // Disable during the close handshake (so a double-click doesn't queue
-  // another close) and once already paused.
   const pauseDisabled = !streaming;
-
-  // Stop is enabled while there's anything to stop or anything on the
-  // canvas. Disabled during the close handshake — a second close
-  // attempt would race the first.
   const stopDisabled = !(streaming || paused);
 
   useEffect(() => {
@@ -171,32 +162,28 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         className="btn btn--primary"
         disabled={runDisabled || kind === "roi"}
         onClick={onRun}
-        title={
-          paused
-            ? "Start a fresh scan (the kept image will be replaced)"
-            : "Open a WebSocket and stream chunks live"
-        }
+        title={paused ? t("scan.run.title.paused") : t("scan.run.title.start")}
       >
         <Icon name="play" tone="success" />
-        Run
+        {t("scan.run")}
       </button>
       <button
         className="btn btn--warn"
         disabled={pauseDisabled}
         onClick={onPause}
-        title="End the scan but keep the partial image on the canvas"
+        title={t("scan.pause.title")}
       >
         <Icon name="pause" tone="warn" />
-        {closing ? "Pausing..." : "Pause"}
+        {closing ? t("scan.pausing") : t("scan.pause")}
       </button>
       <button
         className="btn btn--danger"
         disabled={stopDisabled}
         onClick={onStop}
-        title="End the scan and clear the canvas"
+        title={t("scan.stop.title")}
       >
         <Icon name="square" tone="danger" />
-        Stop
+        {t("scan.stop")}
       </button>
 
       <span className="spacer" />
@@ -205,20 +192,20 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
         className="btn"
         disabled={runDisabled || kind === "roi"}
         onClick={onRunValidated}
-        title="POST /scan/{kind}/run — returns timing + validation report"
+        title={t("scan.runValidated.title")}
       >
         <Icon name="check" tone="success" />
-        Run validated
+        {t("scan.runValidated")}
       </button>
       <button className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
         <Icon name="x" tone="danger" />
-        Clear
+        {t("scan.clear")}
       </button>
       <span
         className="scan-busy"
         data-visible={busy ? "true" : "false"}
         aria-hidden={!busy}
-        title="Scan in progress"
+        title={t("scan.busy.title")}
       >
         <span className="scan-busy__spinner" />
       </span>
