@@ -47,6 +47,10 @@ from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.automation_log import AutomationLog
+# Single source of truth for scan parameters — see the module docstring
+# in scan_params.py for the design notes. JSON config → params, then
+# request → params.override(...) → macro.
+from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, VectorPattern,
@@ -243,8 +247,18 @@ class DeviceService:
         self._config = AutomationConfig(config_path)
 
         action = util.GetStateConfigByName(self._config, "streamData")[Consts.ACTION_DATA]
+        # Raw JSON blocks kept for backward compat with existing
+        # display-render code that pulls camelCase keys directly
+        # (lineShiftPerXRow, adcLatency, xResolution, etc.).
         self._raster_defaults = action.get("rasterScan", {}) or {}
         self._vector_defaults = action.get("vectorScan", {}) or {}
+
+        # Normalized scan params, single source of truth for the macros.
+        # JSON's camelCase keys (frameBlank, latency, drainFloorPixels) are
+        # accepted alongside the snake_case API spellings, so streamData.json
+        # doesn't need to be migrated in lockstep.
+        self._raster_params_defaults = RasterParams.from_json(self._raster_defaults)
+        self._vector_params_defaults = VectorParams.from_json(self._vector_defaults)
 
         self._conn: Optional[GlasgowConnection] = None
         self._lock = asyncio.Lock()
@@ -284,11 +298,55 @@ class DeviceService:
         return self._status.model_copy()
 
     def defaults(self) -> dict:
+        """Return the JSON defaults for the UI.
+
+        Both shapes are present:
+          * `raster` / `vector` — raw camelCase JSON keys, for back-compat
+            with the existing frontend translation in `applyServerDefaults`
+            and the display-render code that pulls `lineShiftPerXRow` etc.
+          * `raster_params` / `vector_params` — normalized snake_case dicts
+            matching the API request shapes, fed by RasterParams /
+            VectorParams. New frontend code should prefer these — no
+            client-side translation needed.
+        """
         return {
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
+            "raster_params": self._raster_params_defaults.to_public_dict(),
+            "vector_params": self._vector_params_defaults.to_public_dict(),
             "is_production": bool(getattr(self._config, "IsProduction", True)),
         }
+
+    # -------- internal: effective params (JSON defaults ⊕ request override) ---
+
+    def _effective_raster_params(self, req: "RasterRequest") -> RasterParams:
+        """Merge the JSON defaults with the request, with the request
+        winning on every field it explicitly carries. Macro-tuning
+        constants (max_pipeline, padding_*) come from JSON only — they're
+        not exposed on the request because nothing in the UI needs to set
+        them, but a per-build streamData.json override flows through."""
+        return self._raster_params_defaults.override(
+            resolution    = req.resolution,
+            dwell         = req.dwell,
+            latency_bytes = req.latency_bytes,
+            frame_blank   = req.frame_blank,
+            cookie        = req.cookie,
+            output_mode   = req.output_mode,
+        )
+
+    def _effective_vector_params(self, req: "VectorRequest") -> VectorParams:
+        # `pattern` is a Pydantic enum; normalize to str for the dataclass.
+        pattern_str = req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern)
+        return self._vector_params_defaults.override(
+            pattern           = pattern_str,
+            vector_resolution = req.vector_resolution,
+            latency_bytes     = req.latency_bytes,
+            output_mode       = req.output_mode,
+            cookie            = req.cookie,
+            pre_process       = req.pre_process,
+            do_validate       = req.do_validate,
+            points            = req.points,
+        )
 
     # -------- internal: lazy connect / drop-on-error ----------------------
 
@@ -464,9 +522,16 @@ class DeviceService:
         async with self._acquire("raster"):
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
-            logger.debug("[raster] %dx%d dwell=%d latency=%d frame_blank=%s",
-                     req.resolution, req.resolution, req.dwell,
-                     req.latency_bytes, req.frame_blank)
+            # Log effective params (post-override) — what actually goes to
+            # the macro — rather than just the raw request. Makes it easy
+            # to confirm a streamData.json default landed where it should.
+            eff = self._effective_raster_params(req)
+            logger.debug(
+                "[raster] %dx%d dwell=%d latency=%d frame_blank=%s "
+                "output_mode=%s cookie=%d max_pipeline=%d",
+                eff.resolution, eff.resolution, eff.dwell, eff.latency_bytes,
+                eff.frame_blank, eff.output_mode, eff.cookie, eff.max_pipeline,
+            )
             t0 = time.perf_counter()
             try:
                 async for chunk in conn.transfer_multiple(
@@ -553,8 +618,15 @@ class DeviceService:
                 process_time = time.perf_counter() - t0
                 logger.debug("[vector] pre-process %.4fs", process_time)
 
-            logger.debug("[vector] latency=%d pattern=%s pre_process=%s",
-                     req.latency_bytes, req.pattern, req.pre_process)
+            eff = self._effective_vector_params(req)
+            logger.debug(
+                "[vector] latency=%d pattern=%s vector_resolution=%d "
+                "output_mode=%s pre_process=%s cookie=%d max_pipeline=%d "
+                "drain_floor=%d",
+                eff.latency_bytes, eff.pattern, eff.vector_resolution,
+                eff.output_mode, eff.pre_process, eff.cookie,
+                eff.max_pipeline, eff.effective_drain_floor_pixels,
+            )
             t0 = time.perf_counter()
             try:
                 async for chunk in conn.transfer_multiple(
@@ -594,24 +666,47 @@ class DeviceService:
             validation=validation,
         )
 
-    # -------- command construction (unchanged) ----------------------------
+    # -------- command construction ---------------------------------------
 
     def _build_raster_cmd(self, req: RasterRequest) -> RasterScanCommand:
+        """Build the macro command from JSON defaults overridden by the
+        request. Every field the macro accepts is passed explicitly —
+        nothing falls through to a hardcoded macro default."""
+        params = self._effective_raster_params(req)
+
         bounds = _roi_bounds(req.roi)
         if bounds is None:
-            x_rng = y_rng = DACCodeRange.from_resolution(req.resolution)
+            x_rng = y_rng = DACCodeRange.from_resolution(params.resolution)
         else:
             x0, x1, y0, y1 = bounds
-            x_rng = _dac_range_for_bounds(x0, x1, req.resolution)
-            y_rng = _dac_range_for_bounds(y0, y1, req.resolution)
+            x_rng = _dac_range_for_bounds(x0, x1, params.resolution)
+            y_rng = _dac_range_for_bounds(y0, y1, params.resolution)
+
+        try:
+            output_mode = OutputMode[params.output_mode]
+        except KeyError:
+            raise ValueError(
+                f"unknown output_mode {params.output_mode!r}; "
+                f"valid: {[m.name for m in OutputMode]}"
+            )
+
         return RasterScanCommand(
-            cookie=req.cookie,
+            cookie=params.cookie,
             x_range=x_rng, y_range=y_rng,
-            dwell_time=req.dwell,
-            frame_blank=req.frame_blank,
+            dwell_time=params.dwell,
+            output_mode=output_mode,
+            frame_blank=params.frame_blank,
+            max_pipeline=params.max_pipeline,
+            padding_min_pixels=params.padding_min_pixels,
+            padding_ratio_denominator=params.padding_ratio_denominator,
+            padding_dwell=params.padding_dwell,
         )
 
     def _build_vector_cmd(self, req: VectorRequest) -> VectorScanCommand:
+        """Same shape as raster: every macro tunable comes from the
+        effective params object."""
+        params = self._effective_vector_params(req)
+
         if req.pattern is VectorPattern.custom:
             if not req.points and not (
                 req.simulation_bitmap is not None
@@ -626,23 +721,27 @@ class DeviceService:
                 # simulation_bitmap is ignored by hardware, so fall back to
                 # the regular ROI vector sweep rather than rejecting the
                 # request as custom-without-points.
-                iter_points = _roi_vector_iter(req.vector_resolution, req.roi)
+                iter_points = _roi_vector_iter(params.vector_resolution, req.roi)
         else:
-            iter_points = _roi_vector_iter(req.vector_resolution, req.roi)
+            iter_points = _roi_vector_iter(params.vector_resolution, req.roi)
 
         try:
-            output_mode = OutputMode[req.output_mode]
+            output_mode = OutputMode[params.output_mode]
         except KeyError:
-            raise ValueError(f"unknown output_mode {req.output_mode!r}; "
-                             f"valid: {[m.name for m in OutputMode]}")
+            raise ValueError(
+                f"unknown output_mode {params.output_mode!r}; "
+                f"valid: {[m.name for m in OutputMode]}"
+            )
 
         return VectorScanCommand(
-            cookie=req.cookie,
+            cookie=params.cookie,
             output_mode=output_mode,
             iter_points=iter_points,
-            # Optional override from streamData.json -> vectorScan.drainFloorPixels.
-            # Missing/None falls back to VectorScanCommand's module default.
-            drain_floor_pixels=self._vector_defaults.get("drainFloorPixels"),
+            drain_floor_pixels=params.effective_drain_floor_pixels,
+            max_pipeline=params.max_pipeline,
+            fpga_pipeline_depth_pixels=params.fpga_pipeline_depth_pixels,
+            drain_safety_factor=params.drain_safety_factor,
+            sender_drain_timeout_s=params.sender_drain_timeout_s,
         )
 
     # -------- on-demand download bytes (CSV / PNG figure) -----------------

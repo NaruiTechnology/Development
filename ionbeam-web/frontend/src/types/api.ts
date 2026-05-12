@@ -24,6 +24,10 @@ export interface RasterRequest {
   latency_bytes: number;  // >= 2
   frame_blank: boolean;
   cookie: number;         // 0..65535
+  /** Output bit-depth for the SynchronizeCommand. Backend defaults to
+   *  "SixteenBit" when omitted, so this field is optional for frontends
+   *  that don't expose a control for it. */
+  output_mode?: "SixteenBit" | "EightBit";
   do_validate: boolean;
   roi?: ROIRequest | null;
   /** Browser-provided grayscale crop for simulation-only raster scans.
@@ -107,9 +111,22 @@ export interface LastScanMeta {
   pattern?: string | null;
 }
 
-/** Server defaults harvested from streamData.json by GET /defaults. */
+/** Server defaults harvested from streamData.json by GET /defaults.
+ *
+ * `raster` / `vector` are the raw camelCase JSON blocks from
+ * streamData.json — used by older code paths and the display-render
+ * extras (lineShiftPerXRow, adcLatency, etc.).
+ *
+ * `raster_params` / `vector_params` are the normalized snake_case
+ * params produced by RasterParams.to_public_dict() / VectorParams
+ * .to_public_dict() on the server. These are the preferred shape
+ * for new code — they map 1:1 to RasterRequest / VectorRequest
+ * fields, no client-side translation needed.
+ */
 export interface ServerDefaults {
   raster: Record<string, unknown>;
   vector: Record<string, unknown>;
+  raster_params?: Record<string, unknown>;
+  vector_params?: Record<string, unknown>;
   is_production?: boolean;
 }

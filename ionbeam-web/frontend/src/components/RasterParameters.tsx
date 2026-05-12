@@ -66,6 +66,27 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         </div>
       </div>
 
+      {/* output_mode is new — see types/api.ts. Optional on the wire, so
+          existing scans without it keep working. */}
+      <div className="field">
+        <label>Output mode</label>
+        <select
+          className="select"
+          value={r.output_mode ?? "SixteenBit"}
+          disabled={disabled}
+          onChange={(e) =>
+            dispatch(
+              updateRaster({
+                output_mode: e.target.value as "SixteenBit" | "EightBit",
+              })
+            )
+          }
+        >
+          <option value="SixteenBit">SixteenBit</option>
+          <option value="EightBit">EightBit</option>
+        </select>
+      </div>
+
       <label className="checkbox">
         <input
           type="checkbox"

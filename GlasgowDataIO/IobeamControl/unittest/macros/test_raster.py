@@ -11,44 +11,56 @@ from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
+from AutomationPy.buildingblocks.scan_params import RasterParams
 
 JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData.json'
 
-# Size of each pixel chunk in bytes (latency parameter to transfer_multiple).
-# 8192 pixels * 2 bytes = 16384 bytes per chunk at SixteenBit output.
-CHUNK_BYTES = 16384
-FRAME_BLANK = False
-RESOLUTION = 512
 
 class RasterScanTest(unittest.TestCase):
+    """Wet-run raster scan test, parameterized through RasterParams.
 
-    # Change this single value to bisect the working-resolution ceiling.
-    # 128 / 512 / 1024 / 2048 are all valid values of DACCodeRange.from_resolution.
-    
+    Previously this test pulled config keys individually
+    (rasterScanConfig.get('pixels', CHUNK_BYTES), etc.) and applied
+    fallback constants at the top of the file (CHUNK_BYTES, FRAME_BLANK,
+    RESOLUTION). All of that is gone — RasterParams.from_json + defaults
+    is the single path. Override individual fields in setUp by editing
+    PARAM_OVERRIDES below.
+    """
+
+    # Override individual params here without touching streamData.json.
+    # An empty dict means "use exactly what streamData.json says";
+    # anything in here wins over the JSON.
+    PARAM_OVERRIDES: dict = {}
 
     def setUp(self):
-        self.sim_data = ("0.0, 1, 2, 5, 8, 9, 10, 0.0, 1, 2, 5, 8, 9, 10, "
-                         "0.0, 1, 2, 5, 8, 9, 10, 0.0, 1, 2, 5, 8, 9, 10")
         if Path(JSON_PATH).is_file():
             self._config = AutomationConfig(JSON_PATH)
+            raster_block = (
+                util.GetStateConfigByName(self._config, 'streamData')
+                [Consts.ACTION_DATA].get('rasterScan')
+            )
         else:
             self._config = None
-        self._rasterScanConfig = util.GetStateConfigByName(self._config, 'streamData')[Consts.ACTION_DATA].get('rasterScan')
-        self.chunk_bytes  = self._rasterScanConfig.get('pixels', CHUNK_BYTES) * 2
-        self.fram_blank = self._rasterScanConfig.get('frameBlank', FRAME_BLANK)
-        self.resolution  = self._rasterScanConfig.get('resolution', RESOLUTION)
-        self.test_dwell = self._rasterScanConfig.get('dwell', 2)
-        
+            raster_block = None
+
+        # Single source of truth: JSON → RasterParams → override.
+        self.params: RasterParams = RasterParams.from_json(raster_block).override(
+            **self.PARAM_OVERRIDES,
+        )
+
     # ------------------------------------------------------------------ #
     # Mock / simulation test (no hardware).                              #
     # ------------------------------------------------------------------ #
     async def scan(self):
+        # Mock scan uses a fixed resolution because MockConnection doesn't
+        # exercise the streamData.json path. The point is to drive the
+        # state machine, not validate config wiring.
         test_range = DACCodeRange.from_resolution(2048)
         test_cmd = RasterScanCommand(
-            cookie=123,
+            cookie=self.params.cookie,
             x_range=test_range,
             y_range=test_range,
-            dwell_time=self.test_dwell,
+            dwell_time=self.params.dwell,
         )
         conn = MockConnection()
         await conn._connect()
@@ -60,9 +72,8 @@ class RasterScanTest(unittest.TestCase):
         self.assertTrue(True)
 
     # ------------------------------------------------------------------ #
-    # Wet-run test: real Glasgow hardware.                               #
-    # Scans RESOLUTION × RESOLUTION at dwell=2, frame_blank=False,       #
-    # receiving chunks of CHUNK_BYTES bytes each.                        #
+    # Wet-run test: real Glasgow hardware. Every macro input is read     #
+    # from `self.params` — no more "what does CHUNK_BYTES mean again?".  #
     # ------------------------------------------------------------------ #
     async def scan_wet_run(self):
         self.chunks = []
@@ -72,18 +83,26 @@ class RasterScanTest(unittest.TestCase):
             print("[test] no config, skipping")
             return
 
-        test_range = DACCodeRange.from_resolution(self.resolution)
+        test_range = DACCodeRange.from_resolution(self.params.resolution)
 
         test_cmd = RasterScanCommand(
-            cookie=123,
+            cookie=self.params.cookie,
             x_range=test_range,
             y_range=test_range,
-            dwell_time=self.test_dwell,
-            frame_blank=self.fram_blank,
+            dwell_time=self.params.dwell,
+            frame_blank=self.params.frame_blank,
+            # Macro-tuning params flow through too — if streamData.json
+            # ever sets max_pipeline / padding_*, this test picks them up
+            # automatically.
+            max_pipeline=self.params.max_pipeline,
+            padding_min_pixels=self.params.padding_min_pixels,
+            padding_ratio_denominator=self.params.padding_ratio_denominator,
+            padding_dwell=self.params.padding_dwell,
         )
 
-        print(f"[test] === {self.resolution}x{self.resolution}, dwell={self.test_dwell}, "
-              f"latency={CHUNK_BYTES}, frame_blank={self.fram_blank} ===", flush=True)
+        print(f"[test] === {self.params.resolution}x{self.params.resolution}, "
+              f"dwell={self.params.dwell}, latency={self.params.latency_bytes}, "
+              f"frame_blank={self.params.frame_blank} ===", flush=True)
 
         conn = GlasgowConnection(self._config)
         await conn._connect()
@@ -92,12 +111,16 @@ class RasterScanTest(unittest.TestCase):
             return
 
         try:
-            async for chunk in conn.transfer_multiple(test_cmd, latency=CHUNK_BYTES):
+            async for chunk in conn.transfer_multiple(
+                    test_cmd, latency=self.params.latency_bytes):
                 self.chunks.append(chunk)
                 self.chunks_received += 1
                 # Sparse preview so the log doesn't drown at large resolutions:
                 # first 3 chunks, then every 128th, plus the last.
-                total_expected = (self.resolution * self.resolution * 2) // CHUNK_BYTES
+                total_expected = (
+                    (self.params.resolution * self.params.resolution * 2)
+                    // self.params.latency_bytes
+                )
                 if (self.chunks_received <= 3
                         or self.chunks_received % 128 == 0
                         or self.chunks_received == total_expected):
@@ -119,14 +142,13 @@ class RasterScanTest(unittest.TestCase):
         asyncio.run(self.scan_wet_run())
         self._exportDataToCsvFile()
 
-        latency_bytes   = self.chunk_bytes            # what you pass to transfer_multiple
-        pixels_per_chunk = math.ceil(latency_bytes / self.test_dwell)
-        total_pixels     = self.resolution * self.resolution
+        pixels_per_chunk = math.ceil(self.params.latency_bytes / self.params.dwell)
+        total_pixels     = self.params.resolution * self.params.resolution
         expected_chunks  = math.ceil(total_pixels / pixels_per_chunk)
 
         self.assertEqual(
             self.chunks_received, expected_chunks,
-            f"dwell={self.test_dwell}: expected {expected_chunks} chunks, "
+            f"dwell={self.params.dwell}: expected {expected_chunks} chunks, "
             f"got {self.chunks_received}",
         )
 
@@ -144,17 +166,18 @@ class RasterScanTest(unittest.TestCase):
                 f"tail chunk wrong size: {tail} bytes")
 
     def _exportDataToCsvFile(self):
-        if not self._config.DumpData:
+        if not self._config or not getattr(self._config, "DumpData", False):
             return
-        
+
         if self.chunks:
             downloads_dir = Path.home() / "Downloads"
             downloads_dir.mkdir(parents=True, exist_ok=True)
-            csv_path = downloads_dir / f"raster_{self.resolution}x{self.resolution}.csv"
+            res = self.params.resolution
+            csv_path = downloads_dir / f"raster_{res}x{res}.csv"
 
             # Flatten every chunk into one sequence of 16-bit pixel values,
             # then slice into RESOLUTION-pixel rows. Each chunk is already a
-            # sequence of uint16 values (len(chunk) == CHUNK_BYTES // 2), so
+            # sequence of uint16 values (len(chunk) == latency_bytes // 2), so
             # extend() works directly.
             all_pixels = []
             for chunk in self.chunks:
@@ -162,9 +185,9 @@ class RasterScanTest(unittest.TestCase):
 
             with csv_path.open("w", newline="") as f:
                 writer = csv.writer(f, delimiter=" ")
-                for row_idx in range(self.resolution):
-                    start = row_idx * self.resolution
-                    row = all_pixels[start:start + self.resolution]
+                for row_idx in range(res):
+                    start = row_idx * res
+                    row = all_pixels[start:start + res]
                     if not row:
                         break  # short scan — stop writing empty rows
                     writer.writerow(row)

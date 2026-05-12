@@ -65,6 +65,7 @@ const defaultRaster: RasterRequest = {
   latency_bytes: 16384,
   frame_blank: false,
   cookie: 123,
+  output_mode: "SixteenBit",
   do_validate: true,
 };
 
@@ -110,34 +111,60 @@ function numberDefault(value: unknown, fallback: number): number {
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
-function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"]): VectorRequest["output_mode"] {
-  return value === "EightBit" || value === "SixteenBit" ? value : fallback;
+function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"] | undefined): VectorRequest["output_mode"] {
+  if (value === "EightBit" || value === "SixteenBit") return value;
+  return fallback ?? "SixteenBit";
 }
 
 function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
+  // Prefer the normalized snake_case `raster_params` / `vector_params`
+  // blocks if the server sent them — they map 1:1 to the request shapes
+  // and don't need any field-name translation. Fall back to the legacy
+  // camelCase `raster` / `vector` blocks for older servers.
+  const rasterParams = (defaults.raster_params ?? {}) as Record<string, unknown>;
+  const vectorParams = (defaults.vector_params ?? {}) as Record<string, unknown>;
   const raster = defaults.raster ?? {};
   const vector = defaults.vector ?? {};
+
+  // Raster: prefer normalized, then legacy `raster` block with the old
+  // translation rules (frameBlank → frame_blank, pixels*2 → latency_bytes).
   const rasterLatency =
+    rasterParams.latency_bytes ??
     raster.latency_bytes ??
     raster.latency ??
     (raster.pixels !== undefined ? numberDefault(raster.pixels, 8192) * 2 : undefined);
 
   state.raster = {
     ...state.raster,
-    resolution: numberDefault(raster.resolution, state.raster.resolution),
-    dwell: numberDefault(raster.dwell, state.raster.dwell),
+    resolution: numberDefault(
+      rasterParams.resolution ?? raster.resolution,
+      state.raster.resolution
+    ),
+    dwell: numberDefault(
+      rasterParams.dwell ?? raster.dwell,
+      state.raster.dwell
+    ),
     latency_bytes: numberDefault(rasterLatency, state.raster.latency_bytes),
-    frame_blank: Boolean(raster.frame_blank ?? raster.frameBlank ?? state.raster.frame_blank),
+    frame_blank: Boolean(
+      rasterParams.frame_blank ??
+        raster.frame_blank ??
+        raster.frameBlank ??
+        state.raster.frame_blank
+    ),
+    output_mode: outputModeDefault(
+      rasterParams.output_mode ?? raster.output_mode ?? raster.outputMode,
+      state.raster.output_mode ?? "SixteenBit"
+    ),
   };
 
   state.vector = {
     ...state.vector,
     latency_bytes: numberDefault(
-      vector.latency_bytes ?? vector.latency,
+      vectorParams.latency_bytes ?? vector.latency_bytes ?? vector.latency,
       state.vector.latency_bytes
     ),
     output_mode: outputModeDefault(
-      vector.output_mode ?? vector.outputMode,
+      vectorParams.output_mode ?? vector.output_mode ?? vector.outputMode,
       state.vector.output_mode
     ),
   };
