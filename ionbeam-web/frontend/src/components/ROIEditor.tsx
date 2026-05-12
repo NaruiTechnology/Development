@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { clearROIImage, clearROISelection, updateROI, type ROIState } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
-import { clearBitmapSelectionCache } from "../lib/bitmapVector";
+import {
+  clearBitmapSelectionCache,
+  worldSelectionToDacROI,
+} from "../lib/bitmapVector";
 import { Icon } from "./Icon";
 
 const EDGE = 640;
@@ -325,6 +328,43 @@ export function ROIEditor({
               }}
             />
           </div>
+
+          {/* DAC mapping diagnostic readout.
+              The four "X origin / X end / Y origin / Y end" inputs above
+              define the field of view in arbitrary world units (µm, mm,
+              cm, nm) — the unit dropdown is purely a display label, the
+              math is unitless. When the request goes to the backend,
+              `worldSelectionToDacROI` linearly remaps the selection from
+              world units onto the DAC range 0..16383. This block shows
+              that mapping live so the operator can sanity-check what
+              part of the DAC range the device will actually sweep.
+              Hidden when there's no selection yet (nothing to map). */}
+          {roi.selection && (
+            <div
+              className="muted"
+              style={{
+                fontSize: 11,
+                marginTop: 2,
+                marginBottom: 8,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              {(() => {
+                const dac = worldSelectionToDacROI(roi.selection, roi);
+                return (
+                  <>
+                    DAC equivalent:&nbsp;
+                    S({dac.x_start}, {dac.y_start}) → E({dac.x_end}, {dac.y_end})
+                    &nbsp;<span style={{ opacity: 0.7 }}>
+                      (out of 0..16383; the full DAC range covers your{" "}
+                      {fmtRange(roi.x_origin, roi.x_end)} ×{" "}
+                      {fmtRange(roi.y_origin, roi.y_end)} {unitLabel(roi.scale_unit)} field of view)
+                    </span>
+                  </>
+                );
+              })()}
+            </div>
+          )}
           <div className="field">
             <label>Scale unit</label>
             <select
@@ -690,6 +730,14 @@ function validateEndPoint(p: { x: number; y: number }, roi: ROIState) {
 
 function roundScale(v: number) {
   return formatOneDecimal(v);
+}
+
+/** Compact "lo..hi" display for the DAC mapping subtitle. Sorts the
+ *  endpoints so a reversed-FOV entry still reads naturally. */
+function fmtRange(a: number, b: number): string {
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  return `${formatOneDecimal(lo)}..${formatOneDecimal(hi)}`;
 }
 
 function formatOneDecimal(v: number): string {
