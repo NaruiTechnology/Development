@@ -1,0 +1,7 @@
+{
+    "python.testing.pytestArgs": [
+        "Open-Beam-Interface"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
+}

@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: iobeam-development
+Version: 0.1.0
+Summary: Development project for AutomationPy and EsmBeamController
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown

@@ -1,3 +1,4 @@
+from os import sync
 import time
 import asyncio
 from collections import deque

@@ -3,30 +3,30 @@
 A long-lived HTTP/WebSocket interface that keeps one Glasgow device connected
 for the lifetime of the process, with Swagger/OpenAPI docs, CSV export,
 and chunk-level validation equivalent to the stand-alone pytest wet-run
-tests â€” all integrated with your existing `GlasgowDataIO.IobeamControl`
+tests — all integrated with your existing `GlasgowDataIO.IobeamControl`
 and `AutomationPy` packages.
 
 ## Layout
 
 ```
 glasgow_service/
-â”œâ”€â”€ README.md
-â”œâ”€â”€ pyproject.toml
-â”œâ”€â”€ requirements.txt
-â”œâ”€â”€ glasgow_service/
-â”‚   â”œâ”€â”€ __init__.py
-â”‚   â”œâ”€â”€ models.py     Pydantic schemas (requests + ScanResult + validation)
-â”‚   â”œâ”€â”€ service.py    DeviceService â€” owns the Glasgow; streaming + blocking APIs
-â”‚   â”œâ”€â”€ auth.py       Bearer-token dependency (opt-in via GLASGOW_TOKEN)
-â”‚   â””â”€â”€ api.py        FastAPI app
-â”œâ”€â”€ tests/
-â”‚   â””â”€â”€ test_wet_run.py   Pytest replacement for test_scan_wet_run (raster + vector)
-â”œâ”€â”€ examples/
-â”‚   â”œâ”€â”€ raster_custom.py  REST client for raster scans, with sweep mode
-â”‚   â”œâ”€â”€ vector_custom.py  REST client for vector scans
-â”‚   â””â”€â”€ ws_client.py      WebSocket streaming client
-â””â”€â”€ deploy/
-    â””â”€â”€ glasgow-svc.service   systemd unit
+├── README.md
+├── pyproject.toml
+├── requirements.txt
+├── glasgow_service/
+│   ├── __init__.py
+│   ├── models.py     Pydantic schemas (requests + ScanResult + validation)
+│   ├── service.py    DeviceService — owns the Glasgow; streaming + blocking APIs
+│   ├── auth.py       Bearer-token dependency (opt-in via GLASGOW_TOKEN)
+│   └── api.py        FastAPI app
+├── tests/
+│   └── test_wet_run.py   Pytest replacement for test_scan_wet_run (raster + vector)
+├── examples/
+│   ├── raster_custom.py  REST client for raster scans, with sweep mode
+│   ├── vector_custom.py  REST client for vector scans
+│   └── ws_client.py      WebSocket streaming client
+└── deploy/
+    └── glasgow-svc.service   systemd unit
 ```
 
 ## What the wet-run integration does
@@ -43,8 +43,8 @@ Each of these:
 1. Runs the scan to completion against the live Glasgow.
 2. Times the USB transfer (`send_time_s`), and for vector with
    `pre_process=True` also times `_pre_process_chunks` (`process_time_s`).
-3. If `save_csv=true`: writes the same CSV your old test wrote (raster â†’
-   `raster_RxR.csv`, one row per raster line; vector â†’
+3. If `save_csv=true`: writes the same CSV your old test wrote (raster →
+   `raster_RxR.csv`, one row per raster line; vector →
    `vector_latencyN.csv`, one row per received chunk).
 4. If `do_validate=true`: runs the same chunk-count / chunk-size /
    padding-leak checks the old `assertEqual`/`assertNotEqual` blocks ran,
@@ -69,7 +69,7 @@ in the same environment.
 ## Run the service
 
 ```bash
-export GLASGOW_CONFIG=C:\Project\Iobeam\Deploy\GlasgowDataIO\Json\streamData.json
+export GLASGOW_CONFIG=/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
 # Optional: turn on auth
 # export GLASGOW_TOKEN=$(openssl rand -hex 32)
 
@@ -82,7 +82,7 @@ uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
 
 ## Run the pytest wet-run suite
 
-The new tests do **not** need the server running â€” they instantiate
+The new tests do **not** need the server running — they instantiate
 `DeviceService` directly:
 
 ```bash
@@ -161,7 +161,7 @@ One scan at a time. Concurrent REST or WebSocket requests return **HTTP
       ],
       "env": {
         "GLASGOW_TOKEN": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
-        "GLASGOW_CONFIG": "C:\Project\Iobeam\Deploy\GlasgowDataIO\Json\streamData.json",
+        "GLASGOW_CONFIG": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
         "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/Development:${env:PYTHONPATH}"
       },
       "justMyCode": false,
@@ -170,4 +170,3 @@ One scan at a time. Concurrent REST or WebSocket requests return **HTTP
   ]
 }
 #------------------------------------------
-
