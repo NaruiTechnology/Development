@@ -98,7 +98,8 @@ class installNodeJS_state(distributionDeploy_state):
             self.info("[{}] Node.js already available: node={}, npm={}"
                       .format(type(self).__name__, node, npm))
             ok_node = await self._runWithTimeout("node --version", self.deployRoot(), timeout)
-            ok_npm = await self._runWithTimeout("npm --version", self.deployRoot(), timeout)
+            npm_cmd = "npm.cmd --version" if os.name == "nt" else "npm --version"
+            ok_npm = await self._runWithTimeout(npm_cmd, self.deployRoot(), timeout)
             return ok_node and ok_npm
 
         if not bool(actionData.get("installOnWindows", True)):
@@ -125,7 +126,7 @@ class installNodeJS_state(distributionDeploy_state):
 
         return (
             await self._runWithTimeout("node --version", self.deployRoot(), timeout)
-            and await self._runWithTimeout("npm --version", self.deployRoot(), timeout)
+            and await self._runWithTimeout("npm.cmd --version", self.deployRoot(), timeout)
         )
 
     async def _runWithTimeout(self, cmd, runDir, timeout):

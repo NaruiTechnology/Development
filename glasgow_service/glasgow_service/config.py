@@ -36,19 +36,19 @@ log = logging.getLogger("glasgow_service.config")
 ENV_VAR = "GLASGOW_CONFIG"
 ENV_FILE_VAR = "GLASGOW_ENV_FILE"
 
-# deploy/ lives next to the package directory in the source tree:
-#     <repo>/glasgow_service/config.py   <-- this file
-#     <repo>/deploy/glasgow-svc.service
-#     <repo>/deploy/glasgow-svc.env       (gitignored, optional)
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-_DEPLOY_DIR = _REPO_ROOT / "deploy"
+# deploy/ lives next to this package's project directory, while the main
+# Development repo is one level above that on a checkout.
+_SERVICE_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = _SERVICE_ROOT.parent
+_DEPLOY_DIR = _SERVICE_ROOT / "deploy"
 _DEFAULT_ENV_FILE = _DEPLOY_DIR / "glasgow-svc.env"
 _DEFAULT_UNIT_FILE = _DEPLOY_DIR / "glasgow-svc.service"
 
 _LOCAL_CANDIDATES: tuple[Path, ...] = (
     Path.cwd() / "streamData.json",
-    _REPO_ROOT / "streamData.json",
+    _SERVICE_ROOT / "streamData.json",
     _DEPLOY_DIR / "streamData.json",
+    _PROJECT_ROOT / "GlasgowDataIO" / "Json" / "streamData.json",
 )
 
 _UNIT_ENV_RE = re.compile(
@@ -104,13 +104,17 @@ def _resolve_env_file_path() -> Path:
 
 def _candidate_values() -> list[tuple[str, Optional[str]]]:
     """Ordered (source-label, raw-value) pairs to try in turn."""
-    return [
+    candidates = [
         ("environment", os.environ.get(ENV_VAR)),
         (f"env file {_resolve_env_file_path()}",
          _parse_env_file(_resolve_env_file_path()).get(ENV_VAR)),
-        (f"systemd unit {_DEFAULT_UNIT_FILE}",
-         _parse_systemd_unit(_DEFAULT_UNIT_FILE).get(ENV_VAR)),
     ]
+    if os.name != "nt":
+        candidates.append(
+            (f"systemd unit {_DEFAULT_UNIT_FILE}",
+             _parse_systemd_unit(_DEFAULT_UNIT_FILE).get(ENV_VAR))
+        )
+    return candidates
 
 
 # ---- public API -----------------------------------------------------------

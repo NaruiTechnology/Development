@@ -64,9 +64,10 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 self._success = True
                 return
 
+            npm = "npm.cmd" if os.name == "nt" else "npm"
             commands = [
-                ("backend", backendDir, "npm install"),
-                ("frontend", frontendDir, "npm install"),
+                ("backend", backendDir, "{} install".format(npm)),
+                ("frontend", frontendDir, "{} install".format(npm)),
             ]
 
             allOk = True

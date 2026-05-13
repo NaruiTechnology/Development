@@ -32,7 +32,7 @@ class SWDProbeException(GlasgowAppletError):
     class Kind(enum.Enum):
         Error   = "error"   # parity error or invalid acknowledgement
         Fault   = "fault"   # target returned a FAULT response
-         = "timeout" # too many retries for a WAIT response
+        Timeout = "timeout" # too many retries for a WAIT response
         Other   = "other"   # unspecified
 
     def __init__(self, message, *, kind: Kind = Kind.Other):

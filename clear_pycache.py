@@ -1,8 +1,8 @@
-import shutil
 import os
+import shutil
 
-path = '/home/vboxuser/Project/IobeamTech/Development' # os.getcwd()
-for directories, subfolder, files in os.walk(path):
-    if os.path.isdir(directories):
-        if directories[::-1][:11][::-1] == '__pycache__':
-            shutil.rmtree(directories)
+path = os.getcwd()
+for directory, subfolders, files in os.walk(path):
+    if os.path.basename(directory) == '__pycache__':
+        shutil.rmtree(directory, ignore_errors=True)
+        subfolders[:] = []

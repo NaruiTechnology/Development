@@ -23,10 +23,11 @@ from glasgow_service.service import DeviceService
 from glasgow_service.models import (
     RasterRequest, VectorRequest, VectorPattern,
 )
+from glasgow_service.config import find_config_path
 
 CONFIG_PATH = os.environ.get(
     "GLASGOW_CONFIG",
-    "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
+    str(find_config_path(required=False) or ""),
 )
 
 

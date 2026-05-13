@@ -43,11 +43,11 @@ class buildFPGAPlan_state(loadFpgaImage_state):
             iface = applet.build(target, args)
             device.demultiplexer = target.multiplexer
             plan = target.build_plan()
-            if plan is not None and os.path.exists(os.path.join(plan.buildDir, "top.v")):
+            if plan is not None:
+                plan.execute(debug=True)
+            if plan is not None and plan.buildDir is not None and os.path.exists(os.path.join(plan.buildDir, "top.v")):
                 stateConfig = self.ParentWorkThread.GetStateConfig(self)
                 if stateConfig is not None and Consts.ACTION_DATA in stateConfig:
-                    cmd = self.formatCommand(stateConfig)          
-                    await self.commandAsyncio(cmd, plan.buildDir)
                     success = self._buildPlanValidation(stateConfig, plan.buildDir) 
                     if success is True:
                         self.Success = True
@@ -75,4 +75,4 @@ class buildFPGAPlan_state(loadFpgaImage_state):
         for key, value in self.ParentWorkThread._config["Glasgow"].items():
             if isinstance(value, dict) and value.get("Id") == deviceId:
                 return SimpleNamespace(**value)
-        return None    
+        return None
