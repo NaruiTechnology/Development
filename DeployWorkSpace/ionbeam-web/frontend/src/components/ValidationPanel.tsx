@@ -1,0 +1,466 @@
+/**
+ * Run-report panel: validation result + download buttons.
+ *
+ * The panel now shows after EITHER kind of completed scan:
+ *   - Validated run (POST /scan/{kind}/run)  -> full report + checks + downloads
+ *   - Live stream (WebSocket)                -> just downloads, no checks
+ *
+ * Download buttons:
+ *   - CSV: validated runs hit /api/scan/last/csv on the server.
+ *          Live streams (no validated result) generate the CSV
+ *          client-side from imageSlice; matches the server format.
+ *   - Figure (PNG): always hits /api/scan/last/figure (matplotlib only
+ *          runs server-side). Both validated and streaming scans
+ *          populate the server's last-scan cache.
+ */
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+import { useAppSelector } from "../store";
+import {
+  rasterCsvBlob,
+  vectorCsvBlob,
+  downloadBlob,
+} from "../lib/csvExport";
+import { useTranslation } from "../i18n";
+import { Icon } from "./Icon";
+
+type DownloadState = "idle" | "fetching" | "error";
+type DirectoryHandle = {
+  name: string;
+  getFileHandle: (
+    name: string,
+    options?: { create?: boolean }
+  ) => Promise<{
+    createWritable: () => Promise<{
+      write: (data: Blob) => Promise<void>;
+      close: () => Promise<void>;
+    }>;
+  }>;
+};
+
+export function ValidationPanel() {
+  const { t, fmt } = useTranslation();
+  const result = useAppSelector((s) => s.scan.lastResult);
+  const error = useAppSelector((s) => s.scan.errorMessage);
+  const phase = useAppSelector((s) => s.scan.phase);
+  const kind = useAppSelector((s) => s.scan.kind);
+  const scanKind = kind === "vector" ? "vector" : "raster";
+
+  const rasterFrame = useAppSelector((s) => s.image.frame);
+  const rasterRes = useAppSelector((s) => s.image.resolution);
+  const rasterCursor = useAppSelector((s) => s.image.cursor);
+  const vectorImage = useAppSelector((s) => s.image.vectorImage);
+  const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
+  const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
+  const vectorLatency = useAppSelector((s) => s.scan.vector.latency_bytes);
+  const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
+
+  const [csvState, setCsvState] = useState<DownloadState>("idle");
+  const [figState, setFigState] = useState<DownloadState>("idle");
+  const [csvErr, setCsvErr] = useState<string | null>(null);
+  const [figErr, setFigErr] = useState<string | null>(null);
+  const [autoDownload, setAutoDownload] = useState(false);
+  const [downloadDir, setDownloadDir] = useState<DirectoryHandle | null>(null);
+  // downloadDirLabel is set lazily after the first translation read so
+  // we don't end up showing the English placeholder briefly during the
+  // initial mount in a Chinese-locale session.
+  const [downloadDirLabel, setDownloadDirLabel] = useState(() => t("validation.folder.default"));
+  const [autoErr, setAutoErr] = useState<string | null>(null);
+  const lastAutoDownloadKeyRef = useRef<string | null>(null);
+
+  const haveStreamData =
+    (kind === "raster" && rasterCursor > 0) ||
+    (kind === "vector" && vectorCursor > 0);
+  const haveValidatedData = result?.has_data === true;
+  const haveAnyData =
+    haveValidatedData ||
+    (haveStreamData && (phase === "completed" || phase === "paused"));
+
+  async function selectDownloadFolder() {
+    setAutoErr(null);
+    const picker = (window as any).showDirectoryPicker as
+      | (() => Promise<DirectoryHandle>)
+      | undefined;
+    if (!picker) {
+      setAutoErr(t("validation.folder.unavailable"));
+      setDownloadDir(null);
+      setDownloadDirLabel(t("validation.folder.default"));
+      return;
+    }
+
+    try {
+      const dir = await picker();
+      setDownloadDir(dir);
+      setDownloadDirLabel(dir.name || t("validation.folder.default"));
+    } catch (e: any) {
+      if (e?.name !== "AbortError") {
+        setAutoErr(e?.message ?? String(e));
+      }
+    }
+  }
+
+  const autoDownloadControls = (
+    <>
+      <div className="button-row" style={{ marginTop: 12, alignItems: "center" }}>
+        <label className="checkbox" style={{ padding: 0 }}>
+          <input
+            type="checkbox"
+            checked={autoDownload}
+            onChange={(e) => {
+              setAutoDownload(e.target.checked);
+              setAutoErr(null);
+            }}
+          />
+          {t("validation.autoDownload")}
+        </label>
+        {autoDownload && (
+          <>
+            <button className="btn btn--ghost" onClick={selectDownloadFolder}>
+              <Icon name="download" tone="accent" />
+              {t("validation.selectFolder")}
+            </button>
+            <span className="muted" style={{ fontSize: 12 }}>
+              {downloadDirLabel}
+            </span>
+          </>
+        )}
+      </div>
+      {autoErr && (
+        <div style={{ color: "var(--c-warn)", fontSize: 12, marginTop: 6 }}>
+          {t("validation.autoDownload.error", { detail: autoErr })}
+        </div>
+      )}
+    </>
+  );
+
+  /* -------- download handlers ------------------------------------------ */
+
+  async function csvDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
+    if (haveValidatedData) {
+      const r = await fetch("/api/scan/last/csv");
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+      const blob = await r.blob();
+      return {
+        blob,
+        filename: defaultDownloadFilename(scanKind, "csv", {
+          resolution: result?.resolution ?? rasterRes,
+          latency_bytes: vectorLatency,
+        }),
+      };
+    }
+
+    const blob = kind === "raster"
+      ? rasterCsvBlob(rasterFrame, rasterRes)
+      : vectorCsvBlob(vectorImage, vectorEdge);
+    return {
+      blob,
+      filename: defaultDownloadFilename(scanKind, "csv", {
+        resolution: rasterRes,
+        latency_bytes: vectorLatency,
+      }),
+    };
+  }
+
+  async function figureDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
+    const url =
+      kind === "vector"
+        ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`
+        : "/api/scan/last/figure";
+    const r = await fetch(url);
+    if (!r.ok) {
+      const detail = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);
+    }
+    const blob = await r.blob();
+    return {
+      blob,
+      filename: defaultDownloadFilename(scanKind, "png", {
+        resolution: result?.resolution ?? rasterRes,
+        latency_bytes: vectorLatency,
+      }),
+    };
+  }
+
+  async function saveDownload(blob: Blob, filename: string) {
+    if (!downloadDir) {
+      downloadBlob(blob, filename);
+      return;
+    }
+    const fileHandle = await downloadDir.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  }
+
+  async function downloadCsv() {
+    setCsvState("fetching");
+    setCsvErr(null);
+    try {
+      const { blob, filename } = await csvDownloadBlob();
+      await saveDownload(blob, filename);
+      setCsvState("idle");
+    } catch (e: any) {
+      setCsvState("error");
+      setCsvErr(e?.message ?? String(e));
+    }
+  }
+
+  async function downloadFigure() {
+    setFigState("fetching");
+    setFigErr(null);
+    try {
+      const { blob, filename } = await figureDownloadBlob();
+      await saveDownload(blob, filename);
+      setFigState("idle");
+    } catch (e: any) {
+      setFigState("error");
+      setFigErr(e?.message ?? String(e));
+    }
+  }
+
+  useEffect(() => {
+    if (!autoDownload || phase !== "completed" || !haveAnyData) return;
+
+    const key = [
+      scanKind,
+      result?.chunks ?? "stream",
+      result?.bytes ?? "stream",
+      rasterCursor,
+      vectorCursor,
+      vectorRenderMode,
+    ].join(":");
+    if (lastAutoDownloadKeyRef.current === key) return;
+    lastAutoDownloadKeyRef.current = key;
+
+    let cancelled = false;
+    async function runAutoDownload() {
+      setCsvState("fetching");
+      setFigState("fetching");
+      setCsvErr(null);
+      setFigErr(null);
+      setAutoErr(null);
+      try {
+        const csv = await csvDownloadBlob();
+        if (cancelled) return;
+        await saveDownload(csv.blob, csv.filename);
+
+        const figure = await figureDownloadBlob();
+        if (cancelled) return;
+        await saveDownload(figure.blob, figure.filename);
+
+        setCsvState("idle");
+        setFigState("idle");
+      } catch (e: any) {
+        if (!cancelled) {
+          const msg = e?.message ?? String(e);
+          setCsvState("error");
+          setFigState("error");
+          setAutoErr(msg);
+        }
+      }
+    }
+
+    runAutoDownload();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode]);
+
+  /* -------- render ------------------------------------------------------ */
+
+  if (error) {
+    return (
+      <div className="card__body">
+        {autoDownloadControls}
+        <div style={{ color: "var(--c-danger)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!result && !haveAnyData) {
+    // Empty-state message contains <Run> and <Run validated> labels
+    // that should look like the actual buttons. Same bracketed-bold
+    // convention used in RasterParameters.
+    return (
+      <div className="card__body">
+        <div className="muted" style={{ fontSize: 12 }}>
+          {renderBracketedBold(t("validation.empty"))}
+        </div>
+        {autoDownloadControls}
+      </div>
+    );
+  }
+
+  const v = result?.validation;
+  // result.kind is "raster" or "vector" — a fixed enum on the wire.
+  // We surface it as the localised name from the i18n table.
+  const resultKindKey = result?.kind === "vector" ? "tabs.vector" : "tabs.raster";
+
+  return (
+    <div className="card__body">
+      {result && (
+        <div className="canvas-meta" style={{ marginTop: 0, flexWrap: "wrap" }}>
+          <span>
+            {t("validation.meta.kind")} <b>{t(resultKindKey)}</b>
+          </span>
+          <span>
+            {t("validation.meta.chunks")} <b>{fmt(result.chunks)}</b>
+            {result.expected_chunks != null && (
+              <span className="muted"> / {fmt(result.expected_chunks)}</span>
+            )}
+          </span>
+          <span>
+            {t("validation.meta.bytes")} <b>{fmt(result.bytes)}</b>
+          </span>
+          {result.pixels_per_chunk != null && (
+            <span>
+              {t("validation.meta.pixelsPerChunk")} <b>{fmt(result.pixels_per_chunk)}</b>
+            </span>
+          )}
+          {result.send_time_s != null && (
+            <span>
+              {t("validation.meta.send")} <b>{fmtSec(result.send_time_s)}</b>
+            </span>
+          )}
+          {result.process_time_s != null && (
+            <span>
+              {t("validation.meta.process")} <b>{fmtSec(result.process_time_s)}</b>
+            </span>
+          )}
+        </div>
+      )}
+
+      {!result && haveStreamData && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+          {renderBracketedBold(t("validation.streamCompleted"))}
+        </div>
+      )}
+
+      {autoDownloadControls}
+
+      {!autoDownload && (
+        <div className="button-row" style={{ marginTop: 12 }}>
+          <button
+            className="btn"
+            disabled={!haveAnyData || csvState === "fetching"}
+            onClick={downloadCsv}
+            title={t("validation.downloadCsv.title")}
+          >
+            <Icon name="download" tone="success" />
+            {csvState === "fetching"
+              ? t("validation.downloadCsv.fetching")
+              : t("validation.downloadCsv")}
+          </button>
+          <button
+            className="btn"
+            disabled={!haveAnyData || figState === "fetching"}
+            onClick={downloadFigure}
+            title={t("validation.downloadFigure.title")}
+          >
+            <Icon name="image" tone="success" />
+            {figState === "fetching"
+              ? t("validation.downloadFigure.rendering")
+              : t("validation.downloadFigure")}
+          </button>
+        </div>
+      )}
+
+      {csvErr && (
+        <div style={{ color: "var(--c-danger)", fontSize: 12, marginTop: 6 }}>
+          {t("validation.csvError", { detail: csvErr })}
+        </div>
+      )}
+      {figErr && (
+        <div style={{ color: "var(--c-danger)", fontSize: 12, marginTop: 6 }}>
+          {t("validation.figureError", { detail: figErr })}
+        </div>
+      )}
+
+      {v && (
+        <>
+          <div className="divider" />
+          <div className="row" style={{ marginBottom: 6 }}>
+            <span className="card__title">{t("validation.title")}</span>
+            <span className="spacer" />
+            <span
+              className="status-pill"
+              data-state={v.passed ? "idle" : "error"}
+            >
+              {v.passed ? t("validation.allPassed") : t("validation.failures")}
+            </span>
+          </div>
+          <ul className="validation-list">
+            {v.checks.map((c) => (
+              <li key={c.name}>
+                <span className={c.passed ? "pass" : "fail"}>
+                  {c.passed ? t("validation.check.pass") : t("validation.check.fail")}
+                </span>
+                {/* Check names and details come from the backend in
+                    English. They're technical strings (e.g. "chunks
+                    correct", "first chunk has the expected cookie")
+                    that map to specific code paths in the Python
+                    service — translating them would create a key-by-
+                    string-prefix lookup that would silently break the
+                    next time a check is added on the backend. We
+                    surface them verbatim and rely on the PASS/FAIL
+                    pill to communicate state in the operator's
+                    language. The integration guide notes this. */}
+                <span>{c.name}</span>
+                <span className="muted">{c.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function fmtSec(s: number): string {
+  if (s < 1e-3) return `${(s * 1e6).toFixed(0)} µs`;
+  if (s < 1) return `${(s * 1e3).toFixed(1)} ms`;
+  return `${s.toFixed(3)} s`;
+}
+
+function shortTimestampSuffix(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${String(d.getFullYear()).slice(-2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  );
+}
+
+function defaultDownloadFilename(
+  kind: "raster" | "vector",
+  fileType: "csv" | "png",
+  result: { resolution?: number | null; latency_bytes?: number | null } | null
+): string {
+  const ts = shortTimestampSuffix();
+  if (kind === "raster") {
+    const r = result?.resolution ?? 0;
+    return `raster_${r}x${r}_${ts}.${fileType}`;
+  }
+  return `vector_latency_${result?.latency_bytes ?? 0}_${ts}.${fileType}`;
+}
+
+/** Bracketed-bold for inline button-name references. Mirrors the
+ *  helper in RasterParameters — kept duplicated rather than imported
+ *  to keep components independently relocatable. */
+function renderBracketedBold(s: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  const re = /<([^<>]+)>/g;
+  let last = 0;
+  let i = 0;
+  for (const m of s.matchAll(re)) {
+    const start = m.index ?? 0;
+    if (start > last) out.push(s.slice(last, start));
+    out.push(<b key={i++}>{m[1]}</b>);
+    last = start + m[0].length;
+  }
+  if (last < s.length) out.push(s.slice(last));
+  return out;
+}

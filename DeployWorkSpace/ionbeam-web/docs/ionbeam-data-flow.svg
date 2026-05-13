@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="950" viewBox="0 0 1600 950">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#2f5f9f"/>
+    </marker>
+    <marker id="arrowReturn" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#1f7a55"/>
+    </marker>
+    <style>
+      .page { fill: #f6f8fb; }
+      .title { font: 700 28px Arial, Helvetica, sans-serif; fill: #172033; }
+      .subtitle { font: 15px Arial, Helvetica, sans-serif; fill: #5d6b82; }
+      .lane-title { font: 700 18px Arial, Helvetica, sans-serif; fill: #172033; }
+      .box-title { font: 700 15px Arial, Helvetica, sans-serif; fill: #172033; }
+      .box-text { font: 12px Arial, Helvetica, sans-serif; fill: #41506a; }
+      .small { font: 11px Arial, Helvetica, sans-serif; fill: #5d6b82; }
+      .caption { font: 12px Arial, Helvetica, sans-serif; fill: #172033; }
+      .lane-browser { fill: #e9f3ff; stroke: #8fbce8; }
+      .lane-node { fill: #eef8ef; stroke: #94c99b; }
+      .lane-api { fill: #fff5df; stroke: #e2b95f; }
+      .lane-stream { fill: #f3eefe; stroke: #b19be4; }
+      .lane-hw { fill: #fdeeee; stroke: #e79a9a; }
+      .box { fill: #ffffff; stroke: #8a96a8; stroke-width: 1.3; rx: 8; ry: 8; }
+      .box-blue { fill: #ffffff; stroke: #3b82c4; stroke-width: 1.6; rx: 8; ry: 8; }
+      .box-green { fill: #ffffff; stroke: #2f9b62; stroke-width: 1.6; rx: 8; ry: 8; }
+      .box-orange { fill: #ffffff; stroke: #c48818; stroke-width: 1.6; rx: 8; ry: 8; }
+      .box-purple { fill: #ffffff; stroke: #7c5bc7; stroke-width: 1.6; rx: 8; ry: 8; }
+      .box-red { fill: #ffffff; stroke: #c75f5f; stroke-width: 1.6; rx: 8; ry: 8; }
+      .flow { fill: none; stroke: #2f5f9f; stroke-width: 2.4; marker-end: url(#arrow); }
+      .return { fill: none; stroke: #1f7a55; stroke-width: 2.4; marker-end: url(#arrowReturn); }
+      .dashed { stroke-dasharray: 8 6; }
+      .note { fill: #ffffff; stroke: #cdd5e0; stroke-width: 1; rx: 6; ry: 6; }
+    </style>
+  </defs>
+
+  <rect class="page" x="0" y="0" width="1600" height="950"/>
+  <text class="title" x="50" y="48">Ion Beam Web Control Data Flow</text>
+  <text class="subtitle" x="50" y="75">Web frontend -> web backend -> FastAPI service -> Iobeam stream chunks -> DAC/ADC acquisition -> live image, CSV, PNG</text>
+
+  <!-- Lanes -->
+  <rect class="lane-browser" x="40" y="110" width="280" height="760" rx="14"/>
+  <rect class="lane-node" x="350" y="110" width="230" height="760" rx="14"/>
+  <rect class="lane-api" x="610" y="110" width="300" height="760" rx="14"/>
+  <rect class="lane-stream" x="940" y="110" width="300" height="760" rx="14"/>
+  <rect class="lane-hw" x="1270" y="110" width="290" height="760" rx="14"/>
+
+  <text class="lane-title" x="70" y="145">Web Frontend</text>
+  <text class="small" x="70" y="164">React + Redux + Canvas</text>
+  <text class="lane-title" x="380" y="145">Web Backend</text>
+  <text class="small" x="380" y="164">Node / TypeScript proxy</text>
+  <text class="lane-title" x="640" y="145">Web API Service</text>
+  <text class="small" x="640" y="164">FastAPI glasgow_service</text>
+  <text class="lane-title" x="970" y="145">Iobeam Stream</text>
+  <text class="small" x="970" y="164">Command chunks to FPGA</text>
+  <text class="lane-title" x="1300" y="145">Glasgow + Acquisition</text>
+  <text class="small" x="1300" y="164">FX2 + iCE40 + analog IO</text>
+
+  <!-- Browser boxes -->
+  <rect class="box-blue" x="70" y="205" width="220" height="70"/>
+  <text class="box-title" x="88" y="230">Operator controls</text>
+  <text class="box-text" x="88" y="250">Run / Pause / Stop</text>
+  <text class="box-text" x="88" y="267">Raster, Vector, ROI inputs</text>
+
+  <rect class="box-blue" x="70" y="315" width="220" height="82"/>
+  <text class="box-title" x="88" y="340">Request builder</text>
+  <text class="box-text" x="88" y="360">RasterRequest / VectorRequest</text>
+  <text class="box-text" x="88" y="377">ROI bitmap conversion</text>
+
+  <rect class="box-blue" x="70" y="445" width="220" height="82"/>
+  <text class="box-title" x="88" y="470">WebSocket client</text>
+  <text class="box-text" x="88" y="490">/ws/scan/raster/stream</text>
+  <text class="box-text" x="88" y="507">/ws/scan/vector/stream</text>
+
+  <rect class="box-blue" x="70" y="610" width="220" height="94"/>
+  <text class="box-title" x="88" y="635">Live image pipeline</text>
+  <text class="box-text" x="88" y="655">Decode uint16 ADC bytes</text>
+  <text class="box-text" x="88" y="672">Redux image buffers</text>
+  <text class="box-text" x="88" y="689">Canvas auto-level render</text>
+
+  <rect class="box-blue" x="70" y="745" width="220" height="82"/>
+  <text class="box-title" x="88" y="770">Run report</text>
+  <text class="box-text" x="88" y="790">Manual or auto download</text>
+  <text class="box-text" x="88" y="807">CSV + PNG figure</text>
+
+  <!-- Node boxes -->
+  <rect class="box-green" x="380" y="240" width="170" height="78"/>
+  <text class="box-title" x="398" y="265">REST proxy</text>
+  <text class="box-text" x="398" y="285">/api/* -> FastAPI</text>
+  <text class="box-text" x="398" y="302">status, defaults, run</text>
+
+  <rect class="box-green" x="380" y="430" width="170" height="92"/>
+  <text class="box-title" x="398" y="455">WS proxy</text>
+  <text class="box-text" x="398" y="475">pipes binary frames</text>
+  <text class="box-text" x="398" y="492">injects bearer token</text>
+  <text class="box-text" x="398" y="509">keeps token off browser</text>
+
+  <!-- API boxes -->
+  <rect class="box-orange" x="640" y="205" width="240" height="76"/>
+  <text class="box-title" x="658" y="230">FastAPI routes</text>
+  <text class="box-text" x="658" y="250">/scan/*/stream</text>
+  <text class="box-text" x="658" y="267">/scan/*/run</text>
+
+  <rect class="box-orange" x="640" y="330" width="240" height="86"/>
+  <text class="box-title" x="658" y="355">DeviceService</text>
+  <text class="box-text" x="658" y="375">single Glasgow owner</text>
+  <text class="box-text" x="658" y="392">busy lock + last-scan cache</text>
+
+  <rect class="box-orange" x="640" y="465" width="240" height="92"/>
+  <text class="box-title" x="658" y="490">Command construction</text>
+  <text class="box-text" x="658" y="510">RasterScanCommand</text>
+  <text class="box-text" x="658" y="527">VectorScanCommand</text>
+  <text class="box-text" x="658" y="544">ROI -> DACCodeRange</text>
+
+  <rect class="box-orange" x="640" y="620" width="240" height="86"/>
+  <text class="box-title" x="658" y="645">transfer_multiple()</text>
+  <text class="box-text" x="658" y="665">async chunk iterator</text>
+  <text class="box-text" x="658" y="682">captures chunks for downloads</text>
+
+  <rect class="box-orange" x="640" y="745" width="240" height="82"/>
+  <text class="box-title" x="658" y="770">Latest scan cache</text>
+  <text class="box-text" x="658" y="790">/scan/last/csv</text>
+  <text class="box-text" x="658" y="807">/scan/last/figure</text>
+
+  <!-- Iobeam stream boxes -->
+  <rect class="box-purple" x="970" y="195" width="240" height="78"/>
+  <text class="box-title" x="988" y="220">SynchronizeCommand</text>
+  <text class="box-text" x="988" y="240">cookie + raster/vector mode</text>
+  <text class="box-text" x="988" y="257">discard stale stream bytes</text>
+
+  <rect class="box-purple" x="970" y="315" width="240" height="86"/>
+  <text class="box-title" x="988" y="340">Raster command path</text>
+  <text class="box-text" x="988" y="360">RasterRegionCommand</text>
+  <text class="box-text" x="988" y="377">RasterPixelRunCommand</text>
+
+  <rect class="box-purple" x="970" y="450" width="240" height="92"/>
+  <text class="box-title" x="988" y="475">Vector command path</text>
+  <text class="box-text" x="988" y="495">ArrayCommand(VectorPixel)</text>
+  <text class="box-text" x="988" y="512">big-endian X/Y/dwell triples</text>
+  <text class="box-text" x="988" y="529">pipeline window + flush</text>
+
+  <rect class="box-purple" x="970" y="610" width="240" height="94"/>
+  <text class="box-title" x="988" y="635">Iobeam stream chunks</text>
+  <text class="box-text" x="988" y="655">USB OUT command chunks</text>
+  <text class="box-text" x="988" y="672">tail drain padding</text>
+  <text class="box-text" x="988" y="689">FlushCommand submit</text>
+
+  <!-- Hardware boxes -->
+  <rect class="box-red" x="1300" y="185" width="220" height="78"/>
+  <text class="box-title" x="1318" y="210">FX2 USB FIFO</text>
+  <text class="box-text" x="1318" y="230">bulk OUT / bulk IN</text>
+  <text class="box-text" x="1318" y="247">endpoint timing</text>
+
+  <rect class="box-red" x="1300" y="305" width="220" height="84"/>
+  <text class="box-title" x="1318" y="330">iCE40 FPGA</text>
+  <text class="box-text" x="1318" y="350">command decoder</text>
+  <text class="box-text" x="1318" y="367">raster/vector sequencer</text>
+
+  <rect class="box-red" x="1300" y="440" width="220" height="86"/>
+  <text class="box-title" x="1318" y="465">DAC beam control</text>
+  <text class="box-text" x="1318" y="485">14-bit X/Y position</text>
+  <text class="box-text" x="1318" y="502">dwell + blanking</text>
+
+  <rect class="box-red" x="1300" y="575" width="220" height="88"/>
+  <text class="box-title" x="1318" y="600">ADC acquisition</text>
+  <text class="box-text" x="1318" y="620">detector response</text>
+  <text class="box-text" x="1318" y="637">16-bit sample stream</text>
+
+  <rect class="box-red" x="1300" y="715" width="220" height="86"/>
+  <text class="box-title" x="1318" y="740">Image serializer</text>
+  <text class="box-text" x="1318" y="760">high byte, low byte</text>
+  <text class="box-text" x="1318" y="777">ADC bytes to USB IN</text>
+
+  <!-- Forward request/control flow -->
+  <path class="flow" d="M180 275 L180 315"/>
+  <path class="flow" d="M180 397 L180 445"/>
+  <path class="flow" d="M290 486 L380 476"/>
+  <text class="caption" x="295" y="458">JSON request</text>
+  <path class="flow" d="M550 476 L640 243"/>
+  <text class="caption" x="555" y="372">WS/REST proxy</text>
+  <path class="flow" d="M760 281 L760 330"/>
+  <path class="flow" d="M760 416 L760 465"/>
+  <path class="flow" d="M760 557 L760 620"/>
+  <path class="flow" d="M880 663 L970 234"/>
+  <text class="caption" x="888" y="440">command bytes</text>
+
+  <path class="flow" d="M1090 273 L1090 315"/>
+  <path class="flow" d="M1090 401 L1090 450"/>
+  <path class="flow" d="M1090 542 L1090 610"/>
+  <path class="flow" d="M1210 657 L1300 224"/>
+  <text class="caption" x="1218" y="430">USB OUT</text>
+  <path class="flow" d="M1410 263 L1410 305"/>
+  <path class="flow" d="M1410 389 L1410 440"/>
+  <path class="flow" d="M1410 526 L1410 575"/>
+  <path class="flow" d="M1410 663 L1410 715"/>
+
+  <!-- Return ADC data flow -->
+  <path class="return" d="M1300 758 C1165 760, 1085 760, 880 663"/>
+  <text class="caption" x="1062" y="745">USB IN ADC bytes</text>
+  <path class="return" d="M640 663 C520 665, 430 650, 290 651"/>
+  <text class="caption" x="410" y="638">binary WebSocket frames</text>
+  <path class="return" d="M180 527 L180 610"/>
+  <path class="return" d="M180 704 L180 745"/>
+  <path class="return dashed" d="M760 706 L760 745 L290 786"/>
+  <text class="caption" x="462" y="772">CSV / PNG latest output</text>
+
+  <!-- REST side branch -->
+  <path class="flow dashed" d="M290 356 L380 279"/>
+  <path class="flow dashed" d="M550 279 L640 243"/>
+  <text class="caption" x="372" y="225">validated run / status / defaults</text>
+
+  <!-- Note -->
+  <rect class="note" x="50" y="895" width="1500" height="36"/>
+  <text class="small" x="70" y="918">Blue arrows: command/request direction. Green arrows: ADC/data return path. Dashed arrows: REST validated-run and download/cache path.</text>
+</svg>

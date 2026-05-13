@@ -1,7 +1,12 @@
-from os import sync
 import time
 import asyncio
 from collections import deque
+
+try:
+    from os import sync
+except ImportError:
+    def sync():
+        return None
 
 import logging
 logger = logging.getLogger(__name__)

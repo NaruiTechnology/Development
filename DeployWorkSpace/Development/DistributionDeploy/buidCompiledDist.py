@@ -315,13 +315,25 @@ def copy_matching_assets(src_dir, dist_dir, patterns, skip_dirs):
                 print(f"Copied asset: {os.path.join(rel_path, filename)}")
 
 
+def _remove_tree(path):
+    def make_writable(func, target, _exc_info):
+        try:
+            os.chmod(target, 0o700)
+        except OSError:
+            pass
+        func(target)
+
+    if os.path.exists(path):
+        shutil.rmtree(path, onerror=make_writable)
+
+
 def copy_json_sources(src_dir, dist_dir, json_sources):
     for jx in json_sources:
         json_src = os.path.join(src_dir, jx)
         if os.path.exists(json_src):
             json_dist = os.path.join(dist_dir, jx)
             if os.path.exists(json_dist):
-                shutil.rmtree(json_dist)
+                _remove_tree(json_dist)
             shutil.copytree(json_src, json_dist)
             print(f"Copied JSON configuration files [{jx}].")
 
@@ -340,27 +352,42 @@ def copy_venv(src_dir, dist_dir):
 
 def copy_source_trees(src_dir, dist_dir, copy_trees, skip_dirs):
     for rel_tree in copy_trees:
-        src_tree = os.path.join(src_dir, rel_tree)
-        if not os.path.isdir(src_tree) and rel_tree.startswith(f'Development{os.sep}'):
-            src_tree = os.path.join(src_dir, os.path.relpath(rel_tree, 'Development'))
-        if not os.path.isdir(src_tree):
+        src_tree = None
+        candidates = [
+            os.path.join(src_dir, rel_tree),
+            os.path.join(src_dir, 'Development', rel_tree),
+        ]
+        if rel_tree.startswith(f'Development{os.sep}'):
+            candidates.append(os.path.join(src_dir, os.path.relpath(rel_tree, 'Development')))
+        for candidate in candidates:
+            if os.path.isdir(candidate):
+                src_tree = candidate
+                break
+        if src_tree is None:
             print(f"Source tree [{rel_tree}] not found (skipping).")
             continue
 
-        dst_tree = os.path.join(dist_dir, os.path.basename(rel_tree))
+        dst_tree = os.path.join(dist_dir, rel_tree)
         if os.path.exists(dst_tree):
-            shutil.rmtree(dst_tree)
+            _remove_tree(dst_tree)
         shutil.copytree(src_tree, dst_tree)
-        print(f"Copied source tree [{rel_tree}].")
+        print(f"Copied source tree [{rel_tree}] from [{src_tree}].")
 
 
 def zip_dist(dist_dir, output_zip):
+    output_dir = os.path.dirname(os.path.abspath(output_zip))
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     if os.path.exists(output_zip):
         os.remove(output_zip)
     abs_dist = os.path.abspath(dist_dir)
     abs_out = os.path.abspath(output_zip)
     with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
-        for root, _, files in os.walk(dist_dir):
+        for root, dirs, files in os.walk(dist_dir):
+            for dirname in dirs:
+                full_dir = os.path.join(root, dirname)
+                arcname = os.path.relpath(full_dir, abs_dist)
+                zf.write(full_dir, arcname)
             for f in files:
                 full = os.path.join(root, f)
                 if os.path.abspath(full) == abs_out:
@@ -387,7 +414,7 @@ def build_compiled_dist(src_dir, dist_dir, output_zip=None,
     copy_trees = copy_trees if copy_trees is not None else DEFAULT_COPY_TREES
 
     if os.path.exists(dist_dir):
-        shutil.rmtree(dist_dir)
+        _remove_tree(dist_dir)
     os.makedirs(dist_dir)
 
     if mode == 'cython':

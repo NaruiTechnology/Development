@@ -28,8 +28,12 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             webRoot = actionData.get(
                 "webRoot",
                 os.path.join(self.deployRoot(), "Development", "ionbeam-web"))
+            webRoot = self._resolveWebRoot(webRoot)
             backendDir = actionData.get("backendDir", os.path.join(webRoot, "backend"))
             frontendDir = actionData.get("frontendDir", os.path.join(webRoot, "frontend"))
+            if not os.path.isdir(backendDir) or not os.path.isdir(frontendDir):
+                backendDir = os.path.join(webRoot, "backend")
+                frontendDir = os.path.join(webRoot, "frontend")
             createEnv = bool(actionData.get("createBackendEnv", True))
             install = bool(actionData.get("npmInstall", True))
             useNvm = bool(actionData.get("useNvm", True))
@@ -95,6 +99,26 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             "bash -lc 'export NVM_DIR=\"$HOME/.nvm\" && "
             "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && {}'"
             .format(cmd)
+        )
+
+    def _resolveWebRoot(self, configuredRoot):
+        candidates = [
+            configuredRoot,
+            os.path.join(self.deployRoot(), "ionbeam-web"),
+            os.path.join(self.deployRoot(), "Development", "ionbeam-web"),
+        ]
+        for candidate in candidates:
+            if self._hasNodeProjects(candidate):
+                if candidate != configuredRoot:
+                    self.info("[{}] using detected ionbeam-web root: {}"
+                              .format(type(self).__name__, candidate))
+                return candidate
+        return configuredRoot
+
+    def _hasNodeProjects(self, webRoot):
+        return (
+            os.path.isfile(os.path.join(webRoot, "backend", "package.json")) and
+            os.path.isfile(os.path.join(webRoot, "frontend", "package.json"))
         )
 
     async def _runWithTimeout(self, cmd, runDir, timeout):

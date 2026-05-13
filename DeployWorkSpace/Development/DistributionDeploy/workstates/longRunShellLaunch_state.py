@@ -94,7 +94,7 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
             lines.append("set \"{}={}\"".format(str(key), str(value)))
 
         lines.extend([
-            "echo ================================================== >> {}".format(self._cmdQuote(logPath)),
+            "echo ================================================== > {}".format(self._cmdQuote(logPath)),
             "echo [%DATE% %TIME%] Starting %IONBEAM_SERVICE_TITLE% >> {}".format(self._cmdQuote(logPath)),
             "echo Working directory: %CD% >> {}".format(self._cmdQuote(logPath)),
             "echo Command: {} >> {}".format(command, self._cmdQuote(logPath)),
@@ -116,8 +116,6 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
         return scriptPath
 
     def _hostCommand(self, command, logPath, showOutput):
-        if showOutput:
-            return "call {}".format(command)
         return "call {} >> {} 2>&1".format(command, self._cmdQuote(logPath))
 
     def _launchWindowsHostShell(self, scriptPath, title, spawnTerminal):

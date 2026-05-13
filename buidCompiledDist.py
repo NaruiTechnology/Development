@@ -36,6 +36,18 @@ COPY_TREES = [
     'ionbeam-web',
 ]
 
+DEPLOY_WORKFLOW_SOURCE = os.path.join('DeployWorkSpace', 'Development', 'DistributionDeploy')
+DEPLOY_WORKFLOW_TARGET = os.path.join('Development', 'DistributionDeploy')
+DEPLOY_WORKFLOW_SKIP = [
+    '__pycache__',
+    'dist_app',
+    'dist_app.zip',
+    'dist_app_raw.zip',
+]
+DEFAULT_DEPLOY_WORKSPACE = 'DeployWorkSpace'
+DEFAULT_DEPLOY_WORKSPACE_ZIP = 'DeployWorkSpace.zip'
+ONE_CLICK_DEPLOY_BAT = 'OneKeyDeploy.bat'
+
 
 def _is_inside(path, parent):
     path = os.path.abspath(path)
@@ -48,6 +60,39 @@ def _is_inside(path, parent):
 
 def _target_folder(dist_dir, rel_path):
     return dist_dir if rel_path == os.curdir else os.path.join(dist_dir, rel_path)
+
+
+def _remove_tree(path):
+    def make_writable(func, target, _exc_info):
+        try:
+            os.chmod(target, 0o700)
+        except OSError:
+            pass
+        func(target)
+
+    if os.path.exists(path):
+        shutil.rmtree(path, onerror=make_writable)
+
+
+def cleanup_pycache_dirs(root_dir):
+    skip = {
+        '.git',
+        '.venv',
+        'node_modules',
+        'dist_app',
+        'dist_app_raw',
+    }
+    removed = 0
+    for root, dirs, _files in os.walk(root_dir):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for dirname in list(dirs):
+            if dirname == '__pycache__':
+                _remove_tree(os.path.join(root, dirname))
+                dirs.remove(dirname)
+                removed += 1
+
+    if removed:
+        print(f"Removed generated __pycache__ folders: {removed}")
 
 
 def copy_matching_assets(src_dir, dist_dir, patterns):
@@ -83,26 +128,192 @@ def copy_json_sources(src_dir, dist_dir):
 
 
 def copy_source_trees(src_dir, dist_dir):
-    ignore = shutil.ignore_patterns(*SKIP_DIRS)
     for rel_tree in COPY_TREES:
         src_tree = os.path.join(src_dir, rel_tree)
         if not os.path.isdir(src_tree):
             continue
         dst_tree = os.path.join(dist_dir, rel_tree)
         if os.path.exists(dst_tree):
-            shutil.rmtree(dst_tree)
-        shutil.copytree(src_tree, dst_tree, ignore=ignore)
+            _remove_tree(dst_tree)
+        shutil.copytree(src_tree, dst_tree)
         print(f"Copied source tree: {os.path.normpath(rel_tree)}")
 
 
+def copy_tree_exact(src_tree, dst_tree, label):
+    if not os.path.isdir(src_tree):
+        raise FileNotFoundError(f"{label} source tree not found: {src_tree}")
+    if os.path.exists(dst_tree):
+        _remove_tree(dst_tree)
+    shutil.copytree(src_tree, dst_tree)
+    print(f"Copied {label}: {os.path.normpath(src_tree)} -> {os.path.normpath(dst_tree)}")
+
+
+def copy_deploy_workflow(src_dir, dist_dir):
+    workflow_src = os.path.join(src_dir, DEPLOY_WORKFLOW_SOURCE)
+    if not os.path.isdir(workflow_src):
+        return
+
+    workflow_dst = os.path.join(dist_dir, DEPLOY_WORKFLOW_TARGET)
+    if os.path.exists(workflow_dst):
+        _remove_tree(workflow_dst)
+    shutil.copytree(
+        workflow_src,
+        workflow_dst,
+        ignore=shutil.ignore_patterns(*DEPLOY_WORKFLOW_SKIP),
+    )
+    print(
+        "Copied deploy workflow: {} -> {}".format(
+            os.path.normpath(DEPLOY_WORKFLOW_SOURCE),
+            os.path.normpath(DEPLOY_WORKFLOW_TARGET),
+        )
+    )
+
+
+def zip_folder(folder, output_zip):
+    output_dir = os.path.dirname(os.path.abspath(output_zip))
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    if os.path.exists(output_zip):
+        os.remove(output_zip)
+
+    abs_folder = os.path.abspath(folder)
+    abs_output = os.path.abspath(output_zip)
+    base_parent = os.path.dirname(abs_folder)
+    with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
+        for root, dirs, files in os.walk(abs_folder):
+            dirs[:] = [d for d in dirs if d not in {'__pycache__', 'dist_app'}]
+            for dirname in dirs:
+                src_dir = os.path.join(root, dirname)
+                archive.write(src_dir, os.path.relpath(src_dir, base_parent))
+            for filename in files:
+                src_file = os.path.join(root, filename)
+                if os.path.abspath(src_file) == abs_output:
+                    continue
+                archive.write(src_file, os.path.relpath(src_file, base_parent))
+
+    size_mb = os.path.getsize(output_zip) / (1024 * 1024)
+    print(f"Workspace archive created successfully: {output_zip} ({size_mb:.2f} MB)")
+
+
+def write_one_click_deploy_launcher(workspace_dir):
+    launcher_path = os.path.join(workspace_dir, ONE_CLICK_DEPLOY_BAT)
+    builder_python = os.path.abspath(sys.executable)
+    launcher = rf'''@echo off
+setlocal
+title IobeamTech One-Key Deploy
+
+cd /d "%~dp0"
+set "APP=%~dp0Development\DistributionDeploy\distributionDeployApp.py"
+set "CONFIG=%~dp0Development\DistributionDeploy\Json\DistributionDeploy.json"
+set "BUILDER_PYTHON={builder_python}"
+
+if not exist "%APP%" (
+    echo Deploy entrypoint not found:
+    echo   "%APP%"
+    pause
+    exit /b 1
+)
+
+if not exist "%CONFIG%" (
+    echo Deploy config not found:
+    echo   "%CONFIG%"
+    pause
+    exit /b 1
+)
+
+if exist "%~dp0.venv\Scripts\python.exe" (
+    set "PYTHON=%~dp0.venv\Scripts\python.exe"
+    goto run_deploy
+)
+
+if exist "%BUILDER_PYTHON%" (
+    set "PYTHON=%BUILDER_PYTHON%"
+    goto run_deploy
+)
+
+where py >nul 2>nul
+if %ERRORLEVEL% EQU 0 (
+    py -3 "%APP%" -j "%CONFIG%" %*
+    set "DEPLOY_EXIT=%ERRORLEVEL%"
+    goto done
+)
+
+where python >nul 2>nul
+if %ERRORLEVEL% EQU 0 (
+    python "%APP%" -j "%CONFIG%" %*
+    set "DEPLOY_EXIT=%ERRORLEVEL%"
+    goto done
+)
+
+echo Python was not found on PATH. Install Python 3 or run from a shell that has Python available.
+pause
+exit /b 1
+
+:run_deploy
+"%PYTHON%" "%APP%" -j "%CONFIG%" %*
+set "DEPLOY_EXIT=%ERRORLEVEL%"
+
+:done
+echo.
+if "%DEPLOY_EXIT%"=="0" (
+    echo Deploy workflow completed successfully.
+) else (
+    echo Deploy workflow failed with exit code %DEPLOY_EXIT%.
+)
+pause
+exit /b %DEPLOY_EXIT%
+'''
+    with open(launcher_path, 'w', newline='\r\n') as f:
+        f.write(launcher)
+    print(f"Wrote one-key deploy launcher: {launcher_path}")
+
+
+def package_deploy_workspace(src_dir, dist_zip, workspace_dir, workspace_zip):
+    workspace_dir = os.path.abspath(workspace_dir)
+    dist_zip = os.path.abspath(dist_zip)
+    workspace_zip = os.path.abspath(workspace_zip)
+
+    if not os.path.isdir(workspace_dir):
+        raise FileNotFoundError(f"Deploy workspace not found: {workspace_dir}")
+    if not os.path.isfile(dist_zip):
+        raise FileNotFoundError(f"dist_app.zip not found: {dist_zip}")
+
+    embedded_zip = os.path.join(
+        workspace_dir,
+        'Development',
+        'DistributionDeploy',
+        os.path.basename(dist_zip),
+    )
+    os.makedirs(os.path.dirname(embedded_zip), exist_ok=True)
+    if os.path.abspath(embedded_zip) != dist_zip:
+        shutil.copy2(dist_zip, embedded_zip)
+        print(f"Embedded dist archive: {embedded_zip}")
+
+    copy_tree_exact(
+        os.path.join(src_dir, 'ionbeam-web'),
+        os.path.join(workspace_dir, 'ionbeam-web'),
+        'DeployWorkSpace ionbeam-web tree',
+    )
+    write_one_click_deploy_launcher(workspace_dir)
+    zip_folder(workspace_dir, workspace_zip)
+
+
 def zip_dist(dist_dir, output_zip):
+    output_dir = os.path.dirname(os.path.abspath(output_zip))
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     if os.path.exists(output_zip):
         os.remove(output_zip)
 
     abs_dist = os.path.abspath(dist_dir)
     abs_output = os.path.abspath(output_zip)
     with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
-        for root, _, files in os.walk(dist_dir):
+        for root, dirs, files in os.walk(dist_dir):
+            for dirname in dirs:
+                src_dir = os.path.join(root, dirname)
+                archive.write(src_dir, os.path.relpath(src_dir, abs_dist))
             for filename in files:
                 src_file = os.path.join(root, filename)
                 if os.path.abspath(src_file) == abs_output:
@@ -114,7 +325,8 @@ def zip_dist(dist_dir, output_zip):
 
 
 def build_compiled_dist(src_dir, dist_dir, output_zip='dist_app.zip',
-                        deliver_raw=False, clean=True):
+                        deliver_raw=False, clean=True,
+                        deploy_workspace=None, deploy_workspace_zip=None):
     src_dir = os.path.abspath(src_dir)
     dist_dir = os.path.abspath(dist_dir)
     output_zip = os.path.abspath(output_zip) if output_zip else None
@@ -131,7 +343,7 @@ def build_compiled_dist(src_dir, dist_dir, output_zip='dist_app.zip',
 
     # 2. Refresh the dist folder.
     if os.path.exists(dist_dir):
-        shutil.rmtree(dist_dir, ignore_errors=True)
+        _remove_tree(dist_dir)
     os.makedirs(dist_dir, exist_ok=True)
 
     # 3. Package source files: raw .py files OR extracted/flattened .pyc files.
@@ -176,18 +388,31 @@ def build_compiled_dist(src_dir, dist_dir, output_zip='dist_app.zip',
     # 5. Copy non-Python application source trees.
     copy_source_trees(src_dir, dist_dir)
 
-    # 6. Copy assets (includes README.md).
+    # 6. Copy the deployment workflow and JSON config.
+    copy_deploy_workflow(src_dir, dist_dir)
+
+    # 7. Copy assets (includes README.md).
     copy_matching_assets(src_dir, dist_dir, ASSET_PATTERNS)
 
-    # 7. Zip the output content.
+    # 8. Zip the output content.
     if output_zip:
         print(f"\nCreating archive {output_zip}...")
         zip_dist(dist_dir, output_zip)
 
-    # 8. Final cleanup.
+    # 9. Final cleanup.
     if clean:
         print(f"Removing temporary build folder {dist_dir}...")
-        shutil.rmtree(dist_dir, ignore_errors=True)
+        _remove_tree(dist_dir)
+
+    cleanup_pycache_dirs(src_dir)
+
+    if output_zip and deploy_workspace and deploy_workspace_zip:
+        package_deploy_workspace(
+            src_dir,
+            output_zip,
+            deploy_workspace,
+            deploy_workspace_zip,
+        )
 
 
 def parse_args(argv=None):
@@ -199,6 +424,14 @@ def parse_args(argv=None):
                         help="Deliver raw python code (skip byte-compilation).")
     parser.add_argument('--keep-dist', action='store_true',
                         help="Keep the temporary dist folder after zipping.")
+    parser.add_argument('--deploy-workspace',
+                        default=DEFAULT_DEPLOY_WORKSPACE,
+                        help="DeployWorkSpace folder to refresh and zip.")
+    parser.add_argument('--deploy-workspace-zip',
+                        default=DEFAULT_DEPLOY_WORKSPACE_ZIP,
+                        help="Output zip path for the whole DeployWorkSpace folder.")
+    parser.add_argument('--no-deploy-workspace-zip', action='store_true',
+                        help="Skip refreshing and zipping DeployWorkSpace after dist_app.zip.")
     return parser.parse_args(argv)
 
 
@@ -210,9 +443,17 @@ def main(argv=None):
         output_zip=args.output,
         deliver_raw=bool(args.raw),
         clean=not args.keep_dist,
+        deploy_workspace=None if args.no_deploy_workspace_zip else args.deploy_workspace,
+        deploy_workspace_zip=None if args.no_deploy_workspace_zip else args.deploy_workspace_zip,
     )
     mode = "raw source" if args.raw else "compiled .pyc"
-    print(f"\nBuild complete ({mode})! The final package is '{args.output}'.")
+    if args.no_deploy_workspace_zip:
+        print(f"\nBuild complete ({mode})! The final package is '{args.output}'.")
+    else:
+        print(
+            f"\nBuild complete ({mode})! The one-key deploy package is "
+            f"'{args.deploy_workspace_zip}'."
+        )
     return 0
 
 

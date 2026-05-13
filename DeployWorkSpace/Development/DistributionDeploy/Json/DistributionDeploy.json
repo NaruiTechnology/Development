@@ -218,6 +218,39 @@
 			}
 		},
 		{
+			"setupUvicorn":{
+				"skip":false,
+				"transactionComplete":false,
+				"actionData":{
+					"commandFormat":"iterative",
+					"pipPackages":[
+						"fastapi>=0.110",
+						"uvicorn[standard]>=0.27",
+						"pydantic>=2.5",
+						"websockets>=12"
+					],
+					"useVenv":true,
+					"venvDir":"C:\\Project\\Iobeam\\Deploy\\.venv",
+					"venvActivate":"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\activate",
+					"verifyCommands":[
+						[
+							"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\python.exe",
+							"-c",
+							"import uvicorn, fastapi, pydantic, websockets"
+						],
+						[
+							"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\python.exe",
+							"-m",
+							"uvicorn",
+							"--version"
+						]
+					],
+					"stopOnError":true
+				},
+				"timeout":300.0
+			}
+		},
+		{
 			"launchGlasgowService":{
 				"skip":false,
 				"transactionComplete":false,
@@ -246,7 +279,7 @@
 				"skip":false,
 				"transactionComplete":false,
 				"actionData":{
-					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Sleep -Seconds {}; if (Test-Path \u0027{}\u0027) {{ Select-String -Path \u0027{}\u0027 -Pattern \u0027{}\u0027 -Quiet }} else {{ exit 1 }}\"",
+					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Sleep -Seconds {}; if (Test-Path \u0027{}\u0027) {{ if (Select-String -Path \u0027{}\u0027 -Pattern \u0027{}\u0027 -Quiet) {{ exit 0 }} else {{ exit 1 }} }} else {{ exit 1 }}\"",
 					"delay":"3",
 					"log":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
 					"logAgain":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
