@@ -33,15 +33,6 @@ export const fetchDefaults = createAsyncThunk<ServerDefaults>(
   }
 );
 
-export const reconnectDevice = createAsyncThunk<ServiceStatus>(
-  "status/reconnect",
-  async () => {
-    const r = await fetch("/api/admin/reconnect", { method: "POST" });
-    if (!r.ok) throw new Error(`reconnect: HTTP ${r.status}`);
-    return (await r.json()) as ServiceStatus;
-  }
-);
-
 const slice = createSlice({
   name: "status",
   initialState,
@@ -65,13 +56,6 @@ const slice = createSlice({
     });
     b.addCase(fetchDefaults.rejected, (s, a) => {
       s.lastError = a.error.message ?? "defaults fetch failed";
-    });
-    b.addCase(reconnectDevice.fulfilled, (s, a) => {
-      s.service = a.payload;
-      s.lastError = null;
-    });
-    b.addCase(reconnectDevice.rejected, (s, a) => {
-      s.lastError = a.error.message ?? "reconnect failed";
     });
   },
 });

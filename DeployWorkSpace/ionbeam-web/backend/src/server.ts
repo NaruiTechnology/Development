@@ -41,8 +41,6 @@ if (config.mock) {
   app.get("/api/defaults", (_req, res) => res.json(mockRest.defaults()));
   app.post("/api/scan/raster/run", (req, res) => res.json(mockRest.runRaster(req.body)));
   app.post("/api/scan/vector/run", (req, res) => res.json(mockRest.runVector(req.body)));
-  app.post("/api/admin/reconnect", (_req, res) => res.json(mockRest.status()));
-
   // Last-scan downloads. The CSV is generated synthetically in-process;
   // the figure endpoint returns 501 because matplotlib only runs on the
   // Python side, and pulling in a Node image-rendering lib just for the

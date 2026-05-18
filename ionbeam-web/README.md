@@ -124,7 +124,6 @@ the FastAPI process. Put it behind nginx/Caddy for TLS.
 | Run raster (validated) | `POST /api/scan/raster/run`       | Forwards with bearer              | `POST /scan/raster/run` → `ScanResult`|
 | Pause                  | `ws.close(1000)`                  | Drops upstream socket             | `WebSocketDisconnect` → cancels gen   |
 | Stop                   | `ws.close(1000)` + clear state    | same                              | same                                  |
-| Reconnect device       | button → `POST /api/admin/reconnect`| Forwards                        | `POST /admin/reconnect`               |
 
 ## Scan Physics Principle
 

@@ -1,21 +1,3 @@
-/**
- * Language picker — segmented control. Mirrors the theme picker
- * intentionally:
- *   - Same .segmented / .segmented__btn classes (no new CSS).
- *   - Same label-then-control pattern (`card__title` + radiogroup).
- *   - Buttons show locale short label + the language's own name in
- *     its native form for the title tooltip.
- *
- * Why not a <select>?
- * -------------------
- * The theme picker has three options and is a visual segmented control
- * because the active option is meaningful at a glance — "what theme am
- * I on?" gets answered without a click. Language has the same property:
- * three options, exactly one active, picking the wrong one is a common
- * mistake to recover from. A select hides the current value behind a
- * click; a segmented control surfaces it. The cost is exactly one row
- * in the header, which we have room for.
- */
 import { setLocale, persistLocale } from "../store/localeSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
@@ -25,7 +7,6 @@ import {
   useTranslation,
   type LocaleCode,
 } from "../i18n";
-import { Icon } from "./Icon";
 
 export function LanguagePicker() {
   const dispatch = useAppDispatch();
@@ -47,37 +28,20 @@ export function LanguagePicker() {
       <span className="card__title" id="language-picker-label">
         {t("header.language.label")}
       </span>
-      <div
-        className="segmented"
-        role="radiogroup"
+      <select
+        className="select header-select"
         aria-labelledby="language-picker-label"
         aria-label={t("header.language.title")}
+        value={locale}
+        title={LOCALE_NAMES[locale]}
+        onChange={(event) => pick(event.target.value as LocaleCode)}
       >
-        {ALL_LOCALES.map((code) => {
-          const active = locale === code;
-          return (
-            <button
-              key={code}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              aria-pressed={active}
-              className="segmented__btn"
-              // Title shows the locale's own native name (always
-              // readable to the speaker, even when the rest of the
-              // UI is in a language they don't know yet).
-              title={LOCALE_NAMES[code]}
-              lang={code}
-              onClick={() => pick(code)}
-            >
-              {code === "en" ? (
-                <Icon name="globe" tone="accent" />
-              ) : null}
-              {LOCALE_SHORT[code]}
-            </button>
-          );
-        })}
-      </div>
+        {ALL_LOCALES.map((code) => (
+          <option key={code} value={code} title={LOCALE_NAMES[code]} lang={code}>
+            {LOCALE_SHORT[code]}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

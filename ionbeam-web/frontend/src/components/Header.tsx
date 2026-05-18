@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { fetchStatus, reconnectDevice } from "../store/statusSlice";
+import { fetchStatus } from "../store/statusSlice";
 import {
   ALL_THEMES,
   applyThemeToDocument,
@@ -9,7 +9,6 @@ import {
 } from "../store/themeSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation, type TranslationKey } from "../i18n";
-import { Icon } from "./Icon";
 import { LanguagePicker } from "./LanguagePicker";
 
 // Per-theme labels and tooltips are now translation KEYS, not the
@@ -27,12 +26,6 @@ const THEME_TITLE_KEYS: Record<ThemeName, TranslationKey> = {
   light: "header.theme.light.title",
 };
 
-const THEME_ICONS: Record<ThemeName, Parameters<typeof Icon>[0]["name"]> = {
-  navy: "layers",
-  black: "moon",
-  light: "sun",
-};
-
 // The set of service states is closed; mapping each to its translation
 // key here lets t() handle the lookup with type-safe keys instead of an
 // indexed object of strings.
@@ -48,7 +41,7 @@ export function Header() {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
   const theme = useAppSelector((s) => s.theme.theme);
-  const { t, fmt } = useTranslation();
+  const { t } = useTranslation();
 
   useEffect(() => {
     applyThemeToDocument(theme);
@@ -101,43 +94,28 @@ export function Header() {
         <span className="card__title" id="theme-picker-label">
           {t("header.theme.label")}
         </span>
-        <div
-          className="segmented"
-          role="radiogroup"
+        <select
+          className="select header-select"
           aria-labelledby="theme-picker-label"
+          value={theme}
+          title={t(THEME_TITLE_KEYS[theme])}
+          onChange={(event) => dispatch(setTheme(event.target.value as ThemeName))}
         >
           {ALL_THEMES.map((th) => (
-            <button
+            <option
               key={th}
-              type="button"
-              role="radio"
-              aria-checked={theme === th}
-              aria-pressed={theme === th}
-              className="segmented__btn"
+              value={th}
               title={t(THEME_TITLE_KEYS[th])}
-              onClick={() => dispatch(setTheme(th))}
             >
-              <Icon name={THEME_ICONS[th]} tone="accent" />
               {t(THEME_LABEL_KEYS[th])}
-            </button>
+            </option>
           ))}
-        </div>
+        </select>
       </div>
 
       <span className="status-pill" data-state={state}>
         {stateKey ? t(stateKey) : state}
       </span>
-      <span className="muted mono" style={{ fontSize: 12 }}>
-        {t("header.scans", { count: fmt(status?.scans_completed ?? 0) })}
-      </span>
-      <button
-        className="btn btn--ghost"
-        onClick={() => dispatch(reconnectDevice())}
-        title={t("header.reconnect.title")}
-      >
-        <Icon name="refresh" tone="accent" />
-        {t("header.reconnect")}
-      </button>
     </header>
   );
 }
