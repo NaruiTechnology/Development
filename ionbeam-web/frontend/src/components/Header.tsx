@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { fetchStatus, reconnectDevice } from "../store/statusSlice";
+import { fetchStatus } from "../store/statusSlice";
 import {
   ALL_THEMES,
   applyThemeToDocument,
@@ -9,7 +9,6 @@ import {
 } from "../store/themeSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation, type TranslationKey } from "../i18n";
-import { Icon } from "./Icon";
 import { LanguagePicker } from "./LanguagePicker";
 
 // Per-theme labels and tooltips are now translation KEYS, not the
@@ -42,7 +41,7 @@ export function Header() {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
   const theme = useAppSelector((s) => s.theme.theme);
-  const { t, fmt } = useTranslation();
+  const { t } = useTranslation();
 
   useEffect(() => {
     applyThemeToDocument(theme);
@@ -117,17 +116,6 @@ export function Header() {
       <span className="status-pill" data-state={state}>
         {stateKey ? t(stateKey) : state}
       </span>
-      <span className="muted mono" style={{ fontSize: 12 }}>
-        {t("header.scans", { count: fmt(status?.scans_completed ?? 0) })}
-      </span>
-      <button
-        className="btn btn--ghost"
-        onClick={() => dispatch(reconnectDevice())}
-        title={t("header.reconnect.title")}
-      >
-        <Icon name="refresh" tone="accent" />
-        {t("header.reconnect")}
-      </button>
     </header>
   );
 }
