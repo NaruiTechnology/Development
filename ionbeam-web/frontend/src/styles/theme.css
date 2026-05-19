@@ -406,6 +406,13 @@ body {
   color: var(--c-danger);
 }
 
+.roi-source-prompt {
+  margin: -4px 0 10px;
+  font-size: 11px;
+  color: var(--c-text-dim);
+  opacity: 0.5;
+}
+
 .checkbox {
   display: flex;
   align-items: center;
@@ -1004,6 +1011,37 @@ body {
   justify-content: center;
 }
 
+.production-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+  background: var(--c-bg-elev-2);
+}
+
+.production-pill__led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 22%, transparent),
+              0 0 8px color-mix(in srgb, #f59e0b 70%, transparent);
+}
+
+.production-pill[data-production="true"] .production-pill__led {
+  background: #22c55e;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 22%, transparent),
+              0 0 8px color-mix(in srgb, #22c55e 70%, transparent);
+}
+
 .settings-modal {
   max-width: 880px;
   width: 100%;
@@ -1094,6 +1132,75 @@ body {
 
 .settings-form__group:not(:first-child) {
   margin-top: 18px;
+}
+
+.settings-form__hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--c-text-dim);
+}
+
+.settings-pins-table {
+  display: grid;
+  gap: 4px 0;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  background: var(--c-bg-elev-1);
+}
+
+.settings-pins-table__head,
+.settings-pins-table__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(80px, 1fr) minmax(120px, 1.2fr) 64px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+}
+
+.settings-pins-table__head {
+  background: var(--c-bg-elev-2);
+  border-bottom: 1px solid var(--c-border-soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+}
+
+.settings-pins-table__head > * {
+  text-align: left;
+}
+
+.settings-pins-table__head > :nth-child(4),
+.settings-pins-table__row > :nth-child(4) {
+  text-align: center;
+  justify-self: center;
+}
+
+.settings-pins-table__row:nth-child(even) {
+  background: var(--c-bg-elev-2);
+}
+
+.settings-pins-table__name {
+  font-size: 12px;
+  color: var(--c-text);
+  user-select: text;
+}
+
+.settings-pins-table__row .input,
+.settings-pins-table__row .select {
+  width: 100%;
+  margin: 0;
+}
+
+.settings-pins-table__row input[type="checkbox"] {
+  accent-color: var(--c-accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 
 .settings-flags {

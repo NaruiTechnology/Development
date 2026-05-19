@@ -17,6 +17,7 @@ type IconName =
   | "square"
   | "sun"
   | "target"
+  | "tools"
   | "trash"
   | "upload"
   | "x";
@@ -123,6 +124,14 @@ const paths: Record<IconName, JSX.Element> = {
       <circle cx="12" cy="12" r="9" />
       <circle cx="12" cy="12" r="5" />
       <circle cx="12" cy="12" r="1.6" />
+    </>
+  ),
+  tools: (
+    <>
+      <path d="M14.7 6.3a4 4 0 0 0 4.9 4.9L12 18.8 8.2 15l7.6-7.6z" />
+      <path d="M5 4l4 4M7 2l4 4M3 6l4 4" />
+      <path d="M2 22l6.2-6.2" />
+      <path d="M14 14l6 6" />
     </>
   ),
   trash: (

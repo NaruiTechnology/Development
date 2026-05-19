@@ -252,6 +252,7 @@ class DeviceService:
         # (lineShiftPerXRow, adcLatency, xResolution, etc.).
         self._raster_defaults = action.get("rasterScan", {}) or {}
         self._vector_defaults = action.get("vectorScan", {}) or {}
+        self._simulation_defaults = action.get("simulation", {}) or {}
 
         # Normalized scan params, single source of truth for the macros.
         # JSON's camelCase keys (frameBlank, latency, drainFloorPixels) are
@@ -312,6 +313,7 @@ class DeviceService:
         return {
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
+            "simulation": dict(self._simulation_defaults),
             "raster_params": self._raster_params_defaults.to_public_dict(),
             "vector_params": self._vector_params_defaults.to_public_dict(),
             "is_production": bool(getattr(self._config, "IsProduction", True)),

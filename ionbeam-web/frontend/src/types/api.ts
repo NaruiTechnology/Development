@@ -142,6 +142,7 @@ export interface LastScanMeta {
 export interface ServerDefaults {
   raster: Record<string, unknown>;
   vector: Record<string, unknown>;
+  simulation?: Record<string, unknown>;
   raster_params?: Record<string, unknown>;
   vector_params?: Record<string, unknown>;
   is_production?: boolean;

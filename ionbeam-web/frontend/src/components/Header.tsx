@@ -43,6 +43,7 @@ const STATE_LABEL_KEYS: Record<string, TranslationKey> = {
 export function Header() {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
+  const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const theme = useAppSelector((s) => s.theme.theme);
   const { t } = useTranslation();
 
@@ -119,6 +120,14 @@ export function Header() {
       <span className="status-pill" data-state={state}>
         {stateKey ? t(stateKey) : state}
       </span>
+      <span
+        className="production-pill"
+        data-production={isProduction ? "true" : "false"}
+        title={isProduction ? t("header.production.true.title") : t("header.production.false.title")}
+      >
+        <span className="production-pill__led" />
+        {isProduction ? t("header.production.true") : t("header.production.false")}
+      </span>
       <button
         type="button"
         className="btn btn--ghost app-header__settings"
@@ -129,7 +138,7 @@ export function Header() {
         aria-label={t("header.settings.aria")}
         title={t("header.settings.title")}
       >
-        <Icon name="cog" tone="accent" />
+        <Icon name="tools" tone="accent" />
       </button>
     </header>
   );

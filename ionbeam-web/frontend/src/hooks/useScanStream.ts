@@ -42,6 +42,7 @@ import { useAppDispatch, useAppSelector } from "../store";
 import {
   appendRaster,
   appendVectorSamples,
+  correctVectorLineShift,
   resetRaster,
   setupVector,
 } from "../store/imageSlice";
@@ -64,6 +65,11 @@ export function useScanStream() {
   // stale-closure bug where the dispatch fires after a user-initiated
   // reset.
   const phase = useAppSelector((s: RootState) => s.scan.phase);
+  const vectorLineShiftPerXRow = useAppSelector((s: RootState) => {
+    const raw = s.status.defaults?.vector?.lineShiftPerXRow;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  });
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
@@ -140,7 +146,8 @@ export function useScanStream() {
       ws.onopen = () => {
         ws.send(JSON.stringify(req));
       };
-      ws.onmessage = (ev) => handleVectorMessage(ev, dispatch, sawDoneRef);
+      ws.onmessage = (ev) =>
+        handleVectorMessage(ev, dispatch, sawDoneRef, vectorLineShiftPerXRow);
       ws.onerror = () => {
         /* see startRaster */
       };
@@ -149,7 +156,7 @@ export function useScanStream() {
         wsRef.current = null;
       };
     },
-    [dispatch]
+    [dispatch, vectorLineShiftPerXRow]
   );
 
   const pause = useCallback(() => {
@@ -163,7 +170,6 @@ export function useScanStream() {
   const stop = useCallback(() => {
     const ws = wsRef.current;
     if (!ws) {
-      dispatch(streamReset());
       return;
     }
     closureKindRef.current = "stop";
@@ -232,13 +238,15 @@ function handleRasterMessage(
 function handleVectorMessage(
   ev: MessageEvent,
   dispatch: ReturnType<typeof useAppDispatch>,
-  sawDoneRef: React.MutableRefObject<boolean>
+  sawDoneRef: React.MutableRefObject<boolean>,
+  lineShiftPerXRow: number
 ): void {
   if (typeof ev.data === "string") {
     try {
       const msg = JSON.parse(ev.data);
       if (msg.event === "done") {
         sawDoneRef.current = true;
+        dispatch(correctVectorLineShift({ lineShiftPerXRow }));
         dispatch(streamCompleted({ chunks: msg.chunks }));
       } else if (msg.event === "error") {
         dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
