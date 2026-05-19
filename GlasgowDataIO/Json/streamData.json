@@ -38,42 +38,13 @@
                                 "an active-high digital output unless 'invert': true is set."
                             ],
                             "subsignals": [
-                                {
-                                    "name": "adc_clk",
-                                    "pin": "",
-                                    "direction": "o"
-                                },
-                                {
-                                    "name": "adc_le_clk",
-                                    "pin": "",
-                                    "direction": "o"
-                                },
-                                {
-                                    "name": "adc_oe",
-                                    "pin": "",
-                                    "direction": "o"
-                                },
-                                {
-                                    "name": "dac_clk",
-                                    "pin": "",
-                                    "direction": "o"
-                                },
-                                {
-                                    "name": "dac_x_le_clk",
-                                    "pin": "",
-                                    "direction": "o"
-                                },
-                                {
-                                    "name": "dac_y_le_clk",
-                                    "pin": "",
-                                    "direction": "o"
-                                },
-                                {
-                                    "name": "d_clock",
-                                    "pin": "F3",
-                                    "direction": "o",
-                                    "invert": true
-                                }
+                                { "name": "adc_clk",      "pin": "",   "direction": "o" },
+                                { "name": "adc_le_clk",   "pin": "",   "direction": "o" },
+                                { "name": "adc_oe",       "pin": "",   "direction": "o" },
+                                { "name": "dac_clk",      "pin": "",   "direction": "o" },
+                                { "name": "dac_x_le_clk", "pin": "",   "direction": "o" },
+                                { "name": "dac_y_le_clk", "pin": "",   "direction": "o" },
+                                { "name": "d_clock",      "pin": "F3", "direction": "o", "invert": true }
                             ],
                             "attrs": {
                                 "IO_STANDARD": "SB_LVCMOS33"
@@ -126,7 +97,7 @@
                         "mode": "image",
                         "imageResolution": 64,
                         "source": "pattern",
-                        "patternKind": "bars",
+                        "patternKind": "bullseye",
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,
                         "seed": 42
@@ -138,6 +109,6 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": true,
+    "IsProduction": false,
     "DumpData": true
 }

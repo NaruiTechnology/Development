@@ -1019,12 +1019,13 @@ body {
   padding: 3px 8px;
   border: 1px solid var(--c-border-soft);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: lowercase;
   color: var(--c-text-dim);
   background: var(--c-bg-elev-2);
+  opacity: 0.7;
 }
 
 .production-pill__led {
@@ -1032,14 +1033,15 @@ body {
   height: 8px;
   border-radius: 50%;
   background: #f59e0b;
+  opacity: 1;
   box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 22%, transparent),
               0 0 8px color-mix(in srgb, #f59e0b 70%, transparent);
 }
 
 .production-pill[data-production="true"] .production-pill__led {
-  background: #22c55e;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 22%, transparent),
-              0 0 8px color-mix(in srgb, #22c55e 70%, transparent);
+  background: lawngreen;
+  box-shadow: 0 0 0 2px color-mix(in srgb, lawngreen 22%, transparent),
+              0 0 8px color-mix(in srgb, lawngreen 70%, transparent);
 }
 
 .settings-modal {
