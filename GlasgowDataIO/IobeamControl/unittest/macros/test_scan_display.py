@@ -1,11 +1,14 @@
 import unittest
 from itertools import islice
+from unittest.mock import patch
 
 import numpy as np
 
+import GlasgowDataIO.IobeamControl.macros.scan_display as scan_display
 from GlasgowDataIO.IobeamControl.macros.scan_display import (
     _delay_iter_points,
     _roll_regular_vector_rows,
+    save_scan_from_config,
 )
 from GlasgowDataIO.IobeamControl.macros.vector import default_iter
 
@@ -53,3 +56,23 @@ class ScanDisplayTimingTest(unittest.TestCase):
             corrected.tolist(),
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
         )
+
+    def test_viewer_launcher_is_not_runtime_api(self):
+        self.assertFalse(hasattr(scan_display, "_open_in_viewer"))
+
+    def test_save_scan_from_config_ignores_open_viewer_flag(self):
+        chunks = [np.array([0, 1, 2, 3], dtype=np.uint16)]
+        scan_config = {
+            "resolution": 2,
+            "display": {
+                "enabled": True,
+                "saveAs": "/tmp/scan-display-test.png",
+                "openViewer": True,
+            },
+        }
+
+        with patch.object(scan_display, "display_raster", return_value=object()) as display:
+            result = save_scan_from_config(chunks, "raster", scan_config)
+
+        self.assertEqual(str(result), "/tmp/scan-display-test.png")
+        display.assert_called_once()

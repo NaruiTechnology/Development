@@ -19,11 +19,11 @@ Three entry points:
         TURNKEY HELPER. Pass it the raw chunks list straight from
         `async for chunk in conn.transfer_multiple(...)`, plus the
         scan-section dict from streamData.json. Reads `display.enabled`
-        / `display.saveAs` and writes the PNG. After a successful
-        save, launches the OS default image viewer unless
-        `display.openViewer` is set to false. Use this from FastAPI
+        / `display.saveAs` and writes the PNG. Use this from FastAPI
         handlers and any other call site that already has chunks +
-        the JSON config in scope.
+        the JSON config in scope. Runtime code never launches an OS
+        image viewer; viewer-opening belongs in explicit local tests or
+        manual tooling.
 
 display_raster / display_vector accept either a flat sequence of
 ints/uint16, an `array.array('H')`, or a numpy.ndarray. matplotlib is
@@ -41,8 +41,6 @@ don't have the GUI stack.
 
 import logging
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -157,69 +155,6 @@ def _delay_iter_points(iter_points, adc_delay_cycles):
         else:
             break
     return delayed
-
-
-def _open_in_viewer(path):
-    """
-    Launch the OS default image viewer on `path`, non-blocking.
-
-    Returns True on a successful spawn, False otherwise. Never raises.
-
-    Cross-platform behaviour:
-      Linux/BSD - subprocess.Popen(['xdg-open', path]) detached via
-                  start_new_session=True so SIGINT to uvicorn doesn't
-                  kill the viewer. Requires xdg-utils (default on
-                  Ubuntu desktop) and a DISPLAY/WAYLAND_DISPLAY env
-                  pointing at a running X/Wayland session.
-      macOS    - subprocess.Popen(['open', path]) — same semantics.
-      Windows  - os.startfile(path), which is fire-and-forget.
-
-    Headless servers and broken-DISPLAY VMs:
-      The Popen call may succeed (the helper exits 0) but then the
-      child immediately fails because there's no display to open on.
-      We don't poll for that — the file is saved, the user can copy
-      it elsewhere. We log a single warning if the spawn itself fails
-      (xdg-open missing, permission denied, etc.).
-
-    Why no DISPLAY check up front:
-      Wayland sessions, remote sessions, and container forwarding all
-      use different env vars, and trying to enumerate them is more
-      brittle than just letting xdg-open do its dispatching and
-      catching whatever comes back.
-    """
-    p = str(path)
-    try:
-        if sys.platform.startswith("darwin"):
-            subprocess.Popen(
-                ["open", p],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-        elif sys.platform.startswith("win"):
-            # os.startfile is the canonical Windows way to "open with
-            # the registered handler"; non-blocking by definition.
-            os.startfile(p)  # type: ignore[attr-defined]
-        else:
-            # Linux/BSD/everything else
-            subprocess.Popen(
-                ["xdg-open", p],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-        logger.info(f"launched default viewer for {p}")
-        return True
-    except FileNotFoundError as exc:
-        # xdg-open / open not installed (headless server, minimal
-        # container, etc.). Save still succeeded; just log and move on.
-        logger.warning(
-            f"viewer launch skipped: required tool not found ({exc}). "
-            f"File is saved at {p}.")
-        return False
-    except Exception as exc:
-        logger.warning(f"viewer launch failed for {p}: {exc}")
-        return False
 
 
 def _maybe_show(fig, save_path):
@@ -521,13 +456,6 @@ def save_scan_from_config(chunks, kind, scan_config, *,
         logger.error(f"save_scan_from_config: unknown kind: {kind!r}")
         return None
 
-    # Optional: launch the OS default viewer on the saved file.
-    # Defaults to True so existing configs without `openViewer` get
-    # the new behaviour automatically. Set `"openViewer": false` in
-    # the JSON `display` block to opt out (e.g. for batch automation
-    # or headless CI runs where popping a window is unwanted).
-    if result is not None and display_cfg.get("openViewer", True):
-        _open_in_viewer(result)
     return result
 
 

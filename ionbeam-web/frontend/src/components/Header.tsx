@@ -7,8 +7,11 @@ import {
   setTheme,
   type ThemeName,
 } from "../store/themeSlice";
+import { openDialog as openSettingsDialog } from "../store/settingsSlice";
+import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation, type TranslationKey } from "../i18n";
+import { Icon } from "./Icon";
 import { LanguagePicker } from "./LanguagePicker";
 
 // Per-theme labels and tooltips are now translation KEYS, not the
@@ -116,6 +119,18 @@ export function Header() {
       <span className="status-pill" data-state={state}>
         {stateKey ? t(stateKey) : state}
       </span>
+      <button
+        type="button"
+        className="btn btn--ghost app-header__settings"
+        onClick={() => {
+          stopAllScanActions();
+          dispatch(openSettingsDialog());
+        }}
+        aria-label={t("header.settings.aria")}
+        title={t("header.settings.title")}
+      >
+        <Icon name="cog" tone="accent" />
+      </button>
     </header>
   );
 }

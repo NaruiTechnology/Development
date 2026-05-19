@@ -47,6 +47,7 @@ import {
 } from "../store/imageSlice";
 import type { RasterRequest, VectorRequest } from "../types/api";
 import type { RootState } from "../store";
+import { registerScanActionStop } from "./scanActionRegistry";
 
 type Closure = "pause" | "stop";
 
@@ -169,6 +170,10 @@ export function useScanStream() {
     dispatch(streamStopping());
     ws.close(1000, "stop");
   }, [dispatch]);
+
+  useEffect(() => {
+    return registerScanActionStop(stop);
+  }, [stop]);
 
   return { startRaster, startVector, pause, stop };
 }

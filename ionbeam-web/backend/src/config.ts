@@ -19,7 +19,19 @@ export interface Config {
   glasgowToken: string | null;
   mock: boolean;
   staticDir: string;
+  configPath: string;
+  restartCmd: string;
+  configStrict: boolean;
 }
+
+const DEFAULT_CONFIG_PATH =
+  "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json";
+const BACKEND_ROOT = path.resolve(__dirname, "..");
+const DEFAULT_RESTART_CMD = path.join(
+  BACKEND_ROOT,
+  "scripts",
+  "restart-glasgow-service.sh"
+);
 
 export const config: Config = {
   port: Number(process.env.PORT ?? 4000),
@@ -32,4 +44,9 @@ export const config: Config = {
     "..",
     process.env.STATIC_DIR ?? "../frontend/dist"
   ),
+  configPath: process.env.GLASGOW_CONFIG?.trim() || DEFAULT_CONFIG_PATH,
+  restartCmd:
+    process.env.GLASGOW_RESTART_CMD?.trim() ||
+    DEFAULT_RESTART_CMD,
+  configStrict: bool(process.env.GLASGOW_CONFIG_STRICT, false),
 };
