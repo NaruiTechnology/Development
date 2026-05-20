@@ -17,7 +17,7 @@ from AutomationPy.buildingblocks.scan_params import VectorParams
 
 logger = logging.getLogger()
 
-JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData.json'
+JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData_unit_test.json'
 
 
 class VectorScanTest(unittest.TestCase):

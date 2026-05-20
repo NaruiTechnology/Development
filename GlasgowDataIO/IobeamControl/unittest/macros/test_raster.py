@@ -13,7 +13,7 @@ from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.scan_params import RasterParams
 
-JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData.json'
+JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData_unit_test.json'
 
 
 class RasterScanTest(unittest.TestCase):
