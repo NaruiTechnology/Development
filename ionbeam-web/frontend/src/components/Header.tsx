@@ -138,7 +138,7 @@ export function Header() {
         aria-label={t("header.settings.aria")}
         title={t("header.settings.title")}
       >
-        <Icon name="tools" tone="accent" />
+        <Icon name="cog" tone="accent" />
       </button>
     </header>
   );
