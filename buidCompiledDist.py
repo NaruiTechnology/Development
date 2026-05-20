@@ -1,6 +1,7 @@
 import argparse
 import compileall
 import fnmatch
+import json
 import os
 import re
 import shutil
@@ -25,6 +26,13 @@ SKIP_DIRS = {
     'node_modules',
 }
 
+# Regex used to keep compileall.compile_dir() out of directories that should
+# not ship in the dist (virtualenvs, vendored trees, etc.). Matches any path
+# segment whose name is in SKIP_DIRS.
+SKIP_RX = re.compile(
+    r'(^|[\\/])(' + '|'.join(re.escape(d) for d in SKIP_DIRS) + r')([\\/]|$)'
+)
+
 JSON_SOURCES = [
     os.path.join('Development', 'GlasgowDataIO', 'Json'),
     os.path.join('Development', 'LoadFPGAImage', 'Json'),
@@ -32,8 +40,16 @@ JSON_SOURCES = [
     os.path.join('DistributionDeploy', 'Json'),
 ]
 
+# Source ionbeam-web tree lives at Development\ionbeam-web. The destination
+# inside dist_app.zip is at the root, because the deploy app expects to
+# find it at <DeployRoot>\ionbeam-web after extraction (see setupIonbeamWeb
+# in DistributionDeploy.json).
+IONBEAM_WEB_SOURCE = os.path.join('Development', 'ionbeam-web')
+IONBEAM_WEB_DEST = 'ionbeam-web'
+
+# (src_relpath, dst_relpath_in_dist) — trees copied verbatim into dist.
 COPY_TREES = [
-    'ionbeam-web',
+    (IONBEAM_WEB_SOURCE, IONBEAM_WEB_DEST),
 ]
 
 DEPLOY_WORKFLOW_SOURCE = os.path.join('DeployWorkSpace', 'Development', 'DistributionDeploy')
@@ -44,9 +60,17 @@ DEPLOY_WORKFLOW_SKIP = [
     'dist_app.zip',
     'dist_app_raw.zip',
 ]
-DEFAULT_DEPLOY_WORKSPACE = 'DeployWorkSpace'
-DEFAULT_DEPLOY_WORKSPACE_ZIP = 'DeployWorkSpace.zip'
+DEFAULT_DEPLOY_WORKSPACE = os.path.join('Development', 'DeployWorkSpace')
+DEFAULT_DEPLOY_WORKSPACE_ZIP = os.path.join('Development', 'DeployWorkSpace.zip')
 ONE_CLICK_DEPLOY_BAT = 'OneKeyDeploy.bat'
+
+# Path (relative to the workspace root) of the JSON config that tells us where
+# dist_app.zip should be staged inside the workspace before zipping.
+WORKSPACE_DEPLOY_JSON = os.path.join(
+    'Development', 'DistributionDeploy', 'Json', 'DistributionDeploy.json'
+)
+# Key inside that JSON whose value is the target folder for dist_app.zip.
+UNZIP_DISTRIBUTION_KEY = 'unzipDistribution'
 
 
 def _is_inside(path, parent):
@@ -128,15 +152,21 @@ def copy_json_sources(src_dir, dist_dir):
 
 
 def copy_source_trees(src_dir, dist_dir):
-    for rel_tree in COPY_TREES:
-        src_tree = os.path.join(src_dir, rel_tree)
+    for src_rel, dst_rel in COPY_TREES:
+        src_tree = os.path.join(src_dir, src_rel)
         if not os.path.isdir(src_tree):
             continue
-        dst_tree = os.path.join(dist_dir, rel_tree)
+        dst_tree = os.path.join(dist_dir, dst_rel)
         if os.path.exists(dst_tree):
             _remove_tree(dst_tree)
         shutil.copytree(src_tree, dst_tree)
-        print(f"Copied source tree: {os.path.normpath(rel_tree)}")
+        if src_rel == dst_rel:
+            print(f"Copied source tree: {os.path.normpath(src_rel)}")
+        else:
+            print(
+                f"Copied source tree: {os.path.normpath(src_rel)} -> "
+                f"{os.path.normpath(dst_rel)}"
+            )
 
 
 def copy_tree_exact(src_tree, dst_tree, label):
@@ -196,17 +226,26 @@ def zip_folder(folder, output_zip):
     print(f"Workspace archive created successfully: {output_zip} ({size_mb:.2f} MB)")
 
 
-def write_one_click_deploy_launcher(workspace_dir):
+def write_one_click_deploy_launcher(workspace_dir, dist_zip_relpath='dist_app.zip'):
     launcher_path = os.path.join(workspace_dir, ONE_CLICK_DEPLOY_BAT)
-    builder_python = os.path.abspath(sys.executable)
-    launcher = rf'''@echo off
+    # Task 3: Every path the launcher touches is anchored to %~dp0 (the
+    # folder the .bat itself lives in), so the script works regardless of
+    # where the user extracts DeployWorkSpace.zip. No developer-machine
+    # paths are baked into the launcher.
+    # The dist_zip path is whatever 'unzipDistribution' (in
+    # DistributionDeploy.json) resolved to, so the .bat's diagnostic check
+    # points at the same location the deploy app will look in.
+    dist_zip_winpath = dist_zip_relpath.replace('/', '\\')
+    launcher = r'''@echo off
 setlocal
 title IobeamTech One-Key Deploy
 
 cd /d "%~dp0"
+echo Running one-key deploy from: %~dp0
+
 set "APP=%~dp0Development\DistributionDeploy\distributionDeployApp.py"
 set "CONFIG=%~dp0Development\DistributionDeploy\Json\DistributionDeploy.json"
-set "BUILDER_PYTHON={builder_python}"
+set "DIST_ZIP=%~dp0__DIST_ZIP_RELPATH__"
 
 if not exist "%APP%" (
     echo Deploy entrypoint not found:
@@ -222,13 +261,15 @@ if not exist "%CONFIG%" (
     exit /b 1
 )
 
-if exist "%~dp0.venv\Scripts\python.exe" (
-    set "PYTHON=%~dp0.venv\Scripts\python.exe"
-    goto run_deploy
+if not exist "%DIST_ZIP%" (
+    echo Warning: dist archive not found at the expected location:
+    echo   "%DIST_ZIP%"
+    echo The deploy app may fail if it expects this file.
+    echo.
 )
 
-if exist "%BUILDER_PYTHON%" (
-    set "PYTHON=%BUILDER_PYTHON%"
+if exist "%~dp0.venv\Scripts\python.exe" (
+    set "PYTHON=%~dp0.venv\Scripts\python.exe"
     goto run_deploy
 )
 
@@ -263,10 +304,71 @@ if "%DEPLOY_EXIT%"=="0" (
 )
 pause
 exit /b %DEPLOY_EXIT%
-'''
+'''.replace('__DIST_ZIP_RELPATH__', dist_zip_winpath)
     with open(launcher_path, 'w', newline='\r\n') as f:
         f.write(launcher)
     print(f"Wrote one-key deploy launcher: {launcher_path}")
+
+
+def _resolve_unzip_distribution_relpath(workspace_dir):
+    """Read DistributionDeploy.json and return the relative folder (under the
+    workspace root) where dist_app.zip should be staged.
+
+    Reads DistributionDeploy.json, walks the Actions[] list, finds the entry
+    whose key is 'unzipDistribution', and pulls the path from
+    actionData.zip — e.g. ".\\Development\\DistributionDeploy\\dist_app.zip".
+
+    Returns the folder portion only (without the filename), forward-slashed
+    and relative to the workspace root, e.g. 'Development/DistributionDeploy'.
+    Returns '' on any failure (with a warning) so the caller falls back to
+    the workspace root.
+    """
+    config_path = os.path.join(workspace_dir, WORKSPACE_DEPLOY_JSON)
+    if not os.path.isfile(config_path):
+        print(
+            f"Warning: {WORKSPACE_DEPLOY_JSON} not found at {config_path}; "
+            f"placing dist archive at workspace root."
+        )
+        return ''
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        print(
+            f"Warning: failed to read {config_path}: {exc}; "
+            f"placing dist archive at workspace root."
+        )
+        return ''
+
+    zip_value = None
+    for entry in config.get('Actions', []) or []:
+        if isinstance(entry, dict) and UNZIP_DISTRIBUTION_KEY in entry:
+            action = entry[UNZIP_DISTRIBUTION_KEY]
+            if isinstance(action, dict):
+                data = action.get('actionData')
+                if isinstance(data, dict):
+                    zip_value = data.get('zip')
+            break
+
+    if not isinstance(zip_value, str) or not zip_value.strip():
+        print(
+            f"Warning: '{UNZIP_DISTRIBUTION_KEY}.actionData.zip' not found "
+            f"in {config_path}; placing dist archive at workspace root."
+        )
+        return ''
+
+    # Normalise separators, drop leading './' and any leading workspace-folder
+    # prefix so the path is relative to workspace_dir regardless of how the
+    # JSON spells it. Then drop the filename component — the caller already
+    # uses os.path.basename(dist_zip) for the leaf name.
+    normalised = zip_value.replace('\\', '/').strip()
+    parts = [p for p in normalised.split('/') if p and p != '.']
+    workspace_name = os.path.basename(os.path.abspath(workspace_dir))
+    if parts and parts[0] == workspace_name:
+        parts = parts[1:]
+    folder_parts = parts[:-1] if parts else []
+    return '/'.join(folder_parts)
 
 
 def package_deploy_workspace(src_dir, dist_zip, workspace_dir, workspace_zip):
@@ -275,28 +377,53 @@ def package_deploy_workspace(src_dir, dist_zip, workspace_dir, workspace_zip):
     workspace_zip = os.path.abspath(workspace_zip)
 
     if not os.path.isdir(workspace_dir):
-        raise FileNotFoundError(f"Deploy workspace not found: {workspace_dir}")
+        print(
+            f"Skipping DeployWorkSpace packaging (folder not found): {workspace_dir}"
+        )
+        # The dist archive was only an intermediate for the workspace flow.
+        # If the workspace isn't there, the archive has nowhere useful to go;
+        # remove it instead of leaving a stale artifact at the project root.
+        if os.path.isfile(dist_zip):
+            os.remove(dist_zip)
+            print(f"Removed orphan dist archive: {dist_zip}")
+        return
     if not os.path.isfile(dist_zip):
         raise FileNotFoundError(f"dist_app.zip not found: {dist_zip}")
 
-    embedded_zip = os.path.join(
-        workspace_dir,
-        'Development',
-        'DistributionDeploy',
-        os.path.basename(dist_zip),
+    # Task 1: stage dist_app.zip at the folder named by 'unzipDistribution'
+    # in DistributionDeploy.json (so the deploy app finds it where it expects).
+    dist_rel_folder = _resolve_unzip_distribution_relpath(workspace_dir)
+    target_folder = (
+        os.path.join(workspace_dir, *dist_rel_folder.split('/'))
+        if dist_rel_folder else workspace_dir
     )
-    os.makedirs(os.path.dirname(embedded_zip), exist_ok=True)
+    os.makedirs(target_folder, exist_ok=True)
+
+    embedded_zip = os.path.join(target_folder, os.path.basename(dist_zip))
     if os.path.abspath(embedded_zip) != dist_zip:
-        shutil.copy2(dist_zip, embedded_zip)
-        print(f"Embedded dist archive: {embedded_zip}")
+        if os.path.exists(embedded_zip):
+            os.remove(embedded_zip)
+        shutil.move(dist_zip, embedded_zip)
+        print(f"Moved dist archive into workspace: {embedded_zip}")
+    dist_rel_for_launcher = (
+        f"{dist_rel_folder}/{os.path.basename(dist_zip)}" if dist_rel_folder
+        else os.path.basename(dist_zip)
+    )
 
     copy_tree_exact(
-        os.path.join(src_dir, 'ionbeam-web'),
-        os.path.join(workspace_dir, 'ionbeam-web'),
+        os.path.join(src_dir, IONBEAM_WEB_SOURCE),
+        os.path.join(workspace_dir, IONBEAM_WEB_DEST),
         'DeployWorkSpace ionbeam-web tree',
     )
-    write_one_click_deploy_launcher(workspace_dir)
+    write_one_click_deploy_launcher(workspace_dir, dist_rel_for_launcher)
     zip_folder(workspace_dir, workspace_zip)
+
+    # Task 2: after DeployWorkSpace.zip is built, remove the staged
+    # dist_app.zip from inside the workspace folder. It already lives inside
+    # the final zip — leaving it on disk just clutters the source tree.
+    if os.path.isfile(embedded_zip):
+        os.remove(embedded_zip)
+        print(f"Removed staged dist archive after zipping: {embedded_zip}")
 
 
 def zip_dist(dist_dir, output_zip):
@@ -337,7 +464,9 @@ def build_compiled_dist(src_dir, dist_dir, output_zip='dist_app.zip',
     # 1. Byte-compile all .py files to __pycache__ (skip in raw mode).
     if not deliver_raw:
         print(f"Compiling source in {src_dir} to .pyc...")
-        compileall.compile_dir(src_dir, force=True, quiet=True, legacy=False)
+        compileall.compile_dir(
+            src_dir, force=True, quiet=True, legacy=False, rx=SKIP_RX
+        )
     else:
         print("Raw delivery mode: skipping byte-compilation.")
 
@@ -418,8 +547,10 @@ def build_compiled_dist(src_dir, dist_dir, output_zip='dist_app.zip',
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description='Deploy source code.')
     parser.add_argument('--source', default='.', help="Source folder to package.")
-    parser.add_argument('--dist', default='dist_app', help="Temporary dist folder.")
-    parser.add_argument('--output', default='dist_app.zip', help="Output zip path.")
+    parser.add_argument('--dist', default=os.path.join('Development', 'dist_app'),
+                        help="Temporary dist folder.")
+    parser.add_argument('--output', default=os.path.join('Development', 'dist_app.zip'),
+                        help="Output zip path.")
     parser.add_argument('-r', '--raw', action='store_true', dest='raw',
                         help="Deliver raw python code (skip byte-compilation).")
     parser.add_argument('--keep-dist', action='store_true',
@@ -447,13 +578,18 @@ def main(argv=None):
         deploy_workspace_zip=None if args.no_deploy_workspace_zip else args.deploy_workspace_zip,
     )
     mode = "raw source" if args.raw else "compiled .pyc"
-    if args.no_deploy_workspace_zip:
-        print(f"\nBuild complete ({mode})! The final package is '{args.output}'.")
-    else:
+    workspace_zip_exists = (
+        not args.no_deploy_workspace_zip
+        and args.deploy_workspace_zip
+        and os.path.isfile(args.deploy_workspace_zip)
+    )
+    if workspace_zip_exists:
         print(
             f"\nBuild complete ({mode})! The one-key deploy package is "
             f"'{args.deploy_workspace_zip}'."
         )
+    else:
+        print(f"\nBuild complete ({mode})! The final package is '{args.output}'.")
     return 0
 
 

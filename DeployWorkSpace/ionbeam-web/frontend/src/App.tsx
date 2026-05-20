@@ -20,6 +20,7 @@ import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
+import { SettingsDialog } from "./components/SettingsDialog";
 
 import { setKind, streamReset, type ScanKind } from "./store/scanSlice";
 import { resetRaster, resetVector } from "./store/imageSlice";
@@ -280,6 +281,7 @@ export function App() {
         </section>
       </main>
 
+      <SettingsDialog />
       <Footer />
     </div>
   );

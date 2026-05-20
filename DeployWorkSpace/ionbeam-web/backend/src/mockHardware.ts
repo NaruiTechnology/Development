@@ -73,7 +73,7 @@ function loadSimulationImage(): SimulationImage {
   }
 
   if (source === "file") {
-    const filePath = sim?._alt_file?.path ?? sim?.path;
+    const filePath = sim?.filePath ?? sim?._alt_file?.path ?? sim?.path;
     const loaded = typeof filePath === "string"
       ? loadImageFile(filePath, resolution, Boolean(sim?.invert ?? sim?._alt_file?.invert))
       : null;
@@ -380,6 +380,7 @@ export const mockRest = {
     const vector = action.vectorScan ?? {};
     return {
       is_production: false,
+      simulation: action.simulation ?? {},
       raster: {
         ...raster,
         resolution: finiteNumber(raster.resolution, 512),

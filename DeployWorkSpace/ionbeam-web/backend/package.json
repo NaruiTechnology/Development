@@ -22,6 +22,7 @@
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.12.7",
     "@types/ws": "^8.5.10",
+    "@vitejs/plugin-react": "^6.0.2",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5"
   },

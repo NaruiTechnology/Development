@@ -275,20 +275,6 @@
 			}
 		},
 		{
-			"verifyGlasgowService":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Sleep -Seconds {}; if (Test-Path \u0027{}\u0027) {{ if (Select-String -Path \u0027{}\u0027 -Pattern \u0027{}\u0027 -Quiet) {{ exit 0 }} else {{ exit 1 }} }} else {{ exit 1 }}\"",
-					"delay":"3",
-					"log":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
-					"logAgain":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
-					"pattern":"chunk|valid|drain|in_flight|Application startup complete"
-				},
-				"timeout":30.0
-			}
-		},
-		{
 			"setupIonbeamWeb":{
 				"skip":false,
 				"transactionComplete":false,

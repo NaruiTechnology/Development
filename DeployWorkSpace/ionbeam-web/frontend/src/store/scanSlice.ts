@@ -174,11 +174,12 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
 
 export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
   "scan/runRasterValidated",
-  async (req) => {
+  async (req, { signal }) => {
     const r = await fetch("/api/scan/raster/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),
+      signal,
     });
     if (!r.ok) throw new Error(`raster run: HTTP ${r.status} ${await r.text()}`);
     return (await r.json()) as ScanResult;
@@ -187,11 +188,12 @@ export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
 
 export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
   "scan/runVectorValidated",
-  async (req) => {
+  async (req, { signal }) => {
     const r = await fetch("/api/scan/vector/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),
+      signal,
     });
     if (!r.ok) throw new Error(`vector run: HTTP ${r.status} ${await r.text()}`);
     return (await r.json()) as ScanResult;
@@ -293,6 +295,11 @@ const slice = createSlice({
       s.lastResult = a.payload;
     });
     b.addCase(runRasterValidated.rejected, (s, a) => {
+      if (a.meta.aborted) {
+        s.phase = "idle";
+        s.errorMessage = null;
+        return;
+      }
       s.phase = "error";
       s.errorMessage = a.error.message ?? "raster run failed";
     });
@@ -308,6 +315,11 @@ const slice = createSlice({
       s.lastResult = a.payload;
     });
     b.addCase(runVectorValidated.rejected, (s, a) => {
+      if (a.meta.aborted) {
+        s.phase = "idle";
+        s.errorMessage = null;
+        return;
+      }
       s.phase = "error";
       s.errorMessage = a.error.message ?? "vector run failed";
     });

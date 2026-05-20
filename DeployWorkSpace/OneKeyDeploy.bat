@@ -3,9 +3,11 @@ setlocal
 title IobeamTech One-Key Deploy
 
 cd /d "%~dp0"
+echo Running one-key deploy from: %~dp0
+
 set "APP=%~dp0Development\DistributionDeploy\distributionDeployApp.py"
 set "CONFIG=%~dp0Development\DistributionDeploy\Json\DistributionDeploy.json"
-set "BUILDER_PYTHON=C:\Project\IobeamTech\Development\.venv\Scripts\python.exe"
+set "DIST_ZIP=%~dp0Development\DistributionDeploy\dist_app.zip"
 
 if not exist "%APP%" (
     echo Deploy entrypoint not found:
@@ -21,13 +23,15 @@ if not exist "%CONFIG%" (
     exit /b 1
 )
 
-if exist "%~dp0.venv\Scripts\python.exe" (
-    set "PYTHON=%~dp0.venv\Scripts\python.exe"
-    goto run_deploy
+if not exist "%DIST_ZIP%" (
+    echo Warning: dist archive not found at the expected location:
+    echo   "%DIST_ZIP%"
+    echo The deploy app may fail if it expects this file.
+    echo.
 )
 
-if exist "%BUILDER_PYTHON%" (
-    set "PYTHON=%BUILDER_PYTHON%"
+if exist "%~dp0.venv\Scripts\python.exe" (
+    set "PYTHON=%~dp0.venv\Scripts\python.exe"
     goto run_deploy
 )
 
