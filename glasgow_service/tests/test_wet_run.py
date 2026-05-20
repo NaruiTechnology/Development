@@ -15,7 +15,6 @@ Two things were broken in the previous version and have been fixed here:
     test is a check that the JSON-to-API translation is intact.
 """
 import asyncio
-import os
 import unittest
 from pathlib import Path
 
@@ -25,10 +24,7 @@ from glasgow_service.models import (
 )
 from glasgow_service.config import find_config_path
 
-CONFIG_PATH = os.environ.get(
-    "GLASGOW_CONFIG",
-    str(find_config_path(required=False) or ""),
-)
+CONFIG_PATH = str(find_config_path(required=False) or "")
 
 
 def _service_available() -> bool:

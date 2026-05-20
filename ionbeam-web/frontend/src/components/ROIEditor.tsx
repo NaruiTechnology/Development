@@ -36,6 +36,11 @@ export function ROIEditor({
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
+  const simulationSource = useAppSelector((s) => {
+    const raw = s.status.defaults?.simulation?.source;
+    return typeof raw === "string" ? raw : "";
+  });
+  const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -46,6 +51,10 @@ export function ROIEditor({
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
+  const imageFileSourceEnabled = isProduction || simulationSource === "file";
+  const imageFileSourcePrompt = !imageFileSourceEnabled
+    ? t("roi.imageSourceFileRequired", { source: simulationSource || "unset" })
+    : "";
   const bitmapCleanupDisabled = !hasLoadedImage || !hasPartialRegion;
   const imageSource =
     roi.imageDataUrl ??
@@ -206,11 +215,21 @@ export function ROIEditor({
       {(variant === "controls" || variant === "all") && (
         <>
           <div className="button-row" style={{ marginBottom: 10 }}>
-            <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
+            <button
+              className="btn"
+              disabled={disabled || !imageFileSourceEnabled}
+              title={!disabled && imageFileSourcePrompt ? imageFileSourcePrompt : undefined}
+              onClick={() => fileRef.current?.click()}
+            >
               <Icon name="upload" tone="accent" />
               {t("roi.select")}
             </button>
-            <button className="btn btn--ghost" disabled={disabled || !hasLoadedImage} onClick={clearLoadedImage}>
+            <button
+              className="btn btn--ghost"
+              disabled={disabled || !imageFileSourceEnabled || !hasLoadedImage}
+              title={!disabled && imageFileSourcePrompt ? imageFileSourcePrompt : undefined}
+              onClick={clearLoadedImage}
+            >
               <Icon name="trash" tone="danger" />
               {t("roi.clearImage")}
             </button>
@@ -230,6 +249,11 @@ export function ROIEditor({
               }}
             />
           </div>
+          {imageFileSourcePrompt && (
+            <div className="roi-source-prompt" role="status">
+              {imageFileSourcePrompt}
+            </div>
+          )}
 
           <div className="field-row">
             <Num

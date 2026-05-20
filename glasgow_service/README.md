@@ -57,27 +57,34 @@ there's one authoritative implementation.
 
 ## Install
 
-```bash
-pip install -r requirements.txt
-# or (pip-installable):
-pip install -e .
+```powershell
+..\.venv\Scripts\python.exe -m pip install -r requirements.txt
+# or, from this glasgow_service directory:
+..\.venv\Scripts\python.exe -m pip install -e .
 ```
 
 Your existing `GlasgowDataIO` and `AutomationPy` packages must be importable
 in the same environment.
 
-## Run the service
+## Run the service on Windows
 
-```bash
-export GLASGOW_CONFIG=/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+```powershell
+$env:GLASGOW_CONFIG="C:\Project\IobeamTech\Development\GlasgowDataIO\Json\streamData.json"
 # Optional: turn on auth
-# export GLASGOW_TOKEN=$(openssl rand -hex 32)
+# $env:GLASGOW_TOKEN="replace-me-with-32-bytes-of-hex"
 
 glasgow token: 376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee
 WkgnwuSK0fFCXPmKkQc-ku4BBDpGB9qZeK_2diBgAyk
 uuid: f960bbee-8797-4946-aa9b-ed2a70c79203
 
-uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
+python -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
+```
+
+If a stale machine-level `GLASGOW_CONFIG` points to an old checkout, clear it
+for the current PowerShell session before starting:
+
+```powershell
+Remove-Item Env:\GLASGOW_CONFIG -ErrorAction SilentlyContinue
 ```
 
 ## Run the pytest wet-run suite
@@ -85,9 +92,9 @@ uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
 The new tests do **not** need the server running — they instantiate
 `DeviceService` directly:
 
-```bash
-export GLASGOW_CONFIG=...      # same path as above
-pytest tests/test_wet_run.py -s
+```powershell
+$env:GLASGOW_CONFIG="C:\Project\IobeamTech\Development\GlasgowDataIO\Json\streamData.json"
+python -m pytest tests/test_wet_run.py -s
 ```
 
 To override specific request fields without editing the test, modify the
@@ -122,18 +129,18 @@ realistic examples for both scan kinds.
 
 ## Quick smoke test
 
-```bash
+```powershell
 # Run a raster wet scan with CSV + validation; parse the result
-curl -s -X POST http://127.0.0.1:8765/scan/raster/run \
-     -H 'content-type: application/json' \
+curl.exe -s -X POST http://127.0.0.1:8765/scan/raster/run `
+     -H "content-type: application/json" `
      -d '{"resolution":512,"dwell":2,"latency_bytes":16384,
-          "save_csv":true,"do_validate":true}' | jq
+          "save_csv":true,"do_validate":true}'
 
 # Vector wet scan with pre-processing timing
-curl -s -X POST http://127.0.0.1:8765/scan/vector/run \
-     -H 'content-type: application/json' \
+curl.exe -s -X POST http://127.0.0.1:8765/scan/vector/run `
+     -H "content-type: application/json" `
      -d '{"pattern":"default","latency_bytes":8196,
-          "pre_process":true,"save_csv":true,"do_validate":true}' | jq
+          "pre_process":true,"save_csv":true,"do_validate":true}'
 ```
 
 Both return a `ScanResult` whose `validation.passed` field is `true` on
@@ -161,7 +168,7 @@ One scan at a time. Concurrent REST or WebSocket requests return **HTTP
       ],
       "env": {
         "GLASGOW_TOKEN": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
-        "GLASGOW_CONFIG": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
+        "GLASGOW_CONFIG": "C:\\Project\\IobeamTech\\Development\\GlasgowDataIO\\Json\\streamData.json",
         "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/Development:${env:PYTHONPATH}"
       },
       "justMyCode": false,

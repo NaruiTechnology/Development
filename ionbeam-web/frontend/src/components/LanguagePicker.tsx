@@ -1,9 +1,9 @@
+/** Language picker for the header toolbar. */
 import { setLocale, persistLocale } from "../store/localeSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
   ALL_LOCALES,
   LOCALE_NAMES,
-  LOCALE_SHORT,
   useTranslation,
   type LocaleCode,
 } from "../i18n";
@@ -37,8 +37,13 @@ export function LanguagePicker() {
         onChange={(event) => pick(event.target.value as LocaleCode)}
       >
         {ALL_LOCALES.map((code) => (
-          <option key={code} value={code} title={LOCALE_NAMES[code]} lang={code}>
-            {LOCALE_SHORT[code]}
+          <option
+            key={code}
+            value={code}
+            title={LOCALE_NAMES[code]}
+            lang={code}
+          >
+            {LOCALE_NAMES[code]}
           </option>
         ))}
       </select>

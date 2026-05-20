@@ -18,6 +18,10 @@ Resolution order (first match wins):
    itself (so any value committed there is honoured automatically).
 5. A ``streamData.json`` discovered next to the package or in CWD.
 
+On Windows, stale Linux deployment paths such as
+``/home/vboxuser/.../GlasgowDataIO/Json/streamData.json`` are translated
+to the same file under this checkout when possible.
+
 Pass ``required=False`` from tests so they skip cleanly on a box with no
 config rather than raising at import time.
 """
@@ -50,6 +54,8 @@ _LOCAL_CANDIDATES: tuple[Path, ...] = (
     _DEPLOY_DIR / "streamData.json",
     _PROJECT_ROOT / "GlasgowDataIO" / "Json" / "streamData.json",
 )
+
+_STREAMDATA_TAIL = ("GlasgowDataIO", "Json", "streamData.json")
 
 _UNIT_ENV_RE = re.compile(
     r"^\s*Environment\s*=\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.+?)\s*$"
@@ -117,6 +123,18 @@ def _candidate_values() -> list[tuple[str, Optional[str]]]:
     return candidates
 
 
+def _matches_streamdata_tail(path: Path) -> bool:
+    parts = tuple(path.parts)
+    return len(parts) >= len(_STREAMDATA_TAIL) and parts[-3:] == _STREAMDATA_TAIL
+
+
+def _windows_equivalent_paths(path: Path) -> tuple[Path, ...]:
+    """Return repo-local equivalents for known deployment paths on Windows."""
+    if os.name != "nt" or not _matches_streamdata_tail(path):
+        return ()
+    return (_PROJECT_ROOT / "GlasgowDataIO" / "Json" / "streamData.json",)
+
+
 # ---- public API -----------------------------------------------------------
 
 def find_config_path(required: bool = True) -> Optional[Path]:
@@ -136,10 +154,26 @@ def find_config_path(required: bool = True) -> Optional[Path]:
         if candidate.is_file():
             log.debug("Glasgow config resolved from %s -> %s", source, candidate)
             return candidate.resolve()
+        for equivalent in _windows_equivalent_paths(candidate):
+            if equivalent.is_file():
+                log.debug(
+                    "Glasgow config resolved from Windows equivalent of %s -> %s",
+                    source,
+                    equivalent,
+                )
+                return equivalent.resolve()
         if required:
+            equivalents = tuple(_windows_equivalent_paths(candidate))
+            equivalent_hint = ""
+            if equivalents:
+                equivalent_hint = (
+                    " Windows equivalent candidates were also checked: "
+                    + ", ".join(str(p) for p in equivalents)
+                    + "."
+                )
             raise FileNotFoundError(
                 f"{ENV_VAR} from {source} points to {candidate}, "
-                f"which does not exist."
+                f"which does not exist.{equivalent_hint}"
             )
         # Source said something but the file is missing; don't fall through
         # silently to local discovery -- the user clearly intended this path.

@@ -1,0 +1,811 @@
+INFO:     127.0.0.1:52837 - "GET /defaults HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55506 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55507 - "GET /defaults HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55510 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55511 - "GET /defaults HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55513 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55515 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61814 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60016 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63256 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57258 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63901 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65073 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62846 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51774 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53704 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54416 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62332 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51607 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64391 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63338 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62118 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62121 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62123 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59000 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64290 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64292 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64293 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50548 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62946 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60044 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62847 - "GET /status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50186 - "GET /status HTTP/1.1" 200 OK
+[GlasgowStream.read] returned=4  in_buffer_after=0
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5612
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4318
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5698
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4720
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5136
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5628
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1338
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=548
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2450
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2788
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4982
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4422
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6118
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5946
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=7284
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5840
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=7508
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4988
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5292
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4080
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5614
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4164
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4040
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3320
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4104
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2270
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3058
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2382
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4030
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2554
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3342
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3302
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2696
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1764
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2398
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1428
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2678
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=640
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=484
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1232
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4346
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2472
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4928
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3604
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1052
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3280
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1072
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2764
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3338
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2608
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=696
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4682
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3304
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1620
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3606
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2926
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4018
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2486
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4112
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3778
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3204
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=476
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5128
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2170
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2666
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1726
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=86
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1472
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5874
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1718
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3296
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=950
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1906
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=228
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5794
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1936
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2672
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=164
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2714
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3560
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4064
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3878
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2748
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=818
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1474
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1066
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=302
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6044
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2134
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5020
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1176
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1762
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2046
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1382
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2414
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=534
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=908
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2862
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=864
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=636
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2126
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1258
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3356
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1028
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2272
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=48
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=820
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1146
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5086
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4594
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2420
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1674
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3090
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1724
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1340
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3580
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=476
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1934
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1304
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1184
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3438
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=260
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2620
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=516
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=386
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=542
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5426
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4386
+[recv_res] got 16384 bytes
+[recv_res] requesting 2 bytes (SixteenBit, pixel_count=1)
+[GlasgowStream.read] returned=2  in_buffer_after=4384
+[recv_res] got 2 bytes
+INFO:     127.0.0.1:51626 - "GET /scan/last/figure?view=texture HTTP/1.1" 200 OK
+[GlasgowStream.read] returned=4  in_buffer_after=0
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3374
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2598
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=138
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4586
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3700
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6112
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4640
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5848
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5022
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6412
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4508
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=382
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2510
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2970
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3702
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3242
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3128
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1872
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2190
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=310
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=878
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3074
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3292
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4420
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3604
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3580
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2266
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3492
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3120
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3462
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1514
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=394
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3522
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3212
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=680
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=288
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=674
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=58
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1134
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1726
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4714
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3418
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1646
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2302
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=652
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5746
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=444
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=430
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1198
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1144
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1216
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3460
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=362
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=682
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2612
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3696
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1582
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2104
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1700
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=828
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2788
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=746
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3138
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2270
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4124
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2636
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4282
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4752
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5978
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=4874
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6450
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6508
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=7388
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3974
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=700
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1708
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=920
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2468
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1450
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1540
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=494
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=398
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6812
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3750
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=826
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=338
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3344
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2850
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1110
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=980
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=236
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=972
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3030
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3666
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2872
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=176
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3720
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=922
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=218
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3368
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6362
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3112
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3602
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1894
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=430
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2966
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=558
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=266
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1186
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=5728
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2864
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=912
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1536
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3974
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3394
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3594
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1830
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=602
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=6210
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1202
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2858
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=250
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=1682
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=3554
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=314
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=646
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2514
+[recv_res] got 16384 bytes
+[recv_res] requesting 16384 bytes (SixteenBit, pixel_count=8192)
+[GlasgowStream.read] returned=16384  in_buffer_after=2746
+[recv_res] got 16384 bytes
+[recv_res] requesting 2 bytes (SixteenBit, pixel_count=1)
+[GlasgowStream.read] returned=2  in_buffer_after=4484
+[recv_res] got 2 bytes
+INFO:     127.0.0.1:54698 - "GET /scan/last/figure?view=texture HTTP/1.1" 200 OK

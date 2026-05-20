@@ -1,5 +1,6 @@
 type IconName =
   | "check"
+  | "cog"
   | "crop"
   | "download"
   | "globe"
@@ -16,6 +17,7 @@ type IconName =
   | "square"
   | "sun"
   | "target"
+  | "tools"
   | "trash"
   | "upload"
   | "x";
@@ -36,6 +38,12 @@ export function Icon({
 
 const paths: Record<IconName, JSX.Element> = {
   check: <path d="M5 12.5l4 4L19 6.5" />,
+  cog: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" />
+    </>
+  ),
   crop: <path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14" />,
   download: <path d="M12 3v11m0 0l-4-4m4 4l4-4M5 19h14" />,
   // Globe — outer circle + equator + a meridian. Two curves are enough
@@ -116,6 +124,14 @@ const paths: Record<IconName, JSX.Element> = {
       <circle cx="12" cy="12" r="9" />
       <circle cx="12" cy="12" r="5" />
       <circle cx="12" cy="12" r="1.6" />
+    </>
+  ),
+  tools: (
+    <>
+      <path d="M14.7 6.3a4 4 0 0 0 4.9 4.9L12 18.8 8.2 15l7.6-7.6z" />
+      <path d="M5 4l4 4M7 2l4 4M3 6l4 4" />
+      <path d="M2 22l6.2-6.2" />
+      <path d="M14 14l6 6" />
     </>
   ),
   trash: (

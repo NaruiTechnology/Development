@@ -17,6 +17,8 @@ import { en, type TranslationTable } from "./locales/en";
 import { zhCN } from "./locales/zh-CN";
 import { zhTW } from "./locales/zh-TW";
 
+declare const process: { exitCode?: number };
+
 interface Report {
   locale: string;
   missing: Array<keyof TranslationTable>;

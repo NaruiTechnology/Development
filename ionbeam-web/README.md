@@ -60,18 +60,18 @@ ionbeam-web/
 You need three processes in dev. Each has its own README; here is the
 quick path.
 
-```bash
+```powershell
 # 1) Glasgow FastAPI service (your existing project) — port 8765
-export GLASGOW_CONFIG=/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+$env:GLASGOW_CONFIG="C:\Project\IobeamTech\Development\GlasgowDataIO\Json\streamData.json"
 
 # Optional: turn on bearer auth
-# export GLASGOW_TOKEN=$(openssl rand -hex 32)
-uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
+# $env:GLASGOW_TOKEN="replace-me-with-32-bytes-of-hex"
+..\.venv\Scripts\python.exe -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
 
 # 2) Node proxy / static server — port 4000
 cd backend
 npm install
-cp .env.example .env          # edit if your token / port differ
+Copy-Item .env.example .env   # edit if your token / port differ
 npm run dev
 
 # 3) React dev server — port 5173, proxies /api and /ws to localhost:4000
@@ -84,9 +84,9 @@ Open <http://localhost:5173>.
 
 ### Without hardware (demo / CI)
 
-```bash
+```powershell
 cd backend
-MOCK=1 npm run dev            # backend invents raster + vector chunks
+$env:MOCK="1"; npm run dev    # backend invents raster + vector chunks
 cd ../frontend
 npm run dev
 ```

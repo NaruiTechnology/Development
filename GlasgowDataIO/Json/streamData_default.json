@@ -1,0 +1,146 @@
+{
+    "Glasgow": { 
+        "Device0": {
+            "Id": ""
+        }           
+    },
+    "Actions":[
+        {
+            "streamData": {
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
+                    "voltage": 2.5,
+                    "ports": [
+                        {
+                            "port": "A",
+                            "pinList": [4,5,6,7]
+                        },
+                        {
+                            "port": "B",
+                            "pinList": [0,1,2,3,4,5,6,7]
+                        }
+                    ],
+                    "bufferSize": "1024*1024",
+                    "frequency": 1000,
+                    "point": 100,
+                    "waveForm" : "square",
+
+                    "rasterScan": {
+                        "pixels": 8192,
+                        "frameBlank": false,
+                        "resolution": 1024, 
+                        "adcLatency": 8,
+                        "dwell": 2,
+                        "display": {
+                        "_comment": [
+                            "When true, test_raster.py invokes scan_display.display_raster",
+                            "after the wet run. saveAs writes a PNG to the named path",
+                            "instead of opening a window (preferred for CI)."
+                            ],
+                        "enabled": true,
+                        "openViewer": true
+                        }
+                    },
+                    "vectorScan": {
+                        "latency": 8196,
+                        "adcLatency": 8,
+                        "lineShiftPerXRow": 5.5,
+                        "drainFloorPixels": 21000,
+
+                        "display": {
+                        "enabled": true,
+                        "openViewer": false
+                        }
+                    },
+
+                    "pins": {
+                        "_comment": [
+                            "Wiring between the Glasgow Interface Explorer C3 pads and",
+                            "the IobeamTech analog board. When this section is missing",
+                            "or empty, no Resource constraints are emitted - the FPGA",
+                            "still synthesises and FakeAdcSimulator drives the data path",
+                            "in loopback. As soon as the analog board exists, fill in",
+                            "the real pin names and set simulation.enabled = false."
+                        ],
+                        "control": {
+                            "_comment": [
+                                "Six bus strobes the BusController FSM generates. Each is",
+                                "an active-high digital output unless 'invert': true is set."
+                            ],
+                            "subsignals": [
+                                { "name": "adc_clk",      "pin": "",  "direction": "o" },
+                                { "name": "adc_le_clk",   "pin": "",  "direction": "o" },
+                                { "name": "adc_oe",       "pin": "",  "direction": "o" },
+                                { "name": "dac_clk",      "pin": "",  "direction": "o" },
+                                { "name": "dac_x_le_clk", "pin": "",  "direction": "o" },
+                                { "name": "dac_y_le_clk", "pin": "",  "direction": "o" },
+                                { "name": "d_clock",      "pin": "F3","direction": "o", "invert": true }
+                                ],
+                            "attrs": { "IO_STANDARD": "SB_LVCMOS33" }
+                        },
+                        "data": {
+                            "_comment": [
+                            "Shared 14-bit bidirectional bus carrying DAC writes and",
+                            "ADC reads. Pin string is space-separated, LSB-first.",
+                            "Empty string ('' or omitted) -> no Resource emitted; the",
+                            "internal data_o / data_i still drive FakeAdcSimulator.",
+                            ""
+                            ],
+                            "pins":      "B2 C4 B1 C3 C2 C1 D3 D1 F4 G2 E3 F1 E2 F2",
+                            "direction": "io",
+                            "attrs":     { "IO_STANDARD": "SB_LVCMOS33" }
+                        }
+                    },
+                    "simulation": {
+                    "_comment": [
+                        "When enabled=true, the FPGA bakes a fake-image BRAM into",
+                        "the bitstream and FakeAdcSimulator drives bus.data_i from",
+                        "it. Forces loopback=true regardless of IsProduction.",
+                        "",
+                        "source = 'file'    -> load 'path' as PNG/BMP/JPG, resize to",
+                        "                      imageResolution, convert to 8-bit",
+                        "                      grayscale.",
+                        "source = 'random'  -> RNG-fill, optional 'seed' for repro.",
+                        "source = 'pattern' -> built-in test patterns:",
+                        "                      ramp / checker / bars / bullseye.",
+                        "---Note, If IsProduction=false and mode is not 'zeros', the simulation will be enabled with fake images"
+                    ],
+                    "imageResolution": 64,
+                    "source":          "pattern",
+                    "patternKind":     "bullseye",
+                    "_alt_file": {
+                        "source": "file",
+                        "path":   "C:\\Project\\Iobeam\\Deploy\\Development\\GlasgowDataIO\\IobeamControl\\unittest\\testData\\SampleImage.bmp",
+                        "invert": false
+                    },
+                    "_alt_random": {
+                        "source": "random",
+                        "seed":   42
+                    },
+                    "mode": "image"
+                    }
+                },
+                "timeout": 60.0
+            }
+        },
+        {
+            "launchUI": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "internal",
+                    "url": "http://127.0.0.1:5173",
+                    "readinessTimeout": 30.0,
+                    "pollInterval": 0.5,
+                    "failOnNotReady": false
+                },
+                "timeout": 60.0
+            }
+        }
+    ],
+    "LogName": "StreamData",
+    "Verbose": true,
+    "DemoWithCLI": true,
+    "IsProduction" : false,
+    "DumpData" : true
+}

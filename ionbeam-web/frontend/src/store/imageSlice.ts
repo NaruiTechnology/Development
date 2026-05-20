@@ -206,6 +206,43 @@ const slice = createSlice({
       state.revision++;
     },
 
+    /**
+     * Apply the vector line-shift correction after a completed live scan.
+     *
+     * Backend figure rendering uses `lineShiftPerXRow` from streamData.json
+     * to deskew each X row in scan order. The live canvas stores default
+     * vector data transposed as image[row * edge + col], so the equivalent
+     * operation is a roll down each rendered X column.
+     */
+    correctVectorLineShift(
+      state,
+      a: PayloadAction<{ lineShiftPerXRow: number }>
+    ) {
+      const lineShift = Number(a.payload.lineShiftPerXRow);
+      const edge = state.vectorEdge;
+      if (
+        state.vectorPattern !== "default" ||
+        !Number.isFinite(lineShift) ||
+        lineShift === 0 ||
+        edge <= 1 ||
+        state.vectorCursor <= 0
+      ) {
+        return;
+      }
+
+      const corrected = new Uint16Array(state.vectorImage.length);
+      for (let col = 0; col < edge; col++) {
+        const shift = Math.round(col * lineShift);
+        const normalizedShift = ((shift % edge) + edge) % edge;
+        for (let row = 0; row < edge; row++) {
+          const srcRow = (row - normalizedShift + edge) % edge;
+          corrected[row * edge + col] = state.vectorImage[srcRow * edge + col];
+        }
+      }
+      state.vectorImage = corrected;
+      state.revision++;
+    },
+
     /** Clear the vector image without touching pattern / points config.
      *  Used by the Stop / Clear buttons. */
     resetVector(state) {
@@ -221,6 +258,7 @@ export const {
   appendRaster,
   setupVector,
   appendVectorSamples,
+  correctVectorLineShift,
   resetVector,
 } = slice.actions;
 

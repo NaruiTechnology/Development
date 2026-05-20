@@ -34,6 +34,7 @@ import {
   type ScanKind,
 } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
+import { registerScanActionStop } from "../hooks/scanActionRegistry";
 import { useScanStream } from "../hooks/useScanStream";
 import {
   clearBitmapSelectionCache,
@@ -113,7 +114,12 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
           roiState,
           { isProduction }
         );
-        dispatch(runRasterValidated(req));
+        const promise = dispatch(runRasterValidated(req));
+        const unregister = registerScanActionStop(() => {
+          promise.abort();
+          dispatch(streamReset());
+        });
+        promise.finally(unregister);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -125,7 +131,12 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
           roiState,
           { isProduction }
         );
-        dispatch(runVectorValidated(req));
+        const promise = dispatch(runVectorValidated(req));
+        const unregister = registerScanActionStop(() => {
+          promise.abort();
+          dispatch(streamReset());
+        });
+        promise.finally(unregister);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }

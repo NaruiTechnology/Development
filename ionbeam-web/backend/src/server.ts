@@ -19,6 +19,13 @@ import { config } from "./config";
 import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
+import {
+  ConfigError,
+  readWithBackup,
+  restartService,
+  restoreFromBackup,
+  writeConfig,
+} from "./configManager";
 
 const app = express();
 
@@ -32,7 +39,55 @@ app.get("/healthz", (_req, res) => {
     mock: config.mock,
     upstream: config.proxyTargetHttp,
     has_token: Boolean(config.glasgowToken),
+    config_path: config.configPath,
+    restart_cmd: config.restartCmd,
   });
+});
+
+app.get("/api/admin/config", async (_req, res) => {
+  try {
+    const info = await readWithBackup();
+    res.json(info);
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post("/api/admin/config", async (req, res) => {
+  const data =
+    req.body && typeof req.body === "object" && "data" in req.body
+      ? (req.body as { data: unknown }).data
+      : req.body;
+
+  if (data === undefined || data === null) {
+    res.status(400).json({
+      ok: false,
+      error: "missing JSON body: expected { data: <streamData> }",
+    });
+    return;
+  }
+
+  try {
+    await writeConfig(data);
+  } catch (err) {
+    sendConfigError(res, err);
+    return;
+  }
+
+  const restart = await restartService();
+  res.json({ ok: true, restart });
+});
+
+app.post("/api/admin/config/restore", async (_req, res) => {
+  try {
+    await restoreFromBackup();
+  } catch (err) {
+    sendConfigError(res, err);
+    return;
+  }
+
+  const restart = await restartService();
+  res.json({ ok: true, restart });
 });
 
 // MOCK responses live BEFORE the proxy mount so they win.
@@ -89,6 +144,17 @@ server.listen(config.port, () => {
       `  upstream = ${config.proxyTargetHttp}\n` +
       `  ws       = ${config.proxyTargetWs}\n` +
       `  token    = ${config.glasgowToken ? "set" : "(none)"}\n` +
+      `  config   = ${config.configPath}\n` +
+      `  restart  = ${config.restartCmd}\n` +
       `  static   = ${fs.existsSync(config.staticDir) ? config.staticDir : "(not built yet)"}`
   );
 });
+
+function sendConfigError(res: express.Response, err: unknown): void {
+  if (err instanceof ConfigError) {
+    res.status(err.status).json({ ok: false, error: err.message });
+    return;
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  res.status(500).json({ ok: false, error: message });
+}
