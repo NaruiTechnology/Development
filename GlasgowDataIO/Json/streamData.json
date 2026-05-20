@@ -38,13 +38,42 @@
                                 "an active-high digital output unless 'invert': true is set."
                             ],
                             "subsignals": [
-                                { "name": "adc_clk",      "pin": "",   "direction": "o" },
-                                { "name": "adc_le_clk",   "pin": "",   "direction": "o" },
-                                { "name": "adc_oe",       "pin": "",   "direction": "o" },
-                                { "name": "dac_clk",      "pin": "",   "direction": "o" },
-                                { "name": "dac_x_le_clk", "pin": "",   "direction": "o" },
-                                { "name": "dac_y_le_clk", "pin": "",   "direction": "o" },
-                                { "name": "d_clock",      "pin": "F3", "direction": "o", "invert": true }
+                                {
+                                    "name": "adc_clk",
+                                    "pin": "",
+                                    "direction": "o"
+                                },
+                                {
+                                    "name": "adc_le_clk",
+                                    "pin": "",
+                                    "direction": "o"
+                                },
+                                {
+                                    "name": "adc_oe",
+                                    "pin": "",
+                                    "direction": "o"
+                                },
+                                {
+                                    "name": "dac_clk",
+                                    "pin": "",
+                                    "direction": "o"
+                                },
+                                {
+                                    "name": "dac_x_le_clk",
+                                    "pin": "",
+                                    "direction": "o"
+                                },
+                                {
+                                    "name": "dac_y_le_clk",
+                                    "pin": "",
+                                    "direction": "o"
+                                },
+                                {
+                                    "name": "d_clock",
+                                    "pin": "F3",
+                                    "direction": "o",
+                                    "invert": true
+                                }
                             ],
                             "attrs": {
                                 "IO_STANDARD": "SB_LVCMOS33"
