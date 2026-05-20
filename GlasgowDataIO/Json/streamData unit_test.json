@@ -1,0 +1,99 @@
+{
+    "Glasgow": {
+        "Device0": {
+            "Id": "C3-20251207T145552Z"
+        }
+    },
+    "Actions": [
+        {
+            "streamData": {
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
+                    "voltage": 2.5,
+                    "ports": [
+                        { "port": "A", "pinList": [4, 5, 6, 7] },
+                        { "port": "B", "pinList": [0, 1, 2, 3, 4, 5, 6, 7] }
+                    ],
+                    "bufferSize": "1024*1024",
+                    "frequency": 1000,
+                    "point": 100,
+                    "waveForm": "square",
+                    "rasterScan": {
+                        "pixels": 8192,
+                        "frameBlank": false,
+                        "resolution": 1024,
+                        "adcLatency": 8,
+                        "dwell": 2,
+                        "display": {
+                            "_comment": [
+                                "When true, test_raster.py invokes scan_display.display_raster",
+                                "after the wet run. saveAs writes a PNG to the named path",
+                                "instead of opening a window (preferred for CI)."
+                            ],
+                            "openViewer": false
+                        }
+                    },
+                    "vectorScan": {
+                        "latency": 8196,
+                        "adcLatency": 8,
+                        "lineShiftPerXRow": 5.5,
+                        "drainFloorPixels": 21000,
+                        "display": {
+                            "openViewer": false
+                        }
+                    },
+                    "pins": {
+                        "_comment": [
+                            "Wiring between the Glasgow Interface Explorer C3 pads and",
+                            "the IobeamTech analog board. When this section is missing",
+                            "or empty, no Resource constraints are emitted - the FPGA",
+                            "still synthesises and FakeAdcSimulator drives the data path",
+                            "in loopback."
+                        ],
+                        "control": {
+                            "subsignals": [
+                                { "name": "adc_clk",      "pin": "",   "direction": "o" },
+                                { "name": "adc_le_clk",   "pin": "",   "direction": "o" },
+                                { "name": "adc_oe",       "pin": "",   "direction": "o" },
+                                { "name": "dac_clk",      "pin": "",   "direction": "o" },
+                                { "name": "dac_x_le_clk", "pin": "",   "direction": "o" },
+                                { "name": "dac_y_le_clk", "pin": "",   "direction": "o" },
+                                { "name": "d_clock",      "pin": "F3", "direction": "o", "invert": true }
+                            ],
+                            "attrs": {
+                                "IO_STANDARD": "SB_LVCMOS33"
+                            }
+                        },
+                        "data": {
+                            "pins": "B2 C4 B1 C3 C2 C1 D3 D1 F4 G2 E3 F1 E2 F2",
+                            "direction": "io",
+                            "attrs": {
+                                "IO_STANDARD": "SB_LVCMOS33"
+                            }
+                        }
+                    },
+                    "simulation": {
+                        "_comment": [
+                            "See streamData.json for the canonical simulation schema",
+                            "documentation. filePath is relative to IOBEAM_ROOT."
+                        ],
+                        "enabled": true,
+                        "mode": "image",
+                        "imageResolution": 64,
+                        "source": "pattern",
+                        "patternKind": "bullseye",
+                        "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
+                        "invert": false,
+                        "seed": 42
+                    }
+                },
+                "timeout": 60
+            }
+        }
+    ],
+    "LogName": "StreamDataUnitTest",
+    "Verbose": true,
+    "DemoWithCLI": true,
+    "IsProduction": false,
+    "DumpData": true
+}

@@ -126,7 +126,7 @@
                         "mode": "image",
                         "imageResolution": 64,
                         "source": "pattern",
-                        "patternKind": "bullseye",
+                        "patternKind": "checker",
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,
                         "seed": 42
