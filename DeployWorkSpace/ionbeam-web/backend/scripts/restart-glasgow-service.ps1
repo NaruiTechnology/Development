@@ -20,11 +20,7 @@ if ($logDir -and -not (Test-Path -LiteralPath $logDir)) {
     New-Item -ItemType Directory -Path $logDir | Out-Null
 }
 
-$env:VIRTUAL_ENV = $venvRoot
 $scriptsDir = Join-Path $venvRoot "Scripts"
-if (Test-Path -LiteralPath $scriptsDir) {
-    $env:Path = "$scriptsDir;$env:Path"
-}
 
 function Get-PortProcessIds {
     try {
@@ -42,11 +38,43 @@ function Get-GlasgowProcessIds {
     $pattern = "uvicorn.*$escapedApp.*--port(?:\s+|=)$escapedPort"
     $ids = New-Object System.Collections.Generic.HashSet[int]
 
-    Get-CimInstance Win32_Process |
-        Where-Object { $_.CommandLine -and $_.CommandLine -match $pattern } |
-        ForEach-Object { [void]$ids.Add([int]$_.ProcessId) }
-
     foreach ($processId in Get-PortProcessIds) {
+        [void]$ids.Add([int]$processId)
+    }
+
+    # Uvicorn launched from a console script can leave a parent wrapper
+    # process alive. If we only kill the listening child, that parent can
+    # spawn another child with the stale command line and reclaim the port.
+    foreach ($processId in @($ids)) {
+        $currentId = [int]$processId
+        while ($currentId -and $currentId -ne $PID) {
+            try {
+                $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $currentId" -ErrorAction Stop
+            } catch {
+                break
+            }
+
+            if ($proc.CommandLine -and (
+                    $proc.CommandLine -match $escapedApp -or
+                    $proc.CommandLine -match "uvicorn" -or
+                    $proc.CommandLine -match "glasgow_service")) {
+                [void]$ids.Add([int]$proc.ProcessId)
+                $currentId = [int]$proc.ParentProcessId
+            } else {
+                break
+            }
+        }
+    }
+
+    try {
+        Get-CimInstance Win32_Process |
+            Where-Object { $_.CommandLine -and $_.CommandLine -match $pattern } |
+            ForEach-Object { [void]$ids.Add([int]$_.ProcessId) }
+    } catch {
+        return ($ids | ForEach-Object { [int]$_ })
+    }
+
+    foreach ($processId in @($ids)) {
         try {
             $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction Stop
             if ($proc.CommandLine -match $escapedApp -or $proc.CommandLine -match "glasgow_service") {
@@ -106,6 +134,21 @@ function Wait-Ready {
     return $false
 }
 
+function Start-UvicornProcess {
+    $pathPrefix = if (Test-Path -LiteralPath $scriptsDir) { "$scriptsDir;" } else { "" }
+    $commandLine = 'set "VIRTUAL_ENV={0}" && set "PATH={1}%PATH%" && "{2}" -m uvicorn "{3}" --host "{4}" --port "{5}" --ws websockets >> "{6}" 2>> "{7}"' -f `
+        $venvRoot, $pathPrefix, $pythonBin, $app, $hostName, $port, $logFile, $errLogFile
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = "cmd.exe"
+    $startInfo.Arguments = "/d /c $commandLine"
+    $startInfo.WorkingDirectory = $workdir
+    $startInfo.UseShellExecute = $true
+    $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+
+    return [System.Diagnostics.Process]::Start($startInfo)
+}
+
 $oldPids = @(Get-GlasgowProcessIds)
 if ($oldPids.Count -gt 0) {
     $oldPids | ForEach-Object {
@@ -125,14 +168,7 @@ if (-not (Wait-PortFree)) {
     throw "port $hostName`:$port is still in use by pid(s): $pids"
 }
 
-$process = Start-Process `
-    -FilePath $pythonBin `
-    -ArgumentList @("-m", "uvicorn", $app, "--host", $hostName, "--port", $port) `
-    -WorkingDirectory $workdir `
-    -RedirectStandardOutput $logFile `
-    -RedirectStandardError $errLogFile `
-    -WindowStyle Hidden `
-    -PassThru
+$process = Start-UvicornProcess
 
 if (-not (Wait-Ready)) {
     if ($process.HasExited) {
@@ -147,4 +183,4 @@ if (-not (Wait-Ready)) {
     throw "started process $($process.Id), but $hostName`:$port/status did not become ready"
 }
 
-Write-Output "started $app on $hostName`:$port with $pythonBin (pid $($process.Id), listener pid(s): $((Get-PortProcessIds) -join ', '), log $logFile, errors $errLogFile)"
+Write-Output "started $app on $hostName`:$port with $pythonBin --ws websockets (host pid $($process.Id), listener pid(s): $((Get-PortProcessIds) -join ', '), log $logFile, errors $errLogFile)"

@@ -96,7 +96,7 @@ function handleProxy(
       upstream.readyState === WebSocket.OPEN ||
       upstream.readyState === WebSocket.CONNECTING
     ) {
-      upstream.close(code === 1006 ? 1000 : code, reason);
+      upstream.close(closeCodeForPeer(code, 1000), reason);
     }
   });
 
@@ -121,7 +121,7 @@ function handleProxy(
       client.readyState === WebSocket.OPEN ||
       client.readyState === WebSocket.CONNECTING
     ) {
-      client.close(code === 1006 ? 1011 : code, reason);
+      client.close(closeCodeForPeer(code, 1011), reason);
     }
   });
 
@@ -147,6 +147,14 @@ function handleProxy(
     `[ws] ${req.socket.remoteAddress} -> ${upstreamUrl}` +
       (config.glasgowToken ? " (with bearer)" : "")
   );
+}
+
+function closeCodeForPeer(code: number, fallback: number): number {
+  // 1005, 1006, and 1015 are reserved sentinel values from the ws API and
+  // must never be sent in an outbound close frame.
+  if (code === 1005 || code === 1006 || code === 1015) return fallback;
+  if (code < 1000 || code >= 5000) return fallback;
+  return code;
 }
 
 /* -------- MOCK=1 path -------------------------------------------------- */

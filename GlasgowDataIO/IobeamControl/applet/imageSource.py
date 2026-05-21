@@ -211,10 +211,16 @@ def pattern_image(resolution=64, kind="ramp"):
             for x in range(n):
                 out[y * n + x] = (x * 255) // (n - 1)
     elif kind == "checker":
+        # Use dark gray rather than true black for the low squares. Small
+        # ROI scans can fall entirely inside one checker cell; a zero-valued
+        # cell is indistinguishable from a dead ADC path in the live/final
+        # views, while 32 still reads visually as the dark half of a checker.
+        low = 32
+        high = 255
         cell = max(1, n // 8)
         for y in range(n):
             for x in range(n):
-                out[y * n + x] = 255 if ((x // cell) + (y // cell)) & 1 else 0
+                out[y * n + x] = high if ((x // cell) + (y // cell)) & 1 else low
     elif kind == "bars":
         for y in range(n):
             for x in range(n):

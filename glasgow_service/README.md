@@ -77,7 +77,7 @@ glasgow token: 376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee
 WkgnwuSK0fFCXPmKkQc-ku4BBDpGB9qZeK_2diBgAyk
 uuid: f960bbee-8797-4946-aa9b-ed2a70c79203
 
-python -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
+python -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --ws websockets
 ```
 
 If a stale machine-level `GLASGOW_CONFIG` points to an old checkout, clear it

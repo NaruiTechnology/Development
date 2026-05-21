@@ -99,6 +99,7 @@ fi
 
 cd "${WORKDIR}"
 nohup "${PYTHON_BIN}" -m uvicorn "${APP}" --host "${HOST}" --port "${PORT}" \
+  --ws websockets \
   >> "${LOG_FILE}" 2>&1 &
 new_pid=$!
 

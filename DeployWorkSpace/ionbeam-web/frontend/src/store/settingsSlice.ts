@@ -183,6 +183,9 @@ const slice = createSlice({
     clearError(s) {
       s.error = null;
     },
+    setError(s, a: PayloadAction<string>) {
+      s.error = a.payload;
+    },
     consumeBackupNotice(s) {
       s.backupNotice = false;
     },
@@ -259,6 +262,7 @@ export const {
   setDraft,
   resetDraft,
   clearError,
+  setError,
   consumeBackupNotice,
   clearLastRestart,
 } = slice.actions;

@@ -26,7 +26,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
-import { useAppDispatch, useAppSelector } from "../store";
+import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
 import { fetchDefaults, previewConfigDefaults } from "../store/statusSlice";
 import {
   ACTION_DATA_PATH,
@@ -44,6 +44,7 @@ import {
   saveSettingsConfig,
   setActiveTab,
   setDraft,
+  setError,
   writePath,
   type SettingsTab,
 } from "../store/settingsSlice";
@@ -59,40 +60,39 @@ export function SettingsDialog() {
     dispatch(fetchSettingsConfig());
   }, [dispatch, open]);
 
-  // Scroll lock + Escape-to-close - same shell behavior as HelpPopover.
+  // Scroll lock while the settings modal is open. The dialog closes
+  // only from the explicit header close button so restart results stay
+  // visible until the operator dismisses them.
   useEffect(() => {
     if (!open) return;
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        dispatch(closeDialog());
-      }
-    }
-    document.addEventListener("keydown", onKey);
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
-      document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [dispatch, open]);
+  }, [open]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) dispatch(closeDialog());
-      }}
-    >
+    <div className="modal-backdrop" role="presentation">
       <SettingsModalShell />
     </div>
   );
+}
+
+async function refreshDefaultsForSettings(dispatch: AppDispatch) {
+  const result = await dispatch(fetchDefaults());
+  if (fetchDefaults.rejected.match(result)) {
+    dispatch(
+      setError(
+        result.error.message ??
+          "Service restart completed, but refreshed defaults could not be loaded.",
+      ),
+    );
+  }
 }
 
 /* -------- modal shell -------------------------------------------------- */
@@ -143,10 +143,7 @@ function SettingsModalShell() {
     const result = await dispatch(saveSettingsConfig(draft));
     if (saveSettingsConfig.fulfilled.match(result)) {
       dispatch(previewConfigDefaults(configDefaultsPreview(draft)));
-      dispatch(fetchDefaults());
-      if (result.payload.restart.ok) {
-        dispatch(closeDialog());
-      }
+      await refreshDefaultsForSettings(dispatch);
     }
     // The restart result is surfaced via `lastRestart`; we don't
     // auto-close the dialog so the operator can see whether it
@@ -164,10 +161,7 @@ function SettingsModalShell() {
       if (fetchSettingsConfig.fulfilled.match(config)) {
         dispatch(previewConfigDefaults(configDefaultsPreview(config.payload.data)));
       }
-      dispatch(fetchDefaults());
-      if (result.payload.restart.ok) {
-        dispatch(closeDialog());
-      }
+      await refreshDefaultsForSettings(dispatch);
     }
   }
 

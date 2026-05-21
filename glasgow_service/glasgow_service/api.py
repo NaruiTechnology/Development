@@ -1,13 +1,14 @@
 """FastAPI app exposing the Glasgow service over REST + WebSocket.
 
 Run:
-    uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
+    uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --ws websockets
 
 Swagger UI:   http://127.0.0.1:8765/docs
 ReDoc:        http://127.0.0.1:8765/redoc
 OpenAPI JSON: http://127.0.0.1:8765/openapi.json
 """
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
@@ -241,6 +242,15 @@ async def _stream_scan(ws: WebSocket, make_gen):
         await ws.send_json({"event": "error", "code": "not_ready", "detail": str(e)})
     except WebSocketDisconnect:
         pass
+    except asyncio.TimeoutError:
+        logger.exception("stream timeout")
+        detail = (
+            "Hardware read timed out while waiting for scan data. "
+            "The service kept any partial CSV/PNG output it was able to write; "
+            "try a lower raster resolution/latency or reconnect the Glasgow device."
+        )
+        try: await ws.send_json({"event": "error", "code": "timeout", "detail": detail})
+        except Exception: pass
     except Exception as e:
         logger.exception("stream error")
         try: await ws.send_json({"event": "error", "message": repr(e)})

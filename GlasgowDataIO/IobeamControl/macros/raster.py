@@ -53,6 +53,7 @@ DEFAULT_PADDING_MIN_PIXELS  = 128
 DEFAULT_PADDING_RATIO_DENOM = 200    # padding = total_pixels // 200 (0.5%)
 DEFAULT_PADDING_DWELL       = 2
 DEFAULT_FRAME_BLANK         = False  # matches the API request default
+DEFAULT_SENDER_DRAIN_TIMEOUT_S = 15.0
 
 
 class RasterScanCommand(BaseCommand):
@@ -70,6 +71,7 @@ class RasterScanCommand(BaseCommand):
         padding_min_pixels: int         = DEFAULT_PADDING_MIN_PIXELS,
         padding_ratio_denominator: int  = DEFAULT_PADDING_RATIO_DENOM,
         padding_dwell: int              = DEFAULT_PADDING_DWELL,
+        sender_drain_timeout_s: float   = DEFAULT_SENDER_DRAIN_TIMEOUT_S,
     ):
         """
         Scan a frame and return data using a combination of
@@ -114,6 +116,7 @@ class RasterScanCommand(BaseCommand):
         self._padding_min_pixels        = int(padding_min_pixels)
         self._padding_ratio_denominator = int(padding_ratio_denominator)
         self._padding_dwell             = int(padding_dwell)
+        self._sender_drain_timeout_s    = float(sender_drain_timeout_s)
 
         self.abort = asyncio.Event()
 
@@ -223,21 +226,36 @@ class RasterScanCommand(BaseCommand):
         await RasterRegionCommand(
             x_range=self._x_range, y_range=self._y_range,
         ).transfer(stream)
-        asyncio.create_task(sender())
+        sender_task = asyncio.create_task(sender())
 
         # Discard the FFFF + cookie reply.
         # TODO: assert against synchronization result
         cookie = await stream.read(4)
-        for commands, pixel_count in self._iter_chunks(latency):
-            tokens += 1
-            if tokens == 1:
-                token_fut.set_result(None)
-                token_fut = asyncio.Future()
-            if tokens == self._max_pipeline + 1:
-                if self.abort.is_set():
-                    break
-            self._logger.debug(f"recver: tokens={tokens}")
-            yield await self.recv_res(pixel_count, stream, self._output_mode)
+        try:
+            for commands, pixel_count in self._iter_chunks(latency):
+                tokens += 1
+                if tokens == 1:
+                    token_fut.set_result(None)
+                    token_fut = asyncio.Future()
+                if tokens == self._max_pipeline + 1:
+                    if self.abort.is_set():
+                        break
+                self._logger.debug(f"recver: tokens={tokens}")
+                yield await self.recv_res(pixel_count, stream, self._output_mode)
+        finally:
+            if not sender_task.done():
+                try:
+                    await asyncio.wait_for(
+                        sender_task, timeout=self._sender_drain_timeout_s)
+                except asyncio.TimeoutError:
+                    self._logger.warning(
+                        f"sender task did not finish drain in "
+                        f"{self._sender_drain_timeout_s:.0f}s; cancelled")
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    self._logger.exception(
+                        "sender task raised during transfer cleanup")
         # Fly back to origin. This is a single hidden pixel emitted to
         # move the DAC back to the scan's starting position after the
         # frame finishes; it isn't part of the captured scan data and

@@ -66,7 +66,7 @@ $env:GLASGOW_CONFIG="C:\Project\IobeamTech\Development\GlasgowDataIO\Json\stream
 
 # Optional: turn on bearer auth
 # $env:GLASGOW_TOKEN="replace-me-with-32-bytes-of-hex"
-..\.venv\Scripts\python.exe -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765
+..\.venv\Scripts\python.exe -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --ws websockets
 
 # 2) Node proxy / static server — port 4000
 cd backend

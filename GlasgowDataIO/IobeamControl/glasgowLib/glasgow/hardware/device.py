@@ -1,4 +1,5 @@
 import re
+import os
 import time
 import struct
 import logging
@@ -16,6 +17,26 @@ from . import quirks
 __all__ = ["GlasgowDevice"]
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_TRANSFER_TIMEOUT_S = 30.0
+TRANSFER_TIMEOUT_ENV = "GLASGOW_USB_TRANSFER_TIMEOUT_S"
+
+
+def _transfer_timeout_s():
+    value = os.environ.get(TRANSFER_TIMEOUT_ENV)
+    if value is None:
+        return DEFAULT_TRANSFER_TIMEOUT_S
+    try:
+        timeout = float(value)
+    except ValueError:
+        logger.warning("Ignoring invalid %s=%r; using %.1fs",
+                       TRANSFER_TIMEOUT_ENV, value, DEFAULT_TRANSFER_TIMEOUT_S)
+        return DEFAULT_TRANSFER_TIMEOUT_S
+    if timeout <= 0:
+        logger.warning("Ignoring non-positive %s=%r; using %.1fs",
+                       TRANSFER_TIMEOUT_ENV, value, DEFAULT_TRANSFER_TIMEOUT_S)
+        return DEFAULT_TRANSFER_TIMEOUT_S
+    return timeout
 
 
 VID_QIHW         = 0x20b7
@@ -289,21 +310,26 @@ class GlasgowDevice:
                     endpoint_dir = "OUT"
                 logger.info("USB: %s EP%d %s (cancelled)",
                              transfer_type, endpoint & 0x7f, endpoint_dir)
-                cancel_future.set_result(None)
+                if not cancel_future.done():
+                    cancel_future.set_result(None)
             elif result_future.cancelled():
                 pass
             elif status == usb1.TRANSFER_COMPLETED:
-                if is_read:
-                    result_future.set_result(transfer.getBuffer()[:transfer.getActualLength()])
-                else:
-                    result_future.set_result(None)
+                if not result_future.done():
+                    if is_read:
+                        result_future.set_result(transfer.getBuffer()[:transfer.getActualLength()])
+                    else:
+                        result_future.set_result(None)
             elif status == usb1.TRANSFER_STALL:
-                result_future.set_exception(usb1.USBErrorPipe())
+                if not result_future.done():
+                    result_future.set_exception(usb1.USBErrorPipe())
             elif status == usb1.TRANSFER_NO_DEVICE:
-                result_future.set_exception(GlasgowDeviceError("device disconnected"))
+                if not result_future.done():
+                    result_future.set_exception(GlasgowDeviceError("device disconnected"))
             else:
-                result_future.set_exception(GlasgowDeviceError(
-                    f"transfer error: {usb1.libusb1.libusb_transfer_status(status)}"))
+                if not result_future.done():
+                    result_future.set_exception(GlasgowDeviceError(
+                        f"transfer error: {usb1.libusb1.libusb_transfer_status(status)}"))
 
         def handle_usb_error(func):
             try:
@@ -315,7 +341,7 @@ class GlasgowDevice:
         transfer.setCallback(lambda transfer: loop.call_soon_threadsafe(usb_callback, transfer))
         handle_usb_error(lambda: transfer.submit())
         try:
-            return await asyncio.wait_for(result_future, timeout=10.0)
+            return await asyncio.wait_for(result_future, timeout=_transfer_timeout_s())
         finally:
             if result_future.cancelled():
                 try:

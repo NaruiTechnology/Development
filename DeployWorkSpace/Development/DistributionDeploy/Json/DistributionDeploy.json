@@ -262,7 +262,7 @@
 						"GLASGOW_TOOLCHAIN":"builtin",
 						"PYTHONPATH":"C:\\Project\\Iobeam\\Deploy;C:\\Project\\Iobeam\\Deploy\\glasgow_service"
 					},
-					"command":"python -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --log-level debug",
+					"command":"python -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --ws websockets --log-level debug",
 					"log":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
 					"pid":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.pid",
 					"title":"Glasgow Service",
