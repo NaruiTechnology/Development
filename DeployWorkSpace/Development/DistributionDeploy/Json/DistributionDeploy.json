@@ -9,7 +9,7 @@
         "SourceRoot": "Development/DistributionDeploy",
         "DistDir": "dist_app",
         "DistZip": "dist_app.zip",
-        "DeployRoot": "../..",
+        "DeployRoot": "~/IobeamPlatform",
         "VenvDir": ".venv",
         "GlasgowConfig": "Development/GlasgowDataIO/Json/streamData.json",
         "GlasgowLog": "/tmp/glasgow.log",
@@ -21,6 +21,16 @@
     },
     "Actions": [
         
+        {
+            "createDeployFolder": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "sudo rm -rf '$1' && mkdir -p '$1'"
+                },
+                "timeout": 30.0
+            }
+        },
         {
             "unzipDistribution": {
                 "skip": false,
