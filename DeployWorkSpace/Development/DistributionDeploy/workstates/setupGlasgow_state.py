@@ -7,10 +7,11 @@
 #      current user to it.
 #   2. Under the deploy root, clone GlasgowEmbedded/glasgow if it isn't
 #      there already.
-#   3. Install the udev rules: cp config/70-glasgow.rules into /etc/udev/rules.d
+#   3. Patch Glasgow's pyproject.toml Python floor when requested.
+#   4. Install the udev rules: cp config/70-glasgow.rules into /etc/udev/rules.d
 #      then `udevadm control --reload && udevadm trigger ...` for the
 #      configured idVendor/idProduct.
-#   4. pipx install -e 'glasgow/software[builtin-toolchain]'
+#   5. pipx install -e 'glasgow/software[builtin-toolchain]'
 #
 # Each step is its own subprocess so a clean stop-on-error point exists at
 # every boundary. Step 1 and step 3 require sudo; step 2 and step 4 don't.
@@ -24,6 +25,10 @@
 #   idVendor       USB vendor id used for udevadm trigger
 #   idProduct      USB product id
 #   pipxTarget     argument to `pipx install -e ...`
+#   pipxPython     optional Python executable for pipx --python
+#   pipxRequired   fail workflow when pipx install fails (default False)
+#   pyprojectPath  pyproject.toml to patch inside deploy root
+#   pythonRequires replacement requires-python value (empty disables patch)
 #   stopOnError    abort on first failure (default True; this whole sequence
 #                  doesn't tolerate skipping a step)
 #-------------------------------------------------------------------------------
@@ -47,7 +52,7 @@ class setupGlasgow_state(distributionDeploy_state):
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
-            deployRoot  = actionData.get("deployRoot") or self.deployRoot()
+            deployRoot  = self.resolveDeployPath(actionData.get("deployRoot") or ".")
             repoUrl     = actionData.get("repoUrl",
                                           "https://github.com/GlasgowEmbedded/glasgow")
             repoDir     = actionData.get("repoDir", "glasgow")
@@ -56,6 +61,10 @@ class setupGlasgow_state(distributionDeploy_state):
             idVendor    = actionData.get("idVendor", "20b7")
             idProduct   = actionData.get("idProduct", "9db1")
             pipxTarget  = actionData.get("pipxTarget", "glasgow/software[builtin-toolchain]")
+            pipxPython  = actionData.get("pipxPython", "python3.13")
+            pipxRequired = bool(actionData.get("pipxRequired", False))
+            pyprojectPath = actionData.get("pyprojectPath", "glasgow/software/pyproject.toml")
+            pythonRequires = actionData.get("pythonRequires", ">=3.12.3,<4")
             stopOnError = bool(actionData.get("stopOnError", True))
 
             steps = []
@@ -75,7 +84,30 @@ class setupGlasgow_state(distributionDeploy_state):
                     root=deployRoot, url=repoUrl, dir=repoDir)
             ))
 
-            # 3. udev rules + trigger (the user's verbatim command)
+            # 3. Patch the cloned Glasgow package metadata for this host.
+            if pythonRequires:
+                pyprojectPathForPy = pyprojectPath.replace("\\", "\\\\").replace('"', '\\"')
+                pythonRequiresForPy = pythonRequires.replace("\\", "\\\\").replace('"', '\\"')
+                steps.append((
+                    "patch-pyproject-python",
+                    "bash -c 'cd \"{root}\" && python3 -c \""
+                    "from pathlib import Path; import re; "
+                    "p=Path(\\\"{path}\\\"); "
+                    "s=p.read_text(); "
+                    "ns,n=re.subn(r\\\"requires-python\\\\s*=\\\\s*[^\\\\n]+\\\", "
+                    "\\\"requires-python = \\\\\\\"{requires}\\\\\\\"\\\", s, count=1); "
+                    "assert n, f\\\"requires-python not found in {{p}}\\\"; "
+                    "p.write_text(ns)\"'".format(
+                        root=deployRoot, path=pyprojectPathForPy,
+                        requires=pythonRequiresForPy)
+                ))
+                steps.append((
+                    "show-pyproject-python",
+                    "bash -c 'cd \"{root}\" && grep -n \"requires-python\" \"{path}\"'".format(
+                        root=deployRoot, path=pyprojectPath)
+                ))
+
+            # 4. udev rules + trigger (the user's verbatim command)
             steps.append((
                 "udev",
                 "bash -c 'cd \"{root}\" && sudo cp {src} {dst} "
@@ -86,11 +118,14 @@ class setupGlasgow_state(distributionDeploy_state):
                     v=idVendor, p=idProduct)
             ))
 
-            # 4. pipx install of the glasgow software
+            # 5. pipx install of the glasgow software
             steps.append((
                 "pipx-install",
-                "bash -c 'cd \"{root}\" && pipx install -e \"{tgt}\"'".format(
-                    root=deployRoot, tgt=pipxTarget)
+                "bash -c 'cd \"{root}\" && "
+                "if command -v {py} >/dev/null 2>&1; then "
+                "pipx install --python {py} -e \"{tgt}\"; "
+                "else pipx install -e \"{tgt}\"; fi'".format(
+                    root=deployRoot, py=pipxPython, tgt=pipxTarget)
             ))
 
             if not os.path.isdir(deployRoot):
@@ -108,6 +143,12 @@ class setupGlasgow_state(distributionDeploy_state):
                     self.error("[{}][{}] FAILED.\n{}".format(
                         type(self).__name__, label,
                         self._stderr.decode(errors="replace") if self._stderr else "<no stderr>"))
+                    if label == "pipx-install" and not pipxRequired:
+                        self.warn("[{}][{}] continuing because pipxRequired=false. "
+                                  "The Glasgow service uses the deploy virtualenv; "
+                                  "pipx only provides the standalone Glasgow CLI."
+                                  .format(type(self).__name__, label))
+                        continue
                     allOk = False
                     if stopOnError:
                         break

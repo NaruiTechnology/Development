@@ -6,13 +6,12 @@
         "Description": "Builds dist_app.zip from local sources and bootstraps an Ubuntu host with all toolchains, the Glasgow service, and the ionbeam-web app."
     },
     "Deployment": {
-        "SourceRoot": ".",
-        "BuildScript": "buidCompiledDist.py",
+        "SourceRoot": "Development/DistributionDeploy",
         "DistDir": "dist_app",
         "DistZip": "dist_app.zip",
-        "DeployRoot": "/home/vboxuser/Project/IobeamTech",
+        "DeployRoot": "../..",
         "VenvDir": ".venv",
-        "GlasgowConfig": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
+        "GlasgowConfig": "Development/GlasgowDataIO/Json/streamData.json",
         "GlasgowLog": "/tmp/glasgow.log",
         "GlasgowServiceLog": "/tmp/glasgow.log",
         "GlasgowRepoUrl": "https://github.com/GlasgowEmbedded/glasgow",
@@ -21,31 +20,15 @@
         "IonbeamWebDir": "ionbeam-web"
     },
     "Actions": [
-        {
-            "buildDistribution": {
-                "skip": true,
-                "transactionComplete": false,
-                "actionData": {
-                    "commandFormat": "python3 {} --source {} --dist {} --output {}",
-                    "script": "buidCompiledDist.py",
-                    "source": ".",
-                    "dist": "dist_app",
-                    "output": "dist_app.zip"
-                },
-                "timeout": 300.0,
-                "args": {
-                    "outputFiles": ["dist_app.zip"]
-                }
-            }
-        },
+        
         {
             "unzipDistribution": {
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "unzip -o {} -d {}",
-                    "zip": "/home/vboxuser/Project/DeployWorkSpace/Development/DistributionDeploy/dist_app*.zip",
-                    "dest": "/home/vboxuser/Project/IobeamTech"
+                    "zip": "Development/DistributionDeploy/dist_app*.zip",
+                    "dest": "."
                 },
                 "timeout": 120.0
             }
@@ -56,7 +39,7 @@
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "bash -c 'cd {} && python3 -m venv {} && . {}/bin/activate && python -m pip install --upgrade pip'",
-                    "root": "/home/vboxuser/Project/IobeamTech",
+                    "root": ".",
                     "venv": ".venv",
                     "venvAct": ".venv"
                 },
@@ -69,12 +52,12 @@
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "python3 -m pip install -r {}/{}",
-                    "root": "/home/vboxuser/Project/IobeamTech/Development",
+                    "root": "Development",
                     "requirementsName": "requirements.txt",
                     "extraRequirements": [
                         "glasgow_service/requirements.txt"
                     ],
-                    "venvDir": "/home/vboxuser/Project/IobeamTech/.venv",
+                    "venvDir": ".venv",
                     "skipPrivateGitEditable": true,
                     "stopOnError": false,
                     "useBreakSystemPackages": true
@@ -133,7 +116,7 @@
                         "amaranth"
                     ],
                     "useVenv": true,
-                    "venvActivate": "/home/vboxuser/Project/IobeamTech/.venv/bin/activate",
+                    "venvActivate": ".venv/bin/activate",
                     "stopOnError": false
                 },
                 "timeout": 1800.0
@@ -145,7 +128,7 @@
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "iterative",
-                    "deployRoot": "/home/vboxuser/Project/IobeamTech",
+                    "deployRoot": ".",
                     "repoUrl": "https://github.com/GlasgowEmbedded/glasgow",
                     "repoDir": "glasgow",
                     "rulesSrc": "glasgow/config/70-glasgow.rules",
@@ -153,6 +136,10 @@
                     "idVendor": "20b7",
                     "idProduct": "9db1",
                     "pipxTarget": "glasgow/software[builtin-toolchain]",
+                    "pipxPython": "python3.13",
+                    "pipxRequired": false,
+                    "pyprojectPath": "glasgow/software/pyproject.toml",
+                    "pythonRequires": ">=3.12.3,<4",
                     "stopOnError": true
                 },
                 "timeout": 900.0
@@ -166,7 +153,11 @@
                     "commandFormat": "internal",
                     "bashrcPath": "~/.bashrc",
                     "exports": {
-                        "GLASGOW_CONFIG": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json"
+                        "GLASGOW_TOKEN": {
+                            "value": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
+                            "resolve": false
+                        },
+                        "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json"
                     }
                 },
                 "timeout": 5.0
@@ -177,11 +168,18 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "root": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/",
-                    "venvActivate": "/home/vboxuser/Project/IobeamTech/.venv/bin/activate",
+                    "root": "Development/GlasgowDataIO",
+                    "venvActivate": ".venv/bin/activate",
                     "exports": {
-                        "GLASGOW_CONFIG": "/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json",
-                        "PYTHONPATH": "/home/vboxuser/Project/IobeamTech/Development:/home/vboxuser/Project/IobeamTech/Development/glasgow_service"
+                        "GLASGOW_TOKEN": {
+                            "value": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
+                            "resolve": false
+                        },
+                        "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json",
+                        "PYTHONPATH": [
+                            "Development",
+                            "Development/glasgow_service"
+                        ]
                     },
                     "command": "uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --log-level debug",
                     "log": "/tmp/glasgow.log",
@@ -213,9 +211,7 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "webRoot": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web",
-                    "backendDir": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/backend",
-                    "frontendDir": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/frontend",
+                    "webRoot": "Development/ionbeam-web",
                     "createBackendEnv": true,
                     "npmInstall": true,
                     "useNvm": true
@@ -228,9 +224,16 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "dir": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/backend",
+                    "dir": "Development/ionbeam-web/backend",
                     "command": "npm run dev",
                     "useNvm": true,
+                    "exports": {
+                        "GLASGOW_TOKEN": {
+                            "value": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
+                            "resolve": false
+                        },
+                        "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json"
+                    },
                     "log": "/tmp/ionbeam-backend.log",
                     "pid": "/tmp/ionbeam-backend.pid",
                     "title": "Ionbeam Web Backend",
@@ -244,7 +247,7 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "dir": "/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/frontend",
+                    "dir": "Development/ionbeam-web/frontend",
                     "command": "npm run dev -- --host 127.0.0.1",
                     "useNvm": true,
                     "log": "/tmp/ionbeam-frontend.log",

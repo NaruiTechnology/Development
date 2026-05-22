@@ -48,6 +48,8 @@ class installToolchain_state(distributionDeploy_state):
             pipPackages  = list(actionData.get("pipPackages", []) or [])
             useVenv      = bool(actionData.get("useVenv", True))
             venvActivate = actionData.get("venvActivate", "")
+            if venvActivate:
+                venvActivate = self.resolveDeployPath(venvActivate)
             breakSys     = bool(actionData.get("useBreakSystemPackages", True))
             stopOnError  = bool(actionData.get("stopOnError", False))
 

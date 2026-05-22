@@ -66,8 +66,7 @@ class executeShellCommand_state(distributionDeploy_state):
             self.Success = False
 
     async def _run(self, cmd, timeout):
-        import os
-        runDir = os.getcwd() #self.deployRoot()
+        runDir = getattr(self.ParentWorkThread, "sourceRoot", self.workRoot())
         if timeout and timeout > 0:
             try:
                 return await asyncio.wait_for(

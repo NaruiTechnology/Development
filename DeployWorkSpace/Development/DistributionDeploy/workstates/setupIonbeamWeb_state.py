@@ -25,11 +25,14 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
-            webRoot = actionData.get(
-                "webRoot",
-                os.path.join(self.deployRoot(), "Development", "ionbeam-web"))
-            backendDir = actionData.get("backendDir", os.path.join(webRoot, "backend"))
-            frontendDir = actionData.get("frontendDir", os.path.join(webRoot, "frontend"))
+            webRoot = self.resolveDeployPath(actionData.get(
+                "webRoot", os.path.join("Development", "ionbeam-web")))
+            backendDir = actionData.get("backendDir")
+            backendDir = (self.resolveDeployPath(backendDir)
+                          if backendDir else os.path.join(webRoot, "backend"))
+            frontendDir = actionData.get("frontendDir")
+            frontendDir = (self.resolveDeployPath(frontendDir)
+                           if frontendDir else os.path.join(webRoot, "frontend"))
             createEnv = bool(actionData.get("createBackendEnv", True))
             install = bool(actionData.get("npmInstall", True))
             useNvm = bool(actionData.get("useNvm", True))
@@ -123,7 +126,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             return cmd
         return (
             "bash -lc 'export NVM_DIR=\"$HOME/.nvm\" && "
-            "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && {}'"
+            "if [ -s \"$NVM_DIR/nvm.sh\" ]; then . \"$NVM_DIR/nvm.sh\"; fi; {}'"
             .format(cmd)
         )
 

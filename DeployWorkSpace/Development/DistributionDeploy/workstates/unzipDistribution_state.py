@@ -16,6 +16,8 @@
 #-------------------------------------------------------------------------------
 import os
 import fnmatch
+import shutil
+import subprocess
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -78,7 +80,13 @@ class unzipDistribution_state(executeShellCommand_state):
                       .format(type(self).__name__, zipPath))
 
             # 3. Build and run the unzip command.
-            cmd = commandFormat.format(zipPath, dest)
+            deployRoot = self.deployRoot()
+            if not self._prepareDeployRoot(deployRoot):
+                self._success = False
+                return
+
+            destPath = self.resolveDeployPath(dest)
+            cmd = commandFormat.format(zipPath, destPath)
             self.info("[{}] >> {}".format(type(self).__name__, cmd))
 
             self.ParentWorkThread.activateVirtualEnv()
@@ -98,8 +106,109 @@ class unzipDistribution_state(executeShellCommand_state):
             self._success = False
 
     # ---- helpers ---------------------------------------------------------
+    def _prepareDeployRoot(self, deployRoot):
+        """
+        Prepare Deployment.DeployRoot as the current user:
+          - create it when missing
+          - remove every child when it already exists
+
+        If the root is missing or owned by another user, sudo is used only to
+        create/chown this one deploy root. Clearing and extraction still run
+        as the current user.
+        """
+        root = os.path.abspath(os.path.expanduser(str(deployRoot)))
+        if not self._isSafeDeployRoot(root):
+            self.error("[{}] refusing to clear unsafe deploy root: {}"
+                       .format(type(self).__name__, root))
+            return False
+
+        try:
+            if not self._ensureDeployRootWritable(root):
+                return False
+
+            if not os.path.exists(root):
+                os.makedirs(root, exist_ok=True)
+                self.info("[{}] created deploy root: {}"
+                          .format(type(self).__name__, root))
+                return True
+
+            if not os.path.isdir(root):
+                self.error("[{}] deploy root exists but is not a directory: {}"
+                           .format(type(self).__name__, root))
+                return False
+
+            for name in os.listdir(root):
+                path = os.path.join(root, name)
+                if os.path.isdir(path) and not os.path.islink(path):
+                    shutil.rmtree(path)
+                else:
+                    os.unlink(path)
+            self.info("[{}] cleared deploy root as current user: {}"
+                      .format(type(self).__name__, root))
+            return True
+        except OSError as e:
+            self.error("[{}] could not prepare deploy root '{}': {}"
+                       .format(type(self).__name__, root, e))
+            return False
+
+    def _ensureDeployRootWritable(self, root):
+        if os.path.isdir(root) and os.access(root, os.W_OK | os.X_OK):
+            return True
+
+        if not os.path.exists(root):
+            parent = os.path.dirname(root) or os.path.abspath(os.sep)
+            if os.path.isdir(parent) and os.access(parent, os.W_OK | os.X_OK):
+                return True
+
+        uid = os.getuid()
+        gid = os.getgid()
+        cmd = [
+            "sudo",
+            "-n",
+            "bash",
+            "-lc",
+            "mkdir -p {root} && chown -R {uid}:{gid} {root}".format(
+                root=_shquote(root), uid=uid, gid=gid),
+        ]
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False)
+        except OSError as e:
+            self.error("[{}] could not run sudo to prepare deploy root '{}': {}"
+                       .format(type(self).__name__, root, e))
+            return False
+
+        if proc.returncode != 0:
+            self.error(
+                "[{}] deploy root '{}' is not writable by the current user, "
+                "and sudo bootstrap failed.\n"
+                "Run once: sudo mkdir -p {} && sudo chown -R $(id -u):$(id -g) {}\n"
+                "stderr:\n{}"
+                .format(type(self).__name__, root, _shquote(root),
+                        _shquote(root), proc.stderr.strip() or "<none>"))
+            return False
+
+        if not os.path.isdir(root) or not os.access(root, os.W_OK | os.X_OK):
+            self.error("[{}] deploy root is still not writable after bootstrap: {}"
+                       .format(type(self).__name__, root))
+            return False
+
+        self.info("[{}] prepared deploy root ownership for current user: {}"
+                  .format(type(self).__name__, root))
+        return True
+
     @staticmethod
-    def _resolveSearchFolder(zipHint):
+    def _isSafeDeployRoot(path):
+        if not path or path == os.path.abspath(os.sep):
+            return False
+        return os.path.basename(path.rstrip(os.sep)) == "IobeamPlatform"
+
+    def _resolveSearchFolder(self, zipHint):
         """
         actionData['zip'] may be either:
           - a directory path -> used as-is, or
@@ -109,6 +218,8 @@ class unzipDistribution_state(executeShellCommand_state):
         itself when it is already a directory). Returns an absolute path.
         """
         path = os.path.expanduser(str(zipHint))
+        if not os.path.isabs(path):
+            path = os.path.join(self.workRoot(), path)
         if os.path.isdir(path):
             return os.path.abspath(path)
         parent = os.path.dirname(path)
@@ -168,3 +279,7 @@ class unzipDistribution_state(executeShellCommand_state):
             if name.lower().endswith(".zip") and os.path.isfile(full):
                 zips.append(full)
         return _newestAbs(zips)
+
+
+def _shquote(value):
+    return "'" + str(value).replace("'", "'\"'\"'") + "'"

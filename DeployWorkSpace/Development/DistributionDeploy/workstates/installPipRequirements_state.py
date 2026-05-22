@@ -29,11 +29,11 @@ class installPipRequirements_state(distributionDeploy_state):
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
-            root = actionData.get("root") or os.path.join(self.deployRoot(), "Development")
+            root = self.resolveDeployPath(actionData.get("root") or "Development")
             requirementsName = actionData.get("requirementsName", "requirements.txt")
-            venvDir = actionData.get(
+            venvDir = self.resolveDeployPath(actionData.get(
                 "venvDir",
-                os.path.join(self.deployRoot(), getattr(self.ParentWorkThread, "venvDir", ".venv")))
+                getattr(self.ParentWorkThread, "venvDir", ".venv")))
             stopOnError = bool(actionData.get("stopOnError", True))
             skipPrivateGit = bool(actionData.get("skipPrivateGitEditable", True))
             breakSys = bool(actionData.get("useBreakSystemPackages", False))
