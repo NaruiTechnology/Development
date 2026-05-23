@@ -275,6 +275,7 @@ export const en = {
   "settings.confirm.default.yes": "Restore defaults",
   "settings.general.group.runtime": "Runtime",
   "settings.general.group.actionData": "Action data",
+  "settings.general.version": "Version",
   "settings.general.logName": "Log name",
   "settings.general.deviceId": "Glasgow device ID",
   "settings.general.verbose": "Verbose",

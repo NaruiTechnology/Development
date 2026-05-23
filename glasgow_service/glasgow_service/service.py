@@ -317,6 +317,7 @@ class DeviceService:
             "raster_params": self._raster_params_defaults.to_public_dict(),
             "vector_params": self._vector_params_defaults.to_public_dict(),
             "is_production": bool(getattr(self._config, "IsProduction", True)),
+            "version": str(getattr(self._config, "Version", "")),
         }
 
     # -------- internal: effective params (JSON defaults ⊕ request override) ---

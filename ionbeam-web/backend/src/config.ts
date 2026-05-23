@@ -21,6 +21,8 @@ export interface Config {
   staticDir: string;
   configPath: string;
   restartCmd: string;
+  restartBackendAfterGlasgow: boolean;
+  backendRestartCmd: string | null;
   configStrict: boolean;
 }
 
@@ -31,6 +33,11 @@ const DEFAULT_RESTART_CMD = path.join(
   BACKEND_ROOT,
   "scripts",
   "restart-glasgow-service.sh"
+);
+const DEFAULT_BACKEND_RESTART_CMD = path.join(
+  BACKEND_ROOT,
+  "scripts",
+  "restart-ionbeam-backend.sh"
 );
 
 export const config: Config = {
@@ -48,5 +55,12 @@ export const config: Config = {
   restartCmd:
     process.env.GLASGOW_RESTART_CMD?.trim() ||
     DEFAULT_RESTART_CMD,
+  restartBackendAfterGlasgow: bool(
+    process.env.IONBEAM_BACKEND_RESTART_AFTER_GLASGOW,
+    true
+  ),
+  backendRestartCmd:
+    process.env.IONBEAM_BACKEND_RESTART_CMD?.trim() ||
+    DEFAULT_BACKEND_RESTART_CMD,
   configStrict: bool(process.env.GLASGOW_CONFIG_STRICT, false),
 };

@@ -621,6 +621,19 @@ body {
 .status-pill[data-state="error"]::before { background: var(--c-danger); }
 .status-pill[data-state="disconnected"] { color: var(--c-text-muted); }
 
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 3px 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c-text-dim);
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  background: var(--c-bg);
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.35; }
