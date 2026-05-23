@@ -55,12 +55,14 @@ const slice = createSlice({
       a: PayloadAction<{
         simulation?: Record<string, unknown>;
         is_production?: boolean;
+        version?: string;
       }>
     ) {
       s.defaults = {
         ...(s.defaults ?? { raster: {}, vector: {} }),
         simulation: a.payload.simulation ?? s.defaults?.simulation,
         is_production: a.payload.is_production ?? s.defaults?.is_production,
+        version: a.payload.version ?? s.defaults?.version,
       };
       s.lastError = null;
     },

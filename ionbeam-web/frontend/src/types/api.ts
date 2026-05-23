@@ -146,4 +146,5 @@ export interface ServerDefaults {
   raster_params?: Record<string, unknown>;
   vector_params?: Record<string, unknown>;
   is_production?: boolean;
+  version?: string;
 }

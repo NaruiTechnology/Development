@@ -12,6 +12,7 @@
 #      be captured by a single shell template.
 #-------------------------------------------------------------------------------
 from abc import abstractmethod
+import os
 
 from buildingblocks.workflow.workstate import WorkState
 
@@ -50,6 +51,44 @@ class distributionDeploy_state(WorkState):
         if thread is not None and hasattr(thread, "deployRoot"):
             return thread.deployRoot
         return "."
+
+    def workRoot(self):
+        """Return the DistributionDeploy working directory for this run."""
+        thread = self.ParentWorkThread
+        if thread is not None and hasattr(thread, "workRoot"):
+            return thread.workRoot
+        return os.getcwd()
+
+    def resolveWorkPath(self, path):
+        """Resolve a JSON path relative to the DistributionDeploy folder."""
+        if not path:
+            return path
+        expanded = os.path.expanduser(str(path))
+        if os.path.isabs(expanded):
+            return os.path.abspath(expanded)
+        return os.path.abspath(os.path.join(self.workRoot(), expanded))
+
+    def resolveDeployPath(self, path):
+        """Resolve a JSON path relative to the configured deploy root."""
+        if not path:
+            return path
+        expanded = os.path.expanduser(str(path))
+        if os.path.isabs(expanded):
+            return os.path.abspath(expanded)
+        return os.path.abspath(os.path.join(self.deployRoot(), expanded))
+
+    def resolveEnvValue(self, value):
+        """Resolve path-like env values; lists become os.pathsep-separated."""
+        if isinstance(value, dict):
+            raw = value.get("value", "")
+            if value.get("resolve", True):
+                return self.resolveEnvValue(raw)
+            return raw
+        if isinstance(value, (list, tuple)):
+            return os.pathsep.join(self.resolveDeployPath(v) for v in value)
+        if isinstance(value, str) and value and not value.startswith(("http://", "https://")):
+            return self.resolveDeployPath(value)
+        return value
 
     def info(self, msg):
         if self._logger is not None:

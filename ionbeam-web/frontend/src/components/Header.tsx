@@ -44,6 +44,7 @@ export function Header() {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
+  const version = useAppSelector((s) => s.status.defaults?.version);
   const theme = useAppSelector((s) => s.theme.theme);
   const { t } = useTranslation();
 
@@ -120,6 +121,7 @@ export function Header() {
       <span className="status-pill" data-state={state}>
         {stateKey ? t(stateKey) : state}
       </span>
+      {version && <span className="version-pill">v{version}</span>}
       <span
         className="production-pill"
         data-production={isProduction ? "true" : "false"}

@@ -52,6 +52,10 @@ class installToolchain_state(distributionDeploy_state):
             useVenv      = bool(actionData.get("useVenv", True))
             venvActivate = actionData.get("venvActivate", "")
             venvDir      = actionData.get("venvDir", "")
+            if venvActivate:
+                venvActivate = self.resolveDeployPath(venvActivate)
+            if venvDir:
+                venvDir = self.resolveDeployPath(venvDir)
             breakSys     = bool(actionData.get("useBreakSystemPackages", True))
             verifyCmds   = list(actionData.get("verifyCommands", []) or [])
             stopOnError  = bool(actionData.get("stopOnError", False))

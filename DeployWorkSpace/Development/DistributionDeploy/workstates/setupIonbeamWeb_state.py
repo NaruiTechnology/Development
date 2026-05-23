@@ -28,9 +28,14 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             webRoot = actionData.get(
                 "webRoot",
                 os.path.join(self.deployRoot(), "Development", "ionbeam-web"))
+            webRoot = self.resolveDeployPath(webRoot)
             webRoot = self._resolveWebRoot(webRoot)
-            backendDir = actionData.get("backendDir", os.path.join(webRoot, "backend"))
-            frontendDir = actionData.get("frontendDir", os.path.join(webRoot, "frontend"))
+            backendDir = actionData.get("backendDir")
+            backendDir = (self.resolveDeployPath(backendDir)
+                          if backendDir else os.path.join(webRoot, "backend"))
+            frontendDir = actionData.get("frontendDir")
+            frontendDir = (self.resolveDeployPath(frontendDir)
+                           if frontendDir else os.path.join(webRoot, "frontend"))
             if not os.path.isdir(backendDir) or not os.path.isdir(frontendDir):
                 backendDir = os.path.join(webRoot, "backend")
                 frontendDir = os.path.join(webRoot, "frontend")
@@ -97,7 +102,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             return cmd
         return (
             "bash -lc 'export NVM_DIR=\"$HOME/.nvm\" && "
-            "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && {}'"
+            "if [ -s \"$NVM_DIR/nvm.sh\" ]; then . \"$NVM_DIR/nvm.sh\"; fi; {}'"
             .format(cmd)
         )
 
