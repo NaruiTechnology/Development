@@ -277,6 +277,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.confirm.default.yes": "還原預設值",
   "settings.general.group.runtime": "執行時",
   "settings.general.group.actionData": "動作資料",
+  "settings.general.version": "版本",
   "settings.general.logName": "日誌名稱",
   "settings.general.deviceId": "Glasgow 裝置 ID",
   "settings.general.verbose": "詳細日誌",

@@ -22,6 +22,8 @@ export interface Config {
   staticDir: string;
   configPath: string;
   restartCmd: string;
+  restartBackendAfterGlasgow: boolean;
+  backendRestartCmd: string | null;
   configStrict: boolean;
 }
 
@@ -33,12 +35,36 @@ const DEFAULT_CONFIG_PATH = path.join(
   "Json",
   "streamData.json"
 );
-const RESTART_SCRIPT = process.platform === "win32"
-  ? path.join(BACKEND_ROOT, "scripts", "restart-glasgow-service.ps1")
-  : path.join(BACKEND_ROOT, "scripts", "restart-glasgow-service.sh");
-const DEFAULT_RESTART_CMD = process.platform === "win32"
-  ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${RESTART_SCRIPT}"`
-  : RESTART_SCRIPT;
+const DEPLOYMENT_CONFIG_PATH = path.join(
+  REPO_ROOT,
+  "Development",
+  "GlasgowDataIO",
+  "Json",
+  "streamData.json"
+);
+const RESTART_SCRIPT = path.join(
+  BACKEND_ROOT,
+  "scripts",
+  process.platform === "win32"
+    ? "restart-glasgow-service.ps1"
+    : "restart-glasgow-service.sh"
+);
+const BACKEND_RESTART_SCRIPT = path.join(
+  BACKEND_ROOT,
+  "scripts",
+  process.platform === "win32"
+    ? "restart-ionbeam-backend.ps1"
+    : "restart-ionbeam-backend.sh"
+);
+const DEFAULT_RESTART_CMD =
+  process.platform === "win32"
+    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${RESTART_SCRIPT}"`
+    : RESTART_SCRIPT;
+const DEFAULT_BACKEND_RESTART_CMD =
+  process.platform === "win32"
+    ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${BACKEND_RESTART_SCRIPT}"`
+    : BACKEND_RESTART_SCRIPT;
+const DEFAULT_RESTART_BACKEND_AFTER_GLASGOW = process.platform !== "win32";
 
 function hasStreamDataTail(p: string): boolean {
   const parts = path.normalize(p).split(/[\\/]+/).filter(Boolean);
@@ -48,12 +74,38 @@ function hasStreamDataTail(p: string): boolean {
 
 function resolveConfigPath(raw: string | undefined): string {
   const candidate = raw?.trim();
-  if (!candidate) return DEFAULT_CONFIG_PATH;
-  if (fs.existsSync(candidate)) return path.resolve(candidate);
-  if (hasStreamDataTail(candidate) && fs.existsSync(DEFAULT_CONFIG_PATH)) {
-    return DEFAULT_CONFIG_PATH;
+  if (!candidate) return firstExistingConfigPath([DEPLOYMENT_CONFIG_PATH, DEFAULT_CONFIG_PATH]);
+  const resolvedCandidate = path.resolve(candidate);
+  if (hasStreamDataTail(resolvedCandidate)) {
+    return firstExistingConfigPath([
+      siblingDevelopmentConfigPath(resolvedCandidate),
+      DEPLOYMENT_CONFIG_PATH,
+      resolvedCandidate,
+      DEFAULT_CONFIG_PATH,
+    ], resolvedCandidate);
   }
-  return candidate;
+  if (fs.existsSync(resolvedCandidate)) return resolvedCandidate;
+  return resolvedCandidate;
+}
+
+function firstExistingConfigPath(paths: Array<string | null>, fallback?: string): string {
+  for (const p of paths) {
+    if (p && fs.existsSync(p)) return path.resolve(p);
+  }
+  return fallback ?? path.resolve(paths.find(Boolean) ?? DEFAULT_CONFIG_PATH);
+}
+
+function siblingDevelopmentConfigPath(streamDataPath: string): string {
+  const jsonDir = path.dirname(streamDataPath);
+  const glasgowDataIoDir = path.dirname(jsonDir);
+  const deployRoot = path.dirname(glasgowDataIoDir);
+  return path.join(
+    deployRoot,
+    "Development",
+    "GlasgowDataIO",
+    "Json",
+    "streamData.json"
+  );
 }
 
 export const config: Config = {
@@ -71,5 +123,12 @@ export const config: Config = {
   restartCmd:
     process.env.GLASGOW_RESTART_CMD?.trim() ||
     DEFAULT_RESTART_CMD,
+  restartBackendAfterGlasgow: bool(
+    process.env.IONBEAM_BACKEND_RESTART_AFTER_GLASGOW,
+    DEFAULT_RESTART_BACKEND_AFTER_GLASGOW
+  ),
+  backendRestartCmd:
+    process.env.IONBEAM_BACKEND_RESTART_CMD?.trim() ||
+    DEFAULT_BACKEND_RESTART_CMD,
   configStrict: bool(process.env.GLASGOW_CONFIG_STRICT, false),
 };

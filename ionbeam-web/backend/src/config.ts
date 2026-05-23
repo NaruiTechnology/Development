@@ -35,6 +35,13 @@ const DEFAULT_CONFIG_PATH = path.join(
   "Json",
   "streamData.json"
 );
+const DEPLOYMENT_CONFIG_PATH = path.join(
+  REPO_ROOT,
+  "Development",
+  "GlasgowDataIO",
+  "Json",
+  "streamData.json"
+);
 const RESTART_SCRIPT = path.join(
   BACKEND_ROOT,
   "scripts",
@@ -57,6 +64,7 @@ const DEFAULT_BACKEND_RESTART_CMD =
   process.platform === "win32"
     ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${BACKEND_RESTART_SCRIPT}"`
     : BACKEND_RESTART_SCRIPT;
+const DEFAULT_RESTART_BACKEND_AFTER_GLASGOW = process.platform !== "win32";
 
 function hasStreamDataTail(p: string): boolean {
   const parts = path.normalize(p).split(/[\\/]+/).filter(Boolean);
@@ -66,12 +74,38 @@ function hasStreamDataTail(p: string): boolean {
 
 function resolveConfigPath(raw: string | undefined): string {
   const candidate = raw?.trim();
-  if (!candidate) return DEFAULT_CONFIG_PATH;
-  if (fs.existsSync(candidate)) return path.resolve(candidate);
-  if (hasStreamDataTail(candidate) && fs.existsSync(DEFAULT_CONFIG_PATH)) {
-    return DEFAULT_CONFIG_PATH;
+  if (!candidate) return firstExistingConfigPath([DEPLOYMENT_CONFIG_PATH, DEFAULT_CONFIG_PATH]);
+  const resolvedCandidate = path.resolve(candidate);
+  if (hasStreamDataTail(resolvedCandidate)) {
+    return firstExistingConfigPath([
+      siblingDevelopmentConfigPath(resolvedCandidate),
+      DEPLOYMENT_CONFIG_PATH,
+      resolvedCandidate,
+      DEFAULT_CONFIG_PATH,
+    ], resolvedCandidate);
   }
-  return candidate;
+  if (fs.existsSync(resolvedCandidate)) return resolvedCandidate;
+  return resolvedCandidate;
+}
+
+function firstExistingConfigPath(paths: Array<string | null>, fallback?: string): string {
+  for (const p of paths) {
+    if (p && fs.existsSync(p)) return path.resolve(p);
+  }
+  return fallback ?? path.resolve(paths.find(Boolean) ?? DEFAULT_CONFIG_PATH);
+}
+
+function siblingDevelopmentConfigPath(streamDataPath: string): string {
+  const jsonDir = path.dirname(streamDataPath);
+  const glasgowDataIoDir = path.dirname(jsonDir);
+  const deployRoot = path.dirname(glasgowDataIoDir);
+  return path.join(
+    deployRoot,
+    "Development",
+    "GlasgowDataIO",
+    "Json",
+    "streamData.json"
+  );
 }
 
 export const config: Config = {
@@ -91,7 +125,7 @@ export const config: Config = {
     DEFAULT_RESTART_CMD,
   restartBackendAfterGlasgow: bool(
     process.env.IONBEAM_BACKEND_RESTART_AFTER_GLASGOW,
-    true
+    DEFAULT_RESTART_BACKEND_AFTER_GLASGOW
   ),
   backendRestartCmd:
     process.env.IONBEAM_BACKEND_RESTART_CMD?.trim() ||

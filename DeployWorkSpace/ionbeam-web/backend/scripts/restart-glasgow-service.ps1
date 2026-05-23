@@ -1,11 +1,17 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
-$workdir = if ($env:GLASGOW_WORKDIR) { $env:GLASGOW_WORKDIR } else { Join-Path $repoRoot "glasgow_service" }
+$projectRoot = if (Test-Path -LiteralPath (Join-Path $repoRoot "Development\glasgow_service")) {
+    Join-Path $repoRoot "Development"
+} else {
+    $repoRoot
+}
+$workdir = if ($env:GLASGOW_WORKDIR) { $env:GLASGOW_WORKDIR } else { Join-Path $projectRoot "glasgow_service" }
 $app = if ($env:GLASGOW_APP) { $env:GLASGOW_APP } else { "glasgow_service.api:app" }
 $hostName = if ($env:GLASGOW_HOST) { $env:GLASGOW_HOST } else { "127.0.0.1" }
 $port = if ($env:GLASGOW_PORT) { $env:GLASGOW_PORT } else { "8765" }
-$logFile = if ($env:GLASGOW_RESTART_LOG) { $env:GLASGOW_RESTART_LOG } else { Join-Path $repoRoot "glasgow_service\uvicorn.log" }
+$glasgowConfig = if ($env:GLASGOW_CONFIG) { $env:GLASGOW_CONFIG } else { Join-Path $projectRoot "GlasgowDataIO\Json\streamData.json" }
+$logFile = if ($env:GLASGOW_RESTART_LOG) { $env:GLASGOW_RESTART_LOG } else { Join-Path $workdir "uvicorn.log" }
 $errLogFile = "$logFile.err"
 $pythonBin = if ($env:GLASGOW_PYTHON) { $env:GLASGOW_PYTHON } else { Join-Path $repoRoot ".venv\Scripts\python.exe" }
 $venvRoot = if ($env:VIRTUAL_ENV) { $env:VIRTUAL_ENV } else { Join-Path $repoRoot ".venv" }
@@ -136,8 +142,9 @@ function Wait-Ready {
 
 function Start-UvicornProcess {
     $pathPrefix = if (Test-Path -LiteralPath $scriptsDir) { "$scriptsDir;" } else { "" }
-    $commandLine = 'set "VIRTUAL_ENV={0}" && set "PATH={1}%PATH%" && "{2}" -m uvicorn "{3}" --host "{4}" --port "{5}" --ws websockets >> "{6}" 2>> "{7}"' -f `
-        $venvRoot, $pathPrefix, $pythonBin, $app, $hostName, $port, $logFile, $errLogFile
+    $pythonPath = "$projectRoot;$workdir"
+    $commandLine = 'set "VIRTUAL_ENV={0}" && set "PATH={1}%PATH%" && set "GLASGOW_CONFIG={2}" && set "PYTHONPATH={3};%PYTHONPATH%" && "{4}" -m uvicorn "{5}" --host "{6}" --port "{7}" --ws websockets >> "{8}" 2>> "{9}"' -f `
+        $venvRoot, $pathPrefix, $glasgowConfig, $pythonPath, $pythonBin, $app, $hostName, $port, $logFile, $errLogFile
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = "cmd.exe"
