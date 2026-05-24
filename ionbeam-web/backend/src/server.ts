@@ -14,6 +14,7 @@ import morgan from "morgan";
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+import { spawn } from "node:child_process";
 
 import { config } from "./config";
 import { buildRestProxy } from "./restProxy";
@@ -21,6 +22,7 @@ import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
 import {
   ConfigError,
+  type RestartResult,
   readWithBackup,
   restartService,
   restoreFromBackup,
@@ -28,6 +30,21 @@ import {
 } from "./configManager";
 
 const app = express();
+let server: http.Server;
+
+interface BackendRestartResult {
+  ok: boolean;
+  scheduled: boolean;
+  mode: "disabled" | "exit" | "command";
+  command?: string;
+  error?: string;
+}
+
+interface RestartServicesResponse {
+  ok: boolean;
+  restart: RestartResult;
+  backend_restart: BackendRestartResult;
+}
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "16mb" })); // vector custom up to 1M points
@@ -41,6 +58,8 @@ app.get("/healthz", (_req, res) => {
     has_token: Boolean(config.glasgowToken),
     config_path: config.configPath,
     restart_cmd: config.restartCmd,
+    backend_restart_enabled: config.restartBackendAfterGlasgow,
+    backend_restart_cmd: config.backendRestartCmd,
   });
 });
 
@@ -74,8 +93,7 @@ app.post("/api/admin/config", async (req, res) => {
     return;
   }
 
-  const restart = await restartService();
-  res.json({ ok: true, restart });
+  await restartServicesAndRespond(res);
 });
 
 app.post("/api/admin/config/restore", async (_req, res) => {
@@ -86,8 +104,11 @@ app.post("/api/admin/config/restore", async (_req, res) => {
     return;
   }
 
-  const restart = await restartService();
-  res.json({ ok: true, restart });
+  await restartServicesAndRespond(res);
+});
+
+app.post("/api/admin/restart-services", async (_req, res) => {
+  await restartServicesAndRespond(res);
 });
 
 // MOCK responses live BEFORE the proxy mount so they win.
@@ -134,7 +155,7 @@ if (fs.existsSync(config.staticDir)) {
   });
 }
 
-const server = http.createServer(app);
+server = http.createServer(app);
 attachWsProxy(server);
 
 server.listen(config.port, () => {
@@ -146,9 +167,90 @@ server.listen(config.port, () => {
       `  token    = ${config.glasgowToken ? "set" : "(none)"}\n` +
       `  config   = ${config.configPath}\n` +
       `  restart  = ${config.restartCmd}\n` +
+      `  backend restart = ${
+        config.restartBackendAfterGlasgow
+          ? config.backendRestartCmd ?? "exit"
+          : "disabled"
+      }\n` +
       `  static   = ${fs.existsSync(config.staticDir) ? config.staticDir : "(not built yet)"}`
   );
 });
+
+function planBackendRestart(glasgowRestartOk: boolean): BackendRestartResult {
+  if (!glasgowRestartOk) {
+    return {
+      ok: true,
+      scheduled: false,
+      mode: "disabled",
+      error: "skipped because Glasgow service restart failed",
+    };
+  }
+  if (!config.restartBackendAfterGlasgow) {
+    return { ok: true, scheduled: false, mode: "disabled" };
+  }
+  if (config.backendRestartCmd) {
+    return {
+      ok: true,
+      scheduled: true,
+      mode: "command",
+      command: config.backendRestartCmd,
+    };
+  }
+  return { ok: true, scheduled: true, mode: "exit" };
+}
+
+async function restartServicesAndRespond(
+  res: express.Response<RestartServicesResponse>
+): Promise<void> {
+  const restart = await restartService();
+  const backendRestart = planBackendRestart(restart.ok);
+  res.json({ ok: true, restart, backend_restart: backendRestart });
+  scheduleBackendRestartAfterResponse(res, backendRestart);
+}
+
+function scheduleBackendRestartAfterResponse(
+  res: express.Response,
+  restart: BackendRestartResult
+): void {
+  if (!restart.scheduled) return;
+
+  res.once("finish", () => {
+    setTimeout(() => {
+      restartBackend(restart);
+    }, 250);
+  });
+}
+
+function restartBackend(restart: BackendRestartResult): void {
+  if (restart.mode === "command" && restart.command) {
+    const child = process.platform === "win32"
+      ? spawn(
+          "cmd.exe",
+          ["/d", "/s", "/c", `timeout /t 1 /nobreak >NUL & ${restart.command}`],
+          {
+            detached: true,
+            stdio: "ignore",
+            cwd: path.resolve(__dirname, ".."),
+            env: process.env,
+          }
+        )
+      : spawn("bash", ["-lc", `sleep 1; exec ${restart.command}`], {
+          detached: true,
+          stdio: "ignore",
+          cwd: path.resolve(__dirname, ".."),
+          env: process.env,
+        });
+    child.unref();
+  }
+
+  server.close(() => {
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    process.exit(0);
+  }, 2_000).unref();
+}
 
 function sendConfigError(res: express.Response, err: unknown): void {
   if (err instanceof ConfigError) {

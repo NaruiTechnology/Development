@@ -29,10 +29,14 @@ class detachedShellLaunch_state(distributionDeploy_state):
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
 
             runDir = actionData.get("dir") or actionData.get("root")
+            if runDir:
+                runDir = self.resolveDeployPath(runDir)
             command = actionData.get("command")
             logPath = actionData.get("log", "/tmp/distribution-deploy-service.log")
             pidPath = actionData.get("pid")
             venvActivate = actionData.get("venvActivate", "")
+            if venvActivate:
+                venvActivate = self.resolveDeployPath(venvActivate)
             exports = actionData.get("exports", {}) or {}
             useNvm = bool(actionData.get("useNvm", False))
             nvmDir = actionData.get("nvmDir", "$HOME/.nvm")
@@ -74,9 +78,10 @@ class detachedShellLaunch_state(distributionDeploy_state):
                 shellParts.append(". {}".format(shlex.quote(venvActivate)))
             if useNvm:
                 shellParts.append("export NVM_DIR={}".format(nvmDir))
-                shellParts.append('[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"')
+                shellParts.append('if [ -s "$NVM_DIR/nvm.sh" ]; then . "$NVM_DIR/nvm.sh"; fi')
             for key, val in exports.items():
-                shellParts.append("export {}={}".format(key, shlex.quote(str(val))))
+                shellParts.append("export {}={}".format(
+                    key, shlex.quote(str(self.resolveEnvValue(val)))))
             shellParts.append(command)
             shellCommand = " && ".join(shellParts)
 

@@ -2,25 +2,24 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_WORKDIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-WORKDIR="${GLASGOW_WORKDIR:-${DEFAULT_WORKDIR}}"
+DEFAULT_DEVELOPMENT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+DEFAULT_PROJECT_ROOT="$(cd "${DEFAULT_DEVELOPMENT_ROOT}/.." && pwd)"
+PROJECT_ROOT="${GLASGOW_PROJECT_ROOT:-${DEFAULT_PROJECT_ROOT}}"
+WORKDIR="${GLASGOW_WORKDIR:-${PROJECT_ROOT}/Development/glasgow_service}"
+RUNTIME_DIR="${GLASGOW_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
 APP="${GLASGOW_APP:-glasgow_service.api:app}"
 HOST="${GLASGOW_HOST:-127.0.0.1}"
 PORT="${GLASGOW_PORT:-8765}"
 LOG_FILE="${GLASGOW_RESTART_LOG:-/tmp/glasgow_service.uvicorn.log}"
-DEFAULT_VENV="${VIRTUAL_ENV:-${WORKDIR}/.venv}"
-if [[ ! -x "${DEFAULT_VENV}/bin/python" && -x "${WORKDIR}/../.venv/bin/python" ]]; then
-  DEFAULT_VENV="$(cd "${WORKDIR}/../.venv" && pwd)"
-fi
-PYTHON_BIN="${GLASGOW_PYTHON:-${DEFAULT_VENV}/bin/python}"
+PYTHON_BIN="${GLASGOW_PYTHON:-${PROJECT_ROOT}/.venv/bin/python}"
 
 if [[ ! -x "${PYTHON_BIN}" ]]; then
   PYTHON_BIN="$(command -v python3)"
 fi
 
-export VIRTUAL_ENV="${VIRTUAL_ENV:-${DEFAULT_VENV}}"
+export VIRTUAL_ENV="${VIRTUAL_ENV:-${PROJECT_ROOT}/.venv}"
 export PATH="${VIRTUAL_ENV}/bin:${PATH}"
-export PYTHONPATH="${WORKDIR}/glasgow_service:${WORKDIR}${PYTHONPATH:+:${PYTHONPATH}}"
+export PYTHONPATH="${WORKDIR}:${PROJECT_ROOT}/Development${PYTHONPATH:+:${PYTHONPATH}}"
 
 port_pids() {
   ss -ltnp "sport = :${PORT}" 2>/dev/null |
@@ -104,10 +103,16 @@ if ! wait_for_port_free; then
   exit 1
 fi
 
-cd "${WORKDIR}"
-nohup "${PYTHON_BIN}" -m uvicorn "${APP}" --host "${HOST}" --port "${PORT}" \
-  --ws websockets \
-  >> "${LOG_FILE}" 2>&1 &
+cd "${RUNTIME_DIR}"
+if command -v setsid >/dev/null 2>&1; then
+  nohup setsid "${PYTHON_BIN}" -m uvicorn "${APP}" --host "${HOST}" --port "${PORT}" \
+    --ws websockets \
+    >> "${LOG_FILE}" 2>&1 &
+else
+  nohup "${PYTHON_BIN}" -m uvicorn "${APP}" --host "${HOST}" --port "${PORT}" \
+    --ws websockets \
+    >> "${LOG_FILE}" 2>&1 &
+fi
 new_pid=$!
 
 if ! wait_for_ready; then

@@ -40,9 +40,10 @@ class exportEnv_state(distributionDeploy_state):
 
             # 1. Update os.environ for the rest of this run.
             for k, v in exports.items():
-                os.environ[str(k)] = str(v)
+                resolved = self.resolveEnvValue(v)
+                os.environ[str(k)] = str(resolved)
                 self.info("[{}] os.environ[{}] = {}"
-                          .format(type(self).__name__, k, v))
+                          .format(type(self).__name__, k, resolved))
 
             # 2. Append to ~/.bashrc, idempotently.
             existing = ""
@@ -58,7 +59,7 @@ class exportEnv_state(distributionDeploy_state):
             with open(bashrcPath, "a") as f:
                 f.write("\n# --- DistributionDeploy exports ---\n")
                 for k, v in exports.items():
-                    line = "export {}={}".format(k, _shquote(v))
+                    line = "export {}={}".format(k, _shquote(self.resolveEnvValue(v)))
                     if line in existing:
                         self.info("[{}] '{}' already present in {}, skipping."
                                   .format(type(self).__name__, k, bashrcPath))

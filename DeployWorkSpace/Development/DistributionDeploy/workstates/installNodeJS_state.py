@@ -54,6 +54,14 @@ class installNodeJS_state(distributionDeploy_state):
                 "#!/usr/bin/env bash",
                 "set -e",
                 "export PATH={safe}:$PATH".format(safe=_SAFE_PATH),
+                "if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then",
+                "  echo 'Using existing Node.js/npm from PATH'",
+                "  node --version",
+                "  npm --version",
+                "  exit 0",
+                "fi",
+                # curl may not be present on a fresh/minimal system -- install it
+                # before attempting to fetch the nvm installer.
                 "command -v curl >/dev/null 2>&1 || { "
                     "sudo apt-get update -qq && "
                     "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl; "
@@ -61,7 +69,21 @@ class installNodeJS_state(distributionDeploy_state):
                 "curl -fsSL -o- {url} | bash".format(url=nvmUrl),
                 'export NVM_DIR="$HOME/.nvm"',
                 '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"',
+                "set +e",
                 "nvm install {ver}".format(ver=nodeVer),
+                "install_status=$?",
+                "set -e",
+                "if [ \"$install_status\" -ne 0 ]; then",
+                "  resolved=\"$(nvm version {ver} 2>/dev/null || true)\"".format(ver=nodeVer),
+                "  if [ -n \"$resolved\" ] && [ \"$resolved\" != \"N/A\" ]; then",
+                "    nvm use --delete-prefix \"$resolved\"",
+                "  else",
+                "    exit \"$install_status\"",
+                "  fi",
+                "fi",
+                # $(nvm current) gives the concrete version string (e.g. v22.1.0)
+                # that nvm alias requires -- passing {ver} directly fails when
+                # nodeVer is a flag like --lts.
                 "nvm alias default $(nvm current)",
                 "node --version",
                 "npm --version",

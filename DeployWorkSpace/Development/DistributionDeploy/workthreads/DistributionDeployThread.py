@@ -3,6 +3,7 @@ from buildingblocks.definitions import Consts
 from buildingblocks.workflow.work_thread import WorkThread
 from buildingblocks.automation_log import AutomationLog
 import buildingblocks.utils as util
+import os
 import queue
 
 TRANSACTION_COMPLETE = "transactionComplete"
@@ -27,14 +28,22 @@ class DistributionDeployThread(WorkThread):
         # Pull deployment-wide settings out of the config so every state can
         # read them off the parent thread without re-walking the JSON.
         deployment = getattr(config, "Deployment", {}) or {}
-        self._deployRoot = deployment.get("DeployRoot", ".")
-        self._sourceRoot = deployment.get("SourceRoot", ".")
+        self._workRoot = self._resolveWorkRoot(config, deployment)
+        self._deployRoot = self._resolveFromWorkRoot(
+            deployment.get("DeployRoot", "."))
+        self._sourceRoot = self._resolveFromWorkRoot(
+            deployment.get("SourceRoot", "."))
         self._distZip = deployment.get("DistZip", "dist_app.zip")
         self._venvDir = deployment.get("VenvDir", ".venv")
-        self._glasgowConfig = deployment.get("GlasgowConfig", "")
+        self._glasgowConfig = self._resolveFromDeployRoot(
+            deployment.get("GlasgowConfig", ""))
         self._glasgowLog = deployment.get("GlasgowLog", "/tmp/glasgow.log")
 
     # -- properties exposed to states ---------------------------------------
+    @property
+    def workRoot(self):
+        return self._workRoot
+
     @property
     def deployRoot(self):
         return self._deployRoot
@@ -62,6 +71,39 @@ class DistributionDeployThread(WorkThread):
     @property
     def logger(self):
         return self._logger
+
+    # -- path helpers -------------------------------------------------------
+    def _resolveWorkRoot(self, config, deployment):
+        configured = deployment.get("WorkRoot")
+        if configured:
+            return os.path.abspath(os.path.expanduser(str(configured)))
+
+        jsonFile = getattr(config, "_jsonFile", None)
+        if jsonFile and os.path.isfile(jsonFile):
+            jsonDir = os.path.dirname(os.path.abspath(jsonFile))
+            if os.path.basename(jsonDir) == "Json":
+                distributionDir = os.path.dirname(jsonDir)
+                if os.path.basename(distributionDir) == "DistributionDeploy":
+                    return os.path.abspath(os.path.join(distributionDir, "..", ".."))
+                return distributionDir
+            return jsonDir
+        return os.getcwd()
+
+    def _resolveFromWorkRoot(self, path):
+        if not path:
+            return path
+        expanded = os.path.expanduser(str(path))
+        if os.path.isabs(expanded):
+            return os.path.abspath(expanded)
+        return os.path.abspath(os.path.join(self._workRoot, expanded))
+
+    def _resolveFromDeployRoot(self, path):
+        if not path:
+            return path
+        expanded = os.path.expanduser(str(path))
+        if os.path.isabs(expanded):
+            return os.path.abspath(expanded)
+        return os.path.abspath(os.path.join(self._deployRoot, expanded))
 
     # -- WorkThread overrides -----------------------------------------------
     @overrides(WorkThread)

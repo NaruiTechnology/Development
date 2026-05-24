@@ -41,6 +41,17 @@
 			}
 		},
 		{
+			"createDeployFolder":{
+				"skip":false,
+				"transactionComplete":false,
+				"actionData":{
+					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root=\u0027$1\u0027; if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }; New-Item -ItemType Directory -Path $root -Force | Out-Null\"",
+					"deployRoot":"C:\\Project\\Iobeam\\Deploy"
+				},
+				"timeout":30.0
+			}
+		},
+		{
 			"unzipDistribution":{
 				"skip":false,
 				"transactionComplete":false,

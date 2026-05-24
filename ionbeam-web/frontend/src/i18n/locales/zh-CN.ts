@@ -268,6 +268,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.confirm.default.yes": "还原默认值",
   "settings.general.group.runtime": "运行时",
   "settings.general.group.actionData": "动作数据",
+  "settings.general.version": "版本",
   "settings.general.logName": "日志名称",
   "settings.general.deviceId": "Glasgow 设备 ID",
   "settings.general.verbose": "详细日志",

@@ -50,9 +50,18 @@ export interface RestartResult {
   error?: string;
 }
 
+export interface BackendRestartResult {
+  ok: boolean;
+  scheduled: boolean;
+  mode: "disabled" | "exit" | "command";
+  command?: string;
+  error?: string;
+}
+
 export interface SaveResponse {
   ok: boolean;
   restart: RestartResult;
+  backend_restart?: BackendRestartResult;
 }
 
 interface SettingsState {
@@ -137,6 +146,18 @@ export const restoreSettingsConfig = createAsyncThunk<SaveResponse>(
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`restore config: HTTP ${r.status} ${text}`);
+    }
+    return (await r.json()) as SaveResponse;
+  }
+);
+
+export const restartSettingsServices = createAsyncThunk<SaveResponse>(
+  "settings/restartServices",
+  async () => {
+    const r = await fetch("/api/admin/restart-services", { method: "POST" });
+    if (!r.ok) {
+      const text = await r.text();
+      throw new Error(`restart services: HTTP ${r.status} ${text}`);
     }
     return (await r.json()) as SaveResponse;
   }
@@ -251,6 +272,21 @@ const slice = createSlice({
     b.addCase(restoreSettingsConfig.rejected, (s, a) => {
       s.restoring = false;
       s.error = a.error.message ?? "failed to restore config";
+    });
+
+    /* restart services ------------------------------------------------- */
+    b.addCase(restartSettingsServices.pending, (s) => {
+      s.saving = true;
+      s.error = null;
+      s.lastRestart = null;
+    });
+    b.addCase(restartSettingsServices.fulfilled, (s, a) => {
+      s.saving = false;
+      s.lastRestart = a.payload.restart;
+    });
+    b.addCase(restartSettingsServices.rejected, (s, a) => {
+      s.saving = false;
+      s.error = a.error.message ?? "failed to restart services";
     });
   },
 });

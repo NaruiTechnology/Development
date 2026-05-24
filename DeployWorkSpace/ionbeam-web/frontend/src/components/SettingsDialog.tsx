@@ -382,6 +382,7 @@ function GeneralTab({ draft }: { draft: unknown }) {
   const { t } = useTranslation();
 
   // Top-level scalars.
+  const version = stringField(draft, ["Version"], "");
   const logName = stringField(draft, ["LogName"], "");
   const verbose = boolField(draft, ["Verbose"], false);
   const isProduction = boolField(draft, ["IsProduction"], false);
@@ -403,6 +404,11 @@ function GeneralTab({ draft }: { draft: unknown }) {
       <h4 className="settings-form__group">{t("settings.general.group.runtime")}</h4>
 
       <div className="field-row">
+        <TextField
+          label={t("settings.general.version")}
+          value={version}
+          onChange={(v) => set(["Version"], v)}
+        />
         <TextField
           label={t("settings.general.logName")}
           value={logName}
@@ -911,15 +917,18 @@ function SettingsHelp({ topic }: { topic: SettingsHelpTopic }) {
 function configDefaultsPreview(config: unknown): {
   simulation?: Record<string, unknown>;
   is_production?: boolean;
+  version?: string;
 } {
   const simulation = readPath(config, SIMULATION_PATH);
   const isProduction = readPath(config, ["IsProduction"]);
+  const version = readPath(config, ["Version"]);
   return {
     simulation:
       simulation && typeof simulation === "object" && !Array.isArray(simulation)
         ? (simulation as Record<string, unknown>)
         : undefined,
     is_production: typeof isProduction === "boolean" ? isProduction : undefined,
+    version: typeof version === "string" ? version : undefined,
   };
 }
 
