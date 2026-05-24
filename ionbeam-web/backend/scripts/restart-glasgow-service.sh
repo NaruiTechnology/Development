@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKDIR="${GLASGOW_WORKDIR:-/home/vboxuser/Project/IobeamTech}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_WORKDIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+WORKDIR="${GLASGOW_WORKDIR:-${DEFAULT_WORKDIR}}"
 APP="${GLASGOW_APP:-glasgow_service.api:app}"
 HOST="${GLASGOW_HOST:-127.0.0.1}"
 PORT="${GLASGOW_PORT:-8765}"
 LOG_FILE="${GLASGOW_RESTART_LOG:-/tmp/glasgow_service.uvicorn.log}"
-PYTHON_BIN="${GLASGOW_PYTHON:-${WORKDIR}/.venv/bin/python}"
+DEFAULT_VENV="${VIRTUAL_ENV:-${WORKDIR}/.venv}"
+if [[ ! -x "${DEFAULT_VENV}/bin/python" && -x "${WORKDIR}/../.venv/bin/python" ]]; then
+  DEFAULT_VENV="$(cd "${WORKDIR}/../.venv" && pwd)"
+fi
+PYTHON_BIN="${GLASGOW_PYTHON:-${DEFAULT_VENV}/bin/python}"
 
 if [[ ! -x "${PYTHON_BIN}" ]]; then
   PYTHON_BIN="$(command -v python3)"
 fi
 
-export VIRTUAL_ENV="${VIRTUAL_ENV:-${WORKDIR}/.venv}"
+export VIRTUAL_ENV="${VIRTUAL_ENV:-${DEFAULT_VENV}}"
 export PATH="${VIRTUAL_ENV}/bin:${PATH}"
+export PYTHONPATH="${WORKDIR}/glasgow_service:${WORKDIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
 port_pids() {
   ss -ltnp "sport = :${PORT}" 2>/dev/null |
