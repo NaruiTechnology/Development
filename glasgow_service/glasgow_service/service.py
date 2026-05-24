@@ -207,23 +207,19 @@ def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
 
 def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
     bitmap = getattr(req, "simulation_bitmap", None)
-    if (
-        req.pattern is not VectorPattern.custom
-        or bitmap is None
-        or not bitmap.pixels
-    ):
+    if bitmap is None or not bitmap.pixels:
         return None
 
     values_per_chunk = max(64, req.latency_bytes // 2)
     chunks: List[array.array] = []
-    if req.points:
+    if req.pattern is VectorPattern.custom and req.points:
         total = len(req.points)
         for start in range(0, total, values_per_chunk):
             samples = array.array("H")
             for x, y, _dwell in req.points[start:start + values_per_chunk]:
                 samples.append(_bitmap_sample_point(bitmap, req.roi, x, y))
             chunks.append(samples)
-    else:
+    elif req.pattern is VectorPattern.custom:
         total = bitmap.width * bitmap.height
         for start in range(0, total, values_per_chunk):
             samples = array.array("H")
@@ -235,6 +231,15 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
                     0.0 if bitmap.width <= 1 else x / (bitmap.width - 1),
                     0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
                 ))
+            chunks.append(samples)
+    else:
+        samples = array.array("H")
+        for x, y, _dwell in _roi_vector_iter(req.vector_resolution, req.roi):
+            samples.append(_bitmap_sample_point(bitmap, req.roi, x, y))
+            if len(samples) >= values_per_chunk:
+                chunks.append(samples)
+                samples = array.array("H")
+        if samples:
             chunks.append(samples)
     return chunks
 

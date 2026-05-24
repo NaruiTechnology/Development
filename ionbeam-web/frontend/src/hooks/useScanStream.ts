@@ -113,11 +113,11 @@ export function useScanStream() {
   const startVector = useCallback(
     (req: VectorRequest) => {
       stopExisting(wsRef);
-      // Default-pattern scans store an edge x edge dense buffer. Extracted
-      // ROI simulations are custom scans but render in compact bitmap space
-      // so the scan can start without first generating/transmitting a huge
-      // point list.
-      const edge = req.simulation_bitmap
+      // Default-pattern scans store an edge x edge dense buffer. Explicit
+      // custom bitmap simulations render in compact bitmap space, but a
+      // default-pattern request with simulation_bitmap still scans at the
+      // configured vector resolution.
+      const edge = req.pattern === "custom" && req.simulation_bitmap
         ? Math.max(req.simulation_bitmap.width, req.simulation_bitmap.height)
         : req.pattern === "custom"
         ? 2048
