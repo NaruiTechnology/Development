@@ -178,31 +178,22 @@ export async function vectorRequestWithBitmapSelection(
     };
   }
 
-  // Bitmap path: same as before. Production splits between "sweep
-  // the cropped DAC region with the default pattern" (hardware
-  // doesn't read pixels) and the dev sim path that streams the
-  // cropped grayscale crop as simulation_bitmap.
+  // Bitmap path: keep vector scans as default-pattern ROI sweeps. The
+  // cropped grayscale pixels are only a simulation input; they must not
+  // change the scan into a compact custom bitmap traversal, or a small
+  // crop appears to complete immediately instead of running the selected
+  // vector sweep.
   const converted = await bitmapSelectionToVector(roi);
   if (!converted.simulationBitmap.pixels.length) {
     return withoutBitmapROI(req);
   }
 
-  if (options.isProduction) {
-    return {
-      ...req,
-      pattern: "default",
-      points: null,
-      roi: converted.roi,
-      simulation_bitmap: null,
-    };
-  }
-
   return {
     ...req,
-    pattern: "custom",
+    pattern: "default",
     points: null,
     roi: converted.roi,
-    simulation_bitmap: converted.simulationBitmap,
+    simulation_bitmap: options.isProduction ? null : converted.simulationBitmap,
   };
 }
 
