@@ -8,6 +8,7 @@ type IconName =
   | "help"
   | "image"
   | "layers"
+  | "link"
   | "moon"
   | "pause"
   | "play"
@@ -81,6 +82,12 @@ const paths: Record<IconName, JSX.Element> = {
     <>
       <path d="M12 2L2 8l10 6 10-6-10-6z" />
       <path d="M2 14l10 6 10-6" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L11 4.93" />
+      <path d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07L13 19.07" />
     </>
   ),
   moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,

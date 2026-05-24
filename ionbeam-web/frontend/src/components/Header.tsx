@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { fetchStatus } from "../store/statusSlice";
+import { fetchDefaults, fetchStatus, reconnectDevice } from "../store/statusSlice";
 import {
   ALL_THEMES,
   applyThemeToDocument,
@@ -43,6 +43,7 @@ const STATE_LABEL_KEYS: Record<string, TranslationKey> = {
 export function Header() {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
+  const fetchingStatus = useAppSelector((s) => s.status.fetching);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const version = useAppSelector((s) => s.status.defaults?.version);
   const theme = useAppSelector((s) => s.theme.theme);
@@ -64,6 +65,7 @@ export function Header() {
 
   const state = status?.state ?? "disconnected";
   const stateKey = STATE_LABEL_KEYS[state];
+  const reconnectDisabled = fetchingStatus || state === "busy" || state === "connecting";
 
   return (
     <header className="app-header">
@@ -132,7 +134,28 @@ export function Header() {
       </span>
       <button
         type="button"
-        className="btn btn--ghost app-header__settings"
+        className="btn btn--ghost app-header__icon-button"
+        disabled={reconnectDisabled}
+        onClick={() => {
+          stopAllScanActions();
+          dispatch(reconnectDevice())
+            .unwrap()
+            .then(() => {
+              dispatch(fetchStatus());
+              dispatch(fetchDefaults());
+            })
+            .catch(() => {
+              dispatch(fetchStatus());
+            });
+        }}
+        aria-label={t("header.reconnect.aria")}
+        title={t("header.reconnect.title")}
+      >
+        <Icon name="link" tone="accent" />
+      </button>
+      <button
+        type="button"
+        className="btn btn--ghost app-header__icon-button app-header__settings"
         onClick={() => {
           stopAllScanActions();
           dispatch(openSettingsDialog());

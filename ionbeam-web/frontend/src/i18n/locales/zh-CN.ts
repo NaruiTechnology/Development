@@ -43,6 +43,8 @@ export const zhCN: Partial<TranslationTable> = {
   "header.state.connecting": "连接中",
   "header.state.error": "错误",
   "header.state.disconnected": "已断开",
+  "header.reconnect.title": "重新连接 Glasgow 设备",
+  "header.reconnect.aria": "重新连接设备",
 
   /* ===== top-level tabs =========================================== */
   "tabs.aria": "扫描类型",
