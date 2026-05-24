@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND_DIR="${IONBEAM_BACKEND_DIR:-/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/backend}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_BACKEND_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BACKEND_DIR="${IONBEAM_BACKEND_DIR:-${DEFAULT_BACKEND_DIR}}"
 START_CMD="${IONBEAM_BACKEND_START_CMD:-npm run dev}"
 LOG_FILE="${IONBEAM_BACKEND_LOG:-/tmp/ionbeam-backend.log}"
 PID_FILE="${IONBEAM_BACKEND_PID:-/tmp/ionbeam-backend.pid}"

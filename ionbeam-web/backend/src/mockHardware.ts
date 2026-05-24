@@ -197,14 +197,37 @@ function loadImageFile(filePath: string, resolution: number, invert: boolean): S
     "json.dump(px, sys.stdout)",
   ].join("; ");
 
-  const result = spawnSync("python3", ["-c", script, filePath, String(resolution), String(invert)], {
-    encoding: "utf8",
-    maxBuffer: resolution * resolution * 8,
-  });
-  if (result.status !== 0 || !result.stdout) return null;
+  const pythonCommands =
+    process.platform === "win32"
+      ? [
+          { command: "py", args: ["-3"] },
+          { command: "python", args: [] },
+          { command: "python3", args: [] },
+        ]
+      : [
+          { command: "python3", args: [] },
+          { command: "python", args: [] },
+        ];
+
+  let stdout: string | null = null;
+  for (const { command, args } of pythonCommands) {
+    const result = spawnSync(
+      command,
+      [...args, "-c", script, filePath, String(resolution), String(invert)],
+      {
+        encoding: "utf8",
+        maxBuffer: resolution * resolution * 8,
+      }
+    );
+    if (result.status === 0 && result.stdout) {
+      stdout = result.stdout;
+      break;
+    }
+  }
+  if (!stdout) return null;
 
   try {
-    const data = JSON.parse(result.stdout);
+    const data = JSON.parse(stdout);
     if (!Array.isArray(data) || data.length !== resolution * resolution) return null;
     return { resolution, pixels: Uint8Array.from(data.map((v) => Number(v) & 0xff)) };
   } catch {

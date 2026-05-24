@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ROOT="${GLASGOW_PROJECT_ROOT:-/home/vboxuser/Project/IobeamTech}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_DEVELOPMENT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+DEFAULT_PROJECT_ROOT="$(cd "${DEFAULT_DEVELOPMENT_ROOT}/.." && pwd)"
+PROJECT_ROOT="${GLASGOW_PROJECT_ROOT:-${DEFAULT_PROJECT_ROOT}}"
 WORKDIR="${GLASGOW_WORKDIR:-${PROJECT_ROOT}/Development/glasgow_service}"
 RUNTIME_DIR="${GLASGOW_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
 APP="${GLASGOW_APP:-glasgow_service.api:app}"
