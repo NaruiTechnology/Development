@@ -343,7 +343,7 @@ export async function streamMockVector(
     for (let k = 0; k < slice.length; k++) {
       const [x, y] = slice[k];
       const sample = p.simulation_bitmap
-        ? p.points && p.points.length
+        ? p.pattern !== "custom" || (p.points && p.points.length)
           ? sampleSimulationBitmapPoint(p.simulation_bitmap, p.roi, x, y)
           : sampleSimulationBitmap(
               p.simulation_bitmap,
