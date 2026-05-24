@@ -19,7 +19,20 @@ export const fetchStatus = createAsyncThunk<ServiceStatus>(
   "status/fetch",
   async () => {
     const r = await fetch("/api/status");
-    if (!r.ok) throw new Error(`status: HTTP ${r.status}`);
+    if (!r.ok) {
+      const proxyError = await parseProxyError(r);
+      if (proxyError) return disconnectedStatus(proxyError);
+      throw new Error(`status: HTTP ${r.status}`);
+    }
+    return (await r.json()) as ServiceStatus;
+  }
+);
+
+export const reconnectDevice = createAsyncThunk<ServiceStatus>(
+  "status/reconnect",
+  async () => {
+    const r = await fetch("/api/admin/reconnect", { method: "POST" });
+    if (!r.ok) throw new Error(`reconnect: HTTP ${r.status} ${await r.text()}`);
     return (await r.json()) as ServiceStatus;
   }
 );
@@ -44,6 +57,29 @@ export const fetchDefaults = createAsyncThunk<ServerDefaults>(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function disconnectedStatus(lastError: string): ServiceStatus {
+  return {
+    state: "disconnected",
+    last_error: lastError,
+    scans_completed: 0,
+    chunks_in_flight: 0,
+  };
+}
+
+async function parseProxyError(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as {
+      error?: string;
+      detail?: string;
+      target?: string;
+    };
+    if (body.error !== "upstream_unreachable") return null;
+    return `Glasgow service is not reachable at ${body.target ?? "the configured endpoint"}.`;
+  } catch {
+    return null;
+  }
 }
 
 const slice = createSlice({
@@ -79,6 +115,19 @@ const slice = createSlice({
     b.addCase(fetchStatus.rejected, (s, a) => {
       s.fetching = false;
       s.lastError = a.error.message ?? "status fetch failed";
+    });
+    b.addCase(reconnectDevice.pending, (s) => {
+      s.fetching = true;
+      s.lastError = null;
+    });
+    b.addCase(reconnectDevice.fulfilled, (s, a) => {
+      s.fetching = false;
+      s.service = a.payload;
+      s.lastError = null;
+    });
+    b.addCase(reconnectDevice.rejected, (s, a) => {
+      s.fetching = false;
+      s.lastError = a.error.message ?? "reconnect failed";
     });
     b.addCase(fetchDefaults.fulfilled, (s, a) => {
       s.defaults = a.payload;

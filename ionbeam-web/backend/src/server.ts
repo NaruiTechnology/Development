@@ -46,6 +46,23 @@ interface RestartServicesResponse {
   backend_restart: BackendRestartResult;
 }
 
+interface ServiceStatus {
+  state: "disconnected" | "connecting" | "idle" | "busy" | "error";
+  last_error: string | null;
+  scans_completed: number;
+  chunks_in_flight: number;
+}
+
+type UpstreamJsonResult =
+  | { ok: true; status: number; data: unknown }
+  | {
+      ok: false;
+      status: number;
+      data: unknown;
+      message: string;
+      unreachable: boolean;
+    };
+
 app.use(morgan("dev"));
 app.use(express.json({ limit: "16mb" })); // vector custom up to 1M points
 
@@ -109,6 +126,15 @@ app.post("/api/admin/config/restore", async (_req, res) => {
 
 app.post("/api/admin/restart-services", async (_req, res) => {
   await restartServicesAndRespond(res);
+});
+
+app.post("/api/admin/reconnect", async (_req, res) => {
+  if (config.mock) {
+    res.json(mockRest.status());
+    return;
+  }
+
+  await reconnectDeviceAndRespond(res);
 });
 
 // MOCK responses live BEFORE the proxy mount so they win.
@@ -206,6 +232,109 @@ async function restartServicesAndRespond(
   const backendRestart = planBackendRestart(restart.ok);
   res.json({ ok: true, restart, backend_restart: backendRestart });
   scheduleBackendRestartAfterResponse(res, backendRestart);
+}
+
+async function reconnectDeviceAndRespond(
+  res: express.Response<ServiceStatus | unknown>
+): Promise<void> {
+  const reconnect = await fetchUpstreamJson("/admin/reconnect", "POST");
+  if (reconnect.ok) {
+    res.status(reconnect.status).json(reconnect.data);
+    return;
+  }
+
+  if (!reconnect.unreachable) {
+    res.status(reconnect.status).json(reconnect.data);
+    return;
+  }
+
+  const restart = await restartService();
+  if (!restart.ok) {
+    res.json(
+      disconnectedStatus(
+        `Glasgow service is not reachable at ${config.proxyTargetHttp}; restart failed: ${restart.error ?? restart.stderr ?? "unknown error"}`
+      )
+    );
+    return;
+  }
+
+  const status = await waitForUpstreamStatus();
+  res.json(
+    status ??
+      disconnectedStatus(
+        `Glasgow service restart completed, but ${config.proxyTargetHttp}/status did not become reachable.`
+      )
+  );
+}
+
+async function waitForUpstreamStatus(): Promise<ServiceStatus | null> {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const status = await fetchUpstreamJson("/status", "GET");
+    if (status.ok) return status.data as ServiceStatus;
+    await delay(500);
+  }
+  return null;
+}
+
+async function fetchUpstreamJson(
+  pathname: string,
+  method: "GET" | "POST"
+): Promise<UpstreamJsonResult> {
+  const url = new URL(pathname, config.proxyTargetHttp);
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (config.glasgowToken) {
+    headers.Authorization = `Bearer ${config.glasgowToken}`;
+  }
+
+  try {
+    const response = await fetch(url, { method, headers });
+    const text = await response.text();
+    const data = parseJsonOrText(text);
+    if (response.ok) return { ok: true, status: response.status, data };
+    return {
+      ok: false,
+      status: response.status,
+      data,
+      message: response.statusText,
+      unreachable: false,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      status: 502,
+      data: {
+        ok: false,
+        error: "upstream_unreachable",
+        detail: message,
+        target: config.proxyTargetHttp,
+      },
+      message,
+      unreachable: true,
+    };
+  }
+}
+
+function parseJsonOrText(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { detail: text };
+  }
+}
+
+function disconnectedStatus(lastError: string): ServiceStatus {
+  return {
+    state: "disconnected",
+    last_error: lastError,
+    scans_completed: 0,
+    chunks_in_flight: 0,
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function scheduleBackendRestartAfterResponse(

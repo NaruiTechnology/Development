@@ -42,6 +42,8 @@ export const en = {
   "header.state.connecting": "Connecting",
   "header.state.error": "Error",
   "header.state.disconnected": "Disconnected",
+  "header.reconnect.title": "Reconnect the Glasgow device",
+  "header.reconnect.aria": "Reconnect device",
 
   /* ===== top-level tabs =========================================== */
   "tabs.aria": "Scan kind",

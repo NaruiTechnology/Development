@@ -9,7 +9,6 @@ import {
 } from "../store/themeSlice";
 import {
   openDialog as openSettingsDialog,
-  restartSettingsServices,
 } from "../store/settingsSlice";
 import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import { useAppDispatch, useAppSelector } from "../store";
@@ -49,7 +48,6 @@ export function Header() {
   const fetchingStatus = useAppSelector((s) => s.status.fetching);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const version = useAppSelector((s) => s.status.defaults?.version);
-  const reconnecting = useAppSelector((s) => s.settings.saving);
   const theme = useAppSelector((s) => s.theme.theme);
   const { t } = useTranslation();
 
@@ -154,19 +152,6 @@ export function Header() {
         }}
         aria-label={t("header.reconnect.aria")}
         title={t("header.reconnect.title")}
-      >
-        <Icon name="link" tone="accent" />
-      </button>
-      <button
-        type="button"
-        className="btn btn--ghost app-header__icon-button app-header__settings"
-        onClick={() => {
-          stopAllScanActions();
-          dispatch(restartSettingsServices());
-        }}
-        aria-label={t("header.restartServices.aria")}
-        title={t("header.restartServices.title")}
-        disabled={reconnecting}
       >
         <Icon name="link" tone="accent" />
       </button>

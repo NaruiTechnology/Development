@@ -52,6 +52,8 @@ export const zhTW: Partial<TranslationTable> = {
   "header.state.connecting": "連線中",
   "header.state.error": "錯誤",
   "header.state.disconnected": "已中斷連線",
+  "header.reconnect.title": "重新連接 Glasgow 裝置",
+  "header.reconnect.aria": "重新連接裝置",
 
   /* ===== top-level tabs =========================================== */
   "tabs.aria": "掃描類型",

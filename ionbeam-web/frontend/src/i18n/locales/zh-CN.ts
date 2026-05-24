@@ -237,8 +237,6 @@ export const zhCN: Partial<TranslationTable> = {
   "help.preProcess.title": "预处理数据块 — 提前编码与按需编码",
   "help.preProcess.aria": "预处理数据块字段的作用是什么？",
 
-  "header.restartServices.title": "重启硬件服务",
-  "header.restartServices.aria": "重启硬件服务",
   "header.settings.title": "打开设置（将停止任何运行中的扫描并编辑 streamData.json）",
   "header.settings.aria": "打开设置对话框",
   "header.production.true": "生产",

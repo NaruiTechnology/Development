@@ -240,8 +240,6 @@ export const en = {
   "help.preProcess.aria": "What does the pre-process chunks field do?",
 
   /* ===== header — settings (gear) button ============================ */
-  "header.restartServices.title": "Restart hardware services",
-  "header.restartServices.aria": "Restart hardware services",
   "header.settings.title": "Open settings (stops any active scan and edits streamData.json)",
   "header.settings.aria": "Open settings dialog",
   "header.production.true": "Production",

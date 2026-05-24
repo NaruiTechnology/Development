@@ -246,8 +246,6 @@ export const zhTW: Partial<TranslationTable> = {
   "help.preProcess.title": "預先處理資料區塊 — 提前編碼與按需編碼",
   "help.preProcess.aria": "預先處理資料區塊欄位的作用是什麼？",
 
-  "header.restartServices.title": "重新啟動硬體服務",
-  "header.restartServices.aria": "重新啟動硬體服務",
   "header.settings.title": "開啟設定（將停止任何執行中的掃描並編輯 streamData.json）",
   "header.settings.aria": "開啟設定對話框",
   "header.production.true": "正式",
