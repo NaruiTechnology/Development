@@ -238,6 +238,8 @@ export const en = {
   "help.preProcess.aria": "What does the pre-process chunks field do?",
 
   /* ===== header — settings (gear) button ============================ */
+  "header.reconnect.title": "Reconnect hardware services",
+  "header.reconnect.aria": "Reconnect hardware services",
   "header.settings.title": "Open settings (stops any active scan and edits streamData.json)",
   "header.settings.aria": "Open settings dialog",
   "header.production.true": "Production",
