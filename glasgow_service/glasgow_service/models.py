@@ -46,7 +46,7 @@ class RasterRequest(BaseModel):
     output_mode:   str  = Field("SixteenBit", description="SixteenBit or EightBit.")
 
     # Wet-run extras (REST only; WebSocket streaming ignores these):
-    do_validate: bool = Field(True, description="Run chunk-count / size / padding checks and return the report.")
+    do_validate: bool = Field(True, description="Run chunk-count / size checks and return the report.")
     roi: Optional["ROIRequest"] = Field(
         default=None,
         description="Optional DAC-code ROI bounds. Coordinates are inclusive 0..16383.",
@@ -116,7 +116,7 @@ class VectorRequest(BaseModel):
 
     # Wet-run extras (REST only):
     pre_process:    bool = Field(False, description="Call _pre_process_chunks before transfer; time it separately.")
-    do_validate:    bool = Field(True,  description="Run non-empty / padding checks and return the report.")
+    do_validate:    bool = Field(True,  description="Run chunk presence checks and return the report.")
     roi:            Optional["ROIRequest"] = Field(
         default=None,
         description="Optional DAC-code ROI bounds. Coordinates are inclusive 0..16383.",

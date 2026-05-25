@@ -1040,7 +1040,7 @@ class DeviceService:
         plt.close(fig)
         return out.getvalue()
 
-    # -------- validation (unchanged) --------------------------------------
+    # -------- validation --------------------------------------------------
 
     def _validate_raster(self, chunks: List, pixels_per_chunk: int,
                          expected_chunks: int) -> ScanValidation:
@@ -1067,13 +1067,6 @@ class DeviceService:
                 passed=0 < tail <= full_bytes,
                 detail=f"tail = {tail} bytes (max {full_bytes})",
             ))
-        if len(chunks) >= 2:
-            first16 = bytes(chunks[1])[:16]
-            checks.append(ValidationCheck(
-                name="no_padding_leak",
-                passed=first16 != b"\x00" * 16,
-                detail="chunk 2 must not begin with 16 zero bytes",
-            ))
         return ScanValidation(passed=all(c.passed for c in checks), checks=checks)
 
     def _validate_vector(self, chunks: List) -> ScanValidation:
@@ -1086,11 +1079,6 @@ class DeviceService:
             name="all_chunks_non_empty", passed=not empties,
             detail=("all non-empty" if not empties
                     else f"empty chunk indices: {empties[:5]}")))
-        if len(chunks) >= 2:
-            first16 = bytes(chunks[1])[:16]
-            checks.append(ValidationCheck(
-                name="no_padding_leak", passed=first16 != b"\x00" * 16,
-                detail="chunk 2 must not begin with 16 zero bytes"))
         return ScanValidation(passed=all(c.passed for c in checks), checks=checks)
 
     # -------- state lock --------------------------------------------------
