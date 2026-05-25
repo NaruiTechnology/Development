@@ -256,7 +256,6 @@ function SettingsModalShell() {
           <ConfirmRow
             message={t("settings.confirm.save")}
             confirmLabel={t("settings.confirm.save.yes")}
-            confirmTone="primary"
             disabled={busy}
             onConfirm={onConfirmSave}
             onCancel={() => setConfirmSave(false)}
@@ -265,7 +264,6 @@ function SettingsModalShell() {
           <ConfirmRow
             message={t("settings.confirm.default")}
             confirmLabel={t("settings.confirm.default.yes")}
-            confirmTone="warn"
             disabled={busy}
             onConfirm={onConfirmDefault}
             onCancel={() => setConfirmDefault(false)}
@@ -1245,14 +1243,12 @@ function SettingsNotice({
 function ConfirmRow({
   message,
   confirmLabel,
-  confirmTone,
   disabled,
   onConfirm,
   onCancel,
 }: {
   message: string;
   confirmLabel: string;
-  confirmTone: "primary" | "warn";
   disabled: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -1272,7 +1268,7 @@ function ConfirmRow({
       </button>
       <button
         type="button"
-        className={confirmTone === "warn" ? "btn btn--warn" : "btn btn--primary"}
+        className="btn btn--orange"
         onClick={onConfirm}
         disabled={disabled}
       >

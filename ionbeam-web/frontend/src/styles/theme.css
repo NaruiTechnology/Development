@@ -458,6 +458,15 @@ body {
 
 .btn--warn   { border-color: var(--c-warn-border); color: var(--c-warn); }
 .btn--danger { border-color: var(--c-danger-border); color: var(--c-danger); }
+.btn--orange {
+  background: #f97316;
+  border-color: #fb923c;
+  color: #ffffff;
+}
+.btn--orange:hover:not(:disabled) {
+  background: #ea580c;
+  border-color: #fdba74;
+}
 
 .btn--ghost { background: transparent; }
 
