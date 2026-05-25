@@ -293,7 +293,7 @@ function SettingsModalShell() {
 
             <button
               type="button"
-              className="btn btn--settings-action"
+              className="btn btn--warn"
               disabled={busy || !hasBackup}
               onClick={() => setConfirmDefault(true)}
               title={
@@ -307,7 +307,7 @@ function SettingsModalShell() {
             </button>
             <button
               type="button"
-              className="btn btn--settings-action"
+              className="btn btn--primary"
               disabled={busy || draft === null || draft === source}
               onClick={() => setConfirmSave(true)}
               title={t("settings.btn.saveAs.title")}
@@ -1268,7 +1268,7 @@ function ConfirmRow({
       </button>
       <button
         type="button"
-        className="btn btn--settings-action"
+        className="btn btn--orange"
         onClick={onConfirm}
         disabled={disabled}
       >
