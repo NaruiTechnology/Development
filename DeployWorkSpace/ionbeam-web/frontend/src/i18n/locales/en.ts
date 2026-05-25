@@ -82,7 +82,7 @@ export const en = {
   "raster.cookie": "Cookie",
   "raster.outputMode": "Output mode",
   "raster.frameBlank": "Frame blank (start and end blanked)",
-  "raster.doValidate": "Run chunk-count / size / padding checks",
+  "raster.doValidate": "Run chunk-count / size checks",
   "raster.footnote": "Validation applies to <Run validated>. After any scan completes, use the <Download CSV> / <Download figure> buttons in the Run report to export the data.",
 
   /* ===== vector parameter form ==================================== */
@@ -106,7 +106,7 @@ export const en = {
   "vector.customPoints.count": "{count} points",
   "vector.customPoints.empty": "0 points",
   "vector.preProcess": "Pre-process chunks (timed separately as process_time_s)",
-  "vector.doValidate": "Run non-empty / padding checks",
+  "vector.doValidate": "Run chunk presence checks",
 
   /* ===== ROI editor =============================================== */
   "roi.select": "SELECT",
