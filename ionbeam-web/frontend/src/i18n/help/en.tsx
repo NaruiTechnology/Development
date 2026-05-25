@@ -315,16 +315,14 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>Raster checks:</p>
 
       <ul className="dwell-help__list">
-        <li><strong>chunk count</strong> — the receiver got the number of chunks predicted by <code>ceil(resolution² / pixels_per_chunk)</code>. A mismatch means the FPGA hit a back-pressure stall or the drain padding got short-cut.</li>
+        <li><strong>chunk count</strong> — the receiver got the number of chunks predicted by <code>ceil(resolution² / pixels_per_chunk)</code>. A mismatch means the FPGA hit a back-pressure stall or the scan was interrupted.</li>
         <li><strong>chunk size</strong> — every chunk except the last is exactly <code>latency_bytes / sample_size</code> samples long. Truncated chunks usually mean an output_mode / latency_bytes alignment mismatch.</li>
-        <li><strong>padding present</strong> — the trailing pipeline-drain padding (~128 pixels minimum, plus 0.5 % of frame size) was correctly emitted by the sender. Without it the last few real pixels can stay trapped in the FPGA pipeline.</li>
       </ul>
 
       <p>Vector checks:</p>
 
       <ul className="dwell-help__list">
         <li><strong>non-empty</strong> — every chunk contains at least one sample. An all-empty stream is a sign the scan never actually triggered (e.g. the FPGA didn&apos;t see the SynchronizeCommand).</li>
-        <li><strong>padding present</strong> — same drain-padding check as raster. Particularly important for vector since the drain floor is much higher there (~21 000 pixels for the default setup).</li>
       </ul>
 
       <div className="dwell-help__rule">

@@ -423,7 +423,6 @@ export const mockRest = {
               { name: "chunk_count", passed: true, detail: `expected ${expected}, got ${expected}` },
               { name: "full_chunk_sizes", passed: true, detail: `all non-tail chunks = ${pixelsPerChunk * 2} bytes` },
               { name: "tail_chunk_size", passed: true, detail: "tail OK" },
-              { name: "no_padding_leak", passed: true, detail: "chunk 2 OK" },
             ],
           }
         : null,
@@ -462,7 +461,6 @@ export const mockRest = {
             checks: [
               { name: "non_zero_chunks", passed: true, detail: `received ${chunks} chunks` },
               { name: "all_chunks_non_empty", passed: true, detail: "all non-empty" },
-              { name: "no_padding_leak", passed: true, detail: "chunk 2 OK" },
             ],
           }
         : null,
