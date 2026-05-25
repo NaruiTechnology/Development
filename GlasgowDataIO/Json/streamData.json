@@ -12,11 +12,12 @@
                     "voltage": 2.5,
                     "bufferSize": "1024*1024",
                     "rasterScan": {
-                        "pixels": 8192,
+                        "pixels": 32768,
                         "frameBlank": false,
                         "resolution": 1024,
                         "adcLatency": 8,
-                        "dwell": 2
+                        "dwell": 2,
+                        "maxPipeline": 4
                     },
                     "vectorScan": {
                         "latency": 8196,

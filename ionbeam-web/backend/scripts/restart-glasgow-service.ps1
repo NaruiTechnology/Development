@@ -10,7 +10,44 @@ $workdir = if ($env:GLASGOW_WORKDIR) { $env:GLASGOW_WORKDIR } else { Join-Path $
 $app = if ($env:GLASGOW_APP) { $env:GLASGOW_APP } else { "glasgow_service.api:app" }
 $hostName = if ($env:GLASGOW_HOST) { $env:GLASGOW_HOST } else { "127.0.0.1" }
 $port = if ($env:GLASGOW_PORT) { $env:GLASGOW_PORT } else { "8765" }
-$glasgowConfig = if ($env:GLASGOW_CONFIG) { $env:GLASGOW_CONFIG } else { Join-Path $projectRoot "GlasgowDataIO\Json\streamData.json" }
+
+function Test-StreamDataTail {
+    param([string]$Path)
+    $normalized = [IO.Path]::GetFullPath($Path)
+    $parts = $normalized -split '[\\/]+' | Where-Object { $_ }
+    if ($parts.Count -lt 3) {
+        return $false
+    }
+    $tail = ($parts | Select-Object -Last 3) -join '/'
+    return $tail.ToLowerInvariant() -eq "glasgowdataio/json/streamdata.json"
+}
+
+function Get-SiblingDevelopmentConfigPath {
+    param([string]$StreamDataPath)
+    $jsonDir = Split-Path -Parent $StreamDataPath
+    $glasgowDataIoDir = Split-Path -Parent $jsonDir
+    $deployRoot = Split-Path -Parent $glasgowDataIoDir
+    return Join-Path $deployRoot "Development\GlasgowDataIO\Json\streamData.json"
+}
+
+function Resolve-GlasgowConfigPath {
+    param([string]$RawPath)
+    if (-not $RawPath) {
+        return Join-Path $projectRoot "GlasgowDataIO\Json\streamData.json"
+    }
+
+    $resolved = [IO.Path]::GetFullPath($RawPath)
+    if (Test-StreamDataTail $resolved) {
+        $sibling = Get-SiblingDevelopmentConfigPath $resolved
+        if (Test-Path -LiteralPath $sibling) {
+            return $sibling
+        }
+    }
+
+    return $resolved
+}
+
+$glasgowConfig = Resolve-GlasgowConfigPath $env:GLASGOW_CONFIG
 $logFile = if ($env:GLASGOW_RESTART_LOG) { $env:GLASGOW_RESTART_LOG } else { Join-Path $workdir "uvicorn.log" }
 $errLogFile = "$logFile.err"
 $pythonBin = if ($env:GLASGOW_PYTHON) { $env:GLASGOW_PYTHON } else { Join-Path $repoRoot ".venv\Scripts\python.exe" }

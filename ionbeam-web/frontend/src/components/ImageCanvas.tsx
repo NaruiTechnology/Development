@@ -199,7 +199,8 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
     kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
   const preferServerFigure =
     Boolean(serverFigureUrl) &&
-    phase === "completed";
+    phase === "completed" &&
+    stats.max > stats.min;
 
   let nativeEdge: number;
   if (kind === "raster") {
