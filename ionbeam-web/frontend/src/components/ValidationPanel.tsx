@@ -25,6 +25,7 @@ import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
+type DirectoryPickerOptions = { startIn?: "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos" };
 type DirectoryHandle = {
   name: string;
   getFileHandle: (
@@ -37,6 +38,9 @@ type DirectoryHandle = {
     }>;
   }>;
 };
+
+const OUTPUT_PREFIX_STORAGE_KEY = "ionbeam:downloadOutputPrefix";
+const DEFAULT_DOWNLOAD_PATH_LABEL = defaultDownloadPathLabel();
 
 export function ValidationPanel() {
   const { t, fmt } = useTranslation();
@@ -64,7 +68,10 @@ export function ValidationPanel() {
   // downloadDirLabel is set lazily after the first translation read so
   // we don't end up showing the English placeholder briefly during the
   // initial mount in a Chinese-locale session.
-  const [downloadDirLabel, setDownloadDirLabel] = useState(() => t("validation.folder.default"));
+  const [downloadDirLabel, setDownloadDirLabel] = useState(DEFAULT_DOWNLOAD_PATH_LABEL);
+  const [outputPrefix, setOutputPrefix] = useState(
+    () => window.localStorage.getItem(OUTPUT_PREFIX_STORAGE_KEY) ?? ""
+  );
   const [autoErr, setAutoErr] = useState<string | null>(null);
   const lastAutoDownloadKeyRef = useRef<string | null>(null);
 
@@ -79,17 +86,17 @@ export function ValidationPanel() {
   async function selectDownloadFolder() {
     setAutoErr(null);
     const picker = (window as any).showDirectoryPicker as
-      | (() => Promise<DirectoryHandle>)
+      | ((options?: DirectoryPickerOptions) => Promise<DirectoryHandle>)
       | undefined;
     if (!picker) {
       setAutoErr(t("validation.folder.unavailable"));
       setDownloadDir(null);
-      setDownloadDirLabel(t("validation.folder.default"));
+      setDownloadDirLabel(DEFAULT_DOWNLOAD_PATH_LABEL);
       return;
     }
 
     try {
-      const dir = await picker();
+      const dir = await picker({ startIn: "downloads" });
       setDownloadDir(dir);
       setDownloadDirLabel(dir.name || t("validation.folder.default"));
     } catch (e: any) {
@@ -99,9 +106,36 @@ export function ValidationPanel() {
     }
   }
 
-  const autoDownloadControls = (
+  function updateOutputPrefix(next: string) {
+    setOutputPrefix(next);
+    window.localStorage.setItem(OUTPUT_PREFIX_STORAGE_KEY, next);
+  }
+
+  const downloadSettings = (
     <>
-      <div className="button-row" style={{ marginTop: 12, alignItems: "center" }}>
+      <div className="field" style={{ marginTop: 12 }}>
+        <label htmlFor="validation-output-prefix">
+          {t("validation.outputPrefix")}
+        </label>
+        <input
+          id="validation-output-prefix"
+          className="input"
+          value={outputPrefix}
+          onChange={(e) => updateOutputPrefix(e.target.value)}
+          placeholder={t("validation.outputPrefix.placeholder")}
+        />
+        <span className="muted" style={{ fontSize: 11 }}>
+          {t("validation.outputPrefix.help")}
+        </span>
+      </div>
+      <div className="button-row" style={{ marginTop: 8, alignItems: "center" }}>
+        <button className="btn btn--ghost" onClick={selectDownloadFolder}>
+          <Icon name="download" tone="accent" />
+          {t("validation.selectFolder")}
+        </button>
+        <span className="muted" style={{ fontSize: 12 }}>
+          {downloadDirLabel}
+        </span>
         <label className="checkbox" style={{ padding: 0 }}>
           <input
             type="checkbox"
@@ -113,17 +147,6 @@ export function ValidationPanel() {
           />
           {t("validation.autoDownload")}
         </label>
-        {autoDownload && (
-          <>
-            <button className="btn btn--ghost" onClick={selectDownloadFolder}>
-              <Icon name="download" tone="accent" />
-              {t("validation.selectFolder")}
-            </button>
-            <span className="muted" style={{ fontSize: 12 }}>
-              {downloadDirLabel}
-            </span>
-          </>
-        )}
       </div>
       {autoErr && (
         <div style={{ color: "var(--c-warn)", fontSize: 12, marginTop: 6 }}>
@@ -145,7 +168,7 @@ export function ValidationPanel() {
         filename: defaultDownloadFilename(scanKind, "csv", {
           resolution: result?.resolution ?? rasterRes,
           latency_bytes: vectorLatency,
-        }),
+        }, outputPrefix),
       };
     }
 
@@ -157,7 +180,7 @@ export function ValidationPanel() {
       filename: defaultDownloadFilename(scanKind, "csv", {
         resolution: rasterRes,
         latency_bytes: vectorLatency,
-      }),
+      }, outputPrefix),
     };
   }
 
@@ -177,7 +200,7 @@ export function ValidationPanel() {
       filename: defaultDownloadFilename(scanKind, "png", {
         resolution: result?.resolution ?? rasterRes,
         latency_bytes: vectorLatency,
-      }),
+      }, outputPrefix),
     };
   }
 
@@ -228,6 +251,7 @@ export function ValidationPanel() {
       rasterCursor,
       vectorCursor,
       vectorRenderMode,
+      outputPrefix,
     ].join(":");
     if (lastAutoDownloadKeyRef.current === key) return;
     lastAutoDownloadKeyRef.current = key;
@@ -265,14 +289,14 @@ export function ValidationPanel() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode]);
+  }, [autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode, outputPrefix]);
 
   /* -------- render ------------------------------------------------------ */
 
   if (error) {
     return (
       <div className="card__body">
-        {autoDownloadControls}
+        {downloadSettings}
         <div style={{ color: "var(--c-danger)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
           {error}
         </div>
@@ -289,7 +313,7 @@ export function ValidationPanel() {
         <div className="muted" style={{ fontSize: 12 }}>
           {renderBracketedBold(t("validation.empty"))}
         </div>
-        {autoDownloadControls}
+        {downloadSettings}
       </div>
     );
   }
@@ -339,7 +363,7 @@ export function ValidationPanel() {
         </div>
       )}
 
-      {autoDownloadControls}
+      {downloadSettings}
 
       {!autoDownload && (
         <div className="button-row" style={{ marginTop: 12 }}>
@@ -434,17 +458,32 @@ function shortTimestampSuffix(): string {
   );
 }
 
+function defaultDownloadPathLabel(): string {
+  const platform = navigator.platform.toLowerCase();
+  const userAgent = navigator.userAgent.toLowerCase();
+  return platform.includes("win") || userAgent.includes("windows")
+    ? "C:\\Scan\\output"
+    : "~/Downloads/Scan/Output";
+}
+
+function filenameInsertedSegment(value: string): string {
+  return value.trim().replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
 function defaultDownloadFilename(
   kind: "raster" | "vector",
   fileType: "csv" | "png",
-  result: { resolution?: number | null; latency_bytes?: number | null } | null
+  result: { resolution?: number | null; latency_bytes?: number | null } | null,
+  insertedPrefix: string
 ): string {
   const ts = shortTimestampSuffix();
+  const suffix = filenameInsertedSegment(insertedPrefix);
+  const inserted = suffix ? `_${suffix}` : "";
   if (kind === "raster") {
     const r = result?.resolution ?? 0;
-    return `raster_${r}x${r}_${ts}.${fileType}`;
+    return `raster_${r}x${r}${inserted}_${ts}.${fileType}`;
   }
-  return `vector_latency_${result?.latency_bytes ?? 0}_${ts}.${fileType}`;
+  return `vector_latency_${result?.latency_bytes ?? 0}${inserted}_${ts}.${fileType}`;
 }
 
 /** Bracketed-bold for inline button-name references. Mirrors the
