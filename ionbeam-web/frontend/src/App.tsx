@@ -18,6 +18,7 @@ import { VectorParameters } from "./components/VectorParameters";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
+import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -45,6 +46,7 @@ export function App() {
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
+  const roiState = useAppSelector((s) => s.scan.roi);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
     const raw = window.localStorage.getItem(RIGHT_PANEL_STORAGE_KEY);
@@ -52,6 +54,7 @@ export function App() {
     return Number.isFinite(parsed) ? parsed : DEFAULT_RIGHT_PANEL_WIDTH;
   });
   const [isResizing, setIsResizing] = useState(false);
+  const hasPartialROI = isPartialROISelection(roiState);
 
   useEffect(() => {
     dispatch(fetchDefaults());
@@ -72,7 +75,7 @@ export function App() {
       const rect = main.getBoundingClientRect();
       const maxRight = Math.max(
         MIN_RIGHT_PANEL_WIDTH,
-        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE
+        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (hasPartialROI ? 236 : 0)
       );
       const next = Math.min(
         maxRight,
@@ -97,7 +100,7 @@ export function App() {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [isResizing]);
+  }, [isResizing, hasPartialROI]);
 
   const scanActive = phase === "running" || phase === "stopping";
   const formDisabled = scanActive;
@@ -134,7 +137,7 @@ export function App() {
     const rect = main.getBoundingClientRect();
     const maxRight = Math.max(
       MIN_RIGHT_PANEL_WIDTH,
-      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE
+      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (hasPartialROI ? 236 : 0)
     );
     const next = Math.min(maxRight, Math.max(MIN_RIGHT_PANEL_WIDTH, rightPanelWidth + delta));
     setRightPanelWidth(next);
@@ -152,7 +155,7 @@ export function App() {
       ? "card.rasterImage"
       : kind === "vector"
       ? "card.vectorPattern"
-      : "card.roiPreview";
+      : "card.selectROI";
 
   return (
     <div className="app-shell">
@@ -160,7 +163,9 @@ export function App() {
 
       <main
         ref={mainRef}
-        className={`app-main${isResizing ? " app-main--resizing" : ""}`}
+        className={`app-main${isResizing ? " app-main--resizing" : ""}${
+          hasPartialROI ? " app-main--with-roi-preview" : ""
+        }`}
         style={layoutStyle}
       >
         {/* left column */}
@@ -279,10 +284,50 @@ export function App() {
           </div>
 
         </section>
+
+        {hasPartialROI && (
+          <section className="roi-preview-column">
+            <div className="card roi-preview-card">
+              <div className="card__header">
+                <span className="card__title">{t("card.roiPreview")}</span>
+              </div>
+              <div className="card__body">
+                <ROIScanPreview backgroundImageUrl={roiScanImageUrl} />
+              </div>
+            </div>
+          </section>
+        )}
       </main>
 
       <SettingsDialog />
       <Footer />
     </div>
   );
+}
+
+function isPartialROISelection(roi: {
+  x_origin: number;
+  x_end: number;
+  y_origin: number;
+  y_end: number;
+  selection: {
+    x_start: number;
+    x_end: number;
+    y_start: number;
+    y_end: number;
+  } | null;
+}): boolean {
+  const sel = roi.selection;
+  if (!sel) return false;
+
+  const x0 = Math.min(roi.x_origin, roi.x_end);
+  const x1 = Math.max(roi.x_origin, roi.x_end);
+  const y0 = Math.min(roi.y_origin, roi.y_end);
+  const y1 = Math.max(roi.y_origin, roi.y_end);
+  const sx0 = Math.min(sel.x_start, sel.x_end);
+  const sx1 = Math.max(sel.x_start, sel.x_end);
+  const sy0 = Math.min(sel.y_start, sel.y_end);
+  const sy1 = Math.max(sel.y_start, sel.y_end);
+
+  return sx0 > x0 || sx1 < x1 || sy0 > y0 || sy1 < y1;
 }

@@ -27,6 +27,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
+import { clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
+import { resetRaster, resetVector } from "../store/imageSlice";
 import { fetchDefaults, previewConfigDefaults } from "../store/statusSlice";
 import {
   ACTION_DATA_PATH,
@@ -50,6 +52,7 @@ import {
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
 import { Icon } from "./Icon";
+import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 
 export function SettingsDialog() {
   const dispatch = useAppDispatch();
@@ -95,6 +98,31 @@ async function refreshDefaultsForSettings(dispatch: AppDispatch) {
   }
 }
 
+function resetPartialROISelection(dispatch: AppDispatch) {
+  clearBitmapSelectionCache();
+  dispatch(clearROISelection());
+}
+
+function resetROIPreview(dispatch: AppDispatch) {
+  resetPartialROISelection(dispatch);
+  dispatch(clearROIImage());
+}
+
+function resetScanImages(dispatch: AppDispatch, rasterResolution: number) {
+  dispatch(streamReset());
+  dispatch(resetRaster({ resolution: rasterResolution }));
+  dispatch(resetVector());
+}
+
+function simulationImageSource(config: unknown): string {
+  const raw = readPath(config, [...SIMULATION_PATH, "source"]);
+  return typeof raw === "string" ? raw : "";
+}
+
+function simulationImageSourceChanged(before: unknown, after: unknown): boolean {
+  return simulationImageSource(before) !== simulationImageSource(after);
+}
+
 /* -------- modal shell -------------------------------------------------- */
 
 function SettingsModalShell() {
@@ -113,6 +141,7 @@ function SettingsModalShell() {
     lastRestart,
     backupNotice,
   } = useAppSelector((s) => s.settings);
+  const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const titleIdRef = useRef(
     `settings-modal-title-${Math.random().toString(36).slice(2, 9)}`,
@@ -140,8 +169,15 @@ function SettingsModalShell() {
   async function onConfirmSave() {
     if (draft === null) return;
     setConfirmSave(false);
+    const imageSourceChanged = simulationImageSourceChanged(source, draft);
     const result = await dispatch(saveSettingsConfig(draft));
     if (saveSettingsConfig.fulfilled.match(result)) {
+      if (imageSourceChanged) {
+        resetROIPreview(dispatch);
+      } else {
+        resetPartialROISelection(dispatch);
+      }
+      resetScanImages(dispatch, rasterResolution);
       dispatch(previewConfigDefaults(configDefaultsPreview(draft)));
       await refreshDefaultsForSettings(dispatch);
     }
@@ -154,12 +190,20 @@ function SettingsModalShell() {
     setConfirmDefault(false);
     const result = await dispatch(restoreSettingsConfig());
     if (restoreSettingsConfig.fulfilled.match(result)) {
+      resetScanImages(dispatch, rasterResolution);
       // Pull the restored values back into the dialog so the tabs
       // show the freshly-installed defaults instead of the pre-restore
       // draft.
       const config = await dispatch(fetchSettingsConfig());
       if (fetchSettingsConfig.fulfilled.match(config)) {
+        if (simulationImageSourceChanged(source, config.payload.data)) {
+          resetROIPreview(dispatch);
+        } else {
+          resetPartialROISelection(dispatch);
+        }
         dispatch(previewConfigDefaults(configDefaultsPreview(config.payload.data)));
+      } else {
+        resetPartialROISelection(dispatch);
       }
       await refreshDefaultsForSettings(dispatch);
     }
@@ -1002,9 +1046,9 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
   rasterDwell: (
     <>
       <p>
-        Number of ADC sample periods accumulated per raster pixel. Higher
-        dwell improves noise averaging but increases frame time linearly.
-        Practical values are usually powers of two.
+        Number of 125 ns ADC sample periods accumulated per raster pixel.
+        Higher dwell improves noise averaging but increases frame time
+        linearly. Practical values are usually powers of two.
       </p>
     </>
   ),

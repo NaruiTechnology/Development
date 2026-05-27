@@ -60,6 +60,7 @@ export const zhCN: Partial<TranslationTable> = {
   "card.rasterImage": "光栅图像",
   "card.vectorPattern": "矢量图样",
   "card.roiPreview": "ROI 预览",
+  "card.selectROI": "选择 ROI",
   "card.validatedRunOptions": "验证运行选项",
 
   /* ===== scan controls (buttons) ================================== */
@@ -78,7 +79,7 @@ export const zhCN: Partial<TranslationTable> = {
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "分辨率",
-  "raster.dwell": "驻留",
+  "raster.dwell": "驻留（125 ns 单位）",
   "raster.latencyBytes": "延迟（字节）",
   "raster.cookie": "Cookie",
   "raster.outputMode": "输出模式",
@@ -101,7 +102,7 @@ export const zhCN: Partial<TranslationTable> = {
   "vector.latencyBytes": "延迟（字节）",
   "vector.outputMode": "输出模式",
   "vector.cookie": "Cookie",
-  "vector.customPoints.label": "自定义点列（每行一个 x,y,驻留）",
+  "vector.customPoints.label": "自定义点列（x,y,驻留；驻留 = 125 ns 单位）",
   "vector.customPoints.error.tooMany": "点数过多：{count} > {max}",
   "vector.customPoints.error.format": "第 {line} 行：应为 \"x,y,驻留\"",
   "vector.customPoints.count": "{count} 个点",
@@ -291,7 +292,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.raster.pixels": "像素",
   "settings.raster.resolution": "分辨率",
   "settings.raster.adcLatency": "ADC 延迟",
-  "settings.raster.dwell": "驻留",
+  "settings.raster.dwell": "驻留（125 ns 单位）",
   "settings.raster.frameBlank": "帧消隐",
   "settings.raster.display.enabled": "启用",
   "settings.raster.display.openViewer": "打开查看器",
