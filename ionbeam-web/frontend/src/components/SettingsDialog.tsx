@@ -27,6 +27,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
+import { clearROISelection } from "../store/scanSlice";
 import { fetchDefaults, previewConfigDefaults } from "../store/statusSlice";
 import {
   ACTION_DATA_PATH,
@@ -50,6 +51,7 @@ import {
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
 import { Icon } from "./Icon";
+import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 
 export function SettingsDialog() {
   const dispatch = useAppDispatch();
@@ -93,6 +95,11 @@ async function refreshDefaultsForSettings(dispatch: AppDispatch) {
       ),
     );
   }
+}
+
+function resetPartialROISelection(dispatch: AppDispatch) {
+  clearBitmapSelectionCache();
+  dispatch(clearROISelection());
 }
 
 /* -------- modal shell -------------------------------------------------- */
@@ -142,6 +149,7 @@ function SettingsModalShell() {
     setConfirmSave(false);
     const result = await dispatch(saveSettingsConfig(draft));
     if (saveSettingsConfig.fulfilled.match(result)) {
+      resetPartialROISelection(dispatch);
       dispatch(previewConfigDefaults(configDefaultsPreview(draft)));
       await refreshDefaultsForSettings(dispatch);
     }
@@ -154,6 +162,7 @@ function SettingsModalShell() {
     setConfirmDefault(false);
     const result = await dispatch(restoreSettingsConfig());
     if (restoreSettingsConfig.fulfilled.match(result)) {
+      resetPartialROISelection(dispatch);
       // Pull the restored values back into the dialog so the tabs
       // show the freshly-installed defaults instead of the pre-restore
       // draft.
@@ -1002,9 +1011,9 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
   rasterDwell: (
     <>
       <p>
-        Number of ADC sample periods accumulated per raster pixel. Higher
-        dwell improves noise averaging but increases frame time linearly.
-        Practical values are usually powers of two.
+        Number of 125 ns ADC sample periods accumulated per raster pixel.
+        Higher dwell improves noise averaging but increases frame time
+        linearly. Practical values are usually powers of two.
       </p>
     </>
   ),

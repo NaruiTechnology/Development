@@ -85,7 +85,7 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "解析度",
-  "raster.dwell": "駐留",
+  "raster.dwell": "駐留（125 ns 單位）",
   "raster.latencyBytes": "延遲（位元組）",
   "raster.cookie": "Cookie",
   "raster.outputMode": "輸出模式",
@@ -108,7 +108,7 @@ export const zhTW: Partial<TranslationTable> = {
   "vector.latencyBytes": "延遲（位元組）",
   "vector.outputMode": "輸出模式",
   "vector.cookie": "Cookie",
-  "vector.customPoints.label": "自訂點列（每行一個 x,y,駐留）",
+  "vector.customPoints.label": "自訂點列（x,y,駐留；駐留 = 125 ns 單位）",
   "vector.customPoints.error.tooMany": "點數過多：{count} > {max}",
   "vector.customPoints.error.format": "第 {line} 行：應為 \"x,y,駐留\"",
   "vector.customPoints.count": "{count} 個點",
@@ -300,7 +300,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.raster.pixels": "像素",
   "settings.raster.resolution": "解析度",
   "settings.raster.adcLatency": "ADC 延遲",
-  "settings.raster.dwell": "駐留",
+  "settings.raster.dwell": "駐留（125 ns 單位）",
   "settings.raster.frameBlank": "畫面消隱",
   "settings.raster.display.enabled": "啟用",
   "settings.raster.display.openViewer": "開啟檢視器",

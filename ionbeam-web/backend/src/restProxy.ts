@@ -13,6 +13,32 @@ import { config } from "./config";
 export function buildRestProxy(): Router {
   const router = Router();
 
+  router.get("/status", async (_req, res) => {
+    try {
+      const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
+        headers: config.glasgowToken
+          ? { Authorization: `Bearer ${config.glasgowToken}` }
+          : undefined,
+        signal: AbortSignal.timeout(2_000),
+      });
+      if (!upstream.ok) {
+        throw new Error(`upstream status returned HTTP ${upstream.status}`);
+      }
+      res
+        .status(upstream.status)
+        .type(upstream.headers.get("content-type") ?? "application/json")
+        .send(await upstream.text());
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      res.json({
+        state: "disconnected",
+        last_error: `glasgow_service unreachable: ${detail}`,
+        scans_completed: 0,
+        chunks_in_flight: 0,
+      });
+    }
+  });
+
   const proxy = createProxyMiddleware({
     target: config.proxyTargetHttp,
     changeOrigin: true,

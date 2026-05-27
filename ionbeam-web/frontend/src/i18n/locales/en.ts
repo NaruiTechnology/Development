@@ -75,7 +75,7 @@ export const en = {
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "Resolution",
-  "raster.dwell": "Dwell",
+  "raster.dwell": "Dwell (125 ns units)",
   "raster.latencyBytes": "Latency (bytes)",
   "raster.cookie": "Cookie",
   "raster.outputMode": "Output mode",
@@ -98,7 +98,7 @@ export const en = {
   "vector.latencyBytes": "Latency (bytes)",
   "vector.outputMode": "Output mode",
   "vector.cookie": "Cookie",
-  "vector.customPoints.label": "Custom points (x,y,dwell per line)",
+  "vector.customPoints.label": "Custom points (x,y,dwell; dwell = 125 ns units)",
   "vector.customPoints.error.tooMany": "too many points: {count} > {max}",
   "vector.customPoints.error.format": "line {line}: expected \"x,y,dwell\"",
   "vector.customPoints.count": "{count} points",
@@ -298,7 +298,7 @@ export const en = {
   "settings.raster.pixels": "Pixels",
   "settings.raster.resolution": "Resolution",
   "settings.raster.adcLatency": "ADC latency",
-  "settings.raster.dwell": "Dwell",
+  "settings.raster.dwell": "Dwell (125 ns units)",
   "settings.raster.frameBlank": "Frame blank",
   "settings.raster.display.enabled": "Enabled",
   "settings.raster.display.openViewer": "Open viewer",
