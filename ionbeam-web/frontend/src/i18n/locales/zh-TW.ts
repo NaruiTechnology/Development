@@ -67,6 +67,7 @@ export const zhTW: Partial<TranslationTable> = {
   "card.rasterImage": "光柵影像",
   "card.vectorPattern": "矢量圖樣",
   "card.roiPreview": "ROI 預覽",
+  "card.selectROI": "選擇 ROI",
   "card.validatedRunOptions": "驗證執行選項",
 
   /* ===== scan controls (buttons) ================================== */

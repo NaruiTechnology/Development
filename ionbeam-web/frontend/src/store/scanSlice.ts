@@ -111,6 +111,17 @@ function numberDefault(value: unknown, fallback: number): number {
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
+function booleanDefault(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
+  }
+  return fallback;
+}
+
 function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"] | undefined): VectorRequest["output_mode"] {
   if (value === "EightBit" || value === "SixteenBit") return value;
   return fallback ?? "SixteenBit";
@@ -145,11 +156,17 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
       state.raster.dwell
     ),
     latency_bytes: numberDefault(rasterLatency, state.raster.latency_bytes),
-    frame_blank: Boolean(
+    frame_blank: booleanDefault(
       rasterParams.frame_blank ??
         raster.frame_blank ??
-        raster.frameBlank ??
-        state.raster.frame_blank
+        raster.frameBlank,
+      state.raster.frame_blank
+    ),
+    do_validate: booleanDefault(
+      rasterParams.do_validate ??
+        raster.do_validate ??
+        raster.doValidate,
+      state.raster.do_validate
     ),
     output_mode: outputModeDefault(
       rasterParams.output_mode ?? raster.output_mode ?? raster.outputMode,
@@ -167,6 +184,68 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
       vectorParams.output_mode ?? vector.output_mode ?? vector.outputMode,
       state.vector.output_mode
     ),
+    pre_process: booleanDefault(
+      vectorParams.pre_process ??
+        vector.pre_process ??
+        vector.preProcess,
+      state.vector.pre_process
+    ),
+    do_validate: booleanDefault(
+      vectorParams.do_validate ??
+        vector.do_validate ??
+        vector.doValidate,
+      state.vector.do_validate
+    ),
+  };
+}
+
+function normalizeRasterPatch(
+  patch: Partial<RasterRequest>,
+  current: RasterRequest
+): Partial<RasterRequest> {
+  return {
+    ...patch,
+    ...(Object.prototype.hasOwnProperty.call(patch, "frame_blank")
+      ? { frame_blank: booleanDefault(patch.frame_blank, current.frame_blank) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
+      ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
+      : {}),
+  };
+}
+
+function normalizeVectorPatch(
+  patch: Partial<VectorRequest>,
+  current: VectorRequest
+): Partial<VectorRequest> {
+  return {
+    ...patch,
+    ...(Object.prototype.hasOwnProperty.call(patch, "pre_process")
+      ? { pre_process: booleanDefault(patch.pre_process, current.pre_process) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
+      ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
+      : {}),
+  };
+}
+
+function normalizeROIPatch(
+  patch: Partial<ROIState>,
+  current: ROIState
+): Partial<ROIState> {
+  return {
+    ...patch,
+    ...(Object.prototype.hasOwnProperty.call(patch, "show_grid")
+      ? { show_grid: booleanDefault(patch.show_grid, current.show_grid) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "keep_loaded_bitmap_after_scan")
+      ? {
+          keep_loaded_bitmap_after_scan: booleanDefault(
+            patch.keep_loaded_bitmap_after_scan,
+            current.keep_loaded_bitmap_after_scan
+          ),
+        }
+      : {}),
   };
 }
 
@@ -208,13 +287,13 @@ const slice = createSlice({
       s.kind = a.payload;
     },
     updateRaster(s, a: PayloadAction<Partial<RasterRequest>>) {
-      s.raster = { ...s.raster, ...a.payload };
+      s.raster = { ...s.raster, ...normalizeRasterPatch(a.payload, s.raster) };
     },
     updateVector(s, a: PayloadAction<Partial<VectorRequest>>) {
-      s.vector = { ...s.vector, ...a.payload };
+      s.vector = { ...s.vector, ...normalizeVectorPatch(a.payload, s.vector) };
     },
     updateROI(s, a: PayloadAction<Partial<ROIState>>) {
-      s.roi = { ...s.roi, ...a.payload };
+      s.roi = { ...s.roi, ...normalizeROIPatch(a.payload, s.roi) };
       if ("selection" in a.payload) {
         s.raster.roi = a.payload.selection ?? null;
         s.vector.roi = a.payload.selection ?? null;

@@ -57,6 +57,7 @@ export const en = {
   "card.rasterImage": "Raster image",
   "card.vectorPattern": "Vector pattern",
   "card.roiPreview": "ROI preview",
+  "card.selectROI": "Select ROI",
   "card.validatedRunOptions": "Validated run options",
 
   /* ===== scan controls (buttons) ================================== */

@@ -56,9 +56,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
   const isProduction = defaults?.is_production !== false;
-  const simulationSource =
-    typeof defaults?.simulation?.source === "string" ? defaults.simulation.source : "";
-  const allowBitmapSimulation = !isProduction && simulationSource === "file";
+  const allowBitmapSimulation = !isProduction && Boolean(roiState.imageDataUrl);
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one

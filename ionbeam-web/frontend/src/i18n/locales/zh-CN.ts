@@ -58,6 +58,7 @@ export const zhCN: Partial<TranslationTable> = {
   "card.rasterImage": "光栅图像",
   "card.vectorPattern": "矢量图样",
   "card.roiPreview": "ROI 预览",
+  "card.selectROI": "选择 ROI",
   "card.validatedRunOptions": "验证运行选项",
 
   /* ===== scan controls (buttons) ================================== */
