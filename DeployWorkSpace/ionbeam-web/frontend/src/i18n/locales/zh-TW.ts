@@ -69,6 +69,7 @@ export const zhTW: Partial<TranslationTable> = {
   "card.rasterImage": "光柵影像",
   "card.vectorPattern": "矢量圖樣",
   "card.roiPreview": "ROI 預覽",
+  "card.selectROI": "選擇 ROI",
   "card.validatedRunOptions": "驗證執行選項",
 
   /* ===== scan controls (buttons) ================================== */
@@ -87,7 +88,7 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "解析度",
-  "raster.dwell": "駐留",
+  "raster.dwell": "駐留（125 ns 單位）",
   "raster.latencyBytes": "延遲（位元組）",
   "raster.cookie": "Cookie",
   "raster.outputMode": "輸出模式",
@@ -110,7 +111,7 @@ export const zhTW: Partial<TranslationTable> = {
   "vector.latencyBytes": "延遲（位元組）",
   "vector.outputMode": "輸出模式",
   "vector.cookie": "Cookie",
-  "vector.customPoints.label": "自訂點列（每行一個 x,y,駐留）",
+  "vector.customPoints.label": "自訂點列（x,y,駐留；駐留 = 125 ns 單位）",
   "vector.customPoints.error.tooMany": "點數過多：{count} > {max}",
   "vector.customPoints.error.format": "第 {line} 行：應為 \"x,y,駐留\"",
   "vector.customPoints.count": "{count} 個點",
@@ -192,8 +193,11 @@ export const zhTW: Partial<TranslationTable> = {
   "validation.deviceError": "裝置連線錯誤",
   "validation.autoDownload": "自動下載",
   "validation.selectFolder": "選擇資料夾",
-  "validation.folder.default": "~/Downloads",
+  "validation.folder.default": "~/Downloads/Scan/Output",
   "validation.folder.unavailable": "此瀏覽器不支援選擇資料夾；將使用瀏覽器預設的下載資料夾。",
+  "validation.outputPrefix": "輸出檔名插入內容",
+  "validation.outputPrefix.placeholder": "時間戳前的可選文字",
+  "validation.outputPrefix.help": "插入到 CSV 和 PNG 檔名的時間戳之前。留空則保持預設檔名。",
   "validation.autoDownload.error": "自動下載：{detail}",
   "validation.downloadCsv": "下載 CSV",
   "validation.downloadCsv.fetching": "正在取得 CSV…",
@@ -297,7 +301,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.raster.pixels": "像素",
   "settings.raster.resolution": "解析度",
   "settings.raster.adcLatency": "ADC 延遲",
-  "settings.raster.dwell": "駐留",
+  "settings.raster.dwell": "駐留（125 ns 單位）",
   "settings.raster.frameBlank": "畫面消隱",
   "settings.raster.display.enabled": "啟用",
   "settings.raster.display.openViewer": "開啟檢視器",

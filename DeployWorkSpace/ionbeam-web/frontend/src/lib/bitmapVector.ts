@@ -112,7 +112,7 @@ export function clearBitmapSelectionCache(): void {
 export async function rasterRequestWithBitmapSelection(
   req: RasterRequest,
   roi: ROIState,
-  options: { isProduction?: boolean } = {}
+  options: { isProduction?: boolean; allowBitmapSimulation?: boolean } = {}
 ): Promise<RasterRequest> {
   // No selection at all → no ROI restriction, scan the full DAC range.
   if (!roi.selection) {
@@ -137,9 +137,19 @@ export async function rasterRequestWithBitmapSelection(
     };
   }
 
-  // Bitmap loaded with a partial selection → existing path: crop the
-  // image to the selected sub-region, map crop pixel bounds to DAC,
-  // forward the cropped pixels as simulation_bitmap in dev mode.
+  // Bitmap loaded with a partial selection. Only forward the cropped
+  // pixels as simulation_bitmap when the active simulation source is
+  // explicitly file-backed. Pattern/random simulation is configured on
+  // the service/bitstream side; sending a promoted last-scan bitmap here
+  // would bypass that path and make the scan complete immediately.
+  if (!options.allowBitmapSimulation) {
+    return {
+      ...req,
+      roi: worldSelectionToDacROI(roi.selection, roi),
+      simulation_bitmap: null,
+    };
+  }
+
   const converted = await bitmapSelectionToVector(roi);
   if (!converted.simulationBitmap.pixels.length) {
     return withoutBitmapROI(req);
@@ -155,7 +165,7 @@ export async function rasterRequestWithBitmapSelection(
 export async function vectorRequestWithBitmapSelection(
   req: VectorRequest,
   roi: ROIState,
-  options: { isProduction?: boolean } = {}
+  options: { isProduction?: boolean; allowBitmapSimulation?: boolean } = {}
 ): Promise<VectorRequest> {
   // No selection → no ROI; the macro sweeps the full DAC range.
   if (!roi.selection) {
@@ -179,10 +189,19 @@ export async function vectorRequestWithBitmapSelection(
   }
 
   // Bitmap path: keep vector scans as default-pattern ROI sweeps. The
-  // cropped grayscale pixels are only a simulation input; they must not
-  // change the scan into a compact custom bitmap traversal, or a small
-  // crop appears to complete immediately instead of running the selected
-  // vector sweep.
+  // cropped grayscale pixels are only a simulation input, and only when
+  // the active simulation source is file-backed. Otherwise a promoted
+  // last-scan image would override pattern/random simulation settings.
+  if (!options.allowBitmapSimulation) {
+    return {
+      ...req,
+      pattern: "default",
+      points: null,
+      roi: worldSelectionToDacROI(roi.selection, roi),
+      simulation_bitmap: null,
+    };
+  }
+
   const converted = await bitmapSelectionToVector(roi);
   if (!converted.simulationBitmap.pixels.length) {
     return withoutBitmapROI(req);
