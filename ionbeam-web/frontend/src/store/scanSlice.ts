@@ -308,6 +308,9 @@ const slice = createSlice({
       s.raster.roi = null;
       s.vector.roi = null;
     },
+    clearLastResult(s) {
+      s.lastResult = null;
+    },
     setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
       s.vectorRenderMode = a.payload;
     },
@@ -415,6 +418,7 @@ export const {
   updateROI,
   clearROIImage,
   clearROISelection,
+  clearLastResult,
   setVectorRenderMode,
   streamStarted,
   streamProgress,
