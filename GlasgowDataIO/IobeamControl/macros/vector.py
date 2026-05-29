@@ -213,72 +213,77 @@ class VectorScanCommand(BaseCommand):
         tokens = max_pipeline
         token_fut = asyncio.Future()
 
+        count_queue = asyncio.Queue()
+        end_marker = object()
+
         async def sender():
             nonlocal tokens
-            for commands, pixel_count in self._iter_chunks(latency):
-                self._logger.debug(f"sender: tokens={tokens}")
-                if tokens == 0:
-                    await FlushCommand().transfer(stream)
-                    await token_fut
-                if self.abort.is_set():
-                    # go to a blanked state after an aborted frame
-                    commands.extend(bytes(BlankCommand(enable=True,
-                                                       inline=False)))
-                await stream.write(commands)
-                # Per-chunk host-side flush. Without this, stream.write()
-                # only appends to the demultiplexer _out_buffer and the
-                # data doesn't reach the device until something else
-                # flushes (a FlushCommand or an auto-flush threshold).
-                # The token-based pacing then loses sync with the actual
-                # device-visible state, freezing exactly at
-                # max_pipeline+1 chunks.
+            total_pixels = 0
+            try:
+                for commands, pixel_count in self._iter_chunks(latency):
+                    self._logger.debug(f"sender: tokens={tokens}")
+                    if tokens == 0:
+                        await FlushCommand().transfer(stream)
+                        await token_fut
+                    if self.abort.is_set():
+                        # go to a blanked state after an aborted frame
+                        commands.extend(bytes(BlankCommand(enable=True,
+                                                           inline=False)))
+                    await stream.write(commands)
+                    # Per-chunk host-side flush. Without this, stream.write()
+                    # only appends to the demultiplexer _out_buffer and the
+                    # data doesn't reach the device until something else
+                    # flushes (a FlushCommand or an auto-flush threshold).
+                    # The token-based pacing then loses sync with the actual
+                    # device-visible state, freezing exactly at
+                    # max_pipeline+1 chunks.
+                    await stream.flush()
+                    tokens -= 1
+                    total_pixels += pixel_count
+                    await count_queue.put(pixel_count)
+                    if self.abort.is_set():
+                        break
+                    await asyncio.sleep(0)
+
+                # ---------- pipeline-drain padding -----------------------------
+                # Mirrors RasterScanCommand.sender's tail. After the last real
+                # chunk the Supersampler → BusController →
+                # PipelinedLoopbackAdapter still holds pixels of scan output;
+                # they only get pushed out once more pixel commands flow in
+                # behind them. Without this padding, the final recv_res on
+                # the host blocks forever waiting for data physically stuck
+                # in FPGA FIFOs.
+                #
+                # These padding pixels produce output too, but the receiver
+                # loop stops before reading them — so they sit harmlessly in
+                # the host _in_buffer until teardown.
+                #
+                # Padding size: floor (drain_floor_pixels) OR 0.5% of total
+                # scan pixels, whichever is larger. The 0.5% term covers
+                # very large scans where per-pixel buffering accumulates;
+                # for small scans the floor wins.
+                padding_pixels = max(
+                    self._drain_floor_pixels, total_pixels // 200)
+                self._logger.debug(
+                    f"vector drain padding: {padding_pixels} px "
+                    f"(floor={self._drain_floor_pixels}, "
+                    f"scan_pixels={total_pixels}, "
+                    f"ratio_term={total_pixels // 200})"
+                )
+                padding_body = bytearray()
+                for _ in range(padding_pixels):
+                    padding_body.extend(struct.pack(">HHH", 0, 0, 1))
+                padding = (
+                    bytes(ArrayCommand(cmdtype=CmdType.VectorPixel,
+                                       array_length=padding_pixels - 1))
+                    + bytes(padding_body)
+                )
+                await stream.write(padding)
                 await stream.flush()
-                tokens -= 1
-                if self.abort.is_set():
-                    break
-                await asyncio.sleep(0)
 
-            # ---------- pipeline-drain padding -----------------------------
-            # Mirrors RasterScanCommand.sender's tail. After the last real
-            # chunk the Supersampler → BusController →
-            # PipelinedLoopbackAdapter still holds pixels of scan output;
-            # they only get pushed out once more pixel commands flow in
-            # behind them. Without this padding, the final recv_res on
-            # the host blocks forever waiting for data physically stuck
-            # in FPGA FIFOs.
-            #
-            # These padding pixels produce output too, but the receiver
-            # loop iterates self._processed_points and stops before
-            # reading them — so they sit harmlessly in the host
-            # _in_buffer until teardown.
-            #
-            # Padding size: floor (drain_floor_pixels) OR 0.5% of total
-            # scan pixels, whichever is larger. The 0.5% term covers
-            # very large scans where per-pixel buffering accumulates;
-            # for small scans the floor wins.
-            if self._processed:
-                total_pixels = sum(pc for _, pc in self._processed_points)
-            else:
-                total_pixels = 0
-            padding_pixels = max(self._drain_floor_pixels, total_pixels // 200)
-            self._logger.debug(
-                f"vector drain padding: {padding_pixels} px "
-                f"(floor={self._drain_floor_pixels}, "
-                f"scan_pixels={total_pixels}, "
-                f"ratio_term={total_pixels // 200})"
-            )
-            padding_body = bytearray()
-            for _ in range(padding_pixels):
-                padding_body.extend(struct.pack(">HHH", 0, 0, 1))
-            padding = (
-                bytes(ArrayCommand(cmdtype=CmdType.VectorPixel,
-                                   array_length=padding_pixels - 1))
-                + bytes(padding_body)
-            )
-            await stream.write(padding)
-            await stream.flush()
-
-            await FlushCommand().transfer(stream)
+                await FlushCommand().transfer(stream)
+            finally:
+                await count_queue.put(end_marker)
 
         await SynchronizeCommand(
             cookie=self._cookie, raster=False, output=self._output_mode,
@@ -289,7 +294,10 @@ class VectorScanCommand(BaseCommand):
         # TODO: assert against synchronization result
         cookie = await stream.read(4)
         try:
-            for commands, pixel_count in self._iter_chunks(latency):
+            while True:
+                pixel_count = await count_queue.get()
+                if pixel_count is end_marker:
+                    break
                 tokens += 1
                 if tokens == 1:
                     token_fut.set_result(None)

@@ -141,18 +141,17 @@ def _percentile_clip_uint16(values, lo_pct: float = 1.0, hi_pct: float = 99.0):
     return lo, hi
 
 
-def _uint16_chunk_to_wire_bytes(chunk) -> bytes:
-    """Return explicit big-endian uint16 sample bytes for WebSocket frames.
+def _sample_chunk_to_wire_bytes(chunk) -> bytes:
+    """Return sample bytes for WebSocket frames.
 
-    Unit tests and CSV paths work with array('H') numeric values. Calling
-    bytes(array('H')) directly serializes in host byte order, which is
-    little-endian on the dev machine and makes the browser decode swapped
-    samples. The FPGA/ImageSerializer wire contract is high byte first, so
-    normalize chunks here without mutating the captured array used by CSV
-    and validation.
+    SixteenBit chunks are array('H') numeric values, so normalize them to
+    explicit big-endian bytes. EightBit chunks are array('B') values and
+    already match the ImageSerializer wire contract: one byte per pixel.
     """
     if isinstance(chunk, (bytes, bytearray, memoryview)):
         return bytes(chunk)
+    if isinstance(chunk, array.array) and chunk.typecode == "B":
+        return chunk.tobytes()
     out = array.array("H", chunk)
     if sys.byteorder == "little":
         out.byteswap()
@@ -407,7 +406,7 @@ class DeviceService:
                 })
                 for chunk in simulated_chunks:
                     self._status.chunks_in_flight += 1
-                    yield _uint16_chunk_to_wire_bytes(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
             return
 
         # Buffer chunks for the /scan/last/* download endpoints. We hold
@@ -423,7 +422,7 @@ class DeviceService:
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
-                    yield _uint16_chunk_to_wire_bytes(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 raise
@@ -459,7 +458,7 @@ class DeviceService:
                 })
                 for chunk in simulated_chunks:
                     self._status.chunks_in_flight += 1
-                    yield _uint16_chunk_to_wire_bytes(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
             return
 
         captured: List = []
@@ -473,7 +472,7 @@ class DeviceService:
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
-                    yield _uint16_chunk_to_wire_bytes(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 raise
