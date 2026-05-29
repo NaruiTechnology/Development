@@ -23,8 +23,9 @@ import struct
 from GlasgowDataIO.IobeamControl.commands import BaseCommand
 from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
     BlankCommand, FlushCommand, SynchronizeCommand, ArrayCommand,
+    BeamSelectCommand, ExternalCtrlCommand,
 )
-from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, CmdType
+from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, CmdType, BeamType
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 
 
@@ -83,6 +84,8 @@ class VectorScanCommand(BaseCommand):
         self,
         cookie: int,
         output_mode: OutputMode = OutputMode.SixteenBit,
+        beam_type: BeamType = BeamType.Ion,
+        external_control: bool = True,
         iter_points=None,
         drain_floor_pixels=None,
         *,
@@ -126,6 +129,8 @@ class VectorScanCommand(BaseCommand):
         self._processed = False
         self._cookie = cookie
         self._output_mode = output_mode
+        self._beam_type = beam_type
+        self._external_control = bool(external_control)
 
         self._max_pipeline               = int(max_pipeline)
         self._fpga_pipeline_depth_pixels = int(fpga_pipeline_depth_pixels)
@@ -145,6 +150,8 @@ class VectorScanCommand(BaseCommand):
     def __repr__(self):
         return (f"VectorScanCommand: cookie={self._cookie}, "
                 f"output_mode={self._output_mode}, "
+                f"beam_type={self._beam_type}, "
+                f"external_control={self._external_control}, "
                 f"max_pipeline={self._max_pipeline}, "
                 f"drain_floor_pixels={self._drain_floor_pixels}")
 
@@ -285,6 +292,8 @@ class VectorScanCommand(BaseCommand):
             finally:
                 await count_queue.put(end_marker)
 
+        await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
+        await ExternalCtrlCommand(enable=self._external_control).transfer(stream)
         await SynchronizeCommand(
             cookie=self._cookie, raster=False, output=self._output_mode,
         ).transfer(stream)

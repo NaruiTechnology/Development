@@ -9,7 +9,7 @@ from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
 from GlasgowDataIO.IobeamControl.transfer.mock import MockConnection
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
-from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
+from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, BeamType
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
@@ -46,6 +46,10 @@ class VectorScanTest(unittest.TestCase):
         self.params: VectorParams = VectorParams.from_json(vector_block).override(
             **self.PARAM_OVERRIDES,
         )
+        try:
+            self.beam_type = BeamType[self.params.beam_type]
+        except KeyError:
+            self.beam_type = BeamType.Ion
 
     # ------------------------------------------------------------------ #
     # Mock / simulation test (no hardware).                              #
@@ -59,6 +63,8 @@ class VectorScanTest(unittest.TestCase):
         test_cmd = VectorScanCommand(
             cookie=self.params.cookie,
             output_mode=output_mode,
+            beam_type=self.beam_type,
+            external_control=self.params.external_control,
             max_pipeline=self.params.max_pipeline,
             fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
             drain_safety_factor=self.params.drain_safety_factor,
@@ -92,6 +98,8 @@ class VectorScanTest(unittest.TestCase):
             cmd = VectorScanCommand(
                 cookie=self.params.cookie,
                 output_mode=OutputMode.SixteenBit,
+                beam_type=self.beam_type,
+                external_control=self.params.external_control,
                 iter_points=points,
                 drain_floor_pixels=1,
                 max_pipeline=self.params.max_pipeline,
@@ -139,6 +147,8 @@ class VectorScanTest(unittest.TestCase):
         test_cmd = VectorScanCommand(
             cookie=self.params.cookie,
             output_mode=output_mode,
+            beam_type=self.beam_type,
+            external_control=self.params.external_control,
             max_pipeline=self.params.max_pipeline,
             fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
             drain_safety_factor=self.params.drain_safety_factor,

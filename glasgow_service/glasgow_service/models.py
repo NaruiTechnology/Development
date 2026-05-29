@@ -44,6 +44,8 @@ class RasterRequest(BaseModel):
     # New in scan-params refactor. Was previously hardcoded to SixteenBit
     # inside the macro because the API had no field for it.
     output_mode:   str  = Field("SixteenBit", description="SixteenBit or EightBit.")
+    beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
+    external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
 
     # Wet-run extras (REST only; WebSocket streaming ignores these):
     do_validate: bool = Field(True, description="Run chunk-count / size checks and return the report.")
@@ -64,9 +66,11 @@ class RasterRequest(BaseModel):
             "examples": [
                 {"resolution": 512,  "dwell": 2, "latency_bytes": 16384,
                  "frame_blank": False, "output_mode": "SixteenBit",
+                 "beam_type": "Ion", "external_control": True,
                  "do_validate": True},
                 {"resolution": 1024, "dwell": 3, "latency_bytes": 16384,
                  "frame_blank": False, "output_mode": "SixteenBit",
+                 "beam_type": "Ion", "external_control": True,
                  "do_validate": True},
             ]
         }
@@ -112,6 +116,8 @@ class VectorRequest(BaseModel):
     )
     latency_bytes:  int  = Field(8196, ge=2, description="Matches `vectorScan.latency` in streamData.json.")
     output_mode:    str  = Field("SixteenBit", description="SixteenBit or EightBit.")
+    beam_type:      str  = Field("Ion", description="NoBeam, Electron, or Ion.")
+    external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
     cookie:         int  = Field(123, ge=0, le=0xFFFF)
 
     # Wet-run extras (REST only):

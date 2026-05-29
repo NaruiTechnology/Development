@@ -33,10 +33,11 @@ import struct
 # test scripts ran from inside `GlasgowDataIO/` where unprefixed imports
 # also worked, which is presumably how the original raster.py got away
 # with them.
-from GlasgowDataIO.IobeamControl.commands import DwellTime, DACCodeRange, OutputMode
+from GlasgowDataIO.IobeamControl.commands import DwellTime, DACCodeRange, OutputMode, BeamType
 from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
     BaseCommand, VectorPixelCommand, RasterRegionCommand,
     SynchronizeCommand, RasterPixelRunCommand, BlankCommand, FlushCommand,
+    BeamSelectCommand, ExternalCtrlCommand,
 )
 from GlasgowDataIO.IobeamControl.commands.structs import u16
 
@@ -63,6 +64,8 @@ class RasterScanCommand(BaseCommand):
         dwell_time: DwellTime,
         cookie: u16,
         output_mode: OutputMode = OutputMode.SixteenBit,
+        beam_type: BeamType = BeamType.Ion,
+        external_control: bool = True,
         frame_blank: bool = DEFAULT_FRAME_BLANK,
         *,
         # --- pipeline tuning (overridable per-build via RasterParams) -----
@@ -108,6 +111,8 @@ class RasterScanCommand(BaseCommand):
         self._dwell       = dwell_time
         self._cookie      = cookie
         self._output_mode = output_mode
+        self._beam_type   = beam_type
+        self._external_control = bool(external_control)
         self.frame_blank  = frame_blank
 
         self._max_pipeline              = int(max_pipeline)
@@ -121,6 +126,8 @@ class RasterScanCommand(BaseCommand):
         return (f"RasterScanCommand: x_range={self._x_range}, "
                 f"y_range={self._y_range}, dwell={self._dwell}, "
                 f"cookie={self._cookie}, output_mode={self._output_mode}, "
+                f"beam_type={self._beam_type}, "
+                f"external_control={self._external_control}, "
                 f"frame_blank={self.frame_blank}, "
                 f"max_pipeline={self._max_pipeline}")
 
@@ -217,6 +224,8 @@ class RasterScanCommand(BaseCommand):
 
             await FlushCommand().transfer(stream)
 
+        await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
+        await ExternalCtrlCommand(enable=self._external_control).transfer(stream)
         await SynchronizeCommand(
             cookie=self._cookie, raster=True, output=self._output_mode,
         ).transfer(stream)

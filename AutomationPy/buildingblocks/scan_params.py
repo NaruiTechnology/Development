@@ -52,6 +52,8 @@ DEFAULT_RASTER_LATENCY_BYTES           = 16384
 DEFAULT_RASTER_FRAME_BLANK             = False
 DEFAULT_RASTER_COOKIE                  = 123
 DEFAULT_RASTER_OUTPUT_MODE             = "SixteenBit"
+DEFAULT_RASTER_BEAM_TYPE               = "Ion"
+DEFAULT_RASTER_EXTERNAL_CONTROL        = True
 DEFAULT_RASTER_MAX_PIPELINE            = 32
 DEFAULT_RASTER_PADDING_MIN_PIXELS      = 128
 DEFAULT_RASTER_PADDING_RATIO_DENOM     = 200      # padding = total // 200 (0.5%)
@@ -62,6 +64,8 @@ DEFAULT_VECTOR_PATTERN                 = "default"
 DEFAULT_VECTOR_RESOLUTION              = 2048
 DEFAULT_VECTOR_LATENCY_BYTES           = 8196
 DEFAULT_VECTOR_OUTPUT_MODE             = "SixteenBit"
+DEFAULT_VECTOR_BEAM_TYPE               = "Ion"
+DEFAULT_VECTOR_EXTERNAL_CONTROL        = True
 DEFAULT_VECTOR_COOKIE                  = 123
 DEFAULT_VECTOR_PRE_PROCESS             = False
 DEFAULT_VECTOR_DO_VALIDATE             = True
@@ -125,6 +129,13 @@ def _coerce_output_mode(v, default):
     return s if s in ("SixteenBit", "EightBit", "NoOutput") else default
 
 
+def _coerce_beam_type(v, default):
+    if v is None:
+        return default
+    s = str(v).strip()
+    return s if s in ("NoBeam", "Electron", "Ion") else default
+
+
 # --------------------------------------------------------------------------
 # RasterParams
 # --------------------------------------------------------------------------
@@ -147,6 +158,8 @@ class RasterParams:
     frame_blank:   bool = DEFAULT_RASTER_FRAME_BLANK
     cookie:        int  = DEFAULT_RASTER_COOKIE
     output_mode:   str  = DEFAULT_RASTER_OUTPUT_MODE
+    beam_type:     str  = DEFAULT_RASTER_BEAM_TYPE
+    external_control: bool = DEFAULT_RASTER_EXTERNAL_CONTROL
 
     # --- macro tuning (rarely overridden) ---------------------------------
     max_pipeline:              int = DEFAULT_RASTER_MAX_PIPELINE
@@ -183,6 +196,10 @@ class RasterParams:
             cookie        = _coerce_int(_pick(cfg, "cookie"),                      DEFAULT_RASTER_COOKIE),
             output_mode   = _coerce_output_mode(
                 _pick(cfg, "output_mode", "outputMode"),                           DEFAULT_RASTER_OUTPUT_MODE),
+            beam_type     = _coerce_beam_type(
+                _pick(cfg, "beam_type", "beamType"),                                DEFAULT_RASTER_BEAM_TYPE),
+            external_control = _coerce_bool(
+                _pick(cfg, "external_control", "externalControl"),                  DEFAULT_RASTER_EXTERNAL_CONTROL),
 
             max_pipeline              = _coerce_int(
                 _pick(cfg, "max_pipeline", "maxPipeline"),                         DEFAULT_RASTER_MAX_PIPELINE),
@@ -229,6 +246,8 @@ class VectorParams:
     vector_resolution: int  = DEFAULT_VECTOR_RESOLUTION
     latency_bytes:     int  = DEFAULT_VECTOR_LATENCY_BYTES
     output_mode:       str  = DEFAULT_VECTOR_OUTPUT_MODE
+    beam_type:         str  = DEFAULT_VECTOR_BEAM_TYPE
+    external_control:  bool = DEFAULT_VECTOR_EXTERNAL_CONTROL
     cookie:            int  = DEFAULT_VECTOR_COOKIE
     pre_process:       bool = DEFAULT_VECTOR_PRE_PROCESS
     do_validate:       bool = DEFAULT_VECTOR_DO_VALIDATE
@@ -258,6 +277,10 @@ class VectorParams:
                 _pick(cfg, "latency_bytes", "latency"),                       DEFAULT_VECTOR_LATENCY_BYTES),
             output_mode       = _coerce_output_mode(
                 _pick(cfg, "output_mode", "outputMode"),                      DEFAULT_VECTOR_OUTPUT_MODE),
+            beam_type         = _coerce_beam_type(
+                _pick(cfg, "beam_type", "beamType"),                           DEFAULT_VECTOR_BEAM_TYPE),
+            external_control  = _coerce_bool(
+                _pick(cfg, "external_control", "externalControl"),             DEFAULT_VECTOR_EXTERNAL_CONTROL),
             cookie            = _coerce_int(_pick(cfg, "cookie"),             DEFAULT_VECTOR_COOKIE),
             pre_process       = _coerce_bool(
                 _pick(cfg, "pre_process", "preProcess"),                      DEFAULT_VECTOR_PRE_PROCESS),

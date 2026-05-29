@@ -8,7 +8,7 @@ import itertools
 import numpy as np
 import tifffile
 
-from IobeamControl.commands.low_level_commands import OutputMode,BlankCommand,DACCodeRange
+from IobeamControl.commands.low_level_commands import OutputMode, BeamType, BlankCommand, DACCodeRange
 from IobeamControl.transfer.abc import Connection
 from .raster import RasterScanCommand
 from .vector import VectorScanCommand, default_iter
@@ -229,7 +229,7 @@ class FrameBuffer:
         else:
             return False
 
-    async def _capture_frame_iter_fill(self, *, frame: Frame, x_range:DACCodeRange, y_range:DACCodeRange, dwell_time: int, latency:int=65536, cookie:int=123, output_mode:OutputMode=OutputMode.SixteenBit, frame_blank:bool=False):
+    async def _capture_frame_iter_fill(self, *, frame: Frame, x_range:DACCodeRange, y_range:DACCodeRange, dwell_time: int, latency:int=65536, cookie:int=123, output_mode:OutputMode=OutputMode.SixteenBit, beam_type:BeamType=BeamType.Ion, external_control:bool=True, frame_blank:bool=False):
         """
         Core function for capturing image data produced by a raster scan into a 2D array.
 
@@ -266,6 +266,8 @@ class FrameBuffer:
             y_range=y_range,
             dwell_time=dwell_time,
             output_mode=output_mode,
+            beam_type=beam_type,
+            external_control=external_control,
             frame_blank=frame_blank,
         )
         self.abort = cmd.abort
@@ -364,6 +366,8 @@ class FrameBuffer:
     async def capture_vector_frame(self, *, iter_points=None,
                                    cookie:int=123,
                                    output_mode:OutputMode=OutputMode.SixteenBit,
+                                   beam_type:BeamType=BeamType.Ion,
+                                   external_control:bool=True,
                                    latency:int=65536,
                                    x_res:int=2048, y_res:int=2048):
         """Capture a vector scan into a Frame.
@@ -380,6 +384,8 @@ class FrameBuffer:
         send_iter, recv_iter = itertools.tee(iter_points)
         import time
         cmd = VectorScanCommand(cookie=cookie, output_mode=output_mode,
+                                beam_type=beam_type,
+                                external_control=external_control,
                                 iter_points=send_iter)
         start_proc = time.perf_counter()
         cmd._pre_process_chunks(latency=latency)
@@ -396,4 +402,3 @@ class FrameBuffer:
         print(f"pre-process time: {end_proc-start_proc:04f}, send time: {stop_send-start_send:04f}, process time: {end_process-start_process:04f}")
         #self.current_frame.canvas = newframe
         return newframe
-
