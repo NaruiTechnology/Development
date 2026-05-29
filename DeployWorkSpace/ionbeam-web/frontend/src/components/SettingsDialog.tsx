@@ -27,7 +27,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
-import { clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
+import { clearLastResult, clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
 import { fetchDefaults, previewConfigDefaults } from "../store/statusSlice";
 import {
@@ -110,17 +110,25 @@ function resetROIPreview(dispatch: AppDispatch) {
 
 function resetScanImages(dispatch: AppDispatch, rasterResolution: number) {
   dispatch(streamReset());
+  dispatch(clearLastResult());
   dispatch(resetRaster({ resolution: rasterResolution }));
   dispatch(resetVector());
 }
 
-function simulationImageSource(config: unknown): string {
-  const raw = readPath(config, [...SIMULATION_PATH, "source"]);
-  return typeof raw === "string" ? raw : "";
+function simulationImageSignature(config: unknown): string {
+  return JSON.stringify({
+    enabled: readPath(config, [...SIMULATION_PATH, "enabled"]),
+    mode: readPath(config, [...SIMULATION_PATH, "mode"]),
+    imageResolution: readPath(config, [...SIMULATION_PATH, "imageResolution"]),
+    source: readPath(config, [...SIMULATION_PATH, "source"]),
+    patternKind: readPath(config, [...SIMULATION_PATH, "patternKind"]),
+    invert: readPath(config, [...SIMULATION_PATH, "invert"]),
+    seed: readPath(config, [...SIMULATION_PATH, "seed"]),
+  });
 }
 
-function simulationImageSourceChanged(before: unknown, after: unknown): boolean {
-  return simulationImageSource(before) !== simulationImageSource(after);
+function simulationImageChanged(before: unknown, after: unknown): boolean {
+  return simulationImageSignature(before) !== simulationImageSignature(after);
 }
 
 /* -------- modal shell -------------------------------------------------- */
@@ -169,10 +177,10 @@ function SettingsModalShell() {
   async function onConfirmSave() {
     if (draft === null) return;
     setConfirmSave(false);
-    const imageSourceChanged = simulationImageSourceChanged(source, draft);
+    const imageChanged = simulationImageChanged(source, draft);
     const result = await dispatch(saveSettingsConfig(draft));
     if (saveSettingsConfig.fulfilled.match(result)) {
-      if (imageSourceChanged) {
+      if (imageChanged) {
         resetROIPreview(dispatch);
       } else {
         resetPartialROISelection(dispatch);
@@ -196,7 +204,7 @@ function SettingsModalShell() {
       // draft.
       const config = await dispatch(fetchSettingsConfig());
       if (fetchSettingsConfig.fulfilled.match(config)) {
-        if (simulationImageSourceChanged(source, config.payload.data)) {
+        if (simulationImageChanged(source, config.payload.data)) {
           resetROIPreview(dispatch);
         } else {
           resetPartialROISelection(dispatch);
