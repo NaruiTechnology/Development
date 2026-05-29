@@ -536,9 +536,10 @@ class DeviceService:
             eff = self._effective_raster_params(req)
             logger.debug(
                 "[raster] %dx%d dwell=%d latency=%d frame_blank=%s "
-                "output_mode=%s cookie=%d max_pipeline=%d",
+                "output_mode=%s cookie=%d max_pipeline=%d sender_drain_timeout_s=%.1f",
                 eff.resolution, eff.resolution, eff.dwell, eff.latency_bytes,
                 eff.frame_blank, eff.output_mode, eff.cookie, eff.max_pipeline,
+                eff.sender_drain_timeout_s,
             )
             t0 = time.perf_counter()
             try:
@@ -708,6 +709,7 @@ class DeviceService:
             padding_min_pixels=params.padding_min_pixels,
             padding_ratio_denominator=params.padding_ratio_denominator,
             padding_dwell=params.padding_dwell,
+            sender_drain_timeout_s=params.sender_drain_timeout_s,
         )
 
     def _build_vector_cmd(self, req: VectorRequest) -> VectorScanCommand:

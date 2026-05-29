@@ -56,6 +56,7 @@ DEFAULT_RASTER_MAX_PIPELINE            = 32
 DEFAULT_RASTER_PADDING_MIN_PIXELS      = 128
 DEFAULT_RASTER_PADDING_RATIO_DENOM     = 200      # padding = total // 200 (0.5%)
 DEFAULT_RASTER_PADDING_DWELL           = 2        # used to be literally =2 in the sender
+DEFAULT_RASTER_SENDER_DRAIN_TIMEOUT_S  = 60.0
 
 # Vector
 DEFAULT_VECTOR_PATTERN                 = "default"
@@ -153,6 +154,7 @@ class RasterParams:
     padding_min_pixels:        int = DEFAULT_RASTER_PADDING_MIN_PIXELS
     padding_ratio_denominator: int = DEFAULT_RASTER_PADDING_RATIO_DENOM
     padding_dwell:             int = DEFAULT_RASTER_PADDING_DWELL
+    sender_drain_timeout_s:     float = DEFAULT_RASTER_SENDER_DRAIN_TIMEOUT_S
 
     @classmethod
     def from_json(cls, cfg: Optional[dict]) -> "RasterParams":
@@ -193,6 +195,8 @@ class RasterParams:
                 DEFAULT_RASTER_PADDING_RATIO_DENOM),
             padding_dwell             = _coerce_int(
                 _pick(cfg, "padding_dwell", "paddingDwell"),                       DEFAULT_RASTER_PADDING_DWELL),
+            sender_drain_timeout_s    = _coerce_float(
+                _pick(cfg, "sender_drain_timeout_s", "senderDrainTimeoutS"),        DEFAULT_RASTER_SENDER_DRAIN_TIMEOUT_S),
         )
 
     def override(self, **kwargs: Any) -> "RasterParams":

@@ -271,6 +271,7 @@
 					"exports":{
 						"GLASGOW_CONFIG":"C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
 						"GLASGOW_TOOLCHAIN":"builtin",
+						"GLASGOW_USB_TRANSFER_TIMEOUT_S":"60",
 						"PYTHONPATH":"C:\\Project\\Iobeam\\Deploy;C:\\Project\\Iobeam\\Deploy\\glasgow_service"
 					},
 					"command":"python -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --ws websockets --log-level debug",
@@ -306,7 +307,7 @@
 				"transactionComplete":false,
 				"actionData":{
 					"dir":"C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\backend",
-					"command":"npm run dev",
+					"command":"npm start",
 					"useNvm":false,
 					"log":"C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-backend.log",
 					"pid":"C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-backend.pid",

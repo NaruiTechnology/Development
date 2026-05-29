@@ -10,6 +10,8 @@ $workdir = if ($env:GLASGOW_WORKDIR) { $env:GLASGOW_WORKDIR } else { Join-Path $
 $app = if ($env:GLASGOW_APP) { $env:GLASGOW_APP } else { "glasgow_service.api:app" }
 $hostName = if ($env:GLASGOW_HOST) { $env:GLASGOW_HOST } else { "127.0.0.1" }
 $port = if ($env:GLASGOW_PORT) { $env:GLASGOW_PORT } else { "8765" }
+$toolchain = if ($env:GLASGOW_TOOLCHAIN) { $env:GLASGOW_TOOLCHAIN } else { "builtin" }
+$usbTransferTimeout = if ($env:GLASGOW_USB_TRANSFER_TIMEOUT_S) { $env:GLASGOW_USB_TRANSFER_TIMEOUT_S } else { "60" }
 
 function Test-StreamDataTail {
     param([string]$Path)
@@ -180,8 +182,8 @@ function Wait-Ready {
 function Start-UvicornProcess {
     $pathPrefix = if (Test-Path -LiteralPath $scriptsDir) { "$scriptsDir;" } else { "" }
     $pythonPath = "$projectRoot;$workdir"
-    $commandLine = 'set "VIRTUAL_ENV={0}" && set "PATH={1}%PATH%" && set "GLASGOW_CONFIG={2}" && set "PYTHONPATH={3};%PYTHONPATH%" && "{4}" -m uvicorn "{5}" --host "{6}" --port "{7}" --ws websockets >> "{8}" 2>> "{9}"' -f `
-        $venvRoot, $pathPrefix, $glasgowConfig, $pythonPath, $pythonBin, $app, $hostName, $port, $logFile, $errLogFile
+    $commandLine = 'set "VIRTUAL_ENV={0}" && set "PATH={1}%PATH%" && set "GLASGOW_CONFIG={2}" && set "GLASGOW_TOOLCHAIN={3}" && set "GLASGOW_USB_TRANSFER_TIMEOUT_S={4}" && set "PYTHONPATH={5};%PYTHONPATH%" && "{6}" -m uvicorn "{7}" --host "{8}" --port "{9}" --ws websockets >> "{10}" 2>> "{11}"' -f `
+        $venvRoot, $pathPrefix, $glasgowConfig, $toolchain, $usbTransferTimeout, $pythonPath, $pythonBin, $app, $hostName, $port, $logFile, $errLogFile
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = "cmd.exe"
@@ -227,4 +229,4 @@ if (-not (Wait-Ready)) {
     throw "started process $($process.Id), but $hostName`:$port/status did not become ready"
 }
 
-Write-Output "started $app on $hostName`:$port with $pythonBin --ws websockets (host pid $($process.Id), listener pid(s): $((Get-PortProcessIds) -join ', '), log $logFile, errors $errLogFile)"
+Write-Output "started $app on $hostName`:$port with $pythonBin --ws websockets, GLASGOW_TOOLCHAIN=$toolchain, GLASGOW_USB_TRANSFER_TIMEOUT_S=$usbTransferTimeout (host pid $($process.Id), listener pid(s): $((Get-PortProcessIds) -join ', '), log $logFile, errors $errLogFile)"

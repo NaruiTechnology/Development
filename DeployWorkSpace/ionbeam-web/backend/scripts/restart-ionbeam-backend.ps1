@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $backendDir = if ($env:IONBEAM_BACKEND_DIR) { $env:IONBEAM_BACKEND_DIR } else { Join-Path $repoRoot "ionbeam-web\backend" }
-$startCmd = if ($env:IONBEAM_BACKEND_START_CMD) { $env:IONBEAM_BACKEND_START_CMD } else { "npm.cmd run dev" }
+$startCmd = if ($env:IONBEAM_BACKEND_START_CMD) { $env:IONBEAM_BACKEND_START_CMD } else { "npm.cmd start" }
 $logFile = if ($env:IONBEAM_BACKEND_LOG) { $env:IONBEAM_BACKEND_LOG } else { Join-Path $env:TEMP "ionbeam-backend.log" }
 $pidFile = if ($env:IONBEAM_BACKEND_PID) { $env:IONBEAM_BACKEND_PID } else { Join-Path $env:TEMP "ionbeam-backend.pid" }
 

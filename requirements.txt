@@ -33,6 +33,7 @@ six==1.17.0
 tifffile==2026.4.11
 tomlkit==0.14.0
 wasmtime==43.0.0
+websockets==16.0
 yowasp-nextpnr-ice40==0.10.0.0.post753
 yowasp-runtime==1.91
 yowasp-yosys==0.64.0.0.post1131

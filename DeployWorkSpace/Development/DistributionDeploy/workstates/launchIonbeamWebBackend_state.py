@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # launchIonbeamWebBackend_state.py
 #
-# Start `npm run dev` in ionbeam-web/backend, detached.
+# Start the compiled backend server in ionbeam-web/backend, detached.
 #-------------------------------------------------------------------------------
 from .longRunShellLaunch_state import longRunShellLaunch_state
 
