@@ -250,6 +250,10 @@ export const en = {
   "header.production.true.title": "IsProduction is true - live hardware mode",
   "header.production.false": "Simulation",
   "header.production.false.title": "IsProduction is false - simulation mode",
+  "header.beam.ebeam": "E-beam",
+  "header.beam.ebeam.title": "Selected scan beam: e-beam",
+  "header.beam.ion": "Ion Beam",
+  "header.beam.ion.title": "Selected scan beam: ion beam",
 
   /* ===== settings dialog ============================================ */
   "settings.title": "Configuration",

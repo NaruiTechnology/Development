@@ -378,6 +378,7 @@ export const mockRest = {
     const action = loadActionData();
     const raster = action.rasterScan ?? {};
     const vector = action.vectorScan ?? {};
+    const selectedBeam = action.enableEbeam ? "ebeam" : "ion";
     return {
       is_production: false,
       simulation: action.simulation ?? {},
@@ -393,6 +394,7 @@ export const mockRest = {
         latency: finiteNumber(vector.latency, 8196),
         outputMode: vector.outputMode ?? "SixteenBit",
       },
+      selected_beam: selectedBeam,
     };
   },
   runRaster(req: RasterParams & { do_validate?: boolean }) {

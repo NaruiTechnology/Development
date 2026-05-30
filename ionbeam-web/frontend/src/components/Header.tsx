@@ -46,6 +46,7 @@ const STATE_LABEL_KEYS: Record<string, TranslationKey> = {
 export function Header() {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
+  const selectedBeam = useAppSelector((s) => s.status.defaults?.selected_beam);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const version = useAppSelector((s) => s.status.defaults?.version);
   const reconnecting = useAppSelector((s) => s.settings.saving);
@@ -68,6 +69,18 @@ export function Header() {
 
   const state = status?.state ?? "disconnected";
   const stateKey = STATE_LABEL_KEYS[state];
+  const beamLabelKey =
+    selectedBeam === "ebeam"
+      ? "header.beam.ebeam"
+      : selectedBeam === "ion"
+      ? "header.beam.ion"
+      : null;
+  const beamTitleKey =
+    selectedBeam === "ebeam"
+      ? "header.beam.ebeam.title"
+      : selectedBeam === "ion"
+      ? "header.beam.ion.title"
+      : null;
 
   return (
     <header className="app-header">
@@ -85,9 +98,12 @@ export function Header() {
           <path d="M22 50 L42 50" stroke="var(--c-logo-stroke)" strokeWidth="2.4" strokeLinecap="round" />
         </svg>
         <div className="app-header__title">
-          {/* Brand name stays unlocalised — it's a trademark. The
-              tagline below is the localised descriptor. */}
-          <b>{t("app.brand.name")}</b>
+          <div className="app-header__title-row">
+            {/* Brand name stays unlocalised — it's a trademark. The
+                tagline below is the localised descriptor. */}
+            <b>{t("app.brand.name")}</b>
+            {version && <span className="version-pill app-header__version">v{version}</span>}
+          </div>
           <small>{t("app.brand.tagline")}</small>
         </div>
       </div>
@@ -99,6 +115,22 @@ export function Header() {
           UI" comes before "I want it tinted differently". */}
       <LanguagePicker />
 
+      {beamLabelKey && beamTitleKey && (
+        <span
+          className="beam-pill"
+          data-beam={selectedBeam}
+          title={t(beamTitleKey)}
+        >
+          <span className="beam-pill__icon" aria-hidden>
+            <Icon name="atom" />
+          </span>
+          {t(beamLabelKey)}
+        </span>
+      )}
+
+      <span className="status-pill" data-state={state}>
+        {stateKey ? t(stateKey) : state}
+      </span>
       <div className="row" style={{ gap: 8 }}>
         <span className="card__title" id="theme-picker-label">
           {t("header.theme.label")}
@@ -121,19 +153,6 @@ export function Header() {
           ))}
         </select>
       </div>
-
-      <span className="status-pill" data-state={state}>
-        {stateKey ? t(stateKey) : state}
-      </span>
-      {version && <span className="version-pill">v{version}</span>}
-      <span
-        className="production-pill"
-        data-production={isProduction ? "true" : "false"}
-        title={isProduction ? t("header.production.true.title") : t("header.production.false.title")}
-      >
-        <span className="production-pill__led" />
-        {isProduction ? t("header.production.true") : t("header.production.false")}
-      </span>
       <button
         type="button"
         className="btn btn--ghost app-header__settings"
@@ -159,6 +178,14 @@ export function Header() {
       >
         <Icon name="cog" tone="accent" />
       </button>
+      <span
+        className="production-pill app-header__production"
+        data-production={isProduction ? "true" : "false"}
+        title={isProduction ? t("header.production.true.title") : t("header.production.false.title")}
+      >
+        <span className="production-pill__led" />
+        {isProduction ? t("header.production.true") : t("header.production.false")}
+      </span>
     </header>
   );
 }

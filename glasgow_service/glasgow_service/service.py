@@ -257,6 +257,7 @@ class DeviceService:
         self._raster_defaults = action.get("rasterScan", {}) or {}
         self._vector_defaults = action.get("vectorScan", {}) or {}
         self._simulation_defaults = action.get("simulation", {}) or {}
+        self._action_defaults = action or {}
 
         # Normalized scan params, single source of truth for the macros.
         # JSON's camelCase keys (frameBlank, latency, drainFloorPixels) are
@@ -320,6 +321,9 @@ class DeviceService:
             "simulation": dict(self._simulation_defaults),
             "raster_params": self._raster_params_defaults.to_public_dict(),
             "vector_params": self._vector_params_defaults.to_public_dict(),
+            "selected_beam": (
+                "ebeam" if bool(self._action_defaults.get("enableEbeam", False)) else "ion"
+            ),
             "is_production": bool(getattr(self._config, "IsProduction", True)),
             "version": str(getattr(self._config, "Version", "")),
         }
