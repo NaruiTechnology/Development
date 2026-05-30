@@ -42,9 +42,10 @@ the older ``_alt_file`` / ``_alt_random`` overlays:
 
 ``filePath`` is resolved through :func:`_resolve_iobeam_path`: absolute
 paths are used verbatim, while relative paths are joined against
-``IOBEAM_ROOT`` (default: the systemd unit's WorkingDirectory). This
-removes the hard-coded ``/home/vboxuser/...`` strings that used to leak
-into the JSON and let the same config travel between dev boxes.
+``IOBEAM_ROOT`` (default: the service working directory, or the checkout
+root found by walking up from this file). This removes machine-specific
+absolute paths from the JSON and lets the same config travel between dev
+boxes.
 
 Back-compat
 -----------
@@ -68,20 +69,20 @@ logger = logging.getLogger(__name__)
 #
 # Why this exists
 # ---------------
-# streamData.json used to carry absolute paths like
-# ``/home/vboxuser/Project/IobeamTech/Development/.../SampleImage.bmp``.
+# streamData.json used to carry machine-specific absolute paths to
+# ``Development/.../SampleImage.bmp``.
 # That made the file un-shareable between developer boxes, CI, and the
 # production target. The cleanup moves those literals out of the JSON
 # and into a single env-driven root, falling back to:
 #
-#   1. ``IOBEAM_ROOT`` environment variable (preferred; matches the
-#      systemd unit's WorkingDirectory).
+#   1. ``IOBEAM_ROOT`` environment variable (preferred; set by the service
+#      launcher when a specific checkout root is required).
 #   2. The walk-up from this file: ``GlasgowDataIO`` lives at
 #      ``<root>/Development/GlasgowDataIO``, so the parent of
 #      ``Development`` is the root.
-#   3. Current working directory, last resort - matches the systemd
-#      unit's ``WorkingDirectory=`` for production but is fragile in
-#      dev shells.
+#   3. Current working directory, last resort. This matches the Windows
+#      service wrapper's working directory in deployed runs but is fragile
+#      in ad-hoc dev shells.
 # ---------------------------------------------------------------------------- #
 
 def _walk_up_to_iobeam_root() -> Path | None:
@@ -150,8 +151,7 @@ def load_image(path, resolution=64, invert=False):
 
     The path is resolved through :func:`_resolve_iobeam_path`, so
     relative paths in streamData.json are interpreted against
-    IOBEAM_ROOT (typically the project root that systemd uses as its
-    WorkingDirectory).
+    IOBEAM_ROOT (typically the project root used by the service launcher).
 
     Falls back to random_image() if PIL is missing or the file can't be
     read - this keeps the build path alive on machines without Pillow.

@@ -7,20 +7,20 @@ box without source edits.
 
 Resolution order (first match wins):
 
-1. ``GLASGOW_CONFIG`` environment variable (set directly, or by the
-   systemd unit's ``Environment=``/``EnvironmentFile=`` directives).
+1. ``GLASGOW_CONFIG`` environment variable (set directly, by the Windows
+   restart wrapper, or by a service manager).
 2. ``GLASGOW_CONFIG`` read from a custom env file pointed to by the
    ``GLASGOW_ENV_FILE`` environment variable.
-3. ``GLASGOW_CONFIG`` read from ``deploy/glasgow-svc.env`` next to the
-   bundled systemd unit (the recommended local-dev location; copy the
-   committed ``glasgow-svc.env.example`` and edit).
-4. ``GLASGOW_CONFIG`` parsed out of ``deploy/glasgow-svc.service``
-   itself (so any value committed there is honoured automatically).
+3. ``GLASGOW_CONFIG`` read from ``deploy/glasgow-svc.env``. On Linux this
+   sits next to the bundled systemd unit; on Windows the PowerShell restart
+   wrapper usually sets the environment directly.
+4. On non-Windows hosts, ``GLASGOW_CONFIG`` parsed out of
+   ``deploy/glasgow-svc.service`` itself.
 5. A ``streamData.json`` discovered next to the package or in CWD.
 
-On Windows, stale Linux deployment paths such as
-``/home/vboxuser/.../GlasgowDataIO/Json/streamData.json`` are translated
-to the same file under this checkout when possible.
+On Windows, stale deployment paths ending in
+``GlasgowDataIO/Json/streamData.json`` are translated to the same file
+under this checkout when possible.
 
 Pass ``required=False`` from tests so they skip cleanly on a box with no
 config rather than raising at import time.
@@ -65,8 +65,11 @@ _UNIT_ENV_RE = re.compile(
 # ---- low-level parsers ----------------------------------------------------
 
 def _parse_env_file(path: Path) -> dict[str, str]:
-    """Parse a ``KEY=value`` env file the way systemd's ``EnvironmentFile``
-    would. Supports ``#`` comments and surrounding single/double quotes."""
+    """Parse a simple ``KEY=value`` env file.
+
+    Compatible with systemd-style ``EnvironmentFile`` syntax used by the
+    Linux service, while also being usable from Windows tooling.
+    """
     out: dict[str, str] = {}
     if not path.is_file():
         return out
@@ -85,7 +88,7 @@ def _parse_env_file(path: Path) -> dict[str, str]:
 
 
 def _parse_systemd_unit(path: Path) -> dict[str, str]:
-    """Extract ``Environment=KEY=VAL`` lines from a systemd unit file."""
+    """Extract ``Environment=KEY=VAL`` lines from a Linux systemd unit file."""
     out: dict[str, str] = {}
     if not path.is_file():
         return out
@@ -188,16 +191,21 @@ def find_config_path(required: bool = True) -> Optional[Path]:
         return None
 
     searched = "\n  ".join(str(c) for c in _LOCAL_CANDIDATES)
+    systemd_attempt = ""
+    if os.name != "nt":
+        systemd_attempt = (
+            f"  - systemd unit {_DEFAULT_UNIT_FILE} "
+            f"({'present' if _DEFAULT_UNIT_FILE.is_file() else 'missing'})\n"
+        )
     raise FileNotFoundError(
         f"Could not locate streamData.json.\n"
         f"Resolution attempts:\n"
         f"  - {ENV_VAR} environment variable (unset)\n"
         f"  - env file {_resolve_env_file_path()} "
         f"({'present' if _resolve_env_file_path().is_file() else 'missing'})\n"
-        f"  - systemd unit {_DEFAULT_UNIT_FILE} "
-        f"({'present' if _DEFAULT_UNIT_FILE.is_file() else 'missing'})\n"
+        f"{systemd_attempt}"
         f"  - local fallbacks:\n  {searched}\n"
-        f"Set {ENV_VAR}=/path/to/streamData.json, fill in "
+        f"Set {ENV_VAR} to the full path of streamData.json, fill in "
         f"{_DEFAULT_ENV_FILE}, or place streamData.json in one of the "
         f"local fallback locations above."
     )
