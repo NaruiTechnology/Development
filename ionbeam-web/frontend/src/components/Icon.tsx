@@ -18,6 +18,7 @@ type IconName =
   | "square"
   | "sun"
   | "target"
+  | "atom"
   | "tools"
   | "trash"
   | "upload"
@@ -132,6 +133,14 @@ const paths: Record<IconName, JSX.Element> = {
       <circle cx="12" cy="12" r="9" />
       <circle cx="12" cy="12" r="5" />
       <circle cx="12" cy="12" r="1.6" />
+    </>
+  ),
+  atom: (
+    <>
+      <circle cx="12" cy="12" r="1.7" />
+      <ellipse cx="12" cy="12" rx="8" ry="3.2" />
+      <ellipse cx="12" cy="12" rx="8" ry="3.2" transform="rotate(60 12 12)" />
+      <ellipse cx="12" cy="12" rx="8" ry="3.2" transform="rotate(-60 12 12)" />
     </>
   ),
   tools: (
