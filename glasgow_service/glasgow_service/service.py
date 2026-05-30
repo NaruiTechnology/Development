@@ -40,7 +40,7 @@ from typing import AsyncIterator, Iterable, List, Optional, Tuple
 from GlasgowDataIO.IobeamControl.macros import RasterScanCommand
 from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
-from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
+from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, BeamType
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
 
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
@@ -141,18 +141,17 @@ def _percentile_clip_uint16(values, lo_pct: float = 1.0, hi_pct: float = 99.0):
     return lo, hi
 
 
-def _uint16_chunk_to_wire_bytes(chunk) -> bytes:
-    """Return explicit big-endian uint16 sample bytes for WebSocket frames.
+def _sample_chunk_to_wire_bytes(chunk) -> bytes:
+    """Return sample bytes for WebSocket frames.
 
-    Unit tests and CSV paths work with array('H') numeric values. Calling
-    bytes(array('H')) directly serializes in host byte order, which is
-    little-endian on the dev machine and makes the browser decode swapped
-    samples. The FPGA/ImageSerializer wire contract is high byte first, so
-    normalize chunks here without mutating the captured array used by CSV
-    and validation.
+    SixteenBit chunks are array('H') numeric values, so normalize them to
+    explicit big-endian bytes. EightBit chunks are array('B') values and
+    already match the ImageSerializer wire contract: one byte per pixel.
     """
     if isinstance(chunk, (bytes, bytearray, memoryview)):
         return bytes(chunk)
+    if isinstance(chunk, array.array) and chunk.typecode == "B":
+        return chunk.tobytes()
     out = array.array("H", chunk)
     if sys.byteorder == "little":
         out.byteswap()
@@ -340,6 +339,8 @@ class DeviceService:
             frame_blank   = req.frame_blank,
             cookie        = req.cookie,
             output_mode   = req.output_mode,
+            beam_type     = req.beam_type,
+            external_control = req.external_control,
         )
 
     def _effective_vector_params(self, req: "VectorRequest") -> VectorParams:
@@ -350,6 +351,8 @@ class DeviceService:
             vector_resolution = req.vector_resolution,
             latency_bytes     = req.latency_bytes,
             output_mode       = req.output_mode,
+            beam_type         = req.beam_type,
+            external_control  = req.external_control,
             cookie            = req.cookie,
             pre_process       = req.pre_process,
             do_validate       = req.do_validate,
@@ -407,7 +410,7 @@ class DeviceService:
                 })
                 for chunk in simulated_chunks:
                     self._status.chunks_in_flight += 1
-                    yield _uint16_chunk_to_wire_bytes(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
             return
 
         # Buffer chunks for the /scan/last/* download endpoints. We hold
@@ -423,7 +426,7 @@ class DeviceService:
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
-                    yield _uint16_chunk_to_wire_bytes(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 raise
@@ -459,7 +462,7 @@ class DeviceService:
                 })
                 for chunk in simulated_chunks:
                     self._status.chunks_in_flight += 1
-                    yield _uint16_chunk_to_wire_bytes(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
             return
 
         captured: List = []
@@ -473,7 +476,7 @@ class DeviceService:
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
-                    yield _uint16_chunk_to_wire_bytes(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 raise
@@ -698,12 +701,21 @@ class DeviceService:
                 f"unknown output_mode {params.output_mode!r}; "
                 f"valid: {[m.name for m in OutputMode]}"
             )
+        try:
+            beam_type = BeamType[params.beam_type]
+        except KeyError:
+            raise ValueError(
+                f"unknown beam_type {params.beam_type!r}; "
+                f"valid: {[m.name for m in BeamType]}"
+            )
 
         return RasterScanCommand(
             cookie=params.cookie,
             x_range=x_rng, y_range=y_rng,
             dwell_time=params.dwell,
             output_mode=output_mode,
+            beam_type=beam_type,
+            external_control=params.external_control,
             frame_blank=params.frame_blank,
             max_pipeline=params.max_pipeline,
             padding_min_pixels=params.padding_min_pixels,
@@ -742,10 +754,19 @@ class DeviceService:
                 f"unknown output_mode {params.output_mode!r}; "
                 f"valid: {[m.name for m in OutputMode]}"
             )
+        try:
+            beam_type = BeamType[params.beam_type]
+        except KeyError:
+            raise ValueError(
+                f"unknown beam_type {params.beam_type!r}; "
+                f"valid: {[m.name for m in BeamType]}"
+            )
 
         return VectorScanCommand(
             cookie=params.cookie,
             output_mode=output_mode,
+            beam_type=beam_type,
+            external_control=params.external_control,
             iter_points=iter_points,
             drain_floor_pixels=params.effective_drain_floor_pixels,
             max_pipeline=params.max_pipeline,

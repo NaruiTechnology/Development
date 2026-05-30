@@ -269,19 +269,21 @@ class IobeamDataSubtarget(Elaboratable):
         connect_pins("ebeam_blank_enable", executor.ext_ctrl_enable)
         connect_pins("ibeam_blank_enable", executor.ext_ctrl_enable)
 
-        with m.If(executor.ext_ctrl_enabled):
-            with m.If(executor.beam_type == BeamType.NoBeam):
-                connect_pins("ebeam_blank", 1)
-                connect_pins("ibeam_blank", 1)
-            with m.Elif(executor.beam_type == BeamType.Electron):
+        with m.If(executor.beam_type == BeamType.NoBeam):
+            connect_pins("ebeam_blank", 1)
+            connect_pins("ibeam_blank", 1)
+        with m.Elif(executor.beam_type == BeamType.Electron):
+            with m.If(executor.ext_ctrl_enabled):
                 connect_pins("ebeam_blank", executor.blank_enable)
-                connect_pins("ibeam_blank", 1)
-            with m.Elif(executor.beam_type == BeamType.Ion):
-                connect_pins("ibeam_blank", executor.blank_enable)
+            with m.Else():
                 connect_pins("ebeam_blank", 1)
-        with m.Else():
-            connect_pins("ebeam_blank", 0)
-            connect_pins("ibeam_blank", 0)
+            connect_pins("ibeam_blank", 1)
+        with m.Elif(executor.beam_type == BeamType.Ion):
+            with m.If(executor.ext_ctrl_enabled):
+                connect_pins("ibeam_blank", executor.blank_enable)
+            with m.Else():
+                connect_pins("ibeam_blank", 1)
+            connect_pins("ebeam_blank", 1)
 
         # ------------------------------------------------------------------ #
         # Benchmark counters

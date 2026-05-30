@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 from GlasgowDataIO.IobeamControl.macros import RasterScanCommand
-from GlasgowDataIO.IobeamControl.commands import DACCodeRange
+from GlasgowDataIO.IobeamControl.commands import DACCodeRange, BeamType
 from GlasgowDataIO.IobeamControl.transfer.mock import MockConnection
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
@@ -47,6 +47,10 @@ class RasterScanTest(unittest.TestCase):
         self.params: RasterParams = RasterParams.from_json(raster_block).override(
             **self.PARAM_OVERRIDES,
         )
+        try:
+            self.beam_type = BeamType[self.params.beam_type]
+        except KeyError:
+            self.beam_type = BeamType.Ion
 
     # ------------------------------------------------------------------ #
     # Mock / simulation test (no hardware).                              #
@@ -61,6 +65,8 @@ class RasterScanTest(unittest.TestCase):
             x_range=test_range,
             y_range=test_range,
             dwell_time=self.params.dwell,
+            beam_type=self.beam_type,
+            external_control=self.params.external_control,
         )
         conn = MockConnection()
         await conn._connect()
@@ -90,6 +96,8 @@ class RasterScanTest(unittest.TestCase):
             x_range=test_range,
             y_range=test_range,
             dwell_time=self.params.dwell,
+            beam_type=self.beam_type,
+            external_control=self.params.external_control,
             frame_blank=self.params.frame_blank,
             # Macro-tuning params flow through too — if streamData.json
             # ever sets max_pipeline / padding_*, this test picks them up

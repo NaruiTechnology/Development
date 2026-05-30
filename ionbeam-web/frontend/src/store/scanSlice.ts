@@ -56,6 +56,7 @@ export interface ROIState {
   selection: ROIRequest | null;
   imageName: string;
   imageDataUrl: string | null;
+  imageKind: "none" | "file" | "lastScan";
   keep_loaded_bitmap_after_scan: boolean;
 }
 
@@ -101,6 +102,7 @@ const initialState: ScanState = {
     selection: null,
     imageName: "No image selected",
     imageDataUrl: null,
+    imageKind: "none",
     keep_loaded_bitmap_after_scan: true,
   },
   vectorRenderMode: "decimated",
@@ -302,6 +304,7 @@ const slice = createSlice({
     clearROIImage(s) {
       s.roi.imageName = "No image selected";
       s.roi.imageDataUrl = null;
+      s.roi.imageKind = "none";
     },
     clearROISelection(s) {
       s.roi.selection = null;

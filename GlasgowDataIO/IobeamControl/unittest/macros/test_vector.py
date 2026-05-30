@@ -9,7 +9,7 @@ from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
 from GlasgowDataIO.IobeamControl.transfer.mock import MockConnection
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
-from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
+from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, BeamType
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
@@ -46,6 +46,10 @@ class VectorScanTest(unittest.TestCase):
         self.params: VectorParams = VectorParams.from_json(vector_block).override(
             **self.PARAM_OVERRIDES,
         )
+        try:
+            self.beam_type = BeamType[self.params.beam_type]
+        except KeyError:
+            self.beam_type = BeamType.Ion
 
     # ------------------------------------------------------------------ #
     # Mock / simulation test (no hardware).                              #
@@ -59,6 +63,8 @@ class VectorScanTest(unittest.TestCase):
         test_cmd = VectorScanCommand(
             cookie=self.params.cookie,
             output_mode=output_mode,
+            beam_type=self.beam_type,
+            external_control=self.params.external_control,
             max_pipeline=self.params.max_pipeline,
             fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
             drain_safety_factor=self.params.drain_safety_factor,
@@ -86,6 +92,40 @@ class VectorScanTest(unittest.TestCase):
         asyncio.run(self.scan())
         self.assertTrue(True)
 
+    def test_lazy_transfer_does_not_split_point_iterator(self):
+        async def run_scan(pre_process: bool):
+            points = ((i, i, 1) for i in range(10))
+            cmd = VectorScanCommand(
+                cookie=self.params.cookie,
+                output_mode=OutputMode.SixteenBit,
+                beam_type=self.beam_type,
+                external_control=self.params.external_control,
+                iter_points=points,
+                drain_floor_pixels=1,
+                max_pipeline=self.params.max_pipeline,
+                fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
+                drain_safety_factor=self.params.drain_safety_factor,
+                sender_drain_timeout_s=self.params.sender_drain_timeout_s,
+            )
+            if pre_process:
+                cmd._pre_process_chunks(latency=2)
+
+            conn = MockConnection()
+            await conn._connect()
+            chunks = []
+            async for chunk in conn.transfer_multiple(cmd, latency=2):
+                chunks.append(chunk)
+            return chunks
+
+        lazy_chunks = asyncio.run(run_scan(pre_process=False))
+        processed_chunks = asyncio.run(run_scan(pre_process=True))
+
+        self.assertEqual(
+            [len(chunk) for chunk in lazy_chunks],
+            [len(chunk) for chunk in processed_chunks],
+        )
+        self.assertEqual(sum(len(chunk) for chunk in lazy_chunks), 10)
+
     # ------------------------------------------------------------------ #
     # Wet-run test: real Glasgow hardware.                               #
     # ------------------------------------------------------------------ #
@@ -107,6 +147,8 @@ class VectorScanTest(unittest.TestCase):
         test_cmd = VectorScanCommand(
             cookie=self.params.cookie,
             output_mode=output_mode,
+            beam_type=self.beam_type,
+            external_control=self.params.external_control,
             max_pipeline=self.params.max_pipeline,
             fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
             drain_safety_factor=self.params.drain_safety_factor,

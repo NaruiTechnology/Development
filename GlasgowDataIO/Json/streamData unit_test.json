@@ -15,12 +15,16 @@
                         { "port": "B", "pinList": [0, 1, 2, 3, 4, 5, 6, 7] }
                     ],
                     "bufferSize": "1024*1024",
+                    "enableEbeam": false,
+                    "enableIbeam": true,
                     "frequency": 1000,
                     "point": 100,
                     "waveForm": "square",
                     "rasterScan": {
                         "pixels": 8192,
                         "frameBlank": false,
+                        "beamType": "Ion",
+                        "externalControl": true,
                         "resolution": 1024,
                         "adcLatency": 8,
                         "dwell": 2,
@@ -36,6 +40,8 @@
                     "vectorScan": {
                         "latency": 8196,
                         "adcLatency": 8,
+                        "beamType": "Ion",
+                        "externalControl": true,
                         "lineShiftPerXRow": 5.5,
                         "drainFloorPixels": 21000,
                         "display": {

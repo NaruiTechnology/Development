@@ -44,6 +44,7 @@ export function App() {
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
   const rasterCursor = useAppSelector((s) => s.image.cursor);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
+  const imageRevision = useAppSelector((s) => s.image.revision);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roiState = useAppSelector((s) => s.scan.roi);
@@ -111,8 +112,8 @@ export function App() {
   const roiScanImageUrl =
     kind === "roi" && hasPriorScanImage
       ? lastScanKind === "vector"
-        ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}&view=texture&_=${vectorCursor}`
-        : `/api/scan/last/figure?view=texture&_=${rasterCursor}`
+        ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}&view=texture&_=${imageRevision}`
+        : `/api/scan/last/figure?view=texture&_=${imageRevision}`
       : null;
 
   function selectKind(nextKind: ScanKind) {

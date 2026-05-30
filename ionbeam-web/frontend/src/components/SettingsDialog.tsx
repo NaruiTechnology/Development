@@ -444,6 +444,9 @@ function GeneralTab({ draft }: { draft: unknown }) {
   // actionData scalars.
   const voltage = numberField(draft, [...ACTION_DATA_PATH, "voltage"], 0);
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
+  const enableEbeam = boolField(draft, [...ACTION_DATA_PATH, "enableEbeam"], false);
+  const enableIbeam = boolField(draft, [...ACTION_DATA_PATH, "enableIbeam"], true);
+  const selectedBeam = enableIbeam || !enableEbeam ? "ion" : "ebeam";
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
@@ -506,6 +509,45 @@ function GeneralTab({ draft }: { draft: unknown }) {
           help={<SettingsHelp topic="generalBuffer" />}
           value={bufferSize}
           onChange={(v) => set([...ACTION_DATA_PATH, "bufferSize"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">
+        {t("settings.general.group.beam")}
+      </h4>
+
+      <div className="settings-flags" role="radiogroup">
+        <RadioField
+          name="beam-enable"
+          label={t("settings.general.enableEbeam")}
+          checked={selectedBeam === "ebeam"}
+          onChange={() =>
+            dispatch(
+              setDraft(
+                writePath(
+                  writePath(draft, [...ACTION_DATA_PATH, "enableEbeam"], true),
+                  [...ACTION_DATA_PATH, "enableIbeam"],
+                  false,
+                ),
+              ),
+            )
+          }
+        />
+        <RadioField
+          name="beam-enable"
+          label={t("settings.general.enableIbeam")}
+          checked={selectedBeam === "ion"}
+          onChange={() =>
+            dispatch(
+              setDraft(
+                writePath(
+                  writePath(draft, [...ACTION_DATA_PATH, "enableEbeam"], false),
+                  [...ACTION_DATA_PATH, "enableIbeam"],
+                  true,
+                ),
+              ),
+            )
+          }
         />
       </div>
     </div>
@@ -1250,6 +1292,33 @@ function CheckboxField({
         type="checkbox"
         checked={value}
         onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>{label}</span>
+      {help}
+    </label>
+  );
+}
+
+function RadioField({
+  name,
+  label,
+  help,
+  checked,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  help?: JSX.Element;
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label className="settings-checkbox">
+      <input
+        type="radio"
+        name={name}
+        checked={checked}
+        onChange={onChange}
       />
       <span>{label}</span>
       {help}
