@@ -56,11 +56,14 @@ export function ROIEditor({
     ? t("roi.imageSourceFileRequired", { source: simulationSource || "unset" })
     : "";
   const bitmapCleanupDisabled = !hasLoadedImage || !hasPartialRegion;
-  const imageSource =
-    roi.imageDataUrl ??
-    (backgroundImageUrl && backgroundImageUrl !== suppressedBackgroundUrl
+  const backgroundSource =
+    backgroundImageUrl && backgroundImageUrl !== suppressedBackgroundUrl
       ? backgroundImageUrl
-      : null);
+      : null;
+  const imageSource =
+    roi.imageKind === "lastScan"
+      ? backgroundSource ?? roi.imageDataUrl
+      : roi.imageDataUrl ?? backgroundSource;
 
   useEffect(() => {
     if (!imageSource) {
@@ -91,6 +94,7 @@ export function ROIEditor({
           dispatch(updateROI({
             imageName: t("roi.imageName.lastScan"),
             imageDataUrl: dataUrl,
+            imageKind: "lastScan",
           }));
         }
       }
@@ -122,7 +126,7 @@ export function ROIEditor({
         clearBitmapSelectionCache();
         setSuppressedBackgroundUrl(null);
         // file.name comes from the OS — leave it verbatim.
-        dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result }));
+        dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result, imageKind: "file" }));
       }
     };
     reader.readAsDataURL(file);

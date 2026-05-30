@@ -372,9 +372,9 @@ export function writePath(
  *   }
  *
  * General edits the top-level scalar flags + the basic actionData
- * fields (voltage, frequency, etc) that aren't raster- or
- * vector-specific. The Raster and Vector tabs edit their
- * respective subtrees verbatim.
+ * fields (voltage, beam enable toggles, etc) that aren't raster- or
+ * vector-specific. The Raster and Vector tabs edit their respective
+ * subtrees verbatim.
  */
 export const ACTION_DATA_PATH: ReadonlyArray<string | number> = [
   "Actions",

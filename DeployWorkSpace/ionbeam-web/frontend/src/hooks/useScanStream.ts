@@ -97,7 +97,8 @@ export function useScanStream() {
       ws.onopen = () => {
         ws.send(JSON.stringify(req));
       };
-      ws.onmessage = (ev) => handleRasterMessage(ev, dispatch, sawDoneRef);
+      ws.onmessage = (ev) =>
+        handleRasterMessage(ev, dispatch, sawDoneRef, req.output_mode);
       ws.onerror = () => {
         // The browser only emits a generic error event; details come via
         // the close handler. Don't transition phase here — onclose will.
@@ -147,7 +148,13 @@ export function useScanStream() {
         ws.send(JSON.stringify(req));
       };
       ws.onmessage = (ev) =>
-        handleVectorMessage(ev, dispatch, sawDoneRef, vectorLineShiftPerXRow);
+        handleVectorMessage(
+          ev,
+          dispatch,
+          sawDoneRef,
+          vectorLineShiftPerXRow,
+          req.output_mode
+        );
       ws.onerror = () => {
         /* see startRaster */
       };
@@ -199,6 +206,18 @@ function stopExisting(ref: React.MutableRefObject<WebSocket | null>): void {
   ref.current = null;
 }
 
+function decodeSamples(buf: ArrayBuffer, outputMode?: string): Uint16Array {
+  if (outputMode === "EightBit") {
+    const view = new Uint8Array(buf);
+    const out = new Uint16Array(view.length);
+    for (let i = 0; i < view.length; i++) {
+      out[i] = view[i] << 8;
+    }
+    return out;
+  }
+  return decodeUint16BE(buf);
+}
+
 /** Reconstruct uint16 samples from a [hi, lo, hi, lo, ...] byte stream. */
 function decodeUint16BE(buf: ArrayBuffer): Uint16Array {
   const view = new Uint8Array(buf);
@@ -213,7 +232,8 @@ function decodeUint16BE(buf: ArrayBuffer): Uint16Array {
 function handleRasterMessage(
   ev: MessageEvent,
   dispatch: ReturnType<typeof useAppDispatch>,
-  sawDoneRef: React.MutableRefObject<boolean>
+  sawDoneRef: React.MutableRefObject<boolean>,
+  outputMode?: string
 ): void {
   if (typeof ev.data === "string") {
     try {
@@ -230,7 +250,7 @@ function handleRasterMessage(
     return;
   }
   const buf = ev.data as ArrayBuffer;
-  const px = decodeUint16BE(buf);
+  const px = decodeSamples(buf, outputMode);
   dispatch(appendRaster({ pixels: px }));
   dispatch(streamProgress({ bytes: buf.byteLength, chunks: 1 }));
 }
@@ -239,7 +259,8 @@ function handleVectorMessage(
   ev: MessageEvent,
   dispatch: ReturnType<typeof useAppDispatch>,
   sawDoneRef: React.MutableRefObject<boolean>,
-  lineShiftPerXRow: number
+  lineShiftPerXRow: number,
+  outputMode?: string
 ): void {
   if (typeof ev.data === "string") {
     try {
@@ -256,11 +277,11 @@ function handleVectorMessage(
     }
     return;
   }
-  // Vector chunks are uint16 ADC samples in the same order the host's
+  // Vector chunks are ADC samples in the same order the host's
   // point script generated commands — same wire format as raster, just
   // a different (x, y) → sample-index mapping (handled by the reducer).
   const buf = ev.data as ArrayBuffer;
-  const values = decodeUint16BE(buf);
+  const values = decodeSamples(buf, outputMode);
   dispatch(appendVectorSamples({ values }));
   dispatch(streamProgress({ bytes: buf.byteLength, chunks: 1 }));
 }

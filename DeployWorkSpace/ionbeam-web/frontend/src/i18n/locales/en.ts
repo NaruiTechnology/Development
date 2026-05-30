@@ -250,6 +250,10 @@ export const en = {
   "header.production.true.title": "IsProduction is true - live hardware mode",
   "header.production.false": "Simulation",
   "header.production.false.title": "IsProduction is false - simulation mode",
+  "header.beam.ebeam": "E-beam",
+  "header.beam.ebeam.title": "Selected scan beam: e-beam",
+  "header.beam.ion": "Ion Beam",
+  "header.beam.ion.title": "Selected scan beam: ion beam",
 
   /* ===== settings dialog ============================================ */
   "settings.title": "Configuration",
@@ -281,6 +285,7 @@ export const en = {
   "settings.confirm.default.yes": "Restore defaults",
   "settings.general.group.runtime": "Runtime",
   "settings.general.group.actionData": "Action data",
+  "settings.general.group.beam": "Beam enable",
   "settings.general.version": "Version",
   "settings.general.logName": "Log name",
   "settings.general.deviceId": "Glasgow device ID",
@@ -288,6 +293,8 @@ export const en = {
   "settings.general.demoWithCLI": "Demo with CLI",
   "settings.general.isProduction": "Is production",
   "settings.general.dumpData": "Dump data",
+  "settings.general.enableEbeam": "Enable e-beam",
+  "settings.general.enableIbeam": "Enable ion beam",
   "settings.general.voltage": "The Voltage of the Glasgow revC3 port A/B",
   "settings.general.frequency": "Frequency (Hz)",
   "settings.general.point": "Point count",

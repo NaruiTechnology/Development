@@ -145,6 +145,7 @@ export interface ServerDefaults {
   simulation?: Record<string, unknown>;
   raster_params?: Record<string, unknown>;
   vector_params?: Record<string, unknown>;
+  selected_beam?: "ebeam" | "ion";
   is_production?: boolean;
   version?: string;
 }
