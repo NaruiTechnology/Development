@@ -5,6 +5,8 @@ import compileall
 import re
 import fnmatch
 import argparse
+import json
+from datetime import datetime
 
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = ['*.ihex', 'requirements.txt', 'README.md']
@@ -41,6 +43,9 @@ TREE_COPY_IGNORE = (
     '__pycache__', '.git', '.venv', '.cache', '.pytest_cache',
     'node_modules', 'dist', 'build', '.next', '.turbo',
 )
+
+STREAM_DATA_JSON = os.path.join(
+    'Development', 'GlasgowDataIO', 'Json', 'streamData.json')
 
 
 def copy_source_trees(src_dir, dist_dir, trees):
@@ -217,7 +222,43 @@ def clean_pycache_under(folder):
           f"{cache_count} __pycache__ folder(s) under {folder}.")
 
 
-def zip_folder(folder):
+def stream_data_json_path(src_dir):
+    """Return the streamData.json path for either project-root invocation style."""
+    candidates = [
+        os.path.join(src_dir, STREAM_DATA_JSON),
+        os.path.join(src_dir, 'GlasgowDataIO', 'Json', 'streamData.json'),
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    raise FileNotFoundError(
+        "Cannot find streamData.json. Checked: " + ", ".join(candidates))
+
+
+def version_label_from_stream_data(src_dir):
+    """Read Version from streamData.json and format it for archive names."""
+    path = stream_data_json_path(src_dir)
+    with open(path, 'r', encoding='utf-8') as f:
+        version = str(json.load(f).get('Version', '')).strip()
+
+    if not version:
+        raise ValueError(f"Missing Version in {path}")
+
+    parts = version.split('.')
+    while len(parts) > 2 and parts[-1] == '0':
+        parts.pop()
+    version = '.'.join(parts)
+    safe_version = re.sub(r'[^A-Za-z0-9._-]+', '_', version).strip('._-')
+    if not safe_version:
+        raise ValueError(f"Version in {path} is not usable for a filename")
+    return f"v{safe_version}"
+
+
+def timestamp_label():
+    return datetime.now().strftime('%m%d%y_%H%M')
+
+
+def zip_folder(folder, archive_base=None):
     """Zip `folder` into <basename>.zip in the current working directory.
 
     The archive preserves the folder itself as the top-level entry (so
@@ -229,7 +270,7 @@ def zip_folder(folder):
         raise FileNotFoundError(f"Cannot zip missing folder: {folder}")
     base = os.path.basename(folder)
     parent = os.path.dirname(folder) or '.'
-    archive_base = base  # writes <base>.zip in cwd
+    archive_base = archive_base or base  # writes <archive_base>.zip in cwd
     if os.path.exists(f"{archive_base}.zip"):
         os.remove(f"{archive_base}.zip")
     print(f"\nCreating workspace archive {archive_base}.zip from {folder}...")
@@ -239,7 +280,7 @@ def zip_folder(folder):
     return final_path
 
 
-def post_build_deploy(zip_name, deploy_dir, workspace_dir):
+def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_base=None):
     """Post-build pipeline run after a successful build:
        1. clear any existing .zip files from deploy_dir
        2. move <zip_name>.zip into deploy_dir
@@ -267,7 +308,7 @@ def post_build_deploy(zip_name, deploy_dir, workspace_dir):
     clean_pycache_under(workspace_dir)
 
     # 4. Zip the entire workspace for handoff
-    zip_folder(workspace_dir)
+    return zip_folder(workspace_dir, archive_base=workspace_archive_base)
 
 
 if __name__ == "__main__":
@@ -289,7 +330,11 @@ if __name__ == "__main__":
         deploy_dir = os.path.join('.', 'Development', 'DeployWorkSpace',
                                   'Development', 'DistributionDeploy')
         workspace_dir = os.path.join('.', 'Development', 'DeployWorkSpace')
-        post_build_deploy(zip_name, deploy_dir, workspace_dir)
+        version_label = version_label_from_stream_data('.')
+        workspace_archive_base = f"Development_{version_label}_{timestamp_label()}"
+        final_archive = post_build_deploy(
+            zip_name, deploy_dir, workspace_dir, workspace_archive_base)
+        print(f"Final handoff archive: {final_archive}")
         print("\nAll steps complete.")
     except Exception as e:
         print(f"\nBuild failed with error: {e}")
