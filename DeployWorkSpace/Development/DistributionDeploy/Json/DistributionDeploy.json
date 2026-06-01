@@ -178,7 +178,7 @@
 				"skip":false,
 				"transactionComplete":false,
 				"actionData":{
-					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Get-Command psql -ErrorAction SilentlyContinue) { exit 0 }; $bin = Get-ChildItem -LiteralPath 'C:\\Program Files\\PostgreSQL' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1; if ($bin -and (Test-Path -LiteralPath (Join-Path $bin.FullName 'bin\\psql.exe'))) { exit 0 }; winget install --id PostgreSQL.PostgreSQL --source winget --accept-source-agreements --accept-package-agreements --silent; exit $LASTEXITCODE\""
+					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Get-Command psql -ErrorAction SilentlyContinue) { exit 0 }; $bin = Get-ChildItem -LiteralPath 'C:\\Program Files\\PostgreSQL' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1; if ($bin -and (Test-Path -LiteralPath (Join-Path $bin.FullName 'bin\\psql.exe'))) { exit 0 }; winget install --id PostgreSQL.PostgreSQL.17 --source winget --accept-source-agreements --accept-package-agreements --silent; exit $LASTEXITCODE\""
 				},
 				"timeout":900.0
 			}
