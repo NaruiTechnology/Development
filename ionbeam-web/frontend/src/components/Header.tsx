@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { fetchStatus } from "../store/statusSlice";
+import { fetchDefaultsMetadata, fetchStatus } from "../store/statusSlice";
 import {
   ALL_THEMES,
   applyThemeToDocument,
@@ -73,10 +73,12 @@ export function Header({
 
   useEffect(() => {
     dispatch(fetchStatus());
+    dispatch(fetchDefaultsMetadata());
     const tHandle = setInterval(() => {
       const s = status?.state;
       if (s === "busy" || s === "connecting") return;
       dispatch(fetchStatus());
+      dispatch(fetchDefaultsMetadata());
     }, 4000);
     return () => clearInterval(tHandle);
   }, [dispatch, status?.state]);

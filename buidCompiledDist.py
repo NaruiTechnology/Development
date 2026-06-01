@@ -248,7 +248,7 @@ def version_label_from_stream_data(src_dir):
     while len(parts) > 2 and parts[-1] == '0':
         parts.pop()
     version = '.'.join(parts)
-    safe_version = re.sub(r'[^A-Za-z0-9._-]+', '_', version).strip('._-')
+    safe_ = re.sub(r'[^A-Za-z0-9._-]+', '_', version).strip('._-')
     if not safe_version:
         raise ValueError(f"Version in {path} is not usable for a filename")
     return f"v{safe_version}"
