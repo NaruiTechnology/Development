@@ -18,14 +18,14 @@
         "USER": 0
     },
     "user": {
-        "id": null,
-        "login_name": "",
-        "first_name": "",
-        "last_name": "",
-        "email": "",
-        "phone_number": "",
+        "id": 1,
+        "login_name": "vboxuser",
+        "first_name": "henry",
+        "last_name": "li",
+        "email": "lyh1154@gmail.com",
+        "phone_number": "1 (503)807-9055",
         "company_name": "",
-        "role": 0,
+        "role": 3,
         "is_active": true
     },
     "users": [
@@ -38,6 +38,17 @@
             "phone_number": "1 (503)807-9055",
             "company_name": "",
             "role": 3,
+            "is_active": true
+        },
+        {
+            "id": 2,
+            "login_name": "yingh",
+            "first_name": "Yinghong",
+            "last_name": "Li",
+            "email": "henry.li@iobeamtech.com",
+            "phone_number": "5038079055",
+            "company_name": "IonbeamTech Ltd",
+            "role": 0,
             "is_active": true
         }
     ],

@@ -21,10 +21,19 @@ export interface Config {
   mock: boolean;
   staticDir: string;
   configPath: string;
+  adminConfigPath: string;
   restartCmd: string;
   restartBackendAfterGlasgow: boolean;
   backendRestartCmd: string | null;
   configStrict: boolean;
+  adminDbHost: string;
+  adminDbPort: number;
+  adminDbName: string;
+  adminDbUser: string;
+  adminDbPassword: string | null;
+  twilioAccountSid: string | null;
+  twilioAuthToken: string | null;
+  twilioFromNumber: string | null;
 }
 
 const BACKEND_ROOT = path.resolve(__dirname, "..");
@@ -41,6 +50,19 @@ const DEPLOYMENT_CONFIG_PATH = path.join(
   "GlasgowDataIO",
   "Json",
   "streamData.json"
+);
+const DEFAULT_ADMIN_CONFIG_PATH = path.join(
+  REPO_ROOT,
+  "IobeamAdmin",
+  "Json",
+  "IobeamAdmin.json"
+);
+const DEPLOYMENT_ADMIN_CONFIG_PATH = path.join(
+  REPO_ROOT,
+  "Development",
+  "IobeamAdmin",
+  "Json",
+  "IobeamAdmin.json"
 );
 const RESTART_SCRIPT = path.join(
   BACKEND_ROOT,
@@ -88,6 +110,19 @@ function resolveConfigPath(raw: string | undefined): string {
   return resolvedCandidate;
 }
 
+function resolveAdminConfigPath(raw: string | undefined): string {
+  const candidate = raw?.trim();
+  if (!candidate) {
+    return firstExistingConfigPath([
+      DEPLOYMENT_ADMIN_CONFIG_PATH,
+      DEFAULT_ADMIN_CONFIG_PATH,
+    ]);
+  }
+  const resolvedCandidate = path.resolve(candidate);
+  if (fs.existsSync(resolvedCandidate)) return resolvedCandidate;
+  return resolvedCandidate;
+}
+
 function firstExistingConfigPath(paths: Array<string | null>, fallback?: string): string {
   for (const p of paths) {
     if (p && fs.existsSync(p)) return path.resolve(p);
@@ -120,6 +155,7 @@ export const config: Config = {
     process.env.STATIC_DIR ?? "../frontend/dist"
   ),
   configPath: resolveConfigPath(process.env.GLASGOW_CONFIG),
+  adminConfigPath: resolveAdminConfigPath(process.env.IOBEAM_ADMIN_CONFIG),
   restartCmd:
     process.env.GLASGOW_RESTART_CMD?.trim() ||
     DEFAULT_RESTART_CMD,
@@ -131,4 +167,12 @@ export const config: Config = {
     process.env.IONBEAM_BACKEND_RESTART_CMD?.trim() ||
     DEFAULT_BACKEND_RESTART_CMD,
   configStrict: bool(process.env.GLASGOW_CONFIG_STRICT, false),
+  adminDbHost: process.env.IOBEAM_ADMIN_DB_HOST?.trim() || "localhost",
+  adminDbPort: Number(process.env.IOBEAM_ADMIN_DB_PORT ?? 5432),
+  adminDbName: process.env.IOBEAM_ADMIN_DB_NAME?.trim() || "iobeam_admin",
+  adminDbUser: process.env.IOBEAM_ADMIN_DB_USER?.trim() || "postgres",
+  adminDbPassword: process.env.IOBEAM_ADMIN_DB_PASSWORD?.trim() || null,
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID?.trim() || null,
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN?.trim() || null,
+  twilioFromNumber: process.env.TWILIO_FROM_NUMBER?.trim() || null,
 };

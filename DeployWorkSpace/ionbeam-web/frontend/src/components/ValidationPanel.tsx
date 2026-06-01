@@ -25,6 +25,7 @@ import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
+type DbFlowState = "checking" | "ready" | "disabled" | "saving" | "saved" | "error";
 type DirectoryPickerOptions = { startIn?: "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos" };
 type DirectoryHandle = {
   name: string;
@@ -42,7 +43,7 @@ type DirectoryHandle = {
 const OUTPUT_PREFIX_STORAGE_KEY = "ionbeam:downloadOutputPrefix";
 const DEFAULT_DOWNLOAD_PATH_LABEL = defaultDownloadPathLabel();
 
-export function ValidationPanel() {
+export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
   const { t, fmt } = useTranslation();
   const result = useAppSelector((s) => s.scan.lastResult);
   const error = useAppSelector((s) => s.scan.errorMessage);
@@ -64,6 +65,8 @@ export function ValidationPanel() {
   const [csvErr, setCsvErr] = useState<string | null>(null);
   const [figErr, setFigErr] = useState<string | null>(null);
   const [autoDownload, setAutoDownload] = useState(false);
+  const [dbFlowState, setDbFlowState] = useState<DbFlowState>("checking");
+  const [dbFlowErr, setDbFlowErr] = useState<string | null>(null);
   const [downloadDir, setDownloadDir] = useState<DirectoryHandle | null>(null);
   // downloadDirLabel is set lazily after the first translation read so
   // we don't end up showing the English placeholder briefly during the
@@ -74,6 +77,7 @@ export function ValidationPanel() {
   );
   const [autoErr, setAutoErr] = useState<string | null>(null);
   const lastAutoDownloadKeyRef = useRef<string | null>(null);
+  const lastDbFlowKeyRef = useRef<string | null>(null);
 
   const haveStreamData =
     (kind === "raster" && rasterCursor > 0) ||
@@ -82,8 +86,10 @@ export function ValidationPanel() {
   const haveAnyData =
     haveValidatedData ||
     (haveStreamData && (phase === "completed" || phase === "paused"));
+  const dbFlowReadyPhase = phase === "completed" || phase === "paused";
 
   async function selectDownloadFolder() {
+    if (disabled) return;
     setAutoErr(null);
     const picker = (window as any).showDirectoryPicker as
       | ((options?: DirectoryPickerOptions) => Promise<DirectoryHandle>)
@@ -111,6 +117,34 @@ export function ValidationPanel() {
     window.localStorage.setItem(OUTPUT_PREFIX_STORAGE_KEY, next);
   }
 
+  useEffect(() => {
+    let cancelled = false;
+    async function checkDb() {
+      setDbFlowState("checking");
+      setDbFlowErr(null);
+      try {
+        const r = await fetch("/api/admin/iobeam/db/status");
+        const data = (await r.json()) as { ok?: boolean; enabled?: boolean; error?: string };
+        if (cancelled) return;
+        if (r.ok && data.enabled) {
+          setDbFlowState("ready");
+        } else {
+          setDbFlowState("disabled");
+          setDbFlowErr(data.error ?? `HTTP ${r.status}`);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setDbFlowState("disabled");
+          setDbFlowErr(e?.message ?? String(e));
+        }
+      }
+    }
+    void checkDb();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const downloadSettings = (
     <>
       <div className="field" style={{ marginTop: 12 }}>
@@ -121,6 +155,7 @@ export function ValidationPanel() {
           id="validation-output-prefix"
           className="input"
           value={outputPrefix}
+          disabled={disabled}
           onChange={(e) => updateOutputPrefix(e.target.value)}
           placeholder={t("validation.outputPrefix.placeholder")}
         />
@@ -129,7 +164,7 @@ export function ValidationPanel() {
         </span>
       </div>
       <div className="button-row" style={{ marginTop: 8, alignItems: "center" }}>
-        <button className="btn btn--ghost" onClick={selectDownloadFolder}>
+        <button className="btn btn--ghost" disabled={disabled} onClick={selectDownloadFolder}>
           <Icon name="download" tone="accent" />
           {t("validation.selectFolder")}
         </button>
@@ -140,6 +175,7 @@ export function ValidationPanel() {
           <input
             type="checkbox"
             checked={autoDownload}
+            disabled={disabled}
             onChange={(e) => {
               setAutoDownload(e.target.checked);
               setAutoErr(null);
@@ -151,6 +187,21 @@ export function ValidationPanel() {
       {autoErr && (
         <div style={{ color: "var(--c-warn)", fontSize: 12, marginTop: 6 }}>
           {t("validation.autoDownload.error", { detail: autoErr })}
+        </div>
+      )}
+      {dbFlowState === "disabled" && dbFlowErr && (
+        <div style={{ color: "var(--c-warn)", fontSize: 12, marginTop: 6 }}>
+          {t("validation.flowToDb.disabled", { detail: dbFlowErr })}
+        </div>
+      )}
+      {dbFlowState === "saved" && (
+        <div style={{ color: "var(--c-accent)", fontSize: 12, marginTop: 6 }}>
+          {t("validation.flowToDb.saved")}
+        </div>
+      )}
+      {dbFlowState === "error" && dbFlowErr && (
+        <div style={{ color: "var(--c-danger)", fontSize: 12, marginTop: 6 }}>
+          {t("validation.flowToDb.error", { detail: dbFlowErr })}
         </div>
       )}
     </>
@@ -215,7 +266,24 @@ export function ValidationPanel() {
     await writable.close();
   }
 
+  async function saveResultToDb() {
+    if (disabled) return;
+    const signedUser = readSignedInUser();
+    const r = await fetch("/api/admin/iobeam/activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: signedUser?.id ?? 1,
+        activity_type: scanKind === "raster" ? "RASTER run" : "VECTER run",
+      }),
+    });
+    if (!r.ok) {
+      throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    }
+  }
+
   async function downloadCsv() {
+    if (disabled) return;
     setCsvState("fetching");
     setCsvErr(null);
     try {
@@ -229,6 +297,7 @@ export function ValidationPanel() {
   }
 
   async function downloadFigure() {
+    if (disabled) return;
     setFigState("fetching");
     setFigErr(null);
     try {
@@ -242,7 +311,7 @@ export function ValidationPanel() {
   }
 
   useEffect(() => {
-    if (!autoDownload || phase !== "completed" || !haveAnyData) return;
+    if (disabled || !autoDownload || phase !== "completed" || !haveAnyData) return;
 
     const key = [
       scanKind,
@@ -289,7 +358,43 @@ export function ValidationPanel() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode, outputPrefix]);
+  }, [disabled, autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode, outputPrefix]);
+
+  useEffect(() => {
+    if (disabled || dbFlowState === "checking" || dbFlowState === "disabled" || !dbFlowReadyPhase || !haveAnyData) return;
+
+    const key = [
+      "db",
+      scanKind,
+      result?.chunks ?? "stream",
+      result?.bytes ?? "stream",
+      rasterCursor,
+      vectorCursor,
+      vectorRenderMode,
+    ].join(":");
+    if (lastDbFlowKeyRef.current === key) return;
+    lastDbFlowKeyRef.current = key;
+
+    let cancelled = false;
+    async function runDbFlow() {
+      setDbFlowState("saving");
+      setDbFlowErr(null);
+      try {
+        await saveResultToDb();
+        if (!cancelled) setDbFlowState("saved");
+      } catch (e: any) {
+        if (!cancelled) {
+          setDbFlowState("error");
+          setDbFlowErr(e?.message ?? String(e));
+        }
+      }
+    }
+    void runDbFlow();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabled, dbFlowState, dbFlowReadyPhase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode]);
 
   /* -------- render ------------------------------------------------------ */
 
@@ -369,7 +474,7 @@ export function ValidationPanel() {
         <div className="button-row" style={{ marginTop: 12 }}>
           <button
             className="btn"
-            disabled={!haveAnyData || csvState === "fetching"}
+            disabled={disabled || !haveAnyData || csvState === "fetching"}
             onClick={downloadCsv}
             title={t("validation.downloadCsv.title")}
           >
@@ -380,7 +485,7 @@ export function ValidationPanel() {
           </button>
           <button
             className="btn"
-            disabled={!haveAnyData || figState === "fetching"}
+            disabled={disabled || !haveAnyData || figState === "fetching"}
             onClick={downloadFigure}
             title={t("validation.downloadFigure.title")}
           >
@@ -484,6 +589,16 @@ function defaultDownloadFilename(
     return `raster_${r}x${r}${inserted}_${ts}.${fileType}`;
   }
   return `vector_latency_${result?.latency_bytes ?? 0}${inserted}_${ts}.${fileType}`;
+}
+
+function readSignedInUser(): { id?: number | null } | null {
+  const raw = window.localStorage.getItem("ionbeam:adminUser");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as { id?: number | null };
+  } catch {
+    return null;
+  }
 }
 
 /** Bracketed-bold for inline button-name references. Mirrors the

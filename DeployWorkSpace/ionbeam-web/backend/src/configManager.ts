@@ -104,7 +104,14 @@ export function backupPathFor(configPath: string): string {
  * the "Default" button relies on.
  */
 export async function readWithBackup(): Promise<ConfigInfo> {
-  const configPath = config.configPath;
+  return readConfigFileWithBackup(config.configPath);
+}
+
+export async function readAdminWithBackup(): Promise<ConfigInfo> {
+  return readConfigFileWithBackup(config.adminConfigPath);
+}
+
+async function readConfigFileWithBackup(configPath: string): Promise<ConfigInfo> {
   const backupPath = backupPathFor(configPath);
 
   let raw: string;
@@ -168,8 +175,18 @@ export async function readWithBackup(): Promise<ConfigInfo> {
  * needs to take effect in the FastAPI process.
  */
 export async function writeConfig(data: unknown): Promise<void> {
-  const configPath = config.configPath;
+  await writeJsonConfig(config.configPath, data, true);
+}
 
+export async function writeAdminConfig(data: unknown): Promise<void> {
+  await writeJsonConfig(config.adminConfigPath, data, false);
+}
+
+async function writeJsonConfig(
+  configPath: string,
+  data: unknown,
+  useStrictMode: boolean
+): Promise<void> {
   // Reject silly-large payloads up front. The Express body parser is
   // already capped at 16 MB; this is a tighter check on what we'll
   // actually accept for a config write specifically.
@@ -181,7 +198,7 @@ export async function writeConfig(data: unknown): Promise<void> {
     );
   }
 
-  if (config.configStrict) {
+  if (useStrictMode && config.configStrict) {
     if (!(await fileExists(configPath))) {
       throw new ConfigError(
         `strict mode: config file does not exist: ${configPath}`,
@@ -203,7 +220,14 @@ export async function writeConfig(data: unknown): Promise<void> {
  * that case, but the check is defensive against a stale page state).
  */
 export async function restoreFromBackup(): Promise<void> {
-  const configPath = config.configPath;
+  await restoreConfigFileFromBackup(config.configPath);
+}
+
+export async function restoreAdminFromBackup(): Promise<void> {
+  await restoreConfigFileFromBackup(config.adminConfigPath);
+}
+
+async function restoreConfigFileFromBackup(configPath: string): Promise<void> {
   const backupPath = backupPathFor(configPath);
 
   let raw: string;

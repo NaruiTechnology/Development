@@ -48,6 +48,7 @@ import {
   setDraft,
   setError,
   writePath,
+  type SettingsConfigInfo,
   type SettingsTab,
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
@@ -291,6 +292,7 @@ function SettingsModalShell() {
         <SettingsTabButton tab="vector" active={activeTab} onSelect={onSelectTab} />
         <SettingsTabButton tab="pins" active={activeTab} onSelect={onSelectTab} />
         <SettingsTabButton tab="simulation" active={activeTab} onSelect={onSelectTab} />
+        <SettingsTabButton tab="admin" active={activeTab} onSelect={onSelectTab} />
       </div>
 
       <div className="modal__body settings-modal__body">
@@ -393,6 +395,7 @@ function SettingsTabButton({
       vector: "settings.tabs.vector",
       pins: "settings.tabs.pins",
       simulation: "settings.tabs.simulation",
+      admin: "settings.tabs.admin",
     } as const
   )[tab];
   return (
@@ -422,6 +425,8 @@ function SettingsTabBody({ tab, draft }: { tab: SettingsTab; draft: unknown }) {
       return <PinsTab draft={draft} />;
     case "simulation":
       return <SimulationTab draft={draft} />;
+    case "admin":
+      return <AdminTab />;
   }
 }
 
@@ -970,6 +975,491 @@ function SimulationTab({ draft }: { draft: unknown }) {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+async function fetchAdminConfig(): Promise<SettingsConfigInfo> {
+  const r = await fetch("/api/admin/iobeam/config");
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`fetch admin config: HTTP ${r.status} ${text}`);
+  }
+  return (await r.json()) as SettingsConfigInfo;
+}
+
+async function saveAdminConfig(data: unknown): Promise<void> {
+  const r = await fetch("/api/admin/iobeam/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`save admin config: HTTP ${r.status} ${text}`);
+  }
+}
+
+async function restoreAdminConfig(): Promise<void> {
+  const r = await fetch("/api/admin/iobeam/config/restore", { method: "POST" });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`restore admin config: HTTP ${r.status} ${text}`);
+  }
+}
+
+interface AdminUserRow {
+  id: number | null;
+  login_name: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+  company_name: string;
+  role: number;
+  is_active: boolean;
+}
+
+const ADMIN_ROLE_OPTIONS = [
+  { value: 3, key: "settings.admin.role.admin" },
+  { value: 2, key: "settings.admin.role.developer" },
+  { value: 1, key: "settings.admin.role.superUser" },
+  { value: 0, key: "settings.admin.role.user" },
+] satisfies ReadonlyArray<{ value: number; key: TranslationKey }>;
+
+function emptyAdminUser(nextId: number): AdminUserRow {
+  return {
+    id: nextId,
+    login_name: "",
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone_number: "",
+    company_name: "",
+    role: 0,
+    is_active: true,
+  };
+}
+
+function adminUsersFromDraft(draft: unknown): AdminUserRow[] {
+  const users = readPath(draft, ["users"]);
+  const rawUsers = Array.isArray(users)
+    ? users
+    : readPath(draft, ["user"]) && typeof readPath(draft, ["user"]) === "object"
+      ? [readPath(draft, ["user"])]
+      : [];
+
+  return rawUsers
+    .filter((u): u is Record<string, unknown> => Boolean(u) && typeof u === "object")
+    .map((u, index) => ({
+      id: typeof u.id === "number" ? u.id : index + 1,
+      login_name: String(u.login_name ?? ""),
+      first_name: String(u.first_name ?? ""),
+      last_name: String(u.last_name ?? ""),
+      email: String(u.email ?? ""),
+      phone_number: String(u.phone_number ?? ""),
+      company_name: String(u.company_name ?? ""),
+      role: typeof u.role === "number" ? u.role : Number(u.role ?? 0),
+      is_active: typeof u.is_active === "boolean" ? u.is_active : true,
+    }));
+}
+
+function AdminTab() {
+  const { t } = useTranslation();
+  const [source, setSource] = useState<unknown | null>(null);
+  const [draft, setDraftLocal] = useState<unknown | null>(null);
+  const [configPath, setConfigPath] = useState("");
+  const [hasBackup, setHasBackup] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [error, setLocalError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setLocalError(null);
+    try {
+      const info = await fetchAdminConfig();
+      setSource(info.data);
+      setDraftLocal(info.data);
+      setConfigPath(info.path);
+      setHasBackup(info.has_backup);
+      setNotice(info.backup_created ? t("settings.admin.backupCreated") : null);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function set(p: ReadonlyArray<string | number>, v: unknown) {
+    if (draft === null) return;
+    setDraftLocal(writePath(draft, p, v));
+  }
+
+  function setUsers(users: AdminUserRow[]) {
+    if (draft === null) return;
+    const next = writePath(draft, ["users"], users);
+    setDraftLocal(writePath(next, ["user"], users[0] ?? emptyAdminUser(1)));
+  }
+
+  function updateUser(index: number, field: keyof AdminUserRow, value: string | number | boolean | null) {
+    const users = adminUsersFromDraft(draft);
+    const next = users.map((user, rowIndex) =>
+      rowIndex === index ? { ...user, [field]: value } : user
+    );
+    setUsers(next);
+  }
+
+  function addUser() {
+    const users = adminUsersFromDraft(draft);
+    const maxId = users.reduce((max, user) => Math.max(max, user.id ?? 0), 0);
+    setUsers([...users, emptyAdminUser(maxId + 1)]);
+  }
+
+  function deleteUser(index: number) {
+    setUsers(adminUsersFromDraft(draft).filter((_user, rowIndex) => rowIndex !== index));
+  }
+
+  async function onSave() {
+    if (draft === null) return;
+    setSaving(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      await saveAdminConfig(draft);
+      setSource(draft);
+      setNotice(t("settings.admin.save.ok"));
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onRestore() {
+    setRestoring(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      await restoreAdminConfig();
+      await load();
+      setNotice(t("settings.admin.restore.ok"));
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  const busy = loading || saving || restoring;
+  const dirty = draft !== null && draft !== source;
+
+  if (loading && draft === null) {
+    return <div className="settings-loading">{t("settings.admin.loading")}</div>;
+  }
+
+  if (draft === null) {
+    return <div className="settings-loading">{t("settings.admin.empty")}</div>;
+  }
+
+  return (
+    <div className="settings-form">
+      {configPath && (
+        <div className="settings-path-strip" title={configPath}>
+          <span className="settings-path-strip__label">
+            {t("settings.admin.boundTo")}
+          </span>
+          <code className="settings-path-strip__path">{configPath}</code>
+        </div>
+      )}
+
+      {notice && (
+        <SettingsNotice
+          tone="success"
+          message={notice}
+          onDismiss={() => setNotice(null)}
+        />
+      )}
+      {error && (
+        <SettingsNotice
+          tone="error"
+          message={error}
+          onDismiss={() => setLocalError(null)}
+        />
+      )}
+
+      <h4 className="settings-form__group">{t("settings.admin.group.header")}</h4>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.application")}
+          value={stringField(draft, ["Header", "Application"], "")}
+          onChange={(v) => set(["Header", "Application"], v)}
+        />
+        <TextField
+          label={t("settings.admin.version")}
+          value={stringField(draft, ["Header", "Version"], "")}
+          onChange={(v) => set(["Header", "Version"], v)}
+        />
+      </div>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.description")}
+          value={stringField(draft, ["Header", "Description"], "")}
+          onChange={(v) => set(["Header", "Description"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">{t("settings.admin.group.database")}</h4>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.db.provider")}
+          value={stringField(draft, ["Database", "Provider"], "")}
+          onChange={(v) => set(["Database", "Provider"], v)}
+        />
+        <TextField
+          label={t("settings.admin.db.name")}
+          value={stringField(draft, ["Database", "DatabaseName"], "")}
+          onChange={(v) => set(["Database", "DatabaseName"], v)}
+        />
+      </div>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.db.schema")}
+          value={stringField(draft, ["Database", "Schema"], "")}
+          onChange={(v) => set(["Database", "Schema"], v)}
+        />
+        <TextField
+          label={t("settings.admin.db.host")}
+          value={stringField(draft, ["Database", "Host"], "")}
+          onChange={(v) => set(["Database", "Host"], v)}
+        />
+        <NumberField
+          label={t("settings.admin.db.port")}
+          value={numberField(draft, ["Database", "Port"], 5432)}
+          onChange={(v) => set(["Database", "Port"], v)}
+        />
+      </div>
+
+      <div className="settings-form__group-row">
+        <h4 className="settings-form__group">{t("settings.admin.group.users")}</h4>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={addUser}
+          disabled={busy}
+          title={t("settings.admin.user.add.title")}
+        >
+          <Icon name="upload" tone="accent" />
+          {t("settings.admin.user.add")}
+        </button>
+      </div>
+      <AdminUsersTable
+        users={adminUsersFromDraft(draft)}
+        disabled={busy}
+        onUpdate={updateUser}
+        onDelete={deleteUser}
+      />
+
+      <h4 className="settings-form__group">{t("settings.admin.group.session")}</h4>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.session.client")}
+          value={stringField(draft, ["session", "client_machine_name"], "")}
+          onChange={(v) => set(["session", "client_machine_name"], v)}
+        />
+        <TextField
+          label={t("settings.admin.session.loginTime")}
+          value={stringField(draft, ["session", "login_time"], "")}
+          onChange={(v) => set(["session", "login_time"], v)}
+        />
+      </div>
+      <div className="settings-flags">
+        <CheckboxField
+          label={t("settings.admin.session.authorized")}
+          value={boolField(draft, ["session", "is_autorized"], false)}
+          onChange={(v) => set(["session", "is_autorized"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">{t("settings.admin.group.activity")}</h4>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.activity.type")}
+          value={stringField(draft, ["activity", "activity_type"], "")}
+          onChange={(v) => set(["activity", "activity_type"], v)}
+        />
+      </div>
+
+      <div className="settings-footer__row">
+        <span
+          className="scan-busy"
+          data-visible={busy ? "true" : "false"}
+          aria-hidden={!busy}
+        >
+          <span className="scan-busy__spinner" />
+        </span>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={() => void load()}
+          disabled={busy}
+          title={t("settings.admin.reload.title")}
+        >
+          <Icon name="refresh" tone="accent" />
+          {t("settings.reload")}
+        </button>
+        <span className="spacer" />
+        <button
+          type="button"
+          className="btn btn--warn"
+          disabled={busy || !hasBackup}
+          onClick={() => void onRestore()}
+          title={t("settings.admin.default.title")}
+        >
+          <Icon name="refresh" tone="warn" />
+          {t("settings.btn.default")}
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={busy || !dirty}
+          onClick={() => void onSave()}
+          title={t("settings.admin.save.title")}
+        >
+          <Icon name="download" />
+          {t("settings.btn.saveAs")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AdminUsersTable({
+  users,
+  disabled,
+  onUpdate,
+  onDelete,
+}: {
+  users: AdminUserRow[];
+  disabled: boolean;
+  onUpdate: (index: number, field: keyof AdminUserRow, value: string | number | boolean | null) => void;
+  onDelete: (index: number) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="settings-admin-table-wrap">
+      <div className="settings-admin-table" role="table">
+        <div className="settings-admin-table__head" role="row">
+          <span role="columnheader">{t("settings.admin.user.id")}</span>
+          <span role="columnheader">{t("settings.admin.user.login")}</span>
+          <span role="columnheader">{t("settings.admin.user.firstName")}</span>
+          <span role="columnheader">{t("settings.admin.user.lastName")}</span>
+          <span role="columnheader">{t("settings.admin.user.email")}</span>
+          <span role="columnheader">{t("settings.admin.user.phone")}</span>
+          <span role="columnheader">{t("settings.admin.user.company")}</span>
+          <span role="columnheader">{t("settings.admin.user.role")}</span>
+          <span role="columnheader">{t("settings.admin.user.active")}</span>
+          <span role="columnheader">{t("settings.admin.user.actions")}</span>
+        </div>
+        {users.map((user, index) => (
+          <div className="settings-admin-table__row" role="row" key={`${user.id ?? "new"}-${index}`}>
+            <input
+              aria-label={t("settings.admin.user.id")}
+              className="input"
+              type="number"
+              value={user.id ?? ""}
+              disabled={disabled}
+              onChange={(e) =>
+                onUpdate(index, "id", e.target.value === "" ? null : Number(e.target.value))
+              }
+            />
+            <input
+              aria-label={t("settings.admin.user.login")}
+              className="input"
+              value={user.login_name}
+              disabled={disabled}
+              onChange={(e) => onUpdate(index, "login_name", e.target.value)}
+            />
+            <input
+              aria-label={t("settings.admin.user.firstName")}
+              className="input"
+              value={user.first_name}
+              disabled={disabled}
+              onChange={(e) => onUpdate(index, "first_name", e.target.value)}
+            />
+            <input
+              aria-label={t("settings.admin.user.lastName")}
+              className="input"
+              value={user.last_name}
+              disabled={disabled}
+              onChange={(e) => onUpdate(index, "last_name", e.target.value)}
+            />
+            <input
+              aria-label={t("settings.admin.user.email")}
+              className="input"
+              type="email"
+              value={user.email}
+              disabled={disabled}
+              onChange={(e) => onUpdate(index, "email", e.target.value)}
+            />
+            <input
+              aria-label={t("settings.admin.user.phone")}
+              className="input"
+              type="tel"
+              value={user.phone_number}
+              disabled={disabled}
+              onChange={(e) => onUpdate(index, "phone_number", e.target.value)}
+            />
+            <input
+              aria-label={t("settings.admin.user.company")}
+              className="input"
+              value={user.company_name}
+              disabled={disabled}
+              onChange={(e) => onUpdate(index, "company_name", e.target.value)}
+            />
+            <select
+              aria-label={t("settings.admin.user.role")}
+              className="select"
+              value={user.role}
+              disabled={disabled}
+              onChange={(e) => onUpdate(index, "role", Number(e.target.value))}
+            >
+              {ADMIN_ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {t(option.key)}
+                </option>
+              ))}
+            </select>
+            <label className="settings-admin-table__check">
+              <input
+                aria-label={t("settings.admin.user.active")}
+                type="checkbox"
+                checked={user.is_active}
+                disabled={disabled}
+                onChange={(e) => onUpdate(index, "is_active", e.target.checked)}
+              />
+            </label>
+            <button
+              type="button"
+              className="modal__close"
+              onClick={() => onDelete(index)}
+              disabled={disabled || users.length <= 1}
+              aria-label={t("settings.admin.user.delete")}
+              title={t("settings.admin.user.delete")}
+            >
+              <Icon name="trash" tone="danger" />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
