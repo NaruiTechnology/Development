@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { Header } from "./components/Header";
+import type { SignedInUser } from "./components/AuthDialog";
 import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
 import { RasterParameters } from "./components/RasterParameters";
@@ -55,11 +56,45 @@ export function App() {
     return Number.isFinite(parsed) ? parsed : DEFAULT_RIGHT_PANEL_WIDTH;
   });
   const [isResizing, setIsResizing] = useState(false);
+  const [signedInUser, setSignedInUser] = useState<SignedInUser | null>(() => {
+    const raw = window.localStorage.getItem("ionbeam:adminUser");
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as SignedInUser;
+    } catch {
+      return null;
+    }
+  });
   const hasPartialROI = isPartialROISelection(roiState);
+  const isSignedIn = Boolean(signedInUser);
 
   useEffect(() => {
     dispatch(fetchDefaults());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!signedInUser) return;
+    let cancelled = false;
+
+    fetch("/api/admin/iobeam/auth/current-account")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { login?: unknown; registered?: unknown } | null) => {
+        if (cancelled || !data) return;
+        const currentLogin = String(data.login ?? "").toLowerCase();
+        const signedInLogin = signedInUser.login_name.toLowerCase();
+        if (!data.registered || currentLogin !== signedInLogin) {
+          window.localStorage.removeItem("ionbeam:adminUser");
+          setSignedInUser(null);
+        }
+      })
+      .catch(() => {
+        // Keep the existing session if the startup account check is temporarily unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [signedInUser]);
 
   useEffect(() => {
     if (kind === "raster" || kind === "vector") {
@@ -104,7 +139,7 @@ export function App() {
   }, [isResizing, hasPartialROI]);
 
   const scanActive = phase === "running" || phase === "stopping";
-  const formDisabled = scanActive;
+  const panelDisabled = scanActive || !isSignedIn;
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
     (lastScanKind === "vector" && vectorCursor > 0) ||
@@ -160,7 +195,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Header />
+      <Header signedInUser={signedInUser} onSignedIn={setSignedInUser} />
 
       <main
         ref={mainRef}
@@ -177,9 +212,9 @@ export function App() {
                 role="tab"
                 className="tab tab--roi"
                 aria-selected={kind === "roi"}
-                disabled={scanActive}
+                disabled={panelDisabled}
                 onClick={() => selectKind("roi")}
-                title={scanActive ? t("tabs.roi.title.disabled") : t("tabs.roi.title")}
+                title={panelDisabled ? t("tabs.roi.title.disabled") : t("tabs.roi.title")}
               >
                 <Icon name="target" tone="tab" />
                 {t("tabs.roi")}
@@ -188,7 +223,7 @@ export function App() {
                 role="tab"
                 className="tab"
                 aria-selected={kind === "raster"}
-                disabled={scanActive}
+                disabled={panelDisabled}
                 onClick={() => selectKind("raster")}
               >
                 <Icon name="grid" tone="tab" />
@@ -198,7 +233,7 @@ export function App() {
                 role="tab"
                 className="tab"
                 aria-selected={kind === "vector"}
-                disabled={scanActive}
+                disabled={panelDisabled}
                 onClick={() => selectKind("vector")}
               >
                 <Icon name="route" tone="tab" />
@@ -207,11 +242,11 @@ export function App() {
             </div>
             <div className="card__body">
               {kind === "raster" ? (
-                <RasterParameters disabled={formDisabled} />
+                <RasterParameters disabled={panelDisabled} />
               ) : kind === "vector" ? (
-                <VectorParameters disabled={formDisabled} />
+                <VectorParameters disabled={panelDisabled} />
               ) : (
-                <ROIEditor disabled={formDisabled} variant="controls" />
+                <ROIEditor disabled={panelDisabled} variant="controls" />
               )}
             </div>
           </div>
@@ -223,14 +258,14 @@ export function App() {
                   <span className="card__title">{t("card.controls")}</span>
                 </div>
                 <div className="card__body">
-                  <ScanControls kind={kind as ScanKind} />
+                  <ScanControls kind={kind as ScanKind} disabled={panelDisabled} />
                 </div>
               </div>
               <div className="card">
                 <div className="card__header">
                   <span className="card__title">{t("card.runReport")}</span>
                 </div>
-                <ValidationPanel />
+                <ValidationPanel disabled={!isSignedIn} />
               </div>
               <ErrorWedge />
             </>
@@ -274,7 +309,7 @@ export function App() {
             <div className="card__body">
               {kind === "roi" ? (
                 <ROIEditor
-                  disabled={formDisabled}
+                  disabled={panelDisabled}
                   variant="canvas"
                   backgroundImageUrl={roiScanImageUrl}
                 />

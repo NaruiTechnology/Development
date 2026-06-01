@@ -139,14 +139,26 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
         # Prune dirs for the next iteration
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
 
-    # 4. Copy specific JSON configuration folders
-    json_sources = [r'Development/GlasgowDataIO/Json', r'Development/LoadFPGAImage/Json']
+    # 4. Copy specific configuration and database setup folders
+    json_sources = [
+        r'Development/GlasgowDataIO/Json',
+        r'Development/LoadFPGAImage/Json',
+        r'Development/IobeamAdmin/Json',
+    ]
     for jx in json_sources:
         json_src = os.path.join(src_dir, jx)
         if os.path.exists(json_src):
             json_dist = os.path.join(dist_dir, jx)
             shutil.copytree(json_src, json_dist, dirs_exist_ok=True)
             print(f"Copied JSON folder: {jx}")
+
+    sql_sources = [r'Development/IobeamAdmin/Sql']
+    for sx in sql_sources:
+        sql_src = os.path.join(src_dir, sx)
+        if os.path.exists(sql_src):
+            sql_dist = os.path.join(dist_dir, sx)
+            shutil.copytree(sql_src, sql_dist, dirs_exist_ok=True)
+            print(f"Copied SQL folder: {sx}")
 
     # 5. Copy assets (includes README.md)
     copy_matching_assets(src_dir, dist_dir, ASSET_PATTERNS)

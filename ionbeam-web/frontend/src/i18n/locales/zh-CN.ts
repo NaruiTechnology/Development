@@ -266,6 +266,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.tabs.vector": "矢量",
   "settings.tabs.pins": "引脚",
   "settings.tabs.simulation": "仿真",
+  "settings.tabs.admin": "管理",
   "settings.btn.saveAs": "更新",
   "settings.btn.saveAs.title": "将编辑后的配置写入 streamData.json 并重启服务",
   "settings.btn.default": "默认值",

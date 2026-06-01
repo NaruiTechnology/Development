@@ -9,7 +9,7 @@
         "SourceRoot": "Development/DistributionDeploy",
         "DistDir": "dist_app",
         "DistZip": "dist_app.zip",
-        "DeployRoot": "~/IobeamPlatform",
+        "DeployRoot": "/opt/IobeamPlatform",
         "VenvDir": ".venv",
         "GlasgowConfig": "Development/GlasgowDataIO/Json/streamData.json",
         "GlasgowLog": "/tmp/glasgow.log",
@@ -26,7 +26,7 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "commandFormat": "sudo rm -rf '$1' && mkdir -p '$1'"
+                    "commandFormat": "sudo rm -rf '$1' && sudo mkdir -p '$1' && sudo chown -R $(id -u):$(id -g) '$1' && chmod -R a+rX '$1'"
                 },
                 "timeout": 30.0
             }
@@ -130,6 +130,28 @@
                     "stopOnError": false
                 },
                 "timeout": 1800.0
+            }
+        },
+        {
+            "installPostgreSQL": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib postgresql-client && sudo systemctl enable --now postgresql"
+                },
+                "timeout": 900.0
+            }
+        },
+        {
+            "setupIobeamAdminDb": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "databaseName": "iobeam_admin",
+                    "schemaFile": "Development/IobeamAdmin/Sql/001_schema.sql",
+                    "seedFile": "Development/IobeamAdmin/Sql/002_seed_root_user.sql"
+                },
+                "timeout": 900.0
             }
         },
         {

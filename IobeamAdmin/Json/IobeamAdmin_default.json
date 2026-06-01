@@ -1,0 +1,59 @@
+{
+    "Header": {
+        "Application": "IobeamAdmin",
+        "Version": "0.1.0",
+        "Description": "Security-model container for PostgreSQL user, session, and activity records."
+    },
+    "Database": {
+        "Provider": "PostgreSQL",
+        "DatabaseName": "iobeam_admin",
+        "Schema": "public",
+        "Host": "localhost",
+        "Port": 5432
+    },
+    "ROLE": {
+        "ADMIN": 3,
+        "DEVELOPER": 2,
+        "SUPER_USER": 1,
+        "USER": 0
+    },
+    "user": {
+        "id": null,
+        "login_name": "",
+        "first_name": "",
+        "last_name": "",
+        "email": "",
+        "phone_number": "",
+        "company_name": "",
+        "role": 0,
+        "is_active": true
+    },
+    "users": [
+        {
+            "id": 1,
+            "login_name": "vboxuser",
+            "first_name": "henry",
+            "last_name": "li",
+            "email": "lyh1154@gmail.com",
+            "phone_number": "1 (503)807-9055",
+            "company_name": "",
+            "role": 3,
+            "is_active": true
+        }
+    ],
+    "session": {
+        "id": null,
+        "user_id": null,
+        "login_name": "",
+        "client_machine_name": "",
+        "login_time": null,
+        "is_autorized": false
+    },
+    "activity": {
+        "id": null,
+        "user_id": null,
+        "activity_type": "",
+        "date": null,
+        "last_signed_in": null
+    }
+}

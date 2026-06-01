@@ -95,6 +95,7 @@ class unzipDistribution_state(executeShellCommand_state):
             self._success = await self._run(cmd, timeout)
 
             if self._success:
+                self._makeDeployTreeReadable(deployRoot)
                 self.info("[{}] OK".format(type(self).__name__))
             else:
                 self.error("[{}] FAILED. stderr:\n{}"
@@ -201,6 +202,31 @@ class unzipDistribution_state(executeShellCommand_state):
         self.info("[{}] prepared deploy root ownership for current user: {}"
                   .format(type(self).__name__, root))
         return True
+
+    def _makeDeployTreeReadable(self, root):
+        root = os.path.abspath(os.path.expanduser(str(root)))
+        if not self._isSafeDeployRoot(root):
+            self.warn("[{}] refusing to chmod unsafe deploy root: {}"
+                      .format(type(self).__name__, root))
+            return
+
+        cmd = ["chmod", "-R", "a+rX", root]
+        try:
+            proc = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False)
+        except OSError as e:
+            self.warn("[{}] could not make deploy tree readable '{}': {}"
+                      .format(type(self).__name__, root, e))
+            return
+
+        if proc.returncode != 0:
+            self.warn("[{}] chmod a+rX failed for '{}': {}"
+                      .format(type(self).__name__, root,
+                              proc.stderr.strip() or "<no stderr>"))
 
     @staticmethod
     def _isSafeDeployRoot(path):

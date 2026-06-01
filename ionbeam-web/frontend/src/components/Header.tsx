@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { fetchStatus } from "../store/statusSlice";
 import {
@@ -16,6 +16,7 @@ import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
 import { LanguagePicker } from "./LanguagePicker";
+import { AuthDialog, type SignedInUser } from "./AuthDialog";
 
 // Per-theme labels and tooltips are now translation KEYS, not the
 // literal strings. The keys resolve through t() inside the component
@@ -43,7 +44,13 @@ const STATE_LABEL_KEYS: Record<string, TranslationKey> = {
   disconnected: "header.state.disconnected",
 };
 
-export function Header() {
+export function Header({
+  signedInUser,
+  onSignedIn,
+}: {
+  signedInUser: SignedInUser | null;
+  onSignedIn: (user: SignedInUser) => void;
+}) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
   const selectedBeam = useAppSelector((s) => s.status.defaults?.selected_beam);
@@ -52,10 +59,17 @@ export function Header() {
   const reconnecting = useAppSelector((s) => s.settings.saving);
   const theme = useAppSelector((s) => s.theme.theme);
   const { t } = useTranslation();
-
+  const [authOpen, setAuthOpen] = useState(false);
+  const authAutoOpenedRef = useRef(false);
   useEffect(() => {
     applyThemeToDocument(theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (signedInUser || authAutoOpenedRef.current) return;
+    authAutoOpenedRef.current = true;
+    setAuthOpen(true);
+  }, [signedInUser]);
 
   useEffect(() => {
     dispatch(fetchStatus());
@@ -81,8 +95,10 @@ export function Header() {
       : selectedBeam === "ion"
       ? "header.beam.ion.title"
       : null;
+  const isSignedIn = Boolean(signedInUser);
 
   return (
+    <>
     <header className="app-header">
       <div className="app-header__logo">
         <svg viewBox="0 0 64 64" aria-hidden>
@@ -162,7 +178,7 @@ export function Header() {
         }}
         aria-label={t("header.reconnect.aria")}
         title={t("header.reconnect.title")}
-        disabled={reconnecting}
+        disabled={reconnecting || !isSignedIn}
       >
         <Icon name="link" tone="accent" />
       </button>
@@ -175,8 +191,22 @@ export function Header() {
         }}
         aria-label={t("header.settings.aria")}
         title={t("header.settings.title")}
+        disabled={!isSignedIn}
       >
         <Icon name="cog" tone="accent" />
+      </button>
+      <button
+        type="button"
+        className="auth-chip"
+        onClick={() => setAuthOpen(true)}
+        title={signedInUser ? t("auth.signedIn.title") : t("auth.signIn.title")}
+      >
+        <span className="auth-chip__avatar">
+          {signedInUser?.initials || "?"}
+        </span>
+        <span className="auth-chip__label">
+          {signedInUser?.login_name || t("auth.signIn")}
+        </span>
       </button>
       <span
         className="production-pill app-header__production"
@@ -187,5 +217,11 @@ export function Header() {
         {isProduction ? t("header.production.true") : t("header.production.false")}
       </span>
     </header>
+    <AuthDialog
+      open={authOpen}
+      onClose={() => setAuthOpen(false)}
+      onSignedIn={onSignedIn}
+    />
+    </>
   );
 }

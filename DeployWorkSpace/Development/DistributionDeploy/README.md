@@ -80,7 +80,9 @@ DistributionDeploy/
     ├── installPipRequirements_state.py
     ├── installNodeJS_state.py
     ├── installToolchain_state.py
+    ├── installPostgreSQL_state.py
     ├── setupGlasgow_state.py
+    ├── setupIobeamAdminDb_state.py
     └── exportEnv_state.py
 ```
 
@@ -169,7 +171,7 @@ as-is — they have no IP to protect.
 ```bash
 python3 distributionDeployApp.py
 python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json
-python3 distributionDeployApp.py -r /opt/IobeamTech    # override deploy root
+python3 distributionDeployApp.py -r /opt/IobeamPlatform    # override deploy root
 ```
 
 The `-r` flag overrides `Deployment.DeployRoot` in the loaded config; every
@@ -229,6 +231,13 @@ list.
   (`installUuidRuntime`) and as part of `installToolchain.aptPackages`. The
   former is kept for parity with the spec; the latter is the practical
   fallback. Either one is idempotent against apt.
+* **PostgreSQL** is installed by `installPostgreSQL` and the `IobeamAdmin`
+  schema is bootstrapped by `setupIobeamAdminDb`. The SQL scripts live under
+  `Development/IobeamAdmin/Sql/` and create the `user`, `session`, and
+  `activity` tables plus their stored procedures.
+* For interactive DB administration, use `pgAdmin 4` if you want a
+  PostgreSQL-native SSMS-style tool, or `DBeaver` for a general-purpose
+  database IDE.
 * **`sudo`**: actions that need root (apt install, cp into
   `/etc/udev/rules.d`, `udevadm control --reload`) call `sudo` directly
   inside the JSON command templates. Run the workflow from a user that
