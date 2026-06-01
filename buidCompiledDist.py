@@ -37,7 +37,12 @@ JSON_SOURCES = [
     os.path.join('Development', 'GlasgowDataIO', 'Json'),
     os.path.join('Development', 'LoadFPGAImage', 'Json'),
     os.path.join('GlasgowDataIO', 'Json'),
+    os.path.join('IobeamAdmin', 'Json'),
     os.path.join('DistributionDeploy', 'Json'),
+]
+
+SQL_SOURCES = [
+    os.path.join('IobeamAdmin', 'Sql'),
 ]
 
 # Source ionbeam-web tree lives at Development\ionbeam-web. The destination
@@ -149,6 +154,17 @@ def copy_json_sources(src_dir, dist_dir):
                 shutil.rmtree(json_dist)
             shutil.copytree(json_src, json_dist)
             print(f"Copied JSON folder: {os.path.normpath(rel_json)}")
+
+
+def copy_sql_sources(src_dir, dist_dir):
+    for rel_sql in SQL_SOURCES:
+        sql_src = os.path.join(src_dir, rel_sql)
+        if os.path.isdir(sql_src):
+            sql_dist = os.path.join(dist_dir, rel_sql)
+            if os.path.exists(sql_dist):
+                shutil.rmtree(sql_dist)
+            shutil.copytree(sql_src, sql_dist)
+            print(f"Copied SQL folder: {os.path.normpath(rel_sql)}")
 
 
 def copy_source_trees(src_dir, dist_dir):
@@ -514,21 +530,24 @@ def build_compiled_dist(src_dir, dist_dir, output_zip='dist_app.zip',
     # 4. Copy specific JSON configuration folders.
     copy_json_sources(src_dir, dist_dir)
 
-    # 5. Copy non-Python application source trees.
+    # 5. Copy database setup scripts.
+    copy_sql_sources(src_dir, dist_dir)
+
+    # 6. Copy non-Python application source trees.
     copy_source_trees(src_dir, dist_dir)
 
-    # 6. Copy the deployment workflow and JSON config.
+    # 7. Copy the deployment workflow and JSON config.
     copy_deploy_workflow(src_dir, dist_dir)
 
-    # 7. Copy assets (includes README.md).
+    # 8. Copy assets (includes README.md).
     copy_matching_assets(src_dir, dist_dir, ASSET_PATTERNS)
 
-    # 8. Zip the output content.
+    # 9. Zip the output content.
     if output_zip:
         print(f"\nCreating archive {output_zip}...")
         zip_dist(dist_dir, output_zip)
 
-    # 9. Final cleanup.
+    # 10. Final cleanup.
     if clean:
         print(f"Removing temporary build folder {dist_dir}...")
         _remove_tree(dist_dir)

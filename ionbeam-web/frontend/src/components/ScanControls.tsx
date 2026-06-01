@@ -44,7 +44,7 @@ import {
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 
-export function ScanControls({ kind }: { kind: ScanKind }) {
+export function ScanControls({ kind, disabled = false }: { kind: ScanKind; disabled?: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const phase = useAppSelector((s) => s.scan.phase);
@@ -69,7 +69,7 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   const busy = streaming || closing;
 
   async function onRun() {
-    if (kind === "roi") return;
+    if (disabled || kind === "roi") return;
     if (kind === "raster") {
       try {
         const req = await rasterRequestWithBitmapSelection(
@@ -97,17 +97,19 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   }
 
   function onPause() {
+    if (disabled) return;
     stream.pause();
   }
 
   function onStop() {
+    if (disabled) return;
     stream.stop();
     if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }
 
   async function onRunValidated() {
-    if (kind === "roi") return;
+    if (disabled || kind === "roi") return;
     if (kind === "raster") {
       try {
         const req = await rasterRequestWithBitmapSelection(
@@ -145,14 +147,15 @@ export function ScanControls({ kind }: { kind: ScanKind }) {
   }
 
   function onClear() {
+    if (disabled) return;
     dispatch(streamReset());
     if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }
 
-  const runDisabled = streaming || closing;
-  const pauseDisabled = !streaming;
-  const stopDisabled = !(streaming || paused);
+  const runDisabled = disabled || streaming || closing;
+  const pauseDisabled = disabled || !streaming;
+  const stopDisabled = disabled || !(streaming || paused);
 
   useEffect(() => {
     const completedNow = phase === "completed" && prevPhaseRef.current !== "completed";

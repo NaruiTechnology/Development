@@ -275,6 +275,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.tabs.vector": "矢量",
   "settings.tabs.pins": "接腳",
   "settings.tabs.simulation": "模擬",
+  "settings.tabs.admin": "管理",
   "settings.btn.saveAs": "更新",
   "settings.btn.saveAs.title": "將編輯後的設定寫入 streamData.json 並重新啟動服務",
   "settings.btn.default": "預設值",

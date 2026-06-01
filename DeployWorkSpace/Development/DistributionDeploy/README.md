@@ -24,8 +24,9 @@ and deploys it to:
    - `amaranth`
    - `yowasp-yosys`
    - `yowasp-nextpnr-ice40`
-7. Set `GLASGOW_TOOLCHAIN=builtin` so Yosys, nextpnr-ice40, and icepack resolve through YosysHQ WASM Python packages on Windows.
-8. Launch `glasgow_service`, the Ionbeam web backend, and the Vite frontend.
+7. Verify or install PostgreSQL and initialize the `iobeam_admin` database from `IobeamAdmin\Sql`.
+8. Set `GLASGOW_TOOLCHAIN=builtin` so Yosys, nextpnr-ice40, and icepack resolve through YosysHQ WASM Python packages on Windows.
+9. Launch `glasgow_service`, the Ionbeam web backend, and the Vite frontend.
 
 ## Run
 
@@ -47,6 +48,8 @@ Python must be available as either `python` or `py -3`.
 
 Node.js LTS should be available on PATH. If it is missing and `winget` is available, the deploy state can install `OpenJS.NodeJS.LTS`.
 
+PostgreSQL should be available on PATH, or installed under `C:\Program Files\PostgreSQL\<version>\bin`. If it is missing and `winget` is available, the deploy state attempts to install `PostgreSQL.PostgreSQL`. Set `IOBEAM_ADMIN_DB_PASSWORD` before running the workflow when the local `postgres` account requires a password.
+
 For Glasgow USB access on Windows, install or associate a WinUSB/libusb-compatible driver for the Glasgow device. The deploy workflow verifies Python USB packages, but Windows driver binding is still a machine-level setup step.
 
 Logs and PID files are written under:
@@ -56,6 +59,10 @@ Logs and PID files are written under:
 The Glasgow service config is:
 
 `C:\Project\Iobeam\Deploy\GlasgowDataIO\Json\streamData.json`
+
+The Iobeam admin config is:
+
+`C:\Project\Iobeam\Deploy\IobeamAdmin\Json\IobeamAdmin.json`
 
 ## Toolchain
 

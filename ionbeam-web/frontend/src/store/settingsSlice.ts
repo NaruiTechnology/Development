@@ -91,7 +91,13 @@ interface SettingsState {
   backupNotice: boolean;
 }
 
-export type SettingsTab = "general" | "raster" | "vector" | "pins" | "simulation";
+export type SettingsTab =
+  | "general"
+  | "raster"
+  | "vector"
+  | "pins"
+  | "simulation"
+  | "admin";
 
 const initialState: SettingsState = {
   dialogOpen: false,
