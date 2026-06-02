@@ -72,10 +72,10 @@ export function Header({
   }, [theme]);
 
   useEffect(() => {
-    if (signedInUser || authAutoOpenedRef.current) return;
+    if (activeView === "report" || signedInUser || authAutoOpenedRef.current) return;
     authAutoOpenedRef.current = true;
     setAuthOpen(true);
-  }, [signedInUser]);
+  }, [activeView, signedInUser]);
 
   useEffect(() => {
     dispatch(fetchStatus());

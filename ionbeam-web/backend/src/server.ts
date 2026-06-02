@@ -433,143 +433,27 @@ app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
       return;
     }
 
-    const idsSql = ids.join(",");
-    const sql = `
-      SET search_path TO iobeam_admin, public;
-      WITH scoped_activity AS (
-        SELECT
-          a.id,
-          a.user_id,
-          btrim(u.login_name::text) AS login_name,
-          btrim(u.first_name::text) AS first_name,
-          btrim(u.last_name::text) AS last_name,
-          btrim(a.activity_type::text) AS activity_type,
-          a.date,
-          CASE
-            WHEN upper(btrim(a.activity_type::text)) LIKE '%RASTER%' THEN 'raster'
-            WHEN upper(btrim(a.activity_type::text)) LIKE '%VECTOR%'
-              OR upper(btrim(a.activity_type::text)) LIKE '%VECTER%' THEN 'vector'
-            ELSE 'other'
-          END AS scan_kind,
-          COALESCE(btrim(latest_session.client_machine_name::text), '') AS client_source
-        FROM activity a
-        JOIN "user" u ON u.id = a.user_id
-        LEFT JOIN LATERAL (
-          SELECT s.client_machine_name
-            FROM session s
-           WHERE s.user_id = a.user_id
-           ORDER BY s.login_time DESC
-           LIMIT 1
-        ) latest_session ON true
-        WHERE a.user_id IN (${idsSql})
-          AND a.date >= CURRENT_TIMESTAMP - (${days} * INTERVAL '1 day')
-      ),
-      normalized AS (
-        SELECT
-          *,
-          CASE
-            WHEN client_source = '' THEN 'Unknown'
-            WHEN client_source IN ('127.0.0.1', '::1', '::ffff:127.0.0.1') THEN 'Localhost'
-            WHEN client_source LIKE '10.%'
-              OR client_source LIKE '192.168.%'
-              OR client_source LIKE '172.16.%'
-              OR client_source LIKE '172.17.%'
-              OR client_source LIKE '172.18.%'
-              OR client_source LIKE '172.19.%'
-              OR client_source LIKE '172.2_.%'
-              OR client_source LIKE '172.30.%'
-              OR client_source LIKE '172.31.%' THEN 'Private network'
-            ELSE client_source
-          END AS location
-        FROM scoped_activity
-      )
-      SELECT jsonb_build_object(
-        'totals', COALESCE((
-          SELECT jsonb_agg(row_to_json(t) ORDER BY t.total_scans DESC, t.login_name)
-          FROM (
-            SELECT
-              user_id,
-              login_name,
-              concat_ws(' ', nullif(first_name, ''), nullif(last_name, '')) AS name,
-              COUNT(*)::int AS total_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-              MAX(date) AS last_activity
-            FROM normalized
-            GROUP BY user_id, login_name, first_name, last_name
-          ) t
-        ), '[]'::jsonb),
-        'daily', COALESCE((
-          SELECT jsonb_agg(row_to_json(d) ORDER BY d.bucket, d.login_name)
-          FROM (
-            SELECT
-              user_id,
-              login_name,
-              to_char(date_trunc('day', date), 'YYYY-MM-DD') AS bucket,
-              COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-              COUNT(*)::int AS total_scans
-            FROM normalized
-            GROUP BY user_id, login_name, date_trunc('day', date)
-          ) d
-        ), '[]'::jsonb),
-        'weekly', COALESCE((
-          SELECT jsonb_agg(row_to_json(w) ORDER BY w.week_start, w.login_name)
-          FROM (
-            SELECT
-              user_id,
-              login_name,
-              to_char(date_trunc('week', date), 'YYYY-MM-DD') AS week_start,
-              COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-              COUNT(*)::int AS total_scans
-            FROM normalized
-            GROUP BY user_id, login_name, date_trunc('week', date)
-          ) w
-        ), '[]'::jsonb),
-        'geography', COALESCE((
-          SELECT jsonb_agg(row_to_json(g) ORDER BY g.total_scans DESC, g.location)
-          FROM (
-            SELECT
-              location,
-              COUNT(DISTINCT user_id)::int AS accounts,
-              COUNT(*)::int AS total_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-              COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-              MAX(date) AS last_activity
-            FROM normalized
-            GROUP BY location
-          ) g
-        ), '[]'::jsonb),
-        'recent', COALESCE((
-          SELECT jsonb_agg(row_to_json(r) ORDER BY r.date DESC)
-          FROM (
-            SELECT
-              user_id,
-              login_name,
-              activity_type,
-              scan_kind,
-              location,
-              date
-            FROM normalized
-            ORDER BY date DESC
-            LIMIT 24
-          ) r
-        ), '[]'::jsonb)
-      );
-    `;
-    const out = await runPsql(["-Atq"], config.adminDbName, sql);
-    const report = JSON.parse(out.trim() || "{}") as Record<string, unknown>;
+    const out = await runPsql(
+      ["-Atq"],
+      config.adminDbName,
+      buildActivityReportCompatibilitySql(ids, days),
+    );
+    const rawReport = JSON.parse(out.trim() || "{}") as unknown;
+    const report =
+      rawReport && typeof rawReport === "object"
+        ? (rawReport as Record<string, unknown>)
+        : {};
     res.json({
       ok: true,
       generated_at: new Date().toISOString(),
       days,
       selected_account_id: requestedAccountId > 0 ? requestedAccountId : null,
       accounts,
-      ...report,
+      totals: Array.isArray(report.totals) ? report.totals : [],
+      daily: Array.isArray(report.daily) ? report.daily : [],
+      weekly: Array.isArray(report.weekly) ? report.weekly : [],
+      geography: Array.isArray(report.geography) ? report.geography : [],
+      recent: Array.isArray(report.recent) ? report.recent : [],
     });
   } catch (err) {
     sendConfigError(res, err);
@@ -869,6 +753,136 @@ async function sendSmsVerification(
 
 function sqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
+}
+
+function buildActivityReportCompatibilitySql(ids: number[], days: number): string {
+  return `
+    SET search_path TO iobeam_admin, public;
+    WITH scoped_activity AS (
+      SELECT
+        a.id,
+        a.user_id,
+        btrim(u.login_name::text) AS login_name,
+        btrim(u.first_name::text) AS first_name,
+        btrim(u.last_name::text) AS last_name,
+        btrim(a.activity_type::text) AS activity_type,
+        a.date,
+        CASE
+          WHEN upper(btrim(a.activity_type::text)) LIKE '%RASTER%' THEN 'raster'
+          WHEN upper(btrim(a.activity_type::text)) LIKE '%VECTOR%'
+            OR upper(btrim(a.activity_type::text)) LIKE '%VECTER%' THEN 'vector'
+          ELSE 'other'
+        END AS scan_kind,
+        COALESCE(btrim(latest_session.client_machine_name::text), '') AS client_source
+      FROM activity a
+      JOIN "user" u ON u.id = a.user_id
+      LEFT JOIN LATERAL (
+        SELECT s.client_machine_name
+          FROM session s
+         WHERE s.user_id = a.user_id
+         ORDER BY s.login_time DESC
+         LIMIT 1
+      ) latest_session ON true
+      WHERE a.user_id = ANY(ARRAY[${ids.join(",")}]::integer[])
+        AND a.date >= CURRENT_TIMESTAMP - (${days} * INTERVAL '1 day')
+    ),
+    normalized AS (
+      SELECT
+        *,
+        CASE
+          WHEN client_source = '' THEN 'Unknown'
+          WHEN client_source IN ('127.0.0.1', '::1', '::ffff:127.0.0.1') THEN 'Localhost'
+          WHEN client_source LIKE '10.%'
+            OR client_source LIKE '192.168.%'
+            OR client_source LIKE '172.16.%'
+            OR client_source LIKE '172.17.%'
+            OR client_source LIKE '172.18.%'
+            OR client_source LIKE '172.19.%'
+            OR client_source LIKE '172.2_.%'
+            OR client_source LIKE '172.30.%'
+            OR client_source LIKE '172.31.%' THEN 'Private network'
+          ELSE client_source
+        END AS location
+      FROM scoped_activity
+    )
+    SELECT jsonb_build_object(
+      'totals', COALESCE((
+        SELECT jsonb_agg(row_to_json(t) ORDER BY t.total_scans DESC, t.login_name)
+        FROM (
+          SELECT
+            user_id,
+            login_name,
+            concat_ws(' ', nullif(first_name, ''), nullif(last_name, '')) AS name,
+            COUNT(*)::int AS total_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+            MAX(date) AS last_activity
+          FROM normalized
+          GROUP BY user_id, login_name, first_name, last_name
+        ) t
+      ), '[]'::jsonb),
+      'daily', COALESCE((
+        SELECT jsonb_agg(row_to_json(d) ORDER BY d.bucket, d.login_name)
+        FROM (
+          SELECT
+            user_id,
+            login_name,
+            to_char(date_trunc('day', date), 'YYYY-MM-DD') AS bucket,
+            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+            COUNT(*)::int AS total_scans
+          FROM normalized
+          GROUP BY user_id, login_name, date_trunc('day', date)
+        ) d
+      ), '[]'::jsonb),
+      'weekly', COALESCE((
+        SELECT jsonb_agg(row_to_json(w) ORDER BY w.week_start, w.login_name)
+        FROM (
+          SELECT
+            user_id,
+            login_name,
+            to_char(date_trunc('week', date), 'YYYY-MM-DD') AS week_start,
+            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+            COUNT(*)::int AS total_scans
+          FROM normalized
+          GROUP BY user_id, login_name, date_trunc('week', date)
+        ) w
+      ), '[]'::jsonb),
+      'geography', COALESCE((
+        SELECT jsonb_agg(row_to_json(g) ORDER BY g.total_scans DESC, g.location)
+        FROM (
+          SELECT
+            location,
+            COUNT(DISTINCT user_id)::int AS accounts,
+            COUNT(*)::int AS total_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+            MAX(date) AS last_activity
+          FROM normalized
+          GROUP BY location
+        ) g
+      ), '[]'::jsonb),
+      'recent', COALESCE((
+        SELECT jsonb_agg(row_to_json(r) ORDER BY r.date DESC)
+        FROM (
+          SELECT
+            user_id,
+            login_name,
+            activity_type,
+            scan_kind,
+            location,
+            date
+          FROM normalized
+          ORDER BY date DESC
+          LIMIT 24
+        ) r
+      ), '[]'::jsonb)
+    );
+  `;
 }
 
 async function recordAdminSession(req: express.Request, user: AdminUser): Promise<void> {

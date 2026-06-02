@@ -67,6 +67,18 @@ interface ActivityReportResponse {
 
 type PeriodMode = "daily" | "weekly";
 
+function normalizeReport(data: ActivityReportResponse): ActivityReportResponse {
+  return {
+    ...data,
+    accounts: Array.isArray(data.accounts) ? data.accounts : [],
+    totals: Array.isArray(data.totals) ? data.totals : [],
+    daily: Array.isArray(data.daily) ? data.daily : [],
+    weekly: Array.isArray(data.weekly) ? data.weekly : [],
+    geography: Array.isArray(data.geography) ? data.geography : [],
+    recent: Array.isArray(data.recent) ? data.recent : [],
+  };
+}
+
 export function ManagementReport({ onBack }: { onBack: () => void }) {
   const { locale, t, fmt } = useTranslation();
   const [accountId, setAccountId] = useState("all");
@@ -91,7 +103,7 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
         return data;
       })
       .then((data) => {
-        if (!cancelled) setReport(data);
+        if (!cancelled) setReport(normalizeReport(data));
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));

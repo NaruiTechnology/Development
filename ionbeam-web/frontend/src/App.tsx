@@ -8,7 +8,14 @@
  * but pulls everything into one window because there is no off-screen
  * "console" surface in a browser context.
  */
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  Component,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { Header } from "./components/Header";
 import type { SignedInUser } from "./components/AuthDialog";
@@ -214,7 +221,9 @@ export function App() {
       />
 
       {route === "report" ? (
-        <ManagementReport onBack={() => navigateTo("control")} />
+        <ReportErrorBoundary>
+          <ManagementReport onBack={() => navigateTo("control")} />
+        </ReportErrorBoundary>
       ) : (
       <main
         ref={mainRef}
@@ -382,7 +391,30 @@ function useAppRoute(): AppRoute {
 }
 
 function normalizeRoute(pathname: string): AppRoute {
-  return pathname === "/report" ? "report" : "control";
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path === "/report" ? "report" : "control";
+}
+
+class ReportErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <main className="management-report">
+        <div className="report-error">
+          Report rendering failed: {this.state.error.message}
+        </div>
+      </main>
+    );
+  }
 }
 
 function isPartialROISelection(roi: {

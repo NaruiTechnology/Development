@@ -133,7 +133,7 @@
                         "mode": "image",
                         "imageResolution": 64,
                         "source": "pattern",
-                        "patternKind": "bars",
+                        "patternKind": "bullseye",
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,
                         "seed": 42
