@@ -55,6 +55,22 @@ export const fetchDefaults = createAsyncThunk<ServerDefaults>(
   }
 );
 
+export const fetchDefaultsMetadata = createAsyncThunk<
+  Pick<ServerDefaults, "is_production" | "simulation" | "version">
+>(
+  "status/defaultsMetadata",
+  async () => {
+    const r = await fetch("/api/defaults", { cache: "no-store" });
+    if (!r.ok) throw new Error(`defaults metadata: HTTP ${r.status}`);
+    const defaults = (await r.json()) as ServerDefaults;
+    return {
+      is_production: defaults.is_production,
+      simulation: defaults.simulation,
+      version: defaults.version,
+    };
+  }
+);
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -135,6 +151,18 @@ const slice = createSlice({
     });
     b.addCase(fetchDefaults.rejected, (s, a) => {
       s.lastError = a.error.message ?? "defaults fetch failed";
+    });
+    b.addCase(fetchDefaultsMetadata.fulfilled, (s, a) => {
+      s.defaults = {
+        ...(s.defaults ?? { raster: {}, vector: {} }),
+        simulation: a.payload.simulation ?? s.defaults?.simulation,
+        is_production: a.payload.is_production ?? s.defaults?.is_production,
+        version: a.payload.version ?? s.defaults?.version,
+      };
+      s.lastError = null;
+    });
+    b.addCase(fetchDefaultsMetadata.rejected, (s, a) => {
+      s.lastError = a.error.message ?? "defaults metadata fetch failed";
     });
   },
 });

@@ -274,7 +274,7 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         user_id: signedUser?.id ?? 1,
-        activity_type: scanKind === "raster" ? "RASTER run" : "VECTER run",
+        activity_type: scanKind === "raster" ? "RASTER run" : "VECTOR run",
       }),
     });
     if (!r.ok) {

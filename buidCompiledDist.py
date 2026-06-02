@@ -7,9 +7,10 @@ import re
 import shutil
 import sys
 import zipfile
+from datetime import datetime
 
 # Files (by name or glob) to copy verbatim into dist.
-ASSET_PATTERNS = ['*.ihex', 'requirements.txt', 'README.md']
+ASSET_PATTERNS = ['*.ihex', '*.toml', 'requirements.txt', 'README.md']
 
 # Directories to skip when walking the source tree.
 SKIP_DIRS = {
@@ -40,6 +41,9 @@ JSON_SOURCES = [
     os.path.join('IobeamAdmin', 'Json'),
     os.path.join('DistributionDeploy', 'Json'),
 ]
+
+STREAM_DATA_JSON = os.path.join(
+    'Development', 'GlasgowDataIO', 'Json', 'streamData.json')
 
 SQL_SOURCES = [
     os.path.join('IobeamAdmin', 'Sql'),
@@ -583,6 +587,42 @@ def parse_args(argv=None):
     parser.add_argument('--no-deploy-workspace-zip', action='store_true',
                         help="Skip refreshing and zipping DeployWorkSpace after dist_app.zip.")
     return parser.parse_args(argv)
+
+
+def stream_data_json_path(src_dir):
+    """Return the streamData.json path for either project-root invocation style."""
+    candidates = [
+        os.path.join(src_dir, STREAM_DATA_JSON),
+        os.path.join(src_dir, 'GlasgowDataIO', 'Json', 'streamData.json'),
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    raise FileNotFoundError(
+        "Cannot find streamData.json. Checked: " + ", ".join(candidates))
+
+
+def version_label_from_stream_data(src_dir):
+    """Read Version from streamData.json and format it for archive names."""
+    path = stream_data_json_path(src_dir)
+    with open(path, 'r', encoding='utf-8') as f:
+        version = str(json.load(f).get('Version', '')).strip()
+
+    if not version:
+        raise ValueError(f"Missing Version in {path}")
+
+    parts = version.split('.')
+    while len(parts) > 2 and parts[-1] == '0':
+        parts.pop()
+    version = '.'.join(parts)
+    safe_version = re.sub(r'[^A-Za-z0-9._-]+', '_', version).strip('._-')
+    if not safe_version:
+        raise ValueError(f"Version in {path} is not usable for a filename")
+    return f"v{safe_version}"
+
+
+def timestamp_label():
+    return datetime.now().strftime('%m%d%y_%H%M')
 
 
 def main(argv=None):

@@ -8,7 +8,8 @@ INSERT INTO "user" (
     phone_number,
     company_name,
     role,
-    is_active
+    is_active,
+    session_lifetime_limit_days
 )
 SELECT
     'vboxuser',
@@ -18,7 +19,8 @@ SELECT
     '1 (503)807-9055',
     '',
     3,
-    true
+    true,
+    1
 WHERE NOT EXISTS (
     SELECT 1
       FROM "user"

@@ -6,6 +6,7 @@ DEFAULT_DEVELOPMENT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 DEFAULT_PROJECT_ROOT="$(cd "${DEFAULT_DEVELOPMENT_ROOT}/.." && pwd)"
 PROJECT_ROOT="${GLASGOW_PROJECT_ROOT:-${DEFAULT_PROJECT_ROOT}}"
 WORKDIR="${GLASGOW_WORKDIR:-${PROJECT_ROOT}/Development/glasgow_service}"
+DEFAULT_GLASGOW_CONFIG="${PROJECT_ROOT}/Development/GlasgowDataIO/Json/streamData.json"
 RUNTIME_DIR="${GLASGOW_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
 APP="${GLASGOW_APP:-glasgow_service.api:app}"
 HOST="${GLASGOW_HOST:-127.0.0.1}"
@@ -20,6 +21,9 @@ fi
 export VIRTUAL_ENV="${VIRTUAL_ENV:-${PROJECT_ROOT}/.venv}"
 export PATH="${VIRTUAL_ENV}/bin:${PATH}"
 export PYTHONPATH="${WORKDIR}:${PROJECT_ROOT}/Development${PYTHONPATH:+:${PYTHONPATH}}"
+if [[ -z "${GLASGOW_CONFIG:-}" || ! -f "${GLASGOW_CONFIG}" ]]; then
+  export GLASGOW_CONFIG="${DEFAULT_GLASGOW_CONFIG}"
+fi
 
 port_pids() {
   ss -ltnp "sport = :${PORT}" 2>/dev/null |

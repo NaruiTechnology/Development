@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { fetchDefaults, fetchStatus, reconnectDevice } from "../store/statusSlice";
+import { fetchDefaultsMetadata, fetchStatus, reconnectDevice } from "../store/statusSlice";
 import {
   ALL_THEMES,
   applyThemeToDocument,
@@ -46,9 +46,15 @@ const STATE_LABEL_KEYS: Record<string, TranslationKey> = {
 export function Header({
   signedInUser,
   onSignedIn,
+  activeView,
+  onOpenReport,
+  onOpenScan,
 }: {
   signedInUser: SignedInUser | null;
   onSignedIn: (user: SignedInUser) => void;
+  activeView: "control" | "report";
+  onOpenReport: () => void;
+  onOpenScan: () => void;
 }) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
@@ -65,17 +71,19 @@ export function Header({
   }, [theme]);
 
   useEffect(() => {
-    if (signedInUser || authAutoOpenedRef.current) return;
+    if (activeView === "report" || signedInUser || authAutoOpenedRef.current) return;
     authAutoOpenedRef.current = true;
     setAuthOpen(true);
-  }, [signedInUser]);
+  }, [activeView, signedInUser]);
 
   useEffect(() => {
     dispatch(fetchStatus());
+    dispatch(fetchDefaultsMetadata());
     const tHandle = setInterval(() => {
       const s = status?.state;
       if (s === "busy" || s === "connecting") return;
       dispatch(fetchStatus());
+      dispatch(fetchDefaultsMetadata());
     }, 4000);
     return () => clearInterval(tHandle);
   }, [dispatch, status?.state]);
@@ -174,11 +182,25 @@ export function Header({
         className="btn btn--ghost app-header__icon-button"
         onClick={() => {
           stopAllScanActions();
+          if (activeView === "report") onOpenScan();
+          else onOpenReport();
+        }}
+        aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
+        title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
+        disabled={!isSignedIn}
+      >
+        <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
+      </button>
+      <button
+        type="button"
+        className="btn btn--ghost app-header__settings"
+        onClick={() => {
+          stopAllScanActions();
           dispatch(reconnectDevice())
             .unwrap()
             .then(() => {
               dispatch(fetchStatus());
-              dispatch(fetchDefaults());
+              dispatch(fetchDefaultsMetadata());
             })
             .catch(() => {
               dispatch(fetchStatus());

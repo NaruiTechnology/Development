@@ -11,6 +11,7 @@ export interface SignedInUser {
   email: string;
   role: number;
   is_active: boolean;
+  session_lifetime_limit_days: number;
   initials: string;
 }
 
@@ -31,6 +32,7 @@ interface CurrentAccountResponse {
   ok: boolean;
   login: string;
   registered: boolean;
+  session_expired?: boolean;
   user: SignedInUser | null;
 }
 
@@ -64,6 +66,7 @@ export function AuthDialog({
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [maskedPhone, setMaskedPhone] = useState("");
   const [devCode, setDevCode] = useState("");
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [registration, setRegistration] = useState<RegistrationDraft>({
     first_name: "",
     last_name: "",
@@ -90,6 +93,7 @@ export function AuthDialog({
     setChallengeId(null);
     setMaskedPhone("");
     setDevCode("");
+    setSessionExpired(false);
 
     fetch("/api/admin/iobeam/auth/current-account")
       .then(async (r) => {
@@ -99,6 +103,7 @@ export function AuthDialog({
       .then((data) => {
         if (cancelled) return;
         setLogin(data.login);
+        setSessionExpired(data.session_expired === true);
         setMode(data.registered ? "sign-in" : "register");
       })
       .catch((err) => {
@@ -273,6 +278,10 @@ export function AuthDialog({
                 }
               />
             </>
+          )}
+
+          {mode === "sign-in" && sessionExpired && !challengeId && (
+            <div className="auth-status">{t("auth.sessionExpired")}</div>
           )}
 
           {challengeId && (

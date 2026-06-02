@@ -1,5 +1,5 @@
 {
-    "Version": "0.5.0",
+    "Version": "0.7.0",
     "Glasgow": {
         "Device0": {
             "Id": ""
@@ -134,7 +134,7 @@
                         "mode": "image",
                         "imageResolution": 64,
                         "source": "pattern",
-                        "patternKind": "bullseye",
+                        "patternKind": "bars",
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,
                         "seed": 42

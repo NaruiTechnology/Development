@@ -11,6 +11,7 @@ import type {
   ROIRequest,
 } from "../types/api";
 import { fetchDefaults } from "./statusSlice";
+import { recordScanActivity } from "../lib/adminActivity";
 
 export type ScanKind = "raster" | "vector" | "roi";
 export type ScanPhase =
@@ -263,7 +264,9 @@ export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
       signal,
     });
     if (!r.ok) throw new Error(`raster run: HTTP ${r.status} ${await r.text()}`);
-    return (await r.json()) as ScanResult;
+    const result = (await r.json()) as ScanResult;
+    recordScanActivity("raster");
+    return result;
   }
 );
 
@@ -277,7 +280,9 @@ export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
       signal,
     });
     if (!r.ok) throw new Error(`vector run: HTTP ${r.status} ${await r.text()}`);
-    return (await r.json()) as ScanResult;
+    const result = (await r.json()) as ScanResult;
+    recordScanActivity("vector");
+    return result;
   }
 );
 

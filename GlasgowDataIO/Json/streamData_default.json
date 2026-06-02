@@ -1,5 +1,5 @@
 {
-    "Version": "0.5.0",
+    "Version": "0.7.0",
     "Glasgow": {
         "Device0": {
             "Id": ""
@@ -11,9 +11,13 @@
                 "actionData": {
                     "voltage": 2.5,
                     "bufferSize": "1024*1024",
+                    "enableEbeam": false,
+                    "enableIbeam": true,
                     "rasterScan": {
                         "pixels": 8192,
                         "frameBlank": false,
+                        "beamType": "Ion",
+                        "externalControl": true,
                         "resolution": 1024,
                         "adcLatency": 8,
                         "dwell": 2
@@ -21,6 +25,8 @@
                     "vectorScan": {
                         "latency": 8196,
                         "adcLatency": 8,
+                        "beamType": "Ion",
+                        "externalControl": true,
                         "lineShiftPerXRow": 5.5,
                         "drainFloorPixels": 21000
                     },
@@ -115,9 +121,9 @@
                             "             'random'  -> RNG-fill, seeded by 'seed'.",
                             "",
                             "Paths are interpreted relative to IOBEAM_ROOT when not",
-                            "absolute. On Windows, the launcher may set IOBEAM_ROOT;",
-                            "otherwise the app walks up from this checkout or uses the",
-                            "service working directory.",
+                            "absolute. IOBEAM_ROOT defaults to the systemd unit's",
+                            "WorkingDirectory (/home/vboxuser/Project/IobeamTech) but",
+                            "can be overridden by environment.",
                             "",
                             "Note: if IsProduction=false AND simulation.enabled=true AND",
                             "mode!='zeros', the FPGA bakes a fake image into the bitstream.",

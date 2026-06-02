@@ -26,7 +26,8 @@
         "phone_number": "",
         "company_name": "",
         "role": 0,
-        "is_active": true
+        "is_active": true,
+        "session_lifetime_limit_days": 1
     },
     "users": [
         {
@@ -38,7 +39,8 @@
             "phone_number": "1 (503)807-9055",
             "company_name": "",
             "role": 3,
-            "is_active": true
+            "is_active": true,
+            "session_lifetime_limit_days": 1
         }
     ],
     "session": {
@@ -54,6 +56,7 @@
         "user_id": null,
         "activity_type": "",
         "date": null,
-        "last_signed_in": null
+        "last_signed_in": null,
+        "session_lifetime_limit_days": 1
     }
 }
