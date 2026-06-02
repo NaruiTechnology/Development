@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useTranslation } from "../i18n";
+import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
 import { Icon } from "./Icon";
 
 export interface SignedInUser {
@@ -9,6 +10,7 @@ export interface SignedInUser {
   first_name: string;
   last_name: string;
   email: string;
+  site: string;
   role: number;
   is_active: boolean;
   session_lifetime_limit_days: number;
@@ -47,6 +49,7 @@ interface RegistrationDraft {
   email: string;
   phone_number: string;
   company_name: string;
+  site: string;
 }
 
 export function AuthDialog({
@@ -73,7 +76,9 @@ export function AuthDialog({
     email: "",
     phone_number: "",
     company_name: "",
+    site: DEFAULT_SITE,
   });
+  const [site, setSite] = useState<string>(DEFAULT_SITE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,6 +99,7 @@ export function AuthDialog({
     setMaskedPhone("");
     setDevCode("");
     setSessionExpired(false);
+    setSite(DEFAULT_SITE);
 
     fetch("/api/admin/iobeam/auth/current-account")
       .then(async (r) => {
@@ -103,6 +109,7 @@ export function AuthDialog({
       .then((data) => {
         if (cancelled) return;
         setLogin(data.login);
+        if (data.user?.site) setSite(normalizeSiteValue(data.user.site));
         setSessionExpired(data.session_expired === true);
         setMode(data.registered ? "sign-in" : "register");
       })
@@ -155,7 +162,7 @@ export function AuthDialog({
       const r = await fetch("/api/admin/iobeam/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login_name: login, ...registration }),
+        body: JSON.stringify({ login_name: login, ...registration, site }),
       });
       if (!r.ok) throw new Error(await responseError(r));
       await r.json() as RegisterResponse;
@@ -176,7 +183,7 @@ export function AuthDialog({
       const r = await fetch("/api/admin/iobeam/auth/verify-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challenge_id: challengeId, code }),
+        body: JSON.stringify({ challenge_id: challengeId, code, site }),
       });
       if (!r.ok) throw new Error(await responseError(r));
       const data = (await r.json()) as VerifySmsResponse;
@@ -220,10 +227,12 @@ export function AuthDialog({
               id="admin-login"
               className="input"
               value={login}
+              required
               disabled={busy || Boolean(challengeId)}
               onChange={(e) => setLogin(e.target.value)}
             />
           </div>
+          <SiteSelect value={site} disabled={busy} onChange={setSite} label={t("auth.site")} />
 
           {mode === "register" && (
             <>
@@ -314,7 +323,7 @@ export function AuthDialog({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={busy || !canRegister(login, registration)}
+                disabled={busy || !canRegister(login, registration, site)}
                 onClick={() => void registerAccount()}
               >
                 <Icon name="check" />
@@ -324,7 +333,7 @@ export function AuthDialog({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={busy || login.trim().length === 0}
+                disabled={busy || login.trim().length === 0 || site.trim().length === 0}
                 onClick={() => void sendSms()}
               >
                 <Icon name="link" />
@@ -334,7 +343,7 @@ export function AuthDialog({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={busy || code.trim().length === 0}
+                disabled={busy || code.trim().length === 0 || site.trim().length === 0}
                 onClick={() => void verifySms()}
               >
                 <Icon name="check" />
@@ -346,6 +355,42 @@ export function AuthDialog({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function SiteSelect({
+  value,
+  disabled,
+  label,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  label: string;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor="admin-site">
+        {label}
+      </label>
+      <select
+        id="admin-site"
+        className="select"
+        value={value}
+        required
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {SITE_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {t(option.labelKey)}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -375,6 +420,7 @@ function RegistrationField({
         className="input"
         type={type}
         value={value}
+        required
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -382,13 +428,15 @@ function RegistrationField({
   );
 }
 
-function canRegister(login: string, draft: RegistrationDraft): boolean {
+function canRegister(login: string, draft: RegistrationDraft, site: string): boolean {
   return Boolean(
     login.trim() &&
+      site.trim() &&
       draft.first_name.trim() &&
       draft.last_name.trim() &&
       draft.email.trim() &&
-      draft.phone_number.trim()
+      draft.phone_number.trim() &&
+      draft.company_name.trim()
   );
 }
 

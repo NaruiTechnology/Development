@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
-import { useTranslation, type LocaleCode } from "../i18n";
+import { useTranslation, type LocaleCode, type TranslationKey } from "../i18n";
+import { siteLabelKey } from "../lib/sites";
 import { Icon } from "./Icon";
 
 interface ReportAccount {
@@ -8,6 +9,7 @@ interface ReportAccount {
   login_name: string;
   name: string;
   company_name: string;
+  site: string;
   role: number;
 }
 
@@ -24,17 +26,22 @@ interface ReportTotal {
 
 interface PeriodUsage {
   user_id: number;
+  equipment_id?: number | null;
+  equipment_name?: string;
   login_name: string;
   bucket?: string;
   week_start?: string;
+  month_start?: string;
+  year_start?: string;
   total_scans: number;
   raster_scans: number;
   vector_scans: number;
   other_activity: number;
 }
 
-interface GeographyUsage {
-  location: string;
+interface SiteUsage {
+  site: string;
+  location?: string;
   accounts: number;
   total_scans: number;
   raster_scans: number;
@@ -42,12 +49,39 @@ interface GeographyUsage {
   last_activity: string | null;
 }
 
+interface EquipmentUsage {
+  equipment_id: number | null;
+  equipment_name: string;
+  accounts: number;
+  total_scans: number;
+  raster_scans: number;
+  vector_scans: number;
+  other_activity: number;
+  last_activity: string | null;
+}
+
+interface EquipmentOption {
+  id: number | null;
+  name: string;
+  model?: string;
+  serial_number?: string;
+}
+
+interface EquipmentResponse {
+  ok: boolean;
+  equipment: EquipmentOption[];
+  error?: string;
+}
+
 interface RecentActivity {
   user_id: number;
   login_name: string;
   activity_type: string;
   scan_kind: string;
-  location: string;
+  site?: string;
+  location?: string;
+  equipment_id?: number | null;
+  equipment_name?: string;
   date: string;
 }
 
@@ -60,12 +94,34 @@ interface ActivityReportResponse {
   totals: ReportTotal[];
   daily: PeriodUsage[];
   weekly: PeriodUsage[];
-  geography: GeographyUsage[];
+  monthly: PeriodUsage[];
+  yearly: PeriodUsage[];
+  site_groups: SiteUsage[];
+  equipment_groups?: EquipmentUsage[];
+  geography?: SiteUsage[];
   recent: RecentActivity[];
   error?: string;
 }
 
-type PeriodMode = "daily" | "weekly";
+type PeriodMode = "weekly" | "daily" | "monthly" | "yearly";
+type GroupMode = "account" | "site" | "equipment";
+type RankingSortMode = "total" | "name" | "raster" | "vector" | "recent";
+type ScanMetricKey = "total_scans" | "raster_scans" | "vector_scans" | "other_activity";
+
+interface RankingRow {
+  id: string;
+  label: string;
+  total_scans: number;
+  raster_scans: number;
+  vector_scans: number;
+  other_activity: number;
+  last_activity?: string | null;
+}
+
+interface UsageTrendRow extends PeriodUsage {
+  id: string;
+  label: string;
+}
 
 function normalizeReport(data: ActivityReportResponse): ActivityReportResponse {
   return {
@@ -74,7 +130,14 @@ function normalizeReport(data: ActivityReportResponse): ActivityReportResponse {
     totals: Array.isArray(data.totals) ? data.totals : [],
     daily: Array.isArray(data.daily) ? data.daily : [],
     weekly: Array.isArray(data.weekly) ? data.weekly : [],
-    geography: Array.isArray(data.geography) ? data.geography : [],
+    monthly: Array.isArray(data.monthly) ? data.monthly : [],
+    yearly: Array.isArray(data.yearly) ? data.yearly : [],
+    site_groups: Array.isArray(data.site_groups)
+      ? data.site_groups
+      : Array.isArray(data.geography)
+        ? data.geography.map((row) => ({ ...row, site: row.site ?? row.location ?? "" }))
+        : [],
+    equipment_groups: Array.isArray(data.equipment_groups) ? data.equipment_groups : [],
     recent: Array.isArray(data.recent) ? data.recent : [],
   };
 }
@@ -82,15 +145,40 @@ function normalizeReport(data: ActivityReportResponse): ActivityReportResponse {
 export function ManagementReport({ onBack }: { onBack: () => void }) {
   const { locale, t, fmt } = useTranslation();
   const [accountId, setAccountId] = useState("all");
-  const [periodMode, setPeriodMode] = useState<PeriodMode>("weekly");
+  const [equipmentId, setEquipmentId] = useState("all");
+  const [groupMode, setGroupMode] = useState<GroupMode>("account");
+  const [rankingSortMode, setRankingSortMode] = useState<RankingSortMode>("total");
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("daily");
+  const [equipmentOptions, setEquipmentOptions] = useState<EquipmentOption[]>([]);
   const [report, setReport] = useState<ActivityReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    fetch("/api/admin/iobeam/equipment")
+      .then(async (r) => {
+        const data = (await r.json().catch(() => null)) as EquipmentResponse | null;
+        if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+        return Array.isArray(data.equipment) ? data.equipment : [];
+      })
+      .then((rows) => {
+        if (!cancelled) setEquipmentOptions(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setEquipmentOptions([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     const params = new URLSearchParams({ days: "90" });
     if (accountId !== "all") params.set("account_id", accountId);
+    if (equipmentId !== "all") params.set("equipment_id", equipmentId);
 
     setLoading(true);
     setError(null);
@@ -115,7 +203,7 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [accountId]);
+  }, [accountId, equipmentId]);
 
   const totals = report?.totals ?? [];
   const totalScans = sum(totals, "total_scans");
@@ -123,14 +211,47 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
   const vectorScans = sum(totals, "vector_scans");
   const otherActivity = sum(totals, "other_activity");
   const activeAccounts = report?.accounts.length ?? 0;
+  const accountSiteById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const account of report?.accounts ?? []) {
+      if (Number.isInteger(account.id)) map.set(account.id as number, account.site);
+    }
+    return map;
+  }, [report]);
+  const accountNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const account of report?.accounts ?? []) {
+      if (Number.isInteger(account.id)) {
+        map.set(account.id as number, account.name || account.login_name);
+      }
+    }
+    return map;
+  }, [report]);
   const selectedName = useMemo(() => {
     if (!report || accountId === "all") return t("report.account.all");
     const account = report.accounts.find((a) => String(a.id) === accountId);
     return account?.name || account?.login_name || t("report.account.selected");
   }, [accountId, report, t]);
-  const periodRows = periodMode === "daily" ? report?.daily ?? [] : report?.weekly ?? [];
+  const selectedEquipmentName = useMemo(() => {
+    if (equipmentId === "all") return t("report.equipment.all");
+    const equipment = equipmentOptions.find((row) => String(row.id) === equipmentId);
+    return equipmentLabel(equipment) || t("report.equipment.unknown");
+  }, [equipmentId, equipmentOptions, t]);
+  const siteRows = report?.site_groups ?? [];
+  const equipmentRows = report?.equipment_groups ?? [];
+  const periodRows = aggregatePeriodRows(
+    periodRowsForMode(report, periodMode),
+    groupMode,
+    accountSiteById,
+    accountNameById,
+    t,
+  );
+  const rankingRows = sortRankingRows(
+    aggregateRankingRows(totals, equipmentRows, groupMode, accountSiteById, t),
+    rankingSortMode,
+  );
   const maxPeriod = Math.max(1, ...periodRows.map((row) => row.total_scans));
-  const maxGeo = Math.max(1, ...(report?.geography ?? []).map((row) => row.total_scans));
+  const maxSite = Math.max(1, ...siteRows.map((row) => row.total_scans));
 
   return (
     <main className="management-report">
@@ -138,7 +259,7 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
         <div>
           <div className="report-eyebrow">{t("report.eyebrow")}</div>
           <h1>{t("report.title")}</h1>
-          <p>{t("report.subtitle", { account: selectedName })}</p>
+          <p>{t("report.subtitle", { account: selectedName, equipment: selectedEquipmentName })}</p>
         </div>
         <div className="report-actions">
           <label className="report-select-field">
@@ -155,6 +276,50 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
                   {account.name || account.login_name}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="report-select-field report-select-field--compact">
+            <span>{t("report.equipment.label")}</span>
+            <select
+              className="select"
+              value={equipmentId}
+              onChange={(event) => setEquipmentId(event.target.value)}
+              disabled={loading || equipmentOptions.length === 0}
+            >
+              <option value="all">{t("report.equipment.all")}</option>
+              {equipmentOptions.map((equipment) => (
+                <option key={equipment.id ?? equipment.name} value={String(equipment.id)}>
+                  {equipmentLabel(equipment)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="report-select-field report-select-field--compact">
+            <span>{t("report.group.label")}</span>
+            <select
+              className="select"
+              value={groupMode}
+              onChange={(event) => setGroupMode(event.target.value as GroupMode)}
+              disabled={loading}
+            >
+              <option value="account">{t("report.group.account")}</option>
+              <option value="site">{t("report.group.site")}</option>
+              <option value="equipment">{t("report.group.equipment")}</option>
+            </select>
+          </label>
+          <label className="report-select-field report-select-field--compact">
+            <span>{t("report.sort.label")}</span>
+            <select
+              className="select"
+              value={rankingSortMode}
+              onChange={(event) => setRankingSortMode(event.target.value as RankingSortMode)}
+              disabled={loading}
+            >
+              <option value="total">{t("report.sort.total")}</option>
+              <option value="name">{rankingHeader(t, groupMode)}</option>
+              <option value="raster">{t("report.kind.raster")}</option>
+              <option value="vector">{t("report.kind.vector")}</option>
+              <option value="recent">{t("report.sort.recent")}</option>
             </select>
           </label>
           <button type="button" className="btn btn--ghost" onClick={onBack}>
@@ -184,7 +349,7 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
         />
         <KpiCard
           label={t("report.kpi.geo")}
-          value={fmt(report?.geography.length ?? 0)}
+          value={fmt(siteRows.length)}
           detail={t("report.kpi.geo.detail")}
         />
       </section>
@@ -207,19 +372,25 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
             other: Math.round(Math.max(0, 100 - percent(rasterScans, totalScans) - percent(vectorScans, totalScans))),
           })}
           formatNumber={fmt}
+          palette={groupMode}
         />
 
-        <div className="report-panel report-panel--wide">
+        <div className={`report-panel report-panel--wide report-palette--${periodMode}`}>
           <div className="report-panel__header">
             <div>
               <h2>{t("report.usage.title")}</h2>
               <span>
-                {periodMode === "daily"
-                  ? t("report.usage.subtitle.daily")
-                  : t("report.usage.subtitle.weekly")}
+                {t(periodSubtitleKey(periodMode))}
               </span>
             </div>
             <div className="segmented">
+              <button
+                type="button"
+                aria-pressed={periodMode === "daily"}
+                onClick={() => setPeriodMode("daily")}
+              >
+                {t("report.period.daily")}
+              </button>
               <button
                 type="button"
                 aria-pressed={periodMode === "weekly"}
@@ -229,10 +400,17 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
               </button>
               <button
                 type="button"
-                aria-pressed={periodMode === "daily"}
-                onClick={() => setPeriodMode("daily")}
+                aria-pressed={periodMode === "monthly"}
+                onClick={() => setPeriodMode("monthly")}
               >
-                {t("report.period.daily")}
+                {t("report.period.monthly")}
+              </button>
+              <button
+                type="button"
+                aria-pressed={periodMode === "yearly"}
+                onClick={() => setPeriodMode("yearly")}
+              >
+                {t("report.period.yearly")}
               </button>
             </div>
           </div>
@@ -244,8 +422,8 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
             ) : (
               periodRows.slice(-14).map((row) => (
                 <UsageBar
-                  key={`${row.user_id}-${row.bucket ?? row.week_start}`}
-                  label={row.bucket ?? row.week_start ?? ""}
+                  key={row.id}
+                  label={row.label}
                   row={row}
                   max={maxPeriod}
                   scansLabel={t("report.unit.scans")}
@@ -256,7 +434,7 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        <div className="report-panel">
+        <div className="report-panel report-palette--site">
           <div className="report-panel__header">
             <div>
               <h2>{t("report.geo.title")}</h2>
@@ -264,23 +442,23 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
             </div>
           </div>
           <div className="geo-list">
-            {(report?.geography ?? []).length === 0 ? (
+            {siteRows.length === 0 ? (
               <div className="report-empty">{t("report.empty.geo")}</div>
             ) : (
-              (report?.geography ?? []).map((row) => (
-                <div className="geo-row" key={row.location}>
+              siteRows.map((row) => (
+                <div className="geo-row" key={row.site || row.location}>
                   <div>
-                    <strong>{row.location}</strong>
+                    <strong>{siteLabel(t, row.site || row.location)}</strong>
                     <span>{t("report.geo.accounts", { count: fmt(row.accounts) })}</span>
                   </div>
                   <div className="geo-meter" aria-hidden>
                     <span
                       className="geo-meter__raster"
-                      style={{ width: `${percent(row.raster_scans, maxGeo)}%` }}
+                      style={{ width: `${percent(row.raster_scans, maxSite)}%` }}
                     />
                     <span
                       className="geo-meter__vector"
-                      style={{ width: `${percent(row.vector_scans, maxGeo)}%` }}
+                      style={{ width: `${percent(row.vector_scans, maxSite)}%` }}
                     />
                   </div>
                   <b>{fmt(row.total_scans)}</b>
@@ -294,28 +472,30 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
           <div className="report-panel__header">
             <div>
               <h2>{t("report.ranking.title")}</h2>
-              <span>{t("report.ranking.subtitle")}</span>
+              <span>
+                {rankingSubtitle(t, groupMode)}
+              </span>
             </div>
           </div>
           <div className="report-table-wrap">
             <table className="report-table">
               <thead>
                 <tr>
-                  <th>{t("report.table.account")}</th>
+                  <th>{rankingHeader(t, groupMode)}</th>
                   <th>{t("report.kind.raster")}</th>
                   <th>{t("report.kind.vector")}</th>
                   <th>{t("report.table.total")}</th>
                 </tr>
               </thead>
               <tbody>
-                {totals.length === 0 ? (
+                {rankingRows.length === 0 ? (
                   <tr>
                     <td colSpan={4}>{t("report.empty.accounts")}</td>
                   </tr>
                 ) : (
-                  totals.map((row) => (
-                    <tr key={row.user_id}>
-                      <td>{row.name || row.login_name}</td>
+                  rankingRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.label}</td>
                       <td>{fmt(row.raster_scans)}</td>
                       <td>{fmt(row.vector_scans)}</td>
                       <td>{fmt(row.total_scans)}</td>
@@ -343,7 +523,9 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
                   <span data-kind={row.scan_kind}>{row.scan_kind.toUpperCase()}</span>
                   <div>
                     <strong>{row.login_name}</strong>
-                    <small>{formatDateTime(locale, row.date)} · {row.location}</small>
+                    <small>
+                      {formatDateTime(locale, row.date)} · {siteLabel(t, row.site || row.location)} · {row.equipment_name || t("report.equipment.unknown")}
+                    </small>
                   </div>
                 </div>
               ))
@@ -368,6 +550,7 @@ function ScanMixPanel({
   otherLabel,
   ariaLabel,
   formatNumber,
+  palette,
 }: {
   total: number;
   raster: number;
@@ -381,6 +564,7 @@ function ScanMixPanel({
   otherLabel: string;
   ariaLabel: string;
   formatNumber: (n: number) => string;
+  palette: GroupMode;
 }) {
   const rasterPct = percent(raster, total);
   const vectorPct = percent(vector, total);
@@ -393,7 +577,7 @@ function ScanMixPanel({
   } as CSSProperties;
 
   return (
-    <div className="report-panel report-panel--mix">
+    <div className={`report-panel report-panel--mix report-palette--${palette}`}>
       <div className="report-panel__header">
         <div>
           <h2>{title}</h2>
@@ -488,9 +672,204 @@ function UsageBar({
 
 function sum(
   rows: ReportTotal[],
-  key: "total_scans" | "raster_scans" | "vector_scans" | "other_activity"
+  key: ScanMetricKey
 ): number {
   return rows.reduce((total, row) => total + row[key], 0);
+}
+
+function aggregateRankingRows(
+  rows: ReportTotal[],
+  equipmentRows: EquipmentUsage[],
+  groupMode: GroupMode,
+  accountSiteById: Map<number, string>,
+  t: ReturnType<typeof useTranslation>["t"],
+): RankingRow[] {
+  if (groupMode === "account") {
+    return rows.map((row) => ({
+      id: String(row.user_id),
+      label: row.name || row.login_name,
+      total_scans: row.total_scans,
+      raster_scans: row.raster_scans,
+      vector_scans: row.vector_scans,
+      other_activity: row.other_activity,
+      last_activity: row.last_activity,
+    }));
+  }
+
+  if (groupMode === "equipment") {
+    return equipmentRows.map((row) => ({
+      id: String(row.equipment_id ?? row.equipment_name),
+      label: row.equipment_name || t("report.equipment.unknown"),
+      total_scans: row.total_scans,
+      raster_scans: row.raster_scans,
+      vector_scans: row.vector_scans,
+      other_activity: row.other_activity,
+      last_activity: row.last_activity,
+    }));
+  }
+
+  const grouped = new Map<string, RankingRow>();
+  for (const row of rows) {
+    const site = accountSiteById.get(row.user_id) ?? "";
+    const id = site || "unknown";
+    const existing = grouped.get(id) ?? {
+      id,
+      label: siteLabel(t, site) || t("report.site.unknown"),
+      total_scans: 0,
+      raster_scans: 0,
+      vector_scans: 0,
+      other_activity: 0,
+      last_activity: null,
+    };
+    addScanMetrics(existing, row);
+    existing.last_activity = latestDate(existing.last_activity, row.last_activity);
+    grouped.set(id, existing);
+  }
+
+  return [...grouped.values()].sort((a, b) =>
+    b.total_scans - a.total_scans || a.label.localeCompare(b.label),
+  );
+}
+
+function sortRankingRows(rows: RankingRow[], sortMode: RankingSortMode): RankingRow[] {
+  const sorted = [...rows];
+  sorted.sort((a, b) => {
+    if (sortMode === "name") return a.label.localeCompare(b.label);
+    if (sortMode === "raster") return b.raster_scans - a.raster_scans || a.label.localeCompare(b.label);
+    if (sortMode === "vector") return b.vector_scans - a.vector_scans || a.label.localeCompare(b.label);
+    if (sortMode === "recent") {
+      return dateMs(b.last_activity) - dateMs(a.last_activity) || a.label.localeCompare(b.label);
+    }
+    return b.total_scans - a.total_scans || a.label.localeCompare(b.label);
+  });
+  return sorted;
+}
+
+function aggregatePeriodRows(
+  rows: PeriodUsage[],
+  groupMode: GroupMode,
+  accountSiteById: Map<number, string>,
+  accountNameById: Map<number, string>,
+  t: ReturnType<typeof useTranslation>["t"],
+): UsageTrendRow[] {
+  const grouped = new Map<string, UsageTrendRow>();
+  for (const row of rows) {
+    const period = periodLabel(row);
+    const group = periodGroup(row, groupMode, accountSiteById, accountNameById, t);
+    const id = `${period}-${group.id}`;
+    const existing = grouped.get(id) ?? {
+      ...row,
+      id,
+      user_id: 0,
+      login_name: "",
+      total_scans: 0,
+      raster_scans: 0,
+      vector_scans: 0,
+      other_activity: 0,
+      label: `${period} · ${group.label}`,
+    };
+    addScanMetrics(existing, row);
+    grouped.set(id, existing);
+  }
+
+  return [...grouped.values()].sort((a, b) =>
+    periodLabel(a).localeCompare(periodLabel(b)) || a.label.localeCompare(b.label),
+  );
+}
+
+function equipmentLabel(equipment: EquipmentOption | undefined): string {
+  if (!equipment) return "";
+  const details = [equipment.model, equipment.serial_number].filter(Boolean).join(" · ");
+  return details ? `${equipment.name} (${details})` : equipment.name;
+}
+
+function latestDate(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return dateMs(b) > dateMs(a) ? b : a;
+}
+
+function dateMs(value: string | null | undefined): number {
+  if (!value) return 0;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function periodGroup(
+  row: PeriodUsage,
+  groupMode: GroupMode,
+  accountSiteById: Map<number, string>,
+  accountNameById: Map<number, string>,
+  t: ReturnType<typeof useTranslation>["t"],
+): { id: string; label: string } {
+  if (groupMode === "account") {
+    const accountName = accountNameById.get(row.user_id) ?? row.login_name;
+    return { id: `account-${row.user_id}`, label: accountName || t("report.account.selected") };
+  }
+  if (groupMode === "equipment") {
+    const equipmentName = row.equipment_name || t("report.equipment.unknown");
+    return { id: `equipment-${row.equipment_id ?? equipmentName}`, label: equipmentName };
+  }
+  const site = accountSiteById.get(row.user_id) ?? "";
+  return { id: `site-${site || "unknown"}`, label: siteLabel(t, site) || t("report.site.unknown") };
+}
+
+function addScanMetrics(
+  target: Pick<RankingRow, ScanMetricKey>,
+  source: Pick<RankingRow, ScanMetricKey>,
+): void {
+  target.total_scans += source.total_scans;
+  target.raster_scans += source.raster_scans;
+  target.vector_scans += source.vector_scans;
+  target.other_activity += source.other_activity;
+}
+
+function periodRowsForMode(
+  report: ActivityReportResponse | null,
+  mode: PeriodMode,
+): PeriodUsage[] {
+  if (!report) return [];
+  if (mode === "daily") return report.daily;
+  if (mode === "monthly") return report.monthly;
+  if (mode === "yearly") return report.yearly;
+  return report.weekly;
+}
+
+function periodSubtitleKey(mode: PeriodMode): TranslationKey {
+  if (mode === "daily") return "report.usage.subtitle.daily";
+  if (mode === "monthly") return "report.usage.subtitle.monthly";
+  if (mode === "yearly") return "report.usage.subtitle.yearly";
+  return "report.usage.subtitle.weekly";
+}
+
+function rankingSubtitle(
+  t: ReturnType<typeof useTranslation>["t"],
+  groupMode: GroupMode,
+): string {
+  if (groupMode === "site") return t("report.ranking.subtitle.site");
+  if (groupMode === "equipment") return t("report.ranking.subtitle.equipment");
+  return t("report.ranking.subtitle.account");
+}
+
+function rankingHeader(
+  t: ReturnType<typeof useTranslation>["t"],
+  groupMode: GroupMode,
+): string {
+  if (groupMode === "site") return t("report.table.site");
+  if (groupMode === "equipment") return t("report.table.equipment");
+  return t("report.table.account");
+}
+
+function periodLabel(row: PeriodUsage): string {
+  return row.bucket ?? row.week_start ?? row.month_start ?? row.year_start ?? "";
+}
+
+function siteLabel(
+  t: ReturnType<typeof useTranslation>["t"],
+  value: string | undefined,
+): string {
+  const key = siteLabelKey(value);
+  return key ? t(key) : value ?? "";
 }
 
 function percentLabel(

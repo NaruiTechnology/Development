@@ -286,7 +286,11 @@ export function App() {
                   <span className="card__title">{t("card.controls")}</span>
                 </div>
                 <div className="card__body">
-                  <ScanControls kind={kind as ScanKind} disabled={panelDisabled} />
+                  <ScanControls
+                    kind={kind as ScanKind}
+                    disabled={panelDisabled}
+                    userRole={signedInUser?.role ?? 0}
+                  />
                 </div>
               </div>
               <div className="card">

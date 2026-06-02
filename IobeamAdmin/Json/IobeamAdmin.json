@@ -12,6 +12,7 @@
         "Port": 5432
     },
     "ROLE": {
+        "AUDIT": 4,
         "ADMIN": 3,
         "DEVELOPER": 2,
         "SUPER_USER": 1,
@@ -38,9 +39,53 @@
             "email": "lyh1154@gmail.com",
             "phone_number": "1 (503)807-9055",
             "company_name": "",
-            "role": 3,
+            "role": 4,
             "is_active": true,
             "session_lifetime_limit_days": 1
+        }
+    ],
+    "auditor": {
+        "id": null,
+        "user_name": "",
+        "email": "",
+        "is_active": true
+    },
+    "auditors": [
+        {
+            "id": 1,
+            "user_name": "Henry Li",
+            "email": "lyh1154@gmail.com",
+            "is_active": true
+        },
+        {
+            "id": 2,
+            "user_name": "Sen Da",
+            "email": "xda@ionbeamtech.com",
+            "is_active": true
+        },
+        {
+            "id": 3,
+            "user_name": "Yuyao Jiang",
+            "email": "yuyao.jiang@ionbeamtech.com",
+            "is_active": true
+        }
+    ],
+    "equipment": {
+        "id": null,
+        "name": "",
+        "model": "",
+        "serial_number": "",
+        "site": "",
+        "description": ""
+    },
+    "equipments": [
+        {
+            "id": 1,
+            "name": "FEI Helios NanoLab 600i DualBeam",
+            "model": "",
+            "serial_number": "DB123456z",
+            "site": "Taixin",
+            "description": "DualBeam SEM/FIB, containing both a focused Ga+ ion beam (\"Tomahawk\") and a high resolution field emission scanning electron (\"Elstar\") column."
         }
     ],
     "session": {
@@ -54,6 +99,7 @@
     "activity": {
         "id": null,
         "user_id": null,
+        "equipment_id": 1,
         "activity_type": "",
         "date": null,
         "last_signed_in": null,
