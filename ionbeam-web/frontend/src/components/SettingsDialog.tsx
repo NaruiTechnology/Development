@@ -1018,6 +1018,7 @@ interface AdminUserRow {
   company_name: string;
   role: number;
   is_active: boolean;
+  session_lifetime_limit_days: number;
 }
 
 const ADMIN_ROLE_OPTIONS = [
@@ -1038,6 +1039,7 @@ function emptyAdminUser(nextId: number): AdminUserRow {
     company_name: "",
     role: 0,
     is_active: true,
+    session_lifetime_limit_days: 1,
   };
 }
 
@@ -1061,6 +1063,10 @@ function adminUsersFromDraft(draft: unknown): AdminUserRow[] {
       company_name: String(u.company_name ?? ""),
       role: typeof u.role === "number" ? u.role : Number(u.role ?? 0),
       is_active: typeof u.is_active === "boolean" ? u.is_active : true,
+      session_lifetime_limit_days: positiveIntField(
+        u.session_lifetime_limit_days,
+        1,
+      ),
     }));
 }
 
@@ -1366,6 +1372,7 @@ function AdminUsersTable({
           <span role="columnheader">{t("settings.admin.user.phone")}</span>
           <span role="columnheader">{t("settings.admin.user.company")}</span>
           <span role="columnheader">{t("settings.admin.user.role")}</span>
+          <span role="columnheader">{t("settings.admin.user.sessionLifetimeDays")}</span>
           <span role="columnheader">{t("settings.admin.user.active")}</span>
           <span role="columnheader">{t("settings.admin.user.actions")}</span>
         </div>
@@ -1438,6 +1445,22 @@ function AdminUsersTable({
                 </option>
               ))}
             </select>
+            <input
+              aria-label={t("settings.admin.user.sessionLifetimeDays")}
+              className="input"
+              type="number"
+              min={1}
+              step={1}
+              value={user.session_lifetime_limit_days}
+              disabled={disabled}
+              onChange={(e) =>
+                onUpdate(
+                  index,
+                  "session_lifetime_limit_days",
+                  Math.max(1, Math.trunc(Number(e.target.value) || 1)),
+                )
+              }
+            />
             <label className="settings-admin-table__check">
               <input
                 aria-label={t("settings.admin.user.active")}
@@ -1914,6 +1937,12 @@ function numberField(
     if (Number.isFinite(n)) return n;
   }
   return fallback;
+}
+
+function positiveIntField(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.trunc(n));
 }
 
 function boolField(

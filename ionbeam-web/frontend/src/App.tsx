@@ -78,11 +78,11 @@ export function App() {
 
     fetch("/api/admin/iobeam/auth/current-account")
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { login?: unknown; registered?: unknown } | null) => {
+      .then((data: { login?: unknown; registered?: unknown; session_expired?: unknown } | null) => {
         if (cancelled || !data) return;
         const currentLogin = String(data.login ?? "").toLowerCase();
         const signedInLogin = signedInUser.login_name.toLowerCase();
-        if (!data.registered || currentLogin !== signedInLogin) {
+        if (!data.registered || data.session_expired === true || currentLogin !== signedInLogin) {
           window.localStorage.removeItem("ionbeam:adminUser");
           setSignedInUser(null);
         }

@@ -67,6 +67,7 @@ interface AdminUser {
   company_name: string;
   role: number;
   is_active: boolean;
+  session_lifetime_limit_days: number;
 }
 
 interface SmsChallenge {
@@ -215,11 +216,13 @@ app.get("/api/admin/iobeam/auth/current-account", async (_req, res) => {
   try {
     const info = await readAdminWithBackup();
     const user = findAdminUser(info.data, login);
+    const sessionExpired = user ? await isAdminSessionExpired(user) : false;
     res.json({
       ok: true,
       login,
       registered: Boolean(user),
-      user: user ? publicAdminUser(user) : null,
+      session_expired: sessionExpired,
+      user: user && !sessionExpired ? publicAdminUser(user) : null,
     });
   } catch (err) {
     sendConfigError(res, err);
@@ -275,6 +278,7 @@ app.post("/api/admin/iobeam/auth/register", async (req, res) => {
       company_name: companyName,
       role: 0,
       is_active: true,
+      session_lifetime_limit_days: 1,
     };
 
     const data = addAdminUser(info.data, user);
@@ -402,6 +406,9 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
   }
 
   try {
+    const info = await readAdminWithBackup();
+    const user = findAdminUserById(info.data, userId);
+    const lifetimeDays = user?.session_lifetime_limit_days ?? 1;
     const sql = `
       SET search_path TO iobeam_admin, public;
       ALTER TABLE activity
@@ -409,20 +416,23 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
         DROP COLUMN IF EXISTS image_file,
         DROP COLUMN IF EXISTS data_file_name,
         DROP COLUMN IF EXISTS image_file_name,
+        ADD COLUMN IF NOT EXISTS session_lifetime_limit_days integer NOT NULL DEFAULT 1,
         ALTER COLUMN last_signed_in SET DEFAULT CURRENT_TIMESTAMP;
       UPDATE activity
          SET last_signed_in = CURRENT_TIMESTAMP
        WHERE last_signed_in IS NULL;
       ALTER TABLE activity
-        ALTER COLUMN last_signed_in SET NOT NULL;
+        ALTER COLUMN last_signed_in SET NOT NULL,
+        ALTER COLUMN session_lifetime_limit_days SET DEFAULT 1;
       INSERT INTO activity (
-        user_id, activity_type, date, last_signed_in
+        user_id, activity_type, date, last_signed_in, session_lifetime_limit_days
       )
       VALUES (
         ${userId},
         ${sqlString(activityType)},
         CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
+        CURRENT_TIMESTAMP,
+        ${Math.max(1, Math.trunc(lifetimeDays))}
       );
     `;
     await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
@@ -546,6 +556,9 @@ function readAdminUsers(data: unknown): AdminUser[] {
       company_name: String(u.company_name ?? ""),
       role: typeof u.role === "number" ? u.role : Number(u.role ?? 0),
       is_active: typeof u.is_active === "boolean" ? u.is_active : true,
+      session_lifetime_limit_days: normalizeSessionLifetimeDays(
+        u.session_lifetime_limit_days,
+      ),
     }));
 }
 
@@ -558,6 +571,10 @@ function findAdminUser(data: unknown, login: string): AdminUser | null {
         u.email.toLowerCase() === normalized
     ) ?? null
   );
+}
+
+function findAdminUserById(data: unknown, id: number): AdminUser | null {
+  return readAdminUsers(data).find((u) => u.id === id) ?? null;
 }
 
 function addAdminUser(data: unknown, user: AdminUser): unknown {
@@ -587,8 +604,15 @@ function publicAdminUser(user: AdminUser) {
     email: user.email,
     role: user.role,
     is_active: user.is_active,
+    session_lifetime_limit_days: user.session_lifetime_limit_days,
     initials: `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.toUpperCase(),
   };
+}
+
+function normalizeSessionLifetimeDays(value: unknown): number {
+  const days = typeof value === "number" ? value : Number(value ?? 1);
+  if (!Number.isFinite(days)) return 1;
+  return Math.max(1, Math.trunc(days));
 }
 
 function currentLoginName(): string {
@@ -685,6 +709,40 @@ async function recordAdminSession(req: express.Request, user: AdminUser): Promis
     );
   `;
   await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+}
+
+async function isAdminSessionExpired(user: AdminUser): Promise<boolean> {
+  if (!Number.isInteger(user.id) || (user.id ?? 0) <= 0) return true;
+  const lifetimeDays = normalizeSessionLifetimeDays(
+    user.session_lifetime_limit_days,
+  );
+
+  try {
+    await ensureAdminSessionSchema();
+    const sql = `
+      SET search_path TO iobeam_admin, public;
+      SELECT CASE
+               WHEN latest_login IS NULL THEN 'expired'
+               WHEN latest_login < CURRENT_TIMESTAMP - (${lifetimeDays} * INTERVAL '1 day') THEN 'expired'
+               ELSE 'active'
+             END
+        FROM (
+          SELECT MAX(login_time) AS latest_login
+            FROM session
+           WHERE user_id = ${user.id}
+             AND is_autorized = true
+        ) latest;
+    `;
+    const out = await runPsql(["-Atq"], config.adminDbName, sql);
+    return out.trim() !== "active";
+  } catch (err) {
+    console.warn(
+      `[iobeam-admin/auth] session expiration check failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return false;
+  }
 }
 
 async function ensureAdminSessionSchema(): Promise<void> {

@@ -132,14 +132,12 @@ def find_config_path(required: bool = True) -> Optional[Path]:
         if candidate.is_file():
             log.debug("Glasgow config resolved from %s -> %s", source, candidate)
             return candidate.resolve()
-        if required:
-            raise FileNotFoundError(
-                f"{ENV_VAR} from {source} points to {candidate}, "
-                f"which does not exist."
-            )
-        # Source said something but the file is missing; don't fall through
-        # silently to local discovery -- the user clearly intended this path.
-        return None
+        log.warning(
+            "%s from %s points to %s, which does not exist; trying next source",
+            ENV_VAR,
+            source,
+            candidate,
+        )
 
     for c in _LOCAL_CANDIDATES:
         if c.is_file():

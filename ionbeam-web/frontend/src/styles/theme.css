@@ -1447,13 +1447,13 @@ body {
 }
 
 .settings-admin-table {
-  min-width: 1120px;
+  min-width: 1240px;
 }
 
 .settings-admin-table__head,
 .settings-admin-table__row {
   display: grid;
-  grid-template-columns: 64px 120px 120px 120px 190px 150px 150px 120px 72px 56px;
+  grid-template-columns: 64px 120px 120px 120px 190px 150px 150px 120px 96px 72px 56px;
   gap: 8px;
   align-items: center;
   padding: 6px 10px;
