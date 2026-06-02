@@ -600,6 +600,18 @@ body {
 /* ---------- management report --------------------------------------- */
 
 .management-report {
+  --report-red-orange: #70ec76;
+  --report-yellow-orange: #f59e0b;
+  --report-yellow-green: #84cc16;
+  --report-blue-green: hsl(222, 70%, 48%);
+  --report-blue-violet: #6d0fd1;
+  --report-red-violet: #c70ae3;
+  --report-raster: var(--report-red-orange);
+  --report-raster-strong: var(--report-yellow-orange);
+  --report-vector: var(--report-blue-green);
+  --report-vector-strong: var(--report-yellow-green);
+  --report-other: var(--report-red-violet);
+  --report-other-strong: var(--report-blue-violet);
   padding: 18px 24px 24px;
   display: grid;
   gap: 16px;
@@ -777,9 +789,9 @@ body {
   border-radius: 50%;
   background:
     conic-gradient(
-      var(--c-accent) 0deg var(--raster-deg),
-      var(--c-success) var(--raster-deg) var(--vector-deg),
-      var(--c-text-dim) var(--vector-deg) 360deg
+      var(--report-raster) 0deg var(--raster-deg),
+      var(--report-vector) var(--raster-deg) var(--vector-deg),
+      var(--report-other) var(--vector-deg) 360deg
     );
   display: grid;
   place-items: center;
@@ -865,15 +877,15 @@ body {
 }
 
 .mix-bar__track i[data-kind="raster"] {
-  background: var(--c-accent);
+  background: linear-gradient(90deg, var(--report-raster-strong), var(--report-raster));
 }
 
 .mix-bar__track i[data-kind="vector"] {
-  background: var(--c-success);
+  background: linear-gradient(90deg, var(--report-vector-strong), var(--report-vector));
 }
 
 .mix-bar__track i[data-kind="other"] {
-  background: var(--c-text-dim);
+  background: linear-gradient(90deg, var(--report-other-strong), var(--report-other));
 }
 
 .usage-chart,
@@ -923,11 +935,11 @@ body {
 }
 
 .usage-row__raster {
-  background: var(--c-accent);
+  background: linear-gradient(90deg, var(--report-raster-strong), var(--report-raster));
 }
 
 .usage-row__vector {
-  background: var(--c-success);
+  background: linear-gradient(90deg, var(--report-vector-strong), var(--report-vector));
 }
 
 .geo-list {
@@ -972,11 +984,11 @@ body {
 }
 
 .geo-meter__raster {
-  background: var(--c-accent);
+  background: linear-gradient(90deg, var(--report-raster), var(--report-raster-strong));
 }
 
 .geo-meter__vector {
-  background: var(--c-success);
+  background: linear-gradient(90deg, var(--report-vector), var(--report-vector-strong));
 }
 
 .report-table {
@@ -1027,11 +1039,11 @@ body {
 }
 
 .recent-row > span[data-kind="raster"] {
-  background: var(--c-accent);
+  background: var(--report-raster);
 }
 
 .recent-row > span[data-kind="vector"] {
-  background: var(--c-success);
+  background: var(--report-vector);
 }
 
 .report-empty {
@@ -1727,7 +1739,7 @@ body {
 }
 
 .production-pill[data-production="true"] .production-pill__led {
-  background: lawngreen;
+  background: rgb(0, 97, 252);
   box-shadow: 0 0 0 2px color-mix(in srgb, lawngreen 22%, transparent),
               0 0 8px color-mix(in srgb, lawngreen 70%, transparent);
 }
