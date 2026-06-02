@@ -356,7 +356,8 @@ body {
 }
 
 .image-panel-card .canvas-frame {
-  width: min(100%, 768px);
+  width: 100%;
+  max-width: none;
 }
 
 .roi-preview-column {
