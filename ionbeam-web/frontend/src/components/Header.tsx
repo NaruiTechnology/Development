@@ -47,9 +47,15 @@ const STATE_LABEL_KEYS: Record<string, TranslationKey> = {
 export function Header({
   signedInUser,
   onSignedIn,
+  activeView,
+  onOpenReport,
+  onOpenScan,
 }: {
   signedInUser: SignedInUser | null;
   onSignedIn: (user: SignedInUser) => void;
+  activeView: "control" | "report";
+  onOpenReport: () => void;
+  onOpenScan: () => void;
 }) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
@@ -171,6 +177,20 @@ export function Header({
           ))}
         </select>
       </div>
+      <button
+        type="button"
+        className="btn btn--ghost app-header__settings"
+        onClick={() => {
+          stopAllScanActions();
+          if (activeView === "report") onOpenScan();
+          else onOpenReport();
+        }}
+        aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
+        title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
+        disabled={!isSignedIn}
+      >
+        <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
+      </button>
       <button
         type="button"
         className="btn btn--ghost app-header__settings"

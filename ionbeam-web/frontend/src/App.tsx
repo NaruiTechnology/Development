@@ -23,6 +23,7 @@ import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { ManagementReport } from "./components/ManagementReport";
 
 import { setKind, streamReset, type ScanKind } from "./store/scanSlice";
 import { resetRaster, resetVector } from "./store/imageSlice";
@@ -35,11 +36,13 @@ const DEFAULT_RIGHT_PANEL_WIDTH = 720;
 const MIN_LEFT_PANEL_WIDTH = 320;
 const MIN_RIGHT_PANEL_WIDTH = 380;
 const SPLITTER_SPACE = 32;
+type AppRoute = "control" | "report";
 
 export function App() {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
+  const route = useAppRoute();
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
@@ -167,6 +170,13 @@ export function App() {
     dispatch(setKind(nextKind));
   }
 
+  function navigateTo(nextRoute: AppRoute) {
+    const nextPath = `/${nextRoute}`;
+    if (window.location.pathname === nextPath) return;
+    window.history.pushState(null, "", nextPath);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+
   function resizeRightPanel(delta: number) {
     const main = mainRef.current;
     if (!main) return;
@@ -195,8 +205,17 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Header signedInUser={signedInUser} onSignedIn={setSignedInUser} />
+      <Header
+        signedInUser={signedInUser}
+        onSignedIn={setSignedInUser}
+        activeView={route}
+        onOpenReport={() => navigateTo("report")}
+        onOpenScan={() => navigateTo("control")}
+      />
 
+      {route === "report" ? (
+        <ManagementReport onBack={() => navigateTo("control")} />
+      ) : (
       <main
         ref={mainRef}
         className={`app-main${isResizing ? " app-main--resizing" : ""}${
@@ -334,11 +353,36 @@ export function App() {
           </section>
         )}
       </main>
+      )}
 
       <SettingsDialog />
       <Footer />
     </div>
   );
+}
+
+function useAppRoute(): AppRoute {
+  const [route, setRoute] = useState<AppRoute>(() => normalizeRoute(window.location.pathname));
+
+  useEffect(() => {
+    const normalized = normalizeRoute(window.location.pathname);
+    if (window.location.pathname !== `/${normalized}`) {
+      window.history.replaceState(null, "", `/${normalized}`);
+    }
+
+    function onPopState() {
+      setRoute(normalizeRoute(window.location.pathname));
+    }
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  return route;
+}
+
+function normalizeRoute(pathname: string): AppRoute {
+  return pathname === "/report" ? "report" : "control";
 }
 
 function isPartialROISelection(roi: {

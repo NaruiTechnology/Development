@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 
 # Files (by name or glob) to copy verbatim into dist
-ASSET_PATTERNS = ['*.ihex', 'requirements.txt', 'README.md']
+ASSET_PATTERNS = ['*.ihex', '*.toml', 'requirements.txt', 'README.md']
 
 # Directories to skip when walking the source tree for the per-file passes
 # (.py/.pyc packaging and ASSET_PATTERNS scan). Non-Python source projects
@@ -248,7 +248,7 @@ def version_label_from_stream_data(src_dir):
     while len(parts) > 2 and parts[-1] == '0':
         parts.pop()
     version = '.'.join(parts)
-    safe_ = re.sub(r'[^A-Za-z0-9._-]+', '_', version).strip('._-')
+    safe_version = re.sub(r'[^A-Za-z0-9._-]+', '_', version).strip('._-')
     if not safe_version:
         raise ValueError(f"Version in {path} is not usable for a filename")
     return f"v{safe_version}"
@@ -331,7 +331,7 @@ if __name__ == "__main__":
                                   'Development', 'DistributionDeploy')
         workspace_dir = os.path.join('.', 'Development', 'DeployWorkSpace')
         version_label = version_label_from_stream_data('.')
-        workspace_archive_base = f"Development_{version_label}_{timestamp_label()}"
+        workspace_archive_base = f"DeployWorkspace_{version_label}_{timestamp_label()}"
         final_archive = post_build_deploy(
             zip_name, deploy_dir, workspace_dir, workspace_archive_base)
         print(f"Final handoff archive: {final_archive}")
