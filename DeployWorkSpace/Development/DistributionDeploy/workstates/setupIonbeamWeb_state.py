@@ -80,7 +80,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
 
             if createEnv:
                 envFile = os.path.join(backendDir, ".env")
-                self._writeBackendEnv(envFile, backendDir)
+                self._writeBackendEnv(envFile, backendDir, actionData)
 
             if not install:
                 self._success = True
@@ -112,14 +112,16 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
 
-    def _writeBackendEnv(self, envFile, backendDir):
+    def _writeBackendEnv(self, envFile, backendDir, actionData):
         deployRoot = self.resolveDeployPath(".")
         token = os.environ.get("GLASGOW_TOKEN", "").strip()
+        backendHost = str(actionData.get("backendHost", "127.0.0.1") or "127.0.0.1").strip()
         lines = [
             "PROXY_TARGET_HTTP=http://127.0.0.1:8765",
             "PROXY_TARGET_WS=ws://127.0.0.1:8765",
             "GLASGOW_TOKEN={}".format(token),
             "PORT=4000",
+            "HOST={}".format(backendHost),
             "MOCK=0",
             "STATIC_DIR=../frontend/dist",
             "GLASGOW_CONFIG={}".format(

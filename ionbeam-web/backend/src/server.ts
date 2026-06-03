@@ -265,8 +265,8 @@ app.get("/api/admin/iobeam/auth/current-account", async (_req, res) => {
   try {
     const info = await readAdminWithBackup();
     const configUser = findAdminUser(info.data, login);
-    const dbUser = await findAdminUserInDb(login).catch(() => null);
-    const user = dbUser ?? configUser;
+    const dbUser = configUser ? null : await findAdminUserInDb(login).catch(() => null);
+    const user = configUser ?? dbUser;
     const sessionExpired = user ? await isAdminSessionExpired(user) : false;
     res.json({
       ok: true,
@@ -1819,6 +1819,7 @@ function runPsql(
   stdin?: string,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const child = spawn(
       "psql",
       [
@@ -1836,10 +1837,31 @@ function runPsql(
         env: {
           ...process.env,
           ...(config.adminDbPassword ? { PGPASSWORD: config.adminDbPassword } : {}),
+          PGCONNECT_TIMEOUT: String(
+            Math.max(1, Math.ceil(config.adminDbCommandTimeoutMs / 1000)),
+          ),
         },
         stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       },
     );
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGTERM");
+      reject(
+        new Error(
+          `psql timed out after ${config.adminDbCommandTimeoutMs}ms connecting to ${config.adminDbHost}:${config.adminDbPort}/${database}`,
+        ),
+      );
+    }, config.adminDbCommandTimeoutMs);
+
+    function finish(fn: () => void): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      fn();
+    }
+
     let stdout = "";
     let stderr = "";
     child.stdout?.setEncoding("utf8");
@@ -1854,10 +1876,14 @@ function runPsql(
       child.stdin?.setDefaultEncoding("utf8");
       child.stdin?.end(stdin);
     }
-    child.on("error", reject);
+    child.on("error", (err) => {
+      finish(() => reject(err));
+    });
     child.on("close", (code) => {
-      if (code === 0) resolve(stdout);
-      else reject(new Error(stderr.trim() || `psql exited with code ${code}`));
+      finish(() => {
+        if (code === 0) resolve(stdout);
+        else reject(new Error(stderr.trim() || `psql exited with code ${code}`));
+      });
     });
   });
 }

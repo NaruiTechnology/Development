@@ -171,12 +171,18 @@ as-is — they have no IP to protect.
 ```bash
 python3 distributionDeployApp.py
 python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json
-python3 distributionDeployApp.py -r /opt/IobeamPlatform    # override deploy root
+python3 distributionDeployApp.py -r ~/IobeamPlatform      # override deploy root
 ```
 
 The `-r` flag overrides `Deployment.DeployRoot` in the loaded config; every
 state reads the deploy root through the parent thread, so changing it once
 re-targets the whole workflow.
+
+The default deploy root is user-owned (`~/IobeamPlatform`) rather than `/opt`.
+This matches the known-good manual workflow where Glasgow, the Node backend,
+and the Vite frontend all run as the login user with the same shell-owned
+Node/Python environment. Use `/opt/IobeamPlatform` only after the user-owned
+deployment is stable and the service environment has been made explicit.
 
 ---
 

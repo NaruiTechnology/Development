@@ -12,6 +12,11 @@ function bool(v: string | undefined, fallback: boolean): boolean {
   return ["1", "true", "yes", "on"].includes(v.toLowerCase());
 }
 
+function int(v: string | undefined, fallback: number): number {
+  const n = Number(v ?? fallback);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
 export interface Config {
   port: number;
   proxyTargetHttp: string;
@@ -30,6 +35,7 @@ export interface Config {
   adminDbName: string;
   adminDbUser: string;
   adminDbPassword: string | null;
+  adminDbCommandTimeoutMs: number;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -90,6 +96,10 @@ export const config: Config = {
   adminDbName: process.env.IOBEAM_ADMIN_DB_NAME?.trim() || "iobeam_admin",
   adminDbUser: process.env.IOBEAM_ADMIN_DB_USER?.trim() || "postgres",
   adminDbPassword: process.env.IOBEAM_ADMIN_DB_PASSWORD?.trim() || null,
+  adminDbCommandTimeoutMs: Math.max(
+    1_000,
+    int(process.env.IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS, 5_000),
+  ),
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID?.trim() || null,
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN?.trim() || null,
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER?.trim() || null,

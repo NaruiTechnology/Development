@@ -9,7 +9,7 @@
         "SourceRoot": "Development/DistributionDeploy",
         "DistDir": "dist_app",
         "DistZip": "dist_app.zip",
-        "DeployRoot": "/opt/IobeamPlatform",
+        "DeployRoot": "~/IobeamPlatform",
         "VenvDir": ".venv",
         "GlasgowConfig": "Development/GlasgowDataIO/Json/streamData.json",
         "GlasgowLog": "/tmp/glasgow.log",
@@ -26,7 +26,7 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "commandFormat": "sudo rm -rf '$1' && sudo mkdir -p '$1' && sudo chown -R $(id -u):$(id -g) '$1' && chmod -R a+rX '$1'"
+                    "commandFormat": "sudo rm -rf '$1' && mkdir -p '$1' && sudo chmod -R u+rwX,go+rX '$1'"
                 },
                 "timeout": 30.0
             }
@@ -216,6 +216,11 @@
                     "command": "uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --log-level debug",
                     "log": "/tmp/glasgow.log",
                     "pid": "/tmp/glasgow.pid",
+                    "port": 8765,
+                    "stopPatterns": [
+                        "uvicorn glasgow_service.api:app .*--port 8765",
+                        "glasgow_service.api:app"
+                    ],
                     "title": "Glasgow Service",
                     "spawnTerminal": true
                 },
@@ -246,7 +251,8 @@
                     "webRoot": "Development/ionbeam-web",
                     "createBackendEnv": true,
                     "npmInstall": true,
-                    "useNvm": true
+                    "useNvm": true,
+                    "backendHost": "127.0.0.1"
                 },
                 "timeout": 600.0
             }
@@ -268,6 +274,11 @@
                     },
                     "log": "/tmp/ionbeam-backend.log",
                     "pid": "/tmp/ionbeam-backend.pid",
+                    "port": 4000,
+                    "stopPatterns": [
+                        "IobeamPlatform/Development/ionbeam-web/backend/src/server.ts",
+                        "ionbeam-web/backend.*tsx watch src/server.ts"
+                    ],
                     "title": "Ionbeam Web Backend",
                     "spawnTerminal": true
                 },
@@ -284,6 +295,11 @@
                     "useNvm": true,
                     "log": "/tmp/ionbeam-frontend.log",
                     "pid": "/tmp/ionbeam-frontend.pid",
+                    "port": 5173,
+                    "stopPatterns": [
+                        "IobeamPlatform/Development/ionbeam-web/frontend/node_modules/.bin/vite",
+                        "ionbeam-web/frontend.*vite --host 127.0.0.1"
+                    ],
                     "title": "Ionbeam Web Frontend",
                     "spawnTerminal": true
                 },
