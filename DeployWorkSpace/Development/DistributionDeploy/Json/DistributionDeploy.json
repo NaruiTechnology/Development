@@ -297,9 +297,25 @@
                 "actionData": {
                     "initialDelay": 3.0,
                     "pollInterval": 1.0,
-                    "urls": [
-                        "http://127.0.0.1:4000/healthz",
-                        "http://127.0.0.1:5173/"
+                    "checks": [
+                        {
+                            "url": "http://127.0.0.1:4000/healthz",
+                            "expectedStatus": 200,
+                            "jsonContains": {
+                                "ok": true
+                            }
+                        },
+                        {
+                            "url": "http://127.0.0.1:4000/api/admin/iobeam/auth/current-account",
+                            "expectedStatus": 200,
+                            "jsonContains": {
+                                "ok": true
+                            }
+                        },
+                        {
+                            "url": "http://127.0.0.1:5173/",
+                            "expectedStatus": 200
+                        }
                     ]
                 },
                 "timeout": 45.0

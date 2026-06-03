@@ -12,6 +12,7 @@ import type {
 } from "../types/api";
 import { fetchDefaults } from "./statusSlice";
 import { recordScanActivity } from "../lib/adminActivity";
+import { scanAuthHeaders } from "../lib/authIdentity";
 
 export type ScanKind = "raster" | "vector" | "roi";
 export type ScanPhase =
@@ -259,7 +260,7 @@ export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
   async (req, { signal }) => {
     const r = await fetch("/api/scan/raster/run", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify(req),
       signal,
     });
@@ -275,7 +276,7 @@ export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
   async (req, { signal }) => {
     const r = await fetch("/api/scan/vector/run", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify(req),
       signal,
     });

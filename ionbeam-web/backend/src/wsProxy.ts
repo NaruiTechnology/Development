@@ -33,6 +33,9 @@ type RawData = Buffer | ArrayBuffer | Buffer[];
 type ScanUpgradeAuthorization =
   | { ok: true }
   | { ok: false; status: number; message: string };
+type ScanUpgradeAuthorize = (
+  req: IncomingMessage,
+) => Promise<ScanUpgradeAuthorization>;
 
 const STREAM_PATHS: Record<string, ScanKind> = {
   "/ws/scan/raster/stream": "raster",
@@ -41,7 +44,7 @@ const STREAM_PATHS: Record<string, ScanKind> = {
 
 export function attachWsProxy(
   server: HttpServer,
-  authorize?: () => Promise<ScanUpgradeAuthorization>,
+  authorize?: ScanUpgradeAuthorize,
 ): void {
   // noServer: we drive the upgrade manually so we can route by path.
   const wss = new WebSocketServer({ noServer: true });
@@ -60,7 +63,7 @@ export function attachWsProxy(
     }
 
     void (async () => {
-      const auth = authorize ? await authorize() : { ok: true as const };
+      const auth = authorize ? await authorize(req) : { ok: true as const };
       if (!auth.ok) {
         const statusText = auth.status === 403 ? "Forbidden" : "Scan authorization failed";
         socket.write(

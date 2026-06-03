@@ -6,7 +6,6 @@
 #-------------------------------------------------------------------------------
 import asyncio
 import os
-import shutil
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -80,16 +79,8 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 return
 
             if createEnv:
-                envExample = os.path.join(backendDir, ".env.example")
                 envFile = os.path.join(backendDir, ".env")
-                if os.path.isfile(envExample) and not os.path.exists(envFile):
-                    shutil.copy2(envExample, envFile)
-                    self.info("[{}] created {}".format(type(self).__name__, envFile))
-                elif os.path.exists(envFile):
-                    self.info("[{}] {} already exists".format(type(self).__name__, envFile))
-                else:
-                    self.warn("[{}] backend .env.example not found; skipping .env creation"
-                              .format(type(self).__name__))
+                self._writeBackendEnv(envFile, backendDir)
 
             if not install:
                 self._success = True
@@ -120,6 +111,33 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         except Exception as e:
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
+
+    def _writeBackendEnv(self, envFile, backendDir):
+        deployRoot = self.resolveDeployPath(".")
+        token = os.environ.get("GLASGOW_TOKEN", "").strip()
+        lines = [
+            "PROXY_TARGET_HTTP=http://127.0.0.1:8765",
+            "PROXY_TARGET_WS=ws://127.0.0.1:8765",
+            "GLASGOW_TOKEN={}".format(token),
+            "PORT=4000",
+            "MOCK=0",
+            "STATIC_DIR=../frontend/dist",
+            "GLASGOW_CONFIG={}".format(
+                self.resolveDeployPath(os.path.join("Development", "GlasgowDataIO", "Json", "streamData.json"))),
+            "IOBEAM_ADMIN_CONFIG={}".format(
+                self.resolveDeployPath(os.path.join("Development", "IobeamAdmin", "Json", "IobeamAdmin.json"))),
+            "GLASGOW_RESTART_CMD={}".format(
+                os.path.join(backendDir, "scripts", "restart-glasgow-service.sh")),
+            "IONBEAM_BACKEND_RESTART_CMD={}".format(
+                os.path.join(backendDir, "scripts", "restart-ionbeam-backend.sh")),
+            "GLASGOW_PROJECT_ROOT={}".format(deployRoot),
+            "GLASGOW_CONFIG_STRICT=0",
+            "",
+        ]
+        with open(envFile, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        self.info("[{}] wrote deployment backend env: {}"
+                  .format(type(self).__name__, envFile))
 
     def _wrapNodeCommand(self, cmd, useNvm):
         if not useNvm:

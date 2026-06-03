@@ -15,6 +15,7 @@ export interface SignedInUser {
   is_active: boolean;
   session_lifetime_limit_days: number;
   initials: string;
+  session_token?: string;
 }
 
 interface SendSmsResponse {

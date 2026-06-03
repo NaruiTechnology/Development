@@ -84,6 +84,11 @@ export function App() {
 
   useEffect(() => {
     if (!signedInUser) return;
+    if (!signedInUser.session_token) {
+      window.localStorage.removeItem("ionbeam:adminUser");
+      setSignedInUser(null);
+      return;
+    }
     let cancelled = false;
 
     fetch("/api/admin/iobeam/auth/current-account")

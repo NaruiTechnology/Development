@@ -18,6 +18,8 @@ import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import { Buffer } from "node:buffer";
 import os from "node:os";
+import { URL } from "node:url";
+import type { IncomingMessage } from "node:http";
 
 import { config } from "./config";
 import { buildRestProxy } from "./restProxy";
@@ -70,6 +72,8 @@ interface AdminUser {
   is_active: boolean;
   session_lifetime_limit_days: number;
 }
+
+type ScanAuthRequest = express.Request | IncomingMessage;
 
 interface Equipment {
   id: number | null;
@@ -440,7 +444,7 @@ app.post("/api/admin/iobeam/auth/verify-sms", async (req, res) => {
 
   res.json({
     ok: true,
-    user: publicAdminUser(challenge.user),
+    user: publicAdminUserWithSession(challenge.user),
   });
 });
 
@@ -825,9 +829,10 @@ function readAuditorEmails(data: unknown): Set<string> {
   );
 }
 
-async function currentAdminActor(): Promise<AdminUser | null> {
+async function currentAdminActor(req?: ScanAuthRequest): Promise<AdminUser | null> {
   const info = await readAdminWithBackup();
-  const login = currentLoginName();
+  const sessionLogin = verifyAdminSessionToken(readScanAuthToken(req));
+  const login = sessionLogin || currentLoginName();
   const configUser = findAdminUser(info.data, login);
   const dbUser = await findAdminUserInDb(login).catch(() => null);
   if (configUser && dbUser) {
@@ -881,12 +886,12 @@ async function authorizeAdminConfigSave(nextData: unknown): Promise<void> {
 }
 
 async function requireScanPrivilege(
-  _req: express.Request,
+  req: express.Request,
   res: express.Response,
   next: express.NextFunction,
 ): Promise<void> {
   try {
-    const actor = await currentAdminActor();
+    const actor = await currentAdminActor(req);
     if (!actor || !actor.is_active || actor.role < ROLE_SUPER_USER) {
       res.status(403).json({
         ok: false,
@@ -900,9 +905,9 @@ async function requireScanPrivilege(
   }
 }
 
-async function authorizeScanUpgrade(): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
   try {
-    const actor = await currentAdminActor();
+    const actor = await currentAdminActor(req);
     if (!actor || !actor.is_active || actor.role < ROLE_SUPER_USER) {
       return {
         ok: false,
@@ -942,6 +947,66 @@ function currentLoginName(): string {
     os.userInfo().username ||
     ""
   );
+}
+
+function publicAdminUserWithSession(user: AdminUser) {
+  return {
+    ...publicAdminUser(user),
+    session_token: createAdminSessionToken(user),
+  };
+}
+
+function readScanAuthToken(req?: ScanAuthRequest): string {
+  if (!req) return "";
+  const header = req.headers["x-iobeam-auth"];
+  if (Array.isArray(header)) return header[0] ?? "";
+  if (typeof header === "string") return header.trim();
+  if (!req.url) return "";
+  try {
+    return new URL(req.url, "http://localhost").searchParams.get("auth")?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function createAdminSessionToken(user: AdminUser): string {
+  const lifetimeDays = normalizeSessionLifetimeDays(user.session_lifetime_limit_days);
+  const payload = {
+    login: user.login_name,
+    exp: Date.now() + lifetimeDays * 24 * 60 * 60 * 1000,
+  };
+  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  return `${encoded}.${signAdminSessionPayload(encoded)}`;
+}
+
+function verifyAdminSessionToken(token: string): string | null {
+  const [encoded, signature, extra] = token.split(".");
+  if (!encoded || !signature || extra !== undefined) return null;
+  const expected = signAdminSessionPayload(encoded);
+  if (!safeEqual(signature, expected)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as {
+      login?: unknown;
+      exp?: unknown;
+    };
+    const exp = Number(payload.exp);
+    const login = String(payload.login ?? "").trim();
+    if (!login || !Number.isFinite(exp) || Date.now() > exp) return null;
+    return login;
+  } catch {
+    return null;
+  }
+}
+
+function signAdminSessionPayload(encodedPayload: string): string {
+  const secret = config.glasgowToken || "ionbeam-dev-session-secret";
+  return crypto.createHmac("sha256", secret).update(encodedPayload).digest("base64url");
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
 function maskPhone(phone: string): string {

@@ -50,6 +50,7 @@ import type { RasterRequest, VectorRequest } from "../types/api";
 import type { RootState } from "../store";
 import { registerScanActionStop } from "./scanActionRegistry";
 import { recordScanActivity } from "../lib/adminActivity";
+import { withScanAuthQuery } from "../lib/authIdentity";
 
 type Closure = "pause" | "stop";
 
@@ -196,7 +197,7 @@ export function useScanStream() {
 
 function openWs(path: string): WebSocket {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return new WebSocket(`${proto}//${window.location.host}${path}`);
+  return new WebSocket(`${proto}//${window.location.host}${withScanAuthQuery(path)}`);
 }
 
 function stopExisting(ref: React.MutableRefObject<WebSocket | null>): void {

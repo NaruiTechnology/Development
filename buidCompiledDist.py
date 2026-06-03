@@ -41,7 +41,7 @@ COPY_TREES = [
 # host will regenerate node_modules via `npm install`.
 TREE_COPY_IGNORE = (
     '__pycache__', '.git', '.venv', '.cache', '.pytest_cache',
-    'node_modules', 'dist', 'build', '.next', '.turbo',
+    'node_modules', 'dist', 'build', '.next', '.turbo', '.env',
 )
 
 STREAM_DATA_JSON = os.path.join(
