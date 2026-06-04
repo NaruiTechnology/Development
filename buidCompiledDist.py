@@ -45,10 +45,6 @@ JSON_SOURCES = [
 STREAM_DATA_JSON = os.path.join(
     'Development', 'GlasgowDataIO', 'Json', 'streamData.json')
 
-SQL_SOURCES = [
-    os.path.join('IobeamAdmin', 'Sql'),
-]
-
 # Source ionbeam-web tree lives at Development\ionbeam-web. The destination
 # inside dist_app.zip is at the root, because the deploy app expects to
 # find it at <DeployRoot>\ionbeam-web after extraction (see setupIonbeamWeb
@@ -161,14 +157,30 @@ def copy_json_sources(src_dir, dist_dir):
 
 
 def copy_sql_sources(src_dir, dist_dir):
-    for rel_sql in SQL_SOURCES:
-        sql_src = os.path.join(src_dir, rel_sql)
-        if os.path.isdir(sql_src):
-            sql_dist = os.path.join(dist_dir, rel_sql)
-            if os.path.exists(sql_dist):
-                shutil.rmtree(sql_dist)
-            shutil.copytree(sql_src, sql_dist)
-            print(f"Copied SQL folder: {os.path.normpath(rel_sql)}")
+    """Copy every .sql file under src_dir into dist_dir, preserving paths."""
+    abs_dist = os.path.abspath(dist_dir)
+    copied = 0
+    for root, dirs, files in os.walk(src_dir):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+
+        if _is_inside(root, abs_dist):
+            dirs[:] = []
+            continue
+
+        for filename in files:
+            if not filename.lower().endswith('.sql'):
+                continue
+            rel_path = os.path.relpath(root, src_dir)
+            target_folder = _target_folder(dist_dir, rel_path)
+            os.makedirs(target_folder, exist_ok=True)
+            src_file = os.path.join(root, filename)
+            dest_file = os.path.join(target_folder, filename)
+            shutil.copy2(src_file, dest_file)
+            copied += 1
+            print(f"Copied SQL file: {os.path.normpath(os.path.join(rel_path, filename))}")
+
+    if copied == 0:
+        print("No SQL files found to copy.")
 
 
 def copy_source_trees(src_dir, dist_dir):
