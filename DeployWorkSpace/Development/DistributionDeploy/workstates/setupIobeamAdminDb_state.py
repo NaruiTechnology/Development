@@ -19,6 +19,10 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
             dbName = actionData.get("databaseName", "iobeam_admin")
+            dbRole = (actionData.get("databaseRole") or
+                      os.environ.get("USER") or
+                      os.environ.get("LOGNAME") or
+                      "postgres")
             schemaFile = self._resolveSqlFile(actionData.get(
                 "schemaFile", "Development/IobeamAdmin/Sql/001_schema.sql"))
             seedFile = self._resolveSqlFile(actionData.get(
@@ -29,6 +33,10 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                 return
 
             if not await self._loadSchema(dbName, schemaFile, seedFile, timeout):
+                self._success = False
+                return
+
+            if not await self._ensureRoleAndGrants(dbName, dbRole, timeout):
                 self._success = False
                 return
 
@@ -94,6 +102,27 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         self.info("[{}][load-schema] OK".format(type(self).__name__))
         return True
 
+    async def _ensureRoleAndGrants(self, dbName, roleName, timeout):
+        roleName = str(roleName or "").strip()
+        if not roleName:
+            self.error("[{}][ensure-role] no database role name available".format(
+                type(self).__name__))
+            return False
+
+        sql = self._roleGrantSql(dbName, roleName)
+        grantRole = ["sudo", "-u", "postgres", "psql", "-d", dbName, "-v", "ON_ERROR_STOP=1"]
+        self.info("[{}][ensure-role] >> {} < SQL".format(
+            type(self).__name__, " ".join(grantRole)))
+        ok, _, stderr = await self._runExec(grantRole, timeout, sql)
+        if not ok:
+            self.error("[{}][ensure-role] FAILED.\n{}".format(
+                type(self).__name__, stderr or "<no stderr>"))
+            return False
+
+        self.info("[{}][ensure-role] ensured PostgreSQL role '{}' and grants.".format(
+            type(self).__name__, roleName))
+        return True
+
     def _resolveSqlFile(self, configuredPath):
         path = self.resolveDeployPath(configuredPath)
         if os.path.isfile(path):
@@ -139,3 +168,32 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         if proc.returncode != 0:
             return False, stdoutText, stderrText
         return True, stdoutText, stderrText
+
+    def _roleGrantSql(self, dbName, roleName):
+        dbIdent = self._quoteIdent(dbName)
+        roleIdent = self._quoteIdent(roleName)
+        roleLiteral = self._quoteLiteral(roleName)
+        return "\n".join([
+            "DO $$",
+            "BEGIN",
+            f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {roleLiteral}) THEN",
+            f"    EXECUTE 'CREATE ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
+            "  ELSE",
+            f"    EXECUTE 'ALTER ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
+            "  END IF;",
+            "END",
+            "$$;",
+            f"GRANT CONNECT ON DATABASE {dbIdent} TO {roleIdent};",
+            f"GRANT USAGE, CREATE ON SCHEMA public TO {roleIdent};",
+            f"GRANT USAGE, CREATE ON SCHEMA iobeam_admin TO {roleIdent};",
+            f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iobeam_admin TO {roleIdent};",
+            f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA iobeam_admin TO {roleIdent};",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {roleIdent};",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {roleIdent};",
+        ])
+
+    def _quoteIdent(self, value):
+        return '"' + str(value).replace('"', '""') + '"'
+
+    def _quoteLiteral(self, value):
+        return "'" + str(value).replace("'", "''") + "'"

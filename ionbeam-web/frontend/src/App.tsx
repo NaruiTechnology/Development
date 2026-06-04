@@ -11,6 +11,7 @@
 import {
   Component,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -37,12 +38,15 @@ import { resetRaster, resetVector } from "./store/imageSlice";
 import { fetchDefaults } from "./store/statusSlice";
 import { useAppDispatch, useAppSelector } from "./store";
 import { useTranslation } from "./i18n";
+import { scanAuthHeaders } from "./lib/authIdentity";
+import { openDialog as openSettingsDialog, setActiveTab } from "./store/settingsSlice";
 
 const RIGHT_PANEL_STORAGE_KEY = "ionbeam:rightPanelWidth";
 const DEFAULT_RIGHT_PANEL_WIDTH = 720;
 const MIN_LEFT_PANEL_WIDTH = 320;
 const MIN_RIGHT_PANEL_WIDTH = 380;
 const SPLITTER_SPACE = 32;
+const LAST_ADMIN_LOGIN_STORAGE_KEY = "ionbeam:lastAdminLogin";
 type AppRoute = "control" | "report";
 
 export function App() {
@@ -75,11 +79,19 @@ export function App() {
       return null;
     }
   });
+  const settingsTarget = useMemo(() => parseSettingsTarget(window.location.search), []);
   const hasPartialROI = isPartialROISelection(roiState);
   const isSignedIn = Boolean(signedInUser);
 
   useEffect(() => {
     dispatch(fetchDefaults());
+  }, [dispatch]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("settings") !== "admin") return;
+    dispatch(openSettingsDialog());
+    dispatch(setActiveTab("admin"));
   }, [dispatch]);
 
   useEffect(() => {
@@ -91,13 +103,14 @@ export function App() {
     }
     let cancelled = false;
 
-    fetch("/api/admin/iobeam/auth/current-account")
+    fetch("/api/admin/iobeam/auth/current-account", { headers: scanAuthHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { login?: unknown; registered?: unknown; session_expired?: unknown } | null) => {
         if (cancelled || !data) return;
         const currentLogin = String(data.login ?? "").toLowerCase();
         const signedInLogin = signedInUser.login_name.toLowerCase();
         if (!data.registered || data.session_expired === true || currentLogin !== signedInLogin) {
+          window.localStorage.setItem(LAST_ADMIN_LOGIN_STORAGE_KEY, signedInUser.login_name);
           window.localStorage.removeItem("ionbeam:adminUser");
           setSignedInUser(null);
         }
@@ -304,7 +317,7 @@ export function App() {
                 </div>
                 <ValidationPanel disabled={!isSignedIn} />
               </div>
-              <ErrorWedge />
+              <ErrorWedge signedInUser={signedInUser} />
             </>
           )}
         </section>
@@ -373,10 +386,21 @@ export function App() {
       </main>
       )}
 
-      <SettingsDialog />
+      <SettingsDialog targetAccountId={settingsTarget.accountId} targetLogin={settingsTarget.login} />
       <Footer />
     </div>
   );
+}
+
+function parseSettingsTarget(search: string): { accountId: number | null; login: string | null } {
+  const params = new URLSearchParams(search);
+  if (params.get("settings") !== "admin") {
+    return { accountId: null, login: null };
+  }
+  const accountIdRaw = Number(params.get("account_id") ?? 0);
+  const accountId = Number.isInteger(accountIdRaw) && accountIdRaw > 0 ? accountIdRaw : null;
+  const login = params.get("login")?.trim() || null;
+  return { accountId, login };
 }
 
 function useAppRoute(): AppRoute {

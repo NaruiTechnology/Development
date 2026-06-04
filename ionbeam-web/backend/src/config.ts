@@ -3,6 +3,7 @@
  * single typed object instead of poking process.env directly.
  */
 import dotenv from "dotenv";
+import os from "node:os";
 import path from "node:path";
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -15,6 +16,16 @@ function bool(v: string | undefined, fallback: boolean): boolean {
 function int(v: string | undefined, fallback: number): number {
   const n = Number(v ?? fallback);
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function currentLogin(): string {
+  try {
+    const username = os.userInfo().username.trim();
+    if (username) return username;
+  } catch {
+    // Fall through to environment-based fallbacks below.
+  }
+  return process.env.USER?.trim() || process.env.LOGNAME?.trim() || "postgres";
 }
 
 export interface Config {
@@ -91,14 +102,14 @@ export const config: Config = {
     process.env.IONBEAM_BACKEND_RESTART_CMD?.trim() ||
     DEFAULT_BACKEND_RESTART_CMD,
   configStrict: bool(process.env.GLASGOW_CONFIG_STRICT, false),
-  adminDbHost: process.env.IOBEAM_ADMIN_DB_HOST?.trim() || "localhost",
+  adminDbHost: process.env.IOBEAM_ADMIN_DB_HOST?.trim() || "/var/run/postgresql",
   adminDbPort: Number(process.env.IOBEAM_ADMIN_DB_PORT ?? 5432),
   adminDbName: process.env.IOBEAM_ADMIN_DB_NAME?.trim() || "iobeam_admin",
-  adminDbUser: process.env.IOBEAM_ADMIN_DB_USER?.trim() || "postgres",
+  adminDbUser: process.env.IOBEAM_ADMIN_DB_USER?.trim() || currentLogin(),
   adminDbPassword: process.env.IOBEAM_ADMIN_DB_PASSWORD?.trim() || null,
   adminDbCommandTimeoutMs: Math.max(
     1_000,
-    int(process.env.IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS, 5_000),
+    int(process.env.IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS, 30_000),
   ),
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID?.trim() || null,
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN?.trim() || null,

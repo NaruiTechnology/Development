@@ -53,6 +53,9 @@ export const zhTW: Partial<TranslationTable> = {
   "header.state.error": "錯誤",
   "header.state.disconnected": "已中斷連線",
 
+  /* ===== authorization ============================================ */
+  "auth.sudoWarning": "這個 OS 登入帳號對應的資料庫角色需要先由部署或管理員設定完成；登入流程不會執行基於 sudo 的資料庫授權。",
+
   /* ===== sites ===================================================== */
   "site.beijing": "北京",
   "site.shanghai": "上海",
@@ -95,6 +98,9 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.stop.title": "結束掃描並清空畫布",
   "scan.runValidated.title": "POST /scan/{kind}/run — 回傳耗時與驗證報告",
   "scan.permission.required": "RUSTER/VECTOR 掃描需要 SuperUser、Admin 或 Auditor 權限。",
+  "scan.roleRequest.title": "申請掃描角色",
+  "scan.roleRequest.subject": "掃描角色申請",
+  "scan.roleRequest.body": "請審核此帳戶並授予掃描權限。\n\n申請角色：{requestedRole}\n帳戶：{login}\n姓名：{name}\n信箱：{email}\n站點：{site}\n目前角色：{currentRole}\n\n原因：我需要執行 RASTER/VECTOR 掃描。",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "解析度",
@@ -467,6 +473,8 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.equipment.empty": "未配置設備",
   "settings.admin.group.equipment": "設備",
   "settings.admin.subtabs.aria": "管理設定分頁",
+  "settings.admin.user.update": "更新使用者帳戶",
+  "settings.admin.user.save": "儲存使用者帳戶",
   "settings.admin.equipment.id": "ID",
   "settings.admin.equipment.name": "名稱",
   "settings.admin.equipment.model": "型號",
@@ -476,5 +484,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.admin.equipment.actions": "操作",
   "settings.admin.equipment.add": "新增",
   "settings.admin.equipment.add.title": "插入新的可編輯設備列",
+  "settings.admin.equipment.update": "更新設備",
+  "settings.admin.equipment.save": "儲存設備",
   "settings.admin.equipment.delete": "刪除設備列",
 };

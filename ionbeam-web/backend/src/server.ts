@@ -122,14 +122,22 @@ const SITE_OPTIONS = [
   "Beijing(北京)",
   "Shanghai(上海)",
   "Shenzheng(深圳)",
-  "Wexi(无锡)",
+  "Wuxi(无锡)",
   "Xian(西安)",
   "Chengdu(成都)",
   "Hangzhou(杭州)",
   "Tianjing(天津)",
   "Taixin(泰兴)",
 ] as const;
+const LEGACY_SITE_ALIASES: Record<string, string> = {
+  "Wexi(无锡)": "Wuxi(无锡)",
+};
 const DEFAULT_SITE = SITE_OPTIONS[0];
+let adminSessionSchemaReady: Promise<void> | null = null;
+let adminUserSchemaReady: Promise<void> | null = null;
+let adminEquipmentSchemaReady: Promise<void> | null = null;
+let adminDbBackoffUntil = 0;
+const ADMIN_DB_BACKOFF_MS = 15_000;
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "256mb" })); // scan DB flow may post large CSV/PNG blobs
@@ -196,7 +204,26 @@ app.post("/api/admin/config/restore", async (_req, res) => {
 app.get("/api/admin/iobeam/config", async (_req, res) => {
   try {
     const info = await readAdminWithBackup();
-    res.json(info);
+    const dbUsers = await listAdminUsersFromDb().catch((err) => {
+      console.warn(
+        `[iobeam-admin/config] DB user records were not loaded: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    });
+    const dbEquipment = await listEquipmentFromDb().catch((err) => {
+      console.warn(
+        `[iobeam-admin/config] DB equipment records were not loaded: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    });
+    res.json({
+      ...info,
+      data: mergeAdminConfigData(info.data, dbUsers, dbEquipment),
+    });
   } catch (err) {
     sendConfigError(res, err);
   }
@@ -219,7 +246,7 @@ app.post(
     }
 
     try {
-      await authorizeAdminConfigSave(data);
+      await authorizeAdminConfigSave(req, data);
       await syncAdminUsersToDb(data);
       await syncEquipmentToDb(data);
       await writeAdminConfig(data);
@@ -260,8 +287,9 @@ app.post(
   },
 );
 
-app.get("/api/admin/iobeam/auth/current-account", async (_req, res) => {
-  const login = currentLoginName();
+app.get("/api/admin/iobeam/auth/current-account", async (req, res) => {
+  const sessionLogin = verifyAdminSessionToken(readScanAuthToken(req));
+  const login = sessionLogin || currentLoginName();
   try {
     const info = await readAdminWithBackup();
     const configUser = findAdminUser(info.data, login);
@@ -792,6 +820,85 @@ function addAdminUser(data: unknown, user: AdminUser): unknown {
   };
 }
 
+function mergeAdminConfigData(
+  data: unknown,
+  dbUsers: AdminUser[],
+  dbEquipment: Equipment[],
+): unknown {
+  const root =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? { ...(data as Record<string, unknown>) }
+      : {};
+  const users = mergeAdminUsers(dbUsers, readAdminUsers(root));
+  const equipment = mergeEquipment(dbEquipment, readEquipment(root));
+  return {
+    ...root,
+    user: users[0] ?? root.user ?? emptyAdminUser(),
+    users,
+    equipment: equipment[0] ?? root.equipment ?? emptyEquipment(),
+    equipments: equipment,
+  };
+}
+
+function mergeAdminUsers(base: AdminUser[], overlay: AdminUser[]): AdminUser[] {
+  const rows = new Map<string, AdminUser>();
+  for (const user of [...base, ...overlay]) {
+    const key = adminUserKey(user);
+    if (key) rows.set(key, user);
+  }
+  return [...rows.values()].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+}
+
+function adminUserKey(user: AdminUser): string {
+  const login = user.login_name.trim().toLowerCase();
+  if (login) return `login:${login}`;
+  const email = user.email.trim().toLowerCase();
+  return email ? `email:${email}` : "";
+}
+
+function emptyAdminUser(): AdminUser {
+  return {
+    id: null,
+    login_name: "",
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone_number: "",
+    company_name: "",
+    site: DEFAULT_SITE,
+    role: ROLE_USER,
+    is_active: true,
+    session_lifetime_limit_days: 1,
+  };
+}
+
+function mergeEquipment(base: Equipment[], overlay: Equipment[]): Equipment[] {
+  const rows = new Map<string, Equipment>();
+  for (const equipment of [...base, ...overlay]) {
+    const key = equipmentKey(equipment);
+    if (key) rows.set(key, equipment);
+  }
+  return [...rows.values()].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+}
+
+function equipmentKey(equipment: Equipment): string {
+  const serialNumber = equipment.serial_number.trim().toLowerCase();
+  if (serialNumber) return `serial:${serialNumber}`;
+  const name = equipment.name.trim().toLowerCase();
+  return name ? `name:${name}` : "";
+}
+
+function emptyEquipment(): Equipment {
+  return {
+    id: null,
+    name: "",
+    model: "",
+    serial_number: "",
+    site: "",
+    description: "",
+  };
+}
+
 function nextAdminUserId(users: AdminUser[]): number {
   return users.reduce((max, user) => Math.max(max, user.id ?? 0), 0) + 1;
 }
@@ -834,16 +941,8 @@ async function currentAdminActor(req?: ScanAuthRequest): Promise<AdminUser | nul
   const sessionLogin = verifyAdminSessionToken(readScanAuthToken(req));
   const login = sessionLogin || currentLoginName();
   const configUser = findAdminUser(info.data, login);
-  const dbUser = await findAdminUserInDb(login).catch(() => null);
-  if (configUser && dbUser) {
-    return {
-      ...dbUser,
-      email: configUser.email || dbUser.email,
-      role: Math.max(configUser.role, dbUser.role),
-      is_active: configUser.is_active && dbUser.is_active,
-    };
-  }
-  return dbUser ?? configUser;
+  const dbUser = configUser ? null : await findAdminUserInDb(login).catch(() => null);
+  return configUser ?? dbUser;
 }
 
 async function currentActorIsAuditor(actor: AdminUser, data?: unknown): Promise<boolean> {
@@ -853,8 +952,8 @@ async function currentActorIsAuditor(actor: AdminUser, data?: unknown): Promise<
   return isAuditorEmailInDb(email).catch(() => false);
 }
 
-async function authorizeAdminConfigSave(nextData: unknown): Promise<void> {
-  const actor = await currentAdminActor();
+async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown): Promise<void> {
+  const actor = await currentAdminActor(req);
   if (!actor || !actor.is_active) {
     const err = new ConfigError("current account is not authorized to edit admin configuration", 403);
     throw err;
@@ -933,8 +1032,9 @@ function normalizeSessionLifetimeDays(value: unknown): number {
 
 function normalizeSite(value: unknown): string {
   const site = String(value ?? "").trim();
-  return SITE_OPTIONS.includes(site as (typeof SITE_OPTIONS)[number])
-    ? site
+  const canonical = LEGACY_SITE_ALIASES[site] ?? site;
+  return SITE_OPTIONS.includes(canonical as (typeof SITE_OPTIONS)[number])
+    ? canonical
     : DEFAULT_SITE;
 }
 
@@ -1068,6 +1168,11 @@ async function sendSmsVerification(
 
 function sqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
+}
+
+function sqlIntegerOrDefault(value: number | null | undefined): string {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? String(Math.trunc(n)) : "DEFAULT";
 }
 
 function buildActivityReportCompatibilitySql(
@@ -1344,39 +1449,47 @@ async function isAdminSessionExpired(user: AdminUser): Promise<boolean> {
 }
 
 async function ensureAdminSessionSchema(): Promise<void> {
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    ${adminSessionSiteMigrationSql()}
-    ALTER TABLE session
-      DROP COLUMN IF EXISTS mac_address,
-      ADD COLUMN IF NOT EXISTS login_time timestamp(6);
+  if (!adminSessionSchemaReady) {
+    adminSessionSchemaReady = (async () => {
+      const sql = `
+        SET search_path TO iobeam_admin, public;
+        ${adminSessionSiteMigrationSql()}
+        ALTER TABLE session
+          DROP COLUMN IF EXISTS mac_address,
+          ADD COLUMN IF NOT EXISTS login_time timestamp(6);
 
-    DO $$
-    BEGIN
-      IF EXISTS (
-          SELECT 1
-            FROM information_schema.columns
-           WHERE table_schema = 'iobeam_admin'
-             AND table_name = 'session'
-             AND column_name = 'last_signed_in'
-      ) THEN
-          EXECUTE 'UPDATE session
-                     SET login_time = COALESCE(login_time, last_signed_in, CURRENT_TIMESTAMP)
-                   WHERE login_time IS NULL';
-      ELSE
-          UPDATE session
-             SET login_time = CURRENT_TIMESTAMP
-           WHERE login_time IS NULL;
-      END IF;
-    END;
-    $$;
+        DO $$
+        BEGIN
+          IF EXISTS (
+              SELECT 1
+                FROM information_schema.columns
+               WHERE table_schema = 'iobeam_admin'
+                 AND table_name = 'session'
+                 AND column_name = 'last_signed_in'
+          ) THEN
+              EXECUTE 'UPDATE session
+                         SET login_time = COALESCE(login_time, last_signed_in, CURRENT_TIMESTAMP)
+                       WHERE login_time IS NULL';
+          ELSE
+              UPDATE session
+                 SET login_time = CURRENT_TIMESTAMP
+               WHERE login_time IS NULL;
+          END IF;
+        END;
+        $$;
 
-    ALTER TABLE session
-      ALTER COLUMN login_time SET DEFAULT CURRENT_TIMESTAMP,
-      ALTER COLUMN login_time SET NOT NULL,
-      DROP COLUMN IF EXISTS last_signed_in;
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+        ALTER TABLE session
+          ALTER COLUMN login_time SET DEFAULT CURRENT_TIMESTAMP,
+          ALTER COLUMN login_time SET NOT NULL,
+          DROP COLUMN IF EXISTS last_signed_in;
+      `;
+      await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+    })().catch((err) => {
+      adminSessionSchemaReady = null;
+      throw err;
+    });
+  }
+  await adminSessionSchemaReady;
 }
 
 function adminUserSiteMigrationSql(): string {
@@ -1541,31 +1654,39 @@ function trimForSqlNchar(value: string, maxLength: number): string {
 }
 
 async function ensureAdminUserSchema(): Promise<void> {
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    ${adminUserSiteMigrationSql()}
-    ${adminAuditorMigrationSql()}
+  if (!adminUserSchemaReady) {
+    adminUserSchemaReady = (async () => {
+      const sql = `
+        SET search_path TO iobeam_admin, public;
+        ${adminUserSiteMigrationSql()}
+        ${adminAuditorMigrationSql()}
 
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-          SELECT 1
-            FROM pg_constraint
-            JOIN pg_attribute
-              ON pg_attribute.attrelid = pg_constraint.conrelid
-             AND pg_attribute.attnum = ANY(pg_constraint.conkey)
-           WHERE pg_constraint.conrelid = 'iobeam_admin."user"'::regclass
-             AND pg_constraint.contype = 'u'
-             AND pg_attribute.attname = 'email'
-             AND cardinality(pg_constraint.conkey) = 1
-      ) THEN
-          ALTER TABLE "user"
-            ADD CONSTRAINT user_email_unique UNIQUE (email);
-      END IF;
-    END;
-    $$;
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+              SELECT 1
+                FROM pg_constraint
+                JOIN pg_attribute
+                  ON pg_attribute.attrelid = pg_constraint.conrelid
+                 AND pg_attribute.attnum = ANY(pg_constraint.conkey)
+               WHERE pg_constraint.conrelid = 'iobeam_admin."user"'::regclass
+                 AND pg_constraint.contype = 'u'
+                 AND pg_attribute.attname = 'email'
+                 AND cardinality(pg_constraint.conkey) = 1
+          ) THEN
+              ALTER TABLE "user"
+                ADD CONSTRAINT user_email_unique UNIQUE (email);
+          END IF;
+        END;
+        $$;
+      `;
+      await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+    })().catch((err) => {
+      adminUserSchemaReady = null;
+      throw err;
+    });
+  }
+  await adminUserSchemaReady;
 }
 
 function adminAuditorMigrationSql(): string {
@@ -1660,11 +1781,19 @@ function adminEquipmentMigrationSql(): string {
 }
 
 async function ensureAdminEquipmentSchema(): Promise<void> {
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    ${adminEquipmentMigrationSql()}
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+  if (!adminEquipmentSchemaReady) {
+    adminEquipmentSchemaReady = (async () => {
+      const sql = `
+        SET search_path TO iobeam_admin, public;
+        ${adminEquipmentMigrationSql()}
+      `;
+      await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+    })().catch((err) => {
+      adminEquipmentSchemaReady = null;
+      throw err;
+    });
+  }
+  await adminEquipmentSchemaReady;
 }
 
 async function listEquipmentFromDb(): Promise<Equipment[]> {
@@ -1691,10 +1820,7 @@ async function listEquipmentFromDb(): Promise<Equipment[]> {
 
 async function upsertEquipmentInDb(equipment: Equipment): Promise<void> {
   await ensureAdminEquipmentSchema();
-  const idValue =
-    Number.isInteger(equipment.id) && (equipment.id ?? 0) > 0
-      ? String(equipment.id)
-      : "DEFAULT";
+  const idValue = sqlIntegerOrDefault(equipment.id);
   const sql = `
     SET search_path TO iobeam_admin, public;
     INSERT INTO Equipment (id, name, model, serial_number, site, description)
@@ -1715,12 +1841,40 @@ async function upsertEquipmentInDb(equipment: Equipment): Promise<void> {
   await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
 }
 
+async function upsertEquipmentRowsInDb(equipmentRows: Equipment[]): Promise<void> {
+  await ensureAdminEquipmentSchema();
+  const values = equipmentRows
+    .map((equipment) => {
+      const idValue = sqlIntegerOrDefault(equipment.id);
+      return `(
+        ${idValue},
+        ${sqlString(trimForSqlNchar(equipment.name, 100))},
+        ${sqlString(trimForSqlNchar(equipment.model, 100))},
+        ${sqlString(trimForSqlNchar(equipment.serial_number, 15))},
+        ${sqlString(trimForSqlNchar(equipment.site, 50))},
+        ${sqlString(trimForSqlNchar(equipment.description, 1000))}
+      )`;
+    })
+    .join(",\n");
+  const sql = `
+    SET search_path TO iobeam_admin, public;
+    INSERT INTO Equipment (id, name, model, serial_number, site, description)
+    VALUES ${values}
+    ON CONFLICT (serial_number) DO UPDATE
+       SET name = EXCLUDED.name,
+           model = EXCLUDED.model,
+           site = EXCLUDED.site,
+           description = EXCLUDED.description;
+  `;
+  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+}
+
 async function syncEquipmentToDb(data: unknown): Promise<void> {
-  const equipmentRows = readEquipment(data);
-  for (const equipment of equipmentRows) {
-    if (!equipment.name.trim() || !equipment.serial_number.trim()) continue;
-    await upsertEquipmentInDb(equipment);
-  }
+  const equipmentRows = readEquipment(data).filter(
+    (equipment) => equipment.name.trim() && equipment.serial_number.trim(),
+  );
+  if (equipmentRows.length === 0) return;
+  await upsertEquipmentRowsInDb(equipmentRows);
 }
 
 async function findAdminUserInDb(loginOrEmail: string): Promise<AdminUser | null> {
@@ -1753,6 +1907,33 @@ async function findAdminUserInDb(loginOrEmail: string): Promise<AdminUser | null
   const out = await runPsql(["-Atq"], config.adminDbName, sql);
   const rows = JSON.parse(out.trim() || "[]") as unknown;
   return Array.isArray(rows) && rows[0] ? readAdminUsers({ users: rows })[0] ?? null : null;
+}
+
+async function listAdminUsersFromDb(): Promise<AdminUser[]> {
+  await ensureAdminUserSchema();
+  const sql = `
+    SET search_path TO iobeam_admin, public;
+    SELECT COALESCE(jsonb_agg(row_to_json(u) ORDER BY u.id), '[]'::jsonb)
+      FROM (
+        SELECT
+          id,
+          btrim(login_name::text) AS login_name,
+          btrim(first_name::text) AS first_name,
+          btrim(last_name::text) AS last_name,
+          btrim(email::text) AS email,
+          btrim(phone_number::text) AS phone_number,
+          btrim(company_name::text) AS company_name,
+          btrim(site::text) AS site,
+          role,
+          is_active,
+          session_lifetime_limit_days
+        FROM "user"
+        ORDER BY id
+      ) u;
+  `;
+  const out = await runPsql(["-Atq"], config.adminDbName, sql);
+  const rows = JSON.parse(out.trim() || "[]") as unknown;
+  return readAdminUsers({ users: rows });
 }
 
 async function upsertAdminUserInDb(user: AdminUser): Promise<void> {
@@ -1790,12 +1971,48 @@ async function upsertAdminUserInDb(user: AdminUser): Promise<void> {
   await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
 }
 
+async function upsertAdminUserRowsInDb(users: AdminUser[]): Promise<void> {
+  await ensureAdminUserSchema();
+  const values = users
+    .map((user) => `(
+      ${user.id ?? "DEFAULT"},
+      ${sqlString(trimForSqlNchar(user.login_name, 100))},
+      ${sqlString(trimForSqlNchar(user.first_name, 100))},
+      ${sqlString(trimForSqlNchar(user.last_name, 100))},
+      ${sqlString(trimForSqlNchar(user.email, 250))},
+      ${sqlString(trimForSqlNchar(user.phone_number, 25))},
+      ${sqlString(trimForSqlNchar(user.company_name, 150))},
+      ${sqlString(trimForSqlNchar(user.site, 150))},
+      ${Math.trunc(user.role || ROLE_USER)},
+      ${user.is_active ? "true" : "false"},
+      ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
+    )`)
+    .join(",\n");
+  const sql = `
+    SET search_path TO iobeam_admin, public;
+    INSERT INTO "user" (
+      id, login_name, first_name, last_name, email,
+      phone_number, company_name, site, role, is_active, session_lifetime_limit_days
+    )
+    VALUES ${values}
+    ON CONFLICT (login_name) DO UPDATE
+       SET first_name = EXCLUDED.first_name,
+           last_name = EXCLUDED.last_name,
+           email = EXCLUDED.email,
+           phone_number = EXCLUDED.phone_number,
+           company_name = EXCLUDED.company_name,
+           site = EXCLUDED.site,
+           role = EXCLUDED.role,
+           is_active = EXCLUDED.is_active,
+           session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
+  `;
+  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+}
+
 async function syncAdminUsersToDb(data: unknown): Promise<void> {
-  const users = readAdminUsers(data);
-  for (const user of users) {
-    if (!user.login_name.trim() || !user.email.trim()) continue;
-    await upsertAdminUserInDb(user);
-  }
+  const users = readAdminUsers(data).filter((user) => user.login_name.trim() && user.email.trim());
+  if (users.length === 0) return;
+  await upsertAdminUserRowsInDb(users);
 }
 
 async function isAuditorEmailInDb(email: string): Promise<boolean> {
@@ -1819,6 +2036,14 @@ function runPsql(
   stdin?: string,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (Date.now() < adminDbBackoffUntil) {
+      reject(
+        new Error(
+          `psql temporarily unavailable for ${config.adminDbHost}:${config.adminDbPort}/${database} after a recent connection failure`,
+        ),
+      );
+      return;
+    }
     let settled = false;
     const child = spawn(
       "psql",
@@ -1848,6 +2073,7 @@ function runPsql(
       if (settled) return;
       settled = true;
       child.kill("SIGTERM");
+      adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
       reject(
         new Error(
           `psql timed out after ${config.adminDbCommandTimeoutMs}ms connecting to ${config.adminDbHost}:${config.adminDbPort}/${database}`,
@@ -1877,15 +2103,32 @@ function runPsql(
       child.stdin?.end(stdin);
     }
     child.on("error", (err) => {
-      finish(() => reject(err));
+      finish(() => {
+        if (isDbConnectivityError(err.message)) {
+          adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
+        }
+        reject(err);
+      });
     });
     child.on("close", (code) => {
       finish(() => {
-        if (code === 0) resolve(stdout);
-        else reject(new Error(stderr.trim() || `psql exited with code ${code}`));
+        if (code === 0) {
+          adminDbBackoffUntil = 0;
+          resolve(stdout);
+          return;
+        }
+        const message = stderr.trim() || `psql exited with code ${code}`;
+        if (isDbConnectivityError(message)) {
+          adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
+        }
+        reject(new Error(message));
       });
     });
   });
+}
+
+function isDbConnectivityError(message: string): boolean {
+  return /timed out after|could not connect to server|connection refused|timeout/i.test(message);
 }
 
 async function restartServicesAndRespond(

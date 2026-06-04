@@ -30,6 +30,7 @@ import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
 import { clearLastResult, clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
 import { fetchDefaults, previewConfigDefaults } from "../store/statusSlice";
+import { scanAuthHeaders } from "../lib/authIdentity";
 import {
   ACTION_DATA_PATH,
   PINS_PATH,
@@ -56,7 +57,13 @@ import { Icon } from "./Icon";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
 
-export function SettingsDialog() {
+export function SettingsDialog({
+  targetAccountId = null,
+  targetLogin = null,
+}: {
+  targetAccountId?: number | null;
+  targetLogin?: string | null;
+}) {
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.settings.dialogOpen);
 
@@ -83,7 +90,7 @@ export function SettingsDialog() {
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <SettingsModalShell />
+      <SettingsModalShell targetAccountId={targetAccountId} targetLogin={targetLogin} />
     </div>
   );
 }
@@ -135,7 +142,13 @@ function simulationImageChanged(before: unknown, after: unknown): boolean {
 
 /* -------- modal shell -------------------------------------------------- */
 
-function SettingsModalShell() {
+function SettingsModalShell({
+  targetAccountId,
+  targetLogin,
+}: {
+  targetAccountId: number | null;
+  targetLogin: string | null;
+}) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const {
@@ -162,11 +175,19 @@ function SettingsModalShell() {
     return () => window.clearTimeout(focusTimer);
   }, []);
 
+  useEffect(() => {
+    if (activeTab === "admin") return;
+    if (targetAccountId !== null || targetLogin) {
+      dispatch(setActiveTab("admin"));
+    }
+  }, [activeTab, dispatch, targetAccountId, targetLogin]);
+
   // "Save As" and "Default" both fire a confirm-then-action flow. We
   // use local component state for the confirm row rather than a nested
   // modal - a second modal layer is heavy for a yes/no prompt.
   const [confirmSave, setConfirmSave] = useState(false);
   const [confirmDefault, setConfirmDefault] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
 
   const busy = loading || saving || restoring;
 
@@ -302,7 +323,18 @@ function SettingsModalShell() {
         ) : draft === null ? (
           <div className="settings-loading">{t("settings.empty")}</div>
         ) : (
-          <SettingsTabBody tab={activeTab} draft={draft} />
+          <SettingsTabBody
+            tab={activeTab}
+            draft={draft}
+            targetAccountId={targetAccountId}
+            targetLogin={targetLogin}
+            activeSubTab={activeSubTab}
+            onSelectAdminSubTab={(tab) => {
+              setConfirmSave(false);
+              setConfirmDefault(false);
+              setActiveSubTab(tab);
+            }}
+          />
         )}
       </div>
 
@@ -323,7 +355,7 @@ function SettingsModalShell() {
             onConfirm={onConfirmDefault}
             onCancel={() => setConfirmDefault(false)}
           />
-        ) : (
+        ) : activeTab === "admin" && (activeSubTab === "users" || activeSubTab === "equipment") ? null : (
           <div className="settings-footer__row">
             <span
               className="scan-busy"
@@ -414,7 +446,21 @@ function SettingsTabButton({
 
 /* -------- tab bodies --------------------------------------------------- */
 
-function SettingsTabBody({ tab, draft }: { tab: SettingsTab; draft: unknown }) {
+function SettingsTabBody({
+  tab,
+  draft,
+  targetAccountId,
+  targetLogin,
+  activeSubTab,
+  onSelectAdminSubTab,
+}: {
+  tab: SettingsTab;
+  draft: unknown;
+  targetAccountId: number | null;
+  targetLogin: string | null;
+  activeSubTab: AdminSubTab;
+  onSelectAdminSubTab: (tab: AdminSubTab) => void;
+}) {
   switch (tab) {
     case "general":
       return <GeneralTab draft={draft} />;
@@ -427,7 +473,14 @@ function SettingsTabBody({ tab, draft }: { tab: SettingsTab; draft: unknown }) {
     case "simulation":
       return <SimulationTab draft={draft} />;
     case "admin":
-      return <AdminTab />;
+      return (
+        <AdminTab
+          targetAccountId={targetAccountId}
+          targetLogin={targetLogin}
+          activeSubTab={activeSubTab}
+          onSelectSubTab={onSelectAdminSubTab}
+        />
+      );
   }
 }
 
@@ -992,7 +1045,7 @@ async function fetchAdminConfig(): Promise<SettingsConfigInfo> {
 async function saveAdminConfig(data: unknown): Promise<void> {
   const r = await fetch("/api/admin/iobeam/config", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
   });
   if (!r.ok) {
@@ -1043,7 +1096,6 @@ interface CurrentAccountResponse {
 }
 
 const ADMIN_ROLE_OPTIONS = [
-  { value: 4, key: "settings.admin.role.audit" },
   { value: 3, key: "settings.admin.role.admin" },
   { value: 2, key: "settings.admin.role.developer" },
   { value: 1, key: "settings.admin.role.superUser" },
@@ -1145,6 +1197,28 @@ function equipmentFromDraft(draft: unknown): EquipmentRow[] {
     }));
 }
 
+function adminUserRowKey(user: AdminUserRow, index: number): string {
+  if (user.id !== null) return `id:${user.id}`;
+  const login = user.login_name.trim().toLowerCase();
+  if (login) return `login:${login}`;
+  return `index:${index}`;
+}
+
+function equipmentRowKey(row: EquipmentRow, index: number): string {
+  if (row.id !== null) return `id:${row.id}`;
+  const serial = row.serial_number.trim().toLowerCase();
+  if (serial) return `serial:${serial}`;
+  return `index:${index}`;
+}
+
+function adminUserRowSignature(user: AdminUserRow): string {
+  return JSON.stringify(user);
+}
+
+function equipmentRowSignature(row: EquipmentRow): string {
+  return JSON.stringify(row);
+}
+
 function adminRoleApprovalRecipients(draft: unknown): string[] {
   const emails = new Set<string>();
   auditorsFromDraft(draft)
@@ -1163,7 +1237,7 @@ function adminRoleApprovalRecipients(draft: unknown): string[] {
 }
 
 function adminRoleRequestLink(user: AdminUserRow): string {
-  const url = new URL(window.location.href);
+  const url = new URL(`${window.location.origin}/`);
   url.searchParams.set("settings", "admin");
   if (user.id !== null) {
     url.searchParams.set("account_id", String(user.id));
@@ -1193,17 +1267,28 @@ function composeAdminRoleRequestEmail(user: AdminUserRow, recipients: string[]) 
 }
 
 async function fetchCurrentAccountRole(): Promise<number | null> {
-  const r = await fetch("/api/admin/iobeam/auth/current-account");
+  const r = await fetch("/api/admin/iobeam/auth/current-account", {
+    headers: scanAuthHeaders(),
+  });
   if (!r.ok) return null;
   const data = (await r.json()) as CurrentAccountResponse;
   return typeof data.user?.role === "number" ? data.user.role : null;
 }
 
-function AdminTab() {
+function AdminTab({
+  targetAccountId,
+  targetLogin,
+  activeSubTab,
+  onSelectSubTab,
+}: {
+  targetAccountId: number | null;
+  targetLogin: string | null;
+  activeSubTab: AdminSubTab;
+  onSelectSubTab: (tab: AdminSubTab) => void;
+}) {
   const { t } = useTranslation();
   const [source, setSource] = useState<unknown | null>(null);
   const [draft, setDraftLocal] = useState<unknown | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
   const [configPath, setConfigPath] = useState("");
   const [hasBackup, setHasBackup] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1415,13 +1500,13 @@ function AdminTab() {
           tab="users"
           active={activeSubTab}
           label={t("settings.admin.group.users")}
-          onSelect={setActiveSubTab}
+          onSelect={onSelectSubTab}
         />
         <AdminSubTabButton
           tab="equipment"
           active={activeSubTab}
           label={t("settings.admin.group.equipment")}
-          onSelect={setActiveSubTab}
+          onSelect={onSelectSubTab}
         />
       </div>
 
@@ -1447,6 +1532,7 @@ function AdminTab() {
             canApproveAdminRole={currentAccountRole !== null && currentAccountRole >= AUDITOR_ROLE}
             disabled={busy}
             onUpdate={updateUser}
+            onPersist={() => void onSave()}
             onDelete={deleteUser}
             onRequestAdminApproval={(user, recipients) => {
               if (recipients.length === 0) {
@@ -1456,6 +1542,8 @@ function AdminTab() {
               composeAdminRoleRequestEmail(user, recipients);
               setNotice(t("settings.admin.user.requestAdmin.composed"));
             }}
+            targetAccountId={targetAccountId}
+            targetLogin={targetLogin}
           />
         </>
       ) : (
@@ -1475,8 +1563,10 @@ function AdminTab() {
           </div>
           <EquipmentTable
             equipment={equipmentFromDraft(draft)}
+            sourceEquipment={equipmentFromDraft(source)}
             disabled={busy}
             onUpdate={updateEquipment}
+            onPersist={() => void onSave()}
             onDelete={deleteEquipment}
           />
         </>
@@ -1587,8 +1677,11 @@ function AdminUsersTable({
   canApproveAdminRole,
   disabled,
   onUpdate,
+  onPersist,
   onDelete,
   onRequestAdminApproval,
+  targetAccountId,
+  targetLogin,
 }: {
   users: AdminUserRow[];
   sourceUsers: AdminUserRow[];
@@ -1596,11 +1689,27 @@ function AdminUsersTable({
   canApproveAdminRole: boolean;
   disabled: boolean;
   onUpdate: (index: number, field: keyof AdminUserRow, value: string | number | boolean | null) => void;
+  onPersist: (index: number) => void;
   onDelete: (index: number) => void;
   onRequestAdminApproval: (user: AdminUserRow, recipients: string[]) => void;
+  targetAccountId: number | null;
+  targetLogin: string | null;
 }) {
   const { t } = useTranslation();
+  const highlightedRowRef = useRef<HTMLDivElement | null>(null);
   const sourceRoleById = new Map(sourceUsers.map((user) => [user.id, user.role] as const));
+  const sourceSignatureByKey = new Map(
+    sourceUsers.map((user, index) => [
+      adminUserRowKey(user, index),
+      adminUserRowSignature(user),
+    ] as const),
+  );
+
+  useEffect(() => {
+    const row = highlightedRowRef.current;
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [targetAccountId, targetLogin, users.length]);
 
   return (
     <div className="settings-admin-table-wrap">
@@ -1623,9 +1732,22 @@ function AdminUsersTable({
           const previousRole = sourceRoleById.get(user.id) ?? 0;
           const needsAdminApproval =
             !canApproveAdminRole && user.role === ADMIN_ROLE && previousRole < ADMIN_ROLE;
+          const persistedSignature = sourceSignatureByKey.get(adminUserRowKey(user, index));
+          const rowExistsInDb = persistedSignature !== undefined;
+          const rowDirty = persistedSignature !== adminUserRowSignature(user);
+          const isHighlighted =
+            (targetAccountId !== null && user.id === targetAccountId) ||
+            (!!targetLogin && user.login_name.trim().toLowerCase() === targetLogin.trim().toLowerCase());
+          const rowRef = isHighlighted ? highlightedRowRef : undefined;
 
           return (
-          <div className="settings-admin-table__row" role="row" key={`${user.id ?? "new"}-${index}`}>
+          <div
+            className="settings-admin-table__row"
+            data-highlighted={isHighlighted ? "true" : "false"}
+            role="row"
+            key={`${user.id ?? "new"}-${index}`}
+            ref={rowRef}
+          >
             <input
               aria-label={t("settings.admin.user.id")}
               className="input"
@@ -1732,6 +1854,29 @@ function AdminUsersTable({
               />
             </label>
             <div className="settings-admin-table__actions">
+              {rowExistsInDb ? (
+                <button
+                  type="button"
+                  className="modal__close"
+                  onClick={() => onPersist(index)}
+                  disabled={disabled || !rowDirty}
+                  aria-label={t("settings.admin.user.update")}
+                  title={t("settings.admin.user.update")}
+                >
+                  <Icon name="refresh" tone="accent" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="modal__close"
+                  onClick={() => onPersist(index)}
+                  disabled={disabled}
+                  aria-label={t("settings.admin.user.save")}
+                  title={t("settings.admin.user.save")}
+                >
+                  <Icon name="save" tone="success" />
+                </button>
+              )}
               {needsAdminApproval && (
                 <button
                   type="button"
@@ -1765,16 +1910,26 @@ function AdminUsersTable({
 
 function EquipmentTable({
   equipment,
+  sourceEquipment,
   disabled,
   onUpdate,
+  onPersist,
   onDelete,
 }: {
   equipment: EquipmentRow[];
+  sourceEquipment: EquipmentRow[];
   disabled: boolean;
   onUpdate: (index: number, field: keyof EquipmentRow, value: string | number | null) => void;
+  onPersist: (index: number) => void;
   onDelete: (index: number) => void;
 }) {
   const { t } = useTranslation();
+  const sourceSignatureByKey = new Map(
+    sourceEquipment.map((row, index) => [
+      equipmentRowKey(row, index),
+      equipmentRowSignature(row),
+    ] as const),
+  );
 
   return (
     <div className="settings-admin-table-wrap">
@@ -1788,7 +1943,12 @@ function EquipmentTable({
           <span role="columnheader">{t("settings.admin.equipment.description")}</span>
           <span role="columnheader">{t("settings.admin.equipment.actions")}</span>
         </div>
-        {equipment.map((row, index) => (
+        {equipment.map((row, index) => {
+          const persistedSignature = sourceSignatureByKey.get(equipmentRowKey(row, index));
+          const rowExistsInDb = persistedSignature !== undefined;
+          const rowDirty = persistedSignature !== equipmentRowSignature(row);
+
+          return (
           <div className="settings-equipment-table__row" role="row" key={`${row.id ?? "new"}-${index}`}>
             <input
               aria-label={t("settings.admin.equipment.id")}
@@ -1841,6 +2001,29 @@ function EquipmentTable({
               onChange={(e) => onUpdate(index, "description", e.target.value)}
             />
             <div className="settings-admin-table__actions">
+              {rowExistsInDb ? (
+                <button
+                  type="button"
+                  className="modal__close"
+                  onClick={() => onPersist(index)}
+                  disabled={disabled || !rowDirty}
+                  aria-label={t("settings.admin.equipment.update")}
+                  title={t("settings.admin.equipment.update")}
+                >
+                  <Icon name="refresh" tone="accent" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="modal__close"
+                  onClick={() => onPersist(index)}
+                  disabled={disabled}
+                  aria-label={t("settings.admin.equipment.save")}
+                  title={t("settings.admin.equipment.save")}
+                >
+                  <Icon name="save" tone="success" />
+                </button>
+              )}
               <button
                 type="button"
                 className="modal__close"
@@ -1853,7 +2036,8 @@ function EquipmentTable({
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

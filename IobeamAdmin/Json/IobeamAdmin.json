@@ -19,27 +19,42 @@
         "USER": 0
     },
     "user": {
-        "id": null,
-        "login_name": "",
-        "first_name": "",
-        "last_name": "",
-        "email": "",
-        "phone_number": "",
-        "company_name": "",
-        "role": 0,
+        "id": 1,
+        "login_name": "vboxuser",
+        "first_name": "Henry",
+        "last_name": "Li",
+        "email": "lyh1154@gmail.com",
+        "phone_number": "1 (503)807-9055",
+        "company_name": "Ionbeamtech",
+        "site": "Beijing(北京)",
+        "role": 4,
         "is_active": true,
-        "session_lifetime_limit_days": 1
+        "session_lifetime_limit_days": 2
     },
     "users": [
         {
             "id": 1,
             "login_name": "vboxuser",
-            "first_name": "henry",
-            "last_name": "li",
+            "first_name": "Henry",
+            "last_name": "Li",
             "email": "lyh1154@gmail.com",
             "phone_number": "1 (503)807-9055",
-            "company_name": "",
+            "company_name": "Ionbeamtech",
+            "site": "Beijing(北京)",
             "role": 4,
+            "is_active": true,
+            "session_lifetime_limit_days": 2
+        },
+        {
+            "id": 2,
+            "login_name": "tester",
+            "first_name": "Yuyao",
+            "last_name": "Jiang",
+            "email": "yuyao.jiang@ionbeamtech.com",
+            "phone_number": "86 (55)12341234",
+            "company_name": "Ionbeamtech",
+            "site": "Taixin(泰兴)",
+            "role": 3,
             "is_active": true,
             "session_lifetime_limit_days": 1
         }
@@ -71,12 +86,12 @@
         }
     ],
     "equipment": {
-        "id": null,
-        "name": "",
+        "id": 1,
+        "name": "FEI Helios NanoLab 600i DualBeam",
         "model": "",
-        "serial_number": "",
-        "site": "",
-        "description": ""
+        "serial_number": "DB123456z",
+        "site": "Taixin",
+        "description": "DualBeam SEM/FIB, containing both a focused Ga+ ion beam (\"Tomahawk\") and a high resolution field emission scanning electron (\"Elstar\") column."
     },
     "equipments": [
         {
@@ -86,6 +101,22 @@
             "serial_number": "DB123456z",
             "site": "Taixin",
             "description": "DualBeam SEM/FIB, containing both a focused Ga+ ion beam (\"Tomahawk\") and a high resolution field emission scanning electron (\"Elstar\") column."
+        },
+        {
+            "id": 2,
+            "name": "",
+            "model": "",
+            "serial_number": "",
+            "site": "",
+            "description": ""
+        },
+        {
+            "id": 3,
+            "name": "",
+            "model": "",
+            "serial_number": "",
+            "site": "",
+            "description": ""
         }
     ],
     "session": {

@@ -44,6 +44,9 @@ export const zhCN: Partial<TranslationTable> = {
   "header.state.error": "错误",
   "header.state.disconnected": "已断开",
 
+  /* ===== authorization ============================================ */
+  "auth.sudoWarning": "该 OS 登录账号对应的数据库角色需要先由部署或管理员设置完成；登录过程不会执行基于 sudo 的数据库授权。",
+
   /* ===== sites ===================================================== */
   "site.beijing": "北京",
   "site.shanghai": "上海",
@@ -86,6 +89,9 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.stop.title": "结束扫描并清空画布",
   "scan.runValidated.title": "POST /scan/{kind}/run — 返回耗时与验证报告",
   "scan.permission.required": "RUSTER/VECTOR 扫描需要 SuperUser、Admin 或 Auditor 权限。",
+  "scan.roleRequest.title": "申请扫描角色",
+  "scan.roleRequest.subject": "扫描角色申请",
+  "scan.roleRequest.body": "请审核此账户并授予扫描权限。\n\n申请角色：{requestedRole}\n账户：{login}\n姓名：{name}\n邮箱：{email}\n站点：{site}\n当前角色：{currentRole}\n\n原因：我需要运行 RASTER/VECTOR 扫描。",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "分辨率",
@@ -272,6 +278,9 @@ export const zhCN: Partial<TranslationTable> = {
   "report.ranking.subtitle.account": "按活跃账户统计总活动",
   "report.ranking.subtitle.site": "按站点统计总活动",
   "report.ranking.subtitle.equipment": "按设备统计总活动",
+  "report.sort.name": "名称",
+  "report.export.pdf": "导出 PDF",
+  "report.export.csv": "导出 CSV",
   "report.table.account": "账户",
   "report.table.site": "站点",
   "report.table.equipment": "设备",
@@ -458,6 +467,8 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.equipment.empty": "未配置设备",
   "settings.admin.group.equipment": "设备",
   "settings.admin.subtabs.aria": "管理配置分区",
+  "settings.admin.user.update": "更新用户账户",
+  "settings.admin.user.save": "保存用户账户",
   "settings.admin.equipment.id": "ID",
   "settings.admin.equipment.name": "名称",
   "settings.admin.equipment.model": "型号",
@@ -467,5 +478,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.admin.equipment.actions": "操作",
   "settings.admin.equipment.add": "新增",
   "settings.admin.equipment.add.title": "插入新的可编辑设备行",
+  "settings.admin.equipment.update": "更新设备",
+  "settings.admin.equipment.save": "保存设备",
   "settings.admin.equipment.delete": "删除设备行",
 };

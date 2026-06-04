@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ROOT="${GLASGOW_PROJECT_ROOT:-/home/vboxuser/Project/IobeamTech}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${GLASGOW_PROJECT_ROOT:-$(cd "${SCRIPT_DIR}/../../../../" && pwd)}"
 WORKDIR="${GLASGOW_WORKDIR:-${PROJECT_ROOT}/Development/glasgow_service}"
 DEFAULT_GLASGOW_CONFIG="${PROJECT_ROOT}/Development/GlasgowDataIO/Json/streamData.json"
 RUNTIME_DIR="${GLASGOW_RUNTIME_DIR:-${TMPDIR:-/tmp}}"

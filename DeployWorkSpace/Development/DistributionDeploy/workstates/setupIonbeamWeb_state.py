@@ -116,6 +116,8 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         deployRoot = self.resolveDeployPath(".")
         token = os.environ.get("GLASGOW_TOKEN", "").strip()
         backendHost = str(actionData.get("backendHost", "127.0.0.1") or "127.0.0.1").strip()
+        dbHost = str(actionData.get("adminDbHost", "/var/run/postgresql") or "/var/run/postgresql").strip()
+        dbName = str(actionData.get("adminDbName", "iobeam_admin") or "iobeam_admin").strip()
         lines = [
             "PROXY_TARGET_HTTP=http://127.0.0.1:8765",
             "PROXY_TARGET_WS=ws://127.0.0.1:8765",
@@ -128,6 +130,9 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 self.resolveDeployPath(os.path.join("Development", "GlasgowDataIO", "Json", "streamData.json"))),
             "IOBEAM_ADMIN_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "IobeamAdmin", "Json", "IobeamAdmin.json"))),
+            "IOBEAM_ADMIN_DB_HOST={}".format(dbHost),
+            "IOBEAM_ADMIN_DB_PORT=5432",
+            "IOBEAM_ADMIN_DB_NAME={}".format(dbName),
             "GLASGOW_RESTART_CMD={}".format(
                 os.path.join(backendDir, "scripts", "restart-glasgow-service.sh")),
             "IONBEAM_BACKEND_RESTART_CMD={}".format(
@@ -161,3 +166,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                            .format(type(self).__name__, timeout, cmd))
                 return False
         return await self.commandAsyncio(cmd, runDir, verbose=True)
+
+
+def _current_login():
+    return os.environ.get("USER") or os.environ.get("LOGNAME") or "postgres"

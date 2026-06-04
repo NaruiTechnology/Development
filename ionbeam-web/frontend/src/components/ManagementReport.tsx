@@ -123,6 +123,27 @@ interface UsageTrendRow extends PeriodUsage {
   label: string;
 }
 
+interface ReportExportContext {
+  generatedAt: string;
+  accountLabel: string;
+  equipmentLabel: string;
+  groupMode: GroupMode;
+  rankingSortMode: RankingSortMode;
+  periodMode: PeriodMode;
+  totalScans: number;
+  rasterScans: number;
+  vectorScans: number;
+  otherActivity: number;
+  activeAccounts: number;
+  selectedAccountId: string;
+  selectedEquipmentId: string;
+  periodRows: UsageTrendRow[];
+  siteRows: SiteUsage[];
+  rankingRows: RankingRow[];
+  recentRows: RecentActivity[];
+  reportTitle: string;
+}
+
 function normalizeReport(data: ActivityReportResponse): ActivityReportResponse {
   return {
     ...data,
@@ -252,6 +273,44 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
   );
   const maxPeriod = Math.max(1, ...periodRows.map((row) => row.total_scans));
   const maxSite = Math.max(1, ...siteRows.map((row) => row.total_scans));
+  const exportContext: ReportExportContext | null = report
+    ? {
+        generatedAt: report.generated_at,
+        accountLabel: selectedName,
+        equipmentLabel: selectedEquipmentName,
+        groupMode,
+        rankingSortMode,
+        periodMode,
+        totalScans,
+        rasterScans,
+        vectorScans,
+        otherActivity,
+        activeAccounts,
+        selectedAccountId: accountId,
+        selectedEquipmentId: equipmentId,
+        periodRows,
+        siteRows,
+        rankingRows,
+        recentRows: report.recent,
+        reportTitle: t("report.title"),
+      }
+    : null;
+
+  function onExportPdf() {
+    if (!exportContext) return;
+    downloadBlob(
+      createReportPdfBlob(exportContext, t, fmt, locale),
+      buildReportExportFilename("pdf", exportContext),
+    );
+  }
+
+  function onExportExcel() {
+    if (!exportContext) return;
+    downloadBlob(
+      createReportWorkbookBlob(exportContext, t, locale),
+      buildReportExportFilename("csv", exportContext),
+    );
+  }
 
   return (
     <main className="management-report">
@@ -322,6 +381,26 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
               <option value="recent">{t("report.sort.recent")}</option>
             </select>
           </label>
+          <button
+            type="button"
+            className="btn btn--logo"
+            onClick={onExportPdf}
+            disabled={loading || report === null}
+            aria-label={t("report.export.pdf")}
+            title={t("report.export.pdf")}
+          >
+            <Icon name="fileText" />
+          </button>
+          <button
+            type="button"
+            className="btn btn--logo"
+            onClick={onExportExcel}
+            disabled={loading || report === null}
+            aria-label={t("report.export.csv")}
+            title={t("report.export.csv")}
+          >
+            <Icon name="sheet" />
+          </button>
           <button type="button" className="btn btn--ghost" onClick={onBack}>
             <Icon name="scan" tone="accent" />
             {t("report.scanConsole")}
@@ -894,4 +973,325 @@ function formatDateTime(locale: LocaleCode, value: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function buildReportExportFilename(kind: "pdf" | "csv", context: ReportExportContext): string {
+  const stamp = new Date(context.generatedAt);
+  const safeStamp = Number.isNaN(stamp.getTime())
+    ? "export"
+    : stamp.toISOString().slice(0, 10);
+  const suffix = kind === "pdf" ? "pdf" : "csv";
+  return `management-report-${safeStamp}.${suffix}`;
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function createReportPdfBlob(
+  context: ReportExportContext,
+  t: ReturnType<typeof useTranslation>["t"],
+  fmt: ReturnType<typeof useTranslation>["fmt"],
+  locale: LocaleCode,
+): Blob {
+  const lines = buildReportExportLines(context, t, fmt, locale).flatMap((line) =>
+    wrapExportLine(line, 94),
+  );
+  const pages = chunkArray(lines, 44);
+  return new Blob([createPdfDocument(pages)], { type: "application/pdf" });
+}
+
+function createReportWorkbookBlob(
+  context: ReportExportContext,
+  t: ReturnType<typeof useTranslation>["t"],
+  locale: LocaleCode,
+): Blob {
+  const csv = buildReportCsv(context, t, locale);
+  return new Blob([csv], { type: "text/csv;charset=utf-8" });
+}
+
+function buildReportExportLines(
+  context: ReportExportContext,
+  t: ReturnType<typeof useTranslation>["t"],
+  fmt: ReturnType<typeof useTranslation>["fmt"],
+  locale: LocaleCode,
+): string[] {
+  const lines: string[] = [];
+  lines.push(context.reportTitle);
+  lines.push(`Generated: ${formatDateTime(locale, context.generatedAt)}`);
+  lines.push(`Account: ${context.accountLabel}`);
+  lines.push(`Equipment: ${context.equipmentLabel}`);
+  lines.push(`Group by: ${t(reportGroupLabelKey(context.groupMode))}`);
+  lines.push(`Sort by: ${t(reportSortLabelKey(context.rankingSortMode))}`);
+  lines.push(`Period: ${t(periodSubtitleKey(context.periodMode))}`);
+  lines.push("");
+  lines.push("Summary");
+  lines.push(`Total scans: ${fmt(context.totalScans)}`);
+  lines.push(`Raster scans: ${fmt(context.rasterScans)}`);
+  lines.push(`Vector scans: ${fmt(context.vectorScans)}`);
+  lines.push(`Other activity: ${fmt(context.otherActivity)}`);
+  lines.push(`Active accounts: ${fmt(context.activeAccounts)}`);
+  lines.push(`Site groups: ${fmt(context.siteRows.length)}`);
+  lines.push("");
+  lines.push("Ranking");
+  lines.push("Label | Raster | Vector | Total | Other | Last activity");
+  for (const row of context.rankingRows) {
+    lines.push(
+      `${row.label} | ${fmt(row.raster_scans)} | ${fmt(row.vector_scans)} | ${fmt(row.total_scans)} | ${fmt(row.other_activity)} | ${row.last_activity ? formatDateTime(locale, row.last_activity) : "-"}`,
+    );
+  }
+  lines.push("");
+  lines.push("Sites");
+  lines.push("Site | Accounts | Raster | Vector | Total | Last activity");
+  for (const row of context.siteRows) {
+    lines.push(
+      `${siteLabel(t, row.site || row.location)} | ${fmt(row.accounts)} | ${fmt(row.raster_scans)} | ${fmt(row.vector_scans)} | ${fmt(row.total_scans)} | ${row.last_activity ? formatDateTime(locale, row.last_activity) : "-"}`,
+    );
+  }
+  lines.push("");
+  lines.push("Period Trend");
+  lines.push("Bucket | Total | Raster | Vector | Other");
+  for (const row of context.periodRows) {
+    lines.push(
+      `${row.label} | ${fmt(row.total_scans)} | ${fmt(row.raster_scans)} | ${fmt(row.vector_scans)} | ${fmt(row.other_activity)}`,
+    );
+  }
+  lines.push("");
+  lines.push("Recent Activity");
+  lines.push("Date | User | Site | Equipment | Kind");
+  for (const row of context.recentRows) {
+    lines.push(
+      `${formatDateTime(locale, row.date)} | ${row.login_name} | ${siteLabel(t, row.site || row.location)} | ${row.equipment_name || t("report.equipment.unknown")} | ${row.scan_kind.toUpperCase()}`,
+    );
+  }
+  return lines;
+}
+
+function buildReportCsv(
+  context: ReportExportContext,
+  t: ReturnType<typeof useTranslation>["t"],
+  locale: LocaleCode,
+): string {
+  const rows: string[][] = [];
+  rows.push([context.reportTitle]);
+  rows.push([`Generated`, formatDateTime(locale, context.generatedAt)]);
+  rows.push([`Account`, context.accountLabel]);
+  rows.push([`Equipment`, context.equipmentLabel]);
+  rows.push([`Group by`, t(reportGroupLabelKey(context.groupMode))]);
+  rows.push([`Sort by`, t(reportSortLabelKey(context.rankingSortMode))]);
+  rows.push([`Period`, t(periodSubtitleKey(context.periodMode))]);
+  rows.push([]);
+  rows.push([`Summary`]);
+  rows.push([`Total scans`, String(context.totalScans)]);
+  rows.push([`Raster scans`, String(context.rasterScans)]);
+  rows.push([`Vector scans`, String(context.vectorScans)]);
+  rows.push([`Other activity`, String(context.otherActivity)]);
+  rows.push([`Active accounts`, String(context.activeAccounts)]);
+  rows.push([`Site groups`, String(context.siteRows.length)]);
+  rows.push([]);
+  rows.push([`Ranking`]);
+  rows.push([`Label`, `Raster`, `Vector`, `Total`, `Other`, `Last activity`]);
+  for (const row of context.rankingRows) {
+    rows.push([
+      row.label,
+      String(row.raster_scans),
+      String(row.vector_scans),
+      String(row.total_scans),
+      String(row.other_activity),
+      row.last_activity ? formatDateTime(locale, row.last_activity) : "",
+    ]);
+  }
+  rows.push([]);
+  rows.push([`Sites`]);
+  rows.push([`Site`, `Accounts`, `Raster`, `Vector`, `Total`, `Last activity`]);
+  for (const row of context.siteRows) {
+    rows.push([
+      siteLabel(t, row.site || row.location),
+      String(row.accounts),
+      String(row.raster_scans),
+      String(row.vector_scans),
+      String(row.total_scans),
+      row.last_activity ? formatDateTime(locale, row.last_activity) : "",
+    ]);
+  }
+  rows.push([]);
+  rows.push([`Period Trend`]);
+  rows.push([`Bucket`, `Total`, `Raster`, `Vector`, `Other`]);
+  for (const row of context.periodRows) {
+    rows.push([
+      row.label,
+      String(row.total_scans),
+      String(row.raster_scans),
+      String(row.vector_scans),
+      String(row.other_activity),
+    ]);
+  }
+  rows.push([]);
+  rows.push([`Recent Activity`]);
+  rows.push([`Date`, `User`, `Site`, `Equipment`, `Kind`]);
+  for (const row of context.recentRows) {
+    rows.push([
+      formatDateTime(locale, row.date),
+      row.login_name,
+      siteLabel(t, row.site || row.location),
+      row.equipment_name || t("report.equipment.unknown"),
+      row.scan_kind.toUpperCase(),
+    ]);
+  }
+  return rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n");
+}
+
+function createPdfDocument(pages: string[][]): string {
+  const encoder = new TextEncoder();
+  const byteLength = (value: string) => encoder.encode(value).length;
+  const fontObjectId = 1;
+  const contentStartId = 2;
+  const pageStartId = contentStartId + pages.length;
+  const pagesObjectId = pageStartId + pages.length;
+  const catalogObjectId = pagesObjectId + 1;
+
+  const objects: Array<{ id: number; body: string }> = [];
+  objects.push({
+    id: fontObjectId,
+    body: "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
+  });
+
+  pages.forEach((pageLines, index) => {
+    const content = createPdfContentStream(pageLines, index + 1, pages.length);
+    const contentObjectId = contentStartId + index;
+    const contentLength = encoder.encode(content).length;
+    objects.push({
+      id: contentObjectId,
+      body: `<< /Length ${contentLength} >>\nstream\n${content}\nendstream`,
+    });
+  });
+
+  pages.forEach((_pageLines, index) => {
+    const pageObjectId = pageStartId + index;
+    const contentObjectId = contentStartId + index;
+    objects.push({
+      id: pageObjectId,
+      body: [
+        "<< /Type /Page",
+        ` /Parent ${pagesObjectId} 0 R`,
+        " /MediaBox [0 0 612 792]",
+        ` /Resources << /Font << /F1 ${fontObjectId} 0 R >> >>`,
+        ` /Contents ${contentObjectId} 0 R >>`,
+      ].join(""),
+    });
+  });
+
+  objects.push({
+    id: pagesObjectId,
+    body: `<< /Type /Pages /Kids [${pages
+      .map((_pageLines, index) => `${pageStartId + index} 0 R`)
+      .join(" ")}] /Count ${pages.length} >>`,
+  });
+
+  objects.push({
+    id: catalogObjectId,
+    body: `<< /Type /Catalog /Pages ${pagesObjectId} 0 R >>`,
+  });
+
+  objects.sort((a, b) => a.id - b.id);
+
+  const header = "%PDF-1.4\n";
+  const chunks = [header];
+  const offsets = [0];
+  let length = byteLength(header);
+  for (const object of objects) {
+    const chunk = `${object.id} 0 obj\n${object.body}\nendobj\n`;
+    offsets.push(length);
+    chunks.push(chunk);
+    length += byteLength(chunk);
+  }
+  const xrefOffset = length;
+  const xrefLines = [
+    "xref",
+    `0 ${objects.length + 1}`,
+    "0000000000 65535 f ",
+    ...offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n `),
+    "trailer",
+    `<< /Size ${objects.length + 1} /Root ${catalogObjectId} 0 R >>`,
+    "startxref",
+    String(xrefOffset),
+    "%%EOF",
+  ];
+  return chunks.join("") + xrefLines.join("\n");
+}
+
+function createPdfContentStream(pageLines: string[], pageNumber: number, pageCount: number): string {
+  const lines = [
+    `Report export${pageCount > 1 ? ` (${pageNumber}/${pageCount})` : ""}`,
+    ...pageLines,
+  ];
+  const pageText = lines.map(escapePdfText);
+  return [
+    "BT",
+    "/F1 10 Tf",
+    "14 TL",
+    "50 760 Td",
+    ...pageText.map((line, index) => (index === 0 ? `(${line}) Tj` : `T* (${line}) Tj`)),
+    "ET",
+  ].join("\n");
+}
+
+function reportGroupLabelKey(groupMode: GroupMode): TranslationKey {
+  if (groupMode === "site") return "report.group.site";
+  if (groupMode === "equipment") return "report.group.equipment";
+  return "report.group.account";
+}
+
+function reportSortLabelKey(sortMode: RankingSortMode): TranslationKey {
+  if (sortMode === "name") return "report.sort.name";
+  if (sortMode === "raster") return "report.kind.raster";
+  if (sortMode === "vector") return "report.kind.vector";
+  if (sortMode === "recent") return "report.sort.recent";
+  return "report.sort.total";
+}
+
+function wrapExportLine(line: string, width: number): string[] {
+  if (line.length <= width) return [line];
+  const words = line.split(/\s+/);
+  const wrapped: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (!current) {
+      current = word;
+      continue;
+    }
+    if ((current + " " + word).length <= width) {
+      current += ` ${word}`;
+    } else {
+      wrapped.push(current);
+      current = word;
+    }
+  }
+  if (current) wrapped.push(current);
+  return wrapped.length > 0 ? wrapped : [line];
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function escapePdfText(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function escapeCsvCell(value: string): string {
+  if (/["\n,\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
 }

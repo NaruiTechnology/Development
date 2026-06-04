@@ -329,7 +329,7 @@
                             }
                         },
                         {
-                            "url": "http://127.0.0.1:5173/",
+                            "url": "http://localhost:5173/control",
                             "expectedStatus": 200
                         }
                     ]
@@ -343,7 +343,7 @@
 		"transactionComplete": false,
 		"actionData": {
 		    "commandFormat": "internal",
-		    "url": "http://127.0.0.1:5173",
+		    "url": "http://localhost:5173/control",
 		    "readinessTimeout": 30.0,
 		    "pollInterval": 0.5,
 		    "failOnNotReady": false

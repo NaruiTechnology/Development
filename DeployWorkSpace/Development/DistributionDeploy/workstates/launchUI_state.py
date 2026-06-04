@@ -37,7 +37,7 @@ class launchUI_state(distributionDeploy_state):
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
 
-            url = actionData.get("url", "http://127.0.0.1:5173")
+            url = actionData.get("url", "http://localhost:5173/control")
             readinessTimeout = float(actionData.get("readinessTimeout", 30.0))
             pollInterval = float(actionData.get("pollInterval", 0.5))
             failOnNotReady = bool(actionData.get("failOnNotReady", False))

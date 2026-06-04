@@ -64,7 +64,9 @@ export function AuthDialog({
 }) {
   const { t } = useTranslation();
   const closeRef = useRef<HTMLButtonElement | null>(null);
-  const [login, setLogin] = useState("");
+  const [login, setLogin] = useState(() => {
+    return window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim() ?? "";
+  });
   const [mode, setMode] = useState<"loading" | "sign-in" | "register">("loading");
   const [code, setCode] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
@@ -101,6 +103,8 @@ export function AuthDialog({
     setDevCode("");
     setSessionExpired(false);
     setSite(DEFAULT_SITE);
+    const cachedLogin = window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim() ?? "";
+    if (cachedLogin) setLogin(cachedLogin);
 
     fetch("/api/admin/iobeam/auth/current-account")
       .then(async (r) => {
@@ -109,7 +113,9 @@ export function AuthDialog({
       })
       .then((data) => {
         if (cancelled) return;
-        setLogin(data.login);
+        if (!window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim()) {
+          setLogin(data.login);
+        }
         if (data.user?.site) setSite(normalizeSiteValue(data.user.site));
         setSessionExpired(data.session_expired === true);
         setMode(data.registered ? "sign-in" : "register");
@@ -189,6 +195,7 @@ export function AuthDialog({
       if (!r.ok) throw new Error(await responseError(r));
       const data = (await r.json()) as VerifySmsResponse;
       window.localStorage.setItem("ionbeam:adminUser", JSON.stringify(data.user));
+      window.localStorage.setItem("ionbeam:lastAdminLogin", data.user.login_name);
       onSignedIn(data.user);
       onClose();
     } catch (err) {
@@ -234,6 +241,7 @@ export function AuthDialog({
             />
           </div>
           <SiteSelect value={site} disabled={busy} onChange={setSite} label={t("auth.site")} />
+          <div className="auth-status">{t("auth.sudoWarning")}</div>
 
           {mode === "register" && (
             <>
