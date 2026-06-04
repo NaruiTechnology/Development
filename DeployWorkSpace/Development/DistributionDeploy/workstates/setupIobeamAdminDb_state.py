@@ -30,7 +30,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                 "seedFile", "Development/IobeamAdmin/Sql/002_seed_root_user.sql"))
             dbSettings = self._dbSettings(actionData)
 
-            if not await self._ensureDatabase(dbName, dbSettings, timeout):
+            if not await self._resetDatabase(dbName, dbSettings, timeout):
                 self._success = False
                 return
 
@@ -38,7 +38,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                 self._success = False
                 return
 
-            if not await self._ensureRoleAndGrants(dbName, dbRole, timeout):
+            if not await self._ensureRoleAndGrants(dbName, dbRole, dbSettings, timeout):
                 self._success = False
                 return
 
@@ -47,32 +47,43 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
 
-    async def _ensureDatabase(self, dbName, dbSettings, timeout):
-        sql = "SELECT 1 FROM pg_database WHERE datname = '{}'".format(
-            dbName.replace("'", "''"))
-        query = self._psqlCommand("postgres", dbSettings) + ["-Atqc", sql]
-        self.info("[{}][ensure-db] >> {}".format(type(self).__name__, " ".join(query)))
-        ok, stdout, stderr = await self._runExec(query, timeout, env=dbSettings["env"])
-        if not ok:
-            self.error("[{}][ensure-db] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
+    async def _resetDatabase(self, dbName, dbSettings, timeout):
+        steps = [
+            (
+                "terminate-db",
+                "SELECT pg_terminate_backend(pid) "
+                "FROM pg_stat_activity "
+                "WHERE datname = {} AND pid <> pg_backend_pid();".format(
+                    self._quoteLiteral(dbName)),
+            ),
+            (
+                "drop-db",
+                "DROP DATABASE IF EXISTS {};".format(self._quoteIdentifier(dbName)),
+            ),
+            (
+                "create-db",
+                "CREATE DATABASE {};".format(self._quoteIdentifier(dbName)),
+            ),
+        ]
 
-        if stdout.strip() == "1":
-            self.info("[{}][ensure-db] '{}' already exists.".format(
-                type(self).__name__, dbName))
-            return True
+        for label, sql in steps:
+            command = self._psqlCommand("postgres", dbSettings) + [
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-c",
+                sql,
+            ]
+            self.info("[{}][{}] >> {}".format(
+                type(self).__name__, label, " ".join(command)))
+            ok, _, stderr = await self._runExec(
+                command, timeout, env=dbSettings["env"])
+            if not ok:
+                self.error("[{}][{}] FAILED.\n{}".format(
+                    type(self).__name__, label, stderr or "<no stderr>"))
+                return False
 
-        createSql = "CREATE DATABASE {};".format(self._quoteIdentifier(dbName))
-        createDb = self._psqlCommand("postgres", dbSettings) + ["-v", "ON_ERROR_STOP=1", "-c", createSql]
-        self.info("[{}][ensure-db] >> {}".format(type(self).__name__, " ".join(createDb)))
-        ok, _, stderr = await self._runExec(createDb, timeout, env=dbSettings["env"])
-        if not ok:
-            self.error("[{}][ensure-db] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-
-        self.info("[{}][ensure-db] created '{}'.".format(type(self).__name__, dbName))
+        self.info("[{}][reset-db] recreated '{}'.".format(
+            type(self).__name__, dbName))
         return True
 
     async def _loadSchema(self, dbName, dbSettings, schemaFile, seedFile, timeout):
@@ -102,7 +113,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         self.info("[{}][load-schema] OK".format(type(self).__name__))
         return True
 
-    async def _ensureRoleAndGrants(self, dbName, roleName, timeout):
+    async def _ensureRoleAndGrants(self, dbName, roleName, dbSettings, timeout):
         roleName = str(roleName or "").strip()
         if not roleName:
             self.error("[{}][ensure-role] no database role name available".format(
@@ -110,7 +121,10 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             return False
 
         sql = self._roleGrantSql(dbName, roleName)
-        grantRole = ["sudo", "-u", "postgres", "psql", "-d", dbName, "-v", "ON_ERROR_STOP=1"]
+        grantRole = self._psqlCommand(dbName, dbSettings) + [
+            "-v",
+            "ON_ERROR_STOP=1",
+        ]
         self.info("[{}][ensure-role] >> {} < SQL".format(
             type(self).__name__, " ".join(grantRole)))
         ok, _, stderr = await self._runExec(grantRole, timeout, sql)
