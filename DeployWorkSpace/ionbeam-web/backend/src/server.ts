@@ -84,6 +84,7 @@ interface AdminUser {
   company_name: string;
   role: number;
   is_active: boolean;
+  session_lifetime_limit_days: number;
 }
 
 interface SmsChallenge {
@@ -232,11 +233,13 @@ app.get("/api/admin/iobeam/auth/current-account", async (_req, res) => {
   try {
     const info = await readAdminWithBackup();
     const user = findAdminUser(info.data, login);
+    const sessionExpired = user ? await isAdminSessionExpired(user) : false;
     res.json({
       ok: true,
       login,
       registered: Boolean(user),
-      user: user ? publicAdminUser(user) : null,
+      session_expired: sessionExpired,
+      user: user && !sessionExpired ? publicAdminUser(user) : null,
     });
   } catch (err) {
     sendConfigError(res, err);
@@ -292,6 +295,7 @@ app.post("/api/admin/iobeam/auth/register", async (req, res) => {
       company_name: companyName,
       role: 0,
       is_active: true,
+      session_lifetime_limit_days: 1,
     };
 
     const data = addAdminUser(info.data, user);
@@ -405,6 +409,74 @@ app.get(
   },
 );
 
+app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
+  try {
+    const info = await readAdminWithBackup();
+    const activeUsers = readAdminUsers(info.data).filter((u) => u.is_active);
+    const requestedAccountId = Number(req.query.account_id ?? 0);
+    const days = Math.min(
+      365,
+      Math.max(1, Math.trunc(Number(req.query.days ?? 90) || 90)),
+    );
+    const reportUsers =
+      Number.isInteger(requestedAccountId) && requestedAccountId > 0
+        ? activeUsers.filter((u) => u.id === requestedAccountId)
+        : activeUsers;
+    const ids = reportUsers
+      .map((u) => u.id)
+      .filter((id): id is number => Number.isInteger(id) && (id ?? 0) > 0);
+
+    const accounts = activeUsers.map((u) => ({
+      id: u.id,
+      login_name: u.login_name,
+      name: `${u.first_name} ${u.last_name}`.trim() || u.login_name,
+      company_name: u.company_name,
+      role: u.role,
+    }));
+
+    if (ids.length === 0) {
+      res.json({
+        ok: true,
+        generated_at: new Date().toISOString(),
+        days,
+        selected_account_id: requestedAccountId > 0 ? requestedAccountId : null,
+        accounts,
+        totals: [],
+        daily: [],
+        weekly: [],
+        geography: [],
+        recent: [],
+      });
+      return;
+    }
+
+    const out = await runPsql(
+      ["-Atq"],
+      config.adminDbName,
+      buildActivityReportCompatibilitySql(ids, days),
+    );
+    const rawReport = JSON.parse(out.trim() || "{}") as unknown;
+    const report =
+      rawReport && typeof rawReport === "object"
+        ? (rawReport as Record<string, unknown>)
+        : {};
+    res.json({
+      ok: true,
+      generated_at: new Date().toISOString(),
+      days,
+      selected_account_id: requestedAccountId > 0 ? requestedAccountId : null,
+      accounts,
+      totals: Array.isArray(report.totals) ? report.totals : [],
+      daily: Array.isArray(report.daily) ? report.daily : [],
+      weekly: Array.isArray(report.weekly) ? report.weekly : [],
+      geography: Array.isArray(report.geography) ? report.geography : [],
+      recent: Array.isArray(report.recent) ? report.recent : [],
+    });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
 app.post("/api/admin/iobeam/activity", async (req, res) => {
   const body = req.body as {
     user_id?: unknown;
@@ -419,6 +491,9 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
   }
 
   try {
+    const info = await readAdminWithBackup();
+    const user = findAdminUserById(info.data, userId);
+    const lifetimeDays = user?.session_lifetime_limit_days ?? 1;
     const sql = `
       SET search_path TO iobeam_admin, public;
       ALTER TABLE activity
@@ -426,20 +501,23 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
         DROP COLUMN IF EXISTS image_file,
         DROP COLUMN IF EXISTS data_file_name,
         DROP COLUMN IF EXISTS image_file_name,
+        ADD COLUMN IF NOT EXISTS session_lifetime_limit_days integer NOT NULL DEFAULT 1,
         ALTER COLUMN last_signed_in SET DEFAULT CURRENT_TIMESTAMP;
       UPDATE activity
          SET last_signed_in = CURRENT_TIMESTAMP
        WHERE last_signed_in IS NULL;
       ALTER TABLE activity
-        ALTER COLUMN last_signed_in SET NOT NULL;
+        ALTER COLUMN last_signed_in SET NOT NULL,
+        ALTER COLUMN session_lifetime_limit_days SET DEFAULT 1;
       INSERT INTO activity (
-        user_id, activity_type, date, last_signed_in
+        user_id, activity_type, date, last_signed_in, session_lifetime_limit_days
       )
       VALUES (
         ${userId},
         ${sqlString(activityType)},
         CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
+        CURRENT_TIMESTAMP,
+        ${Math.max(1, Math.trunc(lifetimeDays))}
       );
     `;
     await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
@@ -572,6 +650,9 @@ function readAdminUsers(data: unknown): AdminUser[] {
       company_name: String(u.company_name ?? ""),
       role: typeof u.role === "number" ? u.role : Number(u.role ?? 0),
       is_active: typeof u.is_active === "boolean" ? u.is_active : true,
+      session_lifetime_limit_days: normalizeSessionLifetimeDays(
+        u.session_lifetime_limit_days,
+      ),
     }));
 }
 
@@ -584,6 +665,10 @@ function findAdminUser(data: unknown, login: string): AdminUser | null {
         u.email.toLowerCase() === normalized
     ) ?? null
   );
+}
+
+function findAdminUserById(data: unknown, id: number): AdminUser | null {
+  return readAdminUsers(data).find((u) => u.id === id) ?? null;
 }
 
 function addAdminUser(data: unknown, user: AdminUser): unknown {
@@ -613,8 +698,15 @@ function publicAdminUser(user: AdminUser) {
     email: user.email,
     role: user.role,
     is_active: user.is_active,
+    session_lifetime_limit_days: user.session_lifetime_limit_days,
     initials: `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.toUpperCase(),
   };
+}
+
+function normalizeSessionLifetimeDays(value: unknown): number {
+  const days = typeof value === "number" ? value : Number(value ?? 1);
+  if (!Number.isFinite(days)) return 1;
+  return Math.max(1, Math.trunc(days));
 }
 
 function currentLoginName(): string {
@@ -689,6 +781,136 @@ function sqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+function buildActivityReportCompatibilitySql(ids: number[], days: number): string {
+  return `
+    SET search_path TO iobeam_admin, public;
+    WITH scoped_activity AS (
+      SELECT
+        a.id,
+        a.user_id,
+        btrim(u.login_name::text) AS login_name,
+        btrim(u.first_name::text) AS first_name,
+        btrim(u.last_name::text) AS last_name,
+        btrim(a.activity_type::text) AS activity_type,
+        a.date,
+        CASE
+          WHEN upper(btrim(a.activity_type::text)) LIKE '%RASTER%' THEN 'raster'
+          WHEN upper(btrim(a.activity_type::text)) LIKE '%VECTOR%'
+            OR upper(btrim(a.activity_type::text)) LIKE '%VECTER%' THEN 'vector'
+          ELSE 'other'
+        END AS scan_kind,
+        COALESCE(btrim(latest_session.client_machine_name::text), '') AS client_source
+      FROM activity a
+      JOIN "user" u ON u.id = a.user_id
+      LEFT JOIN LATERAL (
+        SELECT s.client_machine_name
+          FROM session s
+         WHERE s.user_id = a.user_id
+         ORDER BY s.login_time DESC
+         LIMIT 1
+      ) latest_session ON true
+      WHERE a.user_id = ANY(ARRAY[${ids.join(",")}]::integer[])
+        AND a.date >= CURRENT_TIMESTAMP - (${days} * INTERVAL '1 day')
+    ),
+    normalized AS (
+      SELECT
+        *,
+        CASE
+          WHEN client_source = '' THEN 'Unknown'
+          WHEN client_source IN ('127.0.0.1', '::1', '::ffff:127.0.0.1') THEN 'Localhost'
+          WHEN client_source LIKE '10.%'
+            OR client_source LIKE '192.168.%'
+            OR client_source LIKE '172.16.%'
+            OR client_source LIKE '172.17.%'
+            OR client_source LIKE '172.18.%'
+            OR client_source LIKE '172.19.%'
+            OR client_source LIKE '172.2_.%'
+            OR client_source LIKE '172.30.%'
+            OR client_source LIKE '172.31.%' THEN 'Private network'
+          ELSE client_source
+        END AS location
+      FROM scoped_activity
+    )
+    SELECT jsonb_build_object(
+      'totals', COALESCE((
+        SELECT jsonb_agg(row_to_json(t) ORDER BY t.total_scans DESC, t.login_name)
+        FROM (
+          SELECT
+            user_id,
+            login_name,
+            concat_ws(' ', nullif(first_name, ''), nullif(last_name, '')) AS name,
+            COUNT(*)::int AS total_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+            MAX(date) AS last_activity
+          FROM normalized
+          GROUP BY user_id, login_name, first_name, last_name
+        ) t
+      ), '[]'::jsonb),
+      'daily', COALESCE((
+        SELECT jsonb_agg(row_to_json(d) ORDER BY d.bucket, d.login_name)
+        FROM (
+          SELECT
+            user_id,
+            login_name,
+            to_char(date_trunc('day', date), 'YYYY-MM-DD') AS bucket,
+            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+            COUNT(*)::int AS total_scans
+          FROM normalized
+          GROUP BY user_id, login_name, date_trunc('day', date)
+        ) d
+      ), '[]'::jsonb),
+      'weekly', COALESCE((
+        SELECT jsonb_agg(row_to_json(w) ORDER BY w.week_start, w.login_name)
+        FROM (
+          SELECT
+            user_id,
+            login_name,
+            to_char(date_trunc('week', date), 'YYYY-MM-DD') AS week_start,
+            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+            COUNT(*)::int AS total_scans
+          FROM normalized
+          GROUP BY user_id, login_name, date_trunc('week', date)
+        ) w
+      ), '[]'::jsonb),
+      'geography', COALESCE((
+        SELECT jsonb_agg(row_to_json(g) ORDER BY g.total_scans DESC, g.location)
+        FROM (
+          SELECT
+            location,
+            COUNT(DISTINCT user_id)::int AS accounts,
+            COUNT(*)::int AS total_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+            MAX(date) AS last_activity
+          FROM normalized
+          GROUP BY location
+        ) g
+      ), '[]'::jsonb),
+      'recent', COALESCE((
+        SELECT jsonb_agg(row_to_json(r) ORDER BY r.date DESC)
+        FROM (
+          SELECT
+            user_id,
+            login_name,
+            activity_type,
+            scan_kind,
+            location,
+            date
+          FROM normalized
+          ORDER BY date DESC
+          LIMIT 24
+        ) r
+      ), '[]'::jsonb)
+    );
+  `;
+}
+
 async function recordAdminSession(req: express.Request, user: AdminUser): Promise<void> {
   if (!Number.isInteger(user.id) || (user.id ?? 0) <= 0) {
     throw new Error("cannot record session for an admin user without a database id");
@@ -711,6 +933,40 @@ async function recordAdminSession(req: express.Request, user: AdminUser): Promis
     );
   `;
   await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+}
+
+async function isAdminSessionExpired(user: AdminUser): Promise<boolean> {
+  if (!Number.isInteger(user.id) || (user.id ?? 0) <= 0) return true;
+  const lifetimeDays = normalizeSessionLifetimeDays(
+    user.session_lifetime_limit_days,
+  );
+
+  try {
+    await ensureAdminSessionSchema();
+    const sql = `
+      SET search_path TO iobeam_admin, public;
+      SELECT CASE
+               WHEN latest_login IS NULL THEN 'expired'
+               WHEN latest_login < CURRENT_TIMESTAMP - (${lifetimeDays} * INTERVAL '1 day') THEN 'expired'
+               ELSE 'active'
+             END
+        FROM (
+          SELECT MAX(login_time) AS latest_login
+            FROM session
+           WHERE user_id = ${user.id}
+             AND is_autorized = true
+        ) latest;
+    `;
+    const out = await runPsql(["-Atq"], config.adminDbName, sql);
+    return out.trim() !== "active";
+  } catch (err) {
+    console.warn(
+      `[iobeam-admin/auth] session expiration check failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return false;
+  }
 }
 
 async function ensureAdminSessionSchema(): Promise<void> {

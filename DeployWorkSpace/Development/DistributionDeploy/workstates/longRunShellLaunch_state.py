@@ -9,6 +9,7 @@
 import os
 import re
 import subprocess
+from types import SimpleNamespace
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -121,27 +122,9 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
     def _launchWindowsHostShell(self, scriptPath, title, spawnTerminal):
         creationFlags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         if spawnTerminal:
-            creationFlags |= getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
-        else:
-            creationFlags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            return self._startVisibleWindowsConsole(scriptPath, title)
 
-        if spawnTerminal:
-            # CREATE_NEW_CONSOLE allocates a fresh console for cmd.exe and
-            # wires the child's std handles to that console -- but only if
-            # the parent does NOT pass explicit handles. Passing DEVNULL
-            # for stdin/stdout/stderr forces CPython to set
-            # STARTF_USESTDHANDLES, which overrides the new console and
-            # binds cmd.exe's stdin/stdout/stderr to NUL. The window pops
-            # up, but every `echo` in the wrapper script and every line
-            # the inner service prints goes to NUL -- which looks exactly
-            # like "service runs but the prompt shows nothing". Leaving
-            # the handles unset (Popen default = inherit, with no
-            # STARTF_USESTDHANDLES) lets cmd.exe attach to the new
-            # console naturally.
-            return subprocess.Popen(
-                ["cmd.exe", "/d", "/k", scriptPath],
-                creationflags=creationFlags,
-                close_fds=True)
+        creationFlags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
         # Hidden cmd.exe (CREATE_NO_WINDOW): there is no console to display
         # anything anyway, and the wrapper redirects everything to the log
@@ -153,6 +136,35 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=creationFlags)
+
+    def _startVisibleWindowsConsole(self, scriptPath, title):
+        # Shelling through Start-Process is more reliable than CREATE_NEW_CONSOLE
+        # when the deploy app was itself started from a hidden/non-interactive
+        # parent. It asks Windows Explorer/session shell to create a normal
+        # visible console window and gives us the cmd.exe PID for the pid file.
+        script = self._psQuote(scriptPath)
+        ps = (
+            "$p = Start-Process -FilePath 'cmd.exe' "
+            "-ArgumentList @('/d','/k', {script}) "
+            "-WindowStyle Normal "
+            "-PassThru; "
+            "Write-Output $p.Id"
+        ).format(script=script)
+        completed = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True)
+        pidText = completed.stdout.strip().splitlines()[-1]
+        return SimpleNamespace(pid=int(pidText))
 
     def _scriptsDirFromActivate(self, venvActivate):
         if not venvActivate:
@@ -168,3 +180,6 @@ class longRunShellLaunch_state(detachedShellLaunch_state):
 
     def _cmdQuote(self, value):
         return '"{}"'.format(str(value).replace('"', r'\"'))
+
+    def _psQuote(self, value):
+        return "'{}'".format(str(value).replace("'", "''"))

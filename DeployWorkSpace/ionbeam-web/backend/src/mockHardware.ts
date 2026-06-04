@@ -18,6 +18,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import type { WebSocket } from "ws";
 
+import { config } from "./config";
+
 interface RasterParams {
   resolution: number;
   dwell: number;
@@ -55,7 +57,6 @@ interface SimulationImage {
 }
 
 let cachedSimulationImage: SimulationImage | null = null;
-let cachedActionData: any | null = null;
 
 function loadSimulationImage(): SimulationImage {
   if (cachedSimulationImage) return cachedSimulationImage;
@@ -93,37 +94,35 @@ function loadSimulationImage(): SimulationImage {
 }
 
 function streamDataConfigPath(): string {
-  return (
-    process.env.STREAM_DATA_JSON ??
-    path.resolve(__dirname, "..", "..", "..", "GlasgowDataIO", "Json", "streamData.json")
-  );
+  return process.env.STREAM_DATA_JSON?.trim() || config.configPath;
 }
 
-function loadActionData(): any {
-  if (cachedActionData) return cachedActionData;
-  cachedActionData = readActionData(streamDataConfigPath());
-  return cachedActionData;
-}
-
-function readActionData(configPath: string): any {
+function loadStreamDataConfig(): any {
   try {
-    const raw = fs.readFileSync(configPath, "utf8");
-    const parsed = JSON.parse(raw);
-    const states = parsed?.Actions ?? parsed?.WorkStates ?? parsed?.workStates ?? parsed?.states ?? [];
-    const streamData = Array.isArray(states)
-      ? states.find((s: any) => s?.streamData || s?.name === "streamData" || s?.Name === "streamData")
-      : null;
-    return (
-      streamData?.streamData?.actionData ??
-      streamData?.actionData ??
-      streamData?.ActionData ??
-      streamData?.action_data ??
-      parsed?.actionData ??
-      {}
-    );
+    const raw = fs.readFileSync(streamDataConfigPath(), "utf8");
+    return JSON.parse(raw);
   } catch {
     return {};
   }
+}
+
+function loadActionData(): any {
+  return actionDataFromConfig(loadStreamDataConfig());
+}
+
+function actionDataFromConfig(parsed: any): any {
+  const states = parsed?.Actions ?? parsed?.WorkStates ?? parsed?.workStates ?? parsed?.states ?? [];
+  const streamData = Array.isArray(states)
+    ? states.find((s: any) => s?.streamData || s?.name === "streamData" || s?.Name === "streamData")
+    : null;
+  return (
+    streamData?.streamData?.actionData ??
+    streamData?.actionData ??
+    streamData?.ActionData ??
+    streamData?.action_data ??
+    parsed?.actionData ??
+    {}
+  );
 }
 
 function validateImageResolution(value: number): number {
@@ -398,7 +397,8 @@ export const mockRest = {
     };
   },
   defaults() {
-    const action = loadActionData();
+    const streamDataConfig = loadStreamDataConfig();
+    const action = actionDataFromConfig(streamDataConfig);
     const raster = action.rasterScan ?? {};
     const vector = action.vectorScan ?? {};
     const selectedBeam = action.enableEbeam ? "ebeam" : "ion";
@@ -418,6 +418,7 @@ export const mockRest = {
         outputMode: vector.outputMode ?? "SixteenBit",
       },
       selected_beam: selectedBeam,
+      version: typeof streamDataConfig.Version === "string" ? streamDataConfig.Version : "",
     };
   },
   runRaster(req: RasterParams & { do_validate?: boolean }) {

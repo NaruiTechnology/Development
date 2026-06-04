@@ -49,6 +49,7 @@ import {
 import type { RasterRequest, VectorRequest } from "../types/api";
 import type { RootState } from "../store";
 import { registerScanActionStop } from "./scanActionRegistry";
+import { recordScanActivity } from "../lib/adminActivity";
 
 type Closure = "pause" | "stop";
 
@@ -241,6 +242,7 @@ function handleRasterMessage(
       if (msg.event === "done") {
         sawDoneRef.current = true;
         dispatch(streamCompleted({ chunks: msg.chunks }));
+        recordScanActivity("raster");
       } else if (msg.event === "error") {
         dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
       }
@@ -269,6 +271,7 @@ function handleVectorMessage(
         sawDoneRef.current = true;
         dispatch(correctVectorLineShift({ lineShiftPerXRow }));
         dispatch(streamCompleted({ chunks: msg.chunks }));
+        recordScanActivity("vector");
       } else if (msg.event === "error") {
         dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
       }
