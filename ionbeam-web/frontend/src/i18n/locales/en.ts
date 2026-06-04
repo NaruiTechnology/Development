@@ -140,6 +140,8 @@ export const en = {
   "vector.latencyBytes": "Latency (bytes)",
   "vector.outputMode": "Output mode",
   "vector.cookie": "Cookie",
+  "help.canvasView.title": "Canvas view mode",
+  "help.canvasView.aria": "Help for the decimated and native canvas view modes",
   "vector.customPoints.label": "Custom points (x,y,dwell; dwell = 125 ns units)",
   "vector.customPoints.error.tooMany": "too many points: {count} > {max}",
   "vector.customPoints.error.format": "line {line}: expected \"x,y,dwell\"",

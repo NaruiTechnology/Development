@@ -118,6 +118,8 @@ export const zhCN: Partial<TranslationTable> = {
   "vector.latencyBytes": "延迟（字节）",
   "vector.outputMode": "输出模式",
   "vector.cookie": "Cookie",
+  "help.canvasView.title": "画布视图模式",
+  "help.canvasView.aria": "抽稀与原生画布视图模式的帮助",
   "vector.customPoints.label": "自定义点列（x,y,驻留；驻留 = 125 ns 单位）",
   "vector.customPoints.error.tooMany": "点数过多：{count} > {max}",
   "vector.customPoints.error.format": "第 {line} 行：应为 \"x,y,驻留\"",

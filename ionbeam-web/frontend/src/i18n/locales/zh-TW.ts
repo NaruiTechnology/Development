@@ -127,6 +127,8 @@ export const zhTW: Partial<TranslationTable> = {
   "vector.latencyBytes": "延遲（位元組）",
   "vector.outputMode": "輸出模式",
   "vector.cookie": "Cookie",
+  "help.canvasView.title": "畫布檢視模式",
+  "help.canvasView.aria": "抽稀與原生畫布檢視模式的說明",
   "vector.customPoints.label": "自訂點列（x,y,駐留；駐留 = 125 ns 單位）",
   "vector.customPoints.error.tooMany": "點數過多：{count} > {max}",
   "vector.customPoints.error.format": "第 {line} 行：應為 \"x,y,駐留\"",
