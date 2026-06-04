@@ -6,7 +6,6 @@
 #-------------------------------------------------------------------------------
 import asyncio
 import os
-import shutil
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -58,16 +57,8 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 return
 
             if createEnv:
-                envExample = os.path.join(backendDir, ".env.example")
                 envFile = os.path.join(backendDir, ".env")
-                if os.path.isfile(envExample) and not os.path.exists(envFile):
-                    shutil.copy2(envExample, envFile)
-                    self.info("[{}] created {}".format(type(self).__name__, envFile))
-                elif os.path.exists(envFile):
-                    self.info("[{}] {} already exists".format(type(self).__name__, envFile))
-                else:
-                    self.warn("[{}] backend .env.example not found; skipping .env creation"
-                              .format(type(self).__name__))
+                self._writeBackendEnv(envFile, backendDir, actionData)
 
             if not install:
                 self._success = True
@@ -96,6 +87,40 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         except Exception as e:
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
+
+    def _writeBackendEnv(self, envFile, backendDir, actionData):
+        deployRoot = self.resolveDeployPath(".")
+        token = os.environ.get("GLASGOW_TOKEN", "").strip()
+        backendHost = str(actionData.get("backendHost", "127.0.0.1") or "127.0.0.1").strip()
+        dbHost = str(actionData.get("adminDbHost", "/var/run/postgresql") or "/var/run/postgresql").strip()
+        dbName = str(actionData.get("adminDbName", "iobeam_admin") or "iobeam_admin").strip()
+        lines = [
+            "PROXY_TARGET_HTTP=http://127.0.0.1:8765",
+            "PROXY_TARGET_WS=ws://127.0.0.1:8765",
+            "GLASGOW_TOKEN={}".format(token),
+            "PORT=4000",
+            "HOST={}".format(backendHost),
+            "MOCK=0",
+            "STATIC_DIR=../frontend/dist",
+            "GLASGOW_CONFIG={}".format(
+                self.resolveDeployPath(os.path.join("Development", "GlasgowDataIO", "Json", "streamData.json"))),
+            "IOBEAM_ADMIN_CONFIG={}".format(
+                self.resolveDeployPath(os.path.join("Development", "IobeamAdmin", "Json", "IobeamAdmin.json"))),
+            "IOBEAM_ADMIN_DB_HOST={}".format(dbHost),
+            "IOBEAM_ADMIN_DB_PORT=5432",
+            "IOBEAM_ADMIN_DB_NAME={}".format(dbName),
+            "GLASGOW_RESTART_CMD={}".format(
+                os.path.join(backendDir, "scripts", "restart-glasgow-service.sh")),
+            "IONBEAM_BACKEND_RESTART_CMD={}".format(
+                os.path.join(backendDir, "scripts", "restart-ionbeam-backend.sh")),
+            "GLASGOW_PROJECT_ROOT={}".format(deployRoot),
+            "GLASGOW_CONFIG_STRICT=0",
+            "",
+        ]
+        with open(envFile, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        self.info("[{}] wrote deployment backend env: {}"
+                  .format(type(self).__name__, envFile))
 
     def _wrapNodeCommand(self, cmd, useNvm):
         if not useNvm:
@@ -137,3 +162,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                            .format(type(self).__name__, timeout, cmd))
                 return False
         return await self.commandAsyncio(cmd, runDir, verbose=True)
+
+
+def _current_login():
+    return os.environ.get("USER") or os.environ.get("LOGNAME") or "postgres"

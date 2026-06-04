@@ -8,7 +8,9 @@
 import os
 import shlex
 import shutil
+import signal
 import subprocess
+import time
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -34,6 +36,8 @@ class detachedShellLaunch_state(distributionDeploy_state):
             command = actionData.get("command")
             logPath = actionData.get("log", "/tmp/distribution-deploy-service.log")
             pidPath = actionData.get("pid")
+            port = actionData.get("port")
+            stopPatterns = actionData.get("stopPatterns") or []
             venvActivate = actionData.get("venvActivate", "")
             if venvActivate:
                 venvActivate = self.resolveDeployPath(venvActivate)
@@ -68,6 +72,10 @@ class detachedShellLaunch_state(distributionDeploy_state):
                           .format(type(self).__name__, logPath))
                 return
 
+            if not self._stopExisting(pidPath, port, stopPatterns):
+                self.Success = False
+                return
+
             shellParts = ["cd {}".format(shlex.quote(runDir))]
             if venvActivate:
                 if not os.path.isfile(venvActivate):
@@ -85,11 +93,18 @@ class detachedShellLaunch_state(distributionDeploy_state):
             shellParts.append(command)
             shellCommand = " && ".join(shellParts)
 
-            if spawnTerminal and self._launchTerminal(title, shellCommand, logPath, pidPath):
-                self._success = True
+            launched = False
+            if spawnTerminal:
+                launched = self._launchTerminal(title, shellCommand, logPath, pidPath)
+            if not launched:
+                self._launchDetached(shellCommand, runDir, logPath, pidPath)
+
+            if port and not self._waitForPort(port, actionData.get("readinessTimeout", 20.0)):
+                self.error("[{}] service did not listen on port {}. log={}"
+                           .format(type(self).__name__, port, logPath))
+                self._success = False
                 return
 
-            self._launchDetached(shellCommand, runDir, logPath, pidPath)
             self._success = True
             self.info("[{}] launched in detached shell. log={}"
                       .format(type(self).__name__, logPath))
@@ -130,6 +145,165 @@ class detachedShellLaunch_state(distributionDeploy_state):
         if pidPath:
             with open(pidPath, "w") as f:
                 f.write("{}\n".format(proc.pid))
+
+    def _stopExisting(self, pidPath, port, stopPatterns):
+        pids = set()
+        if pidPath and os.path.isfile(pidPath):
+            try:
+                with open(pidPath, "r", encoding="utf-8") as f:
+                    raw = f.read().strip()
+                if raw.isdigit():
+                    pids.add(int(raw))
+            except OSError as e:
+                self.warn("[{}] could not read pid file {}: {}"
+                          .format(type(self).__name__, pidPath, e))
+
+        if port:
+            pids.update(self._portPids(port))
+        for pattern in stopPatterns:
+            pids.update(self._patternPids(str(pattern)))
+
+        pids.discard(os.getpid())
+        if not pids:
+            return True
+
+        self.info("[{}] stopping existing process(es): {}"
+                  .format(type(self).__name__, ", ".join(str(pid) for pid in sorted(pids))))
+        for sig, attempts in ((signal.SIGTERM, 20), (signal.SIGKILL, 6)):
+            for pid in sorted(pids):
+                self._killProcessGroupOrPid(pid, sig)
+            for _ in range(attempts):
+                alive = {pid for pid in pids if self._pidAlive(pid)}
+                if port:
+                    alive.update(self._portPids(port))
+                for pattern in stopPatterns:
+                    alive.update(self._patternPids(str(pattern)))
+                alive.discard(os.getpid())
+                if not alive:
+                    if pidPath:
+                        try:
+                            os.remove(pidPath)
+                        except OSError:
+                            pass
+                    return True
+                pids = alive
+                time.sleep(0.25)
+
+        self.error("[{}] existing process(es) did not stop: {}"
+                   .format(type(self).__name__, ", ".join(str(pid) for pid in sorted(pids))))
+        return False
+
+    def _killProcessGroupOrPid(self, pid, sig):
+        try:
+            os.killpg(pid, sig)
+            return
+        except ProcessLookupError:
+            return
+        except OSError:
+            pass
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            return
+        except OSError as e:
+            self.warn("[{}] could not signal pid {}: {}"
+                      .format(type(self).__name__, pid, e))
+
+    def _pidAlive(self, pid):
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except OSError:
+            return True
+
+    def _portPids(self, port):
+        try:
+            proc = subprocess.run(
+                ["bash", "-lc", "ss -ltnp 'sport = :{}' 2>/dev/null".format(int(port))],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False)
+        except Exception:
+            return set()
+
+        pids = set()
+        for token in proc.stdout.replace(",", " ").split():
+            if token.startswith("pid="):
+                raw = token.split("=", 1)[1]
+                if raw.isdigit():
+                    pids.add(int(raw))
+        if not pids:
+            pids.update(self._fuserPortPids(port))
+        return pids
+
+    def _fuserPortPids(self, port):
+        commands = [
+            ["fuser", "-n", "tcp", str(int(port))],
+            ["sudo", "-n", "fuser", "-n", "tcp", str(int(port))],
+        ]
+        for cmd in commands:
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False)
+            except Exception:
+                continue
+            pids = {
+                int(token)
+                for token in proc.stdout.replace(":", " ").split()
+                if token.isdigit()
+            }
+            if pids:
+                return pids
+        return set()
+
+    def _patternPids(self, pattern):
+        pattern = pattern.strip()
+        if not pattern:
+            return set()
+        try:
+            proc = subprocess.run(
+                ["pgrep", "-f", pattern],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False)
+        except Exception:
+            return set()
+
+        pids = set()
+        for line in proc.stdout.splitlines():
+            raw = line.strip()
+            if raw.isdigit():
+                pids.add(int(raw))
+        pids.discard(os.getpid())
+        return pids
+
+    def _waitForPort(self, port, timeout):
+        deadline = time.monotonic() + float(timeout or 0.0)
+        while time.monotonic() <= deadline:
+            if self._portListening(port):
+                return True
+            time.sleep(0.25)
+        return False
+
+    def _portListening(self, port):
+        try:
+            proc = subprocess.run(
+                ["bash", "-lc", "ss -ltn 'sport = :{}' 2>/dev/null".format(int(port))],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False)
+        except Exception:
+            return False
+        return ":{}".format(int(port)) in proc.stdout
 
     def _launchTerminal(self, title, shellCommand, logPath, pidPath):
         if not os.environ.get("DISPLAY"):

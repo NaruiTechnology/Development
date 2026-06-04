@@ -24,18 +24,28 @@
 import type { Server as HttpServer, IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { URL } from "node:url";
+import { Buffer } from "node:buffer";
 import { config } from "./config";
 import { streamMockRaster, streamMockVector } from "./mockHardware";
 
 type ScanKind = "raster" | "vector";
 type RawData = Buffer | ArrayBuffer | Buffer[];
+type ScanUpgradeAuthorization =
+  | { ok: true }
+  | { ok: false; status: number; message: string };
+type ScanUpgradeAuthorize = (
+  req: IncomingMessage,
+) => Promise<ScanUpgradeAuthorization>;
 
 const STREAM_PATHS: Record<string, ScanKind> = {
   "/ws/scan/raster/stream": "raster",
   "/ws/scan/vector/stream": "vector",
 };
 
-export function attachWsProxy(server: HttpServer): void {
+export function attachWsProxy(
+  server: HttpServer,
+  authorize?: ScanUpgradeAuthorize,
+): void {
   // noServer: we drive the upgrade manually so we can route by path.
   const wss = new WebSocketServer({ noServer: true });
 
@@ -52,12 +62,36 @@ export function attachWsProxy(server: HttpServer): void {
       return;
     }
 
-    wss.handleUpgrade(req, socket, head, (clientWs) => {
-      if (config.mock) {
-        handleMock(clientWs, kind, req);
-      } else {
-        handleProxy(clientWs, kind, req);
+    void (async () => {
+      const auth = authorize ? await authorize(req) : { ok: true as const };
+      if (!auth.ok) {
+        const statusText = auth.status === 403 ? "Forbidden" : "Scan authorization failed";
+        socket.write(
+          `HTTP/1.1 ${auth.status} ${statusText}\r\n` +
+            "Content-Type: text/plain; charset=utf-8\r\n" +
+            "Connection: close\r\n" +
+            `Content-Length: ${Buffer.byteLength(auth.message)}\r\n\r\n` +
+            auth.message,
+        );
+        socket.destroy();
+        return;
       }
+
+      wss.handleUpgrade(req, socket, head, (clientWs) => {
+        if (config.mock) {
+          handleMock(clientWs, kind, req);
+        } else {
+          handleProxy(clientWs, kind, req);
+        }
+      });
+    })().catch((err) => {
+      socket.write(
+        "HTTP/1.1 500 Internal Server Error\r\n" +
+          "Connection: close\r\n" +
+          `Content-Length: ${Buffer.byteLength(String(err))}\r\n\r\n` +
+          String(err),
+      );
+      socket.destroy();
     });
   });
 }

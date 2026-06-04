@@ -9,17 +9,21 @@ type IconName =
   | "image"
   | "layers"
   | "link"
+  | "mail"
   | "moon"
   | "pause"
   | "play"
   | "refresh"
   | "route"
   | "scan"
+  | "save"
   | "square"
   | "sun"
   | "target"
   | "atom"
   | "tools"
+  | "fileText"
+  | "sheet"
   | "trash"
   | "upload"
   | "x";
@@ -91,6 +95,12 @@ const paths: Record<IconName, JSX.Element> = {
       <path d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07l1.22-1.22" />
     </>
   ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M4 7l8 6 8-6" />
+    </>
+  ),
   moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
   pause: (
     <>
@@ -121,6 +131,14 @@ const paths: Record<IconName, JSX.Element> = {
       <path d="M4 12h16" />
     </>
   ),
+  save: (
+    <>
+      <path d="M5 3h12l2 2v16H5z" />
+      <path d="M8 3v6h8V3" />
+      <path d="M8 21v-7h8v7" />
+      <path d="M8 10h8" />
+    </>
+  ),
   square: <rect x="6" y="6" width="12" height="12" rx="1" />,
   sun: (
     <>
@@ -141,6 +159,21 @@ const paths: Record<IconName, JSX.Element> = {
       <ellipse cx="12" cy="12" rx="8" ry="3.2" />
       <ellipse cx="12" cy="12" rx="8" ry="3.2" transform="rotate(60 12 12)" />
       <ellipse cx="12" cy="12" rx="8" ry="3.2" transform="rotate(-60 12 12)" />
+    </>
+  ),
+  fileText: (
+    <>
+      <path fill="#e53935" stroke="none" d="M6 3h8l4 4v14H6z" />
+      <path fill="#ffffff" stroke="none" d="M14 3v5h4" />
+      <path fill="#ffffff" stroke="none" d="M12 8l3.2 10h-1.9l-.8-2.6h-3l-.8 2.6H8.8L12 8zm.9 5.9-.9-3.1-.9 3.1h1.8z" />
+    </>
+  ),
+  sheet: (
+    <>
+      <path fill="#1d6f42" stroke="none" d="M6 3h8l4 4v14H6z" />
+      <path fill="#ffffff" stroke="none" d="M14 3v5h4" />
+      <path fill="#ffffff" stroke="none" d="M9 9h6l-6 6h6l-6 6" />
+      <path fill="none" d="M6 3h8l4 4v14H6z" />
     </>
   ),
   tools: (

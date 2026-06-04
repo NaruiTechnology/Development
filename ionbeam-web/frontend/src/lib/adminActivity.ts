@@ -4,15 +4,19 @@ interface StoredAdminUser {
 
 export type ActivityScanKind = "raster" | "vector";
 
+const SELECTED_EQUIPMENT_KEY = "ionbeam:selectedEquipmentId";
+
 export function recordScanActivity(kind: ActivityScanKind): void {
   const userId = currentAdminUserId();
   if (!userId) return;
+  const equipmentId = currentEquipmentId();
 
   void fetch("/api/admin/iobeam/activity", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       user_id: userId,
+      ...(equipmentId ? { equipment_id: equipmentId } : {}),
       activity_type: `${kind}_scan`,
     }),
   }).catch((err) => {
@@ -29,6 +33,27 @@ function currentAdminUserId(): number | null {
     if (!raw) return null;
     const user = JSON.parse(raw) as StoredAdminUser;
     const id = Number(user.id);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function selectedEquipmentId(): number | null {
+  return currentEquipmentId();
+}
+
+export function setSelectedEquipmentId(id: number): void {
+  try {
+    window.localStorage.setItem(SELECTED_EQUIPMENT_KEY, String(id));
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+function currentEquipmentId(): number | null {
+  try {
+    const id = Number(window.localStorage.getItem(SELECTED_EQUIPMENT_KEY));
     return Number.isInteger(id) && id > 0 ? id : null;
   } catch {
     return null;

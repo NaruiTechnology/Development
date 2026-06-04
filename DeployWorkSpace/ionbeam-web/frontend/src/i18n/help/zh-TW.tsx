@@ -438,4 +438,30 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
     </>
   ),
+
+  canvasView: () => (
+    <>
+      <p>
+        這個控制只會改變目前矢量緩衝區在畫布上的繪製方式，不會改變實際掃描本身。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li>
+          <strong>抽稀</strong> — 以目前取樣網格大小顯示即時矢量影像。每個像素對應矢量緩衝區中的一個樣本索引。
+        </li>
+        <li>
+          <strong>原生</strong> — 將矢量影像展開到 DAC 網格。當目前矢量解析度低於 2048 時，每個取樣單元會按 DAC 步長進行區塊填充，方便在原生座標網格上檢查覆蓋情況。
+        </li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>步長 1 時兩種檢視完全一致。</strong>當矢量解析度為 2048 時，沒有抽稀，因此切換檢視只會改變標籤。
+      </div>
+
+      <p>
+        當您想分析取樣順序與影像稀疏度時，使用<strong>抽稀</strong>。
+        當您想檢查較低矢量網格在 DAC 空間中的佔用範圍時，使用<strong>原生</strong>。
+      </p>
+    </>
+  ),
 };

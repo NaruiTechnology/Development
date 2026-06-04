@@ -22,7 +22,7 @@
  * from where it left off — which was never true. The button stays
  * labeled "Run" so the operator knows what it actually does.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAppDispatch, useAppSelector } from "../store";
 import {
@@ -43,8 +43,33 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
+import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 
-export function ScanControls({ kind, disabled = false }: { kind: ScanKind; disabled?: boolean }) {
+const MIN_SCAN_ROLE = 1;
+
+interface EquipmentOption {
+  id: number | null;
+  name: string;
+  model: string;
+  serial_number: string;
+  site: string;
+  description: string;
+}
+
+interface EquipmentResponse {
+  ok: boolean;
+  equipment: EquipmentOption[];
+}
+
+export function ScanControls({
+  kind,
+  disabled = false,
+  userRole = 0,
+}: {
+  kind: ScanKind;
+  disabled?: boolean;
+  userRole?: number;
+}) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const phase = useAppSelector((s) => s.scan.phase);
@@ -55,8 +80,11 @@ export function ScanControls({ kind, disabled = false }: { kind: ScanKind; disab
   const roi = roiState.selection;
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
+  const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
+  const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
   const allowBitmapSimulation = !isProduction && Boolean(roiState.imageDataUrl);
+  const hasScanPrivilege = userRole >= MIN_SCAN_ROLE;
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one
@@ -70,6 +98,10 @@ export function ScanControls({ kind, disabled = false }: { kind: ScanKind; disab
 
   async function onRun() {
     if (disabled || kind === "roi") return;
+    if (!hasScanPrivilege) {
+      dispatch(streamErrored(t("scan.permission.required")));
+      return;
+    }
     if (kind === "raster") {
       try {
         const req = await rasterRequestWithBitmapSelection(
@@ -110,6 +142,10 @@ export function ScanControls({ kind, disabled = false }: { kind: ScanKind; disab
 
   async function onRunValidated() {
     if (disabled || kind === "roi") return;
+    if (!hasScanPrivilege) {
+      dispatch(streamErrored(t("scan.permission.required")));
+      return;
+    }
     if (kind === "raster") {
       try {
         const req = await rasterRequestWithBitmapSelection(
@@ -158,6 +194,39 @@ export function ScanControls({ kind, disabled = false }: { kind: ScanKind; disab
   const stopDisabled = disabled || !(streaming || paused);
 
   useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/iobeam/equipment")
+      .then(async (r) => {
+        const data = (await r.json().catch(() => null)) as EquipmentResponse | null;
+        if (!r.ok || !data?.ok) throw new Error(`equipment: HTTP ${r.status}`);
+        return Array.isArray(data.equipment) ? data.equipment : [];
+      })
+      .then((rows) => {
+        if (cancelled) return;
+        setEquipment(rows);
+        const stored = selectedEquipmentId();
+        const selected = rows.find((row) => row.id === stored) ?? rows[0];
+        if (selected?.id) {
+          setEquipmentId(String(selected.id));
+          setSelectedEquipmentId(selected.id);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setEquipment([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function onEquipmentChange(value: string) {
+    setEquipmentId(value);
+    const id = Number(value);
+    if (Number.isInteger(id) && id > 0) setSelectedEquipmentId(id);
+  }
+
+  useEffect(() => {
     const completedNow = phase === "completed" && prevPhaseRef.current !== "completed";
     prevPhaseRef.current = phase;
     if (
@@ -173,11 +242,37 @@ export function ScanControls({ kind, disabled = false }: { kind: ScanKind; disab
 
   return (
     <div className="button-row">
+      <label className="scan-equipment-field">
+        <span>{t("scan.equipment.label")}</span>
+        <select
+          className="select"
+          value={equipmentId}
+          disabled={disabled || equipment.length === 0}
+          onChange={(event) => onEquipmentChange(event.target.value)}
+          title={t("scan.equipment.title")}
+        >
+          {equipment.length === 0 ? (
+            <option value="">{t("scan.equipment.empty")}</option>
+          ) : (
+            equipment.map((row) => (
+              <option key={row.id ?? row.serial_number} value={String(row.id)}>
+                {row.name}
+              </option>
+            ))
+          )}
+        </select>
+      </label>
       <button
         className="btn btn--primary"
         disabled={runDisabled || kind === "roi"}
         onClick={onRun}
-        title={paused ? t("scan.run.title.paused") : t("scan.run.title.start")}
+        title={
+          !hasScanPrivilege
+            ? t("scan.permission.required")
+            : paused
+              ? t("scan.run.title.paused")
+              : t("scan.run.title.start")
+        }
       >
         <Icon name="play" tone="success" />
         {t("scan.run")}
@@ -207,7 +302,7 @@ export function ScanControls({ kind, disabled = false }: { kind: ScanKind; disab
         className="btn"
         disabled={runDisabled || kind === "roi"}
         onClick={onRunValidated}
-        title={t("scan.runValidated.title")}
+        title={!hasScanPrivilege ? t("scan.permission.required") : t("scan.runValidated.title")}
       >
         <Icon name="check" tone="success" />
         {t("scan.runValidated")}

@@ -28,7 +28,8 @@ export type HelpKey =
   | "pattern"
   | "vectorResolution"
   | "customPoints"
-  | "preProcess";
+  | "preProcess"
+  | "canvasView";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
   dwell: () => (
@@ -524,6 +525,42 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><strong>No:</strong> very long scans where peak RAM matters more than total time (≥ 10M points and you&apos;re running on a memory-constrained host).</li>
         <li><strong>No:</strong> small scans under ~10k points — pre-processing overhead is comparable to the savings.</li>
       </ul>
+    </>
+  ),
+
+  canvasView: () => (
+    <>
+      <p>
+        This control only changes how the current vector buffer is
+        drawn on the canvas. It does not change the scan itself.
+      </p>
+
+      <ul className="dwell-help__list">
+        <li>
+          <strong>Decimated</strong> — shows the live vector image at
+          the sampled grid size. Each pixel corresponds to a sample
+          index in the vector buffer.
+        </li>
+        <li>
+          <strong>Native</strong> — expands the vector image to the
+          DAC grid. When the selected vector resolution is below 2048,
+          each sampled cell is block-filled to the full DAC stride so
+          you can inspect coverage on the native coordinate grid.
+        </li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>Stride 1 means both views are identical.</strong>
+        When vector resolution is 2048, there is no decimation, so
+        switching the view only changes the label.
+      </div>
+
+      <p>
+        Use <strong>Decimated</strong> when you want to reason about
+        sample order and image sparsity. Use <strong>Native</strong>
+        when you want to inspect the DAC-space footprint of a reduced
+        vector grid.
+      </p>
     </>
   ),
 };

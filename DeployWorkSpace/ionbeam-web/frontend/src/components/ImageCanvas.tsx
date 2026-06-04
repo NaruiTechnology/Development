@@ -23,6 +23,7 @@ import {
 import type { ROIRequest } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
+import { CanvasViewHelp } from "./CanvasViewHelp";
 
 const DAC_RANGE = 2048;
 
@@ -220,7 +221,10 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
     <div>
       {showModeToggle && (
         <div className="row" style={{ marginBottom: 10, gap: 8 }}>
-          <span className="card__title" id="render-mode-label">{t("canvas.view")}</span>
+          <span className="card__title" id="render-mode-label">
+            {t("canvas.view")}
+            <CanvasViewHelp />
+          </span>
           <div
             className="segmented"
             role="radiogroup"
