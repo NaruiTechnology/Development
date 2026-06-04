@@ -638,14 +638,14 @@ body {
   --report-yellow-orange: #f59e0b;
   --report-yellow-green: #84cc16;
   --report-blue-green: hsl(222, 70%, 48%);
-  --report-blue-violet: #6d0fd1;
-  --report-red-violet: #c70ae3;
+  --report-amber: #ca8a04;
+  --report-yellow: #facc15;
   --report-raster: var(--report-red-orange);
   --report-raster-strong: var(--report-yellow-orange);
   --report-vector: var(--report-blue-green);
   --report-vector-strong: var(--report-yellow-green);
-  --report-other: var(--report-red-violet);
-  --report-other-strong: var(--report-blue-violet);
+  --report-other: var(--report-yellow);
+  --report-other-strong: var(--report-amber);
   padding: 18px 24px 24px;
   display: grid;
   gap: 16px;
@@ -820,10 +820,10 @@ body {
 .report-palette--account {
   --report-raster: #38bdf8;
   --report-raster-strong: #0ea5e9;
-  --report-vector: #a78bfa;
-  --report-vector-strong: #7c3aed;
-  --report-other: #f472b6;
-  --report-other-strong: #db2777;
+  --report-vector: #facc15;
+  --report-vector-strong: #ca8a04;
+  --report-other: #fde047;
+  --report-other-strong: #d97706;
 }
 
 .report-palette--site {
@@ -849,8 +849,8 @@ body {
   --report-raster-strong: #e11d48;
   --report-vector: #38bdf8;
   --report-vector-strong: #0284c7;
-  --report-other: #c084fc;
-  --report-other-strong: #9333ea;
+  --report-other: #fde047;
+  --report-other-strong: #ca8a04;
 }
 
 .report-palette--monthly {
@@ -863,8 +863,8 @@ body {
 }
 
 .report-palette--yearly {
-  --report-raster: #e879f9;
-  --report-raster-strong: #c026d3;
+  --report-raster: #facc15;
+  --report-raster-strong: #ca8a04;
   --report-vector: #2dd4bf;
   --report-vector-strong: #0f766e;
   --report-other: #facc15;
