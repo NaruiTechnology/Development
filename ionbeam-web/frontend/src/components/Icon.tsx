@@ -13,6 +13,7 @@ type IconName =
   | "moon"
   | "pause"
   | "play"
+  | "plus"
   | "refresh"
   | "route"
   | "scan"
@@ -126,6 +127,7 @@ const paths: Record<IconName, JSX.Element> = {
     </>
   ),
   play: <path d="M6 4l14 8-14 8V4z" />,
+  plus: <path d="M12 5v14M5 12h14" />,
   refresh: (
     <>
       <path d="M20 4v6h-6" />

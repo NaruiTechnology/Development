@@ -48,6 +48,8 @@ export const en = {
   "auth.signIn": "Sign in",
   "auth.signIn.title": "Sign in with SMS verification",
   "auth.signedIn.title": "Signed in account",
+  "auth.user": "User",
+  "auth.users.empty": "No active registered users",
   "auth.login": "Login name or email",
   "auth.site": "Site",
   "auth.sudoWarning": "The database role must already be provisioned for this OS login by deploy or admin setup; sign-in does not run sudo-based DB grants.",

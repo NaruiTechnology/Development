@@ -308,6 +308,19 @@ app.get("/api/admin/iobeam/auth/current-account", async (req, res) => {
   }
 });
 
+app.get("/api/admin/iobeam/auth/users", async (_req, res) => {
+  try {
+    const info = await readAdminWithBackup();
+    const dbUsers = await listAdminUsersFromDb().catch(() => []);
+    const users = mergeAdminUsers(dbUsers, readAdminUsers(info.data))
+      .filter((user) => user.is_active)
+      .map(publicAdminUser);
+    res.json({ ok: true, users });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
 app.post("/api/admin/iobeam/auth/register", async (req, res) => {
   const body = (req.body ?? {}) as RegisterAdminUserRequest;
   const loginName = String(body.login_name ?? "").trim();
@@ -384,23 +397,34 @@ app.post("/api/admin/iobeam/auth/register", async (req, res) => {
 });
 
 app.post("/api/admin/iobeam/auth/send-sms", async (req, res) => {
-  const login = String((req.body as { login?: unknown } | null)?.login ?? "").trim();
-  if (!login) {
-    res.status(400).json({ ok: false, error: "login is required" });
+  const body = req.body as { login?: unknown; user_id?: unknown } | null;
+  const login = String(body?.login ?? "").trim();
+  const userId = Number(body?.user_id ?? 0);
+  if (!login && (!Number.isInteger(userId) || userId <= 0)) {
+    res.status(400).json({ ok: false, error: "login or user_id is required" });
     return;
   }
 
   try {
     const info = await readAdminWithBackup();
-    let user = findAdminUser(info.data, login);
-    const dbUser = await findAdminUserInDb(login).catch(() => null);
+    const dbUsers = await listAdminUsersFromDb().catch(() => []);
+    const users = mergeAdminUsers(dbUsers, readAdminUsers(info.data));
+    let user =
+      Number.isInteger(userId) && userId > 0
+        ? users.find((row) => row.id === userId) ?? null
+        : findAdminUser({ users }, login);
+    const dbUser = login ? await findAdminUserInDb(login).catch(() => null) : null;
     if (dbUser && user && dbUser.email.toLowerCase() !== user.email.toLowerCase()) {
       res.status(409).json({ ok: false, error: "account email does not match the DB record" });
       return;
     }
-    user = dbUser ?? user;
+    user = user ?? dbUser;
     if (!user) {
       res.status(404).json({ ok: false, error: "account not found" });
+      return;
+    }
+    if (login && !adminUserMatchesLogin(user, login)) {
+      res.status(409).json({ ok: false, error: "selected account does not match login" });
       return;
     }
     if (!user.is_active) {
@@ -440,9 +464,17 @@ app.post("/api/admin/iobeam/auth/send-sms", async (req, res) => {
 });
 
 app.post("/api/admin/iobeam/auth/verify-sms", async (req, res) => {
-  const body = req.body as { challenge_id?: unknown; code?: unknown; site?: unknown } | null;
+  const body = req.body as {
+    challenge_id?: unknown;
+    code?: unknown;
+    site?: unknown;
+    user_id?: unknown;
+    login?: unknown;
+  } | null;
   const challengeId = String(body?.challenge_id ?? "").trim();
   const code = String(body?.code ?? "").trim();
+  const userId = Number(body?.user_id ?? 0);
+  const login = String(body?.login ?? "").trim();
   const challenge = smsChallenges.get(challengeId);
 
   if (!challenge) {
@@ -456,6 +488,14 @@ app.post("/api/admin/iobeam/auth/verify-sms", async (req, res) => {
   }
   if (code !== challenge.code) {
     res.status(401).json({ ok: false, error: "verification code is invalid" });
+    return;
+  }
+  if (
+    (Number.isInteger(userId) && userId > 0 && challenge.user.id !== userId) ||
+    (login && !adminUserMatchesLogin(challenge.user, login))
+  ) {
+    smsChallenges.delete(challengeId);
+    res.status(409).json({ ok: false, error: "verification account does not match challenge" });
     return;
   }
 
@@ -799,6 +839,14 @@ function findAdminUser(data: unknown, login: string): AdminUser | null {
         u.login_name.toLowerCase() === normalized ||
         u.email.toLowerCase() === normalized
     ) ?? null
+  );
+}
+
+function adminUserMatchesLogin(user: AdminUser, login: string): boolean {
+  const normalized = login.trim().toLowerCase();
+  return (
+    normalized.length > 0 &&
+    (user.login_name.toLowerCase() === normalized || user.email.toLowerCase() === normalized)
   );
 }
 
