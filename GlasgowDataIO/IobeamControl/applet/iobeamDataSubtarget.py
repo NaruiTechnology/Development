@@ -261,8 +261,15 @@ class IobeamDataSubtarget(Elaboratable):
                     if not hasattr(m.submodules, f"{pin_name}_buffer"):
                         m.submodules[f"{pin_name}_buffer"] = \
                             io.Buffer("o", self.ports[pin_name])
-                    for pin in m.submodules[f"{pin_name}_buffer"].o:
-                        m.d.comb += pin.eq(signal)
+                    pins = m.submodules[f"{pin_name}_buffer"].o
+                    signal = Value.cast(signal)
+                    for index, pin in enumerate(pins):
+                        if len(signal) == 1:
+                            m.d.comb += pin.eq(signal)
+                        elif index < len(signal):
+                            m.d.comb += pin.eq(signal[index])
+                        else:
+                            m.d.comb += pin.eq(0)
 
         connect_pins("ebeam_scan_enable",  executor.ext_ctrl_enable)
         connect_pins("ibeam_scan_enable",  executor.ext_ctrl_enable)
