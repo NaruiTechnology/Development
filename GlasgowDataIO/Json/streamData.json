@@ -1,5 +1,5 @@
 {
-    "Version": "0.7.0",
+    "Version": "0.8.0",
     "Glasgow": {
         "Device0": {
             "Id": ""
@@ -47,39 +47,36 @@
                             "subsignals": [
                                 {
                                     "name": "adc_clk",
-                                    "pin": "",
-                                    "direction": "o"
+                                    "pin": "G1",
+                                    "direction": "o",
+                                    "invert": true
                                 },
                                 {
                                     "name": "adc_le_clk",
-                                    "pin": "",
+                                    "pin": "H2",
                                     "direction": "o"
                                 },
                                 {
                                     "name": "adc_oe",
-                                    "pin": "",
-                                    "direction": "o"
+                                    "pin": "G3",
+                                    "direction": "o",
+                                    "invert": true
                                 },
                                 {
                                     "name": "dac_clk",
-                                    "pin": "",
-                                    "direction": "o"
+                                    "pin": "F3",
+                                    "direction": "o",
+                                    "invert": true
                                 },
                                 {
                                     "name": "dac_x_le_clk",
-                                    "pin": "",
+                                    "pin": "H3",
                                     "direction": "o"
                                 },
                                 {
                                     "name": "dac_y_le_clk",
-                                    "pin": "",
+                                    "pin": "H1",
                                     "direction": "o"
-                                },
-                                {
-                                    "name": "d_clock",
-                                    "pin": "F3",
-                                    "direction": "o",
-                                    "invert": true
                                 }
                             ],
                             "attrs": {
