@@ -19,6 +19,8 @@ import crypto from "node:crypto";
 import { Buffer } from "node:buffer";
 import os from "node:os";
 import { URL } from "node:url";
+import net from "node:net";
+import tls from "node:tls";
 import type { IncomingMessage } from "node:http";
 
 import { config } from "./config";
@@ -90,6 +92,12 @@ interface AdminUser {
   session_lifetime_limit_days: number;
 }
 
+interface AdminSession {
+  userId: number | null;
+  login: string;
+  email: string;
+}
+
 type ScanAuthRequest = express.Request | IncomingMessage;
 
 interface Equipment {
@@ -116,6 +124,10 @@ interface RegisterAdminUserRequest {
   company_name?: unknown;
   site?: unknown;
 }
+
+type RegisterAdminUserDbResult =
+  | { ok: true; user: AdminUser }
+  | { ok: false; error: string };
 
 type SmsSendResult =
   | { ok: true; mode: "twilio" }
@@ -305,13 +317,22 @@ app.post(
 );
 
 app.get("/api/admin/iobeam/auth/current-account", async (req, res) => {
-  const sessionLogin = verifyAdminSessionToken(readScanAuthToken(req));
-  const login = sessionLogin || currentLoginName();
+  res.set("Cache-Control", "no-store");
+  const session = verifyAdminSessionToken(readScanAuthToken(req));
+  const login = session?.login || currentLoginName();
   try {
     const info = await readAdminWithBackup();
-    const configUser = findAdminUser(info.data, login);
-    const dbUser = configUser ? null : await findAdminUserInDb(login).catch(() => null);
-    const user = configUser ?? dbUser;
+    const dbUser =
+      session?.userId && session.userId > 0
+        ? await findAdminUserInDbById(session.userId).catch(() => null)
+        : await findAdminUserInDb(login).catch(() => null);
+    const configUser =
+      dbUser
+        ? null
+        : session?.userId && session.userId > 0
+          ? findAdminUserById(info.data, session.userId)
+          : findAdminUser(info.data, login);
+    const user = dbUser ?? configUser;
     const sessionExpired = user ? await isAdminSessionExpired(user) : false;
     res.json({
       ok: true,
@@ -325,9 +346,23 @@ app.get("/api/admin/iobeam/auth/current-account", async (req, res) => {
   }
 });
 
+app.get("/api/admin/iobeam/auth/users", async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const info = await readAdminWithBackup();
+    const dbUsers = await listAdminUsersFromDb().catch(() => []);
+    const users = mergeAdminUsers(readAdminUsers(info.data), dbUsers)
+      .filter((user) => user.is_active)
+      .map(publicAdminUser);
+    res.json({ ok: true, users });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
 app.post("/api/admin/iobeam/auth/register", async (req, res) => {
   const body = (req.body ?? {}) as RegisterAdminUserRequest;
-  const loginName = String(body.login_name ?? "").trim();
+  const loginName = currentLoginName();
   const firstName = String(body.first_name ?? "").trim();
   const lastName = String(body.last_name ?? "").trim();
   const email = String(body.email ?? "").trim();
@@ -354,25 +389,8 @@ app.post("/api/admin/iobeam/auth/register", async (req, res) => {
 
   try {
     const info = await readAdminWithBackup();
-    if (findAdminUser(info.data, loginName)) {
-      res.status(409).json({ ok: false, error: "account is already registered" });
-      return;
-    }
-
-    const currentUsers = readAdminUsers(info.data);
-    if (currentUsers.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-      res.status(409).json({ ok: false, error: "email is already registered" });
-      return;
-    }
-    const dbConflict = await findAdminUserInDb(loginName).catch(() => null);
-    const dbEmailConflict = await findAdminUserInDb(email).catch(() => null);
-    if (dbConflict || dbEmailConflict) {
-      res.status(409).json({ ok: false, error: "account or email is already registered in DB" });
-      return;
-    }
-
-    const user: AdminUser = {
-      id: nextAdminUserId(currentUsers),
+    const result = await registerAdminUserInDb({
+      id: null,
       login_name: loginName,
       first_name: firstName,
       last_name: lastName,
@@ -380,20 +398,18 @@ app.post("/api/admin/iobeam/auth/register", async (req, res) => {
       phone_number: phoneNumber,
       company_name: companyName,
       site,
-      role: 0,
+      role: ROLE_USER,
       is_active: true,
       session_lifetime_limit_days: 1,
-    };
-
-    const data = addAdminUser(info.data, user);
-    await writeAdminConfig(data);
-    await upsertAdminUserInDb(user).catch((err) => {
-      console.warn(
-        `[iobeam-admin/auth] DB user record was not created: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
     });
+    if (!result.ok) {
+      res.status(409).json({ ok: false, error: result.error });
+      return;
+    }
+
+    const user = result.user;
+    const data = upsertAdminUserInConfig(info.data, user);
+    await writeAdminConfig(data);
     res.json({ ok: true, user: publicAdminUser(user) });
   } catch (err) {
     sendConfigError(res, err);
@@ -401,23 +417,35 @@ app.post("/api/admin/iobeam/auth/register", async (req, res) => {
 });
 
 app.post("/api/admin/iobeam/auth/send-sms", async (req, res) => {
-  const login = String((req.body as { login?: unknown } | null)?.login ?? "").trim();
-  if (!login) {
-    res.status(400).json({ ok: false, error: "login is required" });
+  const body = req.body as { login?: unknown; user_id?: unknown } | null;
+  const login = String(body?.login ?? "").trim();
+  const userId = Number(body?.user_id ?? 0);
+  if (!login && (!Number.isInteger(userId) || userId <= 0)) {
+    res.status(400).json({ ok: false, error: "login or user_id is required" });
     return;
   }
 
   try {
     const info = await readAdminWithBackup();
-    let user = findAdminUser(info.data, login);
-    const dbUser = await findAdminUserInDb(login).catch(() => null);
+    const dbUsers = await listAdminUsersFromDb().catch(() => []);
+    const users = mergeAdminUsers(readAdminUsers(info.data), dbUsers);
+    let user =
+      Number.isInteger(userId) && userId > 0
+        ? users.find((row) => row.id === userId) ?? null
+        : findAdminUser({ users }, login);
+    const dbUser =
+      !user && login ? await findAdminUserInDb(login).catch(() => null) : null;
     if (dbUser && user && dbUser.email.toLowerCase() !== user.email.toLowerCase()) {
       res.status(409).json({ ok: false, error: "account email does not match the DB record" });
       return;
     }
-    user = dbUser ?? user;
+    user = user ?? dbUser;
     if (!user) {
       res.status(404).json({ ok: false, error: "account not found" });
+      return;
+    }
+    if (login && !adminUserMatchesLogin(user, login)) {
+      res.status(409).json({ ok: false, error: "selected account does not match login" });
       return;
     }
     if (!user.is_active) {
@@ -457,9 +485,17 @@ app.post("/api/admin/iobeam/auth/send-sms", async (req, res) => {
 });
 
 app.post("/api/admin/iobeam/auth/verify-sms", async (req, res) => {
-  const body = req.body as { challenge_id?: unknown; code?: unknown; site?: unknown } | null;
+  const body = req.body as {
+    challenge_id?: unknown;
+    code?: unknown;
+    site?: unknown;
+    user_id?: unknown;
+    login?: unknown;
+  } | null;
   const challengeId = String(body?.challenge_id ?? "").trim();
   const code = String(body?.code ?? "").trim();
+  const userId = Number(body?.user_id ?? 0);
+  const login = String(body?.login ?? "").trim();
   const challenge = smsChallenges.get(challengeId);
 
   if (!challenge) {
@@ -473,6 +509,14 @@ app.post("/api/admin/iobeam/auth/verify-sms", async (req, res) => {
   }
   if (code !== challenge.code) {
     res.status(401).json({ ok: false, error: "verification code is invalid" });
+    return;
+  }
+  if (
+    (Number.isInteger(userId) && userId > 0 && challenge.user.id !== userId) ||
+    (login && !adminUserMatchesLogin(challenge.user, login))
+  ) {
+    smsChallenges.delete(challengeId);
+    res.status(409).json({ ok: false, error: "verification account does not match challenge" });
     return;
   }
 
@@ -491,6 +535,42 @@ app.post("/api/admin/iobeam/auth/verify-sms", async (req, res) => {
     ok: true,
     user: publicAdminUserWithSession(challenge.user),
   });
+});
+
+app.post("/api/admin/iobeam/auth/request-scan-role", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active) {
+      res.status(401).json({ ok: false, error: "signed-in account is required" });
+      return;
+    }
+
+    const info = await readAdminWithBackup();
+    const recipients = [...readAuditorEmails(info.data)];
+    if (recipients.length === 0) {
+      res.status(400).json({ ok: false, error: "no active Auditor email addresses are configured" });
+      return;
+    }
+
+    const subject = "Scan role request";
+    const body = [
+      "Please review this account and grant scan permission.",
+      "",
+      "Requested role: SuperUser",
+      `Account: ${actor.login_name || "(not set)"}`,
+      `Name: ${`${actor.first_name} ${actor.last_name}`.trim() || "(not set)"}`,
+      `Email: ${actor.email || "(not set)"}`,
+      `Site: ${actor.site || "(not set)"}`,
+      `Current role: ${actor.role}`,
+      "",
+      "Reason: I need to run RASTER/VECTOR scans.",
+    ].join("\n");
+
+    await sendRoleRequestEmail(recipients, subject, body);
+    res.json({ ok: true, recipients });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
 });
 
 app.get(
@@ -828,17 +908,49 @@ function findAdminUser(data: unknown, login: string): AdminUser | null {
   );
 }
 
+function findAdminUserByLoginName(users: AdminUser[], loginName: string): AdminUser | null {
+  const normalized = loginName.trim().toLowerCase();
+  if (!normalized) return null;
+  return users.find((user) => user.login_name.trim().toLowerCase() === normalized) ?? null;
+}
+
+function adminUserMatchesLogin(user: AdminUser, login: string): boolean {
+  const normalized = login.trim().toLowerCase();
+  return (
+    normalized.length > 0 &&
+    (user.login_name.toLowerCase() === normalized || user.email.toLowerCase() === normalized)
+  );
+}
+
 function findAdminUserById(data: unknown, id: number): AdminUser | null {
   return readAdminUsers(data).find((u) => u.id === id) ?? null;
 }
 
-function addAdminUser(data: unknown, user: AdminUser): unknown {
+function upsertAdminUserInConfig(data: unknown, user: AdminUser): unknown {
   const root =
     data && typeof data === "object" && !Array.isArray(data)
       ? { ...(data as Record<string, unknown>) }
       : {};
+  const email = user.email.trim().toLowerCase();
   const users = readAdminUsers(root);
-  const nextUsers = [...users, user];
+  const nextUsers: AdminUser[] = [];
+  let inserted = false;
+
+  for (const existing of users) {
+    const sameId = user.id != null && existing.id === user.id;
+    const sameEmail = email && existing.email.trim().toLowerCase() === email;
+    if (sameId || sameEmail) {
+      if (!inserted) {
+        nextUsers.push(user);
+        inserted = true;
+      }
+      continue;
+    }
+    nextUsers.push(existing);
+  }
+
+  if (!inserted) nextUsers.push(user);
+
   return {
     ...root,
     user: nextUsers[0] ?? user,
@@ -855,7 +967,7 @@ function mergeAdminConfigData(
     data && typeof data === "object" && !Array.isArray(data)
       ? { ...(data as Record<string, unknown>) }
       : {};
-  const users = mergeAdminUsers(dbUsers, readAdminUsers(root));
+  const users = mergeAdminUsers(readAdminUsers(root), dbUsers);
   const equipment = mergeEquipment(dbEquipment, readEquipment(root));
   return {
     ...root,
@@ -876,8 +988,7 @@ function mergeAdminUsers(base: AdminUser[], overlay: AdminUser[]): AdminUser[] {
 }
 
 function adminUserKey(user: AdminUser): string {
-  const login = user.login_name.trim().toLowerCase();
-  if (login) return `login:${login}`;
+  if (user.id != null) return `id:${user.id}`;
   const email = user.email.trim().toLowerCase();
   return email ? `email:${email}` : "";
 }
@@ -964,11 +1075,19 @@ function readAuditorEmails(data: unknown): Set<string> {
 
 async function currentAdminActor(req?: ScanAuthRequest): Promise<AdminUser | null> {
   const info = await readAdminWithBackup();
-  const sessionLogin = verifyAdminSessionToken(readScanAuthToken(req));
-  const login = sessionLogin || currentLoginName();
-  const configUser = findAdminUser(info.data, login);
-  const dbUser = configUser ? null : await findAdminUserInDb(login).catch(() => null);
-  return configUser ?? dbUser;
+  const session = verifyAdminSessionToken(readScanAuthToken(req));
+  const login = session?.login || currentLoginName();
+  const dbUser =
+    session?.userId && session.userId > 0
+      ? await findAdminUserInDbById(session.userId).catch(() => null)
+      : await findAdminUserInDb(login).catch(() => null);
+  const configUser =
+    dbUser
+      ? null
+      : session?.userId && session.userId > 0
+        ? findAdminUserById(info.data, session.userId)
+        : findAdminUser(info.data, login);
+  return dbUser ?? configUser;
 }
 
 async function currentActorIsAuditor(actor: AdminUser, data?: unknown): Promise<boolean> {
@@ -1098,27 +1217,37 @@ function readScanAuthToken(req?: ScanAuthRequest): string {
 function createAdminSessionToken(user: AdminUser): string {
   const lifetimeDays = normalizeSessionLifetimeDays(user.session_lifetime_limit_days);
   const payload = {
+    user_id: user.id,
     login: user.login_name,
+    email: user.email,
     exp: Date.now() + lifetimeDays * 24 * 60 * 60 * 1000,
   };
   const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
   return `${encoded}.${signAdminSessionPayload(encoded)}`;
 }
 
-function verifyAdminSessionToken(token: string): string | null {
+function verifyAdminSessionToken(token: string): AdminSession | null {
   const [encoded, signature, extra] = token.split(".");
   if (!encoded || !signature || extra !== undefined) return null;
   const expected = signAdminSessionPayload(encoded);
   if (!safeEqual(signature, expected)) return null;
   try {
     const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as {
+      user_id?: unknown;
       login?: unknown;
+      email?: unknown;
       exp?: unknown;
     };
     const exp = Number(payload.exp);
     const login = String(payload.login ?? "").trim();
     if (!login || !Number.isFinite(exp) || Date.now() > exp) return null;
-    return login;
+    const userId = Number(payload.user_id ?? 0);
+    const email = String(payload.email ?? "").trim();
+    return {
+      userId: Number.isInteger(userId) && userId > 0 ? userId : null,
+      login,
+      email,
+    };
   } catch {
     return null;
   }
@@ -1190,6 +1319,137 @@ async function sendSmsVerification(
     };
   }
   return { ok: true, mode: "twilio" };
+}
+
+async function sendRoleRequestEmail(
+  recipients: string[],
+  subject: string,
+  body: string,
+): Promise<void> {
+  if (!config.smtpHost || !config.smtpFrom) {
+    throw new ConfigError("SMTP email service is not configured", 503);
+  }
+  if (recipients.length === 0) {
+    throw new ConfigError("no email recipients were provided", 400);
+  }
+
+  const socket = await connectSmtp();
+  try {
+    await expectSmtp(socket, [220]);
+    await smtpCommand(socket, `EHLO ${os.hostname() || "localhost"}`, [250]);
+    if (!config.smtpSecure) {
+      await smtpCommand(socket, "STARTTLS", [220]);
+      const upgraded = tls.connect({
+        socket,
+        servername: config.smtpHost,
+      });
+      await new Promise<void>((resolve, reject) => {
+        upgraded.once("secureConnect", resolve);
+        upgraded.once("error", reject);
+      });
+      await smtpCommand(upgraded, `EHLO ${os.hostname() || "localhost"}`, [250]);
+      await authenticateSmtp(upgraded);
+      await writeSmtpMessage(upgraded, recipients, subject, body);
+      await smtpCommand(upgraded, "QUIT", [221]);
+      upgraded.end();
+      return;
+    }
+
+    await authenticateSmtp(socket);
+    await writeSmtpMessage(socket, recipients, subject, body);
+    await smtpCommand(socket, "QUIT", [221]);
+  } finally {
+    socket.destroy();
+  }
+}
+
+function connectSmtp(): Promise<net.Socket | tls.TLSSocket> {
+  return new Promise((resolve, reject) => {
+    const onConnect = () => resolve(socket);
+    const socket = config.smtpSecure
+      ? tls.connect({ host: config.smtpHost!, port: config.smtpPort, servername: config.smtpHost! }, onConnect)
+      : net.connect({ host: config.smtpHost!, port: config.smtpPort }, onConnect);
+    socket.setTimeout(30_000, () => {
+      socket.destroy(new Error("SMTP connection timed out"));
+    });
+    socket.once("error", reject);
+  });
+}
+
+async function authenticateSmtp(socket: net.Socket | tls.TLSSocket): Promise<void> {
+  if (!config.smtpUser || !config.smtpPassword) return;
+  await smtpCommand(socket, "AUTH LOGIN", [334]);
+  await smtpCommand(socket, Buffer.from(config.smtpUser, "utf8").toString("base64"), [334]);
+  await smtpCommand(socket, Buffer.from(config.smtpPassword, "utf8").toString("base64"), [235]);
+}
+
+async function writeSmtpMessage(
+  socket: net.Socket | tls.TLSSocket,
+  recipients: string[],
+  subject: string,
+  body: string,
+): Promise<void> {
+  await smtpCommand(socket, `MAIL FROM:<${config.smtpFrom}>`, [250]);
+  for (const recipient of recipients) {
+    await smtpCommand(socket, `RCPT TO:<${recipient}>`, [250, 251]);
+  }
+  await smtpCommand(socket, "DATA", [354]);
+  socket.write(
+    [
+      `From: ${config.smtpFrom}`,
+      `To: ${recipients.join(", ")}`,
+      `Subject: ${subject.replace(/\r?\n/g, " ")}`,
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      body.replace(/\r?\n/g, "\r\n").replace(/^\./gm, ".."),
+      ".",
+      "",
+    ].join("\r\n"),
+  );
+  await expectSmtp(socket, [250]);
+}
+
+function smtpCommand(
+  socket: net.Socket | tls.TLSSocket,
+  command: string,
+  expected: number[],
+): Promise<string> {
+  socket.write(`${command}\r\n`);
+  return expectSmtp(socket, expected);
+}
+
+function expectSmtp(socket: net.Socket | tls.TLSSocket, expected: number[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let buffer = "";
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("SMTP response timed out"));
+    }, 30_000);
+    const onData = (chunk: Buffer) => {
+      buffer += chunk.toString("utf8");
+      const lines = buffer.split(/\r?\n/).filter(Boolean);
+      const last = lines[lines.length - 1] ?? "";
+      if (!/^\d{3} /.test(last)) return;
+      const code = Number(last.slice(0, 3));
+      cleanup();
+      if (expected.includes(code)) {
+        resolve(buffer);
+      } else {
+        reject(new Error(`SMTP command failed: ${buffer.trim()}`));
+      }
+    };
+    const onError = (err: Error) => {
+      cleanup();
+      reject(err);
+    };
+    function cleanup(): void {
+      clearTimeout(timer);
+      socket.off("data", onData);
+      socket.off("error", onError);
+    }
+    socket.on("data", onData);
+    socket.once("error", onError);
+  });
 }
 
 function sqlString(value: string): string {
@@ -1717,6 +1977,8 @@ async function ensureAdminUserSchema(): Promise<void> {
         SET search_path TO iobeam_admin, public;
         ${adminUserSiteMigrationSql()}
         ${adminAuditorMigrationSql()}
+        ${adminUserLoginNameUniquenessMigrationSql()}
+        ${adminUserRegistrationFunctionSql()}
 
         DO $$
         BEGIN
@@ -1744,6 +2006,116 @@ async function ensureAdminUserSchema(): Promise<void> {
     });
   }
   await adminUserSchemaReady;
+}
+
+function adminUserLoginNameUniquenessMigrationSql(): string {
+  return `
+    DO $$
+    DECLARE
+      constraint_name text;
+    BEGIN
+      FOR constraint_name IN
+        SELECT pg_constraint.conname
+          FROM pg_constraint
+          JOIN pg_attribute
+            ON pg_attribute.attrelid = pg_constraint.conrelid
+           AND pg_attribute.attnum = ANY(pg_constraint.conkey)
+         WHERE pg_constraint.conrelid = 'iobeam_admin."user"'::regclass
+           AND pg_constraint.contype = 'u'
+           AND pg_attribute.attname = 'login_name'
+           AND cardinality(pg_constraint.conkey) = 1
+      LOOP
+        EXECUTE format('ALTER TABLE "user" DROP CONSTRAINT IF EXISTS %I', constraint_name);
+      END LOOP;
+    END;
+    $$;
+  `;
+}
+
+function adminUserRegistrationFunctionSql(): string {
+  return `
+    CREATE OR REPLACE FUNCTION register_user(
+      p_login_name nchar(100),
+      p_first_name nchar(100),
+      p_last_name nchar(100),
+      p_email nchar(250),
+      p_phone_number nchar(25),
+      p_company_name nchar(150),
+      p_site nchar(150),
+      p_role integer DEFAULT 0,
+      p_session_lifetime_limit_days integer DEFAULT 1
+    )
+    RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $register_user$
+    DECLARE
+      v_login_name text := btrim(p_login_name::text);
+      v_email text := btrim(p_email::text);
+      v_next_id integer;
+      v_user jsonb;
+    BEGIN
+      IF v_login_name = '' THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'login name is required');
+      END IF;
+      IF v_email = '' THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'email is required');
+      END IF;
+
+      LOCK TABLE "user" IN SHARE ROW EXCLUSIVE MODE;
+
+      IF EXISTS (
+        SELECT 1
+          FROM "user"
+         WHERE lower(btrim(email::text)) = lower(v_email)
+      ) THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'email is already registered');
+      END IF;
+
+      SELECT COALESCE(MAX(id), 0) + 1 INTO v_next_id FROM "user";
+
+      INSERT INTO "user" (
+        id, login_name, first_name, last_name, email,
+        phone_number, company_name, site, role, is_active, session_lifetime_limit_days
+      )
+      VALUES (
+        v_next_id,
+        p_login_name,
+        p_first_name,
+        p_last_name,
+        p_email,
+        p_phone_number,
+        p_company_name,
+        p_site,
+        COALESCE(p_role, 0),
+        true,
+        GREATEST(1, COALESCE(p_session_lifetime_limit_days, 1))
+      );
+
+      SELECT row_to_json(u)::jsonb INTO v_user
+        FROM (
+          SELECT
+            id,
+            btrim(login_name::text) AS login_name,
+            btrim(first_name::text) AS first_name,
+            btrim(last_name::text) AS last_name,
+            btrim(email::text) AS email,
+            btrim(phone_number::text) AS phone_number,
+            btrim(company_name::text) AS company_name,
+            btrim(site::text) AS site,
+            role,
+            is_active,
+            session_lifetime_limit_days
+          FROM "user"
+          WHERE id = v_next_id
+        ) u;
+
+      RETURN jsonb_build_object('ok', true, 'user', v_user);
+    EXCEPTION
+      WHEN unique_violation THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'email is already registered');
+    END;
+    $register_user$;
+  `;
 }
 
 function adminAuditorMigrationSql(): string {
@@ -1966,6 +2338,35 @@ async function findAdminUserInDb(loginOrEmail: string): Promise<AdminUser | null
   return Array.isArray(rows) && rows[0] ? readAdminUsers({ users: rows })[0] ?? null : null;
 }
 
+async function findAdminUserInDbById(id: number): Promise<AdminUser | null> {
+  if (!Number.isInteger(id) || id <= 0) return null;
+  await ensureAdminUserSchema();
+  const sql = `
+    SET search_path TO iobeam_admin, public;
+    SELECT COALESCE(jsonb_agg(row_to_json(u)), '[]'::jsonb)
+      FROM (
+        SELECT
+          id,
+          btrim(login_name::text) AS login_name,
+          btrim(first_name::text) AS first_name,
+          btrim(last_name::text) AS last_name,
+          btrim(email::text) AS email,
+          btrim(phone_number::text) AS phone_number,
+          btrim(company_name::text) AS company_name,
+          btrim(site::text) AS site,
+          role,
+          is_active,
+          session_lifetime_limit_days
+        FROM "user"
+        WHERE id = ${id}
+        LIMIT 1
+      ) u;
+  `;
+  const out = await runPsql(["-Atq"], config.adminDbName, sql);
+  const rows = JSON.parse(out.trim() || "[]") as unknown;
+  return Array.isArray(rows) && rows[0] ? readAdminUsers({ users: rows })[0] ?? null : null;
+}
+
 async function listAdminUsersFromDb(): Promise<AdminUser[]> {
   await ensureAdminUserSchema();
   const sql = `
@@ -2014,10 +2415,10 @@ async function upsertAdminUserInDb(user: AdminUser): Promise<void> {
       ${user.is_active ? "true" : "false"},
       ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
     )
-    ON CONFLICT (login_name) DO UPDATE
+    ON CONFLICT (email) DO UPDATE
        SET first_name = EXCLUDED.first_name,
            last_name = EXCLUDED.last_name,
-           email = EXCLUDED.email,
+           login_name = EXCLUDED.login_name,
            phone_number = EXCLUDED.phone_number,
            company_name = EXCLUDED.company_name,
            site = EXCLUDED.site,
@@ -2026,6 +2427,41 @@ async function upsertAdminUserInDb(user: AdminUser): Promise<void> {
            session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
   `;
   await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+}
+
+async function registerAdminUserInDb(user: AdminUser): Promise<RegisterAdminUserDbResult> {
+  await ensureAdminUserSchema();
+  const sql = `
+    SET search_path TO iobeam_admin, public;
+    SELECT register_user(
+      ${sqlString(trimForSqlNchar(user.login_name, 100))},
+      ${sqlString(trimForSqlNchar(user.first_name, 100))},
+      ${sqlString(trimForSqlNchar(user.last_name, 100))},
+      ${sqlString(trimForSqlNchar(user.email, 250))},
+      ${sqlString(trimForSqlNchar(user.phone_number, 25))},
+      ${sqlString(trimForSqlNchar(user.company_name, 150))},
+      ${sqlString(trimForSqlNchar(user.site, 150))},
+      ${Math.trunc(user.role || ROLE_USER)},
+      ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
+    );
+  `;
+  const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+  const raw = JSON.parse(out.trim() || "{}") as unknown;
+  if (!raw || typeof raw !== "object") {
+    throw new ConfigError("register_user returned an invalid response", 500);
+  }
+  const result = raw as Record<string, unknown>;
+  if (result.ok === false) {
+    return { ok: false, error: String(result.error ?? "registration failed") };
+  }
+  if (result.ok !== true) {
+    throw new ConfigError("register_user returned an invalid status", 500);
+  }
+  const created = readAdminUsers({ users: [result.user] })[0] ?? null;
+  if (!created) {
+    throw new ConfigError("register_user did not return the created user", 500);
+  }
+  return { ok: true, user: created };
 }
 
 async function upsertAdminUserRowsInDb(users: AdminUser[]): Promise<void> {
@@ -2052,10 +2488,10 @@ async function upsertAdminUserRowsInDb(users: AdminUser[]): Promise<void> {
       phone_number, company_name, site, role, is_active, session_lifetime_limit_days
     )
     VALUES ${values}
-    ON CONFLICT (login_name) DO UPDATE
+    ON CONFLICT (email) DO UPDATE
        SET first_name = EXCLUDED.first_name,
            last_name = EXCLUDED.last_name,
-           email = EXCLUDED.email,
+           login_name = EXCLUDED.login_name,
            phone_number = EXCLUDED.phone_number,
            company_name = EXCLUDED.company_name,
            site = EXCLUDED.site,

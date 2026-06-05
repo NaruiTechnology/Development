@@ -10,6 +10,7 @@
  */
 import {
   Component,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -64,6 +65,10 @@ export function App() {
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roiState = useAppSelector((s) => s.scan.roi);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
+  const [lastLiveScanImage, setLastLiveScanImage] = useState<{
+    kind: Extract<ScanKind, "raster" | "vector">;
+    imageUrl: string;
+  } | null>(null);
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
     const raw = window.localStorage.getItem(RIGHT_PANEL_STORAGE_KEY);
     const parsed = raw ? Number(raw) : DEFAULT_RIGHT_PANEL_WIDTH;
@@ -181,12 +186,26 @@ export function App() {
     (lastScanKind === "raster" && rasterCursor > 0) ||
     (lastScanKind === "vector" && vectorCursor > 0) ||
     lastResult?.kind === lastScanKind;
+  const serverScanImageUrl =
+    lastScanKind === "vector"
+      ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}&view=texture&_=${imageRevision}`
+      : `/api/scan/last/figure?view=texture&_=${imageRevision}`;
   const roiScanImageUrl =
     kind === "roi" && hasPriorScanImage
-      ? lastScanKind === "vector"
-        ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}&view=texture&_=${imageRevision}`
-        : `/api/scan/last/figure?view=texture&_=${imageRevision}`
+      ? lastLiveScanImage?.kind === lastScanKind
+        ? lastLiveScanImage.imageUrl
+        : serverScanImageUrl
       : null;
+
+  const handleRenderedImageChange = useCallback(
+    (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
+      setLastLiveScanImage((current) => {
+        if (!imageUrl) return current?.kind === scanKind ? null : current;
+        return { kind: scanKind, imageUrl };
+      });
+    },
+    []
+  );
 
   function selectKind(nextKind: ScanKind) {
     if (nextKind === kind) return;
@@ -199,6 +218,7 @@ export function App() {
       dispatch(streamReset());
       dispatch(resetRaster({ resolution: rasterResolution }));
       dispatch(resetVector());
+      setLastLiveScanImage(null);
     }
 
     dispatch(setKind(nextKind));
@@ -373,7 +393,10 @@ export function App() {
                   backgroundImageUrl={roiScanImageUrl}
                 />
               ) : (
-                <ImageCanvas kind={kind as ScanKind} />
+                <ImageCanvas
+                  kind={kind as ScanKind}
+                  onRenderedImageChange={handleRenderedImageChange}
+                />
               )}
             </div>
           </div>

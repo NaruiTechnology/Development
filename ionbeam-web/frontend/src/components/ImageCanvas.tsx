@@ -52,7 +52,13 @@ const KIND_KEYS: Record<string, TranslationKey> = {
   roi: "tabs.roi",
 };
 
-export function ImageCanvas({ kind }: { kind: ScanKind }) {
+export function ImageCanvas({
+  kind,
+  onRenderedImageChange,
+}: {
+  kind: ScanKind;
+  onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
+}) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -115,6 +121,29 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision, kind, renderMode, theme]);
+
+  useEffect(() => {
+    if (!onRenderedImageChange || (kind !== "raster" && kind !== "vector")) return;
+
+    const hasData = kind === "raster" ? cursor > 0 : vectorCursor > 0;
+    if (!hasData) {
+      onRenderedImageChange(kind, null);
+      return;
+    }
+    if (phase !== "completed" && phase !== "paused") return;
+
+    const handle = window.requestAnimationFrame(() => {
+      const canvas = canvasRef.current;
+      if (!canvas || canvas.width <= 0 || canvas.height <= 0) return;
+      try {
+        onRenderedImageChange(kind, canvas.toDataURL("image/png"));
+      } catch {
+        onRenderedImageChange(kind, null);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(handle);
+  }, [onRenderedImageChange, kind, phase, revision, renderMode, cursor, vectorCursor]);
 
   useEffect(() => {
     if (!showServerFigure) {
@@ -201,7 +230,7 @@ export function ImageCanvas({ kind }: { kind: ScanKind }) {
   const preferServerFigure =
     Boolean(serverFigureUrl) &&
     phase === "completed" &&
-    stats.max > stats.min;
+    stats.max > stats.min && !hasLiveCanvasData;
 
   let nativeEdge: number;
   if (kind === "raster") {

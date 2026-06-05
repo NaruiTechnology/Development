@@ -103,6 +103,10 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.roleRequest.title": "申請掃描角色",
   "scan.roleRequest.subject": "掃描角色申請",
   "scan.roleRequest.body": "請審核此帳戶並授予掃描權限。\n\n申請角色：{requestedRole}\n帳戶：{login}\n姓名：{name}\n信箱：{email}\n站點：{site}\n目前角色：{currentRole}\n\n原因：我需要執行 RASTER/VECTOR 掃描。",
+  "scan.roleRequest.sending": "正在傳送掃描角色申請郵件...",
+  "scan.roleRequest.sent": "掃描角色申請郵件已傳送。",
+  "scan.roleRequest.sentTo": "掃描角色申請郵件已傳送至 {recipients}。",
+  "scan.roleRequest.failed": "掃描角色申請郵件未傳送：{error}",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "解析度",

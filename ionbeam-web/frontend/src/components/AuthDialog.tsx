@@ -39,6 +39,11 @@ interface CurrentAccountResponse {
   user: SignedInUser | null;
 }
 
+interface ActiveUsersResponse {
+  ok: boolean;
+  users: SignedInUser[];
+}
+
 interface RegisterResponse {
   ok: boolean;
   user: SignedInUser;
@@ -67,6 +72,9 @@ export function AuthDialog({
   const [login, setLogin] = useState(() => {
     return window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim() ?? "";
   });
+  const [osLogin, setOsLogin] = useState("");
+  const [activeUsers, setActiveUsers] = useState<SignedInUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
   const [mode, setMode] = useState<"loading" | "sign-in" | "register">("loading");
   const [code, setCode] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
@@ -106,17 +114,36 @@ export function AuthDialog({
     const cachedLogin = window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim() ?? "";
     if (cachedLogin) setLogin(cachedLogin);
 
-    fetch("/api/admin/iobeam/auth/current-account")
-      .then(async (r) => {
+    Promise.all([
+      fetch("/api/admin/iobeam/auth/current-account", { cache: "no-store" }).then(async (r) => {
         if (!r.ok) throw new Error(await responseError(r));
         return (await r.json()) as CurrentAccountResponse;
-      })
-      .then((data) => {
+      }),
+      fetch("/api/admin/iobeam/auth/users", { cache: "no-store" }).then(async (r) => {
+        if (!r.ok) throw new Error(await responseError(r));
+        return (await r.json()) as ActiveUsersResponse;
+      }),
+    ])
+      .then(([data, usersResponse]) => {
         if (cancelled) return;
-        if (!window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim()) {
+        const users = usersResponse.users.filter((user) => user.is_active);
+        const cachedLogin = window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim() ?? "";
+        setOsLogin(data.login);
+        const preferredUser =
+          findUserByLogin(users, cachedLogin || data.login) ??
+          (data.user ? findUserByLogin(users, data.user.login_name) : null) ??
+          users[0] ??
+          null;
+
+        setActiveUsers(users);
+        setSelectedUserId(userIdValue(preferredUser));
+        if (preferredUser) {
+          setLogin(preferredUser.login_name);
+          setSite(normalizeSiteValue(preferredUser.site));
+        } else if (!cachedLogin) {
           setLogin(data.login);
         }
-        if (data.user?.site) setSite(normalizeSiteValue(data.user.site));
+        if (data.user?.site && !preferredUser) setSite(normalizeSiteValue(data.user.site));
         setSessionExpired(data.session_expired === true);
         setMode(data.registered ? "sign-in" : "register");
       })
@@ -134,16 +161,53 @@ export function AuthDialog({
     };
   }, [open]);
 
+  const selectedUser = activeUsers.find((user) => userIdValue(user) === selectedUserId) ?? null;
+
   if (!open) return null;
 
-  async function sendSms() {
+  function selectUser(nextUserId: string) {
+    const user = activeUsers.find((row) => userIdValue(row) === nextUserId) ?? null;
+    setSelectedUserId(nextUserId);
+    if (user) {
+      setLogin(user.login_name);
+      setSite(normalizeSiteValue(user.site));
+    }
+    setCode("");
+    setChallengeId(null);
+    setMaskedPhone("");
+    setDevCode("");
+  }
+
+  function openRegistration() {
+    setMode("register");
+    setSelectedUserId("");
+    setLogin(osLogin);
+    setSite(DEFAULT_SITE);
+    setRegistration({
+      first_name: "",
+      last_name: "",
+      email: "",
+      phone_number: "",
+      company_name: "",
+      site: DEFAULT_SITE,
+    });
+    setCode("");
+    setChallengeId(null);
+    setMaskedPhone("");
+    setDevCode("");
+    setError(null);
+  }
+
+  async function sendSms(userOverride: SignedInUser | null = selectedUser) {
+    const smsUser = userOverride;
+    const smsLogin = smsUser?.login_name ?? login;
     setBusy(true);
     setError(null);
     try {
       const r = await fetch("/api/admin/iobeam/auth/send-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login }),
+        body: JSON.stringify({ login: smsLogin, user_id: smsUser?.id ?? undefined }),
       });
       if (r.status === 404) {
         setMode("register");
@@ -155,6 +219,10 @@ export function AuthDialog({
       setMaskedPhone(data.phone_number);
       setDevCode(data.dev_code ?? "");
       setCode("");
+      if (smsUser) {
+        setSelectedUserId(userIdValue(smsUser));
+        setLogin(smsUser.login_name);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -169,12 +237,16 @@ export function AuthDialog({
       const r = await fetch("/api/admin/iobeam/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login_name: login, ...registration, site }),
+        body: JSON.stringify({ ...registration, site }),
       });
       if (!r.ok) throw new Error(await responseError(r));
-      await r.json() as RegisterResponse;
+      const data = (await r.json()) as RegisterResponse;
+      setActiveUsers((users) => [...users.filter((user) => user.id !== data.user.id), data.user]);
+      setSelectedUserId(userIdValue(data.user));
+      setLogin(data.user.login_name);
+      setSite(normalizeSiteValue(data.user.site));
       setMode("sign-in");
-      await sendSms();
+      await sendSms(data.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -190,7 +262,13 @@ export function AuthDialog({
       const r = await fetch("/api/admin/iobeam/auth/verify-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challenge_id: challengeId, code, site }),
+        body: JSON.stringify({
+          challenge_id: challengeId,
+          code,
+          site,
+          login: selectedUser?.login_name ?? login,
+          user_id: selectedUser?.id ?? undefined,
+        }),
       });
       if (!r.ok) throw new Error(await responseError(r));
       const data = (await r.json()) as VerifySmsResponse;
@@ -227,19 +305,14 @@ export function AuthDialog({
             <div className="settings-loading">{t("auth.checking")}</div>
           ) : (
           <>
-          <div className="field">
-            <label className="label" htmlFor="admin-login">
-              {t("auth.login")}
-            </label>
-            <input
-              id="admin-login"
-              className="input"
-              value={login}
-              required
+          {mode === "sign-in" ? (
+            <UserSelect
+              users={activeUsers}
+              value={selectedUserId}
               disabled={busy || Boolean(challengeId)}
-              onChange={(e) => setLogin(e.target.value)}
+              onChange={selectUser}
             />
-          </div>
+          ) : null}
           <SiteSelect value={site} disabled={busy} onChange={setSite} label={t("auth.site")} />
           <div className="auth-status">{t("auth.sudoWarning")}</div>
 
@@ -332,22 +405,38 @@ export function AuthDialog({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={busy || !canRegister(login, registration, site)}
+                disabled={busy || !canRegister(osLogin, registration, site)}
                 onClick={() => void registerAccount()}
               >
                 <Icon name="check" />
                 {t("auth.register")}
               </button>
             ) : !challengeId ? (
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={busy || login.trim().length === 0 || site.trim().length === 0}
-                onClick={() => void sendSms()}
-              >
-                <Icon name="link" />
-                {t("auth.sendSms")}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  disabled={busy}
+                  onClick={openRegistration}
+                >
+                  <Icon name="plus" />
+                  {t("auth.register")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={
+                    busy ||
+                    !selectedUser ||
+                    login.trim().length === 0 ||
+                    site.trim().length === 0
+                  }
+                  onClick={() => void sendSms()}
+                >
+                  <Icon name="link" />
+                  {t("auth.sendSms")}
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -364,6 +453,46 @@ export function AuthDialog({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function UserSelect({
+  users,
+  value,
+  disabled,
+  onChange,
+}: {
+  users: SignedInUser[];
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="field">
+      <label className="label" htmlFor="admin-user">
+        {t("auth.user")}
+      </label>
+      <select
+        id="admin-user"
+        className="select"
+        value={value}
+        required
+        disabled={disabled || users.length === 0}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {users.length === 0 ? (
+          <option value="">{t("auth.users.empty")}</option>
+        ) : (
+          users.map((user) => (
+            <option key={userIdValue(user)} value={userIdValue(user)}>
+              {userOptionLabel(user)}
+            </option>
+          ))
+        )}
+      </select>
     </div>
   );
 }
@@ -435,6 +564,29 @@ function RegistrationField({
       />
     </div>
   );
+}
+
+function userIdValue(user: SignedInUser | null | undefined): string {
+  if (!user) return "";
+  return user.id == null ? `login:${user.login_name}` : `id:${user.id}`;
+}
+
+function findUserByLogin(users: SignedInUser[], login: string): SignedInUser | null {
+  const normalized = login.trim().toLowerCase();
+  if (!normalized) return null;
+  return (
+    users.find(
+      (user) =>
+        user.login_name.toLowerCase() === normalized ||
+        user.email.toLowerCase() === normalized
+    ) ?? null
+  );
+}
+
+function userOptionLabel(user: SignedInUser): string {
+  const name = `${user.first_name} ${user.last_name}`.trim();
+  const identity = user.email.trim() || user.login_name;
+  return name ? `${name} (${identity})` : identity;
 }
 
 function canRegister(login: string, draft: RegistrationDraft, site: string): boolean {
