@@ -1406,6 +1406,11 @@ body {
   border-color: var(--c-accent);
 }
 
+.error-wedge__action:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 /* ---------- canvas ---------------------------------------------------- */
 
 .canvas-frame {

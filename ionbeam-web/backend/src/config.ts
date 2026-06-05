@@ -50,6 +50,12 @@ export interface Config {
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
+  smtpHost: string | null;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string | null;
+  smtpPassword: string | null;
+  smtpFrom: string | null;
 }
 
 const BACKEND_ROOT = path.resolve(__dirname, "..");
@@ -114,4 +120,13 @@ export const config: Config = {
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID?.trim() || null,
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN?.trim() || null,
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER?.trim() || null,
+  smtpHost: process.env.SMTP_HOST?.trim() || null,
+  smtpPort: Number(process.env.SMTP_PORT ?? 587),
+  smtpSecure: bool(process.env.SMTP_SECURE, false),
+  smtpUser: process.env.SMTP_USER?.trim() || null,
+  smtpPassword: process.env.SMTP_PASSWORD?.trim() || null,
+  smtpFrom:
+    process.env.SMTP_FROM?.trim() ||
+    process.env.SMTP_USER?.trim() ||
+    null,
 };

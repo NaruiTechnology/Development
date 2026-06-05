@@ -72,6 +72,7 @@ export function AuthDialog({
   const [login, setLogin] = useState(() => {
     return window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim() ?? "";
   });
+  const [osLogin, setOsLogin] = useState("");
   const [activeUsers, setActiveUsers] = useState<SignedInUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [mode, setMode] = useState<"loading" | "sign-in" | "register">("loading");
@@ -114,11 +115,11 @@ export function AuthDialog({
     if (cachedLogin) setLogin(cachedLogin);
 
     Promise.all([
-      fetch("/api/admin/iobeam/auth/current-account").then(async (r) => {
+      fetch("/api/admin/iobeam/auth/current-account", { cache: "no-store" }).then(async (r) => {
         if (!r.ok) throw new Error(await responseError(r));
         return (await r.json()) as CurrentAccountResponse;
       }),
-      fetch("/api/admin/iobeam/auth/users").then(async (r) => {
+      fetch("/api/admin/iobeam/auth/users", { cache: "no-store" }).then(async (r) => {
         if (!r.ok) throw new Error(await responseError(r));
         return (await r.json()) as ActiveUsersResponse;
       }),
@@ -127,6 +128,7 @@ export function AuthDialog({
         if (cancelled) return;
         const users = usersResponse.users.filter((user) => user.is_active);
         const cachedLogin = window.localStorage.getItem("ionbeam:lastAdminLogin")?.trim() ?? "";
+        setOsLogin(data.login);
         const preferredUser =
           findUserByLogin(users, cachedLogin || data.login) ??
           (data.user ? findUserByLogin(users, data.user.login_name) : null) ??
@@ -178,6 +180,17 @@ export function AuthDialog({
 
   function openRegistration() {
     setMode("register");
+    setSelectedUserId("");
+    setLogin(osLogin);
+    setSite(DEFAULT_SITE);
+    setRegistration({
+      first_name: "",
+      last_name: "",
+      email: "",
+      phone_number: "",
+      company_name: "",
+      site: DEFAULT_SITE,
+    });
     setCode("");
     setChallengeId(null);
     setMaskedPhone("");
@@ -224,7 +237,7 @@ export function AuthDialog({
       const r = await fetch("/api/admin/iobeam/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login_name: login, ...registration, site }),
+        body: JSON.stringify({ ...registration, site }),
       });
       if (!r.ok) throw new Error(await responseError(r));
       const data = (await r.json()) as RegisterResponse;
@@ -299,21 +312,7 @@ export function AuthDialog({
               disabled={busy || Boolean(challengeId)}
               onChange={selectUser}
             />
-          ) : (
-            <div className="field">
-              <label className="label" htmlFor="admin-login">
-                {t("auth.login")}
-              </label>
-              <input
-                id="admin-login"
-                className="input"
-                value={login}
-                required
-                disabled={busy || Boolean(challengeId)}
-                onChange={(e) => setLogin(e.target.value)}
-              />
-            </div>
-          )}
+          ) : null}
           <SiteSelect value={site} disabled={busy} onChange={setSite} label={t("auth.site")} />
           <div className="auth-status">{t("auth.sudoWarning")}</div>
 
@@ -406,7 +405,7 @@ export function AuthDialog({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={busy || !canRegister(login, registration, site)}
+                disabled={busy || !canRegister(osLogin, registration, site)}
                 onClick={() => void registerAccount()}
               >
                 <Icon name="check" />

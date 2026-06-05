@@ -92,6 +92,9 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.roleRequest.title": "申请扫描角色",
   "scan.roleRequest.subject": "扫描角色申请",
   "scan.roleRequest.body": "请审核此账户并授予扫描权限。\n\n申请角色：{requestedRole}\n账户：{login}\n姓名：{name}\n邮箱：{email}\n站点：{site}\n当前角色：{currentRole}\n\n原因：我需要运行 RASTER/VECTOR 扫描。",
+  "scan.roleRequest.opened": "邮件草稿已打开，请在邮件应用中发送。",
+  "scan.roleRequest.noRecipients": "没有配置任何有效的 Auditor 邮箱地址。",
+  "scan.roleRequest.failed": "无法打开邮件草稿：{error}",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "分辨率",

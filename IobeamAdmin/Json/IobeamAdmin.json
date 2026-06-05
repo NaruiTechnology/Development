@@ -24,12 +24,12 @@
         "first_name": "Henry",
         "last_name": "Li",
         "email": "lyh1154@gmail.com",
-        "phone_number": "1 (503)807-9055",
+        "phone_number": "(503)8079055",
         "company_name": "Ionbeamtech",
         "site": "Beijing(北京)",
-        "role": 4,
+        "role": 3,
         "is_active": true,
-        "session_lifetime_limit_days": 2
+        "session_lifetime_limit_days": 1
     },
     "users": [
         {
@@ -38,12 +38,12 @@
             "first_name": "Henry",
             "last_name": "Li",
             "email": "lyh1154@gmail.com",
-            "phone_number": "1 (503)807-9055",
+            "phone_number": "(503)8079055",
             "company_name": "Ionbeamtech",
             "site": "Beijing(北京)",
-            "role": 4,
+            "role": 3,
             "is_active": true,
-            "session_lifetime_limit_days": 2
+            "session_lifetime_limit_days": 1
         },
         {
             "id": 2,
@@ -55,6 +55,19 @@
             "company_name": "Ionbeamtech",
             "site": "Taixin(泰兴)",
             "role": 3,
+            "is_active": true,
+            "session_lifetime_limit_days": 1
+        },
+        {
+            "id": 3,
+            "login_name": "vboxuser",
+            "first_name": "Sean",
+            "last_name": "Da",
+            "email": "xda@ionbeamtech.com",
+            "phone_number": "(503)4661601",
+            "company_name": "Ionbeamtech",
+            "site": "Beijing(北京)",
+            "role": 0,
             "is_active": true,
             "session_lifetime_limit_days": 1
         }
