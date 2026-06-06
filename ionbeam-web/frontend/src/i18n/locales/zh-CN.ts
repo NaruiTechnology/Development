@@ -88,7 +88,7 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.pause.title": "结束扫描但保留画布上的部分图像",
   "scan.stop.title": "结束扫描并清空画布",
   "scan.runValidated.title": "POST /scan/{kind}/run — 返回耗时与验证报告",
-  "scan.permission.required": "RUSTER/VECTOR 扫描需要 SuperUser、Admin 或 Auditor 权限。",
+  "scan.permission.required": "RASTER/VECTOR 扫描需要 SuperUser、Admin 或 Auditor 权限。请使用发送请求按钮发送邮件。",
   "scan.roleRequest.title": "申请扫描角色",
   "scan.roleRequest.subject": "扫描角色申请",
   "scan.roleRequest.body": "请审核此账户并授予扫描权限。\n\n申请角色：{requestedRole}\n账户：{login}\n姓名：{name}\n邮箱：{email}\n站点：{site}\n当前角色：{currentRole}\n\n原因：我需要运行 RASTER/VECTOR 扫描。",

@@ -1110,10 +1110,10 @@ async function requireScanPrivilege(
 ): Promise<void> {
   try {
     const actor = await currentAdminActor(req);
-    if (!actor || !actor.is_active || actor.role < ROLE_SUPER_USER) {
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
       res.status(403).json({
         ok: false,
-        error: "RUSTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege",
+        error: "RASTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege. Please use the send request button to send emails.",
       });
       return;
     }
@@ -1126,11 +1126,11 @@ async function requireScanPrivilege(
 async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
   try {
     const actor = await currentAdminActor(req);
-    if (!actor || !actor.is_active || actor.role < ROLE_SUPER_USER) {
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
       return {
         ok: false,
         status: 403,
-        message: "RUSTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege",
+        message: "RASTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege. Please use the send request button to send emails.",
       };
     }
     return { ok: true };
@@ -1141,6 +1141,10 @@ async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } 
       message: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+function hasRasterVectorScanPrivilege(role: number): boolean {
+  return role === ROLE_SUPER_USER || role === ROLE_ADMIN || role === ROLE_AUDIT;
 }
 
 function normalizeSessionLifetimeDays(value: unknown): number {
@@ -2339,37 +2343,7 @@ async function listAdminUsersFromDb(): Promise<AdminUser[]> {
 
 async function upsertAdminUserInDb(user: AdminUser): Promise<void> {
   await ensureAdminUserSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    INSERT INTO "user" (
-      id, login_name, first_name, last_name, email,
-      phone_number, company_name, site, role, is_active, session_lifetime_limit_days
-    )
-    VALUES (
-      ${user.id ?? "DEFAULT"},
-      ${sqlString(trimForSqlNchar(user.login_name, 100))},
-      ${sqlString(trimForSqlNchar(user.first_name, 100))},
-      ${sqlString(trimForSqlNchar(user.last_name, 100))},
-      ${sqlString(trimForSqlNchar(user.email, 250))},
-      ${sqlString(trimForSqlNchar(user.phone_number, 25))},
-      ${sqlString(trimForSqlNchar(user.company_name, 150))},
-      ${sqlString(trimForSqlNchar(user.site, 150))},
-      ${Math.trunc(user.role || ROLE_USER)},
-      ${user.is_active ? "true" : "false"},
-      ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
-    )
-    ON CONFLICT (email) DO UPDATE
-       SET first_name = EXCLUDED.first_name,
-           last_name = EXCLUDED.last_name,
-           login_name = EXCLUDED.login_name,
-           phone_number = EXCLUDED.phone_number,
-           company_name = EXCLUDED.company_name,
-           site = EXCLUDED.site,
-           role = EXCLUDED.role,
-           is_active = EXCLUDED.is_active,
-           session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+  await upsertAdminUserRowsInDb([user]);
 }
 
 async function registerAdminUserInDb(user: AdminUser): Promise<RegisterAdminUserDbResult> {
@@ -2409,40 +2383,80 @@ async function registerAdminUserInDb(user: AdminUser): Promise<RegisterAdminUser
 
 async function upsertAdminUserRowsInDb(users: AdminUser[]): Promise<void> {
   await ensureAdminUserSchema();
-  const values = users
-    .map((user) => `(
-      ${user.id ?? "DEFAULT"},
-      ${sqlString(trimForSqlNchar(user.login_name, 100))},
-      ${sqlString(trimForSqlNchar(user.first_name, 100))},
-      ${sqlString(trimForSqlNchar(user.last_name, 100))},
-      ${sqlString(trimForSqlNchar(user.email, 250))},
-      ${sqlString(trimForSqlNchar(user.phone_number, 25))},
-      ${sqlString(trimForSqlNchar(user.company_name, 150))},
-      ${sqlString(trimForSqlNchar(user.site, 150))},
-      ${Math.trunc(user.role || ROLE_USER)},
-      ${user.is_active ? "true" : "false"},
-      ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
-    )`)
-    .join(",\n");
+  const usersWithId = users.filter((user) => user.id != null);
+  const usersWithoutId = users.filter((user) => user.id == null);
+  const statements: string[] = [];
+
+  if (usersWithId.length > 0) {
+    const values = usersWithId
+      .map(adminUserSqlValue)
+      .join(",\n");
+    statements.push(`
+      INSERT INTO "user" (
+        id, login_name, first_name, last_name, email,
+        phone_number, company_name, site, role, is_active, session_lifetime_limit_days
+      )
+      VALUES ${values}
+      ON CONFLICT (id) DO UPDATE
+         SET first_name = EXCLUDED.first_name,
+             last_name = EXCLUDED.last_name,
+             login_name = EXCLUDED.login_name,
+             email = EXCLUDED.email,
+             phone_number = EXCLUDED.phone_number,
+             company_name = EXCLUDED.company_name,
+             site = EXCLUDED.site,
+             role = EXCLUDED.role,
+             is_active = EXCLUDED.is_active,
+             session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
+    `);
+  }
+
+  if (usersWithoutId.length > 0) {
+    const values = usersWithoutId
+      .map(adminUserSqlValue)
+      .join(",\n");
+    statements.push(`
+      INSERT INTO "user" (
+        id, login_name, first_name, last_name, email,
+        phone_number, company_name, site, role, is_active, session_lifetime_limit_days
+      )
+      VALUES ${values}
+      ON CONFLICT (email) DO UPDATE
+         SET first_name = EXCLUDED.first_name,
+             last_name = EXCLUDED.last_name,
+             login_name = EXCLUDED.login_name,
+             phone_number = EXCLUDED.phone_number,
+             company_name = EXCLUDED.company_name,
+             site = EXCLUDED.site,
+             role = EXCLUDED.role,
+             is_active = EXCLUDED.is_active,
+             session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
+    `);
+  }
+
+  if (statements.length === 0) return;
+
   const sql = `
     SET search_path TO iobeam_admin, public;
-    INSERT INTO "user" (
-      id, login_name, first_name, last_name, email,
-      phone_number, company_name, site, role, is_active, session_lifetime_limit_days
-    )
-    VALUES ${values}
-    ON CONFLICT (email) DO UPDATE
-       SET first_name = EXCLUDED.first_name,
-           last_name = EXCLUDED.last_name,
-           login_name = EXCLUDED.login_name,
-           phone_number = EXCLUDED.phone_number,
-           company_name = EXCLUDED.company_name,
-           site = EXCLUDED.site,
-           role = EXCLUDED.role,
-           is_active = EXCLUDED.is_active,
-           session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
+    ${statements.join("\n")}
   `;
   await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+}
+
+function adminUserSqlValue(user: AdminUser): string {
+  return `(
+    ${user.id ?? "DEFAULT"},
+    ${sqlString(trimForSqlNchar(user.login_name, 100))},
+    ${sqlString(trimForSqlNchar(user.first_name, 100))},
+    ${sqlString(trimForSqlNchar(user.last_name, 100))},
+    ${sqlString(trimForSqlNchar(user.email, 250))},
+    ${sqlString(trimForSqlNchar(user.phone_number, 25))},
+    ${sqlString(trimForSqlNchar(user.company_name, 150))},
+    ${sqlString(trimForSqlNchar(user.site, 150))},
+    ${Math.trunc(user.role || ROLE_USER)},
+    ${user.is_active ? "true" : "false"},
+    ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
+  )`;
 }
 
 async function syncAdminUsersToDb(data: unknown): Promise<void> {

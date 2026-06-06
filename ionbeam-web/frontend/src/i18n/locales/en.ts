@@ -109,7 +109,7 @@ export const en = {
   "scan.pause.title": "End the scan but keep the partial image on the canvas",
   "scan.stop.title": "End the scan and clear the canvas",
   "scan.runValidated.title": "POST /scan/{kind}/run — returns timing + validation report",
-  "scan.permission.required": "RUSTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege.",
+  "scan.permission.required": "RASTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege. Please use the send request button to send emails.",
   "scan.roleRequest.title": "Request scan role",
   "scan.roleRequest.subject": "Scan role request",
   "scan.roleRequest.body": "Please review this account and grant scan permission.\n\nRequested role: {requestedRole}\nAccount: {login}\nName: {name}\nEmail: {email}\nSite: {site}\nCurrent role: {currentRole}\n\nReason: I need to run RASTER/VECTOR scans.",

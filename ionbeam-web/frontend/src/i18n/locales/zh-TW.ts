@@ -97,7 +97,7 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.pause.title": "結束掃描但保留畫布上的部分影像",
   "scan.stop.title": "結束掃描並清空畫布",
   "scan.runValidated.title": "POST /scan/{kind}/run — 回傳耗時與驗證報告",
-  "scan.permission.required": "RUSTER/VECTOR 掃描需要 SuperUser、Admin 或 Auditor 權限。",
+  "scan.permission.required": "RASTER/VECTOR 掃描需要 SuperUser、Admin 或 Auditor 權限。請使用傳送請求按鈕傳送電子郵件。",
   "scan.roleRequest.title": "申請掃描角色",
   "scan.roleRequest.subject": "掃描角色申請",
   "scan.roleRequest.body": "請審核此帳戶並授予掃描權限。\n\n申請角色：{requestedRole}\n帳戶：{login}\n姓名：{name}\n信箱：{email}\n站點：{site}\n目前角色：{currentRole}\n\n原因：我需要執行 RASTER/VECTOR 掃描。",
