@@ -72,7 +72,7 @@
             "phone_number": "(503)4661601",
             "company_name": "Ionbeamtech",
             "site": "Beijing(北京)",
-            "role": 0,
+            "role": 3,
             "is_active": true,
             "session_lifetime_limit_days": 1
         }
@@ -119,22 +119,6 @@
             "serial_number": "DB123456z",
             "site": "Taixin",
             "description": "DualBeam SEM/FIB, containing both a focused Ga+ ion beam (\"Tomahawk\") and a high resolution field emission scanning electron (\"Elstar\") column."
-        },
-        {
-            "id": 2,
-            "name": "",
-            "model": "",
-            "serial_number": "",
-            "site": "",
-            "description": ""
-        },
-        {
-            "id": 3,
-            "name": "",
-            "model": "",
-            "serial_number": "",
-            "site": "",
-            "description": ""
         }
     ],
     "session": {

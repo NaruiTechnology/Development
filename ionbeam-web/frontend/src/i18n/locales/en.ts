@@ -376,6 +376,8 @@ export const en = {
   "header.beam.ebeam.title": "Selected scan beam: e-beam",
   "header.beam.ion": "Ion Beam",
   "header.beam.ion.title": "Selected scan beam: ion beam",
+  "header.beam.on": "ON",
+  "header.beam.off": "OFF",
 
   /* ===== settings dialog ============================================ */
   "settings.title": "Configuration",
@@ -449,6 +451,7 @@ export const en = {
   "settings.admin.backupCreated": "Backup created: a verbatim copy of the original was saved beside IobeamAdmin.json.",
   "settings.admin.save.ok": "Admin configuration saved.",
   "settings.admin.restore.ok": "Admin configuration restored from backup.",
+  "settings.admin.privilegeRequired": "Current sign-in account does not have enough role privilege for this action.",
   "settings.admin.reload.title": "Re-fetch IobeamAdmin.json from disk and discard pending admin edits",
   "settings.admin.save.title": "Write the edited admin configuration to IobeamAdmin.json",
   "settings.admin.default.title": "Restore IobeamAdmin.json from its backup",

@@ -187,7 +187,7 @@ function SettingsModalShell({
   // modal - a second modal layer is heavy for a yes/no prompt.
   const [confirmSave, setConfirmSave] = useState(false);
   const [confirmDefault, setConfirmDefault] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("configuration");
+  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
 
   const busy = loading || saving || restoring;
@@ -1361,7 +1361,25 @@ function AdminTab({
   const [dbApplying, setDbApplying] = useState(false);
   const [error, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [privilegeNotice, setPrivilegeNotice] = useState<string | null>(null);
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
+  const privilegeNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showPrivilegeNotice() {
+    setNotice(null);
+    setPrivilegeNotice(t("settings.admin.privilegeRequired"));
+    if (privilegeNoticeTimer.current) clearTimeout(privilegeNoticeTimer.current);
+    privilegeNoticeTimer.current = setTimeout(() => {
+      setPrivilegeNotice(null);
+      privilegeNoticeTimer.current = null;
+    }, 3500);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (privilegeNoticeTimer.current) clearTimeout(privilegeNoticeTimer.current);
+    };
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -1492,7 +1510,7 @@ function AdminTab({
   const canManageAdminConfig = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const adminApprovalRequired =
     currentAccountRole !== null &&
-    currentAccountRole < AUDITOR_ROLE &&
+    currentAccountRole < ADMIN_ROLE &&
     adminRoleApprovalRequired(source, draft);
 
   if (loading && draft === null) {
@@ -1528,14 +1546,16 @@ function AdminTab({
           onDismiss={() => setLocalError(null)}
         />
       )}
+      {privilegeNotice && (
+        <SettingsNotice
+          tone="error"
+          volatile
+          message={privilegeNotice}
+          onDismiss={() => setPrivilegeNotice(null)}
+        />
+      )}
 
       <div className="settings-admin-subtabs" role="tablist" aria-label={t("settings.admin.subtabs.aria")}>
-        <AdminSubTabButton
-          tab="configuration"
-          active={activeSubTab}
-          label={t("settings.admin.group.configuration")}
-          onSelect={onSelectSubTab}
-        />
         <AdminSubTabButton
           tab="users"
           active={activeSubTab}
@@ -1546,6 +1566,12 @@ function AdminTab({
           tab="equipment"
           active={activeSubTab}
           label={t("settings.admin.group.equipment")}
+          onSelect={onSelectSubTab}
+        />
+        <AdminSubTabButton
+          tab="configuration"
+          active={activeSubTab}
+          label={t("settings.admin.group.configuration")}
           onSelect={onSelectSubTab}
         />
       </div>
@@ -1637,8 +1663,15 @@ function AdminTab({
         <button
           type="button"
           className="btn btn--primary"
-          onClick={() => void onApplyDatabase()}
-          disabled={busy || !canManageAdminConfig}
+          onClick={() => {
+            if (!canManageAdminConfig) {
+              showPrivilegeNotice();
+              return;
+            }
+            void onApplyDatabase();
+          }}
+          disabled={busy}
+          aria-disabled={!canManageAdminConfig}
           title={t("settings.admin.db.apply.title")}
         >
           <Icon name="tools" />
@@ -1656,8 +1689,15 @@ function AdminTab({
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={addUser}
-              disabled={busy || !canManageAdminConfig}
+              onClick={() => {
+                if (!canManageAdminConfig) {
+                  showPrivilegeNotice();
+                  return;
+                }
+                addUser();
+              }}
+              disabled={busy}
+              aria-disabled={!canManageAdminConfig}
               title={t("settings.admin.user.add.title")}
             >
               <Icon name="upload" tone="accent" />
@@ -1668,11 +1708,14 @@ function AdminTab({
             users={adminUsersFromDraft(draft)}
             sourceUsers={adminUsersFromDraft(source)}
             auditorEmails={adminRoleApprovalRecipients(draft)}
-            canApproveAdminRole={currentAccountRole !== null && currentAccountRole >= AUDITOR_ROLE}
+            canApproveAdminRole={currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE}
             disabled={busy || !canManageAdminConfig}
+            actionDisabled={busy}
+            canManage={canManageAdminConfig}
             onUpdate={updateUser}
             onPersist={() => void onSave()}
             onDelete={deleteUser}
+            onBlockedAction={showPrivilegeNotice}
             onRequestAdminApproval={(user, recipients) => {
               if (recipients.length === 0) {
                 setLocalError(t("settings.admin.user.requestAdmin.noAuditors"));
@@ -1694,8 +1737,15 @@ function AdminTab({
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={addEquipment}
-              disabled={busy || !canManageAdminConfig}
+              onClick={() => {
+                if (!canManageAdminConfig) {
+                  showPrivilegeNotice();
+                  return;
+                }
+                addEquipment();
+              }}
+              disabled={busy}
+              aria-disabled={!canManageAdminConfig}
               title={t("settings.admin.equipment.add.title")}
             >
               <Icon name="upload" tone="accent" />
@@ -1706,53 +1756,65 @@ function AdminTab({
             equipment={equipmentFromDraft(draft)}
             sourceEquipment={equipmentFromDraft(source)}
             disabled={busy || !canManageAdminConfig}
+            actionDisabled={busy}
+            canManage={canManageAdminConfig}
             onUpdate={updateEquipment}
             onPersist={() => void onSave()}
             onDelete={deleteEquipment}
+            onBlockedAction={showPrivilegeNotice}
           />
         </>
       )}
 
-      <div className="settings-footer__row">
-        <span
-          className="scan-busy"
-          data-visible={busy ? "true" : "false"}
-          aria-hidden={!busy}
-        >
-          <span className="scan-busy__spinner" />
-        </span>
-        <button
-          type="button"
-          className="btn btn--ghost"
-          onClick={() => void load()}
-          disabled={busy}
-          title={t("settings.admin.reload.title")}
-        >
-          <Icon name="refresh" tone="accent" />
-          {t("settings.reload")}
-        </button>
-        <span className="spacer" />
-        <button
-          type="button"
-          className="btn btn--warn"
-          disabled={busy || !hasBackup}
-          onClick={() => void onRestore()}
-          title={t("settings.admin.default.title")}
-        >
-          <Icon name="refresh" tone="warn" />
-          {t("settings.btn.default")}
-        </button>
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={busy || !dirty || !canManageAdminConfig || adminApprovalRequired}
-          onClick={() => void onSave()}
-          title={t("settings.admin.save.title")}
-        >
-          <Icon name="download" />
-          {t("settings.btn.saveAs")}
-        </button>
-      </div>
+      {activeSubTab === "configuration" && (
+        <div className="settings-footer__row">
+          <span
+            className="scan-busy"
+            data-visible={busy ? "true" : "false"}
+            aria-hidden={!busy}
+          >
+            <span className="scan-busy__spinner" />
+          </span>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => void load()}
+            disabled={busy}
+            title={t("settings.admin.reload.title")}
+          >
+            <Icon name="refresh" tone="accent" />
+            {t("settings.reload")}
+          </button>
+          <span className="spacer" />
+          <button
+            type="button"
+            className="btn btn--warn"
+            disabled={busy || !hasBackup}
+            onClick={() => void onRestore()}
+            title={t("settings.admin.default.title")}
+          >
+            <Icon name="refresh" tone="warn" />
+            {t("settings.btn.default")}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={busy || !dirty || adminApprovalRequired}
+            aria-disabled={!canManageAdminConfig}
+            onClick={() => {
+              if (!canManageAdminConfig) {
+                showPrivilegeNotice();
+                return;
+              }
+              void onSave();
+            }}
+            title={t("settings.admin.save.title")}
+          >
+            <Icon name="download" />
+            {t("settings.btn.saveAs")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1787,9 +1849,12 @@ function AdminUsersTable({
   auditorEmails,
   canApproveAdminRole,
   disabled,
+  actionDisabled,
+  canManage,
   onUpdate,
   onPersist,
   onDelete,
+  onBlockedAction,
   onRequestAdminApproval,
   targetAccountId,
   targetLogin,
@@ -1799,9 +1864,12 @@ function AdminUsersTable({
   auditorEmails: string[];
   canApproveAdminRole: boolean;
   disabled: boolean;
+  actionDisabled: boolean;
+  canManage: boolean;
   onUpdate: (index: number, field: keyof AdminUserRow, value: string | number | boolean | null) => void;
   onPersist: (index: number) => void;
   onDelete: (index: number) => void;
+  onBlockedAction: () => void;
   onRequestAdminApproval: (user: AdminUserRow, recipients: string[]) => void;
   targetAccountId: number | null;
   targetLogin: string | null;
@@ -1823,7 +1891,15 @@ function AdminUsersTable({
   }, [targetAccountId, targetLogin, users.length]);
 
   return (
-    <div className="settings-admin-table-wrap">
+    <div
+      className="settings-admin-table-wrap"
+      onPointerDownCapture={(event) => {
+        if (canManage) return;
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target?.closest("input, select, button")) return;
+        onBlockedAction();
+      }}
+    >
       <div className="settings-admin-table" role="table">
         <div className="settings-admin-table__head" role="row">
           <span role="columnheader">{t("settings.admin.user.id")}</span>
@@ -1969,8 +2045,15 @@ function AdminUsersTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled || !rowDirty || needsAdminApproval}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || !rowDirty || needsAdminApproval}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.user.update")}
                   title={t("settings.admin.user.update")}
                 >
@@ -1980,8 +2063,15 @@ function AdminUsersTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled || needsAdminApproval}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || needsAdminApproval}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.user.save")}
                   title={t("settings.admin.user.save")}
                 >
@@ -2003,8 +2093,15 @@ function AdminUsersTable({
               <button
                 type="button"
                 className="modal__close"
-                onClick={() => onDelete(index)}
-                disabled={disabled || users.length <= 1}
+                onClick={() => {
+                  if (!canManage) {
+                    onBlockedAction();
+                    return;
+                  }
+                  onDelete(index);
+                }}
+                disabled={actionDisabled || users.length <= 1}
+                aria-disabled={!canManage}
                 aria-label={t("settings.admin.user.delete")}
                 title={t("settings.admin.user.delete")}
               >
@@ -2023,16 +2120,22 @@ function EquipmentTable({
   equipment,
   sourceEquipment,
   disabled,
+  actionDisabled,
+  canManage,
   onUpdate,
   onPersist,
   onDelete,
+  onBlockedAction,
 }: {
   equipment: EquipmentRow[];
   sourceEquipment: EquipmentRow[];
   disabled: boolean;
+  actionDisabled: boolean;
+  canManage: boolean;
   onUpdate: (index: number, field: keyof EquipmentRow, value: string | number | null) => void;
   onPersist: (index: number) => void;
   onDelete: (index: number) => void;
+  onBlockedAction: () => void;
 }) {
   const { t } = useTranslation();
   const sourceSignatureByKey = new Map(
@@ -2043,7 +2146,15 @@ function EquipmentTable({
   );
 
   return (
-    <div className="settings-admin-table-wrap">
+    <div
+      className="settings-admin-table-wrap"
+      onPointerDownCapture={(event) => {
+        if (canManage) return;
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target?.closest("input, select, button")) return;
+        onBlockedAction();
+      }}
+    >
       <div className="settings-equipment-table" role="table">
         <div className="settings-equipment-table__head" role="row">
           <span role="columnheader">{t("settings.admin.equipment.id")}</span>
@@ -2116,8 +2227,15 @@ function EquipmentTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled || !rowDirty}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || !rowDirty}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.equipment.update")}
                   title={t("settings.admin.equipment.update")}
                 >
@@ -2127,8 +2245,15 @@ function EquipmentTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.equipment.save")}
                   title={t("settings.admin.equipment.save")}
                 >
@@ -2138,8 +2263,15 @@ function EquipmentTable({
               <button
                 type="button"
                 className="modal__close"
-                onClick={() => onDelete(index)}
-                disabled={disabled || equipment.length <= 1}
+                onClick={() => {
+                  if (!canManage) {
+                    onBlockedAction();
+                    return;
+                  }
+                  onDelete(index);
+                }}
+                disabled={actionDisabled || equipment.length <= 1}
+                aria-disabled={!canManage}
                 aria-label={t("settings.admin.equipment.delete")}
                 title={t("settings.admin.equipment.delete")}
               >
@@ -2522,15 +2654,17 @@ function FieldLabel({ label, help }: { label: string; help?: JSX.Element }) {
 
 function SettingsNotice({
   tone,
+  volatile = false,
   message,
   onDismiss,
 }: {
   tone: "info" | "success" | "error";
+  volatile?: boolean;
   message: string;
   onDismiss: () => void;
 }) {
   return (
-    <div className={`settings-notice settings-notice--${tone}`}>
+    <div className={`settings-notice settings-notice--${tone}`} data-volatile={volatile ? "true" : "false"}>
       <span className="settings-notice__message">{message}</span>
       <button
         type="button"

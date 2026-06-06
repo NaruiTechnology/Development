@@ -1116,13 +1116,6 @@ async function currentAdminActor(req?: ScanAuthRequest): Promise<AdminUser | nul
   return dbUser ?? configUser;
 }
 
-async function currentActorIsAuditor(actor: AdminUser, data?: unknown): Promise<boolean> {
-  const email = actor.email.trim().toLowerCase();
-  if (!email) return false;
-  if (data !== undefined && readAuditorEmails(data).has(email)) return true;
-  return isAuditorEmailInDb(email).catch(() => false);
-}
-
 async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown): Promise<void> {
   const actor = await currentAdminActor(req);
   if (!actor || !actor.is_active) {
@@ -1135,9 +1128,12 @@ async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown)
     throw new ConfigError("only Admin or Auditor accounts can edit admin configuration", 403);
   }
 
-  const beforeUsers = readAdminUsers(info.data);
+  const dbUsers = await listAdminUsersFromDb().catch(() => []);
+  const dbEquipment = await listEquipmentFromDb().catch(() => []);
+  const currentData = mergeAdminConfigData(info.data, dbUsers, dbEquipment);
+  const beforeUsers = readAdminUsers(currentData);
   const afterUsers = readAdminUsers(nextData);
-  const beforeEquipment = readEquipment(info.data);
+  const beforeEquipment = readEquipment(currentData);
   const afterEquipment = readEquipment(nextData);
   const changedRoleUsers = changedAdminRoleUsers(beforeUsers, afterUsers);
 
@@ -1152,9 +1148,8 @@ async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown)
 
   if (changedRoleUsers.length === 0) return;
 
-  const actorIsAuditor = actor.role >= ROLE_AUDIT && await currentActorIsAuditor(actor, info.data);
-  if (changedRoleUsers.some((u) => u.role >= ROLE_ADMIN) && !actorIsAuditor) {
-    throw new ConfigError("only active Auditor accounts can assign the Admin or Audit role", 403);
+  if (changedRoleUsers.some((u) => u.role >= ROLE_ADMIN) && actor.role < ROLE_ADMIN) {
+    throw new ConfigError("only Admin or Auditor accounts can assign the Admin or Audit role", 403);
   }
   if (changedRoleUsers.some((u) => u.role >= ROLE_SUPER_USER) && actor.role < ROLE_ADMIN) {
     throw new ConfigError("only Admin or Auditor accounts can assign the SuperUser role", 403);
@@ -2631,21 +2626,6 @@ async function syncAdminUsersToDb(data: unknown): Promise<void> {
   const users = readAdminUsers(data).filter((user) => user.login_name.trim() && user.email.trim());
   if (users.length === 0) return;
   await upsertAdminUserRowsInDb(users);
-}
-
-async function isAuditorEmailInDb(email: string): Promise<boolean> {
-  await ensureAdminUserSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    SELECT CASE WHEN EXISTS (
-      SELECT 1
-        FROM auditor
-       WHERE lower(btrim(email::text)) = lower(${sqlString(email)})
-         AND is_active = true
-    ) THEN 'true' ELSE 'false' END;
-  `;
-  const out = await runPsql(["-Atq"], config.adminDbName, sql);
-  return out.trim() === "true";
 }
 
 async function restartServicesAndRespond(

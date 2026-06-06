@@ -60,6 +60,7 @@ export function Header({
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
   const selectedBeam = useAppSelector((s) => s.status.defaults?.selected_beam);
+  const scanPhase = useAppSelector((s) => s.scan.phase);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const version = useAppSelector((s) => s.status.defaults?.version);
   const reconnecting = useAppSelector((s) => s.settings.saving);
@@ -103,6 +104,8 @@ export function Header({
       : selectedBeam === "ion"
       ? "header.beam.ion.title"
       : null;
+  const beamActive = scanPhase === "running";
+  const beamStateLabelKey = beamActive ? "header.beam.on" : "header.beam.off";
   const isSignedIn = Boolean(signedInUser);
 
   return (
@@ -143,12 +146,14 @@ export function Header({
         <span
           className="beam-pill"
           data-beam={selectedBeam}
-          title={t(beamTitleKey)}
+          data-active={beamActive ? "true" : "false"}
+          title={`${t(beamTitleKey)} - ${t(beamStateLabelKey)}`}
         >
           <span className="beam-pill__icon" aria-hidden>
             <Icon name="atom" />
           </span>
           {t(beamLabelKey)}
+          <span className="beam-pill__state">{t(beamStateLabelKey)}</span>
         </span>
       )}
 
