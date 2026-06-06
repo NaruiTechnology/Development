@@ -1099,12 +1099,42 @@ async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseAppl
   return (await r.json()) as AdminDatabaseApplyResponse;
 }
 
+async function fetchAdminDatabaseConnection(includePassword = false): Promise<AdminDatabaseConnectionResponse> {
+  const qs = includePassword ? "?include_password=1" : "";
+  const r = await fetch(`/api/admin/iobeam/db/connection${qs}`, {
+    headers: scanAuthHeaders(),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`fetch admin database connection: HTTP ${r.status} ${text}`);
+  }
+  return (await r.json()) as AdminDatabaseConnectionResponse;
+}
+
 async function restoreAdminConfig(): Promise<void> {
   const r = await fetch("/api/admin/iobeam/config/restore", { method: "POST" });
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`restore admin config: HTTP ${r.status} ${text}`);
   }
+}
+
+function writeAdminDatabaseConnection(
+  data: unknown,
+  connection: AdminDatabaseConnectionResponse["connection"],
+  includePassword: boolean,
+): unknown {
+  let next = writePath(data, ["Database", "Host"], connection.host);
+  next = writePath(next, ["Database", "Port"], connection.port);
+  next = writePath(next, ["Database", "DatabaseName"], connection.database);
+  next = writePath(next, ["Database", "User"], connection.user);
+  next = writePath(next, ["Database", "SslMode"], connection.sslMode);
+  next = writePath(next, ["Database", "ConnectionString"], connection.connectionString);
+  next = writePath(next, ["Database", "CommandTimeoutMs"], connection.commandTimeoutMs);
+  if (includePassword) {
+    next = writePath(next, ["Database", "Password"], connection.password ?? "");
+  }
+  return next;
 }
 
 interface AdminUserRow {
@@ -1143,6 +1173,21 @@ interface CurrentAccountResponse {
 interface AdminDatabaseApplyResponse {
   ok: boolean;
   steps: Array<{ name: string; ok: boolean; detail: string }>;
+}
+
+interface AdminDatabaseConnectionResponse {
+  ok: boolean;
+  connection: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: string | null;
+    password_configured: boolean;
+    sslMode: string;
+    connectionString: string;
+    commandTimeoutMs: number;
+  };
 }
 
 const ADMIN_ROLE_OPTIONS = [
@@ -1363,6 +1408,8 @@ function AdminTab({
   const [notice, setNotice] = useState<string | null>(null);
   const [privilegeNotice, setPrivilegeNotice] = useState<string | null>(null);
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
+  const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
+  const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
   const privilegeNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showPrivilegeNotice() {
@@ -1387,11 +1434,18 @@ function AdminTab({
     try {
       const info = await fetchAdminConfig();
       const accountRole = await fetchCurrentAccountRole();
+      let data = info.data;
+      const dbConnection = await fetchAdminDatabaseConnection(false).catch(() => null);
+      if (dbConnection?.ok) {
+        data = writeAdminDatabaseConnection(data, dbConnection.connection, false);
+        setDbPasswordConfigured(dbConnection.connection.password_configured);
+      }
       setSource(info.data);
-      setDraftLocal(info.data);
+      setDraftLocal(data);
       setConfigPath(info.path);
       setHasBackup(info.has_backup);
       setCurrentAccountRole(accountRole);
+      setDbPasswordVisible(false);
       setNotice(info.backup_created ? t("settings.admin.backupCreated") : null);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err));
@@ -1503,6 +1557,26 @@ function AdminTab({
     } finally {
       setDbApplying(false);
     }
+  }
+
+  async function onRevealDbPassword() {
+    if (draft === null) return;
+    if (!canManageAdminConfig) {
+      showPrivilegeNotice();
+      return;
+    }
+    try {
+      const dbConnection = await fetchAdminDatabaseConnection(true);
+      setDraftLocal(writeAdminDatabaseConnection(draft, dbConnection.connection, true));
+      setDbPasswordVisible(true);
+      setDbPasswordConfigured(dbConnection.connection.password_configured);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function onHideDbPassword() {
+    setDbPasswordVisible(false);
   }
 
   const busy = loading || saving || restoring || dbApplying;
@@ -1635,9 +1709,14 @@ function AdminTab({
           value={stringField(draft, ["Database", "User"], "")}
           onChange={(v) => set(["Database", "User"], v)}
         />
-        <TextField
+        <PasswordField
           label={t("settings.admin.db.password")}
           value={stringField(draft, ["Database", "Password"], "")}
+          visible={dbPasswordVisible}
+          configured={dbPasswordConfigured}
+          revealLabel={t("settings.admin.db.password.show")}
+          onReveal={() => void onRevealDbPassword()}
+          onHide={onHideDbPassword}
           onChange={(v) => set(["Database", "Password"], v)}
         />
         <TextField
@@ -2549,6 +2628,57 @@ function TextField({
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  visible,
+  configured,
+  revealLabel,
+  onReveal,
+  onHide,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  visible: boolean;
+  configured: boolean;
+  revealLabel: string;
+  onReveal: () => void;
+  onHide: () => void;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="field">
+      <FieldLabel label={label} />
+      <div className="settings-password-field">
+        <input
+          type={visible ? "text" : "password"}
+          className="input"
+          value={visible ? value : configured ? "********" : value}
+          readOnly={!visible && configured}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          className="modal__close settings-password-field__reveal"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            onReveal();
+          }}
+          onPointerUp={onHide}
+          onPointerLeave={onHide}
+          onPointerCancel={onHide}
+          onBlur={onHide}
+          aria-label={revealLabel}
+          title={revealLabel}
+        >
+          <Icon name="eye" tone="accent" />
+        </button>
+      </div>
     </div>
   );
 }

@@ -473,6 +473,7 @@ export const en = {
   "settings.admin.db.port": "Port",
   "settings.admin.db.user": "User",
   "settings.admin.db.password": "Password",
+  "settings.admin.db.password.show": "Show database password",
   "settings.admin.db.connectionString": "Connection string",
   "settings.admin.db.sslMode": "SSL mode",
   "settings.admin.db.timeout": "Timeout (ms)",

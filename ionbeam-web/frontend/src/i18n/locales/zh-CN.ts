@@ -381,6 +381,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.general.dumpData": "导出数据",
   "settings.general.enableEbeam": "启用电子束",
   "settings.general.enableIbeam": "启用离子束",
+  "settings.admin.db.password.show": "显示数据库密码",
   "settings.general.voltage": "Glasgow revC3 端口 A/B 的电压",
   "settings.general.frequency": "频率 (Hz)",
   "settings.general.point": "点数",

@@ -387,6 +387,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.general.dumpData": "匯出資料",
   "settings.general.enableEbeam": "啟用電子束",
   "settings.general.enableIbeam": "啟用離子束",
+  "settings.admin.db.password.show": "顯示資料庫密碼",
   "settings.general.voltage": "Glasgow revC3 連接埠 A/B 的電壓",
   "settings.general.frequency": "頻率 (Hz)",
   "settings.general.point": "點數",

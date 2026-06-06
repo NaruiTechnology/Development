@@ -31,6 +31,7 @@ import {
   applyAdminDatabaseSetup,
   pgConnectionFromAdminConfig,
   runPsql,
+  type PgConnection,
 } from "./adminDbService";
 import {
   ConfigError,
@@ -126,6 +127,21 @@ interface DbStatusResponse {
   ok: boolean;
   enabled: boolean;
   error?: string;
+}
+
+interface AdminDbConnectionResponse {
+  ok: boolean;
+  connection: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: string | null;
+    password_configured: boolean;
+    sslMode: string;
+    connectionString: string;
+    commandTimeoutMs: number;
+  };
 }
 
 interface DbApplyResponse {
@@ -304,6 +320,34 @@ app.get("/api/admin/iobeam/equipment", async (_req, res) => {
     }
   }
 });
+
+app.get(
+  "/api/admin/iobeam/db/connection",
+  async (req, res: express.Response<AdminDbConnectionResponse | ConfigSaveResponse>) => {
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can view database connection settings");
+      const info = await readAdminWithBackup();
+      const connection = pgConnectionFromAdminConfig(info.data);
+      const includePassword = String(req.query.include_password ?? "").trim() === "1";
+      res.json({
+        ok: true,
+        connection: {
+          host: connection.host,
+          port: connection.port,
+          database: connection.database,
+          user: connection.user,
+          password: includePassword ? connection.password : null,
+          password_configured: Boolean(connection.password),
+          sslMode: connection.sslMode ?? "",
+          connectionString: adminDbConnectionString(connection, includePassword),
+          commandTimeoutMs: connection.commandTimeoutMs,
+        },
+      });
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
 
 app.post(
   "/api/admin/iobeam/config/restore",
@@ -1280,6 +1324,20 @@ function equipmentSignature(equipment: Equipment): string {
     site: equipment.site.trim(),
     description: equipment.description.trim(),
   });
+}
+
+function adminDbConnectionString(
+  connection: Pick<PgConnection, "host" | "port" | "database" | "user" | "password" | "sslMode">,
+  includePassword: boolean,
+): string {
+  const authUser = encodeURIComponent(connection.user);
+  const authPassword =
+    includePassword && connection.password
+      ? `:${encodeURIComponent(connection.password)}`
+      : "";
+  const host = connection.host || "localhost";
+  const sslMode = connection.sslMode ? `?sslmode=${encodeURIComponent(connection.sslMode)}` : "";
+  return `postgresql://${authUser}${authPassword}@${host}:${connection.port}/${encodeURIComponent(connection.database)}${sslMode}`;
 }
 
 function pinsConfigEqual(left: unknown, right: unknown): boolean {

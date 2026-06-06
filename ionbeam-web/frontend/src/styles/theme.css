@@ -454,6 +454,18 @@ body {
   color: var(--c-danger);
 }
 
+.settings-password-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  gap: 6px;
+  align-items: center;
+}
+
+.settings-password-field__reveal {
+  width: 30px;
+  height: 30px;
+}
+
 .roi-source-prompt {
   margin: -4px 0 10px;
   font-size: 11px;
