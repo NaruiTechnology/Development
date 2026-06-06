@@ -46,8 +46,6 @@ import { Icon } from "./Icon";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 
 const SUPER_USER_SCAN_ROLE = 1;
-const ADMIN_SCAN_ROLE = 3;
-const AUDIT_SCAN_ROLE = 4;
 
 interface EquipmentOption {
   id: number | null;
@@ -86,10 +84,7 @@ export function ScanControls({
   const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
   const allowBitmapSimulation = !isProduction && Boolean(roiState.imageDataUrl);
-  const hasScanPrivilege =
-    userRole === SUPER_USER_SCAN_ROLE ||
-    userRole === ADMIN_SCAN_ROLE ||
-    userRole === AUDIT_SCAN_ROLE;
+  const hasScanPrivilege = userRole >= SUPER_USER_SCAN_ROLE;
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one

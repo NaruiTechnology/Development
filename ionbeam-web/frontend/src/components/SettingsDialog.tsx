@@ -187,9 +187,31 @@ function SettingsModalShell({
   // modal - a second modal layer is heavy for a yes/no prompt.
   const [confirmSave, setConfirmSave] = useState(false);
   const [confirmDefault, setConfirmDefault] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
+  const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("configuration");
+  const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
 
   const busy = loading || saving || restoring;
+  const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+
+  useEffect(() => {
+    if (targetAccountId !== null || targetLogin) {
+      setActiveSubTab("users");
+    }
+  }, [targetAccountId, targetLogin]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCurrentAccountRole()
+      .then((role) => {
+        if (!cancelled) setCurrentAccountRole(role);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentAccountRole(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function onSelectTab(tab: SettingsTab) {
     if (confirmSave) setConfirmSave(false);
@@ -334,6 +356,7 @@ function SettingsModalShell({
               setConfirmDefault(false);
               setActiveSubTab(tab);
             }}
+            canEditPins={canEditPins}
           />
         )}
       </div>
@@ -355,7 +378,7 @@ function SettingsModalShell({
             onConfirm={onConfirmDefault}
             onCancel={() => setConfirmDefault(false)}
           />
-        ) : activeTab === "admin" && (activeSubTab === "users" || activeSubTab === "equipment") ? null : (
+        ) : activeTab === "admin" ? null : (
           <div className="settings-footer__row">
             <span
               className="scan-busy"
@@ -453,6 +476,7 @@ function SettingsTabBody({
   targetLogin,
   activeSubTab,
   onSelectAdminSubTab,
+  canEditPins,
 }: {
   tab: SettingsTab;
   draft: unknown;
@@ -460,6 +484,7 @@ function SettingsTabBody({
   targetLogin: string | null;
   activeSubTab: AdminSubTab;
   onSelectAdminSubTab: (tab: AdminSubTab) => void;
+  canEditPins: boolean;
 }) {
   switch (tab) {
     case "general":
@@ -469,7 +494,7 @@ function SettingsTabBody({
     case "vector":
       return <VectorTab draft={draft} />;
     case "pins":
-      return <PinsTab draft={draft} />;
+      return <PinsTab draft={draft} disabled={!canEditPins} />;
     case "simulation":
       return <SimulationTab draft={draft} />;
     case "admin":
@@ -746,7 +771,7 @@ function VectorTab({ draft }: { draft: unknown }) {
  * any UI benefit. Operators who need an extra strobe edit the file
  * directly.
  * --------------------------------------------------------------------- */
-function PinsTab({ draft }: { draft: unknown }) {
+function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
@@ -809,12 +834,14 @@ function PinsTab({ draft }: { draft: unknown }) {
               role="cell"
               value={typeof row?.pin === "string" ? row.pin : ""}
               placeholder=""
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "pin", e.target.value)}
             />
             <select
               className="select"
               role="cell"
               value={typeof row?.direction === "string" ? row.direction : "o"}
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "direction", e.target.value)}
             >
               <option value="o">{t("settings.pins.dir.o")}</option>
@@ -826,6 +853,7 @@ function PinsTab({ draft }: { draft: unknown }) {
               type="checkbox"
               role="cell"
               checked={Boolean(row?.invert)}
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "invert", e.target.checked)}
             />
           </div>
@@ -836,6 +864,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.control.attrs.ioStandard")}
           value={controlIoStd}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "control", "attrs", "IO_STANDARD"], v)}
         />
       </div>
@@ -847,6 +876,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.data.pins")}
           value={dataPins}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "data", "pins"], v)}
         />
       </div>
@@ -857,6 +887,7 @@ function PinsTab({ draft }: { draft: unknown }) {
           <select
             className="select"
             value={dataDirection}
+            disabled={disabled}
             onChange={(e) => set([...PINS_PATH, "data", "direction"], e.target.value)}
           >
             <option value="o">{t("settings.pins.dir.o")}</option>
@@ -868,6 +899,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.data.attrs.ioStandard")}
           value={dataIoStd}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "data", "attrs", "IO_STANDARD"], v)}
         />
       </div>
@@ -1054,6 +1086,19 @@ async function saveAdminConfig(data: unknown): Promise<void> {
   }
 }
 
+async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseApplyResponse> {
+  const r = await fetch("/api/admin/iobeam/db/apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+    body: JSON.stringify({ data }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`apply admin database setup: HTTP ${r.status} ${text}`);
+  }
+  return (await r.json()) as AdminDatabaseApplyResponse;
+}
+
 async function restoreAdminConfig(): Promise<void> {
   const r = await fetch("/api/admin/iobeam/config/restore", { method: "POST" });
   if (!r.ok) {
@@ -1095,6 +1140,11 @@ interface CurrentAccountResponse {
   user: { role?: number } | null;
 }
 
+interface AdminDatabaseApplyResponse {
+  ok: boolean;
+  steps: Array<{ name: string; ok: boolean; detail: string }>;
+}
+
 const ADMIN_ROLE_OPTIONS = [
   { value: 3, key: "settings.admin.role.admin" },
   { value: 2, key: "settings.admin.role.developer" },
@@ -1104,7 +1154,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "users" | "equipment";
+type AdminSubTab = "configuration" | "users" | "equipment";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1236,6 +1286,20 @@ function adminRoleApprovalRecipients(draft: unknown): string[] {
   return [...emails];
 }
 
+function adminRoleApprovalRequired(source: unknown, draft: unknown): boolean {
+  const previousRoleByKey = new Map(
+    adminUsersFromDraft(source).map((user, index) => [
+      adminUserRowKey(user, index),
+      user.role,
+    ] as const),
+  );
+
+  return adminUsersFromDraft(draft).some((user, index) => {
+    const previousRole = previousRoleByKey.get(adminUserRowKey(user, index)) ?? 0;
+    return user.role === ADMIN_ROLE && previousRole < ADMIN_ROLE;
+  });
+}
+
 function adminRoleRequestLink(user: AdminUserRow): string {
   const url = new URL(`${window.location.origin}/`);
   url.searchParams.set("settings", "admin");
@@ -1294,6 +1358,7 @@ function AdminTab({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [dbApplying, setDbApplying] = useState(false);
   const [error, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
@@ -1406,8 +1471,29 @@ function AdminTab({
     }
   }
 
-  const busy = loading || saving || restoring;
+  async function onApplyDatabase() {
+    if (draft === null) return;
+    setDbApplying(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      const result = await applyAdminDatabaseSetup(draft);
+      setSource(draft);
+      setNotice(t("settings.admin.db.apply.ok", { steps: result.steps.map((step) => step.name).join(", ") }));
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDbApplying(false);
+    }
+  }
+
+  const busy = loading || saving || restoring || dbApplying;
   const dirty = draft !== null && draft !== source;
+  const canManageAdminConfig = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+  const adminApprovalRequired =
+    currentAccountRole !== null &&
+    currentAccountRole < AUDITOR_ROLE &&
+    adminRoleApprovalRequired(source, draft);
 
   if (loading && draft === null) {
     return <div className="settings-loading">{t("settings.admin.loading")}</div>;
@@ -1443,6 +1529,29 @@ function AdminTab({
         />
       )}
 
+      <div className="settings-admin-subtabs" role="tablist" aria-label={t("settings.admin.subtabs.aria")}>
+        <AdminSubTabButton
+          tab="configuration"
+          active={activeSubTab}
+          label={t("settings.admin.group.configuration")}
+          onSelect={onSelectSubTab}
+        />
+        <AdminSubTabButton
+          tab="users"
+          active={activeSubTab}
+          label={t("settings.admin.group.users")}
+          onSelect={onSelectSubTab}
+        />
+        <AdminSubTabButton
+          tab="equipment"
+          active={activeSubTab}
+          label={t("settings.admin.group.equipment")}
+          onSelect={onSelectSubTab}
+        />
+      </div>
+
+      {activeSubTab === "configuration" && (
+        <>
       <h4 className="settings-form__group">{t("settings.admin.group.header")}</h4>
       <div className="field-row">
         <TextField
@@ -1494,23 +1603,53 @@ function AdminTab({
           onChange={(v) => set(["Database", "Port"], v)}
         />
       </div>
-
-      <div className="settings-admin-subtabs" role="tablist" aria-label={t("settings.admin.subtabs.aria")}>
-        <AdminSubTabButton
-          tab="users"
-          active={activeSubTab}
-          label={t("settings.admin.group.users")}
-          onSelect={onSelectSubTab}
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.db.user")}
+          value={stringField(draft, ["Database", "User"], "")}
+          onChange={(v) => set(["Database", "User"], v)}
         />
-        <AdminSubTabButton
-          tab="equipment"
-          active={activeSubTab}
-          label={t("settings.admin.group.equipment")}
-          onSelect={onSelectSubTab}
+        <TextField
+          label={t("settings.admin.db.password")}
+          value={stringField(draft, ["Database", "Password"], "")}
+          onChange={(v) => set(["Database", "Password"], v)}
+        />
+        <TextField
+          label={t("settings.admin.db.sslMode")}
+          value={stringField(draft, ["Database", "SslMode"], "")}
+          onChange={(v) => set(["Database", "SslMode"], v)}
         />
       </div>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.db.connectionString")}
+          value={stringField(draft, ["Database", "ConnectionString"], "")}
+          onChange={(v) => set(["Database", "ConnectionString"], v)}
+        />
+        <NumberField
+          label={t("settings.admin.db.timeout")}
+          value={numberField(draft, ["Database", "CommandTimeoutMs"], 30000)}
+          onChange={(v) => set(["Database", "CommandTimeoutMs"], v)}
+        />
+      </div>
+      <div className="settings-form__group-row settings-form__group-row--db-apply">
+        <span />
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => void onApplyDatabase()}
+          disabled={busy || !canManageAdminConfig}
+          title={t("settings.admin.db.apply.title")}
+        >
+          <Icon name="tools" />
+          {t("settings.admin.db.apply")}
+        </button>
+      </div>
 
-      {activeSubTab === "users" ? (
+        </>
+      )}
+
+      {activeSubTab === "users" && (
         <>
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.users")}</h4>
@@ -1518,7 +1657,7 @@ function AdminTab({
               type="button"
               className="btn btn--ghost"
               onClick={addUser}
-              disabled={busy}
+              disabled={busy || !canManageAdminConfig}
               title={t("settings.admin.user.add.title")}
             >
               <Icon name="upload" tone="accent" />
@@ -1530,7 +1669,7 @@ function AdminTab({
             sourceUsers={adminUsersFromDraft(source)}
             auditorEmails={adminRoleApprovalRecipients(draft)}
             canApproveAdminRole={currentAccountRole !== null && currentAccountRole >= AUDITOR_ROLE}
-            disabled={busy}
+            disabled={busy || !canManageAdminConfig}
             onUpdate={updateUser}
             onPersist={() => void onSave()}
             onDelete={deleteUser}
@@ -1546,7 +1685,9 @@ function AdminTab({
             targetLogin={targetLogin}
           />
         </>
-      ) : (
+      )}
+
+      {activeSubTab === "equipment" && (
         <>
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.equipment")}</h4>
@@ -1554,7 +1695,7 @@ function AdminTab({
               type="button"
               className="btn btn--ghost"
               onClick={addEquipment}
-              disabled={busy}
+              disabled={busy || !canManageAdminConfig}
               title={t("settings.admin.equipment.add.title")}
             >
               <Icon name="upload" tone="accent" />
@@ -1564,43 +1705,13 @@ function AdminTab({
           <EquipmentTable
             equipment={equipmentFromDraft(draft)}
             sourceEquipment={equipmentFromDraft(source)}
-            disabled={busy}
+            disabled={busy || !canManageAdminConfig}
             onUpdate={updateEquipment}
             onPersist={() => void onSave()}
             onDelete={deleteEquipment}
           />
         </>
       )}
-
-      <h4 className="settings-form__group">{t("settings.admin.group.session")}</h4>
-      <div className="field-row">
-        <TextField
-          label={t("settings.admin.session.client")}
-          value={stringField(draft, ["session", "client_machine_name"], "")}
-          onChange={(v) => set(["session", "client_machine_name"], v)}
-        />
-        <TextField
-          label={t("settings.admin.session.loginTime")}
-          value={stringField(draft, ["session", "login_time"], "")}
-          onChange={(v) => set(["session", "login_time"], v)}
-        />
-      </div>
-      <div className="settings-flags">
-        <CheckboxField
-          label={t("settings.admin.session.authorized")}
-          value={boolField(draft, ["session", "is_autorized"], false)}
-          onChange={(v) => set(["session", "is_autorized"], v)}
-        />
-      </div>
-
-      <h4 className="settings-form__group">{t("settings.admin.group.activity")}</h4>
-      <div className="field-row">
-        <TextField
-          label={t("settings.admin.activity.type")}
-          value={stringField(draft, ["activity", "activity_type"], "")}
-          onChange={(v) => set(["activity", "activity_type"], v)}
-        />
-      </div>
 
       <div className="settings-footer__row">
         <span
@@ -1634,7 +1745,7 @@ function AdminTab({
         <button
           type="button"
           className="btn btn--primary"
-          disabled={busy || !dirty}
+          disabled={busy || !dirty || !canManageAdminConfig || adminApprovalRequired}
           onClick={() => void onSave()}
           title={t("settings.admin.save.title")}
         >
@@ -1859,7 +1970,7 @@ function AdminUsersTable({
                   type="button"
                   className="modal__close"
                   onClick={() => onPersist(index)}
-                  disabled={disabled || !rowDirty}
+                  disabled={disabled || !rowDirty || needsAdminApproval}
                   aria-label={t("settings.admin.user.update")}
                   title={t("settings.admin.user.update")}
                 >
@@ -1870,7 +1981,7 @@ function AdminUsersTable({
                   type="button"
                   className="modal__close"
                   onClick={() => onPersist(index)}
-                  disabled={disabled}
+                  disabled={disabled || needsAdminApproval}
                   aria-label={t("settings.admin.user.save")}
                   title={t("settings.admin.user.save")}
                 >
@@ -2287,11 +2398,13 @@ function TextField({
   label,
   help,
   value,
+  disabled = false,
   onChange,
 }: {
   label: string;
   help?: JSX.Element;
   value: string;
+  disabled?: boolean;
   onChange: (v: string) => void;
 }) {
   return (
@@ -2301,6 +2414,7 @@ function TextField({
         type="text"
         className="input"
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
     </div>

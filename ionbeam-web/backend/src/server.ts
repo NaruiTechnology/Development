@@ -28,6 +28,11 @@ import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
 import {
+  applyAdminDatabaseSetup,
+  pgConnectionFromAdminConfig,
+  runPsql,
+} from "./adminDbService";
+import {
   ConfigError,
   type RestartResult,
   readAdminWithBackup,
@@ -123,6 +128,21 @@ interface DbStatusResponse {
   error?: string;
 }
 
+interface DbApplyResponse {
+  ok: boolean;
+  connection?: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: boolean;
+    sslMode?: string | null;
+    commandTimeoutMs: number;
+  };
+  steps?: Array<{ name: string; ok: boolean; detail: string }>;
+  error?: string;
+}
+
 const smsChallenges = new Map<string, SmsChallenge>();
 const SMS_CODE_TTL_MS = 5 * 60 * 1000;
 const ROLE_USER = 0;
@@ -148,8 +168,6 @@ const DEFAULT_SITE = SITE_OPTIONS[0];
 let adminSessionSchemaReady: Promise<void> | null = null;
 let adminUserSchemaReady: Promise<void> | null = null;
 let adminEquipmentSchemaReady: Promise<void> | null = null;
-let adminDbBackoffUntil = 0;
-const ADMIN_DB_BACKOFF_MS = 15_000;
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "256mb" })); // scan DB flow may post large CSV/PNG blobs
@@ -193,6 +211,7 @@ app.post("/api/admin/config", async (req, res) => {
   }
 
   try {
+    await authorizeStreamConfigSave(req, data);
     await writeConfig(data);
   } catch (err) {
     sendConfigError(res, err);
@@ -204,6 +223,7 @@ app.post("/api/admin/config", async (req, res) => {
 
 app.post("/api/admin/config/restore", async (_req, res) => {
   try {
+    await requireAdminPrivilege(_req, "only Admin or Auditor accounts can restore stream configuration");
     await restoreFromBackup();
   } catch (err) {
     sendConfigError(res, err);
@@ -568,6 +588,38 @@ app.get(
         enabled: false,
         error: err instanceof Error ? err.message : String(err),
       });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/iobeam/db/apply",
+  async (req, res: express.Response<DbApplyResponse>) => {
+    const data =
+      req.body && typeof req.body === "object" && "data" in req.body
+        ? (req.body as { data: unknown }).data
+        : req.body;
+
+    if (data === undefined || data === null) {
+      res.status(400).json({
+        ok: false,
+        error: "missing JSON body: expected { data: <adminConfig> }",
+      });
+      return;
+    }
+
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can apply database setup");
+      await authorizeAdminConfigSave(req, data);
+      const connection = pgConnectionFromAdminConfig(data);
+      const setup = await applyAdminDatabaseSetup({
+        connection,
+        roleName: connection.user,
+      });
+      await writeAdminConfig(data);
+      res.json(setup);
+    } catch (err) {
+      sendConfigError(res, err);
     }
   },
 );
@@ -1079,28 +1131,49 @@ async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown)
   }
 
   const info = await readAdminWithBackup();
-  const beforeUsers = new Map(
-    readAdminUsers(info.data)
-      .filter((u) => Number.isInteger(u.id))
-      .map((u) => [u.id, u] as const),
-  );
+  if (actor.role < ROLE_ADMIN) {
+    throw new ConfigError("only Admin or Auditor accounts can edit admin configuration", 403);
+  }
+
+  const beforeUsers = readAdminUsers(info.data);
   const afterUsers = readAdminUsers(nextData);
-  const changedRoleUsers = afterUsers.filter((after) => {
-    const before = beforeUsers.get(after.id);
-    return !before || before.role !== after.role;
-  });
+  const beforeEquipment = readEquipment(info.data);
+  const afterEquipment = readEquipment(nextData);
+  const changedRoleUsers = changedAdminRoleUsers(beforeUsers, afterUsers);
+
+  if (
+    !adminUserCollectionsEqual(beforeUsers, afterUsers) ||
+    !equipmentCollectionsEqual(beforeEquipment, afterEquipment)
+  ) {
+    if (actor.role < ROLE_ADMIN) {
+      throw new ConfigError("only Admin or Auditor accounts can edit users or equipment", 403);
+    }
+  }
+
   if (changedRoleUsers.length === 0) return;
 
-  const actorIsAuditor = actor.role >= ROLE_AUDIT && await currentActorIsAuditor(actor, nextData);
+  const actorIsAuditor = actor.role >= ROLE_AUDIT && await currentActorIsAuditor(actor, info.data);
   if (changedRoleUsers.some((u) => u.role >= ROLE_ADMIN) && !actorIsAuditor) {
     throw new ConfigError("only active Auditor accounts can assign the Admin or Audit role", 403);
   }
-  if (actor.role < ROLE_ADMIN) {
-    throw new ConfigError("only Admin or Auditor accounts can assign account roles", 403);
+  if (changedRoleUsers.some((u) => u.role >= ROLE_SUPER_USER) && actor.role < ROLE_ADMIN) {
+    throw new ConfigError("only Admin or Auditor accounts can assign the SuperUser role", 403);
   }
-  if (!actorIsAuditor && changedRoleUsers.some((u) => u.role >= ROLE_ADMIN)) {
-    throw new ConfigError("Admin accounts can assign only lower-privilege roles", 403);
+}
+
+async function authorizeStreamConfigSave(req: ScanAuthRequest, nextData: unknown): Promise<void> {
+  const info = await readWithBackup();
+  if (!pinsConfigEqual(info.data, nextData)) {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can edit PINS");
   }
+}
+
+async function requireAdminPrivilege(req: ScanAuthRequest, message: string): Promise<AdminUser> {
+  const actor = await currentAdminActor(req);
+  if (!actor || !actor.is_active || actor.role < ROLE_ADMIN) {
+    throw new ConfigError(message, 403);
+  }
+  return actor;
 }
 
 async function requireScanPrivilege(
@@ -1113,7 +1186,7 @@ async function requireScanPrivilege(
     if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
       res.status(403).json({
         ok: false,
-        error: "RASTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege. Please use the send request button to send emails.",
+        error: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
       });
       return;
     }
@@ -1130,7 +1203,7 @@ async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } 
       return {
         ok: false,
         status: 403,
-        message: "RASTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege. Please use the send request button to send emails.",
+        message: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
       };
     }
     return { ok: true };
@@ -1144,7 +1217,102 @@ async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } 
 }
 
 function hasRasterVectorScanPrivilege(role: number): boolean {
-  return role === ROLE_SUPER_USER || role === ROLE_ADMIN || role === ROLE_AUDIT;
+  return role >= ROLE_SUPER_USER;
+}
+
+function changedAdminRoleUsers(beforeUsers: AdminUser[], afterUsers: AdminUser[]): AdminUser[] {
+  const beforeByKey = new Map(beforeUsers.map((user) => [adminUserComparisonKey(user), user] as const));
+  return afterUsers.filter((after) => {
+    const before = beforeByKey.get(adminUserComparisonKey(after));
+    return !before || before.role !== after.role;
+  });
+}
+
+function adminUserCollectionsEqual(left: AdminUser[], right: AdminUser[]): boolean {
+  return normalizedSignatures(left, adminUserComparisonKey, adminUserSignature).join("\n") ===
+    normalizedSignatures(right, adminUserComparisonKey, adminUserSignature).join("\n");
+}
+
+function equipmentCollectionsEqual(left: Equipment[], right: Equipment[]): boolean {
+  return normalizedSignatures(left, equipmentComparisonKey, equipmentSignature).join("\n") ===
+    normalizedSignatures(right, equipmentComparisonKey, equipmentSignature).join("\n");
+}
+
+function normalizedSignatures<T>(
+  rows: T[],
+  key: (row: T, index: number) => string,
+  signature: (row: T) => string,
+): string[] {
+  return rows.map((row, index) => `${key(row, index)}:${signature(row)}`).sort();
+}
+
+function adminUserComparisonKey(user: AdminUser, index = 0): string {
+  if (user.id != null) return `id:${user.id}`;
+  const email = user.email.trim().toLowerCase();
+  if (email) return `email:${email}`;
+  return `index:${index}`;
+}
+
+function adminUserSignature(user: AdminUser): string {
+  return JSON.stringify({
+    id: user.id,
+    login_name: user.login_name.trim(),
+    first_name: user.first_name.trim(),
+    last_name: user.last_name.trim(),
+    email: user.email.trim().toLowerCase(),
+    phone_number: user.phone_number.trim(),
+    company_name: user.company_name.trim(),
+    site: user.site,
+    role: user.role,
+    is_active: user.is_active,
+    session_lifetime_limit_days: user.session_lifetime_limit_days,
+  });
+}
+
+function equipmentComparisonKey(equipment: Equipment, index = 0): string {
+  if (equipment.id != null) return `id:${equipment.id}`;
+  const serialNumber = equipment.serial_number.trim().toLowerCase();
+  if (serialNumber) return `serial:${serialNumber}`;
+  return `index:${index}`;
+}
+
+function equipmentSignature(equipment: Equipment): string {
+  return JSON.stringify({
+    id: equipment.id,
+    name: equipment.name.trim(),
+    model: equipment.model.trim(),
+    serial_number: equipment.serial_number.trim().toLowerCase(),
+    site: equipment.site.trim(),
+    description: equipment.description.trim(),
+  });
+}
+
+function pinsConfigEqual(left: unknown, right: unknown): boolean {
+  return stableJson(readStreamPins(left)) === stableJson(readStreamPins(right));
+}
+
+function readStreamPins(data: unknown): unknown {
+  return readConfigPath(data, ["Actions", 0, "streamData", "actionData", "pins"]);
+}
+
+function readConfigPath(data: unknown, pathParts: ReadonlyArray<string | number>): unknown {
+  let current = data;
+  for (const part of pathParts) {
+    if (!current || typeof current !== "object") return undefined;
+    current = (current as Record<string | number, unknown>)[part];
+  }
+  return current;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function normalizeSessionLifetimeDays(value: unknown): number {
@@ -2478,107 +2646,6 @@ async function isAuditorEmailInDb(email: string): Promise<boolean> {
   `;
   const out = await runPsql(["-Atq"], config.adminDbName, sql);
   return out.trim() === "true";
-}
-
-function runPsql(
-  args: string[],
-  database = config.adminDbName,
-  stdin?: string,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (Date.now() < adminDbBackoffUntil) {
-      reject(
-        new Error(
-          `psql temporarily unavailable for ${config.adminDbHost}:${config.adminDbPort}/${database} after a recent connection failure`,
-        ),
-      );
-      return;
-    }
-    let settled = false;
-    const child = spawn(
-      "psql",
-      [
-        "-h",
-        config.adminDbHost,
-        "-p",
-        String(config.adminDbPort),
-        "-U",
-        config.adminDbUser,
-        "-d",
-        database,
-        ...args,
-      ],
-      {
-        env: {
-          ...process.env,
-          ...(config.adminDbPassword ? { PGPASSWORD: config.adminDbPassword } : {}),
-          PGCONNECT_TIMEOUT: String(
-            Math.max(1, Math.ceil(config.adminDbCommandTimeoutMs / 1000)),
-          ),
-        },
-        stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-      },
-    );
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      child.kill("SIGTERM");
-      adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
-      reject(
-        new Error(
-          `psql timed out after ${config.adminDbCommandTimeoutMs}ms connecting to ${config.adminDbHost}:${config.adminDbPort}/${database}`,
-        ),
-      );
-    }, config.adminDbCommandTimeoutMs);
-
-    function finish(fn: () => void): void {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      fn();
-    }
-
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.setEncoding("utf8");
-    child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr?.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    if (stdin !== undefined) {
-      child.stdin?.setDefaultEncoding("utf8");
-      child.stdin?.end(stdin);
-    }
-    child.on("error", (err) => {
-      finish(() => {
-        if (isDbConnectivityError(err.message)) {
-          adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
-        }
-        reject(err);
-      });
-    });
-    child.on("close", (code) => {
-      finish(() => {
-        if (code === 0) {
-          adminDbBackoffUntil = 0;
-          resolve(stdout);
-          return;
-        }
-        const message = stderr.trim() || `psql exited with code ${code}`;
-        if (isDbConnectivityError(message)) {
-          adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
-        }
-        reject(new Error(message));
-      });
-    });
-  });
-}
-
-function isDbConnectivityError(message: string): boolean {
-  return /timed out after|could not connect to server|connection refused|timeout/i.test(message);
 }
 
 async function restartServicesAndRespond(

@@ -2051,6 +2051,10 @@ body {
   margin-top: 16px;
 }
 
+.settings-form__group-row--db-apply {
+  margin-bottom: 10px;
+}
+
 .settings-form__group-row .settings-form__group {
   margin: 0;
 }
