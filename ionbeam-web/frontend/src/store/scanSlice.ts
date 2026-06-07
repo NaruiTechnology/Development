@@ -264,7 +264,7 @@ export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
       body: JSON.stringify(req),
       signal,
     });
-    if (!r.ok) throw new Error(`raster run: HTTP ${r.status} ${await r.text()}`);
+    if (!r.ok) throw new Error(await scanRunErrorMessage(r, "raster run"));
     const result = (await r.json()) as ScanResult;
     recordScanActivity("raster");
     return result;
@@ -280,12 +280,24 @@ export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
       body: JSON.stringify(req),
       signal,
     });
-    if (!r.ok) throw new Error(`vector run: HTTP ${r.status} ${await r.text()}`);
+    if (!r.ok) throw new Error(await scanRunErrorMessage(r, "vector run"));
     const result = (await r.json()) as ScanResult;
     recordScanActivity("vector");
     return result;
   }
 );
+
+async function scanRunErrorMessage(response: Response, prefix: string): Promise<string> {
+  const text = await response.text();
+  try {
+    const data = JSON.parse(text) as { error?: unknown; message?: unknown };
+    const message = typeof data.error === "string" ? data.error : typeof data.message === "string" ? data.message : "";
+    if (message) return message;
+  } catch {
+    /* fall through to HTTP detail */
+  }
+  return `${prefix}: HTTP ${response.status}${text ? ` ${text}` : ""}`;
+}
 
 const slice = createSlice({
   name: "scan",

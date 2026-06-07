@@ -10,9 +10,9 @@
         "Schema": "public",
         "Host": "localhost",
         "Port": 5432,
-        "User": "",
+        "User": "postgres",
         "Password": "",
-        "ConnectionString": "",
+        "ConnectionString": "postgresql://postgres@localhost:5432/iobeam_admin",
         "SslMode": "",
         "CommandTimeoutMs": 30000
     },
@@ -59,7 +59,7 @@
             "phone_number": "86 (55)12341234",
             "company_name": "Ionbeamtech",
             "site": "Taixin(泰兴)",
-            "role": 3,
+            "role": 1,
             "is_active": true,
             "session_lifetime_limit_days": 1
         },
@@ -72,7 +72,7 @@
             "phone_number": "(503)4661601",
             "company_name": "Ionbeamtech",
             "site": "Beijing(北京)",
-            "role": 3,
+            "role": 1,
             "is_active": true,
             "session_lifetime_limit_days": 1
         }

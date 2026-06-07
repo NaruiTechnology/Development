@@ -148,6 +148,12 @@
                 "transactionComplete": false,
                 "actionData": {
                     "databaseName": "iobeam_admin",
+                    "databaseOwnerRole": "iobeam_admin_owner",
+                    "databaseOwnerMembers": [
+                        "lyh1154@gmail.com",
+                        "yuyao.jiang@ionbeamtech.com"
+                    ],
+                    "adminConfigFile": "Development/IobeamAdmin/Json/IobeamAdmin.json",
                     "schemaFile": "Development/IobeamAdmin/Sql/001_schema.sql",
                     "seedFile": "Development/IobeamAdmin/Sql/002_seed_root_user.sql"
                 },
