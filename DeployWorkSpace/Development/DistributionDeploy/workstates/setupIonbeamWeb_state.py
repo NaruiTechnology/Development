@@ -5,6 +5,7 @@
 # long-running dev servers.
 #-------------------------------------------------------------------------------
 import asyncio
+import json
 import os
 
 from buildingblocks.decorators import overrides
@@ -92,8 +93,14 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         deployRoot = self.resolveDeployPath(".")
         token = os.environ.get("GLASGOW_TOKEN", "").strip()
         backendHost = str(actionData.get("backendHost", "127.0.0.1") or "127.0.0.1").strip()
-        dbHost = str(actionData.get("adminDbHost", "/var/run/postgresql") or "/var/run/postgresql").strip()
-        dbName = str(actionData.get("adminDbName", "iobeam_admin") or "iobeam_admin").strip()
+        dbConfig = self._readAdminDbConfig(actionData)
+        dbHost = str(actionData.get("adminDbHost") or dbConfig.get("Host") or "localhost").strip()
+        dbPort = int(actionData.get("adminDbPort") or dbConfig.get("Port") or 5432)
+        dbName = str(actionData.get("adminDbName") or dbConfig.get("DatabaseName") or "iobeam_admin").strip()
+        dbUser = str(actionData.get("adminDbUser") or dbConfig.get("User") or "iobeam_admin_app").strip()
+        dbPassword = str(actionData.get("adminDbPassword") or dbConfig.get("Password") or "").strip()
+        dbSslMode = str(actionData.get("adminDbSslMode") or dbConfig.get("SslMode") or "").strip()
+        dbTimeout = int(actionData.get("adminDbCommandTimeoutMs") or dbConfig.get("CommandTimeoutMs") or 30000)
         lines = [
             "PROXY_TARGET_HTTP=http://127.0.0.1:8765",
             "PROXY_TARGET_WS=ws://127.0.0.1:8765",
@@ -107,8 +114,16 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             "IOBEAM_ADMIN_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "IobeamAdmin", "Json", "IobeamAdmin.json"))),
             "IOBEAM_ADMIN_DB_HOST={}".format(dbHost),
-            "IOBEAM_ADMIN_DB_PORT=5432",
+            "IOBEAM_ADMIN_DB_PORT={}".format(dbPort),
             "IOBEAM_ADMIN_DB_NAME={}".format(dbName),
+            "IOBEAM_ADMIN_DB_USER={}".format(dbUser),
+        ]
+        if dbPassword:
+            lines.append("IOBEAM_ADMIN_DB_PASSWORD={}".format(dbPassword))
+        if dbSslMode:
+            lines.append("IOBEAM_ADMIN_DB_SSLMODE={}".format(dbSslMode))
+        lines.append("IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS={}".format(dbTimeout))
+        lines.extend([
             "GLASGOW_RESTART_CMD={}".format(
                 os.path.join(backendDir, "scripts", "restart-glasgow-service.sh")),
             "IONBEAM_BACKEND_RESTART_CMD={}".format(
@@ -116,11 +131,27 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             "GLASGOW_PROJECT_ROOT={}".format(deployRoot),
             "GLASGOW_CONFIG_STRICT=0",
             "",
-        ]
+        ])
         with open(envFile, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
         self.info("[{}] wrote deployment backend env: {}"
                   .format(type(self).__name__, envFile))
+
+    def _readAdminDbConfig(self, actionData):
+        configFile = actionData.get(
+            "adminDbConfigFile", "Development/IobeamAdmin/Json/IobeamAdminDb.json")
+        configPath = self.resolveDeployPath(configFile)
+        try:
+            with open(configPath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                return {}
+            db = data.get("Database")
+            return db if isinstance(db, dict) else data
+        except Exception as e:
+            self.warn("[{}] could not read DB config from {}: {}"
+                      .format(type(self).__name__, configPath, e))
+            return {}
 
     def _wrapNodeCommand(self, cmd, useNvm):
         if not useNvm:
@@ -162,7 +193,3 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                            .format(type(self).__name__, timeout, cmd))
                 return False
         return await self.commandAsyncio(cmd, runDir, verbose=True)
-
-
-def _current_login():
-    return os.environ.get("USER") or os.environ.get("LOGNAME") or "postgres"

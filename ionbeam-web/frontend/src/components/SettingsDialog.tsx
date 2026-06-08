@@ -188,8 +188,30 @@ function SettingsModalShell({
   const [confirmSave, setConfirmSave] = useState(false);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
+  const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
 
   const busy = loading || saving || restoring;
+  const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+
+  useEffect(() => {
+    if (targetAccountId !== null || targetLogin) {
+      setActiveSubTab("users");
+    }
+  }, [targetAccountId, targetLogin]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCurrentAccountRole()
+      .then((role) => {
+        if (!cancelled) setCurrentAccountRole(role);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentAccountRole(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function onSelectTab(tab: SettingsTab) {
     if (confirmSave) setConfirmSave(false);
@@ -334,6 +356,7 @@ function SettingsModalShell({
               setConfirmDefault(false);
               setActiveSubTab(tab);
             }}
+            canEditPins={canEditPins}
           />
         )}
       </div>
@@ -355,7 +378,7 @@ function SettingsModalShell({
             onConfirm={onConfirmDefault}
             onCancel={() => setConfirmDefault(false)}
           />
-        ) : activeTab === "admin" && (activeSubTab === "users" || activeSubTab === "equipment") ? null : (
+        ) : activeTab === "admin" ? null : (
           <div className="settings-footer__row">
             <span
               className="scan-busy"
@@ -453,6 +476,7 @@ function SettingsTabBody({
   targetLogin,
   activeSubTab,
   onSelectAdminSubTab,
+  canEditPins,
 }: {
   tab: SettingsTab;
   draft: unknown;
@@ -460,6 +484,7 @@ function SettingsTabBody({
   targetLogin: string | null;
   activeSubTab: AdminSubTab;
   onSelectAdminSubTab: (tab: AdminSubTab) => void;
+  canEditPins: boolean;
 }) {
   switch (tab) {
     case "general":
@@ -469,7 +494,7 @@ function SettingsTabBody({
     case "vector":
       return <VectorTab draft={draft} />;
     case "pins":
-      return <PinsTab draft={draft} />;
+      return <PinsTab draft={draft} disabled={!canEditPins} />;
     case "simulation":
       return <SimulationTab draft={draft} />;
     case "admin":
@@ -746,7 +771,7 @@ function VectorTab({ draft }: { draft: unknown }) {
  * any UI benefit. Operators who need an extra strobe edit the file
  * directly.
  * --------------------------------------------------------------------- */
-function PinsTab({ draft }: { draft: unknown }) {
+function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
@@ -809,12 +834,14 @@ function PinsTab({ draft }: { draft: unknown }) {
               role="cell"
               value={typeof row?.pin === "string" ? row.pin : ""}
               placeholder=""
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "pin", e.target.value)}
             />
             <select
               className="select"
               role="cell"
               value={typeof row?.direction === "string" ? row.direction : "o"}
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "direction", e.target.value)}
             >
               <option value="o">{t("settings.pins.dir.o")}</option>
@@ -826,6 +853,7 @@ function PinsTab({ draft }: { draft: unknown }) {
               type="checkbox"
               role="cell"
               checked={Boolean(row?.invert)}
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "invert", e.target.checked)}
             />
           </div>
@@ -836,6 +864,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.control.attrs.ioStandard")}
           value={controlIoStd}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "control", "attrs", "IO_STANDARD"], v)}
         />
       </div>
@@ -847,6 +876,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.data.pins")}
           value={dataPins}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "data", "pins"], v)}
         />
       </div>
@@ -857,6 +887,7 @@ function PinsTab({ draft }: { draft: unknown }) {
           <select
             className="select"
             value={dataDirection}
+            disabled={disabled}
             onChange={(e) => set([...PINS_PATH, "data", "direction"], e.target.value)}
           >
             <option value="o">{t("settings.pins.dir.o")}</option>
@@ -868,6 +899,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.data.attrs.ioStandard")}
           value={dataIoStd}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "data", "attrs", "IO_STANDARD"], v)}
         />
       </div>
@@ -1054,12 +1086,55 @@ async function saveAdminConfig(data: unknown): Promise<void> {
   }
 }
 
+async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseApplyResponse> {
+  const r = await fetch("/api/admin/iobeam/db/apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+    body: JSON.stringify({ data }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`apply admin database setup: HTTP ${r.status} ${text}`);
+  }
+  return (await r.json()) as AdminDatabaseApplyResponse;
+}
+
+async function fetchAdminDatabaseConnection(includePassword = false): Promise<AdminDatabaseConnectionResponse> {
+  const qs = includePassword ? "?include_password=1" : "";
+  const r = await fetch(`/api/admin/iobeam/db/connection${qs}`, {
+    headers: scanAuthHeaders(),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`fetch admin database connection: HTTP ${r.status} ${text}`);
+  }
+  return (await r.json()) as AdminDatabaseConnectionResponse;
+}
+
 async function restoreAdminConfig(): Promise<void> {
   const r = await fetch("/api/admin/iobeam/config/restore", { method: "POST" });
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`restore admin config: HTTP ${r.status} ${text}`);
   }
+}
+
+function writeAdminDatabaseConnection(
+  data: unknown,
+  connection: AdminDatabaseConnectionResponse["connection"],
+  includePassword: boolean,
+): unknown {
+  let next = writePath(data, ["Database", "Host"], connection.host);
+  next = writePath(next, ["Database", "Port"], connection.port);
+  next = writePath(next, ["Database", "DatabaseName"], connection.database);
+  next = writePath(next, ["Database", "User"], connection.user);
+  next = writePath(next, ["Database", "SslMode"], connection.sslMode);
+  next = writePath(next, ["Database", "ConnectionString"], connection.connectionString);
+  next = writePath(next, ["Database", "CommandTimeoutMs"], connection.commandTimeoutMs);
+  if (includePassword) {
+    next = writePath(next, ["Database", "Password"], connection.password ?? "");
+  }
+  return next;
 }
 
 interface AdminUserRow {
@@ -1095,6 +1170,26 @@ interface CurrentAccountResponse {
   user: { role?: number } | null;
 }
 
+interface AdminDatabaseApplyResponse {
+  ok: boolean;
+  steps: Array<{ name: string; ok: boolean; detail: string }>;
+}
+
+interface AdminDatabaseConnectionResponse {
+  ok: boolean;
+  connection: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: string | null;
+    password_configured: boolean;
+    sslMode: string;
+    connectionString: string;
+    commandTimeoutMs: number;
+  };
+}
+
 const ADMIN_ROLE_OPTIONS = [
   { value: 3, key: "settings.admin.role.admin" },
   { value: 2, key: "settings.admin.role.developer" },
@@ -1104,7 +1199,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "users" | "equipment";
+type AdminSubTab = "configuration" | "users" | "equipment";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1236,6 +1331,20 @@ function adminRoleApprovalRecipients(draft: unknown): string[] {
   return [...emails];
 }
 
+function adminRoleApprovalRequired(source: unknown, draft: unknown): boolean {
+  const previousRoleByKey = new Map(
+    adminUsersFromDraft(source).map((user, index) => [
+      adminUserRowKey(user, index),
+      user.role,
+    ] as const),
+  );
+
+  return adminUsersFromDraft(draft).some((user, index) => {
+    const previousRole = previousRoleByKey.get(adminUserRowKey(user, index)) ?? 0;
+    return user.role === ADMIN_ROLE && previousRole < ADMIN_ROLE;
+  });
+}
+
 function adminRoleRequestLink(user: AdminUserRow): string {
   const url = new URL(`${window.location.origin}/`);
   url.searchParams.set("settings", "admin");
@@ -1294,9 +1403,30 @@ function AdminTab({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [dbApplying, setDbApplying] = useState(false);
   const [error, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [privilegeNotice, setPrivilegeNotice] = useState<string | null>(null);
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
+  const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
+  const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
+  const privilegeNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showPrivilegeNotice() {
+    setNotice(null);
+    setPrivilegeNotice(t("settings.admin.privilegeRequired"));
+    if (privilegeNoticeTimer.current) clearTimeout(privilegeNoticeTimer.current);
+    privilegeNoticeTimer.current = setTimeout(() => {
+      setPrivilegeNotice(null);
+      privilegeNoticeTimer.current = null;
+    }, 3500);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (privilegeNoticeTimer.current) clearTimeout(privilegeNoticeTimer.current);
+    };
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -1304,11 +1434,18 @@ function AdminTab({
     try {
       const info = await fetchAdminConfig();
       const accountRole = await fetchCurrentAccountRole();
+      let data = info.data;
+      const dbConnection = await fetchAdminDatabaseConnection(false).catch(() => null);
+      if (dbConnection?.ok) {
+        data = writeAdminDatabaseConnection(data, dbConnection.connection, false);
+        setDbPasswordConfigured(dbConnection.connection.password_configured);
+      }
       setSource(info.data);
-      setDraftLocal(info.data);
+      setDraftLocal(data);
       setConfigPath(info.path);
       setHasBackup(info.has_backup);
       setCurrentAccountRole(accountRole);
+      setDbPasswordVisible(false);
       setNotice(info.backup_created ? t("settings.admin.backupCreated") : null);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err));
@@ -1406,8 +1543,49 @@ function AdminTab({
     }
   }
 
-  const busy = loading || saving || restoring;
+  async function onApplyDatabase() {
+    if (draft === null) return;
+    setDbApplying(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      const result = await applyAdminDatabaseSetup(draft);
+      setSource(draft);
+      setNotice(t("settings.admin.db.apply.ok", { steps: result.steps.map((step) => step.name).join(", ") }));
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDbApplying(false);
+    }
+  }
+
+  async function onRevealDbPassword() {
+    if (draft === null) return;
+    if (!canManageAdminConfig) {
+      showPrivilegeNotice();
+      return;
+    }
+    try {
+      const dbConnection = await fetchAdminDatabaseConnection(true);
+      setDraftLocal(writeAdminDatabaseConnection(draft, dbConnection.connection, true));
+      setDbPasswordVisible(true);
+      setDbPasswordConfigured(dbConnection.connection.password_configured);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function onHideDbPassword() {
+    setDbPasswordVisible(false);
+  }
+
+  const busy = loading || saving || restoring || dbApplying;
   const dirty = draft !== null && draft !== source;
+  const canManageAdminConfig = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+  const adminApprovalRequired =
+    currentAccountRole !== null &&
+    currentAccountRole < ADMIN_ROLE &&
+    adminRoleApprovalRequired(source, draft);
 
   if (loading && draft === null) {
     return <div className="settings-loading">{t("settings.admin.loading")}</div>;
@@ -1442,7 +1620,38 @@ function AdminTab({
           onDismiss={() => setLocalError(null)}
         />
       )}
+      {privilegeNotice && (
+        <SettingsNotice
+          tone="error"
+          volatile
+          message={privilegeNotice}
+          onDismiss={() => setPrivilegeNotice(null)}
+        />
+      )}
 
+      <div className="settings-admin-subtabs" role="tablist" aria-label={t("settings.admin.subtabs.aria")}>
+        <AdminSubTabButton
+          tab="users"
+          active={activeSubTab}
+          label={t("settings.admin.group.users")}
+          onSelect={onSelectSubTab}
+        />
+        <AdminSubTabButton
+          tab="equipment"
+          active={activeSubTab}
+          label={t("settings.admin.group.equipment")}
+          onSelect={onSelectSubTab}
+        />
+        <AdminSubTabButton
+          tab="configuration"
+          active={activeSubTab}
+          label={t("settings.admin.group.configuration")}
+          onSelect={onSelectSubTab}
+        />
+      </div>
+
+      {activeSubTab === "configuration" && (
+        <>
       <h4 className="settings-form__group">{t("settings.admin.group.header")}</h4>
       <div className="field-row">
         <TextField
@@ -1494,31 +1703,80 @@ function AdminTab({
           onChange={(v) => set(["Database", "Port"], v)}
         />
       </div>
-
-      <div className="settings-admin-subtabs" role="tablist" aria-label={t("settings.admin.subtabs.aria")}>
-        <AdminSubTabButton
-          tab="users"
-          active={activeSubTab}
-          label={t("settings.admin.group.users")}
-          onSelect={onSelectSubTab}
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.db.user")}
+          value={stringField(draft, ["Database", "User"], "")}
+          onChange={(v) => set(["Database", "User"], v)}
         />
-        <AdminSubTabButton
-          tab="equipment"
-          active={activeSubTab}
-          label={t("settings.admin.group.equipment")}
-          onSelect={onSelectSubTab}
+        <PasswordField
+          label={t("settings.admin.db.password")}
+          value={stringField(draft, ["Database", "Password"], "")}
+          visible={dbPasswordVisible}
+          configured={dbPasswordConfigured}
+          revealLabel={t("settings.admin.db.password.show")}
+          onReveal={() => void onRevealDbPassword()}
+          onHide={onHideDbPassword}
+          onChange={(v) => set(["Database", "Password"], v)}
+        />
+        <TextField
+          label={t("settings.admin.db.sslMode")}
+          value={stringField(draft, ["Database", "SslMode"], "")}
+          onChange={(v) => set(["Database", "SslMode"], v)}
         />
       </div>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.db.connectionString")}
+          value={stringField(draft, ["Database", "ConnectionString"], "")}
+          onChange={(v) => set(["Database", "ConnectionString"], v)}
+        />
+        <NumberField
+          label={t("settings.admin.db.timeout")}
+          value={numberField(draft, ["Database", "CommandTimeoutMs"], 30000)}
+          onChange={(v) => set(["Database", "CommandTimeoutMs"], v)}
+        />
+      </div>
+      <div className="settings-form__group-row settings-form__group-row--db-apply">
+        <span />
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => {
+            if (!canManageAdminConfig) {
+              showPrivilegeNotice();
+              return;
+            }
+            void onApplyDatabase();
+          }}
+          disabled={busy}
+          aria-disabled={!canManageAdminConfig}
+          title={t("settings.admin.db.apply.title")}
+        >
+          <Icon name="tools" />
+          {t("settings.admin.db.apply")}
+        </button>
+      </div>
 
-      {activeSubTab === "users" ? (
+        </>
+      )}
+
+      {activeSubTab === "users" && (
         <>
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.users")}</h4>
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={addUser}
+              onClick={() => {
+                if (!canManageAdminConfig) {
+                  showPrivilegeNotice();
+                  return;
+                }
+                addUser();
+              }}
               disabled={busy}
+              aria-disabled={!canManageAdminConfig}
               title={t("settings.admin.user.add.title")}
             >
               <Icon name="upload" tone="accent" />
@@ -1529,11 +1787,14 @@ function AdminTab({
             users={adminUsersFromDraft(draft)}
             sourceUsers={adminUsersFromDraft(source)}
             auditorEmails={adminRoleApprovalRecipients(draft)}
-            canApproveAdminRole={currentAccountRole !== null && currentAccountRole >= AUDITOR_ROLE}
-            disabled={busy}
+            canApproveAdminRole={currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE}
+            disabled={busy || !canManageAdminConfig}
+            actionDisabled={busy}
+            canManage={canManageAdminConfig}
             onUpdate={updateUser}
             onPersist={() => void onSave()}
             onDelete={deleteUser}
+            onBlockedAction={showPrivilegeNotice}
             onRequestAdminApproval={(user, recipients) => {
               if (recipients.length === 0) {
                 setLocalError(t("settings.admin.user.requestAdmin.noAuditors"));
@@ -1546,15 +1807,24 @@ function AdminTab({
             targetLogin={targetLogin}
           />
         </>
-      ) : (
+      )}
+
+      {activeSubTab === "equipment" && (
         <>
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.equipment")}</h4>
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={addEquipment}
+              onClick={() => {
+                if (!canManageAdminConfig) {
+                  showPrivilegeNotice();
+                  return;
+                }
+                addEquipment();
+              }}
               disabled={busy}
+              aria-disabled={!canManageAdminConfig}
               title={t("settings.admin.equipment.add.title")}
             >
               <Icon name="upload" tone="accent" />
@@ -1564,84 +1834,66 @@ function AdminTab({
           <EquipmentTable
             equipment={equipmentFromDraft(draft)}
             sourceEquipment={equipmentFromDraft(source)}
-            disabled={busy}
+            disabled={busy || !canManageAdminConfig}
+            actionDisabled={busy}
+            canManage={canManageAdminConfig}
             onUpdate={updateEquipment}
             onPersist={() => void onSave()}
             onDelete={deleteEquipment}
+            onBlockedAction={showPrivilegeNotice}
           />
         </>
       )}
 
-      <h4 className="settings-form__group">{t("settings.admin.group.session")}</h4>
-      <div className="field-row">
-        <TextField
-          label={t("settings.admin.session.client")}
-          value={stringField(draft, ["session", "client_machine_name"], "")}
-          onChange={(v) => set(["session", "client_machine_name"], v)}
-        />
-        <TextField
-          label={t("settings.admin.session.loginTime")}
-          value={stringField(draft, ["session", "login_time"], "")}
-          onChange={(v) => set(["session", "login_time"], v)}
-        />
-      </div>
-      <div className="settings-flags">
-        <CheckboxField
-          label={t("settings.admin.session.authorized")}
-          value={boolField(draft, ["session", "is_autorized"], false)}
-          onChange={(v) => set(["session", "is_autorized"], v)}
-        />
-      </div>
-
-      <h4 className="settings-form__group">{t("settings.admin.group.activity")}</h4>
-      <div className="field-row">
-        <TextField
-          label={t("settings.admin.activity.type")}
-          value={stringField(draft, ["activity", "activity_type"], "")}
-          onChange={(v) => set(["activity", "activity_type"], v)}
-        />
-      </div>
-
-      <div className="settings-footer__row">
-        <span
-          className="scan-busy"
-          data-visible={busy ? "true" : "false"}
-          aria-hidden={!busy}
-        >
-          <span className="scan-busy__spinner" />
-        </span>
-        <button
-          type="button"
-          className="btn btn--ghost"
-          onClick={() => void load()}
-          disabled={busy}
-          title={t("settings.admin.reload.title")}
-        >
-          <Icon name="refresh" tone="accent" />
-          {t("settings.reload")}
-        </button>
-        <span className="spacer" />
-        <button
-          type="button"
-          className="btn btn--warn"
-          disabled={busy || !hasBackup}
-          onClick={() => void onRestore()}
-          title={t("settings.admin.default.title")}
-        >
-          <Icon name="refresh" tone="warn" />
-          {t("settings.btn.default")}
-        </button>
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={busy || !dirty}
-          onClick={() => void onSave()}
-          title={t("settings.admin.save.title")}
-        >
-          <Icon name="download" />
-          {t("settings.btn.saveAs")}
-        </button>
-      </div>
+      {activeSubTab === "configuration" && (
+        <div className="settings-footer__row">
+          <span
+            className="scan-busy"
+            data-visible={busy ? "true" : "false"}
+            aria-hidden={!busy}
+          >
+            <span className="scan-busy__spinner" />
+          </span>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => void load()}
+            disabled={busy}
+            title={t("settings.admin.reload.title")}
+          >
+            <Icon name="refresh" tone="accent" />
+            {t("settings.reload")}
+          </button>
+          <span className="spacer" />
+          <button
+            type="button"
+            className="btn btn--warn"
+            disabled={busy || !hasBackup}
+            onClick={() => void onRestore()}
+            title={t("settings.admin.default.title")}
+          >
+            <Icon name="refresh" tone="warn" />
+            {t("settings.btn.default")}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={busy || !dirty || adminApprovalRequired}
+            aria-disabled={!canManageAdminConfig}
+            onClick={() => {
+              if (!canManageAdminConfig) {
+                showPrivilegeNotice();
+                return;
+              }
+              void onSave();
+            }}
+            title={t("settings.admin.save.title")}
+          >
+            <Icon name="download" />
+            {t("settings.btn.saveAs")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1676,9 +1928,12 @@ function AdminUsersTable({
   auditorEmails,
   canApproveAdminRole,
   disabled,
+  actionDisabled,
+  canManage,
   onUpdate,
   onPersist,
   onDelete,
+  onBlockedAction,
   onRequestAdminApproval,
   targetAccountId,
   targetLogin,
@@ -1688,9 +1943,12 @@ function AdminUsersTable({
   auditorEmails: string[];
   canApproveAdminRole: boolean;
   disabled: boolean;
+  actionDisabled: boolean;
+  canManage: boolean;
   onUpdate: (index: number, field: keyof AdminUserRow, value: string | number | boolean | null) => void;
   onPersist: (index: number) => void;
   onDelete: (index: number) => void;
+  onBlockedAction: () => void;
   onRequestAdminApproval: (user: AdminUserRow, recipients: string[]) => void;
   targetAccountId: number | null;
   targetLogin: string | null;
@@ -1712,7 +1970,15 @@ function AdminUsersTable({
   }, [targetAccountId, targetLogin, users.length]);
 
   return (
-    <div className="settings-admin-table-wrap">
+    <div
+      className="settings-admin-table-wrap"
+      onPointerDownCapture={(event) => {
+        if (canManage) return;
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target?.closest("input, select, button")) return;
+        onBlockedAction();
+      }}
+    >
       <div className="settings-admin-table" role="table">
         <div className="settings-admin-table__head" role="row">
           <span role="columnheader">{t("settings.admin.user.id")}</span>
@@ -1858,8 +2124,15 @@ function AdminUsersTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled || !rowDirty}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || !rowDirty || needsAdminApproval}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.user.update")}
                   title={t("settings.admin.user.update")}
                 >
@@ -1869,8 +2142,15 @@ function AdminUsersTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || needsAdminApproval}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.user.save")}
                   title={t("settings.admin.user.save")}
                 >
@@ -1892,8 +2172,15 @@ function AdminUsersTable({
               <button
                 type="button"
                 className="modal__close"
-                onClick={() => onDelete(index)}
-                disabled={disabled || users.length <= 1}
+                onClick={() => {
+                  if (!canManage) {
+                    onBlockedAction();
+                    return;
+                  }
+                  onDelete(index);
+                }}
+                disabled={actionDisabled || users.length <= 1}
+                aria-disabled={!canManage}
                 aria-label={t("settings.admin.user.delete")}
                 title={t("settings.admin.user.delete")}
               >
@@ -1912,16 +2199,22 @@ function EquipmentTable({
   equipment,
   sourceEquipment,
   disabled,
+  actionDisabled,
+  canManage,
   onUpdate,
   onPersist,
   onDelete,
+  onBlockedAction,
 }: {
   equipment: EquipmentRow[];
   sourceEquipment: EquipmentRow[];
   disabled: boolean;
+  actionDisabled: boolean;
+  canManage: boolean;
   onUpdate: (index: number, field: keyof EquipmentRow, value: string | number | null) => void;
   onPersist: (index: number) => void;
   onDelete: (index: number) => void;
+  onBlockedAction: () => void;
 }) {
   const { t } = useTranslation();
   const sourceSignatureByKey = new Map(
@@ -1932,7 +2225,15 @@ function EquipmentTable({
   );
 
   return (
-    <div className="settings-admin-table-wrap">
+    <div
+      className="settings-admin-table-wrap"
+      onPointerDownCapture={(event) => {
+        if (canManage) return;
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target?.closest("input, select, button")) return;
+        onBlockedAction();
+      }}
+    >
       <div className="settings-equipment-table" role="table">
         <div className="settings-equipment-table__head" role="row">
           <span role="columnheader">{t("settings.admin.equipment.id")}</span>
@@ -2005,8 +2306,15 @@ function EquipmentTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled || !rowDirty}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || !rowDirty}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.equipment.update")}
                   title={t("settings.admin.equipment.update")}
                 >
@@ -2016,8 +2324,15 @@ function EquipmentTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.equipment.save")}
                   title={t("settings.admin.equipment.save")}
                 >
@@ -2027,8 +2342,15 @@ function EquipmentTable({
               <button
                 type="button"
                 className="modal__close"
-                onClick={() => onDelete(index)}
-                disabled={disabled || equipment.length <= 1}
+                onClick={() => {
+                  if (!canManage) {
+                    onBlockedAction();
+                    return;
+                  }
+                  onDelete(index);
+                }}
+                disabled={actionDisabled || equipment.length <= 1}
+                aria-disabled={!canManage}
                 aria-label={t("settings.admin.equipment.delete")}
                 title={t("settings.admin.equipment.delete")}
               >
@@ -2287,11 +2609,13 @@ function TextField({
   label,
   help,
   value,
+  disabled = false,
   onChange,
 }: {
   label: string;
   help?: JSX.Element;
   value: string;
+  disabled?: boolean;
   onChange: (v: string) => void;
 }) {
   return (
@@ -2301,8 +2625,60 @@ function TextField({
         type="text"
         className="input"
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  visible,
+  configured,
+  revealLabel,
+  onReveal,
+  onHide,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  visible: boolean;
+  configured: boolean;
+  revealLabel: string;
+  onReveal: () => void;
+  onHide: () => void;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="field">
+      <FieldLabel label={label} />
+      <div className="settings-password-field">
+        <input
+          type={visible ? "text" : "password"}
+          className="input"
+          value={visible ? value : configured ? "********" : value}
+          readOnly={!visible && configured}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          className="modal__close settings-password-field__reveal"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            onReveal();
+          }}
+          onPointerUp={onHide}
+          onPointerLeave={onHide}
+          onPointerCancel={onHide}
+          onBlur={onHide}
+          aria-label={revealLabel}
+          title={revealLabel}
+        >
+          <Icon name="eye" tone="accent" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -2408,15 +2784,17 @@ function FieldLabel({ label, help }: { label: string; help?: JSX.Element }) {
 
 function SettingsNotice({
   tone,
+  volatile = false,
   message,
   onDismiss,
 }: {
   tone: "info" | "success" | "error";
+  volatile?: boolean;
   message: string;
   onDismiss: () => void;
 }) {
   return (
-    <div className={`settings-notice settings-notice--${tone}`}>
+    <div className={`settings-notice settings-notice--${tone}`} data-volatile={volatile ? "true" : "false"}>
       <span className="settings-notice__message">{message}</span>
       <button
         type="button"

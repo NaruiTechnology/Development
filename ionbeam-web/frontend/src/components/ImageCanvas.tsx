@@ -230,7 +230,7 @@ export function ImageCanvas({
   const preferServerFigure =
     Boolean(serverFigureUrl) &&
     phase === "completed" &&
-    stats.max > stats.min && !hasLiveCanvasData;
+    (!hasLiveCanvasData || stats.max > stats.min);
 
   let nativeEdge: number;
   if (kind === "raster") {

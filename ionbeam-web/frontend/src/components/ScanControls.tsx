@@ -44,8 +44,7 @@ import {
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
-
-const MIN_SCAN_ROLE = 1;
+import { scanAuthHeaders } from "../lib/authIdentity";
 
 interface EquipmentOption {
   id: number | null;
@@ -61,14 +60,20 @@ interface EquipmentResponse {
   equipment: EquipmentOption[];
 }
 
+interface CurrentAccountResponse {
+  ok?: boolean;
+  registered?: boolean;
+  session_expired?: boolean;
+  user?: { role?: number; is_active?: boolean } | null;
+  error?: string;
+}
+
 export function ScanControls({
   kind,
   disabled = false,
-  userRole = 0,
 }: {
   kind: ScanKind;
   disabled?: boolean;
-  userRole?: number;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -84,7 +89,6 @@ export function ScanControls({
   const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
   const allowBitmapSimulation = !isProduction && Boolean(roiState.imageDataUrl);
-  const hasScanPrivilege = userRole >= MIN_SCAN_ROLE;
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one
@@ -98,8 +102,8 @@ export function ScanControls({
 
   async function onRun() {
     if (disabled || kind === "roi") return;
-    if (!hasScanPrivilege) {
-      dispatch(streamErrored(t("scan.permission.required")));
+    const allowed = await refreshScanPrivilege();
+    if (!allowed) {
       return;
     }
     if (kind === "raster") {
@@ -142,8 +146,8 @@ export function ScanControls({
 
   async function onRunValidated() {
     if (disabled || kind === "roi") return;
-    if (!hasScanPrivilege) {
-      dispatch(streamErrored(t("scan.permission.required")));
+    const allowed = await refreshScanPrivilege();
+    if (!allowed) {
       return;
     }
     if (kind === "raster") {
@@ -226,6 +230,28 @@ export function ScanControls({
     if (Number.isInteger(id) && id > 0) setSelectedEquipmentId(id);
   }
 
+  async function refreshScanPrivilege(): Promise<boolean> {
+    try {
+      const r = await fetch("/api/admin/iobeam/auth/current-account", {
+        cache: "no-store",
+        headers: scanAuthHeaders(),
+      });
+      const data = (await r.json().catch(() => null)) as CurrentAccountResponse | null;
+      if (!r.ok || !data?.ok) {
+        throw new Error(data?.error || `current account: HTTP ${r.status}`);
+      }
+      const role = typeof data.user?.role === "number" ? data.user.role : Number(data.user?.role ?? 0);
+      if (!data.registered || data.session_expired || !data.user?.is_active || role < 1) {
+        dispatch(streamErrored(t("scan.permission.required")));
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      dispatch(streamErrored(e?.message ?? String(e)));
+      return false;
+    }
+  }
+
   useEffect(() => {
     const completedNow = phase === "completed" && prevPhaseRef.current !== "completed";
     prevPhaseRef.current = phase;
@@ -266,13 +292,7 @@ export function ScanControls({
         className="btn btn--primary"
         disabled={runDisabled || kind === "roi"}
         onClick={onRun}
-        title={
-          !hasScanPrivilege
-            ? t("scan.permission.required")
-            : paused
-              ? t("scan.run.title.paused")
-              : t("scan.run.title.start")
-        }
+        title={paused ? t("scan.run.title.paused") : t("scan.run.title.start")}
       >
         <Icon name="play" tone="success" />
         {t("scan.run")}
@@ -302,7 +322,7 @@ export function ScanControls({
         className="btn"
         disabled={runDisabled || kind === "roi"}
         onClick={onRunValidated}
-        title={!hasScanPrivilege ? t("scan.permission.required") : t("scan.runValidated.title")}
+        title={t("scan.runValidated.title")}
       >
         <Icon name="check" tone="success" />
         {t("scan.runValidated")}

@@ -32,6 +32,7 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
+import { scanAuthHeaders } from "../lib/authIdentity";
 
 export interface SettingsConfigInfo {
   path: string;
@@ -135,7 +136,7 @@ export const saveSettingsConfig = createAsyncThunk<
 >("settings/save", async (data) => {
   const r = await fetch("/api/admin/config", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
   });
   if (!r.ok) {
@@ -148,7 +149,10 @@ export const saveSettingsConfig = createAsyncThunk<
 export const restoreSettingsConfig = createAsyncThunk<SaveResponse>(
   "settings/restore",
   async () => {
-    const r = await fetch("/api/admin/config/restore", { method: "POST" });
+    const r = await fetch("/api/admin/config/restore", {
+      method: "POST",
+      headers: scanAuthHeaders(),
+    });
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`restore config: HTTP ${r.status} ${text}`);

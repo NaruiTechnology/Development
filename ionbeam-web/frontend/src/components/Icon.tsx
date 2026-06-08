@@ -24,6 +24,7 @@ type IconName =
   | "atom"
   | "tools"
   | "fileText"
+  | "eye"
   | "sheet"
   | "trash"
   | "upload"
@@ -185,6 +186,12 @@ const paths: Record<IconName, JSX.Element> = {
       <path fill="#e53935" stroke="none" d="M6 3h8l4 4v14H6z" />
       <path fill="#ffffff" stroke="none" d="M14 3v5h4" />
       <path fill="#ffffff" stroke="none" d="M12 8l3.2 10h-1.9l-.8-2.6h-3l-.8 2.6H8.8L12 8zm.9 5.9-.9-3.1-.9 3.1h1.8z" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
     </>
   ),
   sheet: (

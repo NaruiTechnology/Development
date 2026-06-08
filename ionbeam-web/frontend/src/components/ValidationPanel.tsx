@@ -21,6 +21,7 @@ import {
   vectorCsvBlob,
   downloadBlob,
 } from "../lib/csvExport";
+import { scanAuthHeaders } from "../lib/authIdentity";
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 
@@ -271,9 +272,9 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
     const signedUser = readSignedInUser();
     const r = await fetch("/api/admin/iobeam/activity", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify({
-        user_id: signedUser?.id ?? 1,
+        ...(signedUser?.id ? { user_id: signedUser.id } : {}),
         activity_type: scanKind === "raster" ? "RASTER run" : "VECTOR run",
       }),
     });

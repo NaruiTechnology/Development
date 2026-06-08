@@ -47,11 +47,13 @@ export interface Config {
   restartBackendAfterGlasgow: boolean;
   backendRestartCmd: string | null;
   configStrict: boolean;
+  adminDbConfigPath: string;
   adminDbHost: string;
   adminDbPort: number;
   adminDbName: string;
   adminDbUser: string;
   adminDbPassword: string | null;
+  adminDbSslMode: string | null;
   adminDbCommandTimeoutMs: number;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
@@ -91,6 +93,19 @@ const DEPLOYMENT_ADMIN_CONFIG_PATH = path.join(
   "IobeamAdmin",
   "Json",
   "IobeamAdmin.json"
+);
+const DEFAULT_ADMIN_DB_CONFIG_PATH = path.join(
+  REPO_ROOT,
+  "IobeamAdmin",
+  "Json",
+  "IobeamAdminDb.json"
+);
+const DEPLOYMENT_ADMIN_DB_CONFIG_PATH = path.join(
+  REPO_ROOT,
+  "Development",
+  "IobeamAdmin",
+  "Json",
+  "IobeamAdminDb.json"
 );
 const RESTART_SCRIPT = path.join(
   BACKEND_ROOT,
@@ -171,6 +186,117 @@ function siblingDevelopmentConfigPath(streamDataPath: string): string {
   );
 }
 
+interface AdminDbDefaults {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string | null;
+  sslMode: string | null;
+  commandTimeoutMs: number;
+}
+
+const adminDbConfigPath =
+  process.env.IOBEAM_ADMIN_DB_CONFIG?.trim() ||
+  firstExistingConfigPath([
+    DEPLOYMENT_ADMIN_DB_CONFIG_PATH,
+    DEFAULT_ADMIN_DB_CONFIG_PATH,
+  ], DEFAULT_ADMIN_DB_CONFIG_PATH);
+const adminDbDefaults = readAdminDbDefaults(adminDbConfigPath);
+
+function readAdminDbDefaults(filePath: string): AdminDbDefaults {
+  const fallback: AdminDbDefaults = {
+    host: process.platform === "win32" ? "localhost" : "/var/run/postgresql",
+    port: 5432,
+    database: "iobeam_admin",
+    user: process.platform === "win32" ? "postgres" : currentLogin(),
+    password: null,
+    sslMode: null,
+    commandTimeoutMs: 30_000,
+  };
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+    const db = readRecord(raw, "Database");
+    const source = Object.keys(db).length > 0 ? db : raw;
+    const connectionString = stringValue(source.ConnectionString ?? source.connectionString);
+    const parsed = connectionString ? parsePostgresConnectionString(connectionString) : {};
+    return {
+      host: stringValue(source.Host ?? source.host) || parsed.host || fallback.host,
+      port: numberValue(source.Port ?? source.port) || parsed.port || fallback.port,
+      database:
+        stringValue(source.DatabaseName ?? source.databaseName ?? source.Database ?? source.database) ||
+        parsed.database ||
+        fallback.database,
+      user: stringValue(source.User ?? source.user ?? source.Username ?? source.username) || parsed.user || fallback.user,
+      password: stringValue(source.Password ?? source.password) || parsed.password || fallback.password,
+      sslMode: stringValue(source.SslMode ?? source.sslMode) || parsed.sslMode || fallback.sslMode,
+      commandTimeoutMs:
+        numberValue(source.CommandTimeoutMs ?? source.commandTimeoutMs) ||
+        parsed.commandTimeoutMs ||
+        fallback.commandTimeoutMs,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function readRecord(data: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = data[key];
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function parsePostgresConnectionString(value: string): Partial<AdminDbDefaults> {
+  const url = new URL(value);
+  if (!["postgres", "postgresql"].includes(url.protocol.replace(":", ""))) {
+    return {};
+  }
+  return {
+    host: url.hostname || undefined,
+    port: url.port ? Number(url.port) : undefined,
+    database: decodeURIComponent(url.pathname.replace(/^\//, "")) || undefined,
+    user: url.username ? decodeURIComponent(url.username) : undefined,
+    password: url.password ? decodeURIComponent(url.password) : undefined,
+    sslMode: url.searchParams.get("sslmode") || undefined,
+  };
+}
+
+function stringValue(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function numberValue(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
+function normalizeLocalPeerUser(host: string, user: string, password: string | null): string {
+  const login = currentLogin();
+  if (
+    !password &&
+    user === "postgres" &&
+    login !== "postgres" &&
+    (host === "/var/run/postgresql" || host.startsWith("/"))
+  ) {
+    return login;
+  }
+  return user;
+}
+
+const resolvedAdminDbHost =
+  process.env.IOBEAM_ADMIN_DB_HOST?.trim() || adminDbDefaults.host;
+const resolvedAdminDbPassword =
+  process.env.IOBEAM_ADMIN_DB_PASSWORD?.trim() || adminDbDefaults.password;
+const resolvedAdminDbSslMode =
+  process.env.IOBEAM_ADMIN_DB_SSLMODE?.trim() || adminDbDefaults.sslMode;
+const resolvedAdminDbUser = normalizeLocalPeerUser(
+  resolvedAdminDbHost,
+  process.env.IOBEAM_ADMIN_DB_USER?.trim() || adminDbDefaults.user,
+  resolvedAdminDbPassword,
+);
+
 export const config: Config = {
   port: Number(process.env.PORT ?? 4000),
   proxyTargetHttp: process.env.PROXY_TARGET_HTTP ?? "http://127.0.0.1:8765",
@@ -195,18 +321,16 @@ export const config: Config = {
     process.env.IONBEAM_BACKEND_RESTART_CMD?.trim() ||
     DEFAULT_BACKEND_RESTART_CMD,
   configStrict: bool(process.env.GLASGOW_CONFIG_STRICT, false),
-  adminDbHost:
-    process.env.IOBEAM_ADMIN_DB_HOST?.trim() ||
-    (process.platform === "win32" ? "localhost" : "/var/run/postgresql"),
-  adminDbPort: Number(process.env.IOBEAM_ADMIN_DB_PORT ?? 5432),
-  adminDbName: process.env.IOBEAM_ADMIN_DB_NAME?.trim() || "iobeam_admin",
-  adminDbUser:
-    process.env.IOBEAM_ADMIN_DB_USER?.trim() ||
-    (process.platform === "win32" ? "postgres" : currentLogin()),
-  adminDbPassword: process.env.IOBEAM_ADMIN_DB_PASSWORD?.trim() || null,
+  adminDbConfigPath,
+  adminDbHost: resolvedAdminDbHost,
+  adminDbPort: Number(process.env.IOBEAM_ADMIN_DB_PORT ?? adminDbDefaults.port),
+  adminDbName: process.env.IOBEAM_ADMIN_DB_NAME?.trim() || adminDbDefaults.database,
+  adminDbUser: resolvedAdminDbUser,
+  adminDbPassword: resolvedAdminDbPassword,
+  adminDbSslMode: resolvedAdminDbSslMode,
   adminDbCommandTimeoutMs: Math.max(
     1_000,
-    int(process.env.IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS, 30_000),
+    int(process.env.IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS, adminDbDefaults.commandTimeoutMs),
   ),
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID?.trim() || null,
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN?.trim() || null,

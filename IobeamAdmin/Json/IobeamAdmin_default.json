@@ -9,7 +9,12 @@
         "DatabaseName": "iobeam_admin",
         "Schema": "public",
         "Host": "localhost",
-        "Port": 5432
+        "Port": 5432,
+        "User": "",
+        "Password": "",
+        "ConnectionString": "",
+        "SslMode": "",
+        "CommandTimeoutMs": 30000
     },
     "ROLE": {
         "AUDIT": 4,

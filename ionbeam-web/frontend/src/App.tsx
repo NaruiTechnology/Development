@@ -110,12 +110,7 @@ export function App() {
 
     fetch("/api/admin/iobeam/auth/current-account", { headers: scanAuthHeaders() })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: {
-        login?: unknown;
-        registered?: unknown;
-        session_expired?: unknown;
-        user?: { login_name?: unknown } | null;
-      } | null) => {
+      .then((data: { login?: unknown; registered?: unknown; session_expired?: unknown; user?: SignedInUser | null } | null) => {
         if (cancelled || !data) return;
         const currentLogin = String(data.login ?? "").toLowerCase();
         const signedInLogin = signedInUser.login_name.toLowerCase();
@@ -127,6 +122,17 @@ export function App() {
           window.localStorage.setItem(LAST_ADMIN_LOGIN_STORAGE_KEY, signedInUser.login_name);
           window.localStorage.removeItem("ionbeam:adminUser");
           setSignedInUser(null);
+          return;
+        }
+        if (data.user) {
+          const refreshedUser = {
+            ...data.user,
+            session_token: signedInUser.session_token,
+          };
+          if (JSON.stringify(refreshedUser) !== JSON.stringify(signedInUser)) {
+            window.localStorage.setItem("ionbeam:adminUser", JSON.stringify(refreshedUser));
+            setSignedInUser(refreshedUser);
+          }
         }
       })
       .catch(() => {
@@ -336,7 +342,6 @@ export function App() {
                   <ScanControls
                     kind={kind as ScanKind}
                     disabled={panelDisabled}
-                    userRole={signedInUser?.role ?? 0}
                   />
                 </div>
               </div>

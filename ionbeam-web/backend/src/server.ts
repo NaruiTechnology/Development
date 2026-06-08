@@ -28,6 +28,27 @@ import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
 import {
+  applyAdminDatabaseSetup,
+  pgConnectionFromAdminConfig,
+  runPsql,
+  type PgConnection,
+} from "./adminDbService";
+import {
+  buildActivityReportFromDb,
+  findAdminUserInDb,
+  findAdminUserInDbById,
+  isAdminSessionExpiredInDb,
+  listAdminUsersFromDb,
+  listEquipmentFromDb,
+  recordActivityInDb,
+  recordAdminSessionInDb,
+  registerAdminUserInDb,
+  syncAdminUsersToDb,
+  syncEquipmentToDb,
+  type AdminUser,
+  type Equipment,
+} from "./adminDbRepository";
+import {
   ConfigError,
   type RestartResult,
   readAdminWithBackup,
@@ -56,40 +77,9 @@ interface RestartServicesResponse {
   backend_restart: BackendRestartResult;
 }
 
-interface ServiceStatus {
-  state: "disconnected" | "connecting" | "idle" | "busy" | "error";
-  last_error: string | null;
-  scans_completed: number;
-  chunks_in_flight: number;
-}
-
-type UpstreamJsonResult =
-  | { ok: true; status: number; data: unknown }
-  | {
-      ok: false;
-      status: number;
-      data: unknown;
-      message: string;
-      unreachable: boolean;
-    };
-
 interface ConfigSaveResponse {
   ok: boolean;
   error?: string;
-}
-
-interface AdminUser {
-  id: number | null;
-  login_name: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone_number: string;
-  company_name: string;
-  site: string;
-  role: number;
-  is_active: boolean;
-  session_lifetime_limit_days: number;
 }
 
 interface AdminSession {
@@ -99,15 +89,6 @@ interface AdminSession {
 }
 
 type ScanAuthRequest = express.Request | IncomingMessage;
-
-interface Equipment {
-  id: number | null;
-  name: string;
-  model: string;
-  serial_number: string;
-  site: string;
-  description: string;
-}
 
 interface SmsChallenge {
   code: string;
@@ -125,10 +106,6 @@ interface RegisterAdminUserRequest {
   site?: unknown;
 }
 
-type RegisterAdminUserDbResult =
-  | { ok: true; user: AdminUser }
-  | { ok: false; error: string };
-
 type SmsSendResult =
   | { ok: true; mode: "twilio" }
   | { ok: true; mode: "mock"; code: string }
@@ -137,6 +114,36 @@ type SmsSendResult =
 interface DbStatusResponse {
   ok: boolean;
   enabled: boolean;
+  error?: string;
+}
+
+interface AdminDbConnectionResponse {
+  ok: boolean;
+  connection: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: string | null;
+    password_configured: boolean;
+    sslMode: string;
+    connectionString: string;
+    commandTimeoutMs: number;
+  };
+}
+
+interface DbApplyResponse {
+  ok: boolean;
+  connection?: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: boolean;
+    sslMode?: string | null;
+    commandTimeoutMs: number;
+  };
+  steps?: Array<{ name: string; ok: boolean; detail: string }>;
   error?: string;
 }
 
@@ -162,11 +169,6 @@ const LEGACY_SITE_ALIASES: Record<string, string> = {
   "Wexi(无锡)": "Wuxi(无锡)",
 };
 const DEFAULT_SITE = SITE_OPTIONS[0];
-let adminSessionSchemaReady: Promise<void> | null = null;
-let adminUserSchemaReady: Promise<void> | null = null;
-let adminEquipmentSchemaReady: Promise<void> | null = null;
-let adminDbBackoffUntil = 0;
-const ADMIN_DB_BACKOFF_MS = 15_000;
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "256mb" })); // scan DB flow may post large CSV/PNG blobs
@@ -210,6 +212,7 @@ app.post("/api/admin/config", async (req, res) => {
   }
 
   try {
+    await authorizeStreamConfigSave(req, data);
     await writeConfig(data);
   } catch (err) {
     sendConfigError(res, err);
@@ -221,6 +224,7 @@ app.post("/api/admin/config", async (req, res) => {
 
 app.post("/api/admin/config/restore", async (_req, res) => {
   try {
+    await requireAdminPrivilege(_req, "only Admin or Auditor accounts can restore stream configuration");
     await restoreFromBackup();
   } catch (err) {
     sendConfigError(res, err);
@@ -276,8 +280,8 @@ app.post(
 
     try {
       await authorizeAdminConfigSave(req, data);
-      await syncAdminUsersToDb(data);
-      await syncEquipmentToDb(data);
+      await syncAdminUsersToDb(readAdminUsers(data));
+      await syncEquipmentToDb(readEquipment(data));
       await writeAdminConfig(data);
     } catch (err) {
       sendConfigError(res, err);
@@ -301,6 +305,34 @@ app.get("/api/admin/iobeam/equipment", async (_req, res) => {
     }
   }
 });
+
+app.get(
+  "/api/admin/iobeam/db/connection",
+  async (req, res: express.Response<AdminDbConnectionResponse | ConfigSaveResponse>) => {
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can view database connection settings");
+      const info = await readAdminWithBackup();
+      const connection = pgConnectionFromAdminConfig(info.data);
+      const includePassword = String(req.query.include_password ?? "").trim() === "1";
+      res.json({
+        ok: true,
+        connection: {
+          host: connection.host,
+          port: connection.port,
+          database: connection.database,
+          user: connection.user,
+          password: includePassword ? connection.password : null,
+          password_configured: Boolean(connection.password),
+          sslMode: connection.sslMode ?? "",
+          connectionString: adminDbConnectionString(connection, includePassword),
+          commandTimeoutMs: connection.commandTimeoutMs,
+        },
+      });
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
 
 app.post(
   "/api/admin/iobeam/config/restore",
@@ -589,10 +621,51 @@ app.get(
   },
 );
 
+app.post(
+  "/api/admin/iobeam/db/apply",
+  async (req, res: express.Response<DbApplyResponse>) => {
+    const data =
+      req.body && typeof req.body === "object" && "data" in req.body
+        ? (req.body as { data: unknown }).data
+        : req.body;
+
+    if (data === undefined || data === null) {
+      res.status(400).json({
+        ok: false,
+        error: "missing JSON body: expected { data: <adminConfig> }",
+      });
+      return;
+    }
+
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can apply database setup");
+      await authorizeAdminConfigSave(req, data);
+      const connection = pgConnectionFromAdminConfig(data);
+      const setup = await applyAdminDatabaseSetup({
+        connection,
+        roleName: connection.user,
+      });
+      await writeAdminConfig(data);
+      res.json(setup);
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
+
 app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
   try {
     const info = await readAdminWithBackup();
-    const activeUsers = readAdminUsers(info.data).filter((u) => u.is_active);
+    const dbUsers = await listAdminUsersFromDb().catch((err) => {
+      console.warn(
+        `[iobeam-admin/report] DB user records were not loaded: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    });
+    const activeUsers = (dbUsers.length > 0 ? dbUsers : readAdminUsers(info.data))
+      .filter((u) => u.is_active);
     const requestedAccountId = Number(req.query.account_id ?? 0);
     const requestedEquipmentId = Number(req.query.equipment_id ?? 0);
     const days = Math.min(
@@ -606,6 +679,9 @@ app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
     const ids = reportUsers
       .map((u) => u.id)
       .filter((id): id is number => Number.isInteger(id) && (id ?? 0) > 0);
+    if (ids.length === 0 && Number.isInteger(requestedAccountId) && requestedAccountId > 0) {
+      ids.push(requestedAccountId);
+    }
 
     const accounts = activeUsers.map((u) => ({
       id: u.id,
@@ -637,25 +713,24 @@ app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
       return;
     }
 
-    const out = await runPsql(
-      ["-Atq"],
-      config.adminDbName,
-      buildActivityReportCompatibilitySql(
+    let report: Record<string, unknown> = {};
+    let reportError: string | null = null;
+    try {
+      report = await buildActivityReportFromDb(
         ids,
         days,
         Number.isInteger(requestedEquipmentId) && requestedEquipmentId > 0
           ? requestedEquipmentId
           : null,
-      ),
-    );
-    const rawReport = JSON.parse(out.trim() || "{}") as unknown;
-    const report =
-      rawReport && typeof rawReport === "object"
-        ? (rawReport as Record<string, unknown>)
-        : {};
+      );
+    } catch (err) {
+      reportError = err instanceof Error ? err.message : String(err);
+      console.error(`[iobeam-admin/report] DB activity report failed: ${reportError}`);
+    }
     res.json({
       ok: true,
       generated_at: new Date().toISOString(),
+      report_error: reportError,
       days,
       selected_account_id: requestedAccountId > 0 ? requestedAccountId : null,
       selected_equipment_id: requestedEquipmentId > 0 ? requestedEquipmentId : null,
@@ -681,12 +756,12 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
     equipment_id?: unknown;
     activity_type?: unknown;
   } | null;
-  const userId = Number(body?.user_id ?? 1);
+  const requestedUserId = Number(body?.user_id ?? 0);
   const equipmentId = Number(body?.equipment_id ?? 0);
   const activityType = String(body?.activity_type ?? "scan_result").slice(0, 150);
 
-  if (!Number.isInteger(userId) || userId <= 0) {
-    res.status(400).json({ ok: false, error: "user_id must be a positive integer" });
+  if (body?.user_id !== undefined && (!Number.isInteger(requestedUserId) || requestedUserId <= 0)) {
+    res.status(400).json({ ok: false, error: "user_id must be a positive integer when provided" });
     return;
   }
   if (body?.equipment_id !== undefined && (!Number.isInteger(equipmentId) || equipmentId <= 0)) {
@@ -696,44 +771,34 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
 
   try {
     const info = await readAdminWithBackup();
-    const user = findAdminUserById(info.data, userId);
+    const requestedUser =
+      requestedUserId > 0
+        ? await findAdminUserInDbById(requestedUserId).catch(() => null)
+        : null;
+    const actor = requestedUser ?? (await currentAdminActor(req).catch(() => null));
+    const configUser = actor ?? findAdminUser(info.data, currentLoginName());
+    const user =
+      (configUser?.id && configUser.id > 0
+        ? await findAdminUserInDbById(configUser.id).catch(() => null)
+        : null) ??
+      (configUser?.login_name
+        ? await findAdminUserInDb(configUser.login_name).catch(() => null)
+        : null) ??
+      (configUser?.email
+        ? await findAdminUserInDb(configUser.email).catch(() => null)
+        : null);
+    const userId = Number(user?.id ?? 0);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      res.status(400).json({ ok: false, error: "no active admin DB user could be resolved for activity recording" });
+      return;
+    }
     const lifetimeDays = user?.session_lifetime_limit_days ?? 1;
-    await ensureAdminEquipmentSchema();
-    const sql = `
-      SET search_path TO iobeam_admin, public;
-      ALTER TABLE activity
-        DROP COLUMN IF EXISTS data_file,
-        DROP COLUMN IF EXISTS image_file,
-        DROP COLUMN IF EXISTS data_file_name,
-        DROP COLUMN IF EXISTS image_file_name,
-        ADD COLUMN IF NOT EXISTS equipment_id integer,
-        ADD COLUMN IF NOT EXISTS session_lifetime_limit_days integer NOT NULL DEFAULT 1,
-        ALTER COLUMN last_signed_in SET DEFAULT CURRENT_TIMESTAMP;
-      UPDATE activity
-         SET last_signed_in = CURRENT_TIMESTAMP
-       WHERE last_signed_in IS NULL;
-      UPDATE activity
-         SET equipment_id = (SELECT id FROM Equipment ORDER BY id LIMIT 1)
-       WHERE equipment_id IS NULL;
-      ALTER TABLE activity
-        ALTER COLUMN last_signed_in SET NOT NULL,
-        ALTER COLUMN session_lifetime_limit_days SET DEFAULT 1;
-      INSERT INTO activity (
-        user_id, equipment_id, activity_type, date, last_signed_in, session_lifetime_limit_days
-      )
-      VALUES (
-        ${userId},
-        COALESCE(
-          (SELECT id FROM Equipment WHERE id = ${equipmentId > 0 ? equipmentId : "NULL"} LIMIT 1),
-          (SELECT id FROM Equipment ORDER BY id LIMIT 1)
-        ),
-        ${sqlString(activityType)},
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP,
-        ${Math.max(1, Math.trunc(lifetimeDays))}
-      );
-    `;
-    await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+    await recordActivityInDb(
+      userId,
+      equipmentId > 0 ? equipmentId : null,
+      activityType,
+      Math.max(1, Math.trunc(lifetimeDays)),
+    );
     res.json({ ok: true });
   } catch (err) {
     sendConfigError(res, err);
@@ -742,15 +807,6 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
 
 app.post("/api/admin/restart-services", async (_req, res) => {
   await restartServicesAndRespond(res);
-});
-
-app.post("/api/admin/reconnect", async (_req, res) => {
-  if (config.mock) {
-    res.json(mockRest.status());
-    return;
-  }
-
-  await reconnectDeviceAndRespond(res);
 });
 
 app.use("/api/scan/raster/run", requireScanPrivilege);
@@ -1090,13 +1146,6 @@ async function currentAdminActor(req?: ScanAuthRequest): Promise<AdminUser | nul
   return dbUser ?? configUser;
 }
 
-async function currentActorIsAuditor(actor: AdminUser, data?: unknown): Promise<boolean> {
-  const email = actor.email.trim().toLowerCase();
-  if (!email) return false;
-  if (data !== undefined && readAuditorEmails(data).has(email)) return true;
-  return isAuditorEmailInDb(email).catch(() => false);
-}
-
 async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown): Promise<void> {
   const actor = await currentAdminActor(req);
   if (!actor || !actor.is_active) {
@@ -1105,28 +1154,51 @@ async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown)
   }
 
   const info = await readAdminWithBackup();
-  const beforeUsers = new Map(
-    readAdminUsers(info.data)
-      .filter((u) => Number.isInteger(u.id))
-      .map((u) => [u.id, u] as const),
-  );
+  if (actor.role < ROLE_ADMIN) {
+    throw new ConfigError("only Admin or Auditor accounts can edit admin configuration", 403);
+  }
+
+  const dbUsers = await listAdminUsersFromDb().catch(() => []);
+  const dbEquipment = await listEquipmentFromDb().catch(() => []);
+  const currentData = mergeAdminConfigData(info.data, dbUsers, dbEquipment);
+  const beforeUsers = readAdminUsers(currentData);
   const afterUsers = readAdminUsers(nextData);
-  const changedRoleUsers = afterUsers.filter((after) => {
-    const before = beforeUsers.get(after.id);
-    return !before || before.role !== after.role;
-  });
+  const beforeEquipment = readEquipment(currentData);
+  const afterEquipment = readEquipment(nextData);
+  const changedRoleUsers = changedAdminRoleUsers(beforeUsers, afterUsers);
+
+  if (
+    !adminUserCollectionsEqual(beforeUsers, afterUsers) ||
+    !equipmentCollectionsEqual(beforeEquipment, afterEquipment)
+  ) {
+    if (actor.role < ROLE_ADMIN) {
+      throw new ConfigError("only Admin or Auditor accounts can edit users or equipment", 403);
+    }
+  }
+
   if (changedRoleUsers.length === 0) return;
 
-  const actorIsAuditor = actor.role >= ROLE_AUDIT && await currentActorIsAuditor(actor, nextData);
-  if (changedRoleUsers.some((u) => u.role >= ROLE_ADMIN) && !actorIsAuditor) {
-    throw new ConfigError("only active Auditor accounts can assign the Admin or Audit role", 403);
+  if (changedRoleUsers.some((u) => u.role >= ROLE_ADMIN) && actor.role < ROLE_ADMIN) {
+    throw new ConfigError("only Admin or Auditor accounts can assign the Admin or Audit role", 403);
   }
-  if (actor.role < ROLE_ADMIN) {
-    throw new ConfigError("only Admin or Auditor accounts can assign account roles", 403);
+  if (changedRoleUsers.some((u) => u.role >= ROLE_SUPER_USER) && actor.role < ROLE_ADMIN) {
+    throw new ConfigError("only Admin or Auditor accounts can assign the SuperUser role", 403);
   }
-  if (!actorIsAuditor && changedRoleUsers.some((u) => u.role >= ROLE_ADMIN)) {
-    throw new ConfigError("Admin accounts can assign only lower-privilege roles", 403);
+}
+
+async function authorizeStreamConfigSave(req: ScanAuthRequest, nextData: unknown): Promise<void> {
+  const info = await readWithBackup();
+  if (!pinsConfigEqual(info.data, nextData)) {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can edit PINS");
   }
+}
+
+async function requireAdminPrivilege(req: ScanAuthRequest, message: string): Promise<AdminUser> {
+  const actor = await currentAdminActor(req);
+  if (!actor || !actor.is_active || actor.role < ROLE_ADMIN) {
+    throw new ConfigError(message, 403);
+  }
+  return actor;
 }
 
 async function requireScanPrivilege(
@@ -1136,10 +1208,10 @@ async function requireScanPrivilege(
 ): Promise<void> {
   try {
     const actor = await currentAdminActor(req);
-    if (!actor || !actor.is_active || actor.role < ROLE_SUPER_USER) {
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
       res.status(403).json({
         ok: false,
-        error: "RUSTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege",
+        error: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
       });
       return;
     }
@@ -1152,11 +1224,11 @@ async function requireScanPrivilege(
 async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
   try {
     const actor = await currentAdminActor(req);
-    if (!actor || !actor.is_active || actor.role < ROLE_SUPER_USER) {
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
       return {
         ok: false,
         status: 403,
-        message: "RUSTER/VECTOR scan requires SuperUser, Admin, or Auditor privilege",
+        message: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
       };
     }
     return { ok: true };
@@ -1167,6 +1239,119 @@ async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } 
       message: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+function hasRasterVectorScanPrivilege(role: number): boolean {
+  return role >= ROLE_SUPER_USER;
+}
+
+function changedAdminRoleUsers(beforeUsers: AdminUser[], afterUsers: AdminUser[]): AdminUser[] {
+  const beforeByKey = new Map(beforeUsers.map((user) => [adminUserComparisonKey(user), user] as const));
+  return afterUsers.filter((after) => {
+    const before = beforeByKey.get(adminUserComparisonKey(after));
+    return !before || before.role !== after.role;
+  });
+}
+
+function adminUserCollectionsEqual(left: AdminUser[], right: AdminUser[]): boolean {
+  return normalizedSignatures(left, adminUserComparisonKey, adminUserSignature).join("\n") ===
+    normalizedSignatures(right, adminUserComparisonKey, adminUserSignature).join("\n");
+}
+
+function equipmentCollectionsEqual(left: Equipment[], right: Equipment[]): boolean {
+  return normalizedSignatures(left, equipmentComparisonKey, equipmentSignature).join("\n") ===
+    normalizedSignatures(right, equipmentComparisonKey, equipmentSignature).join("\n");
+}
+
+function normalizedSignatures<T>(
+  rows: T[],
+  key: (row: T, index: number) => string,
+  signature: (row: T) => string,
+): string[] {
+  return rows.map((row, index) => `${key(row, index)}:${signature(row)}`).sort();
+}
+
+function adminUserComparisonKey(user: AdminUser, index = 0): string {
+  if (user.id != null) return `id:${user.id}`;
+  const email = user.email.trim().toLowerCase();
+  if (email) return `email:${email}`;
+  return `index:${index}`;
+}
+
+function adminUserSignature(user: AdminUser): string {
+  return JSON.stringify({
+    id: user.id,
+    login_name: user.login_name.trim(),
+    first_name: user.first_name.trim(),
+    last_name: user.last_name.trim(),
+    email: user.email.trim().toLowerCase(),
+    phone_number: user.phone_number.trim(),
+    company_name: user.company_name.trim(),
+    site: user.site,
+    role: user.role,
+    is_active: user.is_active,
+    session_lifetime_limit_days: user.session_lifetime_limit_days,
+  });
+}
+
+function equipmentComparisonKey(equipment: Equipment, index = 0): string {
+  if (equipment.id != null) return `id:${equipment.id}`;
+  const serialNumber = equipment.serial_number.trim().toLowerCase();
+  if (serialNumber) return `serial:${serialNumber}`;
+  return `index:${index}`;
+}
+
+function equipmentSignature(equipment: Equipment): string {
+  return JSON.stringify({
+    id: equipment.id,
+    name: equipment.name.trim(),
+    model: equipment.model.trim(),
+    serial_number: equipment.serial_number.trim().toLowerCase(),
+    site: equipment.site.trim(),
+    description: equipment.description.trim(),
+  });
+}
+
+function adminDbConnectionString(
+  connection: Pick<PgConnection, "host" | "port" | "database" | "user" | "password" | "sslMode">,
+  includePassword: boolean,
+): string {
+  const authUser = encodeURIComponent(connection.user);
+  const authPassword =
+    includePassword && connection.password
+      ? `:${encodeURIComponent(connection.password)}`
+      : "";
+  const host = connection.host || "localhost";
+  const sslMode = connection.sslMode ? `?sslmode=${encodeURIComponent(connection.sslMode)}` : "";
+  return `postgresql://${authUser}${authPassword}@${host}:${connection.port}/${encodeURIComponent(connection.database)}${sslMode}`;
+}
+
+function pinsConfigEqual(left: unknown, right: unknown): boolean {
+  return stableJson(readStreamPins(left)) === stableJson(readStreamPins(right));
+}
+
+function readStreamPins(data: unknown): unknown {
+  return readConfigPath(data, ["Actions", 0, "streamData", "actionData", "pins"]);
+}
+
+function readConfigPath(data: unknown, pathParts: ReadonlyArray<string | number>): unknown {
+  let current = data;
+  for (const part of pathParts) {
+    if (!current || typeof current !== "object") return undefined;
+    current = (current as Record<string | number, unknown>)[part];
+  }
+  return current;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function normalizeSessionLifetimeDays(value: unknown): number {
@@ -1452,252 +1637,13 @@ function expectSmtp(socket: net.Socket | tls.TLSSocket, expected: number[]): Pro
   });
 }
 
-function sqlString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function sqlIntegerOrDefault(value: number | null | undefined): string {
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? String(Math.trunc(n)) : "DEFAULT";
-}
-
-function buildActivityReportCompatibilitySql(
-  ids: number[],
-  days: number,
-  equipmentId: number | null = null,
-): string {
-  const equipmentFilter =
-    Number.isInteger(equipmentId) && (equipmentId ?? 0) > 0
-      ? `AND a.equipment_id = ${equipmentId}`
-      : "";
-  return `
-    SET search_path TO iobeam_admin, public;
-    ${adminUserSiteMigrationSql()}
-    ${adminSessionSiteMigrationSql()}
-    ${adminEquipmentMigrationSql()}
-    WITH scoped_activity AS (
-      SELECT
-        a.id,
-        a.user_id,
-        a.equipment_id,
-        btrim(u.login_name::text) AS login_name,
-        btrim(u.first_name::text) AS first_name,
-        btrim(u.last_name::text) AS last_name,
-        btrim(e.name::text) AS equipment_name,
-        btrim(e.model::text) AS equipment_model,
-        btrim(e.serial_number::text) AS equipment_serial_number,
-        btrim(a.activity_type::text) AS activity_type,
-        a.date,
-        COALESCE(
-          NULLIF(btrim(latest_session.site::text), ''),
-          NULLIF(btrim(u.site::text), ''),
-          ${sqlString(DEFAULT_SITE)}
-        ) AS site,
-        CASE
-          WHEN upper(btrim(a.activity_type::text)) LIKE '%RASTER%' THEN 'raster'
-          WHEN upper(btrim(a.activity_type::text)) LIKE '%VECTOR%'
-            OR upper(btrim(a.activity_type::text)) LIKE '%VECTER%' THEN 'vector'
-          ELSE 'other'
-        END AS scan_kind
-      FROM activity a
-      JOIN "user" u ON u.id = a.user_id
-      LEFT JOIN Equipment e ON e.id = a.equipment_id
-      LEFT JOIN LATERAL (
-        SELECT s.site
-          FROM session s
-         WHERE s.user_id = a.user_id
-         ORDER BY s.login_time DESC
-         LIMIT 1
-      ) latest_session ON true
-      WHERE a.user_id = ANY(ARRAY[${ids.join(",")}]::integer[])
-        AND a.date >= CURRENT_TIMESTAMP - (${days} * INTERVAL '1 day')
-        ${equipmentFilter}
-    ),
-    normalized AS (
-      SELECT
-        *,
-        COALESCE(NULLIF(site, ''), ${sqlString(DEFAULT_SITE)}) AS site_name,
-        COALESCE(NULLIF(equipment_name, ''), 'Unknown equipment') AS equipment_label
-      FROM scoped_activity
-    )
-    SELECT jsonb_build_object(
-      'totals', COALESCE((
-        SELECT jsonb_agg(row_to_json(t) ORDER BY t.total_scans DESC, t.login_name)
-        FROM (
-          SELECT
-            user_id,
-            login_name,
-            concat_ws(' ', nullif(first_name, ''), nullif(last_name, '')) AS name,
-            COUNT(*)::int AS total_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-            MAX(date) AS last_activity
-          FROM normalized
-          GROUP BY user_id, login_name, first_name, last_name
-        ) t
-      ), '[]'::jsonb),
-      'daily', COALESCE((
-        SELECT jsonb_agg(row_to_json(d) ORDER BY d.bucket, d.login_name)
-        FROM (
-          SELECT
-            user_id,
-            equipment_id,
-            login_name,
-            equipment_label AS equipment_name,
-            to_char(date_trunc('day', date), 'YYYY-MM-DD') AS bucket,
-            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-            COUNT(*)::int AS total_scans
-          FROM normalized
-          GROUP BY user_id, equipment_id, login_name, equipment_label, date_trunc('day', date)
-        ) d
-      ), '[]'::jsonb),
-      'weekly', COALESCE((
-        SELECT jsonb_agg(row_to_json(w) ORDER BY w.week_start, w.login_name)
-        FROM (
-          SELECT
-            user_id,
-            equipment_id,
-            login_name,
-            equipment_label AS equipment_name,
-            to_char(date_trunc('week', date), 'YYYY-MM-DD') AS week_start,
-            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-            COUNT(*)::int AS total_scans
-          FROM normalized
-          GROUP BY user_id, equipment_id, login_name, equipment_label, date_trunc('week', date)
-        ) w
-      ), '[]'::jsonb),
-      'monthly', COALESCE((
-        SELECT jsonb_agg(row_to_json(m) ORDER BY m.month_start, m.login_name)
-        FROM (
-          SELECT
-            user_id,
-            equipment_id,
-            login_name,
-            equipment_label AS equipment_name,
-            to_char(date_trunc('month', date), 'YYYY-MM') AS month_start,
-            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-            COUNT(*)::int AS total_scans
-          FROM normalized
-          GROUP BY user_id, equipment_id, login_name, equipment_label, date_trunc('month', date)
-        ) m
-      ), '[]'::jsonb),
-      'yearly', COALESCE((
-        SELECT jsonb_agg(row_to_json(y) ORDER BY y.year_start, y.login_name)
-        FROM (
-          SELECT
-            user_id,
-            equipment_id,
-            login_name,
-            equipment_label AS equipment_name,
-            to_char(date_trunc('year', date), 'YYYY') AS year_start,
-            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-            COUNT(*)::int AS total_scans
-          FROM normalized
-          GROUP BY user_id, equipment_id, login_name, equipment_label, date_trunc('year', date)
-        ) y
-      ), '[]'::jsonb),
-      'site_groups', COALESCE((
-        SELECT jsonb_agg(row_to_json(s) ORDER BY s.total_scans DESC, s.site)
-        FROM (
-          SELECT
-            site_name AS site,
-            COUNT(DISTINCT user_id)::int AS accounts,
-            COUNT(*)::int AS total_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-            MAX(date) AS last_activity
-          FROM normalized
-          GROUP BY site_name
-        ) s
-      ), '[]'::jsonb),
-      'equipment_groups', COALESCE((
-        SELECT jsonb_agg(row_to_json(eq) ORDER BY eq.total_scans DESC, eq.equipment_name)
-        FROM (
-          SELECT
-            equipment_id,
-            equipment_label AS equipment_name,
-            COUNT(DISTINCT user_id)::int AS accounts,
-            COUNT(*)::int AS total_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
-            MAX(date) AS last_activity
-          FROM normalized
-          GROUP BY equipment_id, equipment_label
-        ) eq
-      ), '[]'::jsonb),
-      'geography', COALESCE((
-        SELECT jsonb_agg(row_to_json(g) ORDER BY g.total_scans DESC, g.location)
-        FROM (
-          SELECT
-            site_name AS location,
-            COUNT(DISTINCT user_id)::int AS accounts,
-            COUNT(*)::int AS total_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
-            COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
-            MAX(date) AS last_activity
-          FROM normalized
-          GROUP BY site_name
-        ) g
-      ), '[]'::jsonb),
-      'recent', COALESCE((
-        SELECT jsonb_agg(row_to_json(r) ORDER BY r.date DESC)
-        FROM (
-          SELECT
-            user_id,
-            login_name,
-            activity_type,
-            scan_kind,
-            site_name AS site,
-            site_name AS location,
-            equipment_id,
-            equipment_label AS equipment_name,
-            date
-          FROM normalized
-          ORDER BY date DESC
-          LIMIT 24
-        ) r
-      ), '[]'::jsonb)
-    );
-  `;
-}
-
 async function recordAdminSession(
   req: express.Request,
   user: AdminUser,
   selectedSite: string,
 ): Promise<void> {
-  if (!Number.isInteger(user.id) || (user.id ?? 0) <= 0) {
-    throw new Error("cannot record session for an admin user without a database id");
-  }
-
   const clientMachineName = trimForSqlNchar(clientAddress(req), 150);
-  await ensureAdminSessionSchema();
-
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    INSERT INTO session (
-      user_id, login_name, client_machine_name, site, login_time, is_autorized
-    )
-    VALUES (
-      ${user.id},
-      ${sqlString(trimForSqlNchar(user.login_name, 100))},
-      ${sqlString(clientMachineName)},
-      ${sqlString(trimForSqlNchar(selectedSite, 150))},
-      CURRENT_TIMESTAMP,
-      true
-    );
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+  await recordAdminSessionInDb(user, clientMachineName, trimForSqlNchar(selectedSite, 150));
 }
 
 async function isAdminSessionExpired(user: AdminUser): Promise<boolean> {
@@ -1707,23 +1653,7 @@ async function isAdminSessionExpired(user: AdminUser): Promise<boolean> {
   );
 
   try {
-    await ensureAdminSessionSchema();
-    const sql = `
-      SET search_path TO iobeam_admin, public;
-      SELECT CASE
-               WHEN latest_login IS NULL THEN 'expired'
-               WHEN latest_login < CURRENT_TIMESTAMP - (${lifetimeDays} * INTERVAL '1 day') THEN 'expired'
-               ELSE 'active'
-             END
-        FROM (
-          SELECT MAX(login_time) AS latest_login
-            FROM session
-           WHERE user_id = ${user.id}
-             AND is_autorized = true
-        ) latest;
-    `;
-    const out = await runPsql(["-Atq"], config.adminDbName, sql);
-    return out.trim() !== "active";
+    return await isAdminSessionExpiredInDb(user.id!, lifetimeDays);
   } catch (err) {
     console.warn(
       `[iobeam-admin/auth] session expiration check failed: ${
@@ -1732,202 +1662,6 @@ async function isAdminSessionExpired(user: AdminUser): Promise<boolean> {
     );
     return false;
   }
-}
-
-async function ensureAdminSessionSchema(): Promise<void> {
-  if (!adminSessionSchemaReady) {
-    adminSessionSchemaReady = (async () => {
-      const sql = `
-        SET search_path TO iobeam_admin, public;
-        ${adminSessionSiteMigrationSql()}
-        ALTER TABLE session
-          DROP COLUMN IF EXISTS mac_address,
-          ADD COLUMN IF NOT EXISTS login_time timestamp(6);
-
-        DO $$
-        BEGIN
-          IF EXISTS (
-              SELECT 1
-                FROM information_schema.columns
-               WHERE table_schema = 'iobeam_admin'
-                 AND table_name = 'session'
-                 AND column_name = 'last_signed_in'
-          ) THEN
-              EXECUTE 'UPDATE session
-                         SET login_time = COALESCE(login_time, last_signed_in, CURRENT_TIMESTAMP)
-                       WHERE login_time IS NULL';
-          ELSE
-              UPDATE session
-                 SET login_time = CURRENT_TIMESTAMP
-               WHERE login_time IS NULL;
-          END IF;
-        END;
-        $$;
-
-        ALTER TABLE session
-          ALTER COLUMN login_time SET DEFAULT CURRENT_TIMESTAMP,
-          ALTER COLUMN login_time SET NOT NULL,
-          DROP COLUMN IF EXISTS last_signed_in;
-      `;
-      await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
-    })().catch((err) => {
-      adminSessionSchemaReady = null;
-      throw err;
-    });
-  }
-  await adminSessionSchemaReady;
-}
-
-function adminUserSiteMigrationSql(): string {
-  return `
-    DO $$
-    DECLARE
-      legacy_column text;
-      has_site boolean;
-    BEGIN
-      SELECT EXISTS (
-        SELECT 1
-          FROM information_schema.columns
-         WHERE table_schema = 'iobeam_admin'
-           AND table_name = 'user'
-           AND column_name = 'site'
-      ) INTO has_site;
-
-      SELECT column_name
-        INTO legacy_column
-        FROM information_schema.columns
-       WHERE table_schema = 'iobeam_admin'
-         AND table_name = 'user'
-         AND column_name IN ('geo', 'geography', 'geo_site', 'geolocation')
-       ORDER BY CASE column_name
-                  WHEN 'geo' THEN 1
-                  WHEN 'geography' THEN 2
-                  WHEN 'geo_site' THEN 3
-                  ELSE 4
-                END
-       LIMIT 1;
-
-      IF legacy_column IS NOT NULL AND NOT has_site THEN
-        EXECUTE format('ALTER TABLE "user" RENAME COLUMN %I TO site', legacy_column);
-      END IF;
-    END;
-    $$;
-
-    ALTER TABLE "user"
-      ADD COLUMN IF NOT EXISTS site nchar(150);
-
-    DO $$
-    DECLARE
-      legacy_column text;
-    BEGIN
-      SELECT column_name
-        INTO legacy_column
-        FROM information_schema.columns
-       WHERE table_schema = 'iobeam_admin'
-         AND table_name = 'user'
-         AND column_name IN ('geo', 'geography', 'geo_site', 'geolocation')
-       ORDER BY CASE column_name
-                  WHEN 'geo' THEN 1
-                  WHEN 'geography' THEN 2
-                  WHEN 'geo_site' THEN 3
-                  ELSE 4
-                END
-       LIMIT 1;
-
-      IF legacy_column IS NOT NULL THEN
-        EXECUTE format(
-          'UPDATE "user" SET site = COALESCE(NULLIF(btrim(site::text), ''''), NULLIF(btrim(%I::text), ''''), %L)',
-          legacy_column,
-          ${sqlString(DEFAULT_SITE)}
-        );
-      END IF;
-    END;
-    $$;
-
-    UPDATE "user"
-       SET site = ${sqlString(DEFAULT_SITE)}
-     WHERE site IS NULL OR btrim(site::text) = '';
-
-    ALTER TABLE "user"
-      ALTER COLUMN site SET DEFAULT ${sqlString(DEFAULT_SITE)},
-      ALTER COLUMN site SET NOT NULL;
-  `;
-}
-
-function adminSessionSiteMigrationSql(): string {
-  return `
-    DO $$
-    DECLARE
-      legacy_column text;
-      has_site boolean;
-    BEGIN
-      SELECT EXISTS (
-        SELECT 1
-          FROM information_schema.columns
-         WHERE table_schema = 'iobeam_admin'
-           AND table_name = 'session'
-           AND column_name = 'site'
-      ) INTO has_site;
-
-      SELECT column_name
-        INTO legacy_column
-        FROM information_schema.columns
-       WHERE table_schema = 'iobeam_admin'
-         AND table_name = 'session'
-         AND column_name IN ('geo', 'geography', 'geo_site', 'geolocation')
-       ORDER BY CASE column_name
-                  WHEN 'geo' THEN 1
-                  WHEN 'geography' THEN 2
-                  WHEN 'geo_site' THEN 3
-                  ELSE 4
-                END
-       LIMIT 1;
-
-      IF legacy_column IS NOT NULL AND NOT has_site THEN
-        EXECUTE format('ALTER TABLE session RENAME COLUMN %I TO site', legacy_column);
-      END IF;
-    END;
-    $$;
-
-    ALTER TABLE session
-      ADD COLUMN IF NOT EXISTS site nchar(150);
-
-    DO $$
-    DECLARE
-      legacy_column text;
-    BEGIN
-      SELECT column_name
-        INTO legacy_column
-        FROM information_schema.columns
-       WHERE table_schema = 'iobeam_admin'
-         AND table_name = 'session'
-         AND column_name IN ('geo', 'geography', 'geo_site', 'geolocation')
-       ORDER BY CASE column_name
-                  WHEN 'geo' THEN 1
-                  WHEN 'geography' THEN 2
-                  WHEN 'geo_site' THEN 3
-                  ELSE 4
-                END
-       LIMIT 1;
-
-      IF legacy_column IS NOT NULL THEN
-        EXECUTE format(
-          'UPDATE session SET site = COALESCE(NULLIF(btrim(site::text), ''''), NULLIF(btrim(%I::text), ''''), %L)',
-          legacy_column,
-          ${sqlString(DEFAULT_SITE)}
-        );
-      END IF;
-    END;
-    $$;
-
-    UPDATE session
-       SET site = ${sqlString(DEFAULT_SITE)}
-     WHERE site IS NULL OR btrim(site::text) = '';
-
-    ALTER TABLE session
-      ALTER COLUMN site SET DEFAULT ${sqlString(DEFAULT_SITE)},
-      ALTER COLUMN site SET NOT NULL;
-  `;
 }
 
 function clientAddress(req: express.Request): string {
@@ -1939,691 +1673,6 @@ function trimForSqlNchar(value: string, maxLength: number): string {
   return value.trim().slice(0, maxLength);
 }
 
-function resolvePsqlBinary(): string {
-  const explicit = process.env.PSQL_PATH?.trim();
-  if (explicit) return explicit;
-  if (process.platform !== "win32") return "psql";
-
-  const roots = [
-    process.env.ProgramFiles,
-    process.env["ProgramFiles(x86)"],
-  ].filter((value): value is string => Boolean(value));
-
-  for (const root of roots) {
-    const pgRoot = path.join(root, "PostgreSQL");
-    if (!fs.existsSync(pgRoot)) continue;
-    try {
-      const versions = fs
-        .readdirSync(pgRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-      for (const version of versions) {
-        const candidate = path.join(pgRoot, version, "bin", "psql.exe");
-        if (fs.existsSync(candidate)) return candidate;
-      }
-    } catch {
-      // Fall through to PATH lookup below.
-    }
-  }
-
-  return "psql";
-}
-
-async function ensureAdminUserSchema(): Promise<void> {
-  if (!adminUserSchemaReady) {
-    adminUserSchemaReady = (async () => {
-      const sql = `
-        SET search_path TO iobeam_admin, public;
-        ${adminUserSiteMigrationSql()}
-        ${adminAuditorMigrationSql()}
-        ${adminUserLoginNameUniquenessMigrationSql()}
-        ${adminUserRegistrationFunctionSql()}
-
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-              SELECT 1
-                FROM pg_constraint
-                JOIN pg_attribute
-                  ON pg_attribute.attrelid = pg_constraint.conrelid
-                 AND pg_attribute.attnum = ANY(pg_constraint.conkey)
-               WHERE pg_constraint.conrelid = 'iobeam_admin."user"'::regclass
-                 AND pg_constraint.contype = 'u'
-                 AND pg_attribute.attname = 'email'
-                 AND cardinality(pg_constraint.conkey) = 1
-          ) THEN
-              ALTER TABLE "user"
-                ADD CONSTRAINT user_email_unique UNIQUE (email);
-          END IF;
-        END;
-        $$;
-      `;
-      await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
-    })().catch((err) => {
-      adminUserSchemaReady = null;
-      throw err;
-    });
-  }
-  await adminUserSchemaReady;
-}
-
-function adminUserLoginNameUniquenessMigrationSql(): string {
-  return `
-    DO $$
-    DECLARE
-      constraint_name text;
-    BEGIN
-      FOR constraint_name IN
-        SELECT pg_constraint.conname
-          FROM pg_constraint
-          JOIN pg_attribute
-            ON pg_attribute.attrelid = pg_constraint.conrelid
-           AND pg_attribute.attnum = ANY(pg_constraint.conkey)
-         WHERE pg_constraint.conrelid = 'iobeam_admin."user"'::regclass
-           AND pg_constraint.contype = 'u'
-           AND pg_attribute.attname = 'login_name'
-           AND cardinality(pg_constraint.conkey) = 1
-      LOOP
-        EXECUTE format('ALTER TABLE "user" DROP CONSTRAINT IF EXISTS %I', constraint_name);
-      END LOOP;
-    END;
-    $$;
-  `;
-}
-
-function adminUserRegistrationFunctionSql(): string {
-  return `
-    CREATE OR REPLACE FUNCTION register_user(
-      p_login_name nchar(100),
-      p_first_name nchar(100),
-      p_last_name nchar(100),
-      p_email nchar(250),
-      p_phone_number nchar(25),
-      p_company_name nchar(150),
-      p_site nchar(150),
-      p_role integer DEFAULT 0,
-      p_session_lifetime_limit_days integer DEFAULT 1
-    )
-    RETURNS jsonb
-    LANGUAGE plpgsql
-    AS $register_user$
-    DECLARE
-      v_login_name text := btrim(p_login_name::text);
-      v_email text := btrim(p_email::text);
-      v_next_id integer;
-      v_user jsonb;
-    BEGIN
-      IF v_login_name = '' THEN
-        RETURN jsonb_build_object('ok', false, 'error', 'login name is required');
-      END IF;
-      IF v_email = '' THEN
-        RETURN jsonb_build_object('ok', false, 'error', 'email is required');
-      END IF;
-
-      LOCK TABLE "user" IN SHARE ROW EXCLUSIVE MODE;
-
-      IF EXISTS (
-        SELECT 1
-          FROM "user"
-         WHERE lower(btrim(email::text)) = lower(v_email)
-      ) THEN
-        RETURN jsonb_build_object('ok', false, 'error', 'email is already registered');
-      END IF;
-
-      SELECT COALESCE(MAX(id), 0) + 1 INTO v_next_id FROM "user";
-
-      INSERT INTO "user" (
-        id, login_name, first_name, last_name, email,
-        phone_number, company_name, site, role, is_active, session_lifetime_limit_days
-      )
-      VALUES (
-        v_next_id,
-        p_login_name,
-        p_first_name,
-        p_last_name,
-        p_email,
-        p_phone_number,
-        p_company_name,
-        p_site,
-        COALESCE(p_role, 0),
-        true,
-        GREATEST(1, COALESCE(p_session_lifetime_limit_days, 1))
-      );
-
-      SELECT row_to_json(u)::jsonb INTO v_user
-        FROM (
-          SELECT
-            id,
-            btrim(login_name::text) AS login_name,
-            btrim(first_name::text) AS first_name,
-            btrim(last_name::text) AS last_name,
-            btrim(email::text) AS email,
-            btrim(phone_number::text) AS phone_number,
-            btrim(company_name::text) AS company_name,
-            btrim(site::text) AS site,
-            role,
-            is_active,
-            session_lifetime_limit_days
-          FROM "user"
-          WHERE id = v_next_id
-        ) u;
-
-      RETURN jsonb_build_object('ok', true, 'user', v_user);
-    EXCEPTION
-      WHEN unique_violation THEN
-        RETURN jsonb_build_object('ok', false, 'error', 'email is already registered');
-    END;
-    $register_user$;
-  `;
-}
-
-function adminAuditorMigrationSql(): string {
-  return `
-    CREATE TABLE IF NOT EXISTS auditor (
-      id         integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-      user_name nchar(100) NOT NULL,
-      email     nchar(100) NOT NULL UNIQUE,
-      is_active boolean    NOT NULL DEFAULT true
-    );
-
-    INSERT INTO auditor (user_name, email, is_active)
-    VALUES
-      ('Henry Li', 'lyh1154@gmail.com', true),
-      ('Sen Da', 'xda@ionbeamtech.com', true),
-      ('Yuyao Jiang', 'yuyao.jiang@ionbeamtech.com', true)
-    ON CONFLICT (email) DO UPDATE
-       SET user_name = EXCLUDED.user_name,
-           is_active = EXCLUDED.is_active;
-  `;
-}
-
-function adminEquipmentMigrationSql(): string {
-  return `
-    CREATE TABLE IF NOT EXISTS Equipment (
-      id            integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-      name          varchar(100)  NOT NULL,
-      model         varchar(100)  NOT NULL DEFAULT '',
-      serial_number varchar(15)   NOT NULL UNIQUE,
-      site          varchar(50)   NOT NULL DEFAULT '',
-      description   varchar(1000) NOT NULL DEFAULT ''
-    );
-
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-          SELECT 1
-            FROM pg_constraint
-            JOIN pg_attribute
-              ON pg_attribute.attrelid = pg_constraint.conrelid
-             AND pg_attribute.attnum = ANY(pg_constraint.conkey)
-           WHERE conrelid = 'iobeam_admin.equipment'::regclass
-             AND pg_constraint.contype = 'u'
-             AND pg_attribute.attname = 'serial_number'
-             AND cardinality(pg_constraint.conkey) = 1
-      ) THEN
-          ALTER TABLE Equipment
-            ADD CONSTRAINT equipment_serial_number_unique UNIQUE (serial_number);
-      END IF;
-    END;
-    $$;
-
-    INSERT INTO Equipment (name, model, serial_number, site, description)
-    VALUES (
-      'FEI Helios NanoLab 600i DualBeam',
-      '',
-      'DB123456z',
-      'Taixin',
-      'DualBeam SEM/FIB, containing both a focused Ga+ ion beam ("Tomahawk") and a high resolution field emission scanning electron ("Elstar") column.'
-    )
-    ON CONFLICT (serial_number) DO UPDATE
-       SET name = EXCLUDED.name,
-           model = EXCLUDED.model,
-           site = EXCLUDED.site,
-           description = EXCLUDED.description;
-
-    ALTER TABLE activity
-      ADD COLUMN IF NOT EXISTS equipment_id integer;
-
-    UPDATE activity
-       SET equipment_id = (SELECT id FROM Equipment ORDER BY id LIMIT 1)
-     WHERE equipment_id IS NULL;
-
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-          SELECT 1
-            FROM pg_constraint
-           WHERE conrelid = 'iobeam_admin.activity'::regclass
-             AND conname = 'activity_equipment_id_fkey'
-      ) THEN
-          ALTER TABLE activity
-            ADD CONSTRAINT activity_equipment_id_fkey
-            FOREIGN KEY (equipment_id) REFERENCES Equipment(id) ON DELETE SET NULL;
-      END IF;
-    END;
-    $$;
-
-    CREATE INDEX IF NOT EXISTS idx_activity_equipment_date
-      ON activity (equipment_id, date DESC);
-  `;
-}
-
-async function ensureAdminEquipmentSchema(): Promise<void> {
-  if (!adminEquipmentSchemaReady) {
-    adminEquipmentSchemaReady = (async () => {
-      const sql = `
-        SET search_path TO iobeam_admin, public;
-        ${adminEquipmentMigrationSql()}
-      `;
-      await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
-    })().catch((err) => {
-      adminEquipmentSchemaReady = null;
-      throw err;
-    });
-  }
-  await adminEquipmentSchemaReady;
-}
-
-async function listEquipmentFromDb(): Promise<Equipment[]> {
-  await ensureAdminEquipmentSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    SELECT COALESCE(jsonb_agg(row_to_json(e) ORDER BY e.id), '[]'::jsonb)
-      FROM (
-        SELECT
-          id,
-          btrim(name::text) AS name,
-          btrim(model::text) AS model,
-          btrim(serial_number::text) AS serial_number,
-          btrim(site::text) AS site,
-          btrim(description::text) AS description
-        FROM Equipment
-        ORDER BY id
-      ) e;
-  `;
-  const out = await runPsql(["-Atq"], config.adminDbName, sql);
-  const rows = JSON.parse(out.trim() || "[]") as unknown;
-  return readEquipment({ equipments: rows });
-}
-
-async function upsertEquipmentInDb(equipment: Equipment): Promise<void> {
-  await ensureAdminEquipmentSchema();
-  const idValue = sqlIntegerOrDefault(equipment.id);
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    INSERT INTO Equipment (id, name, model, serial_number, site, description)
-    VALUES (
-      ${idValue},
-      ${sqlString(trimForSqlNchar(equipment.name, 100))},
-      ${sqlString(trimForSqlNchar(equipment.model, 100))},
-      ${sqlString(trimForSqlNchar(equipment.serial_number, 15))},
-      ${sqlString(trimForSqlNchar(equipment.site, 50))},
-      ${sqlString(trimForSqlNchar(equipment.description, 1000))}
-    )
-    ON CONFLICT (serial_number) DO UPDATE
-       SET name = EXCLUDED.name,
-           model = EXCLUDED.model,
-           site = EXCLUDED.site,
-           description = EXCLUDED.description;
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
-}
-
-async function upsertEquipmentRowsInDb(equipmentRows: Equipment[]): Promise<void> {
-  await ensureAdminEquipmentSchema();
-  const values = equipmentRows
-    .map((equipment) => {
-      const idValue = sqlIntegerOrDefault(equipment.id);
-      return `(
-        ${idValue},
-        ${sqlString(trimForSqlNchar(equipment.name, 100))},
-        ${sqlString(trimForSqlNchar(equipment.model, 100))},
-        ${sqlString(trimForSqlNchar(equipment.serial_number, 15))},
-        ${sqlString(trimForSqlNchar(equipment.site, 50))},
-        ${sqlString(trimForSqlNchar(equipment.description, 1000))}
-      )`;
-    })
-    .join(",\n");
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    INSERT INTO Equipment (id, name, model, serial_number, site, description)
-    VALUES ${values}
-    ON CONFLICT (serial_number) DO UPDATE
-       SET name = EXCLUDED.name,
-           model = EXCLUDED.model,
-           site = EXCLUDED.site,
-           description = EXCLUDED.description;
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
-}
-
-async function syncEquipmentToDb(data: unknown): Promise<void> {
-  const equipmentRows = readEquipment(data).filter(
-    (equipment) => equipment.name.trim() && equipment.serial_number.trim(),
-  );
-  if (equipmentRows.length === 0) return;
-  await upsertEquipmentRowsInDb(equipmentRows);
-}
-
-async function findAdminUserInDb(loginOrEmail: string): Promise<AdminUser | null> {
-  const login = loginOrEmail.trim();
-  if (!login) return null;
-  await ensureAdminUserSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    SELECT COALESCE(jsonb_agg(row_to_json(u)), '[]'::jsonb)
-      FROM (
-        SELECT
-          id,
-          btrim(login_name::text) AS login_name,
-          btrim(first_name::text) AS first_name,
-          btrim(last_name::text) AS last_name,
-          btrim(email::text) AS email,
-          btrim(phone_number::text) AS phone_number,
-          btrim(company_name::text) AS company_name,
-          btrim(site::text) AS site,
-          role,
-          is_active,
-          session_lifetime_limit_days
-        FROM "user"
-        WHERE lower(btrim(login_name::text)) = lower(${sqlString(login)})
-           OR lower(btrim(email::text)) = lower(${sqlString(login)})
-        ORDER BY id
-        LIMIT 1
-      ) u;
-  `;
-  const out = await runPsql(["-Atq"], config.adminDbName, sql);
-  const rows = JSON.parse(out.trim() || "[]") as unknown;
-  return Array.isArray(rows) && rows[0] ? readAdminUsers({ users: rows })[0] ?? null : null;
-}
-
-async function findAdminUserInDbById(id: number): Promise<AdminUser | null> {
-  if (!Number.isInteger(id) || id <= 0) return null;
-  await ensureAdminUserSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    SELECT COALESCE(jsonb_agg(row_to_json(u)), '[]'::jsonb)
-      FROM (
-        SELECT
-          id,
-          btrim(login_name::text) AS login_name,
-          btrim(first_name::text) AS first_name,
-          btrim(last_name::text) AS last_name,
-          btrim(email::text) AS email,
-          btrim(phone_number::text) AS phone_number,
-          btrim(company_name::text) AS company_name,
-          btrim(site::text) AS site,
-          role,
-          is_active,
-          session_lifetime_limit_days
-        FROM "user"
-        WHERE id = ${id}
-        LIMIT 1
-      ) u;
-  `;
-  const out = await runPsql(["-Atq"], config.adminDbName, sql);
-  const rows = JSON.parse(out.trim() || "[]") as unknown;
-  return Array.isArray(rows) && rows[0] ? readAdminUsers({ users: rows })[0] ?? null : null;
-}
-
-async function listAdminUsersFromDb(): Promise<AdminUser[]> {
-  await ensureAdminUserSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    SELECT COALESCE(jsonb_agg(row_to_json(u) ORDER BY u.id), '[]'::jsonb)
-      FROM (
-        SELECT
-          id,
-          btrim(login_name::text) AS login_name,
-          btrim(first_name::text) AS first_name,
-          btrim(last_name::text) AS last_name,
-          btrim(email::text) AS email,
-          btrim(phone_number::text) AS phone_number,
-          btrim(company_name::text) AS company_name,
-          btrim(site::text) AS site,
-          role,
-          is_active,
-          session_lifetime_limit_days
-        FROM "user"
-        ORDER BY id
-      ) u;
-  `;
-  const out = await runPsql(["-Atq"], config.adminDbName, sql);
-  const rows = JSON.parse(out.trim() || "[]") as unknown;
-  return readAdminUsers({ users: rows });
-}
-
-async function upsertAdminUserInDb(user: AdminUser): Promise<void> {
-  await ensureAdminUserSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    INSERT INTO "user" (
-      id, login_name, first_name, last_name, email,
-      phone_number, company_name, site, role, is_active, session_lifetime_limit_days
-    )
-    VALUES (
-      ${user.id ?? "DEFAULT"},
-      ${sqlString(trimForSqlNchar(user.login_name, 100))},
-      ${sqlString(trimForSqlNchar(user.first_name, 100))},
-      ${sqlString(trimForSqlNchar(user.last_name, 100))},
-      ${sqlString(trimForSqlNchar(user.email, 250))},
-      ${sqlString(trimForSqlNchar(user.phone_number, 25))},
-      ${sqlString(trimForSqlNchar(user.company_name, 150))},
-      ${sqlString(trimForSqlNchar(user.site, 150))},
-      ${Math.trunc(user.role || ROLE_USER)},
-      ${user.is_active ? "true" : "false"},
-      ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
-    )
-    ON CONFLICT (email) DO UPDATE
-       SET first_name = EXCLUDED.first_name,
-           last_name = EXCLUDED.last_name,
-           login_name = EXCLUDED.login_name,
-           phone_number = EXCLUDED.phone_number,
-           company_name = EXCLUDED.company_name,
-           site = EXCLUDED.site,
-           role = EXCLUDED.role,
-           is_active = EXCLUDED.is_active,
-           session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
-}
-
-async function registerAdminUserInDb(user: AdminUser): Promise<RegisterAdminUserDbResult> {
-  await ensureAdminUserSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    SELECT register_user(
-      ${sqlString(trimForSqlNchar(user.login_name, 100))},
-      ${sqlString(trimForSqlNchar(user.first_name, 100))},
-      ${sqlString(trimForSqlNchar(user.last_name, 100))},
-      ${sqlString(trimForSqlNchar(user.email, 250))},
-      ${sqlString(trimForSqlNchar(user.phone_number, 25))},
-      ${sqlString(trimForSqlNchar(user.company_name, 150))},
-      ${sqlString(trimForSqlNchar(user.site, 150))},
-      ${Math.trunc(user.role || ROLE_USER)},
-      ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
-    );
-  `;
-  const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
-  const raw = JSON.parse(out.trim() || "{}") as unknown;
-  if (!raw || typeof raw !== "object") {
-    throw new ConfigError("register_user returned an invalid response", 500);
-  }
-  const result = raw as Record<string, unknown>;
-  if (result.ok === false) {
-    return { ok: false, error: String(result.error ?? "registration failed") };
-  }
-  if (result.ok !== true) {
-    throw new ConfigError("register_user returned an invalid status", 500);
-  }
-  const created = readAdminUsers({ users: [result.user] })[0] ?? null;
-  if (!created) {
-    throw new ConfigError("register_user did not return the created user", 500);
-  }
-  return { ok: true, user: created };
-}
-
-async function upsertAdminUserRowsInDb(users: AdminUser[]): Promise<void> {
-  await ensureAdminUserSchema();
-  const values = users
-    .map((user) => `(
-      ${user.id ?? "DEFAULT"},
-      ${sqlString(trimForSqlNchar(user.login_name, 100))},
-      ${sqlString(trimForSqlNchar(user.first_name, 100))},
-      ${sqlString(trimForSqlNchar(user.last_name, 100))},
-      ${sqlString(trimForSqlNchar(user.email, 250))},
-      ${sqlString(trimForSqlNchar(user.phone_number, 25))},
-      ${sqlString(trimForSqlNchar(user.company_name, 150))},
-      ${sqlString(trimForSqlNchar(user.site, 150))},
-      ${Math.trunc(user.role || ROLE_USER)},
-      ${user.is_active ? "true" : "false"},
-      ${Math.max(1, Math.trunc(user.session_lifetime_limit_days || 1))}
-    )`)
-    .join(",\n");
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    INSERT INTO "user" (
-      id, login_name, first_name, last_name, email,
-      phone_number, company_name, site, role, is_active, session_lifetime_limit_days
-    )
-    VALUES ${values}
-    ON CONFLICT (email) DO UPDATE
-       SET first_name = EXCLUDED.first_name,
-           last_name = EXCLUDED.last_name,
-           login_name = EXCLUDED.login_name,
-           phone_number = EXCLUDED.phone_number,
-           company_name = EXCLUDED.company_name,
-           site = EXCLUDED.site,
-           role = EXCLUDED.role,
-           is_active = EXCLUDED.is_active,
-           session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
-  `;
-  await runPsql(["-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
-}
-
-async function syncAdminUsersToDb(data: unknown): Promise<void> {
-  const users = readAdminUsers(data).filter((user) => user.login_name.trim() && user.email.trim());
-  if (users.length === 0) return;
-  await upsertAdminUserRowsInDb(users);
-}
-
-async function isAuditorEmailInDb(email: string): Promise<boolean> {
-  await ensureAdminUserSchema();
-  const sql = `
-    SET search_path TO iobeam_admin, public;
-    SELECT CASE WHEN EXISTS (
-      SELECT 1
-        FROM auditor
-       WHERE lower(btrim(email::text)) = lower(${sqlString(email)})
-         AND is_active = true
-    ) THEN 'true' ELSE 'false' END;
-  `;
-  const out = await runPsql(["-Atq"], config.adminDbName, sql);
-  return out.trim() === "true";
-}
-
-function runPsql(
-  args: string[],
-  database = config.adminDbName,
-  stdin?: string,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (Date.now() < adminDbBackoffUntil) {
-      reject(
-        new Error(
-          `psql temporarily unavailable for ${config.adminDbHost}:${config.adminDbPort}/${database} after a recent connection failure`,
-        ),
-      );
-      return;
-    }
-    let settled = false;
-    const child = spawn(
-      resolvePsqlBinary(),
-      [
-        "-h",
-        config.adminDbHost,
-        "-p",
-        String(config.adminDbPort),
-        "-U",
-        config.adminDbUser,
-        "-d",
-        database,
-        ...args,
-      ],
-      {
-        env: {
-          ...process.env,
-          ...(config.adminDbPassword ? { PGPASSWORD: config.adminDbPassword } : {}),
-          PGCONNECT_TIMEOUT: String(
-            Math.max(1, Math.ceil(config.adminDbCommandTimeoutMs / 1000)),
-          ),
-        },
-        stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-      },
-    );
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      child.kill("SIGTERM");
-      adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
-      reject(
-        new Error(
-          `psql timed out after ${config.adminDbCommandTimeoutMs}ms connecting to ${config.adminDbHost}:${config.adminDbPort}/${database}`,
-        ),
-      );
-    }, config.adminDbCommandTimeoutMs);
-
-    function finish(fn: () => void): void {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      fn();
-    }
-
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.setEncoding("utf8");
-    child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr?.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    if (stdin !== undefined) {
-      child.stdin?.setDefaultEncoding("utf8");
-      child.stdin?.end(stdin);
-    }
-    child.on("error", (err) => {
-      finish(() => {
-        if (isDbConnectivityError(err.message)) {
-          adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
-        }
-        reject(err);
-      });
-    });
-    child.on("close", (code) => {
-      finish(() => {
-        if (code === 0) {
-          adminDbBackoffUntil = 0;
-          resolve(stdout);
-          return;
-        }
-        const message = stderr.trim() || `psql exited with code ${code}`;
-        if (isDbConnectivityError(message)) {
-          adminDbBackoffUntil = Date.now() + ADMIN_DB_BACKOFF_MS;
-        }
-        reject(new Error(message));
-      });
-    });
-  });
-}
-
-function isDbConnectivityError(message: string): boolean {
-  return /timed out after|could not connect to server|connection refused|timeout/i.test(message);
-}
-
 async function restartServicesAndRespond(
   res: express.Response<RestartServicesResponse>
 ): Promise<void> {
@@ -2631,109 +1680,6 @@ async function restartServicesAndRespond(
   const backendRestart = planBackendRestart(restart.ok);
   res.json({ ok: true, restart, backend_restart: backendRestart });
   scheduleBackendRestartAfterResponse(res, backendRestart);
-}
-
-async function reconnectDeviceAndRespond(
-  res: express.Response<ServiceStatus | unknown>
-): Promise<void> {
-  const reconnect = await fetchUpstreamJson("/admin/reconnect", "POST");
-  if (reconnect.ok) {
-    res.status(reconnect.status).json(reconnect.data);
-    return;
-  }
-
-  if (!reconnect.unreachable) {
-    res.status(reconnect.status).json(reconnect.data);
-    return;
-  }
-
-  const restart = await restartService();
-  if (!restart.ok) {
-    res.json(
-      disconnectedStatus(
-        `Glasgow service is not reachable at ${config.proxyTargetHttp}; restart failed: ${restart.error ?? restart.stderr ?? "unknown error"}`
-      )
-    );
-    return;
-  }
-
-  const status = await waitForUpstreamStatus();
-  res.json(
-    status ??
-      disconnectedStatus(
-        `Glasgow service restart completed, but ${config.proxyTargetHttp}/status did not become reachable.`
-      )
-  );
-}
-
-async function waitForUpstreamStatus(): Promise<ServiceStatus | null> {
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const status = await fetchUpstreamJson("/status", "GET");
-    if (status.ok) return status.data as ServiceStatus;
-    await delay(500);
-  }
-  return null;
-}
-
-async function fetchUpstreamJson(
-  pathname: string,
-  method: "GET" | "POST"
-): Promise<UpstreamJsonResult> {
-  const url = new URL(pathname, config.proxyTargetHttp);
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (config.glasgowToken) {
-    headers.Authorization = `Bearer ${config.glasgowToken}`;
-  }
-
-  try {
-    const response = await fetch(url, { method, headers });
-    const text = await response.text();
-    const data = parseJsonOrText(text);
-    if (response.ok) return { ok: true, status: response.status, data };
-    return {
-      ok: false,
-      status: response.status,
-      data,
-      message: response.statusText,
-      unreachable: false,
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return {
-      ok: false,
-      status: 502,
-      data: {
-        ok: false,
-        error: "upstream_unreachable",
-        detail: message,
-        target: config.proxyTargetHttp,
-      },
-      message,
-      unreachable: true,
-    };
-  }
-}
-
-function parseJsonOrText(text: string): unknown {
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { detail: text };
-  }
-}
-
-function disconnectedStatus(lastError: string): ServiceStatus {
-  return {
-    state: "disconnected",
-    last_error: lastError,
-    scans_completed: 0,
-    chunks_in_flight: 0,
-  };
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function scheduleBackendRestartAfterResponse(
@@ -2751,23 +1697,12 @@ function scheduleBackendRestartAfterResponse(
 
 function restartBackend(restart: BackendRestartResult): void {
   if (restart.mode === "command" && restart.command) {
-    const child = process.platform === "win32"
-      ? spawn(
-          "cmd.exe",
-          ["/d", "/s", "/c", `timeout /t 1 /nobreak >NUL & ${restart.command}`],
-          {
-            detached: true,
-            stdio: "ignore",
-            cwd: path.resolve(__dirname, ".."),
-            env: process.env,
-          }
-        )
-      : spawn("bash", ["-lc", `sleep 1; exec ${restart.command}`], {
-          detached: true,
-          stdio: "ignore",
-          cwd: path.resolve(__dirname, ".."),
-          env: process.env,
-        });
+    const child = spawn("bash", ["-lc", `sleep 1; exec ${restart.command}`], {
+      detached: true,
+      stdio: "ignore",
+      cwd: path.resolve(__dirname, ".."),
+      env: process.env,
+    });
     child.unref();
   }
 
