@@ -28,7 +28,7 @@ class detachedShellLaunch_state(distributionDeploy_state):
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
-            actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
+            actionData = self.resolvedActionData(stateConfig)
 
             runDir = actionData.get("dir") or actionData.get("root")
             if runDir:

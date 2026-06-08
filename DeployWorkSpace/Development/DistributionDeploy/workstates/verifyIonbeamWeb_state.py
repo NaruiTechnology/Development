@@ -23,6 +23,7 @@ class verifyIonbeamWeb_state(distributionDeploy_state):
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
+            stateConfig = self.resolvedStateConfig(stateConfig)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             checks = actionData.get("checks") or actionData.get("urls") or [
                 "http://127.0.0.1:4000/healthz",

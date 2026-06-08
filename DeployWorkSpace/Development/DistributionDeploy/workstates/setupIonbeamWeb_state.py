@@ -22,6 +22,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
+            stateConfig = self.resolvedStateConfig(stateConfig)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
@@ -115,19 +116,69 @@ class setupIonbeamWeb_state(distributionDeploy_state):
 
     def _writeBackendEnv(self, envFile, backendDir, actionData):
         deployRoot = self.resolveDeployPath(".")
+        deployment = self.deploymentConfig()
         token = os.environ.get("GLASGOW_TOKEN", "").strip()
-        backendHost = str(actionData.get("backendHost", "127.0.0.1") or "127.0.0.1").strip()
+        backendHost = str(
+            deployment.get("BackendHost")
+            or actionData.get("backendHost")
+            or "127.0.0.1"
+        ).strip()
+        proxyTargetHttp = str(
+            deployment.get("ProxyTargetHttp")
+            or actionData.get("proxyTargetHttp")
+            or "http://127.0.0.1:8765"
+        ).strip()
+        proxyTargetWs = str(
+            deployment.get("ProxyTargetWs")
+            or actionData.get("proxyTargetWs")
+            or "ws://127.0.0.1:8765"
+        ).strip()
         dbConfig = self._readAdminDbConfig(actionData)
-        dbHost = str(actionData.get("adminDbHost") or dbConfig.get("Host") or "localhost").strip()
-        dbPort = int(actionData.get("adminDbPort") or dbConfig.get("Port") or 5432)
-        dbName = str(actionData.get("adminDbName") or dbConfig.get("DatabaseName") or "iobeam_admin").strip()
-        dbUser = str(actionData.get("adminDbUser") or dbConfig.get("User") or "iobeam_admin_app").strip()
-        dbPassword = str(actionData.get("adminDbPassword") or dbConfig.get("Password") or "").strip()
-        dbSslMode = str(actionData.get("adminDbSslMode") or dbConfig.get("SslMode") or "").strip()
-        dbTimeout = int(actionData.get("adminDbCommandTimeoutMs") or dbConfig.get("CommandTimeoutMs") or 30000)
+        dbHost = str(
+            deployment.get("DatabaseHost")
+            or actionData.get("adminDbHost")
+            or dbConfig.get("Host")
+            or "localhost"
+        ).strip()
+        dbPort = int(
+            deployment.get("DatabasePort")
+            or actionData.get("adminDbPort")
+            or dbConfig.get("Port")
+            or 5432
+        )
+        dbName = str(
+            deployment.get("DatabaseName")
+            or actionData.get("adminDbName")
+            or dbConfig.get("DatabaseName")
+            or "iobeam_admin"
+        ).strip()
+        dbUser = str(
+            deployment.get("DatabaseUser")
+            or actionData.get("adminDbUser")
+            or dbConfig.get("User")
+            or "iobeam_admin_app"
+        ).strip()
+        dbPassword = str(
+            deployment.get("DatabasePassword")
+            or actionData.get("adminDbPassword")
+            or dbConfig.get("Password")
+            or ""
+        ).strip()
+        dbSslMode = str(
+            deployment.get("DatabaseSslMode")
+            or actionData.get("adminDbSslMode")
+            or dbConfig.get("SslMode")
+            or ""
+        ).strip()
+        dbTimeout = int(
+            deployment.get("DatabaseCommandTimeoutMs")
+            or actionData.get("adminDbCommandTimeoutMs")
+            or dbConfig.get("CommandTimeoutMs")
+            or 30000
+        )
         lines = [
-            "PROXY_TARGET_HTTP=http://127.0.0.1:8765",
-            "PROXY_TARGET_WS=ws://127.0.0.1:8765",
+            "PROXY_TARGET_HTTP={}".format(proxyTargetHttp),
+            "PROXY_TARGET_WS={}".format(proxyTargetWs),
             "GLASGOW_TOKEN={}".format(token),
             "PORT=4000",
             "HOST={}".format(backendHost),

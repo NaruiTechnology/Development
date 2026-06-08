@@ -18,7 +18,7 @@ def endpoint(spec):
 
     m = re.match(r"^(tcp):(?:()|\*|\[([a-fA-F0-9:]+)\]|(\d+(?:\.\d+){3})|([a-zA-Z.-]+))"
                  r":(\d+)$", spec)
-    if m: return (m[1], m[3] or m[4] or m[5] if m[2] is None else "localhost", int(m[6]))
+    if m: return (m[1], m[3] or m[4] or m[5] if m[2] is None else "", int(m[6]))
 
     raise argparse.ArgumentTypeError(f"invalid endpoint: {spec!r}")
 

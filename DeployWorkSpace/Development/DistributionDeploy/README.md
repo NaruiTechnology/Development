@@ -184,6 +184,53 @@ and the Vite frontend all run as the login user with the same shell-owned
 Node/Python environment. Use `/opt/IobeamPlatform` only after the user-owned
 deployment is stable and the service environment has been made explicit.
 
+### Production overrides
+
+`Deployment.IsProduction` is the workflow-wide switch. When it is `false`,
+the deploy path stays on the localhost defaults.
+
+Per-action `ProductionConfig` blocks are merged into `actionData` only when
+production mode is enabled. Use them for values that differ on the edge host:
+
+* database host, port, user, or SSL mode
+* backend proxy targets
+* Vite proxy targets for the frontend dev server
+* frontend readiness URLs
+* browser launch URLs
+
+Empty override values are ignored, so the same JSON can carry placeholders
+without breaking the localhost path.
+
+### Localhost compatibility
+
+The workflow still defaults to local development addresses:
+
+* Glasgow service defaults to `127.0.0.1:8765`
+* Node backend defaults to `127.0.0.1:4000`
+* Vite frontend defaults to `127.0.0.1:5173`
+* Admin database defaults to `localhost:5432`
+
+That means the existing single-machine deployment path still works without
+editing the JSON. Production mode is a configuration override, not a different
+code path.
+
+### Production readiness TODO
+
+The current workflow is functional, but these pieces still need to be treated
+as production-hardening work:
+
+* Move secrets out of plain JSON and shell env files into a proper secret
+  source for production deploys.
+* Add a dedicated remote-DB bootstrap path, including schema migration and
+  versioned upgrade handling for non-local PostgreSQL instances.
+* Wire a real production web host for the Node backend and Vite build instead
+  of relying on `npm run dev` for the deploy workflow.
+* Put TLS and reverse-proxy termination in front of the web entrypoints.
+* Add startup validation that fails fast when a required production endpoint
+  or secret is missing instead of falling back silently to localhost.
+* Add an automated smoke test that covers both localhost and remote-DB
+  deployment profiles.
+
 ---
 
 ## Adding a new action

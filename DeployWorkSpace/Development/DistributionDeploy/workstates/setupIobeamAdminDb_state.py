@@ -18,20 +18,42 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
+            stateConfig = self.resolvedStateConfig(stateConfig)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
+            deployment = self.deploymentConfig()
 
-            dbName = actionData.get("databaseName", "iobeam_admin")
-            dbHost = str(actionData.get("databaseHost", "localhost") or "localhost").strip()
-            dbRole = str(actionData.get("databaseRole") or
-                         actionData.get("adminDbUser") or
-                         "iobeam_admin_app").strip()
-            dbPassword = str(actionData.get("adminDbPassword") or "").strip()
-            dbOwnerRole = str(actionData.get("databaseOwnerRole", "iobeam_admin_owner") or
-                              "iobeam_admin_owner").strip()
+            dbName = str(
+                deployment.get("DatabaseName")
+                or actionData.get("databaseName")
+                or "iobeam_admin"
+            ).strip()
+            dbHost = str(
+                deployment.get("DatabaseHost")
+                or actionData.get("databaseHost")
+                or "localhost"
+            ).strip()
+            dbRole = str(
+                deployment.get("DatabaseUser")
+                or actionData.get("databaseRole")
+                or actionData.get("adminDbUser")
+                or "iobeam_admin_app"
+            ).strip()
+            dbPassword = str(
+                deployment.get("DatabasePassword")
+                or actionData.get("adminDbPassword")
+                or ""
+            ).strip()
+            dbOwnerRole = str(
+                deployment.get("DatabaseOwnerRole")
+                or actionData.get("databaseOwnerRole")
+                or "iobeam_admin_owner"
+            ).strip()
             dbConfigFile = self.resolveDeployPath(actionData.get(
                 "adminDbConfigFile", "Development/IobeamAdmin/Json/IobeamAdminDb.json"))
-            dbPassword = dbPassword or self._readDbPassword(dbConfigFile) or self._generatePassword()
+            dbPassword = dbPassword or self._readDbPassword(dbConfigFile) or ""
+            if not dbPassword and self._isLocalHost(dbHost):
+                dbPassword = self._generatePassword()
             dbMemberRoles = self._databaseOwnerMembers(actionData, dbRole)
             dbReadRoles = self._databaseReadMembers(actionData, dbMemberRoles)
             schemaFile = self._resolveSqlFile(actionData.get(
@@ -39,55 +61,61 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             seedFile = self._resolveSqlFile(actionData.get(
                 "seedFile", "Development/IobeamAdmin/Sql/002_seed_root_user.sql"))
 
-            if self._isLocalHost(dbHost):
+            isLocalDb = self._isLocalHost(dbHost)
+            if isLocalDb:
                 if not await self._ensurePostgreSQLInstalled(timeout, actionData):
                     self._success = False
                     return
 
-            if not await self._ensureDatabase(dbName, timeout):
-                self._success = False
-                return
-
-            if not await self._ensureOwnerRoleAndMembership(dbName, dbOwnerRole, dbMemberRoles, timeout):
-                self._success = False
-                return
-
-            if not await self._ensureDatabaseAccess(dbName, dbOwnerRole, dbMemberRoles + dbReadRoles, timeout):
-                self._success = False
-                return
-
-            for roleName in dbMemberRoles:
-                rolePassword = dbPassword if roleName == dbRole else None
-                if not await self._ensureRoleAndGrants(dbName, roleName, timeout, dbOwnerRole, rolePassword):
+            if isLocalDb:
+                if not await self._ensureDatabase(dbName, timeout):
                     self._success = False
                     return
+
+                if not await self._ensureOwnerRoleAndMembership(dbName, dbOwnerRole, dbMemberRoles, timeout):
+                    self._success = False
+                    return
+
+                if not await self._ensureDatabaseAccess(dbName, dbOwnerRole, dbMemberRoles + dbReadRoles, timeout):
+                    self._success = False
+                    return
+
+                for roleName in dbMemberRoles:
+                    rolePassword = dbPassword if roleName == dbRole else None
+                    if not await self._ensureRoleAndGrants(dbName, roleName, timeout, dbOwnerRole, rolePassword):
+                        self._success = False
+                        return
 
             if not self._writeDbConfig(dbConfigFile, dbName, dbHost, dbRole, dbPassword, actionData):
                 self._success = False
                 return
 
-            if not await self._assignAdminOwnership(dbName, dbOwnerRole, timeout):
-                self._success = False
-                return
-
-            if not await self._loadSchema(dbName, schemaFile, seedFile, timeout):
-                self._success = False
-                return
-
-            if not await self._assignAdminOwnership(dbName, dbOwnerRole, timeout):
-                self._success = False
-                return
-
-            for roleName in dbMemberRoles:
-                rolePassword = dbPassword if roleName == dbRole else None
-                if not await self._ensureRoleAndGrants(dbName, roleName, timeout, dbOwnerRole, rolePassword):
+            if isLocalDb:
+                if not await self._assignAdminOwnership(dbName, dbOwnerRole, timeout):
                     self._success = False
                     return
 
-            for roleName in dbReadRoles:
-                if not await self._ensureReadRoleAndGrants(dbName, roleName, timeout):
+                if not await self._loadSchema(dbName, schemaFile, seedFile, timeout):
                     self._success = False
                     return
+
+                if not await self._assignAdminOwnership(dbName, dbOwnerRole, timeout):
+                    self._success = False
+                    return
+
+                for roleName in dbMemberRoles:
+                    rolePassword = dbPassword if roleName == dbRole else None
+                    if not await self._ensureRoleAndGrants(dbName, roleName, timeout, dbOwnerRole, rolePassword):
+                        self._success = False
+                        return
+
+                for roleName in dbReadRoles:
+                    if not await self._ensureReadRoleAndGrants(dbName, roleName, timeout):
+                        self._success = False
+                        return
+            else:
+                self.info("[{}] remote DB host detected; skipping local PostgreSQL provisioning and schema load."
+                          .format(type(self).__name__))
 
             if not await self._verifyRuntimeRoleCanConnect(dbName, dbHost, dbRole, dbPassword, timeout, actionData):
                 self._success = False
@@ -270,14 +298,31 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         return True
 
     async def _verifyRuntimeRoleCanConnect(self, dbName, dbHost, dbRole, dbPassword, timeout, actionData):
-        dbPort = int(actionData.get("databasePort", actionData.get("adminDbPort", 5432)) or 5432)
-        host = str(actionData.get("adminDbHost") or dbHost or "localhost").strip()
+        deployment = self.deploymentConfig()
+        dbPort = int(
+            deployment.get("DatabasePort")
+            or actionData.get("databasePort")
+            or actionData.get("adminDbPort")
+            or 5432
+        )
+        sslMode = str(
+            deployment.get("DatabaseSslMode")
+            or actionData.get("adminDbSslMode")
+            or ""
+        ).strip()
+        host = str(
+            deployment.get("DatabaseHost")
+            or actionData.get("adminDbHost")
+            or dbHost
+            or "localhost"
+        ).strip()
         if host in ("", "/var/run/postgresql"):
             host = "localhost"
 
         command = (
-            "PGPASSWORD={} psql -h {} -p {} -U {} -d {} -Atqc {}".format(
-                self._shellQuote(dbPassword),
+            "{}{} psql -h {} -p {} -U {} -d {} -Atqc {}".format(
+                "PGSSLMODE={} ".format(self._shellQuote(sslMode)) if sslMode else "",
+                "PGPASSWORD={} ".format(self._shellQuote(dbPassword)),
                 self._shellQuote(host),
                 self._shellQuote(str(dbPort)),
                 self._shellQuote(dbRole),
@@ -310,12 +355,31 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         return secrets.token_urlsafe(32)
 
     def _writeDbConfig(self, configFile, dbName, dbHost, dbRole, dbPassword, actionData):
-        dbPort = int(actionData.get("databasePort", actionData.get("adminDbPort", 5432)) or 5432)
-        host = str(actionData.get("adminDbHost") or dbHost or "localhost").strip()
+        deployment = self.deploymentConfig()
+        dbPort = int(
+            deployment.get("DatabasePort")
+            or actionData.get("databasePort")
+            or actionData.get("adminDbPort")
+            or 5432
+        )
+        host = str(
+            deployment.get("DatabaseHost")
+            or actionData.get("adminDbHost")
+            or dbHost
+            or "localhost"
+        ).strip()
         if host in ("", "/var/run/postgresql"):
             host = "localhost"
-        sslMode = str(actionData.get("adminDbSslMode") or "").strip()
-        commandTimeoutMs = int(actionData.get("adminDbCommandTimeoutMs", 30000) or 30000)
+        sslMode = str(
+            actionData.get("adminDbSslMode")
+            or deployment.get("DatabaseSslMode")
+            or ""
+        ).strip()
+        commandTimeoutMs = int(
+            actionData.get("adminDbCommandTimeoutMs")
+            or deployment.get("DatabaseCommandTimeoutMs")
+            or 30000
+        )
         connectionString = "postgresql://{}:{}@{}:{}/{}".format(
             quote(dbRole, safe=""),
             quote(dbPassword, safe=""),

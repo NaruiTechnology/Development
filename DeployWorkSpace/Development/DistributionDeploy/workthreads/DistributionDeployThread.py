@@ -38,6 +38,7 @@ class DistributionDeployThread(WorkThread):
         self._glasgowConfig = self._resolveFromDeployRoot(
             deployment.get("GlasgowConfig", ""))
         self._glasgowLog = deployment.get("GlasgowLog", "/tmp/glasgow.log")
+        self._isProduction = self._truthy(deployment.get("IsProduction", False))
 
     # -- properties exposed to states ---------------------------------------
     @property
@@ -143,8 +144,15 @@ class DistributionDeployThread(WorkThread):
                 # Honor both control flags
                 skip = bool(actionConfig.get(Consts.SKIP, False))
                 done = bool(actionConfig.get(TRANSACTION_COMPLETE, False))
+                effectiveSkip = skip and not self._isProduction
                 if skip:
-                    self._logger.info("[skip=true] '{}' skipped.".format(key))
+                    if effectiveSkip:
+                        self._logger.info("[skip=true] '{}' skipped.".format(key))
+                    else:
+                        self._logger.info(
+                            "[skip=true] '{}' enabled because IsProduction is true.".format(key)
+                        )
+                if effectiveSkip:
                     continue
                 if done:
                     self._logger.info(
@@ -187,6 +195,16 @@ class DistributionDeployThread(WorkThread):
         except Exception as e:
             self._logger.warning("Could not mark '{}' complete: {}"
                                  .format(actionName, e))
+
+    @staticmethod
+    def _truthy(value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if value is None:
+            return False
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
 
     def activateVirtualEnv(self):
         if self._venvPath is not None:

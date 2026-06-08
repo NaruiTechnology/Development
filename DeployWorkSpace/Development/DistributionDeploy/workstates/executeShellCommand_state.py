@@ -31,6 +31,7 @@ class executeShellCommand_state(distributionDeploy_state):
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
+            stateConfig = self.resolvedStateConfig(stateConfig)
             if stateConfig is None or Consts.ACTION_DATA not in stateConfig:
                 self.error("[{}] no actionData; nothing to run."
                            .format(type(self).__name__))

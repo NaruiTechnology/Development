@@ -12,6 +12,7 @@
 #      be captured by a single shell template.
 #-------------------------------------------------------------------------------
 from abc import abstractmethod
+import copy
 import os
 
 from buildingblocks.workflow.workstate import WorkState
@@ -59,6 +60,68 @@ class distributionDeploy_state(WorkState):
             return thread.workRoot
         return os.getcwd()
 
+    def deploymentConfig(self):
+        """Return the top-level Deployment block for this run, if any."""
+        thread = self.ParentWorkThread
+        config = getattr(thread, "Config", None) if thread is not None else None
+        if isinstance(config, dict):
+            deployment = config.get("Deployment", {})
+        else:
+            deployment = getattr(config, "Deployment", {}) if config is not None else {}
+        return deployment if isinstance(deployment, dict) else {}
+
+    def deploymentValue(self, key, default=None):
+        """Read a value from the top-level Deployment block."""
+        return self.deploymentConfig().get(key, default)
+
+    def isProduction(self):
+        """Return the workflow-wide production flag."""
+        thread = self.ParentWorkThread
+        if thread is not None and hasattr(thread, "_isProduction"):
+            return bool(thread._isProduction)
+        return bool(self.deploymentValue("IsProduction", False))
+
+    def resolvedStateConfig(self, stateConfig):
+        """Return a copy of the action config with production overrides applied."""
+        if not isinstance(stateConfig, dict):
+            return stateConfig
+
+        resolved = copy.deepcopy(stateConfig)
+        actionData = resolved.get("actionData", {})
+        if not isinstance(actionData, dict):
+            return resolved
+
+        productionConfig = actionData.pop("ProductionConfig", {}) or {}
+        if self.isProduction():
+            resolved["actionData"] = self._mergeProductionConfig(actionData, productionConfig)
+        else:
+            resolved["actionData"] = actionData
+        return resolved
+
+    def resolvedActionData(self, stateConfig):
+        """Return the actionData block with production overrides applied."""
+        resolved = self.resolvedStateConfig(stateConfig)
+        if not isinstance(resolved, dict):
+            return {}
+        actionData = resolved.get("actionData", {})
+        return actionData if isinstance(actionData, dict) else {}
+
+    def _mergeProductionConfig(self, base, override):
+        if not isinstance(base, dict):
+            return copy.deepcopy(override) if isinstance(override, dict) else base
+        merged = copy.deepcopy(base)
+        if not isinstance(override, dict):
+            return merged
+        for key, value in override.items():
+            if value in (None, "", [], {}):
+                continue
+            current = merged.get(key)
+            if isinstance(current, dict) and isinstance(value, dict):
+                merged[key] = self._mergeProductionConfig(current, value)
+            else:
+                merged[key] = copy.deepcopy(value)
+        return merged
+
     def resolveWorkPath(self, path):
         """Resolve a JSON path relative to the DistributionDeploy folder."""
         if not path:
@@ -86,7 +149,7 @@ class distributionDeploy_state(WorkState):
             return raw
         if isinstance(value, (list, tuple)):
             return os.pathsep.join(self.resolveDeployPath(v) for v in value)
-        if isinstance(value, str) and value and not value.startswith(("http://", "https://")):
+        if isinstance(value, str) and value and not value.startswith(("http://", "https://", "ws://", "wss://")):
             return self.resolveDeployPath(value)
         return value
 

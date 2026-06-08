@@ -35,6 +35,7 @@ class launchUI_state(distributionDeploy_state):
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
+            stateConfig = self.resolvedStateConfig(stateConfig)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
 
             url = actionData.get("url", "http://localhost:5173/control")
