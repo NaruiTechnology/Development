@@ -4,7 +4,7 @@
 # Bring up the Glasgow toolchain on a fresh Ubuntu host:
 #
 #   1. Ensure the 'plugdev' group exists; if not, create it and add the
-#      current user to it.
+#      current deploy user, configured admin users, and local login users to it.
 #   2. Under the deploy root, clone GlasgowEmbedded/glasgow if it isn't
 #      there already.
 #   3. Patch Glasgow's pyproject.toml Python floor when requested.
@@ -27,13 +27,19 @@
 #   pipxTarget     argument to `pipx install -e ...`
 #   pipxPython     optional Python executable for pipx --python
 #   pipxRequired   fail workflow when pipx install fails (default False)
+#   plugdevUsers   extra existing OS users to add to plugdev
+#   adminConfigFile admin config used to discover active login_name values
+#   addAllLoginUsersToPlugdev add all local UID>=1000 login users (default True)
 #   pyprojectPath  pyproject.toml to patch inside deploy root
 #   pythonRequires replacement requires-python value (empty disables patch)
 #   stopOnError    abort on first failure (default True; this whole sequence
 #                  doesn't tolerate skipping a step)
 #-------------------------------------------------------------------------------
 import asyncio
+import json
 import os
+import pwd
+import shlex
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -63,17 +69,17 @@ class setupGlasgow_state(distributionDeploy_state):
             pipxTarget  = actionData.get("pipxTarget", "glasgow/software[builtin-toolchain]")
             pipxPython  = actionData.get("pipxPython", "python3.13")
             pipxRequired = bool(actionData.get("pipxRequired", False))
+            plugdevUsers = self._plugdevUsers(actionData)
             pyprojectPath = actionData.get("pyprojectPath", "glasgow/software/pyproject.toml")
             pythonRequires = actionData.get("pythonRequires", ">=3.12.3,<4")
             stopOnError = bool(actionData.get("stopOnError", True))
 
             steps = []
 
-            # 1. plugdev group: create if missing, add current user.
+            # 1. plugdev group: create if missing, add known local users.
             steps.append((
                 "plugdev",
-                "bash -c 'getent group plugdev >/dev/null || sudo groupadd plugdev; "
-                "sudo usermod -aG plugdev \"$USER\"'"
+                self._plugdevCommand(plugdevUsers)
             ))
 
             # 2. clone repo only if it doesn't exist
@@ -169,3 +175,75 @@ class setupGlasgow_state(distributionDeploy_state):
                            .format(type(self).__name__, timeout, cmd))
                 return False
         return await self.commandAsyncio(cmd, runDir, verbose=True)
+
+    def _plugdevUsers(self, actionData):
+        users = []
+
+        def add(user):
+            user = str(user or "").strip()
+            if user and user not in users:
+                users.append(user)
+
+        add(os.environ.get("SUDO_USER"))
+        add(os.environ.get("USER"))
+        add(os.environ.get("LOGNAME"))
+
+        for user in list(actionData.get("plugdevUsers", []) or []):
+            add(user)
+
+        for user in self._adminLoginNames(actionData):
+            add(user)
+
+        if actionData.get("addAllLoginUsersToPlugdev", True):
+            for entry in pwd.getpwall():
+                if entry.pw_uid >= 1000 and entry.pw_name != "nobody":
+                    add(entry.pw_name)
+
+        return users
+
+    def _adminLoginNames(self, actionData):
+        adminConfigPath = actionData.get(
+            "adminConfigFile", "Development/IobeamAdmin/Json/IobeamAdmin.json")
+        adminConfigPath = self.resolveDeployPath(adminConfigPath)
+        try:
+            with open(adminConfigPath, "r", encoding="utf-8") as f:
+                adminConfig = json.load(f)
+            users = adminConfig.get("users")
+            if not isinstance(users, list):
+                user = adminConfig.get("user")
+                users = [user] if isinstance(user, dict) else []
+            names = []
+            for user in users:
+                if not isinstance(user, dict) or user.get("is_active") is False:
+                    continue
+                loginName = str(user.get("login_name") or "").strip()
+                if loginName and loginName not in names:
+                    names.append(loginName)
+            return names
+        except Exception as e:
+            self.warn("[{}][plugdev] could not read admin login names from {}: {}"
+                      .format(type(self).__name__, adminConfigPath, e))
+            return []
+
+    def _plugdevCommand(self, users):
+        userArgs = " ".join(shlex.quote(user) for user in users)
+        return (
+            "bash -c 'getent group plugdev >/dev/null || sudo groupadd plugdev; "
+            "if [ -f /etc/adduser.conf ]; then "
+            "sudo cp -n /etc/adduser.conf /etc/adduser.conf.iobeam-bak 2>/dev/null || true; "
+            "grep -q \"^[#[:space:]]*ADD_EXTRA_GROUPS=\" /etc/adduser.conf "
+            "&& sudo sed -i -E \"s/^[#[:space:]]*ADD_EXTRA_GROUPS=.*/ADD_EXTRA_GROUPS=1/\" /etc/adduser.conf "
+            "|| echo \"ADD_EXTRA_GROUPS=1\" | sudo tee -a /etc/adduser.conf >/dev/null; "
+            "if grep -q \"^[#[:space:]]*EXTRA_GROUPS=\" /etc/adduser.conf; then "
+            "grep -q \"^[#[:space:]]*EXTRA_GROUPS=.*\\bplugdev\\b\" /etc/adduser.conf "
+            "|| sudo sed -i -E \"s/^[#[:space:]]*EXTRA_GROUPS=\\\"?([^\\\"]*)\\\"?/EXTRA_GROUPS=\\\"\\1 plugdev\\\"/\" /etc/adduser.conf; "
+            "else echo \"EXTRA_GROUPS=\\\"plugdev\\\"\" | sudo tee -a /etc/adduser.conf >/dev/null; "
+            "fi; "
+            "fi; "
+            "for u in \"$@\"; do "
+            "if id -u \"$u\" >/dev/null 2>&1; then "
+            "sudo usermod -aG plugdev \"$u\"; "
+            "else echo \"skip missing OS user: $u\"; "
+            "fi; "
+            "done' _ {}".format(userArgs)
+        )

@@ -33,13 +33,17 @@ def setup_iobeam_admin_db(args, *, current_role):
     seed_file = Path(args.seed_file or Path(__file__).with_name("Sql") / "002_seed_root_user.sql")
 
     if args.ensure_database:
-        ensure_database(params, args.admin_database)
+        if args.backup_file:
+            reset_database_from_backup(params, args.admin_database, Path(args.backup_file))
+        else:
+            ensure_database(params, args.admin_database)
 
-    sql_parts = [schema_file.read_text(encoding="utf-8")]
-    if not args.no_seed:
-        sql_parts.append(seed_file.read_text(encoding="utf-8"))
-    run_psql(params, params["database"], ["-v", "ON_ERROR_STOP=1"], "\n".join(sql_parts))
-    print("loaded schema{}".format("" if args.no_seed else " and seed data"))
+    if not args.backup_file:
+        sql_parts = [schema_file.read_text(encoding="utf-8")]
+        if not args.no_seed:
+            sql_parts.append(seed_file.read_text(encoding="utf-8"))
+        run_psql(params, params["database"], ["-v", "ON_ERROR_STOP=1"], "\n".join(sql_parts))
+        print("loaded schema{}".format("" if args.no_seed else " and seed data"))
 
     if not args.no_grants:
         role_name = args.grant_role or params["user"]
@@ -61,6 +65,7 @@ def parse_args():
     parser.add_argument("--schema-file")
     parser.add_argument("--seed-file")
     parser.add_argument("--grant-role", help="PostgreSQL role to grant schema permissions; defaults to --user.")
+    parser.add_argument("--backup-file", help="Restore this pg_dump SQL file after dropping/recreating the target database.")
     parser.add_argument("--no-seed", action="store_true")
     parser.add_argument("--no-grants", action="store_true")
     parser.add_argument("--no-ensure-database", dest="ensure_database", action="store_false")
@@ -103,6 +108,24 @@ def ensure_database(params, admin_database):
         return
     run_psql(params, admin_database, ["-v", "ON_ERROR_STOP=1"], "CREATE DATABASE {};".format(quote_ident(params["database"])))
     print("created database {}".format(params["database"]))
+
+
+def reset_database_from_backup(params, admin_database, backup_file):
+    if not backup_file.is_file():
+        raise FileNotFoundError("backup file not found: {}".format(backup_file))
+    db_ident = quote_ident(params["database"])
+    db_literal = sql_literal(params["database"])
+    reset_sql = "\n".join([
+        "SELECT pg_terminate_backend(pid)",
+        "  FROM pg_stat_activity",
+        " WHERE datname = {}",
+        "   AND pid <> pg_backend_pid();",
+        "DROP DATABASE IF EXISTS {};",
+        "CREATE DATABASE {};",
+    ]).format(db_literal, db_ident, db_ident)
+    run_psql(params, admin_database, ["-v", "ON_ERROR_STOP=1"], reset_sql)
+    run_psql(params, params["database"], ["-v", "ON_ERROR_STOP=1", "-f", str(backup_file)])
+    print("restored database {} from {}".format(params["database"], backup_file))
 
 
 def run_psql(params, database, args, stdin=None):
@@ -151,8 +174,11 @@ def role_grant_sql(db_name, role_name):
         "GRANT USAGE, CREATE ON SCHEMA iobeam_admin TO {};".format(role_ident),
         "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iobeam_admin TO {};".format(role_ident),
         "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA iobeam_admin TO {};".format(role_ident),
+        "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA iobeam_admin TO {};".format(role_ident),
+        "GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA iobeam_admin TO {};".format(role_ident),
         "ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {};".format(role_ident),
         "ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {};".format(role_ident),
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT EXECUTE ON FUNCTIONS TO {};".format(role_ident),
     ])
 
 

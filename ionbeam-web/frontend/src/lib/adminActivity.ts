@@ -1,3 +1,5 @@
+import { scanAuthHeaders } from "./authIdentity";
+
 interface StoredAdminUser {
   id?: unknown;
 }
@@ -8,14 +10,13 @@ const SELECTED_EQUIPMENT_KEY = "ionbeam:selectedEquipmentId";
 
 export function recordScanActivity(kind: ActivityScanKind): void {
   const userId = currentAdminUserId();
-  if (!userId) return;
   const equipmentId = currentEquipmentId();
 
   void fetch("/api/admin/iobeam/activity", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({
-      user_id: userId,
+      ...(userId ? { user_id: userId } : {}),
       ...(equipmentId ? { equipment_id: equipmentId } : {}),
       activity_type: `${kind}_scan`,
     }),

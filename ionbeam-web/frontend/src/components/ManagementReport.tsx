@@ -101,6 +101,7 @@ interface ActivityReportResponse {
   geography?: SiteUsage[];
   recent: RecentActivity[];
   error?: string;
+  report_error?: string | null;
 }
 
 type PeriodMode = "weekly" | "daily" | "monthly" | "yearly";
@@ -208,6 +209,9 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
         const data = (await r.json().catch(() => null)) as ActivityReportResponse | null;
         if (!r.ok || !data?.ok) {
           throw new Error(data?.error || `HTTP ${r.status}`);
+        }
+        if (data.report_error) {
+          throw new Error(data.report_error);
         }
         return data;
       })

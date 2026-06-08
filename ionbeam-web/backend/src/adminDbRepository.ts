@@ -1,0 +1,183 @@
+import { config } from "./config";
+import {
+  applyAdminDatabaseSetup,
+  pgConnectionFromRuntimeConfig,
+  runPsql,
+} from "./adminDbService";
+
+export interface AdminUser {
+  id: number | null;
+  login_name: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+  company_name: string;
+  site: string;
+  role: number;
+  is_active: boolean;
+  session_lifetime_limit_days: number;
+}
+
+export interface Equipment {
+  id: number | null;
+  name: string;
+  model: string;
+  serial_number: string;
+  site: string;
+  description: string;
+}
+
+export type RegisterAdminUserDbResult =
+  | { ok: true; user: AdminUser }
+  | { ok: false; error: string };
+
+let schemaReady: Promise<void> | null = null;
+
+export async function ensureAdminSchema(): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = applyAdminDatabaseSetup({
+      connection: pgConnectionFromRuntimeConfig(),
+      loadSeed: false,
+      ensureDatabase: false,
+      ensureRole: false,
+    })
+      .then(() => undefined)
+      .catch((err) => {
+        schemaReady = null;
+        throw err;
+      });
+  }
+  await schemaReady;
+}
+
+export async function recordAdminSessionInDb(
+  user: AdminUser,
+  clientMachineName: string,
+  selectedSite: string,
+): Promise<void> {
+  if (!Number.isInteger(user.id) || (user.id ?? 0) <= 0) {
+    throw new Error("cannot record session for an admin user without a database id");
+  }
+  await executeStored("SELECT fn_record_admin_session($$payload$$);", {
+    user_id: user.id,
+    login_name: user.login_name,
+    client_machine_name: clientMachineName,
+    site: selectedSite,
+  });
+}
+
+export async function isAdminSessionExpiredInDb(userId: number, lifetimeDays: number): Promise<boolean> {
+  if (!Number.isInteger(userId) || userId <= 0) return true;
+  const out = await queryStored(
+    "SELECT fn_is_admin_session_expired($$payload$$);",
+    { user_id: userId, lifetime_days: lifetimeDays },
+    "false",
+  );
+  return out.trim() === "true";
+}
+
+export async function recordActivityInDb(
+  userId: number,
+  equipmentId: number | null,
+  activityType: string,
+  lifetimeDays: number,
+): Promise<void> {
+  await executeStored("SELECT fn_record_admin_activity($$payload$$);", {
+    user_id: userId,
+    equipment_id: equipmentId,
+    activity_type: activityType,
+    session_lifetime_limit_days: lifetimeDays,
+  });
+}
+
+export async function buildActivityReportFromDb(
+  userIds: number[],
+  days: number,
+  equipmentId: number | null = null,
+): Promise<Record<string, unknown>> {
+  const raw = await queryStored("SELECT fn_admin_activity_report($$payload$$);", {
+    user_ids: userIds,
+    days,
+    equipment_id: equipmentId,
+  });
+  const parsed = JSON.parse(raw.trim() || "{}") as unknown;
+  return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+}
+
+export async function listEquipmentFromDb(): Promise<Equipment[]> {
+  const raw = await queryStored("SELECT fn_list_equipment();");
+  return parseArray(raw) as Equipment[];
+}
+
+export async function syncEquipmentToDb(equipmentRows: Equipment[]): Promise<void> {
+  const rows = equipmentRows.filter((equipment) => equipment.name.trim() && equipment.serial_number.trim());
+  if (rows.length === 0) return;
+  await executeStored("SELECT fn_upsert_equipment($$payload$$);", rows);
+}
+
+export async function findAdminUserInDb(loginOrEmail: string): Promise<AdminUser | null> {
+  const login = loginOrEmail.trim();
+  if (!login) return null;
+  const raw = await queryStored("SELECT fn_find_admin_user($$payload$$);", { login_or_email: login });
+  return parseFirstUser(raw);
+}
+
+export async function findAdminUserInDbById(id: number): Promise<AdminUser | null> {
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const raw = await queryStored("SELECT fn_find_admin_user_by_id($$payload$$);", { id });
+  return parseFirstUser(raw);
+}
+
+export async function listAdminUsersFromDb(): Promise<AdminUser[]> {
+  const raw = await queryStored("SELECT fn_list_admin_users();");
+  return parseArray(raw) as AdminUser[];
+}
+
+export async function syncAdminUsersToDb(users: AdminUser[]): Promise<void> {
+  const rows = users.filter((user) => user.login_name.trim() && user.email.trim());
+  if (rows.length === 0) return;
+  await executeStored("SELECT fn_upsert_admin_users($$payload$$);", rows);
+}
+
+export async function registerAdminUserInDb(user: AdminUser): Promise<RegisterAdminUserDbResult> {
+  const raw = await queryStored("SELECT fn_register_admin_user($$payload$$);", user);
+  const parsed = JSON.parse(raw.trim() || "{}") as unknown;
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("fn_register_admin_user returned an invalid response");
+  }
+  const result = parsed as Record<string, unknown>;
+  if (result.ok === false) {
+    return { ok: false, error: String(result.error ?? "registration failed") };
+  }
+  if (result.ok !== true) {
+    throw new Error("fn_register_admin_user returned an invalid status");
+  }
+  return { ok: true, user: result.user as AdminUser };
+}
+
+async function executeStored(sqlTemplate: string, payload: unknown = null): Promise<void> {
+  await queryStored(sqlTemplate, payload);
+}
+
+async function queryStored(sqlTemplate: string, payload: unknown = null, fallback = ""): Promise<string> {
+  await ensureAdminSchema();
+  const payloadSql = jsonbLiteral(payload);
+  const sql = `SET search_path TO iobeam_admin, public;\n${sqlTemplate.replace("$$payload$$", payloadSql)}`;
+  const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+  return out.trim() || fallback;
+}
+
+function parseFirstUser(raw: string): AdminUser | null {
+  const rows = parseArray(raw);
+  return rows[0] ? (rows[0] as AdminUser) : null;
+}
+
+function parseArray(raw: string): unknown[] {
+  const parsed = JSON.parse(raw.trim() || "[]") as unknown;
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function jsonbLiteral(value: unknown): string {
+  return `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
+}

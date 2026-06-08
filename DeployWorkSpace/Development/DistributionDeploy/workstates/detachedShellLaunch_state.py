@@ -116,12 +116,14 @@ class detachedShellLaunch_state(distributionDeploy_state):
 
     def _stopExisting(self, pidPath, port, stopPatterns):
         pids = set()
+        pidFilePids = set()
         if pidPath and os.path.isfile(pidPath):
             try:
                 with open(pidPath, "r", encoding="utf-8") as f:
                     raw = f.read().strip()
                 if raw.isdigit():
-                    pids.add(int(raw))
+                    pidFilePids.add(int(raw))
+                    pids.update(pidFilePids)
             except OSError as e:
                 self.warn("[{}] could not read pid file {}: {}"
                           .format(type(self).__name__, pidPath, e))
@@ -131,6 +133,7 @@ class detachedShellLaunch_state(distributionDeploy_state):
         for pattern in stopPatterns:
             pids.update(self._patternPids(str(pattern)))
 
+        pids = self._expandProcessTreePids(pids)
         pids.discard(os.getpid())
         if not pids:
             return True
@@ -138,6 +141,7 @@ class detachedShellLaunch_state(distributionDeploy_state):
         self.info("[{}] stopping existing process(es): {}"
                   .format(type(self).__name__, ", ".join(str(pid) for pid in sorted(pids))))
         for sig, attempts in ((signal.SIGTERM, 20), (signal.SIGKILL, 6)):
+            pids = self._expandProcessTreePids(pids)
             for pid in sorted(pids):
                 self._killProcessGroupOrPid(pid, sig)
             for _ in range(attempts):
@@ -146,6 +150,7 @@ class detachedShellLaunch_state(distributionDeploy_state):
                     alive.update(self._portPids(port))
                 for pattern in stopPatterns:
                     alive.update(self._patternPids(str(pattern)))
+                alive = self._expandProcessTreePids(alive)
                 alive.discard(os.getpid())
                 if not alive:
                     if pidPath:
@@ -157,11 +162,67 @@ class detachedShellLaunch_state(distributionDeploy_state):
                 pids = alive
                 time.sleep(0.25)
 
+        servicePids = set()
+        if port:
+            servicePids.update(self._portPids(port))
+        for pattern in stopPatterns:
+            servicePids.update(self._patternPids(str(pattern)))
+        servicePids = self._expandProcessTreePids(servicePids)
+        servicePids.discard(os.getpid())
+        if not servicePids and pids.issubset(pidFilePids):
+            self.warn("[{}] ignoring stale pid file {}; pid(s) no longer match service: {}"
+                      .format(type(self).__name__, pidPath,
+                              ", ".join(str(pid) for pid in sorted(pids))))
+            if pidPath:
+                try:
+                    os.remove(pidPath)
+                except OSError:
+                    pass
+            return True
+
         self.error("[{}] existing process(es) did not stop: {}"
                    .format(type(self).__name__, ", ".join(str(pid) for pid in sorted(pids))))
         return False
 
+    def _expandProcessTreePids(self, pids):
+        expanded = {int(pid) for pid in pids if self._pidAlive(pid)}
+        pending = list(expanded)
+        while pending:
+            pid = pending.pop()
+            for childPid in self._childPids(pid):
+                if childPid not in expanded:
+                    expanded.add(childPid)
+                    pending.append(childPid)
+        return expanded
+
+    def _childPids(self, pid):
+        try:
+            proc = subprocess.run(
+                ["pgrep", "-P", str(int(pid))],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False)
+        except Exception:
+            return set()
+
+        return {
+            int(line.strip())
+            for line in proc.stdout.splitlines()
+            if line.strip().isdigit()
+        }
+
     def _killProcessGroupOrPid(self, pid, sig):
+        try:
+            pgid = os.getpgid(pid)
+            if pgid != os.getpgrp():
+                os.killpg(pgid, sig)
+                return
+        except ProcessLookupError:
+            return
+        except OSError:
+            pass
+
         try:
             os.killpg(pid, sig)
             return
@@ -178,6 +239,17 @@ class detachedShellLaunch_state(distributionDeploy_state):
                       .format(type(self).__name__, pid, e))
 
     def _pidAlive(self, pid):
+        statPath = "/proc/{}/stat".format(int(pid))
+        try:
+            with open(statPath, "r", encoding="utf-8") as f:
+                fields = f.read().split()
+            if len(fields) > 2 and fields[2] == "Z":
+                return False
+        except FileNotFoundError:
+            return False
+        except OSError:
+            pass
+
         try:
             os.kill(pid, 0)
             return True

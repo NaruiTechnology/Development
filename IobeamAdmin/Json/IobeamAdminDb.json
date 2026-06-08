@@ -1,0 +1,12 @@
+{
+  "Provider": "PostgreSQL",
+  "DatabaseName": "iobeam_admin",
+  "Schema": "iobeam_admin",
+  "Host": "localhost",
+  "Port": 5432,
+  "User": "iobeam_admin_app",
+  "Password": "",
+  "ConnectionString": "postgresql://iobeam_admin_app@localhost:5432/iobeam_admin",
+  "SslMode": "",
+  "CommandTimeoutMs": 30000
+}

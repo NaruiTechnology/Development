@@ -1,40 +1,63 @@
 SET search_path TO iobeam_admin, public;
 
-UPDATE "user"
-   SET email = 'lyh1154@gmail.com',
-       role = 4
- WHERE login_name = 'vboxuser';
-
-INSERT INTO "user" (
-    login_name,
-    first_name,
-    last_name,
-    email,
-    phone_number,
-    company_name,
-    role,
-    is_active,
-    session_lifetime_limit_days
-)
-SELECT
-    'vboxuser',
-    'henry',
-    'li',
-    'lyh1154@gmail.com',
-    '1 (503)807-9055',
-    '',
-    4,
-    true,
-    1
-ON CONFLICT (login_name) DO UPDATE
-   SET first_name = EXCLUDED.first_name,
-       last_name = EXCLUDED.last_name,
-       email = EXCLUDED.email,
-       phone_number = EXCLUDED.phone_number,
-       company_name = EXCLUDED.company_name,
-       role = EXCLUDED.role,
-       is_active = EXCLUDED.is_active,
-       session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+          FROM "user"
+         WHERE btrim(email::text) = 'lyh1154@gmail.com'
+    ) THEN
+        UPDATE "user"
+           SET login_name = 'vboxuser',
+               first_name = 'henry',
+               last_name = 'li',
+               phone_number = '1 (503)807-9055',
+               company_name = '',
+               role = 4,
+               is_active = true,
+               session_lifetime_limit_days = 1
+         WHERE btrim(email::text) = 'lyh1154@gmail.com';
+    ELSIF EXISTS (
+        SELECT 1
+          FROM "user"
+         WHERE btrim(login_name::text) = 'vboxuser'
+    ) THEN
+        UPDATE "user"
+           SET first_name = 'henry',
+               last_name = 'li',
+               email = 'lyh1154@gmail.com',
+               phone_number = '1 (503)807-9055',
+               company_name = '',
+               role = 4,
+               is_active = true,
+               session_lifetime_limit_days = 1
+         WHERE btrim(login_name::text) = 'vboxuser';
+    ELSE
+        INSERT INTO "user" (
+            login_name,
+            first_name,
+            last_name,
+            email,
+            phone_number,
+            company_name,
+            role,
+            is_active,
+            session_lifetime_limit_days
+        )
+        VALUES (
+            'vboxuser',
+            'henry',
+            'li',
+            'lyh1154@gmail.com',
+            '1 (503)807-9055',
+            '',
+            4,
+            true,
+            1
+        );
+    END IF;
+END;
+$$;
 
 INSERT INTO Equipment (name, model, serial_number, site, description)
 VALUES (

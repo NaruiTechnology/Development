@@ -526,3 +526,666 @@ AS $$
         ), '[]'::jsonb)
     );
 $$;
+
+DO $$
+DECLARE
+    legacy_column text;
+    has_site boolean;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1
+          FROM information_schema.columns
+         WHERE table_schema = 'iobeam_admin'
+           AND table_name = 'user'
+           AND column_name = 'site'
+    ) INTO has_site;
+
+    SELECT column_name
+      INTO legacy_column
+      FROM information_schema.columns
+     WHERE table_schema = 'iobeam_admin'
+       AND table_name = 'user'
+       AND column_name IN ('geo', 'geography', 'geo_site', 'geolocation')
+     ORDER BY CASE column_name
+                WHEN 'geo' THEN 1
+                WHEN 'geography' THEN 2
+                WHEN 'geo_site' THEN 3
+                ELSE 4
+              END
+     LIMIT 1;
+
+    IF legacy_column IS NOT NULL AND NOT has_site THEN
+        EXECUTE format('ALTER TABLE "user" RENAME COLUMN %I TO site', legacy_column);
+    END IF;
+END;
+$$;
+
+ALTER TABLE "user"
+    ADD COLUMN IF NOT EXISTS site nchar(150);
+
+UPDATE "user"
+   SET site = 'Beijing(北京)'
+ WHERE site IS NULL OR btrim(site::text) = '';
+
+ALTER TABLE "user"
+    ALTER COLUMN site SET DEFAULT 'Beijing(北京)',
+    ALTER COLUMN site SET NOT NULL;
+
+DO $$
+DECLARE
+    constraint_name text;
+BEGIN
+    FOR constraint_name IN
+        SELECT pg_constraint.conname
+          FROM pg_constraint
+          JOIN pg_attribute
+            ON pg_attribute.attrelid = pg_constraint.conrelid
+           AND pg_attribute.attnum = ANY(pg_constraint.conkey)
+         WHERE pg_constraint.conrelid = 'iobeam_admin."user"'::regclass
+           AND pg_constraint.contype = 'u'
+           AND pg_attribute.attname = 'login_name'
+           AND cardinality(pg_constraint.conkey) = 1
+    LOOP
+        EXECUTE format('ALTER TABLE "user" DROP CONSTRAINT IF EXISTS %I', constraint_name);
+    END LOOP;
+END;
+$$;
+
+DO $$
+DECLARE
+    legacy_column text;
+    has_site boolean;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1
+          FROM information_schema.columns
+         WHERE table_schema = 'iobeam_admin'
+           AND table_name = 'session'
+           AND column_name = 'site'
+    ) INTO has_site;
+
+    SELECT column_name
+      INTO legacy_column
+      FROM information_schema.columns
+     WHERE table_schema = 'iobeam_admin'
+       AND table_name = 'session'
+       AND column_name IN ('geo', 'geography', 'geo_site', 'geolocation')
+     ORDER BY CASE column_name
+                WHEN 'geo' THEN 1
+                WHEN 'geography' THEN 2
+                WHEN 'geo_site' THEN 3
+                ELSE 4
+              END
+     LIMIT 1;
+
+    IF legacy_column IS NOT NULL AND NOT has_site THEN
+        EXECUTE format('ALTER TABLE session RENAME COLUMN %I TO site', legacy_column);
+    END IF;
+END;
+$$;
+
+ALTER TABLE session
+    ADD COLUMN IF NOT EXISTS site nchar(150);
+
+UPDATE session
+   SET site = 'Beijing(北京)'
+ WHERE site IS NULL OR btrim(site::text) = '';
+
+ALTER TABLE session
+    ALTER COLUMN site SET DEFAULT 'Beijing(北京)',
+    ALTER COLUMN site SET NOT NULL;
+
+CREATE OR REPLACE FUNCTION fn_user_json(u "user")
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT jsonb_build_object(
+        'id', u.id,
+        'login_name', btrim(u.login_name::text),
+        'first_name', btrim(u.first_name::text),
+        'last_name', btrim(u.last_name::text),
+        'email', btrim(u.email::text),
+        'phone_number', btrim(u.phone_number::text),
+        'company_name', btrim(u.company_name::text),
+        'site', btrim(u.site::text),
+        'role', u.role,
+        'is_active', u.is_active,
+        'session_lifetime_limit_days', u.session_lifetime_limit_days
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION fn_equipment_json(e equipment)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT jsonb_build_object(
+        'id', e.id,
+        'name', btrim(e.name::text),
+        'model', btrim(e.model::text),
+        'serial_number', btrim(e.serial_number::text),
+        'site', btrim(e.site::text),
+        'description', btrim(e.description::text)
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION fn_list_admin_users()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(jsonb_agg(fn_user_json(u) ORDER BY u.id), '[]'::jsonb)
+      FROM "user" u;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_find_admin_user(p_payload jsonb)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(jsonb_agg(fn_user_json(u) ORDER BY u.id), '[]'::jsonb)
+      FROM (
+        SELECT *
+          FROM "user"
+         WHERE lower(btrim(login_name::text)) = lower(btrim(p_payload->>'login_or_email'))
+            OR lower(btrim(email::text)) = lower(btrim(p_payload->>'login_or_email'))
+         ORDER BY id
+         LIMIT 1
+      ) u;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_find_admin_user_by_id(p_payload jsonb)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(jsonb_agg(fn_user_json(u)), '[]'::jsonb)
+      FROM (
+        SELECT *
+          FROM "user"
+         WHERE id = NULLIF(p_payload->>'id', '')::integer
+         LIMIT 1
+      ) u;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_list_equipment()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(jsonb_agg(fn_equipment_json(e) ORDER BY e.id), '[]'::jsonb)
+      FROM equipment e;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_register_admin_user(p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_login_name text := btrim(COALESCE(p_payload->>'login_name', ''));
+    v_email text := btrim(COALESCE(p_payload->>'email', ''));
+    v_next_id integer;
+    v_user jsonb;
+BEGIN
+    IF v_login_name = '' THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'login name is required');
+    END IF;
+    IF v_email = '' THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'email is required');
+    END IF;
+
+    LOCK TABLE "user" IN SHARE ROW EXCLUSIVE MODE;
+
+    IF EXISTS (
+        SELECT 1
+          FROM "user"
+         WHERE lower(btrim(email::text)) = lower(v_email)
+    ) THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'email is already registered');
+    END IF;
+
+    SELECT COALESCE(MAX(id), 0) + 1 INTO v_next_id FROM "user";
+
+    INSERT INTO "user" (
+        id, login_name, first_name, last_name, email,
+        phone_number, company_name, site, role, is_active,
+        session_lifetime_limit_days
+    )
+    VALUES (
+        v_next_id,
+        left(v_login_name, 100)::nchar(100),
+        left(btrim(COALESCE(p_payload->>'first_name', '')), 100)::nchar(100),
+        left(btrim(COALESCE(p_payload->>'last_name', '')), 100)::nchar(100),
+        left(v_email, 250)::nchar(250),
+        left(btrim(COALESCE(p_payload->>'phone_number', '')), 25)::nchar(25),
+        left(btrim(COALESCE(p_payload->>'company_name', '')), 150)::nchar(150),
+        left(COALESCE(NULLIF(btrim(p_payload->>'site'), ''), 'Beijing(北京)'), 150)::nchar(150),
+        COALESCE(NULLIF(p_payload->>'role', '')::integer, 0),
+        true,
+        GREATEST(1, COALESCE(NULLIF(p_payload->>'session_lifetime_limit_days', '')::integer, 1))
+    );
+
+    SELECT fn_user_json(u) INTO v_user
+      FROM "user" u
+     WHERE u.id = v_next_id;
+
+    RETURN jsonb_build_object('ok', true, 'user', v_user);
+EXCEPTION
+    WHEN unique_violation THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'email is already registered');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION register_user(
+    p_login_name nchar(100),
+    p_first_name nchar(100),
+    p_last_name nchar(100),
+    p_email nchar(250),
+    p_phone_number nchar(25),
+    p_company_name nchar(150),
+    p_site nchar(150),
+    p_role integer DEFAULT 0,
+    p_session_lifetime_limit_days integer DEFAULT 1
+)
+RETURNS jsonb
+LANGUAGE sql
+AS $$
+    SELECT fn_register_admin_user(jsonb_build_object(
+        'login_name', p_login_name,
+        'first_name', p_first_name,
+        'last_name', p_last_name,
+        'email', p_email,
+        'phone_number', p_phone_number,
+        'company_name', p_company_name,
+        'site', p_site,
+        'role', p_role,
+        'session_lifetime_limit_days', p_session_lifetime_limit_days
+    ));
+$$;
+
+CREATE OR REPLACE FUNCTION fn_upsert_admin_users(p_payload jsonb)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    item jsonb;
+    v_id integer;
+BEGIN
+    FOR item IN SELECT value FROM jsonb_array_elements(COALESCE(p_payload, '[]'::jsonb))
+    LOOP
+        v_id := NULLIF(item->>'id', '')::integer;
+        IF v_id IS NOT NULL AND v_id > 0 THEN
+            INSERT INTO "user" (
+                id, login_name, first_name, last_name, email,
+                phone_number, company_name, site, role, is_active,
+                session_lifetime_limit_days
+            )
+            VALUES (
+                v_id,
+                left(btrim(COALESCE(item->>'login_name', '')), 100)::nchar(100),
+                left(btrim(COALESCE(item->>'first_name', '')), 100)::nchar(100),
+                left(btrim(COALESCE(item->>'last_name', '')), 100)::nchar(100),
+                left(btrim(COALESCE(item->>'email', '')), 250)::nchar(250),
+                left(btrim(COALESCE(item->>'phone_number', '')), 25)::nchar(25),
+                left(btrim(COALESCE(item->>'company_name', '')), 150)::nchar(150),
+                left(COALESCE(NULLIF(btrim(item->>'site'), ''), 'Beijing(北京)'), 150)::nchar(150),
+                COALESCE(NULLIF(item->>'role', '')::integer, 0),
+                COALESCE(NULLIF(item->>'is_active', '')::boolean, true),
+                GREATEST(1, COALESCE(NULLIF(item->>'session_lifetime_limit_days', '')::integer, 1))
+            )
+            ON CONFLICT (id) DO UPDATE
+               SET login_name = EXCLUDED.login_name,
+                   first_name = EXCLUDED.first_name,
+                   last_name = EXCLUDED.last_name,
+                   email = EXCLUDED.email,
+                   phone_number = EXCLUDED.phone_number,
+                   company_name = EXCLUDED.company_name,
+                   site = EXCLUDED.site,
+                   role = EXCLUDED.role,
+                   is_active = EXCLUDED.is_active,
+                   session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
+        ELSE
+            INSERT INTO "user" (
+                login_name, first_name, last_name, email,
+                phone_number, company_name, site, role, is_active,
+                session_lifetime_limit_days
+            )
+            VALUES (
+                left(btrim(COALESCE(item->>'login_name', '')), 100)::nchar(100),
+                left(btrim(COALESCE(item->>'first_name', '')), 100)::nchar(100),
+                left(btrim(COALESCE(item->>'last_name', '')), 100)::nchar(100),
+                left(btrim(COALESCE(item->>'email', '')), 250)::nchar(250),
+                left(btrim(COALESCE(item->>'phone_number', '')), 25)::nchar(25),
+                left(btrim(COALESCE(item->>'company_name', '')), 150)::nchar(150),
+                left(COALESCE(NULLIF(btrim(item->>'site'), ''), 'Beijing(北京)'), 150)::nchar(150),
+                COALESCE(NULLIF(item->>'role', '')::integer, 0),
+                COALESCE(NULLIF(item->>'is_active', '')::boolean, true),
+                GREATEST(1, COALESCE(NULLIF(item->>'session_lifetime_limit_days', '')::integer, 1))
+            )
+            ON CONFLICT (email) DO UPDATE
+               SET login_name = EXCLUDED.login_name,
+                   first_name = EXCLUDED.first_name,
+                   last_name = EXCLUDED.last_name,
+                   phone_number = EXCLUDED.phone_number,
+                   company_name = EXCLUDED.company_name,
+                   site = EXCLUDED.site,
+                   role = EXCLUDED.role,
+                   is_active = EXCLUDED.is_active,
+                   session_lifetime_limit_days = EXCLUDED.session_lifetime_limit_days;
+        END IF;
+    END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_upsert_equipment(p_payload jsonb)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    item jsonb;
+    v_id integer;
+BEGIN
+    FOR item IN SELECT value FROM jsonb_array_elements(COALESCE(p_payload, '[]'::jsonb))
+    LOOP
+        v_id := NULLIF(item->>'id', '')::integer;
+        IF v_id IS NOT NULL AND v_id > 0 THEN
+            INSERT INTO equipment (id, name, model, serial_number, site, description)
+            VALUES (
+                v_id,
+                left(btrim(COALESCE(item->>'name', '')), 100),
+                left(btrim(COALESCE(item->>'model', '')), 100),
+                left(btrim(COALESCE(item->>'serial_number', '')), 15),
+                left(btrim(COALESCE(item->>'site', '')), 50),
+                left(btrim(COALESCE(item->>'description', '')), 1000)
+            )
+            ON CONFLICT (serial_number) DO UPDATE
+               SET name = EXCLUDED.name,
+                   model = EXCLUDED.model,
+                   site = EXCLUDED.site,
+                   description = EXCLUDED.description;
+        ELSE
+            INSERT INTO equipment (name, model, serial_number, site, description)
+            VALUES (
+                left(btrim(COALESCE(item->>'name', '')), 100),
+                left(btrim(COALESCE(item->>'model', '')), 100),
+                left(btrim(COALESCE(item->>'serial_number', '')), 15),
+                left(btrim(COALESCE(item->>'site', '')), 50),
+                left(btrim(COALESCE(item->>'description', '')), 1000)
+            )
+            ON CONFLICT (serial_number) DO UPDATE
+               SET name = EXCLUDED.name,
+                   model = EXCLUDED.model,
+                   site = EXCLUDED.site,
+                   description = EXCLUDED.description;
+        END IF;
+    END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_record_admin_session(p_payload jsonb)
+RETURNS void
+LANGUAGE sql
+AS $$
+    INSERT INTO session (
+        user_id, login_name, client_machine_name, site, login_time, is_autorized
+    )
+    VALUES (
+        NULLIF(p_payload->>'user_id', '')::integer,
+        left(btrim(COALESCE(p_payload->>'login_name', '')), 100)::nchar(100),
+        left(btrim(COALESCE(p_payload->>'client_machine_name', '')), 150)::nchar(150),
+        left(COALESCE(NULLIF(btrim(p_payload->>'site'), ''), 'Beijing(北京)'), 150)::nchar(150),
+        CURRENT_TIMESTAMP,
+        true
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION fn_is_admin_session_expired(p_payload jsonb)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT CASE
+             WHEN latest_login IS NULL THEN true
+             WHEN latest_login < CURRENT_TIMESTAMP - (
+                 GREATEST(1, COALESCE(NULLIF(p_payload->>'lifetime_days', '')::integer, 1)) * INTERVAL '1 day'
+             ) THEN true
+             ELSE false
+           END
+      FROM (
+        SELECT MAX(login_time) AS latest_login
+          FROM session
+         WHERE user_id = NULLIF(p_payload->>'user_id', '')::integer
+           AND is_autorized = true
+      ) latest;
+$$;
+
+CREATE OR REPLACE FUNCTION fn_record_admin_activity(p_payload jsonb)
+RETURNS void
+LANGUAGE sql
+AS $$
+    INSERT INTO activity (
+        user_id, equipment_id, activity_type, date, last_signed_in,
+        session_lifetime_limit_days
+    )
+    VALUES (
+        NULLIF(p_payload->>'user_id', '')::integer,
+        COALESCE(
+            (SELECT id
+               FROM equipment
+              WHERE id = NULLIF(p_payload->>'equipment_id', '')::integer
+              LIMIT 1),
+            (SELECT id FROM equipment ORDER BY id LIMIT 1)
+        ),
+        left(btrim(COALESCE(p_payload->>'activity_type', 'scan_result')), 150)::nchar(150),
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP,
+        GREATEST(1, COALESCE(NULLIF(p_payload->>'session_lifetime_limit_days', '')::integer, 1))
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION fn_admin_activity_report(p_payload jsonb)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+    WITH inputs AS (
+        SELECT
+            ARRAY(
+                SELECT jsonb_array_elements_text(COALESCE(p_payload->'user_ids', '[]'::jsonb))::integer
+            ) AS user_ids,
+            GREATEST(1, LEAST(365, COALESCE(NULLIF(p_payload->>'days', '')::integer, 90))) AS days,
+            NULLIF(p_payload->>'equipment_id', '')::integer AS equipment_id
+    ),
+    scoped_activity AS (
+        SELECT
+            a.id,
+            a.user_id,
+            a.equipment_id,
+            btrim(u.login_name::text) AS login_name,
+            btrim(u.first_name::text) AS first_name,
+            btrim(u.last_name::text) AS last_name,
+            btrim(e.name::text) AS equipment_name,
+            btrim(a.activity_type::text) AS activity_type,
+            a.date,
+            COALESCE(
+                NULLIF(btrim(latest_session.site::text), ''),
+                NULLIF(btrim(u.site::text), ''),
+                'Beijing(北京)'
+            ) AS site,
+            CASE
+                WHEN upper(btrim(a.activity_type::text)) LIKE '%RASTER%' THEN 'raster'
+                WHEN upper(btrim(a.activity_type::text)) LIKE '%VECTOR%'
+                  OR upper(btrim(a.activity_type::text)) LIKE '%VECTER%' THEN 'vector'
+                ELSE 'other'
+            END AS scan_kind
+        FROM inputs i
+        JOIN activity a ON a.user_id = ANY(i.user_ids)
+        JOIN "user" u ON u.id = a.user_id
+        LEFT JOIN equipment e ON e.id = a.equipment_id
+        LEFT JOIN LATERAL (
+            SELECT s.site
+              FROM session s
+             WHERE s.user_id = a.user_id
+             ORDER BY s.login_time DESC
+             LIMIT 1
+        ) latest_session ON true
+        WHERE a.date >= CURRENT_TIMESTAMP - (i.days * INTERVAL '1 day')
+          AND (i.equipment_id IS NULL OR a.equipment_id = i.equipment_id)
+    ),
+    normalized AS (
+        SELECT
+            *,
+            COALESCE(NULLIF(site, ''), 'Beijing(北京)') AS site_name,
+            COALESCE(NULLIF(equipment_name, ''), 'Unknown equipment') AS equipment_label
+        FROM scoped_activity
+    )
+    SELECT jsonb_build_object(
+        'totals', COALESCE((
+            SELECT jsonb_agg(row_to_json(t) ORDER BY t.total_scans DESC, t.login_name)
+            FROM (
+                SELECT
+                    user_id,
+                    login_name,
+                    concat_ws(' ', nullif(first_name, ''), nullif(last_name, '')) AS name,
+                    COUNT(*)::int AS total_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+                    MAX(date) AS last_activity
+                FROM normalized
+                GROUP BY user_id, login_name, first_name, last_name
+            ) t
+        ), '[]'::jsonb),
+        'daily', COALESCE((
+            SELECT jsonb_agg(row_to_json(d) ORDER BY d.bucket, d.login_name)
+            FROM (
+                SELECT
+                    user_id,
+                    equipment_id,
+                    login_name,
+                    equipment_label AS equipment_name,
+                    to_char(date_trunc('day', date), 'YYYY-MM-DD') AS bucket,
+                    COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+                    COUNT(*)::int AS total_scans
+                FROM normalized
+                GROUP BY user_id, equipment_id, login_name, equipment_label, date_trunc('day', date)
+            ) d
+        ), '[]'::jsonb),
+        'weekly', COALESCE((
+            SELECT jsonb_agg(row_to_json(w) ORDER BY w.week_start, w.login_name)
+            FROM (
+                SELECT
+                    user_id,
+                    equipment_id,
+                    login_name,
+                    equipment_label AS equipment_name,
+                    to_char(date_trunc('week', date), 'YYYY-MM-DD') AS week_start,
+                    COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+                    COUNT(*)::int AS total_scans
+                FROM normalized
+                GROUP BY user_id, equipment_id, login_name, equipment_label, date_trunc('week', date)
+            ) w
+        ), '[]'::jsonb),
+        'monthly', COALESCE((
+            SELECT jsonb_agg(row_to_json(m) ORDER BY m.month_start, m.login_name)
+            FROM (
+                SELECT
+                    user_id,
+                    equipment_id,
+                    login_name,
+                    equipment_label AS equipment_name,
+                    to_char(date_trunc('month', date), 'YYYY-MM') AS month_start,
+                    COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+                    COUNT(*)::int AS total_scans
+                FROM normalized
+                GROUP BY user_id, equipment_id, login_name, equipment_label, date_trunc('month', date)
+            ) m
+        ), '[]'::jsonb),
+        'yearly', COALESCE((
+            SELECT jsonb_agg(row_to_json(y) ORDER BY y.year_start, y.login_name)
+            FROM (
+                SELECT
+                    user_id,
+                    equipment_id,
+                    login_name,
+                    equipment_label AS equipment_name,
+                    to_char(date_trunc('year', date), 'YYYY') AS year_start,
+                    COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+                    COUNT(*)::int AS total_scans
+                FROM normalized
+                GROUP BY user_id, equipment_id, login_name, equipment_label, date_trunc('year', date)
+            ) y
+        ), '[]'::jsonb),
+        'site_groups', COALESCE((
+            SELECT jsonb_agg(row_to_json(s) ORDER BY s.total_scans DESC, s.site)
+            FROM (
+                SELECT
+                    site_name AS site,
+                    COUNT(DISTINCT user_id)::int AS accounts,
+                    COUNT(*)::int AS total_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+                    MAX(date) AS last_activity
+                FROM normalized
+                GROUP BY site_name
+            ) s
+        ), '[]'::jsonb),
+        'equipment_groups', COALESCE((
+            SELECT jsonb_agg(row_to_json(eq) ORDER BY eq.total_scans DESC, eq.equipment_name)
+            FROM (
+                SELECT
+                    equipment_id,
+                    equipment_label AS equipment_name,
+                    COUNT(DISTINCT user_id)::int AS accounts,
+                    COUNT(*)::int AS total_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'other')::int AS other_activity,
+                    MAX(date) AS last_activity
+                FROM normalized
+                GROUP BY equipment_id, equipment_label
+            ) eq
+        ), '[]'::jsonb),
+        'geography', COALESCE((
+            SELECT jsonb_agg(row_to_json(g) ORDER BY g.total_scans DESC, g.location)
+            FROM (
+                SELECT
+                    site_name AS location,
+                    COUNT(DISTINCT user_id)::int AS accounts,
+                    COUNT(*)::int AS total_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'raster')::int AS raster_scans,
+                    COUNT(*) FILTER (WHERE scan_kind = 'vector')::int AS vector_scans,
+                    MAX(date) AS last_activity
+                FROM normalized
+                GROUP BY site_name
+            ) g
+        ), '[]'::jsonb),
+        'recent', COALESCE((
+            SELECT jsonb_agg(row_to_json(r) ORDER BY r.date DESC)
+            FROM (
+                SELECT
+                    user_id,
+                    login_name,
+                    activity_type,
+                    scan_kind,
+                    site_name AS site,
+                    site_name AS location,
+                    equipment_id,
+                    equipment_label AS equipment_name,
+                    date
+                FROM normalized
+                ORDER BY date DESC
+                LIMIT 24
+            ) r
+        ), '[]'::jsonb)
+    );
+$$;

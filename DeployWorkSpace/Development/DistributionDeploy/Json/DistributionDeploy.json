@@ -148,14 +148,18 @@
                 "transactionComplete": false,
                 "actionData": {
                     "databaseName": "iobeam_admin",
+                    "databaseHost": "localhost",
+                    "databaseRole": "iobeam_admin_app",
                     "databaseOwnerRole": "iobeam_admin_owner",
                     "databaseOwnerMembers": [
                         "lyh1154@gmail.com",
                         "yuyao.jiang@ionbeamtech.com"
                     ],
                     "adminConfigFile": "Development/IobeamAdmin/Json/IobeamAdmin.json",
+                    "adminDbConfigFile": "Development/IobeamAdmin/Json/IobeamAdminDb.json",
                     "schemaFile": "Development/IobeamAdmin/Sql/001_schema.sql",
-                    "seedFile": "Development/IobeamAdmin/Sql/002_seed_root_user.sql"
+                    "seedFile": "Development/IobeamAdmin/Sql/002_seed_root_user.sql",
+                    "installCommand": "sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo apt-get install -y postgresql postgresql-contrib postgresql-client"
                 },
                 "timeout": 900.0
             }
@@ -258,7 +262,8 @@
                     "createBackendEnv": true,
                     "npmInstall": true,
                     "useNvm": true,
-                    "backendHost": "127.0.0.1"
+                    "backendHost": "127.0.0.1",
+                    "adminDbConfigFile": "Development/IobeamAdmin/Json/IobeamAdminDb.json"
                 },
                 "timeout": 600.0
             }
@@ -329,6 +334,20 @@
                         },
                         {
                             "url": "http://127.0.0.1:4000/api/admin/iobeam/auth/current-account",
+                            "expectedStatus": 200,
+                            "jsonContains": {
+                                "ok": true
+                            }
+                        },
+                        {
+                            "url": "http://127.0.0.1:4000/api/admin/iobeam/reports/activity?days=90",
+                            "expectedStatus": 200,
+                            "jsonContains": {
+                                "ok": true
+                            }
+                        },
+                        {
+                            "url": "http://127.0.0.1:4000/api/admin/iobeam/equipment",
                             "expectedStatus": 200,
                             "jsonContains": {
                                 "ok": true

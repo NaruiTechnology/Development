@@ -41,6 +41,7 @@ export function pgConnectionFromRuntimeConfig(source: Config = config): PgConnec
     database: source.adminDbName,
     user: source.adminDbUser,
     password: source.adminDbPassword,
+    sslMode: source.adminDbSslMode,
     commandTimeoutMs: source.adminDbCommandTimeoutMs,
   };
 }
@@ -280,8 +281,11 @@ function roleGrantSql(dbName: string, roleName: string): string {
     `GRANT USAGE, CREATE ON SCHEMA iobeam_admin TO ${roleIdent};`,
     `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iobeam_admin TO ${roleIdent};`,
     `GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA iobeam_admin TO ${roleIdent};`,
+    `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA iobeam_admin TO ${roleIdent};`,
+    `GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA iobeam_admin TO ${roleIdent};`,
     `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${roleIdent};`,
     `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ${roleIdent};`,
+    `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT EXECUTE ON FUNCTIONS TO ${roleIdent};`,
   ].join("\n");
 }
 
