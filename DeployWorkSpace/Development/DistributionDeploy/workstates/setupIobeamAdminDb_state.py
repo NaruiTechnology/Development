@@ -567,7 +567,19 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                 continue
             seen.add(roleName)
             roleIdent = self._quoteIdent(roleName)
-            lines.append(f"GRANT CONNECT, TEMPORARY ON DATABASE {dbIdent} TO {roleIdent};")
+            roleLiteral = self._quoteLiteral(roleName)
+            lines.extend([
+                "DO $$",
+                "BEGIN",
+                f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {roleLiteral}) THEN",
+                f"    EXECUTE 'CREATE ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
+                "  ELSE",
+                f"    EXECUTE 'ALTER ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
+                "  END IF;",
+                "END",
+                "$$;",
+                f"GRANT CONNECT, TEMPORARY ON DATABASE {dbIdent} TO {roleIdent};",
+            ])
         return "\n".join(lines)
 
     def _assignOwnershipSql(self, ownerRole):
