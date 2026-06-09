@@ -104,6 +104,31 @@ cd ../backend && npm run build && npm start
 The Node server then serves `frontend/dist/` and proxies `/api` + `/ws` to
 the FastAPI process. Put it behind nginx/Caddy for TLS.
 
+### Deployment workflow
+
+The existing JSON-driven deploy workflow lives in
+[DeployWorkSpace/Development/DistributionDeploy](/home/vboxuser/Project/IobeamTech/Development/DeployWorkSpace/Development/DistributionDeploy).
+Ionbeam-web exposes convenience npm scripts that delegate to that workflow for
+both local and production runs:
+
+```bash
+cd backend
+npm run deploy:local
+npm run deploy:production
+```
+
+The workflow JSON now switches to production mode with:
+
+* backend build/start instead of `npm run dev`
+* the frontend launcher disabled in production
+* the UI browser target set to `https://ionbeamtech.com/control`
+
+For the remote VM, see the concrete nginx/systemd guide in
+[deploy/remote-vm.md](/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/deploy/remote-vm.md).
+
+Production mode is controlled by the workflow JSON's `Deployment.IsProduction`
+flag and the `--production` CLI switch on `distributionDeployApp.py`.
+
 ## Why this shape
 
 * The browser **never sees `GLASGOW_TOKEN`**. The Node proxy injects the

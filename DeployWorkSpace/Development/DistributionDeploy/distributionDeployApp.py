@@ -28,6 +28,9 @@ def main():
         '-r', action='store', dest='deployRoot',
         help="Override the deploy root directory on the target host",
         default=None)
+    parser.add_argument(
+        '--production', action='store_true', dest='production',
+        help="Enable production overrides from the JSON config")
 
     args = parser.parse_args()
     jsonpath = args.jsonfile
@@ -45,6 +48,8 @@ def main():
     if args.deployRoot is not None:
         # Mutate in place so all states pick up the override
         config.Deployment["DeployRoot"] = args.deployRoot
+    if args.production:
+        config.Deployment["IsProduction"] = True
 
     thread = DistributionDeployThread(config)
     thread.Start()

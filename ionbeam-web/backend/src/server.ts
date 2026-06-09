@@ -1583,7 +1583,7 @@ async function writeSmtpMessage(
     [
       `From: ${config.smtpFrom}`,
       `To: ${recipients.join(", ")}`,
-      `Subject: ${subject.replace(/\r?\n/g, " ")}`,
+      `Subject: ${subject.replace(/\n?\n/g, " ")}`,
       "Content-Type: text/plain; charset=utf-8",
       "",
       body.replace(/\r?\n/g, "\r\n").replace(/^\./gm, ".."),

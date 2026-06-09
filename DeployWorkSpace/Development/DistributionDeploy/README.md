@@ -189,6 +189,18 @@ deployment is stable and the service environment has been made explicit.
 `Deployment.IsProduction` is the workflow-wide switch. When it is `false`,
 the deploy path stays on the localhost defaults.
 
+For Ionbeam web, production mode is used to:
+
+* restart the Node backend through `systemd`
+* skip the Vite frontend launcher
+* open the browser at `https://ionbeamtech.com/control`
+
+The remote VM layout and nginx setup live in:
+
+* [ionbeam-web/deploy/remote-vm.md](/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/deploy/remote-vm.md)
+* [ionbeam-web/deploy/ionbeam-web.service](/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/deploy/ionbeam-web.service)
+* [ionbeam-web/deploy/nginx/ionbeamtech.com.conf](/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/deploy/nginx/ionbeamtech.com.conf)
+
 Per-action `ProductionConfig` blocks are merged into `actionData` only when
 production mode is enabled. Use them for values that differ on the edge host:
 

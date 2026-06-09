@@ -319,6 +319,10 @@
                     "title": "Ionbeam Web Backend",
                     "spawnTerminal": true
                 },
+                "ProductionConfig": {
+                    "command": "sudo systemctl restart ionbeam-web.service",
+                    "spawnTerminal": false
+                },
                 "timeout": 60.0
             }
         },
@@ -347,6 +351,11 @@
                     },
                     "title": "Ionbeam Web Frontend",
                     "spawnTerminal": true
+                },
+                "ProductionConfig": {
+                    "command": "true",
+                    "port": 0,
+                    "spawnTerminal": false
                 },
                 "timeout": 60.0
             }
@@ -393,7 +402,19 @@
                         }
                     ],
                     "ProductionConfig": {
-                        "checks": []
+                        "checks": [
+                            {
+                                "url": "https://ionbeamtech.com/healthz",
+                                "expectedStatus": 200,
+                                "jsonContains": {
+                                    "ok": true
+                                }
+                            },
+                            {
+                                "url": "https://ionbeamtech.com/control",
+                                "expectedStatus": 200
+                            }
+                        ]
                     }
                 },
                 "timeout": 45.0
@@ -410,7 +431,7 @@
 		    "pollInterval": 0.5,
 		    "failOnNotReady": false,
 		    "ProductionConfig": {
-		        "url": ""
+		        "url": "https://ionbeamtech.com/control"
 		    }
 		},
 		"timeout": 60.0
