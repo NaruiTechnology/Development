@@ -320,6 +320,8 @@ export const zhCN: Partial<TranslationTable> = {
   "help.frameBlank.aria": "帧消隐字段的作用是什么？",
   "help.validation.title": "验证 — 扫描后完整性检查",
   "help.validation.aria": "验证字段的作用是什么？",
+  "help.runValidated.title": "验证运行 — 带检查的阻塞扫描",
+  "help.runValidated.aria": "验证运行的作用是什么？",
   "help.pattern.title": "图样 — 默认扫描与自定义点列",
   "help.pattern.aria": "图样字段的作用是什么？",
   "help.vectorResolution.title": "矢量分辨率 — 默认扫描密度",

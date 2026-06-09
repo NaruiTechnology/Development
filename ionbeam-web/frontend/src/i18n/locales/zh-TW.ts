@@ -326,6 +326,8 @@ export const zhTW: Partial<TranslationTable> = {
   "help.frameBlank.aria": "畫面消隱欄位的作用是什麼？",
   "help.validation.title": "驗證 — 掃描後完整性檢查",
   "help.validation.aria": "驗證欄位的作用是什麼？",
+  "help.runValidated.title": "驗證執行 — 帶檢查的阻塞掃描",
+  "help.runValidated.aria": "驗證執行的作用是什麼？",
   "help.pattern.title": "圖樣 — 預設掃描與自訂點列",
   "help.pattern.aria": "圖樣欄位的作用是什麼？",
   "help.vectorResolution.title": "矢量解析度 — 預設掃描密度",

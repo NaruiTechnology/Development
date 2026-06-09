@@ -382,6 +382,8 @@ class DeviceService:
             self._conn = None
             self._status.state = DeviceState.ERROR
             self._status.last_error = repr(e)
+            if _is_fatal_usb_error(e):
+                raise DeviceNotReady(str(e)) from e
             raise
 
         self._status.state = DeviceState.IDLE
@@ -555,6 +557,8 @@ class DeviceService:
                     self._status.chunks_in_flight += 1
             except BaseException as e:
                 self._drop_conn_on_error(e)
+                if _is_fatal_usb_error(e):
+                    raise DeviceNotReady(str(e)) from e
                 raise
             send_time = time.perf_counter() - t0
 
@@ -650,6 +654,8 @@ class DeviceService:
                     self._status.chunks_in_flight += 1
             except BaseException as e:
                 self._drop_conn_on_error(e)
+                if _is_fatal_usb_error(e):
+                    raise DeviceNotReady(str(e)) from e
                 raise
             send_time = time.perf_counter() - t0
 

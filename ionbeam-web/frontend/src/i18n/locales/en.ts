@@ -350,6 +350,8 @@ export const en = {
   "help.frameBlank.aria": "What does the frame blank field do?",
   "help.validation.title": "Validation — post-scan integrity checks",
   "help.validation.aria": "What does the validation field do?",
+  "help.runValidated.title": "Run validated — blocking scan with checks",
+  "help.runValidated.aria": "What does Run validated do?",
   "help.pattern.title": "Pattern — default sweep vs custom points",
   "help.pattern.aria": "What does the pattern field do?",
   "help.vectorResolution.title": "Vector resolution — default-sweep density",

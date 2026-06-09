@@ -292,6 +292,26 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  runValidated: () => (
+    <>
+      <p>
+        当您需要的是<strong>阻塞式扫描结果</strong>而不是实时串流时，请使用
+        <strong>验证运行</strong>。它在光栅和矢量两种模式下都可用，会等待扫描完成，
+        然后一次性返回耗时数据和验证报告。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>需要报告时用这个。</strong>普通的 <code>Run</code> 只负责实时发送数据块，
+        不会等待验证结果。<code>验证运行</code> 才是生成 Run report 面板中那些后扫描检查的路径。
+      </div>
+
+      <p>
+        光栅或矢量参数表里的验证复选框，仍然决定结果里是否包含逐项的通过 / 失败清单。
+        这个按钮只是选择返回扫描结果对象的阻塞端点。
+      </p>
+    </>
+  ),
+
   pattern: () => (
     <>
       <p>

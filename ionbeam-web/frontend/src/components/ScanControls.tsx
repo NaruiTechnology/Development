@@ -43,6 +43,7 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
+import { RunValidatedHelp } from "./RunValidatedHelp";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 
@@ -318,15 +319,18 @@ export function ScanControls({
 
       <span className="spacer" />
 
-      <button
-        className="btn"
-        disabled={runDisabled || kind === "roi"}
-        onClick={onRunValidated}
-        title={t("scan.runValidated.title")}
-      >
-        <Icon name="check" tone="success" />
-        {t("scan.runValidated")}
-      </button>
+      <span className="scan-action-with-help">
+        <button
+          className="btn"
+          disabled={runDisabled || kind === "roi"}
+          onClick={onRunValidated}
+          title={t("scan.runValidated.title")}
+        >
+          <Icon name="check" tone="success" />
+          {t("scan.runValidated")}
+        </button>
+        <RunValidatedHelp />
+      </span>
       <button className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
         <Icon name="x" tone="danger" />
         {t("scan.clear")}

@@ -288,6 +288,26 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  runValidated: () => (
+    <>
+      <p>
+        當您需要的是<strong>阻塞式掃描結果</strong>而不是即時串流時，請使用
+        <strong>驗證執行</strong>。它在光柵與矢量兩種模式下都可用，會等待掃描完成，
+        然後一次性回傳耗時資料與驗證報告。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>需要報告時用這個。</strong>一般的 <code>Run</code> 只負責即時送出資料區塊，
+        不會等待驗證結果。<code>驗證執行</code> 才是產生 Run report 面板中那些掃描後檢查的路徑。
+      </div>
+
+      <p>
+        光柵或矢量參數表中的驗證核取方塊，仍然決定結果裡是否包含逐項的通過 / 失敗清單。
+        這個按鈕只是選擇回傳掃描結果物件的阻塞端點。
+      </p>
+    </>
+  ),
+
   pattern: () => (
     <>
       <p>
