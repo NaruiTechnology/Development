@@ -61,6 +61,10 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             seedFile = self._resolveSqlFile(actionData.get(
                 "seedFile", "Development/IobeamAdmin/Sql/002_seed_root_user.sql"))
 
+            if not await self._ensureVboxUser(timeout):
+                self._success = False
+                return
+
             isLocalDb = self._isLocalHost(dbHost)
             if isLocalDb:
                 if not await self._ensurePostgreSQLInstalled(timeout, actionData):
@@ -125,6 +129,43 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         except Exception as e:
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
+
+    async def _ensureVboxUser(self, timeout):
+        cmd = ["getent", "passwd"]
+        self.info("[{}][ensure-vboxuser] >> {}".format(type(self).__name__, " ".join(cmd)))
+        ok, stdout, stderr = await self._runExec(cmd, timeout)
+        if not ok:
+            self.error("[{}][ensure-vboxuser] failed to list local users.\n{}"
+                       .format(type(self).__name__, stderr or "<no stderr>"))
+            return False
+
+        users = []
+        for line in stdout.splitlines():
+            name = line.split(":", 1)[0].strip()
+            if name:
+                users.append(name)
+        self.info("[{}][ensure-vboxuser] local users: {}"
+                  .format(type(self).__name__, ", ".join(users) or "<none>"))
+
+        if "vboxuser" in users:
+            self.info("[{}][ensure-vboxuser] user 'vboxuser' already exists."
+                      .format(type(self).__name__))
+            return True
+
+        createCmd = (
+            "sudo useradd -m -G sudo vboxuser && "
+            "sudo usermod -a -G plugdev vboxuser"
+        )
+        self.info("[{}][ensure-vboxuser] >> {}".format(type(self).__name__, createCmd))
+        ok, _, stderr = await self._runExec(["bash", "-lc", createCmd], timeout)
+        if not ok:
+            self.error("[{}][ensure-vboxuser] failed to create 'vboxuser'.\n{}"
+                       .format(type(self).__name__, stderr or "<no stderr>"))
+            return False
+
+        self.info("[{}][ensure-vboxuser] created 'vboxuser' and added sudo/plugdev groups."
+                  .format(type(self).__name__))
+        return True
 
     async def _ensureDatabase(self, dbName, timeout):
         sql = "SELECT 1 FROM pg_database WHERE datname = '{}'".format(
