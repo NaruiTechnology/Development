@@ -11,7 +11,6 @@ import {
   openDialog as openSettingsDialog,
   restartSettingsServices,
 } from "../store/settingsSlice";
-import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
@@ -53,12 +52,14 @@ export function Header({
   activeView,
   onOpenReport,
   onOpenScan,
+  scanLocked,
 }: {
   signedInUser: SignedInUser | null;
   onSignedIn: (user: SignedInUser) => void;
   activeView: "control" | "report";
   onOpenReport: () => void;
   onOpenScan: () => void;
+  scanLocked: boolean;
 }) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
@@ -71,15 +72,20 @@ export function Header({
   const { t } = useTranslation();
   const [authOpen, setAuthOpen] = useState(false);
   const authAutoOpenedRef = useRef(false);
+  const headerActionDisabled = scanLocked || !signedInUser;
   useEffect(() => {
     applyThemeToDocument(theme);
   }, [theme]);
 
   useEffect(() => {
+    if (scanLocked) {
+      setAuthOpen(false);
+      return;
+    }
     if (activeView === "report" || signedInUser || authAutoOpenedRef.current) return;
     authAutoOpenedRef.current = true;
     setAuthOpen(true);
-  }, [activeView, signedInUser]);
+  }, [activeView, scanLocked, signedInUser]);
 
   useEffect(() => {
     dispatch(fetchStatus());
@@ -178,13 +184,12 @@ export function Header({
         type="button"
         className="btn btn--ghost app-header__settings"
         onClick={() => {
-          stopAllScanActions();
           if (activeView === "report") onOpenScan();
           else onOpenReport();
         }}
         aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
         title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
-        disabled={!isSignedIn}
+        disabled={headerActionDisabled}
       >
         <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
       </button>
@@ -192,12 +197,11 @@ export function Header({
         type="button"
         className="btn btn--ghost app-header__settings"
         onClick={() => {
-          stopAllScanActions();
           dispatch(restartSettingsServices());
         }}
         aria-label={t("header.reconnect.aria")}
         title={t("header.reconnect.title")}
-        disabled={reconnecting || !isSignedIn}
+        disabled={reconnecting || headerActionDisabled}
       >
         <Icon name="link" tone="accent" />
       </button>
@@ -205,12 +209,11 @@ export function Header({
         type="button"
         className="btn btn--ghost app-header__settings"
         onClick={() => {
-          stopAllScanActions();
           dispatch(openSettingsDialog());
         }}
         aria-label={t("header.settings.aria")}
         title={t("header.settings.title")}
-        disabled={!isSignedIn}
+        disabled={headerActionDisabled}
       >
         <Icon name="cog" tone="accent" />
       </button>
@@ -219,6 +222,8 @@ export function Header({
         className="auth-chip"
         onClick={() => setAuthOpen(true)}
         title={signedInUser ? t("auth.signedIn.title") : t("auth.signIn.title")}
+        disabled={scanLocked}
+        aria-disabled={scanLocked}
       >
         <span className="auth-chip__avatar">
           {signedInUser?.initials || "?"}

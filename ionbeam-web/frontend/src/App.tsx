@@ -267,6 +267,7 @@ export function App() {
         activeView={route}
         onOpenReport={() => navigateTo("report")}
         onOpenScan={() => navigateTo("control")}
+        scanLocked={scanActive}
       />
 
       {route === "report" ? (
