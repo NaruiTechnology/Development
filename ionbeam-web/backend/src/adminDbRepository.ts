@@ -1,9 +1,11 @@
-import { config } from "./config";
 import {
   applyAdminDatabaseSetup,
+  pgConnectionFromAdminConfig,
   pgConnectionFromRuntimeConfig,
   runPsql,
+  type PgConnection,
 } from "./adminDbService";
+import { readAdminWithBackup } from "./configManager";
 
 export interface AdminUser {
   id: number | null;
@@ -32,23 +34,26 @@ export type RegisterAdminUserDbResult =
   | { ok: true; user: AdminUser }
   | { ok: false; error: string };
 
-let schemaReady: Promise<void> | null = null;
+const schemaReadyByConnection = new Map<string, Promise<void>>();
 
-export async function ensureAdminSchema(): Promise<void> {
-  if (!schemaReady) {
-    schemaReady = applyAdminDatabaseSetup({
-      connection: pgConnectionFromRuntimeConfig(),
+export async function ensureAdminSchema(connection?: PgConnection): Promise<void> {
+  const resolved = connection ?? (await resolveCurrentAdminDbConnection());
+  const key = connectionKey(resolved);
+  if (!schemaReadyByConnection.has(key)) {
+    const promise = applyAdminDatabaseSetup({
+      connection: resolved,
       loadSeed: false,
       ensureDatabase: false,
       ensureRole: false,
     })
       .then(() => undefined)
       .catch((err) => {
-        schemaReady = null;
+        schemaReadyByConnection.delete(key);
         throw err;
       });
+    schemaReadyByConnection.set(key, promise);
   }
-  await schemaReady;
+  await schemaReadyByConnection.get(key);
 }
 
 export async function recordAdminSessionInDb(
@@ -103,6 +108,47 @@ export async function buildActivityReportFromDb(
   });
   const parsed = JSON.parse(raw.trim() || "{}") as unknown;
   return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+}
+
+export async function dedupeActivityRowsFromDb(): Promise<number> {
+  const raw = await queryStored(`
+    WITH classified AS (
+      SELECT
+        id,
+        user_id,
+        equipment_id,
+        date,
+        CASE
+          WHEN upper(btrim(activity_type::text)) LIKE '%RASTER%' THEN 'raster'
+          WHEN upper(btrim(activity_type::text)) LIKE '%VECTOR%'
+            OR upper(btrim(activity_type::text)) LIKE '%VECTER%' THEN 'vector'
+          ELSE 'other'
+        END AS scan_kind,
+        row_number() OVER (
+          PARTITION BY
+            user_id,
+            equipment_id,
+            CASE
+              WHEN upper(btrim(activity_type::text)) LIKE '%RASTER%' THEN 'raster'
+              WHEN upper(btrim(activity_type::text)) LIKE '%VECTOR%'
+                OR upper(btrim(activity_type::text)) LIKE '%VECTER%' THEN 'vector'
+              ELSE 'other'
+            END,
+            date_trunc('second', date)
+          ORDER BY date ASC, id ASC
+        ) AS rn
+      FROM activity
+    ),
+    deleted AS (
+      DELETE FROM activity a
+      USING classified c
+      WHERE a.id = c.id
+        AND c.rn > 1
+      RETURNING a.id
+    )
+    SELECT COUNT(*)::int FROM deleted;
+  `);
+  return Number.parseInt(raw.trim() || "0", 10) || 0;
 }
 
 export async function listEquipmentFromDb(): Promise<Equipment[]> {
@@ -161,10 +207,11 @@ async function executeStored(sqlTemplate: string, payload: unknown = null): Prom
 }
 
 async function queryStored(sqlTemplate: string, payload: unknown = null, fallback = ""): Promise<string> {
-  await ensureAdminSchema();
+  const connection = await resolveCurrentAdminDbConnection();
+  await ensureAdminSchema(connection);
   const payloadSql = jsonbLiteral(payload);
   const sql = `SET search_path TO iobeam_admin, public;\n${sqlTemplate.replace("$$payload$$", payloadSql)}`;
-  const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], config.adminDbName, sql);
+  const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
   return out.trim() || fallback;
 }
 
@@ -180,4 +227,13 @@ function parseArray(raw: string): unknown[] {
 
 function jsonbLiteral(value: unknown): string {
   return `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
+}
+
+async function resolveCurrentAdminDbConnection(): Promise<PgConnection> {
+  const info = await readAdminWithBackup();
+  return pgConnectionFromAdminConfig(info.data, pgConnectionFromRuntimeConfig());
+}
+
+function connectionKey(connection: PgConnection): string {
+  return `${connection.host}:${connection.port}:${connection.database}:${connection.user}`;
 }

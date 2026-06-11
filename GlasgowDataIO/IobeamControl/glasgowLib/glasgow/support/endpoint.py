@@ -240,7 +240,7 @@ class ClientEndpoint(aobject, asyncio.Protocol):
     @classmethod
     def add_argument(cls, parser, name, default=None):
         metavar = name.upper().replace("_", "-")
-        help    = "connect to %s, either unix:PATH or tcp:HOST:PORT" % metavar
+        help    = " to %s, either unix:PATH or tcp:HOST:PORT" % metavar
         if default is None:
             nargs = None
         else:

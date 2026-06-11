@@ -21,7 +21,6 @@ import {
   vectorCsvBlob,
   downloadBlob,
 } from "../lib/csvExport";
-import { scanAuthHeaders } from "../lib/authIdentity";
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 
@@ -269,18 +268,11 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
 
   async function saveResultToDb() {
     if (disabled) return;
-    const signedUser = readSignedInUser();
-    const r = await fetch("/api/admin/iobeam/activity", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
-      body: JSON.stringify({
-        ...(signedUser?.id ? { user_id: signedUser.id } : {}),
-        activity_type: scanKind === "raster" ? "RASTER run" : "VECTOR run",
-      }),
-    });
-    if (!r.ok) {
-      throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-    }
+    // Activity rows are already written by the scan completion paths
+    // (`useScanStream` for live scans and the validated run thunk for
+    // POST /scan/{kind}/run). This hook now only gates the UI state for
+    // the DB flow indicator so we don't double-count a single scan.
+    return;
   }
 
   async function downloadCsv() {

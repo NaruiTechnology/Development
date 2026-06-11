@@ -35,6 +35,7 @@ import {
 } from "./adminDbService";
 import {
   buildActivityReportFromDb,
+  dedupeActivityRowsFromDb,
   findAdminUserInDb,
   findAdminUserInDbById,
   isAdminSessionExpiredInDb,
@@ -145,6 +146,11 @@ interface DbApplyResponse {
   };
   steps?: Array<{ name: string; ok: boolean; detail: string }>;
   error?: string;
+}
+
+interface ActivityDedupeResponse {
+  ok: boolean;
+  deleted: number;
 }
 
 const smsChallenges = new Map<string, SmsChallenge>();
@@ -297,12 +303,7 @@ app.get("/api/admin/iobeam/equipment", async (_req, res) => {
     const equipment = await listEquipmentFromDb();
     res.json({ ok: true, equipment });
   } catch (err) {
-    try {
-      const info = await readAdminWithBackup();
-      res.json({ ok: true, equipment: readEquipment(info.data) });
-    } catch {
-      sendConfigError(res, err);
-    }
+    sendConfigError(res, err);
   }
 });
 
@@ -656,16 +657,9 @@ app.post(
 app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
   try {
     const info = await readAdminWithBackup();
-    const dbUsers = await listAdminUsersFromDb().catch((err) => {
-      console.warn(
-        `[iobeam-admin/report] DB user records were not loaded: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      return [];
-    });
-    const activeUsers = (dbUsers.length > 0 ? dbUsers : readAdminUsers(info.data))
-      .filter((u) => u.is_active);
+    const connection = pgConnectionFromAdminConfig(info.data);
+    const dbUsers = await listAdminUsersFromDb();
+    const activeUsers = dbUsers.filter((u) => u.is_active);
     const requestedAccountId = Number(req.query.account_id ?? 0);
     const requestedEquipmentId = Number(req.query.equipment_id ?? 0);
     const days = Math.min(
@@ -695,6 +689,7 @@ app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
     if (ids.length === 0) {
       res.json({
         ok: true,
+        data_source: adminDbSource(connection),
         generated_at: new Date().toISOString(),
         days,
         selected_account_id: requestedAccountId > 0 ? requestedAccountId : null,
@@ -729,6 +724,7 @@ app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
     }
     res.json({
       ok: true,
+      data_source: adminDbSource(connection),
       generated_at: new Date().toISOString(),
       report_error: reportError,
       days,
@@ -804,6 +800,19 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
     sendConfigError(res, err);
   }
 });
+
+app.post(
+  "/api/admin/iobeam/activity/dedupe",
+  async (req, res: express.Response<ActivityDedupeResponse | ConfigSaveResponse>) => {
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can clean duplicate activity rows");
+      const deleted = await dedupeActivityRowsFromDb();
+      res.json({ ok: true, deleted });
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
 
 app.post("/api/admin/restart-services", async (_req, res) => {
   await restartServicesAndRespond(res);
@@ -951,6 +960,21 @@ function readEquipment(data: unknown): Equipment[] {
       description: String(row.description ?? ""),
     }))
     .filter((row) => row.name.trim() || row.serial_number.trim());
+}
+
+function adminDbSource(connection: PgConnection): "local_db" | "remote_db" {
+  const host = connection.host.trim().toLowerCase();
+  if (
+    !host ||
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "::ffff:127.0.0.1" ||
+    host.startsWith("/")
+  ) {
+    return "local_db";
+  }
+  return "remote_db";
 }
 
 function findAdminUser(data: unknown, login: string): AdminUser | null {
