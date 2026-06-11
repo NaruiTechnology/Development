@@ -203,6 +203,8 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 os.path.join(backendDir, "scripts", "restart-glasgow-service.sh")),
             "IONBEAM_BACKEND_RESTART_CMD={}".format(
                 os.path.join(backendDir, "scripts", "restart-ionbeam-backend.sh")),
+            "IONBEAM_MOBILITY_ONLY={}".format(
+                "1" if self.deploymentValue("MobilityOnly", False) else "0"),
             "GLASGOW_PROJECT_ROOT={}".format(deployRoot),
             "GLASGOW_CONFIG_STRICT=0",
             "",

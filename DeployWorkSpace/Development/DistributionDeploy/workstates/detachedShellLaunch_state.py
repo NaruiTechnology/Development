@@ -76,6 +76,8 @@ class detachedShellLaunch_state(distributionDeploy_state):
             for key, val in exports.items():
                 shellParts.append("export {}={}".format(
                     key, shlex.quote(str(self.resolveEnvValue(val)))))
+            if self.deploymentValue("MobilityOnly", False) and type(self).__name__ == "launchIonbeamWebFrontend_state":
+                shellParts.append("export VITE_MOBILITY_ONLY=1")
             shellParts.append(command)
             shellCommand = " && ".join(shellParts)
 

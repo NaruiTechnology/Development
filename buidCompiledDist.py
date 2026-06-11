@@ -34,6 +34,7 @@ SKIP_DIRS = {
 # .env.example, index.html, src/, public/, etc.).
 COPY_TREES = [
     os.path.join('Development', 'ionbeam-web'),
+    os.path.join('Development', 'IobeamAdmin'),
 ]
 
 # Patterns excluded while copying a tree from COPY_TREES. Keeps the zip
@@ -65,6 +66,19 @@ def copy_source_trees(src_dir, dist_dir, trees):
         dst_tree = os.path.join(dist_dir, rel_tree)
         shutil.copytree(src_tree, dst_tree, ignore=ignore, dirs_exist_ok=True)
         print(f"Copied source tree: {rel_tree}")
+
+
+def copy_preserved_files(src_dir, dist_dir, file_pairs):
+    """Copy specific files that are intentionally excluded from tree ignores."""
+    for rel_src, rel_dst in file_pairs:
+        src_file = os.path.join(src_dir, rel_src)
+        if not os.path.isfile(src_file):
+            print(f"Preserved file not found (skipping): {rel_src}")
+            continue
+        dest_file = os.path.join(dist_dir, rel_dst)
+        os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+        shutil.copy2(src_file, dest_file)
+        print(f"Copied preserved file: {rel_dst}")
 
 
 def copy_matching_assets(src_dir, dist_dir, patterns):
@@ -104,6 +118,12 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
     # Done before the .py walk so SKIP_DIRS cleanly excludes these paths
     # from per-file processing.
     copy_source_trees(src_dir, dist_dir, COPY_TREES)
+    copy_preserved_files(src_dir, dist_dir, [
+        (
+            os.path.join('Development', 'ionbeam-web', 'backend', '.env'),
+            os.path.join('Development', 'ionbeam-web', 'backend', '.env'),
+        ),
+    ])
 
     # 3. Package source files: raw .py files OR extracted/flattened .pyc files
     abs_dist = os.path.abspath(dist_dir)

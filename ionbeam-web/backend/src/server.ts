@@ -184,6 +184,7 @@ app.get("/healthz", (_req, res) => {
   res.json({
     ok: true,
     mock: config.mock,
+    mobility_only: config.mobilityOnly,
     upstream: config.proxyTargetHttp,
     has_token: Boolean(config.glasgowToken),
     config_path: config.configPath,
@@ -856,9 +857,23 @@ if (config.mock) {
 
 // Static (production) — only mount if the build output actually exists, so
 // `npm run dev` doesn't 404 itself.
+if (config.mobilityOnly) {
+  app.get(["/", "/control", "/report"], (_req, res) => {
+    const target = _req.path === "/report" ? "/mobility/reports" : "/mobility";
+    res.redirect(302, target);
+  });
+}
+
 if (fs.existsSync(config.staticDir)) {
   app.use(express.static(config.staticDir));
   app.get("*", (_req, res, next) => {
+    if (config.mobilityOnly) {
+      const target = _req.path === "/report" ? "/mobility/reports" : "/mobility";
+      if (_req.path === "/" || _req.path === "/control" || _req.path === "/report") {
+        res.redirect(302, target);
+        return;
+      }
+    }
     const indexHtml = path.join(config.staticDir, "index.html");
     if (fs.existsSync(indexHtml)) res.sendFile(indexHtml);
     else next();

@@ -6,12 +6,15 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:mobility": "IONBEAM_MOBILITY_ONLY=1 tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "deploy": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json",
     "deploy:local": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json",
-    "deploy:production": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --production"
+    "deploy:production": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --production",
+    "deploy:mobility": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --mobility",
+    "deploy:production-mobility": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --production --mobility"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

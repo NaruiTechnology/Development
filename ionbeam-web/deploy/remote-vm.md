@@ -40,6 +40,7 @@ PORT=4000
 STATIC_DIR=../frontend/dist
 PROXY_TARGET_HTTP=http://127.0.0.1:8765
 PROXY_TARGET_WS=ws://127.0.0.1:8765
+IONBEAM_MOBILITY_ONLY=1
 GLASGOW_CONFIG=/absolute/path/to/streamData.json
 GLASGOW_RESTART_CMD=/absolute/path/to/restart-glasgow-service.sh
 IONBEAM_BACKEND_RESTART_CMD=sudo systemctl restart ionbeam-web.service
@@ -104,4 +105,7 @@ sudo journalctl -u nginx -f
 * The app routes are:
   * `/` or `/control` -> control view
   * `/report` -> management report
+  * `/mobility` -> mobility portal
+* Set `IONBEAM_MOBILITY_ONLY=1` in the backend `.env` when you want the
+  server to redirect `/` and `/control` into the mobility portal.
 * WebSocket scan routes stay under `/ws/scan/...`

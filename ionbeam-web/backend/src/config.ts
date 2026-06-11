@@ -35,6 +35,7 @@ export interface Config {
   proxyTargetWs: string;
   glasgowToken: string | null;
   mock: boolean;
+  mobilityOnly: boolean;
   staticDir: string;
   configPath: string;
   adminConfigPath: string;
@@ -205,6 +206,7 @@ export const config: Config = {
   proxyTargetWs: process.env.PROXY_TARGET_WS ?? "ws://127.0.0.1:8765",
   glasgowToken: process.env.GLASGOW_TOKEN?.trim() || null,
   mock: bool(process.env.MOCK, false),
+  mobilityOnly: bool(process.env.IONBEAM_MOBILITY_ONLY, false),
   staticDir: path.resolve(
     __dirname,
     "..",

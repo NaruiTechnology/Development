@@ -31,6 +31,9 @@ def main():
     parser.add_argument(
         '--production', action='store_true', dest='production',
         help="Enable production overrides from the JSON config")
+    parser.add_argument(
+        '--mobility', action='store_true', dest='mobility',
+        help="Deploy the mobility-only frontend variant")
 
     args = parser.parse_args()
     jsonpath = args.jsonfile
@@ -50,6 +53,8 @@ def main():
         config.Deployment["DeployRoot"] = args.deployRoot
     if args.production:
         config.Deployment["IsProduction"] = True
+    if args.mobility:
+        config.Deployment["MobilityOnly"] = True
 
     thread = DistributionDeployThread(config)
     thread.Start()

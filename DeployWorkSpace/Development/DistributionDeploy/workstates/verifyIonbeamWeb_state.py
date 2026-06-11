@@ -25,10 +25,16 @@ class verifyIonbeamWeb_state(distributionDeploy_state):
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             stateConfig = self.resolvedStateConfig(stateConfig)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
+            mobilityOnly = self.deploymentValue("MobilityOnly", False)
             checks = actionData.get("checks") or actionData.get("urls") or [
                 "http://127.0.0.1:4000/healthz",
                 "http://127.0.0.1:5173/",
             ]
+            if mobilityOnly:
+                checks = [
+                    "http://127.0.0.1:4000/healthz",
+                    "http://127.0.0.1:5173/mobility",
+                ]
             delay = float(actionData.get("initialDelay", 3.0))
             pollInterval = float(actionData.get("pollInterval", 1.0))
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 30.0) or 30.0)
