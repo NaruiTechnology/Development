@@ -60,9 +60,11 @@ import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
 export function SettingsDialog({
   targetAccountId = null,
   targetLogin = null,
+  mobilityMode = false,
 }: {
   targetAccountId?: number | null;
   targetLogin?: string | null;
+  mobilityMode?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.settings.dialogOpen);
@@ -90,7 +92,11 @@ export function SettingsDialog({
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <SettingsModalShell targetAccountId={targetAccountId} targetLogin={targetLogin} />
+      <SettingsModalShell
+        targetAccountId={targetAccountId}
+        targetLogin={targetLogin}
+        mobilityMode={mobilityMode}
+      />
     </div>
   );
 }
@@ -145,9 +151,11 @@ function simulationImageChanged(before: unknown, after: unknown): boolean {
 function SettingsModalShell({
   targetAccountId,
   targetLogin,
+  mobilityMode,
 }: {
   targetAccountId: number | null;
   targetLogin: string | null;
+  mobilityMode: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -182,6 +190,12 @@ function SettingsModalShell({
     }
   }, [activeTab, dispatch, targetAccountId, targetLogin]);
 
+  useEffect(() => {
+    if (mobilityMode && activeTab !== "admin") {
+      dispatch(setActiveTab("admin"));
+    }
+  }, [activeTab, dispatch, mobilityMode]);
+
   // "Save As" and "Default" both fire a confirm-then-action flow. We
   // use local component state for the confirm row rather than a nested
   // modal - a second modal layer is heavy for a yes/no prompt.
@@ -192,6 +206,9 @@ function SettingsModalShell({
 
   const busy = loading || saving || restoring;
   const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+  const visibleTabs: SettingsTab[] = mobilityMode
+    ? ["admin"]
+    : ["general", "raster", "vector", "pins", "simulation", "admin"];
 
   useEffect(() => {
     if (targetAccountId !== null || targetLogin) {
@@ -290,7 +307,7 @@ function SettingsModalShell({
         </button>
       </div>
 
-      {configPath && (
+      {!mobilityMode && configPath && (
         <div className="settings-path-strip" title={configPath}>
           <span className="settings-path-strip__label">
             {t("settings.boundTo")}
@@ -331,12 +348,9 @@ function SettingsModalShell({
       )}
 
       <div className="settings-tabs" role="tablist" aria-label={t("settings.tabs.aria")}>
-        <SettingsTabButton tab="general" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="raster" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="vector" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="pins" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="simulation" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="admin" active={activeTab} onSelect={onSelectTab} />
+        {visibleTabs.map((tab) => (
+          <SettingsTabButton key={tab} tab={tab} active={activeTab} onSelect={onSelectTab} />
+        ))}
       </div>
 
       <div className="modal__body settings-modal__body">
@@ -356,6 +370,7 @@ function SettingsModalShell({
               setConfirmDefault(false);
               setActiveSubTab(tab);
             }}
+            mobilityMode={mobilityMode}
             canEditPins={canEditPins}
           />
         )}
@@ -476,6 +491,7 @@ function SettingsTabBody({
   targetLogin,
   activeSubTab,
   onSelectAdminSubTab,
+  mobilityMode,
   canEditPins,
 }: {
   tab: SettingsTab;
@@ -484,6 +500,7 @@ function SettingsTabBody({
   targetLogin: string | null;
   activeSubTab: AdminSubTab;
   onSelectAdminSubTab: (tab: AdminSubTab) => void;
+  mobilityMode: boolean;
   canEditPins: boolean;
 }) {
   switch (tab) {
@@ -504,6 +521,7 @@ function SettingsTabBody({
           targetLogin={targetLogin}
           activeSubTab={activeSubTab}
           onSelectSubTab={onSelectAdminSubTab}
+          mobilityMode={mobilityMode}
         />
       );
   }
@@ -1389,11 +1407,13 @@ function AdminTab({
   targetLogin,
   activeSubTab,
   onSelectSubTab,
+  mobilityMode,
 }: {
   targetAccountId: number | null;
   targetLogin: string | null;
   activeSubTab: AdminSubTab;
   onSelectSubTab: (tab: AdminSubTab) => void;
+  mobilityMode: boolean;
 }) {
   const { t } = useTranslation();
   const [source, setSource] = useState<unknown | null>(null);
@@ -1427,6 +1447,12 @@ function AdminTab({
       if (privilegeNoticeTimer.current) clearTimeout(privilegeNoticeTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (mobilityMode && activeSubTab === "configuration") {
+      onSelectSubTab("users");
+    }
+  }, [activeSubTab, mobilityMode, onSelectSubTab]);
 
   async function load() {
     setLoading(true);
@@ -1597,7 +1623,7 @@ function AdminTab({
 
   return (
     <div className="settings-form">
-      {configPath && (
+      {!mobilityMode && configPath && (
         <div className="settings-path-strip" title={configPath}>
           <span className="settings-path-strip__label">
             {t("settings.admin.boundTo")}
@@ -1642,15 +1668,17 @@ function AdminTab({
           label={t("settings.admin.group.equipment")}
           onSelect={onSelectSubTab}
         />
-        <AdminSubTabButton
-          tab="configuration"
-          active={activeSubTab}
-          label={t("settings.admin.group.configuration")}
-          onSelect={onSelectSubTab}
-        />
+        {!mobilityMode && (
+          <AdminSubTabButton
+            tab="configuration"
+            active={activeSubTab}
+            label={t("settings.admin.group.configuration")}
+            onSelect={onSelectSubTab}
+          />
+        )}
       </div>
 
-      {activeSubTab === "configuration" && (
+      {activeSubTab === "configuration" && !mobilityMode && (
         <>
       <h4 className="settings-form__group">{t("settings.admin.group.header")}</h4>
       <div className="field-row">

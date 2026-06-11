@@ -216,10 +216,6 @@ export function MobilityApp() {
                   <Icon name="tools" />
                   <span>{t("mobility.openAdminConsole")}</span>
                 </button>
-                <button type="button" className="mobility-button" onClick={() => setAuthOpen(true)}>
-                  <Icon name="refresh" />
-                  <span>{t("mobility.refreshAccount")}</span>
-                </button>
               </div>
             </article>
 
@@ -302,7 +298,7 @@ export function MobilityApp() {
       </footer>
 
       <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} onSignedIn={handleSignedIn} />
-      <SettingsDialog targetAccountId={null} targetLogin={null} />
+      <SettingsDialog targetAccountId={null} targetLogin={null} mobilityMode />
     </div>
   );
 }
