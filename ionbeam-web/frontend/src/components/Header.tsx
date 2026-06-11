@@ -224,17 +224,6 @@ export function Header({
       </button>
       <button
         type="button"
-        className="btn btn--ghost app-header__settings"
-        onClick={() => {
-          window.location.assign("/mobility");
-        }}
-        aria-label={t("mobility.title")}
-        title={t("mobility.title")}
-      >
-        <Icon name="globe" tone="accent" />
-      </button>
-      <button
-        type="button"
         className="auth-chip"
         onClick={() => setAuthOpen(true)}
         title={signedInUser ? t("auth.signedIn.title") : t("auth.signIn.title")}
