@@ -434,6 +434,12 @@ body {
   outline: none;
 }
 
+.input:disabled,
+.select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .input:focus, .select:focus {
   border-color: var(--c-accent);
   box-shadow: 0 0 0 2px rgba(95, 184, 255, 0.18);
@@ -1682,6 +1688,11 @@ body {
   opacity: 0.85;
   transition: color 0.12s ease, opacity 0.12s ease,
               background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.help-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 .help-btn:hover {

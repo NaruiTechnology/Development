@@ -8,6 +8,11 @@ The stack is:
 * `ionbeam-web.service` runs the Node backend on `127.0.0.1:4000`
 * `glasgow-svc.service` runs the FastAPI device service on `127.0.0.1:8765`
 
+If you want a one-shot mobility-only bootstrap for a fresh VM, use
+[mobility-only-bootstrap.sh](./mobility-only-bootstrap.sh). It installs
+`nginx`, provisions TLS, and can run the web stack in `MOCK=1` mobility mode
+when the Glasgow hardware service is not present.
+
 The service unit uses `IONBEAM_WEB_ROOT` plus `%h`. Change `User=ionbeam` to
 the actual login user on your VM if needed, and if your checkout lives
 somewhere else, update the single `IONBEAM_WEB_ROOT` line in the unit.

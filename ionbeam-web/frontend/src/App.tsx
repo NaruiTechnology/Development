@@ -338,7 +338,8 @@ export function App() {
                 <div className="card__body">
                   <ScanControls
                     kind={kind as ScanKind}
-                    disabled={panelDisabled}
+                    disabled={!isSignedIn}
+                    scanActive={scanActive}
                   />
                 </div>
               </div>

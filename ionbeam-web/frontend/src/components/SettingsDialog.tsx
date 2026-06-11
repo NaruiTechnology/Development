@@ -61,10 +61,12 @@ export function SettingsDialog({
   targetAccountId = null,
   targetLogin = null,
   mobilityMode = false,
+  scanLocked = false,
 }: {
   targetAccountId?: number | null;
   targetLogin?: string | null;
   mobilityMode?: boolean;
+  scanLocked?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.settings.dialogOpen);
@@ -96,6 +98,7 @@ export function SettingsDialog({
         targetAccountId={targetAccountId}
         targetLogin={targetLogin}
         mobilityMode={mobilityMode}
+        scanLocked={scanLocked}
       />
     </div>
   );
@@ -152,10 +155,12 @@ function SettingsModalShell({
   targetAccountId,
   targetLogin,
   mobilityMode,
+  scanLocked,
 }: {
   targetAccountId: number | null;
   targetLogin: string | null;
   mobilityMode: boolean;
+  scanLocked: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -364,14 +369,15 @@ function SettingsModalShell({
             draft={draft}
             targetAccountId={targetAccountId}
             targetLogin={targetLogin}
-            activeSubTab={activeSubTab}
-            onSelectAdminSubTab={(tab) => {
+          activeSubTab={activeSubTab}
+          onSelectAdminSubTab={(tab) => {
               setConfirmSave(false);
               setConfirmDefault(false);
               setActiveSubTab(tab);
             }}
             mobilityMode={mobilityMode}
             canEditPins={canEditPins}
+            scanLocked={scanLocked}
           />
         )}
       </div>
@@ -397,7 +403,7 @@ function SettingsModalShell({
           <div className="settings-footer__row">
             <span
               className="scan-busy"
-              data-visible={busy ? "true" : "false"}
+              data-visible={busy || scanLocked ? "true" : "false"}
               aria-hidden={!busy}
             >
               <span className="scan-busy__spinner" />
@@ -407,7 +413,7 @@ function SettingsModalShell({
               type="button"
               className="btn btn--ghost"
               onClick={() => dispatch(fetchSettingsConfig())}
-              disabled={busy}
+              disabled={busy || scanLocked}
               title={t("settings.reload.title")}
             >
               <Icon name="refresh" tone="accent" />
@@ -419,7 +425,7 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--warn"
-              disabled={busy || !hasBackup}
+              disabled={busy || scanLocked || !hasBackup}
               onClick={() => setConfirmDefault(true)}
               title={
                 hasBackup
@@ -433,7 +439,7 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || draft === null || draft === source}
+              disabled={busy || scanLocked || draft === null || draft === source}
               onClick={() => setConfirmSave(true)}
               title={t("settings.btn.saveAs.title")}
             >
