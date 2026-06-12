@@ -11,6 +11,9 @@ from datetime import datetime
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = ['*.ihex', '*.toml', 'requirements.txt', 'README.md']
 
+# Files to exclude from any copied tree or asset sweep.
+EXCLUDE_PATTERNS = ['*.log']
+
 # Directories to skip when walking the source tree for the per-file passes
 # (.py/.pyc packaging and ASSET_PATTERNS scan). Non-Python source projects
 # listed in COPY_TREES are excluded here because they're handled wholesale
@@ -19,6 +22,8 @@ SKIP_DIRS = {
     '__pycache__',
     '.venv',
     '.git',
+    '.agents',
+    '.codex',
     '.pytest_cache',
     'dist_app',
     'EsmBeamController',
@@ -43,6 +48,7 @@ COPY_TREES = [
 TREE_COPY_IGNORE = (
     '__pycache__', '.git', '.venv', '.cache', '.pytest_cache',
     'node_modules', 'dist', 'build', '.next', '.turbo', '.env',
+    '*.log',
 )
 
 STREAM_DATA_JSON = os.path.join(
@@ -122,6 +128,8 @@ def copy_matching_assets(src_dir, dist_dir, patterns):
             continue
 
         for filename in files:
+            if any(fnmatch.fnmatch(filename, pat) for pat in EXCLUDE_PATTERNS):
+                continue
             if any(fnmatch.fnmatch(filename, pat) for pat in patterns):
                 rel_path = os.path.relpath(root, src_dir)
                 target_folder = os.path.join(dist_dir, rel_path)
@@ -152,6 +160,18 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
         (
             os.path.join('Development', 'ionbeam-web', 'backend', '.env'),
             os.path.join('Development', 'ionbeam-web', 'backend', '.env'),
+        ),
+        (
+            os.path.join('Development', 'ionbeam-web', 'deploy', 'ionbeam-web.service'),
+            os.path.join('Development', 'ionbeam-web', 'deploy', 'ionbeam-web.service'),
+        ),
+        (
+            os.path.join('Development', 'ionbeam-web', 'deploy', 'mobility-only-bootstrap.sh'),
+            os.path.join('Development', 'ionbeam-web', 'deploy', 'mobility-only-bootstrap.sh'),
+        ),
+        (
+            os.path.join('Development', 'ionbeam-web', 'deploy', 'remote-vm.md'),
+            os.path.join('Development', 'ionbeam-web', 'deploy', 'remote-vm.md'),
         ),
     ])
 

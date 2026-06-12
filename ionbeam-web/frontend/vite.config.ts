@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: 5173,
+      allowedHosts: ["localhost", "ion.o-0.top"],
       proxy: {
         "/api": {
           target: proxyTargetHttp,
