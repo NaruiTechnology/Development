@@ -57,15 +57,45 @@ def copy_source_trees(src_dir, dist_dir, trees):
     including non-Python ones like package.json, tsconfig.json,
     vite.config.*, .env.example -- are preserved.
     """
-    ignore = shutil.ignore_patterns(*TREE_COPY_IGNORE)
     for rel_tree in trees:
         src_tree = os.path.join(src_dir, rel_tree)
         if not os.path.isdir(src_tree):
             print(f"Source tree [{rel_tree}] not found (skipping).")
             continue
         dst_tree = os.path.join(dist_dir, rel_tree)
-        shutil.copytree(src_tree, dst_tree, ignore=ignore, dirs_exist_ok=True)
+        shutil.copytree(
+            src_tree,
+            dst_tree,
+            ignore=_tree_copy_ignore_for(rel_tree),
+            dirs_exist_ok=True,
+        )
         print(f"Copied source tree: {rel_tree}")
+
+
+def _tree_copy_ignore_for(rel_tree):
+    """Return a per-tree ignore callback.
+
+    The ionbeam-web tree should keep backend/deploy intact so the dist zip
+    carries the full backend subtree, but still skip the top-level frontend
+    deploy assets that are not needed in the packaged app.
+    """
+    base_ignore = set(TREE_COPY_IGNORE)
+    if os.path.normpath(rel_tree) == os.path.join('Development', 'ionbeam-web'):
+        def ignore(dirpath, names):
+            ignored = set()
+            rel_dir = os.path.normpath(os.path.relpath(dirpath, rel_tree))
+            for name in names:
+                if name in base_ignore:
+                    ignored.add(name)
+                    continue
+                if name == 'deploy':
+                    if rel_dir != 'backend':
+                        ignored.add(name)
+            return ignored
+
+        return ignore
+
+    return shutil.ignore_patterns(*base_ignore)
 
 
 def copy_preserved_files(src_dir, dist_dir, file_pairs):
