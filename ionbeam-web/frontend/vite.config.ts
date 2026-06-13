@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
+import { ALLOWED_HOSTS } from "./src/generated/allowedHosts";
+
 // In dev, the Vite server proxies /api and /ws to the Node backend on
 // :4000. The Node backend in turn proxies to the FastAPI glasgow_service.
 // Two hops in dev is intentional — it exercises the same code path
@@ -15,7 +17,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: 5173,
-      allowedHosts: ["localhost", "ion.o-0.top"],
+      allowedHosts: ALLOWED_HOSTS,
       proxy: {
         "/api": {
           target: proxyTargetHttp,

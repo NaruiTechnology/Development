@@ -36,6 +36,7 @@ import {
 import {
   buildActivityReportFromDb,
   dedupeActivityRowsFromDb,
+  listAllowedHostsFromDb,
   findAdminUserInDb,
   findAdminUserInDbById,
   isAdminSessionExpiredInDb,
@@ -49,6 +50,7 @@ import {
   type AdminUser,
   type Equipment,
 } from "./adminDbRepository";
+import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
 import {
   ConfigError,
   type RestartResult,
@@ -81,6 +83,13 @@ interface RestartServicesResponse {
 interface ConfigSaveResponse {
   ok: boolean;
   error?: string;
+}
+
+interface AllowedHostsResponse {
+  ok: boolean;
+  hosts: string[];
+  error?: string;
+  sync_warning?: string;
 }
 
 interface AdminSession {
@@ -307,6 +316,48 @@ app.get("/api/admin/iobeam/equipment", async (_req, res) => {
     sendConfigError(res, err);
   }
 });
+
+app.get("/api/admin/iobeam/hosts", async (_req, res: express.Response<AllowedHostsResponse>) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    const hosts = await listAllowedHostsFromDb();
+    res.json({ ok: true, hosts });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post(
+  "/api/admin/iobeam/hosts",
+  async (req, res: express.Response<AllowedHostsResponse | ConfigSaveResponse>) => {
+    const body = req.body as { hosts?: unknown; allowed_hosts?: unknown; allowedHosts?: unknown } | null;
+    const rawHosts = Array.isArray(body?.hosts)
+      ? body?.hosts
+      : Array.isArray(body?.allowed_hosts)
+        ? body?.allowed_hosts
+        : Array.isArray(body?.allowedHosts)
+          ? body?.allowedHosts
+          : null;
+
+    if (!rawHosts) {
+      res.status(400).json({ ok: false, error: "missing JSON body: expected { hosts: string[] }" });
+      return;
+    }
+
+    const hosts = rawHosts.map((host) => String(host ?? "").trim()).filter((host) => host.length > 0);
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can edit allowed hosts");
+      const saved = await saveAllowedHosts(hosts);
+      res.json({
+        ok: true,
+        hosts: saved.hosts,
+        ...(saved.syncWarning ? { sync_warning: saved.syncWarning } : {}),
+      });
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
 
 app.get(
   "/api/admin/iobeam/db/connection",
@@ -879,6 +930,14 @@ if (fs.existsSync(config.staticDir)) {
     else next();
   });
 }
+
+void syncAllowedHostsModuleFromDb().catch((err) => {
+  console.warn(
+    `[iobeam-admin/hosts] initial frontend host sync failed: ${
+      err instanceof Error ? err.message : String(err)
+    }`,
+  );
+});
 
 server = http.createServer(app);
 attachWsProxy(server, authorizeScanUpgrade);

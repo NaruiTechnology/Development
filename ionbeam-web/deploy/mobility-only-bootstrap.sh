@@ -210,6 +210,7 @@ ensure_user() {
 build_frontend() {
   cd "${APP_ROOT}/frontend"
   npm ci
+  npm run sync:allowed-hosts
   npm run build:mobility
 }
 

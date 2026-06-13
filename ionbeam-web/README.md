@@ -129,6 +129,7 @@ The mobility-only path adds:
 * `--mobility` deploy flag
 * the mobile shell rendered at `/mobility`
 * verification / launch URLs switched to the mobility route
+* an `Allowed Hosts` admin tab that persists the Vite dev-server allowlist in `iobeam_admin.hosts` and regenerates `frontend/src/generated/allowedHosts.ts`
 
 ### Local mobility verification
 

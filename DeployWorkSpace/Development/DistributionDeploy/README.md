@@ -194,6 +194,7 @@ For Ionbeam web, production mode is used to:
 * restart the Node backend through `systemd`
 * skip the Vite frontend launcher
 * open the browser at `https://ionbeamtech.com/control`
+* keep the mobility host allowlist in sync with `iobeam_admin.hosts` before the Vite build starts
 
 The remote VM layout and nginx setup live in:
 

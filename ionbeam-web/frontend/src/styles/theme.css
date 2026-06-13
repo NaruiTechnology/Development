@@ -2302,6 +2302,12 @@ body {
   min-width: 0;
 }
 
+.settings-admin-hosts__textarea {
+  min-height: 160px;
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+}
+
 .settings-checkbox {
   display: inline-flex;
   align-items: center;

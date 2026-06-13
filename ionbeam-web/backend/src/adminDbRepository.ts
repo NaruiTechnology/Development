@@ -30,6 +30,11 @@ export interface Equipment {
   description: string;
 }
 
+export interface AllowedHost {
+  id: number | null;
+  host: string;
+}
+
 export type RegisterAdminUserDbResult =
   | { ok: true; user: AdminUser }
   | { ok: false; error: string };
@@ -156,10 +161,19 @@ export async function listEquipmentFromDb(): Promise<Equipment[]> {
   return parseArray(raw) as Equipment[];
 }
 
+export async function listAllowedHostsFromDb(): Promise<string[]> {
+  const raw = await queryStored("SELECT fn_list_hosts();");
+  return parseStringArray(raw);
+}
+
 export async function syncEquipmentToDb(equipmentRows: Equipment[]): Promise<void> {
   const rows = equipmentRows.filter((equipment) => equipment.name.trim() && equipment.serial_number.trim());
   if (rows.length === 0) return;
   await executeStored("SELECT fn_upsert_equipment($$payload$$);", rows);
+}
+
+export async function replaceAllowedHostsInDb(hosts: string[]): Promise<void> {
+  await executeStored("SELECT fn_replace_hosts($$payload$$);", normalizeAllowedHosts(hosts));
 }
 
 export async function findAdminUserInDb(loginOrEmail: string): Promise<AdminUser | null> {
@@ -223,6 +237,24 @@ function parseFirstUser(raw: string): AdminUser | null {
 function parseArray(raw: string): unknown[] {
   const parsed = JSON.parse(raw.trim() || "[]") as unknown;
   return Array.isArray(parsed) ? parsed : [];
+}
+
+function parseStringArray(raw: string): string[] {
+  return parseArray(raw)
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => item.length > 0);
+}
+
+function normalizeAllowedHosts(hosts: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const host of hosts) {
+    const value = String(host ?? "").trim().toLowerCase();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    normalized.push(value);
+  }
+  return normalized.length > 0 ? normalized : ["localhost", "ion.o-0.top"];
 }
 
 function jsonbLiteral(value: unknown): string {

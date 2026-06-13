@@ -113,4 +113,5 @@ sudo journalctl -u nginx -f
   * `/mobility` -> mobility portal
 * Set `IONBEAM_MOBILITY_ONLY=1` in the backend `.env` when you want the
   server to redirect `/` and `/control` into the mobility portal.
+* The mobility settings modal includes an `Allowed Hosts` tab backed by `iobeam_admin.hosts`; the backend refreshes `frontend/src/generated/allowedHosts.ts` so Vite reads the same allowlist at build/dev start.
 * WebSocket scan routes stay under `/ws/scan/...`

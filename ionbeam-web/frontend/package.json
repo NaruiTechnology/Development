@@ -5,10 +5,11 @@
   "type": "module",
   "description": "React/Redux/TS web client for Ion Beam Technology beam control.",
   "scripts": {
-    "dev": "vite",
-    "dev:mobility": "VITE_MOBILITY_ONLY=1 vite",
-    "build": "tsc -b && vite build",
-    "build:mobility": "tsc -b && VITE_MOBILITY_ONLY=1 vite build",
+    "sync:allowed-hosts": "node scripts/sync-allowed-hosts.mjs",
+    "dev": "npm run sync:allowed-hosts && vite",
+    "dev:mobility": "npm run sync:allowed-hosts && VITE_MOBILITY_ONLY=1 vite",
+    "build": "tsc -b && npm run sync:allowed-hosts && vite build",
+    "build:mobility": "tsc -b && npm run sync:allowed-hosts && VITE_MOBILITY_ONLY=1 vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit"
   },

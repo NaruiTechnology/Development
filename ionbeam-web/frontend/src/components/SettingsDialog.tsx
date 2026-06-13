@@ -23,7 +23,7 @@
  * every render. The Redux DevTools timeline becomes the edit history
  * for free.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
@@ -1213,6 +1213,13 @@ interface AdminDatabaseConnectionResponse {
   };
 }
 
+interface AllowedHostsResponse {
+  ok: boolean;
+  hosts: string[];
+  error?: string;
+  sync_warning?: string;
+}
+
 const ADMIN_ROLE_OPTIONS = [
   { value: 3, key: "settings.admin.role.admin" },
   { value: 2, key: "settings.admin.role.developer" },
@@ -1222,7 +1229,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "configuration" | "users" | "equipment";
+type AdminSubTab = "configuration" | "users" | "equipment" | "allowedHosts";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1313,6 +1320,63 @@ function equipmentFromDraft(draft: unknown): EquipmentRow[] {
       site: String(row.site ?? ""),
       description: String(row.description ?? ""),
     }));
+}
+
+const DEFAULT_ALLOWED_HOSTS = ["localhost", "ion.o-0.top"];
+const ALLOWED_HOSTNAME_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
+const ALLOWED_IPV4_RE =
+  /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+function normalizeAllowedHostList(hosts: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const host of hosts) {
+    const value = String(host ?? "").trim().toLowerCase();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    normalized.push(value);
+  }
+  return normalized.length > 0 ? normalized : [...DEFAULT_ALLOWED_HOSTS];
+}
+
+function validateAllowedHostList(hosts: string[]): string[] {
+  const invalid: string[] = [];
+  for (const host of hosts) {
+    if (!isValidAllowedHost(host)) invalid.push(host);
+  }
+  return invalid;
+}
+
+function parseAllowedHostsText(text: string): string[] {
+  return normalizeAllowedHostList(
+    text
+      .split(/[\r\n,]+/)
+      .map((host) => host.trim())
+      .filter((host) => host.length > 0),
+  );
+}
+
+function isValidAllowedHost(host: string): boolean {
+  const value = String(host ?? "").trim().toLowerCase();
+  if (!value || value.length > 253) return false;
+  if (
+    value.includes("/") ||
+    value.includes("\\") ||
+    value.includes(":") ||
+    value.includes("@") ||
+    value.includes("#") ||
+    value.includes("?") ||
+    value.includes("*") ||
+    value.includes(" ")
+  ) {
+    return false;
+  }
+  if (value === "localhost") return true;
+  if (ALLOWED_IPV4_RE.test(value)) return true;
+
+  const labels = value.split(".");
+  if (labels.length === 0) return false;
+  return labels.every((label) => label.length > 0 && label.length <= 63 && ALLOWED_HOSTNAME_LABEL_RE.test(label));
 }
 
 function adminUserRowKey(user: AdminUserRow, index: number): string {
@@ -1681,6 +1745,12 @@ function AdminTab({
             onSelect={onSelectSubTab}
           />
         )}
+        <AdminSubTabButton
+          tab="allowedHosts"
+          active={activeSubTab}
+          label={t("settings.admin.group.allowedHosts")}
+          onSelect={onSelectSubTab}
+        />
       </div>
 
       {activeSubTab === "configuration" && !mobilityMode && (
@@ -1927,6 +1997,172 @@ function AdminTab({
           </button>
         </div>
       )}
+
+      {activeSubTab === "allowedHosts" && (
+        <AllowedHostsTab
+          canManage={canManageAdminConfig}
+          onBlockedAction={showPrivilegeNotice}
+        />
+      )}
+    </div>
+  );
+}
+
+function AllowedHostsTab({
+  canManage,
+  onBlockedAction,
+}: {
+  canManage: boolean;
+  onBlockedAction: () => void;
+}) {
+  const { t } = useTranslation();
+  const [sourceHosts, setSourceHosts] = useState<string[]>(DEFAULT_ALLOWED_HOSTS);
+  const [draft, setDraft] = useState(DEFAULT_ALLOWED_HOSTS.join("\n"));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTone, setNoticeTone] = useState<"info" | "success">("success");
+
+  const draftHosts = useMemo(() => parseAllowedHostsText(draft), [draft]);
+  const invalidHosts = useMemo(() => validateAllowedHostList(draftHosts), [draftHosts]);
+  const dirty = draftHosts.join("\n") !== sourceHosts.join("\n");
+
+  async function loadHosts(cancelledRef: { current: boolean }): Promise<boolean> {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/admin/iobeam/hosts", { headers: scanAuthHeaders() });
+      const data = (await r.json().catch(() => null)) as AllowedHostsResponse | null;
+      if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      const hosts = normalizeAllowedHostList(Array.isArray(data.hosts) ? data.hosts : []);
+      if (cancelledRef.current) return false;
+      setSourceHosts(hosts);
+      setDraft(hosts.join("\n"));
+      return true;
+    } catch (err) {
+      if (cancelledRef.current) return false;
+      const fallback = [...DEFAULT_ALLOWED_HOSTS];
+      setSourceHosts(fallback);
+      setDraft(fallback.join("\n"));
+      setError(err instanceof Error ? err.message : String(err));
+      return false;
+    } finally {
+      if (!cancelledRef.current) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const cancelled = { current: false };
+    void loadHosts(cancelled);
+    return () => {
+      cancelled.current = true;
+    };
+  }, []);
+
+  async function onSave() {
+    if (!canManage) {
+      onBlockedAction();
+      return;
+    }
+    if (invalidHosts.length > 0) {
+      setNotice(null);
+      setError(t("settings.admin.allowedHosts.validation.error", { hosts: invalidHosts.join(", ") }));
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    setNoticeTone("success");
+    try {
+      const r = await fetch("/api/admin/iobeam/hosts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+        body: JSON.stringify({ hosts: draftHosts }),
+      });
+      const data = (await r.json().catch(() => null)) as AllowedHostsResponse | null;
+      if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      const hosts = normalizeAllowedHostList(Array.isArray(data.hosts) ? data.hosts : draftHosts);
+      setSourceHosts(hosts);
+      setDraft(hosts.join("\n"));
+      setNoticeTone(data.sync_warning ? "info" : "success");
+      setNotice(
+        data.sync_warning
+          ? t("settings.admin.allowedHosts.save.warning", { warning: data.sync_warning })
+          : t("settings.admin.allowedHosts.save.ok"),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function reloadHosts() {
+    setNotice(null);
+    const cancelled = { current: false };
+    void loadHosts(cancelled).then((loaded) => {
+      if (!cancelled.current && loaded) {
+        setNoticeTone("success");
+        setNotice(t("settings.admin.allowedHosts.reload.ok"));
+      }
+    });
+  }
+
+  return (
+    <div className="settings-form">
+      {notice && (
+        <SettingsNotice tone={noticeTone} message={notice} onDismiss={() => setNotice(null)} />
+      )}
+      {error && (
+        <SettingsNotice tone="error" message={error} onDismiss={() => setError(null)} />
+      )}
+
+      <h4 className="settings-form__group">{t("settings.admin.group.allowedHosts")}</h4>
+      <p className="settings-form__hint">{t("settings.admin.allowedHosts.hint")}</p>
+
+      <div className="field-row">
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label htmlFor="allowed-hosts-input">{t("settings.admin.allowedHosts.label")}</label>
+          <textarea
+            id="allowed-hosts-input"
+            className="input settings-admin-hosts__textarea"
+            rows={6}
+            value={draft}
+            disabled={loading || saving}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={DEFAULT_ALLOWED_HOSTS.join("\n")}
+          />
+        </div>
+      </div>
+
+      <div className="settings-form__group-row settings-form__group-row--db-apply">
+        <span />
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={reloadHosts}
+          disabled={loading || saving}
+          title={t("settings.admin.allowedHosts.reload.title")}
+        >
+          <Icon name="refresh" tone="accent" />
+          {t("settings.reload")}
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={onSave}
+          disabled={loading || saving || !dirty}
+          aria-disabled={!canManage}
+          title={t("settings.admin.allowedHosts.save.title")}
+        >
+          <Icon name="download" />
+          {t("settings.admin.allowedHosts.save.label")}
+        </button>
+      </div>
+
+      <p className="settings-form__hint">{t("settings.admin.allowedHosts.note")}</p>
+      <p className="settings-form__hint">{t("settings.admin.allowedHosts.help")}</p>
     </div>
   );
 }
