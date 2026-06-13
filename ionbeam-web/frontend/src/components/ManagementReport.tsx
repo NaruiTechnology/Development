@@ -166,9 +166,19 @@ function normalizeReport(data: ActivityReportResponse): ActivityReportResponse {
   };
 }
 
-export function ManagementReport({ onBack }: { onBack: () => void }) {
+export function ManagementReport({
+  onBack,
+  defaultAccountId,
+}: {
+  onBack: () => void;
+  defaultAccountId?: number | null;
+}) {
   const { locale, t, fmt } = useTranslation();
-  const [accountId, setAccountId] = useState("all");
+  const [accountId, setAccountId] = useState(() =>
+    Number.isInteger(defaultAccountId) && (defaultAccountId ?? 0) > 0
+      ? String(defaultAccountId)
+      : "all",
+  );
   const [equipmentId, setEquipmentId] = useState("all");
   const [groupMode, setGroupMode] = useState<GroupMode>("account");
   const [rankingSortMode, setRankingSortMode] = useState<RankingSortMode>("total");

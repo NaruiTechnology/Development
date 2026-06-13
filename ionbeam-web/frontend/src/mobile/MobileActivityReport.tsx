@@ -127,9 +127,17 @@ function normalizeReport(data: ActivityReportResponse): ActivityReportResponse {
   };
 }
 
-export function MobileActivityReport() {
+export function MobileActivityReport({
+  defaultAccountId,
+}: {
+  defaultAccountId?: number | null;
+}) {
   const { locale, t, fmt } = useTranslation();
-  const [accountId, setAccountId] = useState("all");
+  const [accountId, setAccountId] = useState(() =>
+    Number.isInteger(defaultAccountId) && (defaultAccountId ?? 0) > 0
+      ? String(defaultAccountId)
+      : "all",
+  );
   const [equipmentId, setEquipmentId] = useState("all");
   const [groupMode, setGroupMode] = useState<GroupMode>("account");
   const [report, setReport] = useState<ActivityReportResponse | null>(null);

@@ -206,7 +206,10 @@ export function MobilityApp() {
             </div>
           </section>
         ) : route === "reports" ? (
-          <MobileActivityReport />
+          <MobileActivityReport
+            key={signedInUser?.id ?? "all"}
+            defaultAccountId={signedInUser?.id ?? null}
+          />
         ) : route === "admin" ? (
           <section className="mobility-stack">
             <article className="mobility-panel">

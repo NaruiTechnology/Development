@@ -364,21 +364,20 @@ function SettingsModalShell({
         ) : draft === null ? (
           <div className="settings-loading">{t("settings.empty")}</div>
         ) : (
-          <SettingsTabBody
-            tab={activeTab}
-            draft={draft}
-            targetAccountId={targetAccountId}
-            targetLogin={targetLogin}
+        <SettingsTabBody
+          tab={activeTab}
+          draft={draft}
+          targetAccountId={targetAccountId}
+          targetLogin={targetLogin}
           activeSubTab={activeSubTab}
           onSelectAdminSubTab={(tab) => {
               setConfirmSave(false);
               setConfirmDefault(false);
               setActiveSubTab(tab);
             }}
-            mobilityMode={mobilityMode}
-            canEditPins={canEditPins}
-            scanLocked={scanLocked}
-          />
+          mobilityMode={mobilityMode}
+          canEditPins={canEditPins}
+        />
         )}
       </div>
 

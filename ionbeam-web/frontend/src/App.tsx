@@ -272,7 +272,11 @@ export function App() {
 
       {route === "report" ? (
         <ReportErrorBoundary>
-          <ManagementReport onBack={() => navigateTo("control")} />
+          <ManagementReport
+            key={signedInUser?.id ?? "all"}
+            onBack={() => navigateTo("control")}
+            defaultAccountId={signedInUser?.id ?? null}
+          />
         </ReportErrorBoundary>
       ) : (
       <main
