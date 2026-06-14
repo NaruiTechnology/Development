@@ -80,6 +80,8 @@
                     ],
                     "venvDir": ".venv",
                     "skipPrivateGitEditable": true,
+                    "editableInstall": true,
+                    "editableTarget": ".",
                     "stopOnError": false,
                     "useBreakSystemPackages": true
                 },
