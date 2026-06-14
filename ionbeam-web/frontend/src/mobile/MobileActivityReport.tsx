@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useTranslation } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
@@ -204,6 +204,26 @@ export function MobileActivityReport({
   const vectorScans = sum(totals, "vector_scans");
   const otherActivity = sum(totals, "other_activity");
   const activeAccounts = report?.accounts.length ?? 0;
+  const mixPercentages = useMemo(() => {
+    const raster = percent(rasterScans, totalScans);
+    const vector = percent(vectorScans, totalScans);
+    const other = Math.max(0, 100 - raster - vector);
+    return { raster, vector, other };
+  }, [rasterScans, totalScans, vectorScans]);
+  const mixPieStyle = useMemo<CSSProperties>(
+    () =>
+      ({
+        "--mobility-raster": "#5fb8ff",
+        "--mobility-raster-strong": "#2b78c2",
+        "--mobility-vector": "#4ade80",
+        "--mobility-vector-strong": "#16a34a",
+        "--mobility-other": "#facc15",
+        "--mobility-other-strong": "#f59e0b",
+        "--raster-deg": `${(mixPercentages.raster / 100) * 360}deg`,
+        "--vector-deg": `${((mixPercentages.raster + mixPercentages.vector) / 100) * 360}deg`,
+      }) as CSSProperties,
+    [mixPercentages.raster, mixPercentages.vector],
+  );
   const groupRows = useMemo<RankedRow[]>(() => {
     if (!report) return [];
     if (groupMode === "site") {
@@ -324,6 +344,50 @@ export function MobileActivityReport({
           <div className="mobility-error">{error}</div>
         ) : (
           <>
+            <div
+              className="mobility-mix"
+              aria-label={t("mobility.scanMix")}
+            >
+              <div
+                className="mobility-mix__pie"
+                style={mixPieStyle}
+                role="img"
+                aria-label={t("report.mix.aria", {
+                  raster: Math.round(mixPercentages.raster),
+                  vector: Math.round(mixPercentages.vector),
+                  other: Math.round(mixPercentages.other),
+                })}
+              >
+                <div>
+                  <strong>{fmt(totalScans)}</strong>
+                  <span>{t("report.chart.total")}</span>
+                </div>
+              </div>
+              <div className="mobility-mix__legend">
+                <MixLegendRow
+                  label={t("report.kind.raster")}
+                  value={rasterScans}
+                  percentValue={mixPercentages.raster}
+                  tone="raster"
+                  formatNumber={fmt}
+                />
+                <MixLegendRow
+                  label={t("report.kind.vector")}
+                  value={vectorScans}
+                  percentValue={mixPercentages.vector}
+                  tone="vector"
+                  formatNumber={fmt}
+                />
+                <MixLegendRow
+                  label={t("report.kind.other")}
+                  value={otherActivity}
+                  percentValue={mixPercentages.other}
+                  tone="other"
+                  formatNumber={fmt}
+                />
+              </div>
+            </div>
+
             <div className="mobility-bars" aria-label={t("mobility.scanMix")}>
               <BarRow label={t("report.kind.raster")} value={rasterScans} total={Math.max(totalScans, 1)} tone="good" />
               <BarRow label={t("report.kind.vector")} value={vectorScans} total={Math.max(totalScans, 1)} tone="accent" />
@@ -432,6 +496,31 @@ function BarRow({
   );
 }
 
+function MixLegendRow({
+  label,
+  value,
+  percentValue,
+  tone,
+  formatNumber,
+}: {
+  label: string;
+  value: number;
+  percentValue: number;
+  tone: "raster" | "vector" | "other";
+  formatNumber: (n: number) => string;
+}) {
+  return (
+    <div className="mobility-mix__legend-row">
+      <div className="mobility-mix__legend-head">
+        <span className="mobility-mix__swatch" data-tone={tone} />
+        <span>{label}</span>
+      </div>
+      <strong>{formatNumber(value)}</strong>
+      <small>{Math.round(percentValue)}%</small>
+    </div>
+  );
+}
+
 function siteLabel(t: (key: TranslationKey, vars?: Record<string, string | number>) => string, value: unknown): string {
   const key = siteLabelKey(value);
   return key ? t(key) : String(value ?? "");
@@ -453,4 +542,9 @@ function sum(rows: unknown[], key: string): number {
     (acc, row) => acc + Number((row as Record<string, unknown>)[key] ?? 0),
     0,
   );
+}
+
+function percent(value: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, (value / total) * 100));
 }
