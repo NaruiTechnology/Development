@@ -115,9 +115,20 @@ class Frame:
     
     @staticmethod
     def fill_vector(pixels: array.array, iterpoints, x_res:int=2048, y_res:int=2048):
+        """
+        Build a frame from vector-scan samples.
+
+        ``iterpoints`` yields DAC-space coordinates, while ``pixels`` holds the
+        corresponding sampled intensity values. The coordinates are scaled into
+        the current frame grid before writing.
+        """
         newframe = np.zeros((y_res, x_res))
         for (x, y, dwell), data in zip(iterpoints, pixels):
-            newframe[y,x] = data
+            # iterpoints are DAC codes, not frame indices, so scale them
+            # into the frame grid before writing.
+            x_idx = min(x_res - 1, int((x * x_res) / 16384))
+            y_idx = min(y_res - 1, int((y * y_res) / 16384))
+            newframe[y_idx, x_idx] = data
         return newframe
 
     def as_uint16(self) -> np.ndarray:

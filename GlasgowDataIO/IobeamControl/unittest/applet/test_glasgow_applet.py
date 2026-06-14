@@ -117,12 +117,12 @@ class GlasgowAppletTestCase(unittest.TestCase):
         return await self.applet.run(self.device, self._parsed_args)
 
 
-    def test_synthesis_test(case):
+    def synthesis_test(case):
         synthesis_available = find_toolchain(quiet=True) is not None
         return unittest.skipUnless(synthesis_available, "synthesis not available")(case)
 
 
-    def test_applet_simulation_test(setup, args=[]):
+    def applet_simulation_test(setup, args=[]):
         def decorator(case):
             def wrapper(self):
                 access_args = GlasgowAppletArguments("applet", "AB", 16)
@@ -130,13 +130,12 @@ class GlasgowAppletTestCase(unittest.TestCase):
                 self._prepare_simulation_target()
 
                 getattr(self, setup)()
-                @types.coroutine
-                def run():
-                    yield from case(self)
+                async def run(ctx):
+                    await case(self)
 
                 sim = Simulator(self.target)
                 sim.add_clock(1e-9)
-                sim.add_sync_process(run)
+                sim.add_testbench(run)
                 vcd_name = f"{case.__name__}.vcd"
                 with sim.write_vcd(vcd_name):
                     sim.run()
@@ -147,7 +146,7 @@ class GlasgowAppletTestCase(unittest.TestCase):
         return decorator
 
 
-    def test_applet_hardware_test(setup="run_hardware_applet", args=[]):
+    def applet_hardware_test(setup="run_hardware_applet", args=[]):
         def decorator(case):
             @functools.wraps(case)
             def wrapper(self):

@@ -1,0 +1,75 @@
+{
+    "Version": "1.0",
+    "stepperCarrier": {
+        "_comment": [
+            "Generic STEP/DIR/EN carrier for Glasgow rev C3.",
+            "This file is intended to be loaded by the stepper applet config path.",
+            "Pins are expressed as Glasgow port pin numbers, with optional inversion."
+        ],
+        "board": {
+            "name": "GlasgowRevC3GenericStepperCarrier",
+            "glasgowRevision": "C3"
+        },
+        "pins": {
+            "step": {
+                "number": 0,
+                "invert": false
+            },
+            "dir": {
+                "number": 1,
+                "invert": false
+            },
+            "en": {
+                "number": 2,
+                "invert": false
+            }
+        },
+        "timing": {
+            "pulseHighUs": 5,
+            "defaultPeriodUs": 1000,
+            "minimumPeriodUs": 1
+        },
+        "driver": {
+            "_comment": [
+                "The FPGA only generates STEP/DIR/EN. Current limit, microstep mode,",
+                "and motor selection are set on the external driver module."
+            ],
+            "type": "generic-step-dir-enable",
+            "enablePolarity": "active-high",
+            "directionPolarity": "active-high",
+            "stepPolarity": "rising-edge"
+        },
+        "motorProfiles": [
+            {
+                "name": "NEMA17_balanced",
+                "notes": [
+                    "Typical 1.8 degree bipolar stepper on an A4988/DRV8825/TMC2209-class driver.",
+                    "Use moderate pulse rate and set the driver current limit to the motor's rated phase current."
+                ],
+                "recommendedMicrostep": "1/16",
+                "recommendedPulseHighUs": 5,
+                "recommendedStartPeriodUs": 1000
+            },
+            {
+                "name": "NEMA23_high_torque",
+                "notes": [
+                    "Higher inductance motor that usually needs a larger supply voltage and slower step rate.",
+                    "Increase the driver current limit only within the motor datasheet rating."
+                ],
+                "recommendedMicrostep": "1/8",
+                "recommendedPulseHighUs": 8,
+                "recommendedStartPeriodUs": 2000
+            },
+            {
+                "name": "low_inductance_precision",
+                "notes": [
+                    "Use when the mechanical system can tolerate faster acceleration and shorter periods.",
+                    "Verify that the driver still satisfies the minimum STEP high time."
+                ],
+                "recommendedMicrostep": "1/32",
+                "recommendedPulseHighUs": 3,
+                "recommendedStartPeriodUs": 500
+            }
+        ]
+    }
+}

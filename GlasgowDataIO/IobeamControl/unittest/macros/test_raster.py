@@ -86,8 +86,7 @@ class RasterScanTest(unittest.TestCase):
         self.chunks_received = 0
 
         if self._config is None:
-            print("[test] no config, skipping")
-            return
+            self.skipTest("no config")
 
         test_range = DACCodeRange.from_resolution(self.params.resolution)
 
