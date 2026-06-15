@@ -5,7 +5,7 @@ Security-model artifacts for the administrative account system.
 Contents:
 
 - `Json/IobeamAdmin.json` - canonical container for the admin data model.
-- `Sql/001_schema.sql` - PostgreSQL tables and stored procedures.
+- `Sql/001_schema.sql` - PostgreSQL tables and stored procedures, including the mobility host allowlist table.
 - `Sql/002_seed_root_user.sql` - bootstrap admin account.
 
 This module is intentionally separate from `GlasgowDataIO` and

@@ -271,11 +271,16 @@ export function App() {
         activeView={route}
         onOpenReport={() => navigateTo("report")}
         onOpenScan={() => navigateTo("control")}
+        scanLocked={scanActive}
       />
 
       {route === "report" ? (
         <ReportErrorBoundary>
-          <ManagementReport onBack={() => navigateTo("control")} />
+          <ManagementReport
+            key={signedInUser?.id ?? "all"}
+            onBack={() => navigateTo("control")}
+            defaultAccountId={signedInUser?.id ?? null}
+          />
         </ReportErrorBoundary>
       ) : (
       <main
@@ -341,7 +346,8 @@ export function App() {
                 <div className="card__body">
                   <ScanControls
                     kind={kind as ScanKind}
-                    disabled={panelDisabled}
+                    disabled={!isSignedIn}
+                    scanActive={scanActive}
                   />
                 </div>
               </div>

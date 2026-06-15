@@ -6,13 +6,13 @@
     },
     "Database": {
         "Provider": "PostgreSQL",
-        "DatabaseName": "iobeam_admin",
+        "DatabaseName": "ionbeam_admin_db",
         "Schema": "public",
-        "Host": "localhost",
+        "Host": "124.221.175.89",
         "Port": 5432,
-        "User": "postgres",
-        "Password": "",
-        "ConnectionString": "postgresql://postgres@localhost:5432/iobeam_admin",
+        "User": "deployworkspace",
+        "Password": "DWS_112233",
+        "ConnectionString": "postgresql://postgres:soul2375@124.221.175.89:5432/iobeam_admin",
         "SslMode": "",
         "CommandTimeoutMs": 30000
     },
@@ -26,13 +26,13 @@
     "user": {
         "id": 1,
         "login_name": "vboxuser",
-        "first_name": "Henry",
-        "last_name": "Li",
+        "first_name": "henry",
+        "last_name": "li",
         "email": "lyh1154@gmail.com",
-        "phone_number": "(503)8079055",
-        "company_name": "Ionbeamtech",
+        "phone_number": "1 (503)807-9055",
+        "company_name": "",
         "site": "Beijing(北京)",
-        "role": 3,
+        "role": 4,
         "is_active": true,
         "session_lifetime_limit_days": 1
     },
@@ -40,13 +40,13 @@
         {
             "id": 1,
             "login_name": "vboxuser",
-            "first_name": "Henry",
-            "last_name": "Li",
+            "first_name": "henry",
+            "last_name": "li",
             "email": "lyh1154@gmail.com",
-            "phone_number": "(503)8079055",
-            "company_name": "Ionbeamtech",
+            "phone_number": "1 (503)807-9055",
+            "company_name": "",
             "site": "Beijing(北京)",
-            "role": 3,
+            "role": 4,
             "is_active": true,
             "session_lifetime_limit_days": 1
         },
@@ -72,7 +72,20 @@
             "phone_number": "(503)4661601",
             "company_name": "Ionbeamtech",
             "site": "Beijing(北京)",
-            "role": 1,
+            "role": 3,
+            "is_active": true,
+            "session_lifetime_limit_days": 1
+        },
+        {
+            "id": 4,
+            "login_name": "vboxuser",
+            "first_name": "yuyao",
+            "last_name": "jiang",
+            "email": "1318474625@qq.com",
+            "phone_number": "8615961236817",
+            "company_name": "",
+            "site": "Beijing(北京)",
+            "role": 3,
             "is_active": true,
             "session_lifetime_limit_days": 1
         }
@@ -119,6 +132,14 @@
             "serial_number": "DB123456z",
             "site": "Taixin",
             "description": "DualBeam SEM/FIB, containing both a focused Ga+ ion beam (\"Tomahawk\") and a high resolution field emission scanning electron (\"Elstar\") column."
+        },
+        {
+            "id": 2,
+            "name": "FIB",
+            "model": "",
+            "serial_number": "FIB123",
+            "site": "Taixin",
+            "description": "123"
         }
     ],
     "session": {

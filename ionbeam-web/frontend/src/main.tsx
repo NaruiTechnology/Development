@@ -2,10 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { Provider } from "react-redux";
 
-import { App } from "./App";
 import { store } from "./store";
 import { applyLocaleToDocument } from "./i18n";
 import "./styles/theme.css";
+import "./styles/mobile.css";
 
 // Apply <html lang> and document.title before the first render so the
 // page is correctly tagged at first paint (matters for screen readers,
@@ -18,10 +18,36 @@ import "./styles/theme.css";
 // the document.
 applyLocaleToDocument(store.getState().locale.locale);
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <Provider store={store}>
-      <App />
-    </Provider>
-  </React.StrictMode>
-);
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+
+void bootstrap();
+
+async function bootstrap() {
+  const mobilityOnly = import.meta.env.VITE_MOBILITY_ONLY === "1";
+  const path = window.location.pathname;
+  const mobilityRoute = path.startsWith("/mobility");
+  if (mobilityOnly && !path.startsWith("/mobility")) {
+    window.history.replaceState(null, "", "/mobility");
+  }
+
+  if (mobilityOnly || mobilityRoute) {
+    const { MobilityApp } = await import("./mobile/MobilityApp");
+    root.render(
+      <React.StrictMode>
+        <Provider store={store}>
+          <MobilityApp />
+        </Provider>
+      </React.StrictMode>
+    );
+    return;
+  }
+
+  const { App } = await import("./App");
+  root.render(
+    <React.StrictMode>
+      <Provider store={store}>
+        <App />
+      </Provider>
+    </React.StrictMode>
+  );
+}

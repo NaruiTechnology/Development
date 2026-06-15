@@ -1,0 +1,109 @@
+{
+    "Version": "1.1",
+    "stepperCarrier": {
+        "_comment": [
+            "Legacy STEP/DIR/EN compatibility block for the current applet.",
+            "The wafer-stage design uses encoder feedback and external closed-loop motion control.",
+            "These pins remain the low-level command path."
+        ],
+        "board": {
+            "name": "GlasgowRevC3VacuumWaferStageInterface",
+            "glasgowRevision": "C3"
+        },
+        "pins": {
+            "step": {
+                "number": 0,
+                "invert": false
+            },
+            "dir": {
+                "number": 1,
+                "invert": false
+            },
+            "en": {
+                "number": 2,
+                "invert": false
+            }
+        },
+        "timing": {
+            "pulseHighUs": 5,
+            "defaultPeriodUs": 2000,
+            "minimumPeriodUs": 5
+        },
+        "driver": {
+            "_comment": [
+                "The current gateware does not close the position loop.",
+                "Use an external motion controller or driver that accepts STEP/DIR/EN and encoder feedback."
+            ],
+            "type": "closed-loop-step-dir-enable",
+            "enablePolarity": "driver-specific",
+            "directionPolarity": "driver-specific",
+            "stepPolarity": "rising-edge"
+        }
+    },
+    "vacuumStage": {
+        "_comment": [
+            "Precision vacuum wafer-stage metadata for the PCB/control spec.",
+            "This section is ignored by the current stepper applet but documents the intended hardware."
+        ],
+        "application": "ion-beam-dut-positioning",
+        "vacuumClass": "UHV",
+        "axis": "linear",
+        "travelMm": 300,
+        "waferDiameterMm": 300,
+        "load": {
+            "description": "12 inch wafer",
+            "massClass": "stage-dependent"
+        },
+        "accuracyTargets": {
+            "positioningUm": 1.0,
+            "repeatabilityUm": 0.5
+        },
+        "architecture": {
+            "motionType": "closed-loop-linear-stage",
+            "motorPlacement": "outside-vacuum-preferred",
+            "coupling": "bellows-or-feedthrough",
+            "feedback": "linear-encoder"
+        },
+        "encoder": {
+            "type": "differential-quadrature",
+            "standard": "RS-422",
+            "channels": ["A", "B", "Z"],
+            "supply": "+5V_ENC",
+            "targetEffectiveResolutionUm": 0.5
+        },
+        "connectors": {
+            "controlIn": ["STEP", "DIR", "EN", "GND"],
+            "driverOut": ["STEP_OUT", "DIR_OUT", "EN_OUT", "FAULT_IN", "READY_IN", "GND"],
+            "encoderIn": ["A+", "A-", "B+", "B-", "Z+", "Z-", "+5V_ENC", "GND"],
+            "interlock": ["ESTOP_CHAIN", "CHAMBER_OK", "DRIVER_FAULT", "GND"]
+        },
+        "layoutNotes": [
+            "Route encoder pairs as matched differential pairs.",
+            "Keep encoder traces away from driver outputs and motor power wiring.",
+            "Place termination options near the receiver footprint.",
+            "Keep interlock and fault nets accessible at the board edge."
+        ]
+    },
+    "motorProfiles": [
+        {
+            "name": "closed_loop_stepper_precision",
+            "notes": [
+                "Use a closed-loop stepper stage only if the linear encoder closes the loop on position.",
+                "Set conservative acceleration and verify repeatability before tuning for speed."
+            ],
+            "recommendedMicrostep": "1/16",
+            "recommendedPulseHighUs": 5,
+            "recommendedStartPeriodUs": 2000
+        },
+        {
+            "name": "closed_loop_stepper_high_force",
+            "notes": [
+                "Use when the axis needs more holding force than a light precision stepper can provide.",
+                "Pair with a ballscrew or fine-pitch lead screw and close the loop with the linear encoder."
+            ],
+            "recommendedMicrostep": "1/8",
+            "recommendedPulseHighUs": 5,
+            "recommendedStartPeriodUs": 2500
+        }
+    ]
+}

@@ -9,6 +9,7 @@
 #-------------------------------------------------------------------------------
 import asyncio
 import os
+import shlex
 import tempfile
 
 from buildingblocks.decorators import overrides
@@ -37,6 +38,8 @@ class installPipRequirements_state(distributionDeploy_state):
             stopOnError = bool(actionData.get("stopOnError", True))
             skipPrivateGit = bool(actionData.get("skipPrivateGitEditable", True))
             breakSys = bool(actionData.get("useBreakSystemPackages", False))
+            editableInstall = bool(actionData.get("editableInstall", False))
+            editableTarget = actionData.get("editableTarget", ".")
 
             reqFiles = [os.path.join(root, requirementsName)]
             extraReqs = actionData.get("extraRequirements")
@@ -86,6 +89,24 @@ class installPipRequirements_state(distributionDeploy_state):
                     allOk = False
                     if stopOnError:
                         break
+
+            if allOk and editableInstall:
+                targetPath = editableTarget
+                if not os.path.isabs(targetPath):
+                    targetPath = os.path.join(root, targetPath)
+                targetPath = os.path.abspath(targetPath)
+                cmd = "{} install -e {}".format(pipPrefix, shlex.quote(targetPath))
+                if pipPrefix.startswith("python3 ") and breakSys:
+                    cmd += " --break-system-packages"
+
+                self.info("[{}] >> {}".format(type(self).__name__, cmd))
+                ok = await self._runWithTimeout(cmd, self.deployRoot(), timeout)
+                if not ok:
+                    self.error("[{}] editable pip install failed for {}\n{}"
+                               .format(type(self).__name__, targetPath,
+                                       self._stderr.decode(errors="replace")
+                                       if self._stderr else "<no stderr>"))
+                    allOk = False
 
             self._success = allOk
         except Exception as e:

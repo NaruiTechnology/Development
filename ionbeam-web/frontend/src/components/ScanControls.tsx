@@ -43,6 +43,7 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
+import { RunValidatedHelp } from "./RunValidatedHelp";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 
@@ -71,9 +72,11 @@ interface CurrentAccountResponse {
 export function ScanControls({
   kind,
   disabled = false,
+  scanActive = false,
 }: {
   kind: ScanKind;
   disabled?: boolean;
+  scanActive?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -99,6 +102,7 @@ export function ScanControls({
   const closing = phase === "stopping";
   const paused = phase === "paused";
   const busy = streaming || closing;
+  const controlsDisabled = disabled || scanActive;
 
   async function onRun() {
     if (disabled || kind === "roi") return;
@@ -193,7 +197,7 @@ export function ScanControls({
     else dispatch(resetVector());
   }
 
-  const runDisabled = disabled || streaming || closing;
+  const runDisabled = controlsDisabled || streaming || closing;
   const pauseDisabled = disabled || !streaming;
   const stopDisabled = disabled || !(streaming || paused);
 
@@ -273,7 +277,7 @@ export function ScanControls({
         <select
           className="select"
           value={equipmentId}
-          disabled={disabled || equipment.length === 0}
+          disabled={controlsDisabled || equipment.length === 0}
           onChange={(event) => onEquipmentChange(event.target.value)}
           title={t("scan.equipment.title")}
         >
@@ -318,15 +322,18 @@ export function ScanControls({
 
       <span className="spacer" />
 
-      <button
-        className="btn"
-        disabled={runDisabled || kind === "roi"}
-        onClick={onRunValidated}
-        title={t("scan.runValidated.title")}
-      >
-        <Icon name="check" tone="success" />
-        {t("scan.runValidated")}
-      </button>
+      <span className="scan-action-with-help">
+        <button
+          className="btn"
+          disabled={runDisabled || kind === "roi"}
+          onClick={onRunValidated}
+          title={t("scan.runValidated.title")}
+        >
+          <Icon name="check" tone="success" />
+          {t("scan.runValidated")}
+        </button>
+        <RunValidatedHelp />
+      </span>
       <button className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
         <Icon name="x" tone="danger" />
         {t("scan.clear")}

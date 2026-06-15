@@ -35,9 +35,13 @@ class launchUI_state(distributionDeploy_state):
     async def DoWork(self):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
+            stateConfig = self.resolvedStateConfig(stateConfig)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
 
+            mobilityOnly = self.deploymentValue("MobilityOnly", False)
             url = actionData.get("url", "http://localhost:5173/control")
+            if mobilityOnly:
+                url = actionData.get("mobilityUrl", "http://localhost:5173/mobility")
             readinessTimeout = float(actionData.get("readinessTimeout", 30.0))
             pollInterval = float(actionData.get("pollInterval", 0.5))
             failOnNotReady = bool(actionData.get("failOnNotReady", False))

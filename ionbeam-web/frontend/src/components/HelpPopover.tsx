@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useTranslation } from "../i18n";
+import { useAppSelector } from "../store";
 import { Icon } from "./Icon";
 
 interface HelpPopoverProps {
@@ -21,11 +22,19 @@ interface HelpPopoverProps {
 export function HelpPopover({ title, ariaLabel, children }: HelpPopoverProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const scanPhase = useAppSelector((s) => s.scan.phase);
+  const helpLocked = scanPhase === "running" || scanPhase === "stopping";
 
   function close() {
     setOpen(false);
     requestAnimationFrame(() => triggerRef.current?.focus());
   }
+
+  useEffect(() => {
+    if (helpLocked && open) {
+      close();
+    }
+  }, [helpLocked, open]);
 
   return (
     <>
@@ -37,7 +46,10 @@ export function HelpPopover({ title, ariaLabel, children }: HelpPopoverProps) {
         aria-haspopup="dialog"
         aria-expanded={open}
         title={ariaLabel}
+        disabled={helpLocked}
+        aria-disabled={helpLocked}
         onClick={(e) => {
+          if (helpLocked) return;
           e.stopPropagation();
           e.preventDefault();
           setOpen(true);

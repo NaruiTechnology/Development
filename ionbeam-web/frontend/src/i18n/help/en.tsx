@@ -25,6 +25,7 @@ export type HelpKey =
   | "outputMode"
   | "frameBlank"
   | "validation"
+  | "runValidated"
   | "pattern"
   | "vectorResolution"
   | "customPoints"
@@ -346,6 +347,33 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         designed to catch exactly the &ldquo;scan completed but the
         data is silently wrong&rdquo; failure modes that are
         otherwise expensive to notice.
+      </p>
+    </>
+  ),
+
+  runValidated: () => (
+    <>
+      <p>
+        Use <strong>Run validated</strong> when you want the blocking
+        scan endpoint instead of the live stream. It works in both
+        raster and vector mode, waits for the scan to finish, and
+        returns the timing data plus the validation report in one
+        response.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Use this when you need the report.</strong> The
+        regular <code>Run</code> button streams chunks live and does
+        not wait for the validation payload. <code>Run validated</code>{" "}
+        is the path that produces the post-scan checks shown in the
+        Run report panel.
+      </div>
+
+      <p>
+        The validation checkbox in the raster or vector parameter form
+        still controls whether the per-check pass/fail list is included
+        in the result. This button just chooses the blocking endpoint
+        that returns the scan result object.
       </p>
     </>
   ),

@@ -104,6 +104,64 @@ cd ../backend && npm run build && npm start
 The Node server then serves `frontend/dist/` and proxies `/api` + `/ws` to
 the FastAPI process. Put it behind nginx/Caddy for TLS.
 
+### Deployment workflow
+
+The existing JSON-driven deploy workflow lives in
+[DeployWorkSpace/Development/DistributionDeploy](/home/vboxuser/Project/IobeamTech/Development/DeployWorkSpace/Development/DistributionDeploy).
+Ionbeam-web exposes convenience npm scripts that delegate to that workflow for
+both local and production runs:
+
+```bash
+cd backend
+npm run deploy:local
+npm run deploy:production
+npm run deploy:mobility
+```
+
+The workflow JSON now switches to production mode with:
+
+* backend build/start instead of `npm run dev`
+* the frontend launcher disabled in production
+* the UI browser target set to `https://ionbeamtech.com/control`
+
+The mobility-only path adds:
+
+* `--mobility` deploy flag
+* the mobile shell rendered at `/mobility`
+* verification / launch URLs switched to the mobility route
+* an `Allowed Hosts` admin tab that persists the Vite dev-server allowlist in `iobeam_admin.hosts` and regenerates `frontend/src/generated/allowedHosts.ts`
+
+### Local mobility verification
+
+You can verify the mobility surface locally without pushing to a remote host:
+
+1. Start the backend in mobility mode:
+
+   ```bash
+   cd backend
+   npm run dev:mobility
+   ```
+
+2. Start the frontend mobility shell:
+
+   ```bash
+   cd frontend
+   npm run dev:mobility
+   ```
+
+3. Open `http://127.0.0.1:5173/mobility`.
+
+If you want the desktop app and the mobility app side by side, keep the
+normal frontend dev server running and use the `/mobility` route directly.
+The browser can now mount the mobility shell on any `/mobility*` path without
+redirecting back to `/control`.
+
+For the remote VM, see the concrete nginx/systemd guide in
+[deploy/remote-vm.md](/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/deploy/remote-vm.md).
+
+Production mode is controlled by the workflow JSON's `Deployment.IsProduction`
+flag and the `--production` CLI switch on `distributionDeployApp.py`.
+
 ## Why this shape
 
 * The browser **never sees `GLASGOW_TOKEN`**. The Node proxy injects the

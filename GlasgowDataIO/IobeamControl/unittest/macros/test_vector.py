@@ -136,8 +136,7 @@ class VectorScanTest(unittest.TestCase):
         self.send_time = 0.0
 
         if self._config is None:
-            print("[test] no config, skipping")
-            return
+            self.skipTest("no config")
 
         try:
             output_mode = OutputMode[self.params.output_mode]

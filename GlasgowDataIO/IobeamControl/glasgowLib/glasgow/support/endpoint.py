@@ -18,7 +18,7 @@ def endpoint(spec):
 
     m = re.match(r"^(tcp):(?:()|\*|\[([a-fA-F0-9:]+)\]|(\d+(?:\.\d+){3})|([a-zA-Z.-]+))"
                  r":(\d+)$", spec)
-    if m: return (m[1], m[3] or m[4] or m[5] if m[2] is None else "localhost", int(m[6]))
+    if m: return (m[1], m[3] or m[4] or m[5] if m[2] is None else "", int(m[6]))
 
     raise argparse.ArgumentTypeError(f"invalid endpoint: {spec!r}")
 
@@ -240,7 +240,7 @@ class ClientEndpoint(aobject, asyncio.Protocol):
     @classmethod
     def add_argument(cls, parser, name, default=None):
         metavar = name.upper().replace("_", "-")
-        help    = "connect to %s, either unix:PATH or tcp:HOST:PORT" % metavar
+        help    = " to %s, either unix:PATH or tcp:HOST:PORT" % metavar
         if default is None:
             nargs = None
         else:

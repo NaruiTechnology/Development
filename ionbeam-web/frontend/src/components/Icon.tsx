@@ -7,6 +7,7 @@ type IconName =
   | "grid"
   | "help"
   | "image"
+  | "home"
   | "layers"
   | "link"
   | "mail"
@@ -100,6 +101,13 @@ const paths: Record<IconName, JSX.Element> = {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="9" cy="9" r="2" />
       <path d="M21 15l-5-5L5 21" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="M4 11.5L12 4l8 7.5" />
+      <path d="M6.5 10.5V20h11V10.5" />
+      <path d="M10 20v-5h4v5" />
     </>
   ),
   layers: (

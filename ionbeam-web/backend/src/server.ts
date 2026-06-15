@@ -35,6 +35,8 @@ import {
 } from "./adminDbService";
 import {
   buildActivityReportFromDb,
+  dedupeActivityRowsFromDb,
+  listAllowedHostsFromDb,
   findAdminUserInDb,
   findAdminUserInDbById,
   isAdminSessionExpiredInDb,
@@ -48,6 +50,7 @@ import {
   type AdminUser,
   type Equipment,
 } from "./adminDbRepository";
+import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
 import {
   ConfigError,
   type RestartResult,
@@ -80,6 +83,13 @@ interface RestartServicesResponse {
 interface ConfigSaveResponse {
   ok: boolean;
   error?: string;
+}
+
+interface AllowedHostsResponse {
+  ok: boolean;
+  hosts: string[];
+  error?: string;
+  sync_warning?: string;
 }
 
 interface AdminSession {
@@ -147,6 +157,11 @@ interface DbApplyResponse {
   error?: string;
 }
 
+interface ActivityDedupeResponse {
+  ok: boolean;
+  deleted: number;
+}
+
 const smsChallenges = new Map<string, SmsChallenge>();
 const SMS_CODE_TTL_MS = 5 * 60 * 1000;
 const ROLE_USER = 0;
@@ -178,6 +193,7 @@ app.get("/healthz", (_req, res) => {
   res.json({
     ok: true,
     mock: config.mock,
+    mobility_only: config.mobilityOnly,
     upstream: config.proxyTargetHttp,
     has_token: Boolean(config.glasgowToken),
     config_path: config.configPath,
@@ -297,14 +313,51 @@ app.get("/api/admin/iobeam/equipment", async (_req, res) => {
     const equipment = await listEquipmentFromDb();
     res.json({ ok: true, equipment });
   } catch (err) {
-    try {
-      const info = await readAdminWithBackup();
-      res.json({ ok: true, equipment: readEquipment(info.data) });
-    } catch {
-      sendConfigError(res, err);
-    }
+    sendConfigError(res, err);
   }
 });
+
+app.get("/api/admin/iobeam/hosts", async (_req, res: express.Response<AllowedHostsResponse>) => {
+  try {
+    res.set("Cache-Control", "no-store");
+    const hosts = await listAllowedHostsFromDb();
+    res.json({ ok: true, hosts });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post(
+  "/api/admin/iobeam/hosts",
+  async (req, res: express.Response<AllowedHostsResponse | ConfigSaveResponse>) => {
+    const body = req.body as { hosts?: unknown; allowed_hosts?: unknown; allowedHosts?: unknown } | null;
+    const rawHosts = Array.isArray(body?.hosts)
+      ? body?.hosts
+      : Array.isArray(body?.allowed_hosts)
+        ? body?.allowed_hosts
+        : Array.isArray(body?.allowedHosts)
+          ? body?.allowedHosts
+          : null;
+
+    if (!rawHosts) {
+      res.status(400).json({ ok: false, error: "missing JSON body: expected { hosts: string[] }" });
+      return;
+    }
+
+    const hosts = rawHosts.map((host) => String(host ?? "").trim()).filter((host) => host.length > 0);
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can edit allowed hosts");
+      const saved = await saveAllowedHosts(hosts);
+      res.json({
+        ok: true,
+        hosts: saved.hosts,
+        ...(saved.syncWarning ? { sync_warning: saved.syncWarning } : {}),
+      });
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
 
 app.get(
   "/api/admin/iobeam/db/connection",
@@ -656,16 +709,9 @@ app.post(
 app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
   try {
     const info = await readAdminWithBackup();
-    const dbUsers = await listAdminUsersFromDb().catch((err) => {
-      console.warn(
-        `[iobeam-admin/report] DB user records were not loaded: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      return [];
-    });
-    const activeUsers = (dbUsers.length > 0 ? dbUsers : readAdminUsers(info.data))
-      .filter((u) => u.is_active);
+    const connection = pgConnectionFromAdminConfig(info.data);
+    const dbUsers = await listAdminUsersFromDb();
+    const activeUsers = dbUsers.filter((u) => u.is_active);
     const requestedAccountId = Number(req.query.account_id ?? 0);
     const requestedEquipmentId = Number(req.query.equipment_id ?? 0);
     const days = Math.min(
@@ -695,6 +741,7 @@ app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
     if (ids.length === 0) {
       res.json({
         ok: true,
+        data_source: adminDbSource(connection),
         generated_at: new Date().toISOString(),
         days,
         selected_account_id: requestedAccountId > 0 ? requestedAccountId : null,
@@ -729,6 +776,7 @@ app.get("/api/admin/iobeam/reports/activity", async (req, res) => {
     }
     res.json({
       ok: true,
+      data_source: adminDbSource(connection),
       generated_at: new Date().toISOString(),
       report_error: reportError,
       days,
@@ -805,6 +853,19 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
   }
 });
 
+app.post(
+  "/api/admin/iobeam/activity/dedupe",
+  async (req, res: express.Response<ActivityDedupeResponse | ConfigSaveResponse>) => {
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can clean duplicate activity rows");
+      const deleted = await dedupeActivityRowsFromDb();
+      res.json({ ok: true, deleted });
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
+
 app.post("/api/admin/restart-services", async (_req, res) => {
   await restartServicesAndRespond(res);
 });
@@ -847,14 +908,36 @@ if (config.mock) {
 
 // Static (production) — only mount if the build output actually exists, so
 // `npm run dev` doesn't 404 itself.
+if (config.mobilityOnly) {
+  app.get(["/", "/control", "/report"], (_req, res) => {
+    const target = _req.path === "/report" ? "/mobility/reports" : "/mobility";
+    res.redirect(302, target);
+  });
+}
+
 if (fs.existsSync(config.staticDir)) {
   app.use(express.static(config.staticDir));
   app.get("*", (_req, res, next) => {
+    if (config.mobilityOnly) {
+      const target = _req.path === "/report" ? "/mobility/reports" : "/mobility";
+      if (_req.path === "/" || _req.path === "/control" || _req.path === "/report") {
+        res.redirect(302, target);
+        return;
+      }
+    }
     const indexHtml = path.join(config.staticDir, "index.html");
     if (fs.existsSync(indexHtml)) res.sendFile(indexHtml);
     else next();
   });
 }
+
+void syncAllowedHostsModuleFromDb().catch((err) => {
+  console.warn(
+    `[iobeam-admin/hosts] initial frontend host sync failed: ${
+      err instanceof Error ? err.message : String(err)
+    }`,
+  );
+});
 
 server = http.createServer(app);
 attachWsProxy(server, authorizeScanUpgrade);
@@ -951,6 +1034,21 @@ function readEquipment(data: unknown): Equipment[] {
       description: String(row.description ?? ""),
     }))
     .filter((row) => row.name.trim() || row.serial_number.trim());
+}
+
+function adminDbSource(connection: PgConnection): "local_db" | "remote_db" {
+  const host = connection.host.trim().toLowerCase();
+  if (
+    !host ||
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "::ffff:127.0.0.1" ||
+    host.startsWith("/")
+  ) {
+    return "local_db";
+  }
+  return "remote_db";
 }
 
 function findAdminUser(data: unknown, login: string): AdminUser | null {
@@ -1583,7 +1681,7 @@ async function writeSmtpMessage(
     [
       `From: ${config.smtpFrom}`,
       `To: ${recipients.join(", ")}`,
-      `Subject: ${subject.replace(/\r?\n/g, " ")}`,
+      `Subject: ${subject.replace(/\n?\n/g, " ")}`,
       "Content-Type: text/plain; charset=utf-8",
       "",
       body.replace(/\r?\n/g, "\r\n").replace(/^\./gm, ".."),

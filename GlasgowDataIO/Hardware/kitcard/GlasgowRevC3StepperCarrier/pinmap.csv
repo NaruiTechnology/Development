@@ -1,0 +1,5 @@
+signal,glasgow_port,fpga_ball,carrier_pin,notes
+STEP,port_a[0],A1,J1-1 / J2-1,primary step pulse
+DIR,port_a[1],A2,J1-2 / J2-2,direction control
+EN,port_a[2],B3,J1-3 / J2-3,active-high enable
+GND,system_ground,,J1-4 / J2-4,common reference

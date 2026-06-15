@@ -1,14 +1,19 @@
 import unittest
 import logging
 import asyncio
+import gc
+import warnings
 
-from amaranth.sim import Simulator, Settle
+from amaranth.sim import Simulator
 from amaranth import Module, ClockDomain
+from amaranth.hdl._ir import UnusedElaboratable
 
 from IobeamControl.sysControl.stepper.stepperChannel import StepperChannel
 from IobeamControl.sysControl.stepper.controlStepperInterface import ControlStepperInterface
 from IobeamControl.sysControl.stepper.controlStepperSubtarget import ControlStepperSubtarget  
 from IobeamControl.sysControl.stepper.stepperApplet import ControlStepperApplet
+
+warnings.filterwarnings("ignore", category=UnusedElaboratable)
 
 # ---------------------------------------------------------------------------
 # Helper: Mock lower interface
@@ -37,23 +42,23 @@ class ControlStepperTest(unittest.TestCase):
             m.domains.sync = ClockDomain("sync")  
             dut = StepperChannel(pulse_high_us=2)
             m.submodules.dut = dut
-            sim = Simulator(m) 
-                       
-            def process():
+            sim = Simulator(m)
+
+            async def bench(ctx):
                 # Initialize inputs
-                yield dut.en.eq(1)
-                yield dut.run.eq(0)
-                yield dut.dir_in.eq(1)
-                yield dut.period.eq(10)
-                yield dut.steps_in.eq(3)
+                ctx.set(dut.en, 1)
+                ctx.set(dut.run, 0)
+                ctx.set(dut.dir_in, 1)
+                ctx.set(dut.period, 10)
+                ctx.set(dut.steps_in, 3)
 
                 # Run long enough to cover the 3 pulses
                 for _ in range(200):
-                    yield
+                    await ctx.tick()
 
             # Drive the 'sync' clock
             sim.add_clock(1e-6, domain="sync")
-            sim.add_sync_process(process, domain="sync")
+            sim.add_testbench(bench)
 
             sim.run()
             
@@ -102,28 +107,99 @@ class ControlStepperTest(unittest.TestCase):
 
     def test_applet_build(self):
         """Smoke test: applet.build() should run with dummy target."""
-        
+
         class DummyTarget:
+            def __init__(self):
+                self.multiplexer = self.DummyMux()
+
             class DummyMux:
                 def claim_interface(self, applet, args):
                     return self
+
                 def add_subtarget(self, subtarget):
-                    pass
+                    self.subtarget = subtarget
+
                 def get_port_group(self, **kwargs):
                     return type("P", (), {})()
+
                 def get_out_fifo(self):
                     return type("Fifo", (), {
                         "r_en": 0, "r_rdy": 0, "r_data": 0
                     })()
-            multiplexer = DummyMux()
 
         args = type("Args", (), {
             "pin_step": "A0", "pin_dir": "A1", "pin_en": "A2"
         })()
 
         try:
+            target = DummyTarget()
             applet = ControlStepperApplet(None)
             # Should not raise
-            applet.build(DummyTarget(), args)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                applet.build(target, args)
+                del applet
+                del target
+                gc.collect()
         except Exception as e:
             self.fail(f"ControlStepperApplet.build() raised an exception: {e}")
+
+    def test_applet_uses_json_config(self):
+        """JSON config should override the default pin layout and timing."""
+
+        class DummyTarget:
+            def __init__(self):
+                self.multiplexer = self.DummyMux()
+
+            class DummyMux:
+                def claim_interface(self, applet, args):
+                    return self
+
+                def add_subtarget(self, subtarget):
+                    self.subtarget = subtarget
+
+                def get_port_group(self, **kwargs):
+                    self.kwargs = kwargs
+                    return type("P", (), {})()
+
+                def get_out_fifo(self):
+                    return type("Fifo", (), {
+                        "r_en": 0, "r_rdy": 0, "r_data": 0
+                    })()
+
+        cfg = {
+            "stepperCarrier": {
+                "pins": {
+                    "step": {"number": 4, "invert": True},
+                    "dir": {"number": 5, "invert": False},
+                    "en": {"number": 6, "invert": True},
+                },
+                "timing": {
+                    "pulseHighUs": 9,
+                },
+            }
+        }
+        args = type("Args", (), {
+            "pin_step": "A0", "pin_dir": "A1", "pin_en": "A2"
+        })()
+
+        target = DummyTarget()
+        applet = ControlStepperApplet(cfg)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            applet.build(target, args)
+
+        subtarget = target.multiplexer.subtarget
+        self.assertEqual(target.multiplexer.kwargs["step"].number, 4)
+        self.assertTrue(target.multiplexer.kwargs["step"].invert)
+        self.assertEqual(target.multiplexer.kwargs["dir"].number, 5)
+        self.assertEqual(target.multiplexer.kwargs["en"].number, 6)
+        self.assertTrue(target.multiplexer.kwargs["en"].invert)
+        self.assertEqual(subtarget.pulse_high_us, 9)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            del applet
+            del target
+            del subtarget
+            gc.collect()
