@@ -35,6 +35,7 @@ import {
 } from "./adminDbService";
 import {
   buildActivityReportFromDb,
+  adminActivityExistsInDb,
   dedupeActivityRowsFromDb,
   listAllowedHostsFromDb,
   findAdminUserInDb,
@@ -50,6 +51,11 @@ import {
   type AdminUser,
   type Equipment,
 } from "./adminDbRepository";
+import {
+  recordInputSetupInDb,
+  recordOutputDataInDb,
+  readOperationTelemetrySummaryFromDb,
+} from "./operationDataRepository";
 import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
 import {
   ConfigError,
@@ -157,9 +163,57 @@ interface DbApplyResponse {
   error?: string;
 }
 
+interface OperationTelemetryStatusResponse {
+  ok: boolean;
+  input_setup_count?: number;
+  output_data_count?: number;
+  latest_input_setup?: {
+    id: number;
+    activity_id: number;
+    start_xy: number;
+    end_xy: number;
+    dwell: number;
+    scale_unit: string;
+    ev: number;
+    scan_parameters: Record<string, unknown>;
+  } | null;
+  latest_output_data?: {
+    id: number;
+    activity_id: number;
+    csv_filename: string;
+    image_filename: string;
+    description: string;
+    scan_result: Record<string, unknown>;
+  } | null;
+  error?: string;
+}
+
 interface ActivityDedupeResponse {
   ok: boolean;
   deleted: number;
+}
+
+interface ScanTelemetryStartRequest {
+  kind?: unknown;
+  start_xy?: unknown;
+  end_xy?: unknown;
+  dwell?: unknown;
+  scale_unit?: unknown;
+  ev?: unknown;
+  resolution?: unknown;
+  latency_bytes?: unknown;
+  vector_resolution?: unknown;
+  scan_parameters?: unknown;
+}
+
+interface ScanTelemetryOutputRequest {
+  activity_id?: unknown;
+  kind?: unknown;
+  resolution?: unknown;
+  latency_bytes?: unknown;
+  vector_resolution?: unknown;
+  chunks?: unknown;
+  scan_result?: unknown;
 }
 
 const smsChallenges = new Map<string, SmsChallenge>();
@@ -674,6 +728,22 @@ app.get(
   },
 );
 
+app.get(
+  "/api/admin/iobeam/operation/status",
+  async (req, res: express.Response<OperationTelemetryStatusResponse>) => {
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can view operation scan telemetry");
+      const summary = await readOperationTelemetrySummaryFromDb();
+      res.json({
+        ok: true,
+        ...summary,
+      });
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
+
 app.post(
   "/api/admin/iobeam/db/apply",
   async (req, res: express.Response<DbApplyResponse>) => {
@@ -853,6 +923,117 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
   }
 });
 
+app.post("/api/admin/iobeam/operation/input-setup", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
+      throw new ConfigError("scan privilege required to record operation inputs", 403);
+    }
+    const body = req.body as ScanTelemetryStartRequest | null;
+    const kind = String(body?.kind ?? "").trim().toLowerCase();
+    if (kind !== "raster" && kind !== "vector") {
+      res.status(400).json({ ok: false, error: "kind must be raster or vector" });
+      return;
+    }
+
+    const userId = Number(actor.id ?? 0);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      res.status(400).json({ ok: false, error: "current account does not have a database id" });
+      return;
+    }
+
+    const lifetimeDays = Math.max(1, Math.trunc(actor.session_lifetime_limit_days ?? 1));
+    const activityId = await recordActivityInDb(
+      userId,
+      null,
+      `${kind}_scan`,
+      lifetimeDays,
+    );
+    if (!activityId) {
+      throw new ConfigError("failed to record admin activity for scan start", 500);
+    }
+
+    const inputId = await recordInputSetupInDb({
+      activity_id: activityId,
+      start_xy: normalizeDecimal(body?.start_xy, 0),
+      end_xy: normalizeDecimal(body?.end_xy, 0),
+      dwell: normalizeInteger(body?.dwell, 0),
+      scale_unit: normalizeScaleUnit(body?.scale_unit),
+      ev: normalizeDecimal(body?.ev, 0),
+      scan_parameters: jsonObjectOrSelf(body?.scan_parameters, body),
+    });
+
+    res.json({ ok: true, activity_id: activityId, input_setup_id: inputId });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post("/api/admin/iobeam/operation/output-data", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
+      throw new ConfigError("scan privilege required to record operation outputs", 403);
+    }
+    const body = req.body as ScanTelemetryOutputRequest | null;
+    const activityId = normalizePositiveInteger(body?.activity_id);
+    if (!activityId) {
+      res.status(400).json({ ok: false, error: "activity_id must be a positive integer" });
+      return;
+    }
+    if (!(await adminActivityExistsInDb(activityId))) {
+      res.status(404).json({ ok: false, error: "unknown activity_id" });
+      return;
+    }
+
+    const kind = String(body?.kind ?? "").trim().toLowerCase();
+    if (kind !== "raster" && kind !== "vector") {
+      res.status(400).json({ ok: false, error: "kind must be raster or vector" });
+      return;
+    }
+
+    const timestamp = formatScanTimestamp(new Date());
+    const resolution = normalizeInteger(body?.resolution, 0);
+    const latencyBytes = normalizeInteger(body?.latency_bytes, 0);
+    const vectorResolution = normalizeInteger(body?.vector_resolution, 0);
+    const csvFilename =
+      kind === "raster"
+        ? `raster_${resolution}x${resolution}_${timestamp}.csv`
+        : `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.csv`;
+    const imageFilename =
+      kind === "raster"
+        ? `raster_${resolution}x${resolution}_${timestamp}.png`
+        : `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.png`;
+    const description = buildOperationOutputDescription({
+      kind,
+      activityId,
+      chunks: normalizeInteger(body?.chunks, 0),
+      resolution,
+      latencyBytes,
+      vectorResolution,
+      csvFilename,
+      imageFilename,
+    });
+
+    const outputId = await recordOutputDataInDb({
+      activity_id: activityId,
+      csv_filename: csvFilename,
+      image_filename: imageFilename,
+      description,
+      scan_result: jsonObjectOrSelf(body?.scan_result, body),
+    });
+
+    res.json({
+      ok: true,
+      output_data_id: outputId,
+      csv_filename: csvFilename,
+      image_filename: imageFilename,
+    });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
 app.post(
   "/api/admin/iobeam/activity/dedupe",
   async (req, res: express.Response<ActivityDedupeResponse | ConfigSaveResponse>) => {
@@ -903,6 +1084,12 @@ if (config.mock) {
     });
   });
 } else {
+  app.post("/api/scan/raster/run", async (req, res) => {
+    await proxyScanRunWithTelemetry("raster", req, res);
+  });
+  app.post("/api/scan/vector/run", async (req, res) => {
+    await proxyScanRunWithTelemetry("vector", req, res);
+  });
   app.use("/api", buildRestProxy());
 }
 
@@ -1319,7 +1506,7 @@ async function requireScanPrivilege(
   }
 }
 
-async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true; actor: AdminUser } | { ok: false; status: number; message: string }> {
   try {
     const actor = await currentAdminActor(req);
     if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
@@ -1329,7 +1516,7 @@ async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } 
         message: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
       };
     }
-    return { ok: true };
+    return { ok: true, actor };
   } catch (err) {
     return {
       ok: false,
@@ -1341,6 +1528,187 @@ async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } 
 
 function hasRasterVectorScanPrivilege(role: number): boolean {
   return role >= ROLE_SUPER_USER;
+}
+
+function normalizeInteger(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function normalizePositiveInteger(value: unknown): number {
+  const n = normalizeInteger(value, 0);
+  return n > 0 ? n : 0;
+}
+
+function normalizeDecimal(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function jsonObjectOrSelf(value: unknown, fallback: unknown): Record<string, unknown> {
+  if (value && typeof value === "object") {
+    return value as Record<string, unknown>;
+  }
+  if (fallback && typeof fallback === "object") {
+    return fallback as Record<string, unknown>;
+  }
+  return {};
+}
+
+async function proxyScanRunWithTelemetry(
+  kind: "raster" | "vector",
+  req: express.Request,
+  res: express.Response,
+): Promise<void> {
+  const body = req.body as Record<string, unknown> | null;
+  const actor = await currentAdminActor(req).catch(() => null);
+  if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
+    res.status(403).json({
+      ok: false,
+      error: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
+    });
+    return;
+  }
+
+  const activityId = await recordOperationScanStart(kind, actor, body).catch((err) => {
+    console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
+    return null;
+  });
+
+  const upstream = await fetch(`${config.proxyTargetHttp}/scan/${kind}/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(config.glasgowToken ? { Authorization: `Bearer ${config.glasgowToken}` } : {}),
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  const responseText = await upstream.text();
+  const contentType = upstream.headers.get("content-type") ?? "application/json";
+  res.status(upstream.status).type(contentType).send(responseText);
+
+  if (!upstream.ok || !activityId) {
+    return;
+  }
+
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = responseText ? (JSON.parse(responseText) as Record<string, unknown>) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed) {
+    return;
+  }
+
+  const chunks = normalizeInteger(parsed.chunks, normalizeInteger(body?.chunks, 0));
+  await recordOperationScanOutput(kind, activityId, body, parsed, chunks).catch((err) => {
+    console.warn(`[operation-data] failed to record ${kind} scan output:`, err);
+  });
+}
+
+async function recordOperationScanStart(
+  kind: "raster" | "vector",
+  actor: AdminUser,
+  body: Record<string, unknown> | null,
+): Promise<number | null> {
+  const activityId = await recordActivityInDb(
+    Number(actor.id ?? 0),
+    null,
+    `${kind}_scan`,
+    Math.max(1, Math.trunc(actor.session_lifetime_limit_days ?? 1)),
+  );
+  if (!activityId) {
+    return null;
+  }
+
+  await recordInputSetupInDb({
+    activity_id: activityId,
+    start_xy: normalizeDecimal(body?.start_xy, 0),
+    end_xy: normalizeDecimal(body?.end_xy, 0),
+    dwell: normalizeInteger(body?.dwell, 0),
+    scale_unit: normalizeScaleUnit(body?.scale_unit),
+    ev: normalizeDecimal(body?.ev, 0),
+    scan_parameters: body ?? {},
+  });
+  return activityId;
+}
+
+async function recordOperationScanOutput(
+  kind: "raster" | "vector",
+  activityId: number,
+  body: Record<string, unknown> | null,
+  response: Record<string, unknown>,
+  chunks: number,
+): Promise<number> {
+  const timestamp = formatScanTimestamp(new Date());
+  const resolution = normalizeInteger(response.resolution ?? body?.resolution, 0);
+  const latencyBytes = normalizeInteger(response.latency_bytes ?? body?.latency_bytes, 0);
+  const vectorResolution = normalizeInteger(response.vector_resolution ?? body?.vector_resolution, 0);
+  const csvFilename =
+    kind === "raster"
+      ? `raster_${resolution}x${resolution}_${timestamp}.csv`
+      : `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.csv`;
+  const imageFilename =
+    kind === "raster"
+      ? `raster_${resolution}x${resolution}_${timestamp}.png`
+      : `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.png`;
+  const description = buildOperationOutputDescription({
+    kind,
+    activityId,
+    chunks,
+    resolution,
+    latencyBytes,
+    vectorResolution,
+    csvFilename,
+    imageFilename,
+  });
+
+  return recordOutputDataInDb({
+    activity_id: activityId,
+    csv_filename: csvFilename,
+    image_filename: imageFilename,
+    description,
+    scan_result: response,
+  });
+}
+
+function normalizeScaleUnit(value: unknown): string {
+  const unit = String(value ?? "").trim();
+  return unit.slice(0, 10) || "dac";
+}
+
+function formatScanTimestamp(date: Date): string {
+  const yy = String(date.getUTCFullYear() % 100).padStart(2, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const min = String(date.getUTCMinutes()).padStart(2, "0");
+  const ss = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${yy}${mm}${dd}_${hh}${min}${ss}`;
+}
+
+function buildOperationOutputDescription(payload: {
+  kind: string;
+  activityId: number;
+  chunks: number;
+  resolution: number;
+  latencyBytes: number;
+  vectorResolution: number;
+  csvFilename: string;
+  imageFilename: string;
+}): string {
+  return JSON.stringify({
+    kind: payload.kind,
+    activity_id: payload.activityId,
+    chunks: payload.chunks,
+    resolution: payload.resolution || null,
+    latency_bytes: payload.latencyBytes || null,
+    vector_resolution: payload.vectorResolution || null,
+    csv_filename: payload.csvFilename,
+    image_filename: payload.imageFilename,
+  });
 }
 
 function changedAdminRoleUsers(beforeUsers: AdminUser[], afterUsers: AdminUser[]): AdminUser[] {

@@ -11,7 +11,6 @@ import type {
   ROIRequest,
 } from "../types/api";
 import { fetchDefaults } from "./statusSlice";
-import { recordScanActivity } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 
 export type ScanKind = "raster" | "vector" | "roi";
@@ -273,9 +272,7 @@ export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
       signal,
     });
     if (!r.ok) throw new Error(await scanRunErrorMessage(r, "raster run"));
-    const result = (await r.json()) as ScanResult;
-    recordScanActivity("raster");
-    return result;
+    return (await r.json()) as ScanResult;
   }
 );
 
@@ -289,9 +286,7 @@ export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
       signal,
     });
     if (!r.ok) throw new Error(await scanRunErrorMessage(r, "vector run"));
-    const result = (await r.json()) as ScanResult;
-    recordScanActivity("vector");
-    return result;
+    return (await r.json()) as ScanResult;
   }
 );
 

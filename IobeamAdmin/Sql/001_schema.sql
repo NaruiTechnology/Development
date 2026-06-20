@@ -1028,8 +1028,10 @@ AS $$
       ) latest;
 $$;
 
-CREATE OR REPLACE FUNCTION fn_record_admin_activity(p_payload jsonb)
-RETURNS void
+DROP FUNCTION IF EXISTS fn_record_admin_activity(jsonb);
+
+CREATE FUNCTION fn_record_admin_activity(p_payload jsonb)
+RETURNS integer
 LANGUAGE sql
 AS $$
     INSERT INTO activity (
@@ -1049,7 +1051,8 @@ AS $$
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP,
         GREATEST(1, COALESCE(NULLIF(p_payload->>'session_lifetime_limit_days', '')::integer, 1))
-    );
+    )
+    RETURNING id;
 $$;
 
 CREATE OR REPLACE FUNCTION fn_admin_activity_report(p_payload jsonb)

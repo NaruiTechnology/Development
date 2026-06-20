@@ -49,7 +49,10 @@ import {
 import type { RasterRequest, VectorRequest } from "../types/api";
 import type { RootState } from "../store";
 import { registerScanActionStop } from "./scanActionRegistry";
-import { recordScanActivity } from "../lib/adminActivity";
+import {
+  recordScanOperationOutput,
+  recordScanOperationStart,
+} from "../lib/operationTelemetry";
 import { withScanAuthQuery } from "../lib/authIdentity";
 
 type Closure = "pause" | "stop";
@@ -67,12 +70,15 @@ export function useScanStream() {
   // stale-closure bug where the dispatch fires after a user-initiated
   // reset.
   const phase = useAppSelector((s: RootState) => s.scan.phase);
+  const scanRoi = useAppSelector((s: RootState) => s.scan.roi);
+  const beamEnergyEv = useAppSelector((s: RootState) => s.scan.beamEnergyEv);
   const vectorLineShiftPerXRow = useAppSelector((s: RootState) => {
     const raw = s.status.defaults?.vector?.lineShiftPerXRow;
     const n = Number(raw);
     return Number.isFinite(n) ? n : 0;
   });
   const phaseRef = useRef(phase);
+  const activityIdRef = useRef<Promise<number | null> | null>(null);
   phaseRef.current = phase;
 
   // Ensure WS is closed when the component using this hook unmounts so we
@@ -90,6 +96,15 @@ export function useScanStream() {
       stopExisting(wsRef);
       dispatch(resetRaster({ resolution: req.resolution }));
       dispatch(streamStarted());
+      activityIdRef.current = recordScanOperationStart({
+        kind: "raster",
+        start_xy: scanRoi.x_origin,
+        end_xy: scanRoi.x_end,
+        dwell: req.dwell,
+        scale_unit: scanRoi.scale_unit,
+        ev: beamEnergyEv,
+        scan_parameters: buildRasterScanParameters(req, scanRoi, beamEnergyEv),
+      });
       const ws = openWs("/ws/scan/raster/stream");
       wsRef.current = ws;
       closureKindRef.current = null;
@@ -100,7 +115,16 @@ export function useScanStream() {
         ws.send(JSON.stringify(req));
       };
       ws.onmessage = (ev) =>
-        handleRasterMessage(ev, dispatch, sawDoneRef, req.output_mode);
+        handleRasterMessage(ev, dispatch, sawDoneRef, req.output_mode, (result) => {
+          void recordScanOperationOutput({
+            activityId: activityIdRef.current,
+            kind: "raster",
+            chunks: Number(result.chunks) || 0,
+            resolution: req.resolution,
+            latency_bytes: req.latency_bytes,
+            scan_result: result,
+          });
+        });
       ws.onerror = () => {
         // The browser only emits a generic error event; details come via
         // the close handler. Don't transition phase here — onclose will.
@@ -108,9 +132,10 @@ export function useScanStream() {
       ws.onclose = (ev) => {
         finalize(closureKindRef.current, sawDoneRef.current, phaseRef.current, ev, dispatch);
         wsRef.current = null;
+        activityIdRef.current = null;
       };
     },
-    [dispatch]
+    [dispatch, beamEnergyEv, scanRoi.scale_unit, scanRoi.x_end, scanRoi.x_origin]
   );
 
   const startVector = useCallback(
@@ -140,6 +165,15 @@ export function useScanStream() {
         })
       );
       dispatch(streamStarted());
+      activityIdRef.current = recordScanOperationStart({
+        kind: "vector",
+        start_xy: scanRoi.x_origin,
+        end_xy: scanRoi.x_end,
+        dwell: req.points?.[0]?.[2] ?? 0,
+        scale_unit: scanRoi.scale_unit,
+        ev: beamEnergyEv,
+        scan_parameters: buildVectorScanParameters(req, scanRoi, beamEnergyEv, vectorLineShiftPerXRow),
+      });
       const ws = openWs("/ws/scan/vector/stream");
       wsRef.current = ws;
       closureKindRef.current = null;
@@ -155,7 +189,17 @@ export function useScanStream() {
           dispatch,
           sawDoneRef,
           vectorLineShiftPerXRow,
-          req.output_mode
+          req.output_mode,
+          (result) => {
+            void recordScanOperationOutput({
+              activityId: activityIdRef.current,
+              kind: "vector",
+              chunks: Number(result.chunks) || 0,
+              latency_bytes: req.latency_bytes,
+              vector_resolution: req.vector_resolution,
+              scan_result: result,
+            });
+          },
         );
       ws.onerror = () => {
         /* see startRaster */
@@ -163,9 +207,10 @@ export function useScanStream() {
       ws.onclose = (ev) => {
         finalize(closureKindRef.current, sawDoneRef.current, phaseRef.current, ev, dispatch);
         wsRef.current = null;
+        activityIdRef.current = null;
       };
     },
-    [dispatch, vectorLineShiftPerXRow]
+    [beamEnergyEv, dispatch, scanRoi.scale_unit, scanRoi.x_end, scanRoi.x_origin, vectorLineShiftPerXRow]
   );
 
   const pause = useCallback(() => {
@@ -235,7 +280,8 @@ function handleRasterMessage(
   ev: MessageEvent,
   dispatch: ReturnType<typeof useAppDispatch>,
   sawDoneRef: React.MutableRefObject<boolean>,
-  outputMode?: string
+  outputMode: string | undefined,
+  onDone?: (result: Record<string, unknown>) => void,
 ): void {
   if (typeof ev.data === "string") {
     try {
@@ -243,7 +289,7 @@ function handleRasterMessage(
       if (msg.event === "done") {
         sawDoneRef.current = true;
         dispatch(streamCompleted({ chunks: msg.chunks }));
-        recordScanActivity("raster");
+        onDone?.(msg as Record<string, unknown>);
       } else if (msg.event === "error") {
         dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
       }
@@ -263,7 +309,8 @@ function handleVectorMessage(
   dispatch: ReturnType<typeof useAppDispatch>,
   sawDoneRef: React.MutableRefObject<boolean>,
   lineShiftPerXRow: number,
-  outputMode?: string
+  outputMode: string | undefined,
+  onDone?: (result: Record<string, unknown>) => void,
 ): void {
   if (typeof ev.data === "string") {
     try {
@@ -272,7 +319,7 @@ function handleVectorMessage(
         sawDoneRef.current = true;
         dispatch(correctVectorLineShift({ lineShiftPerXRow }));
         dispatch(streamCompleted({ chunks: msg.chunks }));
-        recordScanActivity("vector");
+        onDone?.(msg as Record<string, unknown>);
       } else if (msg.event === "error") {
         dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
       }
@@ -288,6 +335,34 @@ function handleVectorMessage(
   const values = decodeSamples(buf, outputMode);
   dispatch(appendVectorSamples({ values }));
   dispatch(streamProgress({ bytes: buf.byteLength, chunks: 1 }));
+}
+
+function buildRasterScanParameters(
+  req: RasterRequest,
+  scanRoi: { x_origin: number; x_end: number; scale_unit: string },
+  beamEnergyEv: number,
+): Record<string, unknown> {
+  return {
+    kind: "raster",
+    request: req,
+    roi_state: scanRoi,
+    beam_energy_ev: beamEnergyEv,
+  };
+}
+
+function buildVectorScanParameters(
+  req: VectorRequest,
+  scanRoi: { x_origin: number; x_end: number; scale_unit: string },
+  beamEnergyEv: number,
+  lineShiftPerXRow: number,
+): Record<string, unknown> {
+  return {
+    kind: "vector",
+    request: req,
+    roi_state: scanRoi,
+    beam_energy_ev: beamEnergyEv,
+    line_shift_per_x_row: lineShiftPerXRow,
+  };
 }
 
 function finalize(

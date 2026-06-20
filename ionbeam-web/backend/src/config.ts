@@ -51,6 +51,14 @@ export interface Config {
   adminDbPassword: string | null;
   adminDbSslMode: string | null;
   adminDbCommandTimeoutMs: number;
+  operationDbConfigPath: string;
+  operationDbHost: string;
+  operationDbPort: number;
+  operationDbName: string;
+  operationDbUser: string;
+  operationDbPassword: string | null;
+  operationDbSslMode: string | null;
+  operationDbCommandTimeoutMs: number;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -82,6 +90,12 @@ const DEFAULT_ADMIN_DB_CONFIG_PATH = path.join(
   "Json",
   "IobeamAdminDb.json"
 );
+const DEFAULT_OPERATION_DB_CONFIG_PATH = path.join(
+  DEPLOY_DEVELOPMENT_ROOT,
+  "OperationData",
+  "Json",
+  "OperationDataDb.json"
+);
 const DEFAULT_RESTART_CMD = path.join(
   BACKEND_ROOT,
   "scripts",
@@ -106,6 +120,9 @@ interface AdminDbDefaults {
 const adminDbConfigPath =
   process.env.IOBEAM_ADMIN_DB_CONFIG?.trim() || DEFAULT_ADMIN_DB_CONFIG_PATH;
 const adminDbDefaults = readAdminDbDefaults(adminDbConfigPath);
+const operationDbConfigPath =
+  process.env.IOBEAM_OPERATION_DB_CONFIG?.trim() || DEFAULT_OPERATION_DB_CONFIG_PATH;
+const operationDbDefaults = readOperationDbDefaults(operationDbConfigPath, adminDbDefaults);
 
 function readAdminDbDefaults(filePath: string): AdminDbDefaults {
   const fallback: AdminDbDefaults = {
@@ -116,6 +133,43 @@ function readAdminDbDefaults(filePath: string): AdminDbDefaults {
     password: null,
     sslMode: null,
     commandTimeoutMs: 30_000,
+  };
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+    const db = readRecord(raw, "Database");
+    const source = Object.keys(db).length > 0 ? db : raw;
+    const connectionString = stringValue(source.ConnectionString ?? source.connectionString);
+    const parsed = connectionString ? parsePostgresConnectionString(connectionString) : {};
+    return {
+      host: stringValue(source.Host ?? source.host) || parsed.host || fallback.host,
+      port: numberValue(source.Port ?? source.port) || parsed.port || fallback.port,
+      database:
+        stringValue(source.DatabaseName ?? source.databaseName ?? source.Database ?? source.database) ||
+        parsed.database ||
+        fallback.database,
+      user: stringValue(source.User ?? source.user ?? source.Username ?? source.username) || parsed.user || fallback.user,
+      password: stringValue(source.Password ?? source.password) || parsed.password || fallback.password,
+      sslMode: stringValue(source.SslMode ?? source.sslMode) || parsed.sslMode || fallback.sslMode,
+      commandTimeoutMs:
+        numberValue(source.CommandTimeoutMs ?? source.commandTimeoutMs) ||
+        parsed.commandTimeoutMs ||
+        fallback.commandTimeoutMs,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function readOperationDbDefaults(filePath: string, fallbackDefaults: AdminDbDefaults): AdminDbDefaults {
+  const fallback: AdminDbDefaults = {
+    host: fallbackDefaults.host,
+    port: fallbackDefaults.port,
+    database: "operation_data",
+    user: fallbackDefaults.user,
+    password: fallbackDefaults.password,
+    sslMode: fallbackDefaults.sslMode,
+    commandTimeoutMs: fallbackDefaults.commandTimeoutMs,
   };
 
   try {
@@ -199,6 +253,11 @@ const resolvedAdminDbUser = normalizeLocalPeerUser(
   process.env.IOBEAM_ADMIN_DB_USER?.trim() || adminDbDefaults.user,
   resolvedAdminDbPassword,
 );
+const resolvedOperationDbUser = normalizeLocalPeerUser(
+  process.env.IOBEAM_OPERATION_DB_HOST?.trim() || operationDbDefaults.host,
+  process.env.IOBEAM_OPERATION_DB_USER?.trim() || operationDbDefaults.user,
+  process.env.IOBEAM_OPERATION_DB_PASSWORD?.trim() || operationDbDefaults.password,
+);
 
 export const config: Config = {
   port: Number(process.env.PORT ?? 4000),
@@ -236,6 +295,19 @@ export const config: Config = {
   adminDbCommandTimeoutMs: Math.max(
     1_000,
     int(process.env.IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS, adminDbDefaults.commandTimeoutMs),
+  ),
+  operationDbConfigPath,
+  operationDbHost: process.env.IOBEAM_OPERATION_DB_HOST?.trim() || operationDbDefaults.host,
+  operationDbPort: Number(process.env.IOBEAM_OPERATION_DB_PORT ?? operationDbDefaults.port),
+  operationDbName: process.env.IOBEAM_OPERATION_DB_NAME?.trim() || operationDbDefaults.database,
+  operationDbUser: resolvedOperationDbUser,
+  operationDbPassword:
+    process.env.IOBEAM_OPERATION_DB_PASSWORD?.trim() || operationDbDefaults.password,
+  operationDbSslMode:
+    process.env.IOBEAM_OPERATION_DB_SSLMODE?.trim() || operationDbDefaults.sslMode,
+  operationDbCommandTimeoutMs: Math.max(
+    1_000,
+    int(process.env.IOBEAM_OPERATION_DB_COMMAND_TIMEOUT_MS, operationDbDefaults.commandTimeoutMs),
   ),
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID?.trim() || null,
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN?.trim() || null,

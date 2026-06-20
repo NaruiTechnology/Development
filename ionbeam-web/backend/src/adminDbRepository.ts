@@ -92,13 +92,26 @@ export async function recordActivityInDb(
   equipmentId: number | null,
   activityType: string,
   lifetimeDays: number,
-): Promise<void> {
-  await executeStored("SELECT fn_record_admin_activity($$payload$$);", {
+): Promise<number> {
+  const raw = await queryStored("SELECT fn_record_admin_activity($$payload$$);", {
     user_id: userId,
     equipment_id: equipmentId,
     activity_type: activityType,
     session_lifetime_limit_days: lifetimeDays,
   });
+  return Number.parseInt(raw.trim() || "0", 10) || 0;
+}
+
+export async function adminActivityExistsInDb(activityId: number): Promise<boolean> {
+  if (!Number.isInteger(activityId) || activityId <= 0) return false;
+  const raw = await queryStored(
+    `SELECT 1
+       FROM activity
+      WHERE id = ${activityId};`,
+    null,
+    "0",
+  );
+  return raw.trim() === "1";
 }
 
 export async function buildActivityReportFromDb(

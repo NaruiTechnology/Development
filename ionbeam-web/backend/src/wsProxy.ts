@@ -101,7 +101,7 @@ export function attachWsProxy(
 function handleProxy(
   client: WebSocket,
   kind: ScanKind,
-  req: IncomingMessage
+  req: IncomingMessage,
 ): void {
   const upstreamUrl = `${config.proxyTargetWs}/scan/${kind}/stream`;
   const headers: Record<string, string> = {};
@@ -188,7 +188,7 @@ function handleProxy(
 function handleMock(
   client: WebSocket,
   kind: ScanKind,
-  req: IncomingMessage
+  req: IncomingMessage,
 ): void {
   console.log(`[ws][mock] ${req.socket.remoteAddress} -> ${kind} stream`);
   client.once("message", async (raw: RawData) => {
