@@ -18,6 +18,7 @@ import { VectorResolutionHelp } from "./VectorResolutionHelp";
 import { CustomPointsHelp } from "./CustomPointsHelp";
 import { PreProcessHelp } from "./PreProcessHelp";
 import { ValidationHelp } from "./ValidationHelp";
+import { BeamEnergyField } from "./BeamEnergyField";
 
 const MAX_POINTS = 1_000_000;
 
@@ -82,6 +83,8 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
 
   return (
     <div>
+      <BeamEnergyField disabled={disabled} />
+
       <div className="field">
         <label>
           {t("vector.pattern")}

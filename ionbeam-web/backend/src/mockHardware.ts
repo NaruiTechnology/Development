@@ -24,6 +24,7 @@ interface RasterParams {
   resolution: number;
   dwell: number;
   latency_bytes: number;
+  voltage?: number;
   cookie?: number;
   frame_blank?: boolean;
   simulation_bitmap?: SimulationBitmapPayload | null;
@@ -33,6 +34,7 @@ interface VectorParams {
   pattern: "default" | "custom";
   points?: Array<[number, number, number]>;
   latency_bytes: number;
+  voltage?: number;
   /** Edge length for default-pattern sweeps (256 / 512 / 1024 / 2048).
    *  Total samples = edge². Coverage is always the full DAC range. */
   vector_resolution?: number;
@@ -379,11 +381,16 @@ export const mockRest = {
     const raster = action.rasterScan ?? {};
     const vector = action.vectorScan ?? {};
     const selectedBeam = action.enableEbeam ? "ebeam" : "ion";
+    const ev = finiteNumber(action.ev, 1000.0);
+    const voltage = finiteNumber(action.voltage, 2.5);
     return {
       is_production: false,
+      ev,
+      voltage,
       simulation: action.simulation ?? {},
       raster: {
         ...raster,
+        voltage,
         resolution: finiteNumber(raster.resolution, 512),
         dwell: finiteNumber(raster.dwell, 2),
         latency: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
@@ -391,6 +398,7 @@ export const mockRest = {
       },
       vector: {
         ...vector,
+        voltage,
         latency: finiteNumber(vector.latency, 8196),
         outputMode: vector.outputMode ?? "SixteenBit",
       },

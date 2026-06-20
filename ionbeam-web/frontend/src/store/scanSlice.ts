@@ -39,6 +39,8 @@ interface ScanState {
   raster: RasterRequest;
   vector: VectorRequest;
   roi: ROIState;
+  /** Manual beam energy entry shared by the raster/vector panels. */
+  beamEnergyEv: number;
 
   /** How the vector image is rendered onto the canvas. Per-session — not
    *  persisted to localStorage — because the right choice depends on the
@@ -107,12 +109,18 @@ const initialState: ScanState = {
     imageKind: "none",
     keep_loaded_bitmap_after_scan: true,
   },
+  beamEnergyEv: 1000.0,
   vectorRenderMode: "decimated",
 };
 
 function numberDefault(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+
+function floatDefault(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function booleanDefault(value: unknown, fallback: boolean): boolean {
@@ -312,6 +320,9 @@ const slice = createSlice({
     updateVector(s, a: PayloadAction<Partial<VectorRequest>>) {
       s.vector = { ...s.vector, ...normalizeVectorPatch(a.payload, s.vector) };
     },
+    updateBeamEnergyEv(s, a: PayloadAction<number>) {
+      s.beamEnergyEv = floatDefault(a.payload, s.beamEnergyEv);
+    },
     updateROI(s, a: PayloadAction<Partial<ROIState>>) {
       s.roi = { ...s.roi, ...normalizeROIPatch(a.payload, s.roi) };
       if ("selection" in a.payload) {
@@ -428,6 +439,7 @@ const slice = createSlice({
     });
     b.addCase(fetchDefaults.fulfilled, (s, a) => {
       applyServerDefaults(s, a.payload);
+      s.beamEnergyEv = floatDefault(a.payload.ev, s.beamEnergyEv);
     });
   },
 });
@@ -436,6 +448,7 @@ export const {
   setKind,
   updateRaster,
   updateVector,
+  updateBeamEnergyEv,
   updateROI,
   clearROIImage,
   clearROISelection,

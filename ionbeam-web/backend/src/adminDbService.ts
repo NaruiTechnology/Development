@@ -286,6 +286,14 @@ function roleGrantSql(dbName: string, roleName: string): string {
     `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${roleIdent};`,
     `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ${roleIdent};`,
     `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT EXECUTE ON FUNCTIONS TO ${roleIdent};`,
+    `GRANT USAGE, CREATE ON SCHEMA ionbeam_asset TO ${roleIdent};`,
+    `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ionbeam_asset TO ${roleIdent};`,
+    `GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA ionbeam_asset TO ${roleIdent};`,
+    `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ionbeam_asset TO ${roleIdent};`,
+    `GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA ionbeam_asset TO ${roleIdent};`,
+    `ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${roleIdent};`,
+    `ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ${roleIdent};`,
+    `ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT EXECUTE ON FUNCTIONS TO ${roleIdent};`,
   ].join("\n");
 }
 

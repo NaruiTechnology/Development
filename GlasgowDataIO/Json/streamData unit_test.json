@@ -9,6 +9,7 @@
             "streamData": {
                 "actionData": {
                     "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
+                    "ev": 1000.0,
                     "voltage": 2.5,
                     "ports": [
                         { "port": "A", "pinList": [4, 5, 6, 7] },

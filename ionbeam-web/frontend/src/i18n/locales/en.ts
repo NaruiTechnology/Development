@@ -467,7 +467,7 @@ export const en = {
   "settings.general.dumpData": "Dump data",
   "settings.general.enableEbeam": "Enable e-beam",
   "settings.general.enableIbeam": "Enable ion beam",
-  "settings.general.voltage": "The Voltage of the Glasgow revC3 port A/B",
+  "settings.general.ev": "Beam energy (eV)",
   "settings.general.frequency": "Frequency (Hz)",
   "settings.general.point": "Point count",
   "settings.general.waveForm": "Waveform",
@@ -623,7 +623,7 @@ export const en = {
 
   /* ===== settings dialog help ===================================== */
   "settings.help.aria": "Show technical help",
-  "settings.help.generalVoltage.title": "Voltage",
+  "settings.help.generalVoltage.title": "Beam energy",
   "settings.help.generalBuffer.title": "Buffer size",
   "settings.help.rasterPixels.title": "Raster pixels",
   "settings.help.rasterResolution.title": "Raster resolution",

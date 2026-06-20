@@ -549,7 +549,11 @@ function GeneralTab({ draft }: { draft: unknown }) {
   const deviceId = stringField(draft, ["Glasgow", "Device0", "Id"], "");
 
   // actionData scalars.
-  const voltage = numberField(draft, [...ACTION_DATA_PATH, "voltage"], 0);
+  const ev = numberField(
+    draft,
+    [...ACTION_DATA_PATH, "ev"],
+    1000,
+  );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
   const enableEbeam = boolField(draft, [...ACTION_DATA_PATH, "enableEbeam"], false);
   const enableIbeam = boolField(draft, [...ACTION_DATA_PATH, "enableIbeam"], true);
@@ -605,11 +609,11 @@ function GeneralTab({ draft }: { draft: unknown }) {
 
       <div className="field-row">
         <NumberField
-          label={t("settings.general.voltage")}
+          label={t("settings.general.ev")}
           help={<SettingsHelp topic="generalVoltage" />}
-          value={voltage}
+          value={ev}
           step="any"
-          onChange={(v) => set([...ACTION_DATA_PATH, "voltage"], v)}
+          onChange={(v) => set([...ACTION_DATA_PATH, "ev"], v)}
         />
         <TextField
           label={t("settings.general.bufferSize")}
@@ -2709,10 +2713,10 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
   generalVoltage: (
     <>
       <p>
-        Default beam-control voltage from <code>actionData.voltage</code>.
-        It is loaded with the rest of <code>streamData.json</code> and
-        should match the analog range expected by the connected scan
-        electronics.
+        Beam energy in electron-volts from <code>actionData.ev</code>.
+        This is not the Glasgow I/O port voltage. It is stored with the
+        rest of <code>streamData.json</code> and should match the beam
+        energy expected by the microscope configuration.
       </p>
     </>
   ),

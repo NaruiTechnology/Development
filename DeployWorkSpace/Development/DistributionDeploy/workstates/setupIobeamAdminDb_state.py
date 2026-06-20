@@ -575,7 +575,9 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             "END",
             "$$;",
             f"CREATE SCHEMA IF NOT EXISTS iobeam_admin AUTHORIZATION {ownerIdent};",
+            f"CREATE SCHEMA IF NOT EXISTS ionbeam_asset AUTHORIZATION {ownerIdent};",
             f"ALTER SCHEMA iobeam_admin OWNER TO {ownerIdent};",
+            f"ALTER SCHEMA ionbeam_asset OWNER TO {ownerIdent};",
         ]
         for roleName in memberRoles:
             roleIdent = self._quoteIdent(roleName)
@@ -628,6 +630,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         ownerLiteral = self._quoteLiteral(ownerRole)
         return "\n".join([
             f"ALTER SCHEMA iobeam_admin OWNER TO {ownerIdent};",
+            f"ALTER SCHEMA ionbeam_asset OWNER TO {ownerIdent};",
             "DO $$",
             "DECLARE",
             "  obj record;",
@@ -635,7 +638,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             "  FOR obj IN",
             "    SELECT format('%I.%I', schemaname, tablename) AS name",
             "      FROM pg_tables",
-            "     WHERE schemaname = 'iobeam_admin'",
+            "     WHERE schemaname IN ('iobeam_admin', 'ionbeam_asset')",
             "  LOOP",
             f"    EXECUTE 'ALTER TABLE ' || obj.name || ' OWNER TO ' || quote_ident({ownerLiteral});",
             "  END LOOP;",
@@ -643,7 +646,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             "  FOR obj IN",
             "    SELECT format('%I.%I', sequence_schema, sequence_name) AS name",
             "      FROM information_schema.sequences",
-            "     WHERE sequence_schema = 'iobeam_admin'",
+            "     WHERE sequence_schema IN ('iobeam_admin', 'ionbeam_asset')",
             "  LOOP",
             f"    EXECUTE 'ALTER SEQUENCE ' || obj.name || ' OWNER TO ' || quote_ident({ownerLiteral});",
             "  END LOOP;",
@@ -653,7 +656,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             "           format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) AS signature",
             "      FROM pg_proc p",
             "      JOIN pg_namespace n ON n.oid = p.pronamespace",
-            "     WHERE n.nspname = 'iobeam_admin'",
+            "     WHERE n.nspname IN ('iobeam_admin', 'ionbeam_asset')",
             "  LOOP",
             "    IF obj.prokind = 'p' THEN",
             f"      EXECUTE 'ALTER PROCEDURE ' || obj.signature || ' OWNER TO ' || quote_ident({ownerLiteral});",
@@ -693,6 +696,14 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {roleIdent};",
             f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {roleIdent};",
             f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT EXECUTE ON FUNCTIONS TO {roleIdent};",
+            f"GRANT USAGE, CREATE ON SCHEMA ionbeam_asset TO {roleIdent};",
+            f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ionbeam_asset TO {roleIdent};",
+            f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA ionbeam_asset TO {roleIdent};",
+            f"GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ionbeam_asset TO {roleIdent};",
+            f"GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA ionbeam_asset TO {roleIdent};",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {roleIdent};",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {roleIdent};",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT EXECUTE ON FUNCTIONS TO {roleIdent};",
         ])
         if ownerRole:
             lines.append(f"GRANT {self._quoteIdent(ownerRole)} TO {roleIdent};")
@@ -718,6 +729,11 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA iobeam_admin TO {roleIdent};",
             f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT ON TABLES TO {roleIdent};",
             f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT ON SEQUENCES TO {roleIdent};",
+            f"GRANT USAGE ON SCHEMA ionbeam_asset TO {roleIdent};",
+            f"GRANT SELECT ON ALL TABLES IN SCHEMA ionbeam_asset TO {roleIdent};",
+            f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ionbeam_asset TO {roleIdent};",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT SELECT ON TABLES TO {roleIdent};",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT USAGE, SELECT ON SEQUENCES TO {roleIdent};",
         ])
 
     def _quoteIdent(self, value):

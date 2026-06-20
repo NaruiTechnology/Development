@@ -24,6 +24,7 @@ import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
 import { FrameBlankHelp } from "./FrameBlankHelp";
 import { ValidationHelp } from "./ValidationHelp";
+import { BeamEnergyField } from "./BeamEnergyField";
 
 const RES_PRESETS = [256, 512, 1024, 2048];
 const DWELL_PRESETS = [1, 2, 4, 8, 16, 32];
@@ -47,6 +48,8 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
 
   return (
     <div>
+      <BeamEnergyField disabled={disabled} />
+
       <div className="field-row">
         <PresetField
           labelKey="raster.resolution"

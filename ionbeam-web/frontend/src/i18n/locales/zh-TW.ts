@@ -435,7 +435,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.general.enableEbeam": "啟用電子束",
   "settings.general.enableIbeam": "啟用離子束",
   "settings.admin.db.password.show": "顯示資料庫密碼",
-  "settings.general.voltage": "Glasgow revC3 連接埠 A/B 的電壓",
+  "settings.general.ev": "束能量（eV）",
   "settings.general.frequency": "頻率 (Hz)",
   "settings.general.point": "點數",
   "settings.general.waveForm": "波形",
@@ -504,7 +504,7 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== settings dialog help ===================================== */
   "settings.help.aria": "顯示技術說明",
-  "settings.help.generalVoltage.title": "電壓",
+  "settings.help.generalVoltage.title": "束能量",
   "settings.help.generalBuffer.title": "緩衝區大小",
   "settings.help.rasterPixels.title": "光柵像素",
   "settings.help.rasterResolution.title": "光柵解析度",
