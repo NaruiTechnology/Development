@@ -69,6 +69,13 @@ export function App() {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
+  const [mergedFigureByKind, setMergedFigureByKind] = useState<{
+    raster: string | null;
+    vector: string | null;
+  }>({
+    raster: null,
+    vector: null,
+  });
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
     const raw = window.localStorage.getItem(RIGHT_PANEL_STORAGE_KEY);
     const parsed = raw ? Number(raw) : DEFAULT_RIGHT_PANEL_WIDTH;
@@ -209,6 +216,15 @@ export function App() {
     []
   );
 
+  const handleMergedFigureChange = useCallback(
+    (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
+      setMergedFigureByKind((current) =>
+        current[scanKind] === imageUrl ? current : { ...current, [scanKind]: imageUrl }
+      );
+    },
+    []
+  );
+
   function selectKind(nextKind: ScanKind) {
     if (nextKind === kind) return;
     if (scanActive) return;
@@ -221,6 +237,7 @@ export function App() {
       dispatch(resetRaster({ resolution: rasterResolution }));
       dispatch(resetVector());
       setLastLiveScanImage(null);
+      setMergedFigureByKind({ raster: null, vector: null });
     }
 
     dispatch(setKind(nextKind));
@@ -351,7 +368,12 @@ export function App() {
                 <div className="card__header">
                   <span className="card__title">{t("card.runReport")}</span>
                 </div>
-                <ValidationPanel disabled={!isSignedIn} />
+                <ValidationPanel
+                  disabled={!isSignedIn}
+                  mergedFigureUrl={
+                    kind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
+                  }
+                />
               </div>
               <ErrorWedge signedInUser={signedInUser} />
             </>
@@ -391,6 +413,7 @@ export function App() {
           <div className="card image-panel-card">
             <div className="card__header">
               <span className="card__title">{t(imagePanelTitleKey)}</span>
+              <div id="image-panel-toolbar-slot" className="card__header-toolbar-slot" />
             </div>
             <div className="card__body">
               {kind === "roi" ? (
@@ -403,6 +426,7 @@ export function App() {
                 <ImageCanvas
                   kind={kind as ScanKind}
                   onRenderedImageChange={handleRenderedImageChange}
+                  onMergedFigureChange={handleMergedFigureChange}
                 />
               )}
             </div>

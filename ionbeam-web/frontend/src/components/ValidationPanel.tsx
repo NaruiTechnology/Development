@@ -43,7 +43,13 @@ type DirectoryHandle = {
 const OUTPUT_PREFIX_STORAGE_KEY = "ionbeam:downloadOutputPrefix";
 const DEFAULT_DOWNLOAD_PATH_LABEL = defaultDownloadPathLabel();
 
-export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
+export function ValidationPanel({
+  disabled = false,
+  mergedFigureUrl = null,
+}: {
+  disabled?: boolean;
+  mergedFigureUrl?: string | null;
+}) {
   const { t, fmt } = useTranslation();
   const result = useAppSelector((s) => s.scan.lastResult);
   const error = useAppSelector((s) => s.scan.errorMessage);
@@ -236,6 +242,20 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
   }
 
   async function figureDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
+    if (mergedFigureUrl) {
+      const merged = await fetch(mergedFigureUrl);
+      if (!merged.ok) {
+        throw new Error(`HTTP ${merged.status}: merged figure export failed`);
+      }
+      return {
+        blob: await merged.blob(),
+        filename: defaultDownloadFilename(scanKind, "png", {
+          resolution: result?.resolution ?? rasterRes,
+          latency_bytes: vectorLatency,
+        }, outputPrefix),
+      };
+    }
+
     const url =
       kind === "vector"
         ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`

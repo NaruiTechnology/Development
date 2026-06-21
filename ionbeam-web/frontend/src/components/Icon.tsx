@@ -1,11 +1,14 @@
 type IconName =
   | "check"
+  | "circleTool"
   | "cog"
+  | "commentTool"
   | "crop"
   | "download"
   | "globe"
   | "grid"
   | "help"
+  | "highlightTool"
   | "image"
   | "home"
   | "layers"
@@ -16,6 +19,7 @@ type IconName =
   | "play"
   | "plus"
   | "refresh"
+  | "rectangleTool"
   | "route"
   | "scan"
   | "save"
@@ -39,10 +43,11 @@ export function Icon({
   tone?: "accent" | "danger" | "success" | "tab" | "warn";
 }) {
   const imageSource = imageSources[name];
+  const className = `${tone ? `icon icon--${tone}` : "icon"} icon--${name}`;
   if (imageSource) {
     return (
       <img
-        className={tone ? `icon icon--${tone}` : "icon"}
+        className={className}
         src={imageSource}
         alt=""
         aria-hidden
@@ -51,18 +56,22 @@ export function Icon({
   }
 
   return (
-    <svg className={tone ? `icon icon--${tone}` : "icon"} viewBox="0 0 24 24" aria-hidden>
-      {paths[name]}
+    <svg className={className} viewBox="0 0 24 24" aria-hidden>
+      {paths[name] ?? null}
     </svg>
   );
 }
 
 const imageSources: Partial<Record<IconName, string>> = {
   fileText: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAB/klEQVR4nO3ZWUsbURgG4Pk1WrEXtuDSulBFXKkGV7DkppBWqiIi4kItYqWgiBuKN60o9EaT09te9Fac/A4VjjGJcYmJRssr5xsdpBYXMnNmlPPCC5MzE/gecmYSiKapqKg8/YAFa8GC22BBpNu9+vfr8gEBfcuK4UV5Rp58BCwa/gpACI9Pf9QAqQjYBOCyEHYCuAyE3QBuN0IGgNuJkAXgdiGsBOzmVtyJiDW1r7sWcPJtST4CFgIeUk0BLqMATAHSy5MFRGu8iJQ2UqO1XiS/LNB6YmjWXI+UtyLW8gknY9/N9+2/60a4uN7sce+EM4DQizLsvqpBvHMU4aI68Mx8pGZWEe/6Ss/y/bYuHHh76Drx+rh/yoBXe7GTXYjDj5+pp+MrzgHEMOI4ObJoDNk3aQLO5hmdO//xGzvPixAufGsCQjmlzm8hAYi8aaBvV7GdeGYBUnP+GwAaurIN/FkB4NeNTyDrNWINPmpqbs05gBhUDCP2cnJ4ntb/BwiXeOh6cwsR4APVUcDVFrrefwGJwWnj901zu/u2UPQWgLixQy/LjeMSD/4u/3EX4KhjBImB6Rvrp5M/cegbosa7x+gegX/DPJ8YnKUnF5wG2F1NAS6jAEwB0osCMAVILwrAFMA9fzHduwF90zrAL71aKiKgb4JtVFkGUFFR0VybCyA7+nk5Yx4EAAAAAElFTkSuQmCC",
+  highlightTool: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAB8klEQVR4nO2ZTUoDQRCFXy3cia4U3bkX/MGbqAtvontx4xX0ANl4B4UcQHQhCLoK+Fc9AU26TVRGKtMzdMaJZIiQEvrBQBKm4XuVV91MDRAVVakuY9sxNdIUM/iP8Jap7wylztCZehPpE2ar4C3Tu3oTr69YsExXjum4y9gpKs903Glj0zGxWhNvD1i0TNceUCr+5T8f5fd0X7DlmBJ1JkJ4y3RvmT585Zvle9WZKMFfy/cuY7cwYeiwykTRE0yN6Wde4A3ddJ6wVECWeiBcJ6a84U9rsKcO/jcTKuCrYoMRGooTU9Ov6csWC+3wVSZkd5oa/DixGaXfekJt5SvW3+XrwxNbdeX/Yv1EivAc4esrwnOEr68IzxG+viI8R/j6ivAc4esrTUGW6TIYOtV6IJn0YWZi9RKse/jHuiBThxfZBAce4ORHFJ6xDI2xCeWYLgQinwaMY0INfMqYk2mAjDXSBPMjAQMTauDzmYwfZZyjpCoTquBF1tBpBoN9jNGkU2/Y8vbpDLUEqJdgDSMUVl1N5UWDtyIZVEvMoCTpicHELPuXHtVUXuTaWLGGbn3+k04bG/mZIHGSnghm+PkBd6kCvmewmkenuLK3IkO/DQyIEYN9MQYtckxmCH74aklkJDrhtqpKrgJcsp3HKCoqCir1DY/bXN6VXvpsAAAAAElFTkSuQmCC",
+  commentTool: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAB4UlEQVR4nO2Zv08UURDHv1NZSChMSAAT/AMsLOlJICSHN7Mma0XlP2AhPwpL6An/wkFHY2sBCVylf4Am/gdaGDj2ZvYoWPLOPUOOLHtncrynvk+y3RTzeW9mXjILRCKRSHBIjjVWOhalTIwKnx8rXbpckhyNkZJno13fSUuVjNFO7cn3g5VyVmwkGebgmSTDnCg2XU4ut3tvQpROfl0bNhAYrNgqS+r4niC6dEFphlkERpphtqyOTmXQoNYQKFKXXxSYMBIF0H8n2hOc8+2/WkCMziYu4BOJAp6RKIA4hYo4hSwK+EOiAP6sieumy6j4nEJnwQj4RKKAZ+SfF2CjHy4g7WAGgdHo4mlfQOmiMoiVPvbHnuIdAoMV27WLrcSwVAZduXXecoHH8Eyzi3mXPCv1XG61S15RvP/9ACl9vT3/x3mQRPGajT4PdpoPstwdIIaVspxa4zZ4WmCKjQ69rderGEXgZQ/PWelL2WwdMbxZLfAIISA1AqJYH/wQcaXnZBASUiHgTpiV9m9deyuE5h9J4JXiGRt9Kk/dJMdbhIoMCTRzNMXoZ5n8t6SHFwgZdidsVKwpFsRoT5SuS6mj1QLTCB1W+jA03npBl8ww6TmesNEBG30Xo9NmF4t3giL/ITcqDctIeD2VjgAAAABJRU5ErkJggg==",
+  rectangleTool: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAABI0lEQVR4nO2YQUoDQRBFn4xHiAfIPQTNoEvP5AlcRpKdR/BGMXGjkEVwKQ0lAy00zQzpxnEqkP+gdl3T/1f3LPqDEEII0c8VsALegRDraWDtAtgDNmIFYAesgTmVtMBnz0e/gYue9S8ji7esvoC7msn3iZ/6BCyrD2BWYmCVNL0BN0DD9DTANbBJ9DyXNO6Shk68N4tEz7akISQNHpPPabJrfJT03p0KVqNJBv4BkwFnTAacMRlwxmTAGZMBZ0wGnDEZcMZkwBk7KwPhxB71l7WP+jRW6XIZb9ospzrKOmnYxFzGK9hqYxb0q2dZ0jiPWaSNXAfgYWDPx5i7jhItdtwP5KN/rdeB/fYF4m+pZBazyG32Y091AiHuvayZvBBCiPPiB3dyUVMxeJZMAAAAAElFTkSuQmCC",
+  circleTool: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAADeklEQVR4nO1ZzU4UQRDuYBQT8S9REy4SDadNBKF6V0P8eQUl8RFAhTuaGEUDZwFfAhTEZwHBwx74MZnqnalmMUiieGBMza5xt2fW3dmZnRGyX9LJZDJdXT1dXd/X1UK00UYb0eG6HaB0DhQ9B0VLEmlVKipKRQflViy/Wyx9o3PcR6QNcJxuqWgaFH2VSrvhGm17fR2nO3HHb2x/uyiR5kDpH+Edr27ANpDm+jd3LyTivEQ9LFHbUR33TQR1gW23zPFHrnuC/9Q/HNgD1PNZyxmRSNmbiJfBdU9y856VzkmkUUBakKi/17ZDszxWrM7f39w8DYqWaziuJNJYn1JnGrXH30pF495fDwwrWuYx4/vzSn8KGOinRD2Zse2uZm1nbLsLFL0pZSr/JGJZiaCw8f6cvTMkYgJYxTtB+woUzUR0Xg8HxOgaWMWrImYMYLEHFK1XjYd0mLX0w6YMQrF4XqJGI3eTLBSuixZhAIs95krwanPaDm1MIr3zxXyMYVMLg5Zz17cnkOZCGWF29JEU6smWeW0AUL8wyS4UYzPFm6kySrYJi958vhOQNozwnW6st+t2lHRK1RKOiYQBSI+NCWw1JAA9xjQYNgxJxYWMbXeZjJ1FknU7stw1JjCfiMcBAKT3Bi88q9+J9XzlrC1nRKQE8IfRYiOdPhsZICdSwmBB3zb24mrdTqBIV03A2rskUkKfUldMIq3bySSRzJp7SqSE3ny+0yTT4z8BOOohBMdgEy8ZnUYT8TYAgPQkfBr1ERktiJQgFS0aRDYRWkownacoJfZDS4lAMadoXCQMQHralJirIacLQ0RnRaLpk7aMCUxFOtCAotciIUjUryIdaIKrEXTA1QPRYmTRuSeRfhmJZDa0oZzW58xDvUdyKRzq+5utm5bqoHRoTGKdB4rb+ZzavSYVfTE46BAsehDJMC+foUe4OVw9iDVsFJF/HHob2TiX94LronTA1YMoYq/XO7zrlzVKix9jK/J6A9Us7tIGn5zCVC28mqiX58lIlX+d5zFFnCivxIy5JyoYe5/PsKxfQOlbrCR5dbjxM78raRv6YDKsrIh5DpvYy+uV4FplrbJ4lAaoC03XQcOC01qcV0yANJvYFVPAJd+UXzs10jj+aSqVS75AAYiU5bqNJ4GRVkDRzp9rVu8ZaaV8zTrhqcr/4Zq1jTbE0cdv/d9yBKPjQt8AAAAASUVORK5CYII=",
   sheet: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC2klEQVR4nGNgGAWjYBSMgmEJODtdpHjbPXy5210bOFtcNnM0OT1jGJSg3p5FcEqwttAkvzjBCb4TBfp9dvP3eL3h7fb8z9Pp8Z+73e0/V6vLf85m5/8D7VQG4TlJvJILI20k54anic0Jmyg2M+SIyPSg78JTA/8LTQ74LzjR779Av+9//l7v/wPuAbmlmYKyqxJtZJcn5MssjVskvST2qtSiqL+SCyL/S8yL+C8+J+y/2KzQ/6Izgv8PSg8orEn+L78q6b/cioT/ssvi/sssif0vtSj6PyUeMDziThY2OOJ2eEh7wPCIO+mxN+qB7lEP/B90HkAGMIfhA6MekEfyQO3pRSiGZ+2fhOIB1dlx/z/+/AqXrzkwd3B5QH5p/P/r7x/BDb/1/sl/idlhcA9MO78RLnf9zcP/Qr2+gy8PhO5qRQmhuJ1dYA8YLEr7/+PPL7i4z6rKwZuJtz44BXfouVe3wR5YcWM/XGzl9f2DMw/IQD1gviYPJbRTdvf+//PvL5gNygNqs+IGfynUf2Ed3JL3P77A2RUHZg3eUkgGyQNKi+L/P/vyBsWyy6/v/xeZFDA0KjLVxYn/n319i+KBR59e/ZeaGjo0PLDoxh64w198fQdnd59aOfiTUMD2xv///v8DW/D998//sTs64BaCMrfpgozB6wGFpfH/b75/Ardg4vn14GJ078PzcLEjjy//F+j1GZwe6L+4Hm74h59f/qstTAR7wG5l4f+//yCxAgJJWzoHXx5w2FT2/ydS+d94cglKW2j97SNwuRdf3v2XmRQyeDwgvzz+/6lXt+AOfP713X+FBbEoHjBZnPn/998/cDUzzm4cfElIaig3p2VGPeA8eCoyiVEPuI96YEh5wOCw2yGGETe4i3N4fUGUscTcsLhBP7xOzgSHwAS/Dv4+n82DdoKDaPCfgZGv102Fp8sjlLvdrY2z1WUbR7Pzc+INGAWjYBSMAoYhAgBEtnuV0kUiSgAAAABJRU5ErkJggg==",
 };
 
-const paths: Record<IconName, JSX.Element> = {
+const paths: Partial<Record<IconName, JSX.Element>> = {
   check: <path d="M5 12.5l4 4L19 6.5" />,
   cog: (
     <path

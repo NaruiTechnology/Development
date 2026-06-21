@@ -11,7 +11,8 @@
  * to their actual populated cells. For vector custom, only requested
  * point coordinates are painted; unpopulated cells stay transparent.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
 import {
@@ -31,6 +32,45 @@ interface PaintStats {
   min: number;
   max: number;
   populated: number;
+}
+
+type AnnotationTool = "highlight" | "comment" | "rectangle" | "circle";
+type LineStyle = "solid" | "dashed" | "dotted";
+
+interface CanvasAnnotation {
+  id: string;
+  kind: AnnotationTool;
+  x: number;
+  y: number;
+  x2?: number;
+  y2?: number;
+  strokeColor: string;
+  lineStyle: LineStyle;
+  lineWidth: number;
+  text?: string;
+}
+
+interface CommentDraft {
+  x: number;
+  y: number;
+  text: string;
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  annotationId: string | null;
+}
+
+interface DraftShape {
+  kind: Extract<AnnotationTool, "rectangle" | "circle">;
+  x: number;
+  y: number;
+  x2: number;
+  y2: number;
+  strokeColor: string;
+  lineStyle: LineStyle;
+  lineWidth: number;
 }
 
 // Phase values from the scan slice are stable wire-format strings. Map
@@ -55,17 +95,33 @@ const KIND_KEYS: Record<string, TranslationKey> = {
 export function ImageCanvas({
   kind,
   onRenderedImageChange,
+  onMergedFigureChange,
 }: {
   kind: ScanKind;
   onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
+  onMergedFigureChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const annotationSeqRef = useRef(0);
   const [stats, setStats] = useState<PaintStats>({ min: 0, max: 0, populated: 0 });
   const [serverFigureUrl, setServerFigureUrl] = useState<string | null>(null);
   const [serverFigureBusy, setServerFigureBusy] = useState(false);
   const [serverFigureError, setServerFigureError] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<AnnotationTool>("highlight");
+  const [strokeColor, setStrokeColor] = useState("#ffd60a");
+  const [lineStyle, setLineStyle] = useState<LineStyle>("solid");
+  const [lineWidth, setLineWidth] = useState(0.5);
+  const [annotations, setAnnotations] = useState<CanvasAnnotation[]>([]);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const [draftShape, setDraftShape] = useState<DraftShape | null>(null);
+  const [commentDraft, setCommentDraft] = useState<CommentDraft | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [mergedFigureUrl, setMergedFigureUrl] = useState<string | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
 
   const revision = useAppSelector((s) => s.image.revision);
 
@@ -91,6 +147,11 @@ export function ImageCanvas({
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
   const showServerFigure = phase === "completed" || phase === "paused";
+  const hasLiveCanvasData =
+    kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
+  const editorEnabled =
+    (phase === "completed" || phase === "paused") &&
+    (hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl));
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
 
@@ -125,8 +186,7 @@ export function ImageCanvas({
   useEffect(() => {
     if (!onRenderedImageChange || (kind !== "raster" && kind !== "vector")) return;
 
-    const hasData = kind === "raster" ? cursor > 0 : vectorCursor > 0;
-    if (!hasData) {
+    if (!hasLiveCanvasData) {
       onRenderedImageChange(kind, null);
       return;
     }
@@ -143,7 +203,57 @@ export function ImageCanvas({
     });
 
     return () => window.cancelAnimationFrame(handle);
-  }, [onRenderedImageChange, kind, phase, revision, renderMode, cursor, vectorCursor]);
+  }, [onRenderedImageChange, kind, phase, revision, renderMode, cursor, vectorCursor, hasLiveCanvasData]);
+
+  const clearEditorState = useCallback(
+    (notifyMerged = true) => {
+      annotationSeqRef.current = 0;
+      setAnnotations([]);
+      setSelectedAnnotationId(null);
+      setDraftShape(null);
+      setCommentDraft(null);
+      setContextMenu(null);
+      setMergedFigureUrl(null);
+      setEditorError(null);
+      if (notifyMerged && (kind === "raster" || kind === "vector")) {
+        onMergedFigureChange?.(kind, null);
+      }
+    },
+    [kind, onMergedFigureChange]
+  );
+
+  useEffect(() => {
+    clearEditorState(true);
+  }, [kind, clearEditorState]);
+
+  useEffect(() => {
+    if (phase === "idle" || phase === "running" || phase === "error") {
+      clearEditorState(true);
+    }
+  }, [phase, clearEditorState]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    setToolbarHost(document.getElementById("image-panel-toolbar-slot"));
+  }, []);
+
+  useEffect(() => {
+    if (!editorEnabled) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTypingField =
+        tag === "input" || tag === "textarea" || target?.isContentEditable === true;
+      if (isTypingField) return;
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
+      event.preventDefault();
+      undoLastAnnotation();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editorEnabled, annotations.length]);
 
   useEffect(() => {
     if (!showServerFigure) {
@@ -225,12 +335,11 @@ export function ImageCanvas({
       : phase === "completed"
       ? 100
       : 0;
-  const hasLiveCanvasData =
-    kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
   const preferServerFigure =
     Boolean(serverFigureUrl) &&
     phase === "completed" &&
     !hasLiveCanvasData;
+  const displayedFigureUrl = mergedFigureUrl ?? (preferServerFigure ? serverFigureUrl : null);
 
   let nativeEdge: number;
   if (kind === "raster") {
@@ -245,9 +354,316 @@ export function ImageCanvas({
   const kindKey = KIND_KEYS[kind];
   const phaseLabel = phaseKey ? t(phaseKey) : phase;
   const kindLabel = kindKey ? t(kindKey) : kind;
+  const contextTargetId = contextMenu?.annotationId ?? selectedAnnotationId;
+
+  function nextAnnotationId(): string {
+    annotationSeqRef.current += 1;
+    return `annotation-${annotationSeqRef.current}`;
+  }
+
+  function toRelativePoint(clientX: number, clientY: number): { x: number; y: number } | null {
+    const frame = frameRef.current;
+    if (!frame) return null;
+    const rect = frame.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return {
+      x: Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)),
+    };
+  }
+
+  function openContextMenu(
+    event: {
+      preventDefault: () => void;
+      stopPropagation: () => void;
+      clientX: number;
+      clientY: number;
+    },
+    annotationId: string | null
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedAnnotationId(annotationId);
+    const frame = frameRef.current;
+    if (!frame) return;
+    const rect = frame.getBoundingClientRect();
+    setContextMenu({
+      x: Math.min(rect.width - 8, Math.max(8, event.clientX - rect.left)),
+      y: Math.min(rect.height - 8, Math.max(8, event.clientY - rect.top)),
+      annotationId,
+    });
+  }
+
+  function handleEditorSurfaceClick(event: { clientX: number; clientY: number }) {
+    if (!editorEnabled) return;
+    setSelectedAnnotationId(null);
+    if (activeTool !== "highlight" && activeTool !== "comment") return;
+    setContextMenu(null);
+    setEditorError(null);
+
+    const point = toRelativePoint(event.clientX, event.clientY);
+    if (!point) return;
+
+    if (activeTool === "comment") {
+      setCommentDraft({ x: point.x, y: point.y, text: "" });
+      return;
+    }
+
+    const annotationId = nextAnnotationId();
+    setAnnotations((current) => [
+      ...current,
+      {
+        id: annotationId,
+        kind: "highlight",
+        x: point.x,
+        y: point.y,
+        strokeColor,
+        lineStyle,
+        lineWidth,
+      },
+    ]);
+    setSelectedAnnotationId(annotationId);
+  }
+
+  function handleEditorPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (!editorEnabled || (activeTool !== "rectangle" && activeTool !== "circle")) return;
+    if (event.button !== 0) return;
+    const point = toRelativePoint(event.clientX, event.clientY);
+    if (!point) return;
+    setCommentDraft(null);
+    setContextMenu(null);
+    setEditorError(null);
+    setSelectedAnnotationId(null);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDraftShape({
+      kind: activeTool,
+      x: point.x,
+      y: point.y,
+      x2: point.x,
+      y2: point.y,
+      strokeColor,
+      lineStyle,
+      lineWidth,
+    });
+  }
+
+  function handleEditorPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!draftShape) return;
+    const point = toRelativePoint(event.clientX, event.clientY);
+    if (!point) return;
+    setDraftShape((current) =>
+      current
+        ? {
+            ...current,
+            x2: point.x,
+            y2: point.y,
+          }
+        : current
+    );
+  }
+
+  function handleEditorPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    if (!draftShape) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const normalized = normalizeShape(draftShape);
+    setDraftShape(null);
+    if (!normalized || shapeTooSmall(normalized)) return;
+    const annotationId = nextAnnotationId();
+    setAnnotations((current) => [...current, { ...normalized, id: annotationId }]);
+    setSelectedAnnotationId(annotationId);
+  }
+
+  function saveCommentDraft() {
+    const text = commentDraft?.text.trim() ?? "";
+    if (!commentDraft || !text) {
+      setCommentDraft(null);
+      return;
+    }
+    const annotationId = nextAnnotationId();
+    setAnnotations((current) => [
+      ...current,
+      {
+        id: annotationId,
+        kind: "comment",
+        x: commentDraft.x,
+        y: commentDraft.y,
+        strokeColor,
+        lineStyle,
+        lineWidth,
+        text,
+      },
+    ]);
+    setSelectedAnnotationId(annotationId);
+    setCommentDraft(null);
+    setContextMenu(null);
+  }
+
+  function undoLastAnnotation() {
+    setAnnotations((current) => {
+      const next = current.slice(0, -1);
+      setSelectedAnnotationId(next.length ? next[next.length - 1].id : null);
+      return next;
+    });
+    setDraftShape(null);
+    setCommentDraft(null);
+    setContextMenu(null);
+  }
+
+  function removeAnnotation(annotationId: string | null) {
+    if (!annotationId) return;
+    setAnnotations((current) => current.filter((annotation) => annotation.id !== annotationId));
+    setSelectedAnnotationId((current) => (current === annotationId ? null : current));
+    setDraftShape(null);
+    setCommentDraft(null);
+    setContextMenu(null);
+  }
+
+  async function mergeAnnotationsIntoImage() {
+    if (!annotations.length) return;
+    const confirmed = window.confirm(
+      t("canvas.editor.merge.confirm", { count: annotations.length })
+    );
+    if (!confirmed) return;
+
+    try {
+      const sourceCanvas = canvasRef.current;
+      const exportCanvas = document.createElement("canvas");
+      const ctx = exportCanvas.getContext("2d");
+      if (!ctx) throw new Error(t("canvas.editor.merge.error"));
+
+      if (displayedFigureUrl) {
+        const image = await loadImage(displayedFigureUrl);
+        exportCanvas.width = image.naturalWidth || image.width;
+        exportCanvas.height = image.naturalHeight || image.height;
+        ctx.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
+      } else if (sourceCanvas) {
+        exportCanvas.width = sourceCanvas.width;
+        exportCanvas.height = sourceCanvas.height;
+        ctx.drawImage(sourceCanvas, 0, 0);
+      } else {
+        throw new Error(t("canvas.editor.merge.error"));
+      }
+
+      drawCanvasAnnotations(ctx, annotations, exportCanvas.width, exportCanvas.height);
+      const mergedUrl = exportCanvas.toDataURL("image/png");
+      setMergedFigureUrl(mergedUrl);
+      setAnnotations([]);
+      setCommentDraft(null);
+      setContextMenu(null);
+      setEditorError(null);
+      if (kind === "raster" || kind === "vector") {
+        onMergedFigureChange?.(kind, mergedUrl);
+      }
+    } catch (error: any) {
+      setEditorError(error?.message ?? t("canvas.editor.merge.error"));
+    }
+  }
+
+  const toolbar = editorEnabled ? (
+        <div className="canvas-toolbox" role="toolbar" aria-label={t("canvas.editor.toolbar.aria")}>
+          <div className="canvas-toolbox__cluster" role="radiogroup" aria-label={t("canvas.editor.toolbar.tools")}>
+            {(
+              [
+                ["highlight", "highlightTool", "canvas.editor.tool.highlight"],
+                ["comment", "commentTool", "canvas.editor.tool.comment"],
+                ["rectangle", "rectangleTool", "canvas.editor.tool.rectangle"],
+                ["circle", "circleTool", "canvas.editor.tool.circle"],
+              ] as const
+            ).map(([tool, icon, labelKey]) => (
+              <button
+                key={tool}
+                type="button"
+                role="radio"
+                aria-checked={activeTool === tool}
+                aria-pressed={activeTool === tool}
+                className="canvas-toolbox__tool"
+                title={t(labelKey)}
+                onClick={() => {
+                  setActiveTool(tool);
+                  setSelectedAnnotationId(null);
+                  setDraftShape(null);
+                  setCommentDraft(null);
+                  setContextMenu(null);
+                }}
+              >
+                <Icon name={icon} tone="accent" />
+              </button>
+            ))}
+          </div>
+
+          <div className="canvas-toolbox__cluster">
+            <label className="canvas-toolbox__field" title={t("canvas.editor.pen.color")}>
+              <span>{t("canvas.editor.pen.color.short")}</span>
+              <input
+                type="color"
+                value={strokeColor}
+                onChange={(event) => setStrokeColor(event.target.value)}
+              />
+            </label>
+
+            <label className="canvas-toolbox__field" title={t("canvas.editor.pen.lineStyle")}>
+              <span>{t("canvas.editor.pen.lineStyle.short")}</span>
+              <select
+                className="input canvas-toolbox__select"
+                value={lineStyle}
+                onChange={(event) => setLineStyle(event.target.value as LineStyle)}
+              >
+                <option value="solid">{t("canvas.editor.pen.lineStyle.solid")}</option>
+                <option value="dashed">{t("canvas.editor.pen.lineStyle.dashed")}</option>
+                <option value="dotted">{t("canvas.editor.pen.lineStyle.dotted")}</option>
+              </select>
+            </label>
+
+            <label className="canvas-toolbox__field" title={t("canvas.editor.pen.width")}>
+              <span>{t("canvas.editor.pen.width.short")}</span>
+              <select
+                className="input canvas-toolbox__select"
+                value={String(lineWidth)}
+                onChange={(event) => setLineWidth(Number(event.target.value))}
+              >
+                {[0.5, 1, 2, 3, 4, 6, 8].map((width) => (
+                  <option key={width} value={width}>
+                    {width}px
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="canvas-toolbox__cluster">
+            <button
+              type="button"
+              className="canvas-toolbox__action"
+              disabled={!annotations.length}
+              title={t("canvas.editor.merge")}
+              onClick={() => void mergeAnnotationsIntoImage()}
+            >
+              <Icon name="save" tone="success" />
+            </button>
+          </div>
+
+          <span className="canvas-toolbox__hint">
+            {annotations.length > 0
+              ? t("canvas.editor.pending", { count: annotations.length })
+              : mergedFigureUrl
+              ? t("canvas.editor.mergedReady")
+              : activeTool === "comment"
+              ? t("canvas.editor.instructions.comment")
+              : activeTool === "rectangle"
+              ? t("canvas.editor.instructions.rectangle")
+              : activeTool === "circle"
+              ? t("canvas.editor.instructions.circle")
+              : t("canvas.editor.instructions.highlight")}
+          </span>
+        </div>
+      ) : null;
 
   return (
     <div>
+      {toolbarHost && toolbar ? createPortal(toolbar, toolbarHost) : toolbar}
+
       {showModeToggle && (
         <div className="row" style={{ marginBottom: 10, gap: 8 }}>
           <span className="card__title" id="render-mode-label">
@@ -289,34 +705,201 @@ export function ImageCanvas({
         </div>
       )}
 
-      <div className="canvas-frame">
+      <div
+        ref={frameRef}
+        className="canvas-frame"
+        onContextMenu={(event) => {
+          if (editorEnabled) openContextMenu(event, null);
+        }}
+      >
         <canvas
           ref={canvasRef}
           width={nativeEdge}
           height={nativeEdge}
           onDragStart={(e) => e.preventDefault()}
           style={{
-            display: preferServerFigure ? "none" : undefined,
+            display: displayedFigureUrl ? "none" : undefined,
           }}
         />
-        {preferServerFigure && serverFigureUrl && (
+        {displayedFigureUrl && (
           <img
             className="server-figure"
-            src={serverFigureUrl}
+            src={displayedFigureUrl}
             alt={t("canvas.serverFigure.alt", { kind: kindLabel })}
             draggable={false}
             onDragStart={(e) => e.preventDefault()}
           />
         )}
+        {editorEnabled && (
+          <div
+            className="canvas-editor-layer"
+            data-tool={activeTool}
+            onPointerDown={handleEditorPointerDown}
+            onPointerMove={handleEditorPointerMove}
+            onPointerUp={handleEditorPointerUp}
+            onClick={handleEditorSurfaceClick}
+          >
+            {annotations.map((annotation, index) => (
+              annotation.kind === "rectangle" || annotation.kind === "circle" ? (
+                <div
+                  key={annotation.id}
+                  role="button"
+                  tabIndex={0}
+                  className={`canvas-editor__shape canvas-editor__shape--${annotation.kind}`}
+                  data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
+                  style={shapeStyle(annotation)}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedAnnotationId(annotation.id);
+                    setContextMenu(null);
+                  }}
+                  onContextMenu={(event) => openContextMenu(event, annotation.id)}
+                  title={t(
+                    annotation.kind === "rectangle"
+                      ? "canvas.editor.tool.rectangle"
+                      : "canvas.editor.tool.circle"
+                  )}
+                />
+              ) : (
+                <button
+                  key={annotation.id}
+                  type="button"
+                  className={`canvas-editor__annotation canvas-editor__annotation--${annotation.kind}`}
+                  data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
+                  style={{
+                    left: `${annotation.x * 100}%`,
+                    top: `${annotation.y * 100}%`,
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedAnnotationId(annotation.id);
+                    setContextMenu(null);
+                  }}
+                  onContextMenu={(event) => openContextMenu(event, annotation.id)}
+                  title={
+                    annotation.kind === "comment"
+                      ? annotation.text
+                      : t("canvas.editor.tool.highlight")
+                  }
+                >
+                  <span
+                    className="canvas-editor__annotation-index"
+                    style={{
+                      borderColor: annotation.strokeColor,
+                      background: alphaColor(annotation.strokeColor, annotation.kind === "comment" ? 0.92 : 0.24),
+                    }}
+                  >
+                    {index + 1}
+                  </span>
+                  {annotation.kind === "comment" && annotation.text && (
+                    <span className="canvas-editor__label">{annotation.text}</span>
+                  )}
+                </button>
+              )
+            ))}
+
+            {draftShape && (
+              <div
+                className={`canvas-editor__shape canvas-editor__shape--${draftShape.kind} canvas-editor__shape--draft`}
+                style={shapeStyle(draftShape)}
+              />
+            )}
+
+            {commentDraft && (
+              <form
+                className="canvas-editor__draft"
+                style={{
+                  left: `${commentDraft.x * 100}%`,
+                  top: `${commentDraft.y * 100}%`,
+                }}
+                onClick={(event) => event.stopPropagation()}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveCommentDraft();
+                }}
+              >
+                <input
+                  autoFocus
+                  className="input"
+                  value={commentDraft.text}
+                  placeholder={t("canvas.editor.comment.placeholder")}
+                  onChange={(event) =>
+                    setCommentDraft((current) =>
+                      current ? { ...current, text: event.target.value } : current
+                    )
+                  }
+                />
+                <div className="button-row">
+                  <button type="submit" className="btn btn--ghost">
+                    {t("canvas.editor.comment.save")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => setCommentDraft(null)}
+                  >
+                    {t("canvas.editor.comment.cancel")}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {contextMenu && (
+              <div
+                className="canvas-editor__menu"
+                style={{ left: contextMenu.x, top: contextMenu.y }}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="canvas-editor__menu-item"
+                  disabled={!annotations.length}
+                  onClick={undoLastAnnotation}
+                >
+                  {t("canvas.editor.context.undo")}
+                </button>
+                <button
+                  type="button"
+                  className="canvas-editor__menu-item"
+                  disabled={!contextTargetId}
+                  onClick={() => removeAnnotation(contextTargetId)}
+                >
+                  {t("canvas.editor.context.remove")}
+                </button>
+                <button
+                  type="button"
+                  className="canvas-editor__menu-item"
+                  disabled={!annotations.length}
+                  onClick={() => {
+                    setAnnotations([]);
+                    setSelectedAnnotationId(null);
+                    setDraftShape(null);
+                    setCommentDraft(null);
+                    setContextMenu(null);
+                  }}
+                >
+                  {t("canvas.editor.context.clear")}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {showServerFigure && !serverFigureUrl && (
+      {showServerFigure && !serverFigureUrl && !mergedFigureUrl && (
         <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
           {serverFigureBusy
             ? t("canvas.serverFigure.rendering")
             : serverFigureError
             ? t("canvas.serverFigure.unavailable", { detail: serverFigureError })
             : t("canvas.serverFigure.livePreview")}
+        </div>
+      )}
+      {editorError && (
+        <div style={{ color: "var(--c-danger)", fontSize: 11, marginTop: 6 }}>
+          {editorError}
         </div>
       )}
 
@@ -495,6 +1078,164 @@ function formatPoint(x: number, y: number, unit: string): string {
 
 function formatCoord(v: number): string {
   return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2);
+}
+
+function normalizeShape(shape: DraftShape): Omit<CanvasAnnotation, "id" | "text"> | null {
+  const x0 = Math.min(shape.x, shape.x2);
+  const x1 = Math.max(shape.x, shape.x2);
+  const y0 = Math.min(shape.y, shape.y2);
+  const y1 = Math.max(shape.y, shape.y2);
+  if (![x0, x1, y0, y1].every(Number.isFinite)) return null;
+  return {
+    kind: shape.kind,
+    x: x0,
+    y: y0,
+    x2: x1,
+    y2: y1,
+    strokeColor: shape.strokeColor,
+    lineStyle: shape.lineStyle,
+    lineWidth: shape.lineWidth,
+  };
+}
+
+function shapeTooSmall(shape: Pick<CanvasAnnotation, "x" | "y" | "x2" | "y2">): boolean {
+  return Math.abs((shape.x2 ?? shape.x) - shape.x) < 0.008 || Math.abs((shape.y2 ?? shape.y) - shape.y) < 0.008;
+}
+
+function shapeStyle(shape: Pick<CanvasAnnotation, "kind" | "x" | "y" | "x2" | "y2" | "strokeColor" | "lineStyle" | "lineWidth">) {
+  const x2 = shape.x2 ?? shape.x;
+  const y2 = shape.y2 ?? shape.y;
+  return {
+    left: `${shape.x * 100}%`,
+    top: `${shape.y * 100}%`,
+    width: `${Math.max(0, x2 - shape.x) * 100}%`,
+    height: `${Math.max(0, y2 - shape.y) * 100}%`,
+    borderColor: shape.strokeColor,
+    borderWidth: `${shape.lineWidth}px`,
+    borderStyle: cssBorderStyle(shape.lineStyle),
+  } as const;
+}
+
+function cssBorderStyle(lineStyle: LineStyle): "solid" | "dashed" | "dotted" {
+  return lineStyle;
+}
+
+function canvasLineDash(lineStyle: LineStyle, lineWidth: number): number[] {
+  if (lineStyle === "dashed") return [lineWidth * 4, lineWidth * 2];
+  if (lineStyle === "dotted") return [lineWidth, lineWidth * 1.8];
+  return [];
+}
+
+function alphaColor(hex: string, alpha: number): string {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return `rgba(255, 214, 10, ${alpha})`;
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function drawCanvasAnnotations(
+  ctx: CanvasRenderingContext2D,
+  annotations: CanvasAnnotation[],
+  width: number,
+  height: number
+): void {
+  const markerRadius = Math.max(12, Math.round(Math.min(width, height) * 0.02));
+  const fontSize = Math.max(14, Math.round(markerRadius * 0.9));
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
+
+  annotations.forEach((annotation, index) => {
+    const x = annotation.x * width;
+    const y = annotation.y * height;
+
+    ctx.save();
+    ctx.lineWidth = annotation.lineWidth;
+    ctx.strokeStyle = annotation.strokeColor;
+    ctx.setLineDash(canvasLineDash(annotation.lineStyle, annotation.lineWidth));
+
+    if (annotation.kind === "rectangle" || annotation.kind === "circle") {
+      const x2 = (annotation.x2 ?? annotation.x) * width;
+      const y2 = (annotation.y2 ?? annotation.y) * height;
+      const w = Math.max(0, x2 - x);
+      const h = Math.max(0, y2 - y);
+      if (annotation.kind === "rectangle") {
+        ctx.strokeRect(x, y, w, h);
+      } else {
+        ctx.beginPath();
+        ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.fillStyle = alphaColor(annotation.strokeColor, 0.24);
+    ctx.arc(x, y, markerRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#101820";
+    ctx.font = `600 ${fontSize}px sans-serif`;
+    ctx.fillText(String(index + 1), x, y + 0.5);
+
+    if (annotation.kind === "comment" && annotation.text) {
+      const bubblePaddingX = 10;
+      const bubblePaddingY = 6;
+      const bubbleText = annotation.text;
+      ctx.font = `500 ${Math.max(12, Math.round(fontSize * 0.9))}px sans-serif`;
+      ctx.textAlign = "left";
+      const textWidth = ctx.measureText(bubbleText).width;
+      const bubbleWidth = textWidth + bubblePaddingX * 2;
+      const bubbleHeight = fontSize + bubblePaddingY * 2;
+      const bubbleX = Math.min(width - bubbleWidth - 6, x + markerRadius + 8);
+      const bubbleY = Math.max(6, y - bubbleHeight - 8);
+
+      ctx.fillStyle = "rgba(16, 24, 32, 0.88)";
+      roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 8);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(x + markerRadius * 0.55, y - markerRadius * 0.2);
+      ctx.lineTo(bubbleX + 8, bubbleY + bubbleHeight);
+      ctx.lineTo(bubbleX + 18, bubbleY + bubbleHeight);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillText(bubbleText, bubbleX + bubblePaddingX, bubbleY + bubbleHeight / 2);
+    }
+    ctx.restore();
+  });
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`image load failed: ${src}`));
+    image.src = src;
+  });
 }
 
 /* -------- painters ----------------------------------------------------- */
