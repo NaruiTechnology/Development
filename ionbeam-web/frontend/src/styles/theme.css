@@ -1612,8 +1612,11 @@ body {
   height: 18px;
 }
 
-.canvas-toolbox__tool .icon--rectangleTool {
-  filter: brightness(0) saturate(100%) invert(15%) sepia(87%) saturate(5714%) hue-rotate(355deg) brightness(103%) contrast(114%);
+.canvas-toolbox__tool .icon--highlightTool,
+.canvas-toolbox__tool .icon--commentTool,
+.canvas-toolbox__tool .icon--rectangleTool,
+.canvas-toolbox__tool .icon--circleTool {
+  filter: brightness(0) saturate(100%) invert(74%) sepia(49%) saturate(1448%) hue-rotate(176deg) brightness(102%) contrast(103%);
 }
 
 .canvas-toolbox__tool:disabled,
