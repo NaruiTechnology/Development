@@ -1636,11 +1636,11 @@ body {
 }
 
 .canvas-toolbox__field input[type="color"] {
-  width: 10px;
-  height: 10px;
+  width: 15px;
+  height: 15px;
   padding: 0;
   border: 1px solid var(--c-border);
-  border-radius: 999px;
+  border-radius: 0;
   background: transparent;
   cursor: pointer;
   overflow: hidden;
@@ -1652,12 +1652,12 @@ body {
 
 .canvas-toolbox__field input[type="color"]::-webkit-color-swatch {
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
 }
 
 .canvas-toolbox__field input[type="color"]::-moz-color-swatch {
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
 }
 
 .canvas-toolbox__select {
@@ -1716,6 +1716,12 @@ body {
   font-size: 12px;
   font-weight: 700;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.3);
+}
+
+.canvas-editor__annotation--highlight .canvas-editor__annotation-index {
+  background: #ffd60a;
+  border-color: #ffd60a;
+  color: #fff;
 }
 
 .canvas-editor__annotation--comment .canvas-editor__annotation-index {

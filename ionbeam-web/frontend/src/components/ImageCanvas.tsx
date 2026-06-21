@@ -111,7 +111,7 @@ export function ImageCanvas({
   const [serverFigureBusy, setServerFigureBusy] = useState(false);
   const [serverFigureError, setServerFigureError] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<AnnotationTool>("highlight");
-  const [strokeColor, setStrokeColor] = useState("#ffd60a");
+  const [strokeColor, setStrokeColor] = useState("lawngreen");
   const [lineStyle, setLineStyle] = useState<LineStyle>("solid");
   const [lineWidth, setLineWidth] = useState(0.5);
   const [annotations, setAnnotations] = useState<CanvasAnnotation[]>([]);
