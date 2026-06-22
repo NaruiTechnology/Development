@@ -1788,6 +1788,7 @@ body {
   border-radius: 10px;
   background: color-mix(in srgb, var(--c-panel) 94%, #0f172a 6%);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.24);
+  color: #f8fafc;
 }
 
 .canvas-editor__menu-item {
@@ -1798,7 +1799,7 @@ body {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--c-text);
+  color: inherit;
   font-size: 12px;
   text-align: left;
   cursor: pointer;
@@ -1809,6 +1810,7 @@ body {
 }
 
 .canvas-editor__menu-item:disabled {
+  color: #94a3b8;
   opacity: 0.45;
   cursor: not-allowed;
 }
