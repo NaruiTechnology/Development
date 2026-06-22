@@ -98,6 +98,7 @@ export type SettingsTab =
   | "vector"
   | "pins"
   | "simulation"
+  | "ftp"
   | "admin";
 
 const initialState: SettingsState = {
@@ -411,4 +412,9 @@ export const PINS_PATH: ReadonlyArray<string | number> = [
 export const SIMULATION_PATH: ReadonlyArray<string | number> = [
   ...ACTION_DATA_PATH,
   "simulation",
+];
+
+export const FTP_PATH: ReadonlyArray<string | number> = [
+  ...ACTION_DATA_PATH,
+  "ftp",
 ];

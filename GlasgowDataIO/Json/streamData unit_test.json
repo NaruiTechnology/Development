@@ -92,6 +92,13 @@
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,
                         "seed": 42
+                    },
+                    "ftp": {
+                        "enabled": true,
+                        "host": "localhost",
+                        "username": "vboxuser",
+                        "password": "ionbeam123",
+                        "folder": "/tmp/ftp"
                     }
                 },
                 "timeout": 60

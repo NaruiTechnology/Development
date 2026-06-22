@@ -2327,6 +2327,12 @@ body {
   border-left: 3px solid var(--c-success);
 }
 
+.settings-notice--warning {
+  color: var(--c-text);
+  background: color-mix(in srgb, var(--c-warn) 14%, transparent);
+  border-left: 3px solid var(--c-warn);
+}
+
 .settings-notice--error {
   color: var(--c-text);
   background: color-mix(in srgb, var(--c-danger) 14%, transparent);
@@ -2447,9 +2453,11 @@ body {
 }
 
 .settings-admin-subtabs {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  width: 100%;
   padding: 3px;
   margin: 18px 0 2px;
   border: 1px solid var(--c-border-soft);

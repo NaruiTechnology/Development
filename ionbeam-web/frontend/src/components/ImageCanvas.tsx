@@ -23,6 +23,7 @@ import {
 } from "../store/scanSlice";
 import type { ROIRequest } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
+import { scanAuthHeaders } from "../lib/authIdentity";
 import { Icon } from "./Icon";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 
@@ -555,6 +556,7 @@ export function ImageCanvas({
       setEditorError(null);
       if (kind === "raster" || kind === "vector") {
         onMergedFigureChange?.(kind, mergedUrl);
+        await uploadMergedFigure(kind, mergedUrl);
       }
     } catch (error: any) {
       setEditorError(error?.message ?? t("canvas.editor.merge.error"));
@@ -1450,4 +1452,22 @@ function vectorDefaultRange(buf: Uint16Array, edge: number, limit: number): Pain
 function scaleSample(value: number, lo: number, hi: number): number {
   if (hi <= lo) return hi > 0 ? 255 : 0;
   return Math.max(0, Math.min(255, Math.round(((value - lo) * 255) / (hi - lo))));
+}
+
+async function uploadMergedFigure(
+  kind: Extract<ScanKind, "raster" | "vector">,
+  dataUrl: string,
+): Promise<void> {
+  const response = await fetch("/api/admin/ftp/merged-figure", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+    body: JSON.stringify({
+      kind,
+      data_url: dataUrl,
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(detail || `HTTP ${response.status}`);
+  }
 }

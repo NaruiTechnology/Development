@@ -473,6 +473,7 @@ export const en = {
   "settings.tabs.vector": "Vector",
   "settings.tabs.pins": "Pins",
   "settings.tabs.simulation": "Simulation",
+  "settings.tabs.ftp": "FTP",
   "settings.tabs.admin": "Admin",
   /* The label is now "Update", but the key keeps the historical "saveAs"
    * name to avoid churning every translation entry's identifier. */
@@ -541,6 +542,7 @@ export const en = {
   "settings.admin.group.users": "User accounts",
   "settings.admin.group.equipment": "Equipment",
   "settings.admin.group.allowedHosts": "Allowed Host",
+  "settings.admin.group.ftp": "FTP",
   "settings.admin.subtabs.aria": "Admin management section",
   "settings.admin.application": "Application",
   "settings.admin.version": "Version",
@@ -651,6 +653,24 @@ export const en = {
   "settings.simulation.patternKind.bullseye": "Bullseye",
   "settings.simulation.invert": "Invert image (255 - pixel)",
   "settings.simulation.seed": "RNG seed",
+
+  /* ===== settings dialog — FTP tab =============================== */
+  "settings.ftp.hint": "CSV files upload to the configured folder's csv subdirectory. PNG figures and merged figures upload to its img subdirectory.",
+  "settings.ftp.enabled": "Enabled",
+  "settings.ftp.save.ok": "FTP configuration saved.",
+  "settings.ftp.restore.ok": "FTP configuration restored from backup.",
+  "settings.ftp.test": "Test connection",
+  "settings.ftp.test.title": "Check whether the configured FTP server is reachable",
+  "settings.ftp.testing": "Testing FTP connection...",
+  "settings.ftp.reachable": "FTP server is reachable.",
+  "settings.ftp.unreachable": "Warning: FTP server is not reachable.",
+  "settings.ftp.disabled": "FTP is disabled or not fully configured.",
+  "settings.ftp.group.connection": "Connection",
+  "settings.ftp.group.destination": "Destination",
+  "settings.ftp.host": "Host",
+  "settings.ftp.username": "Username",
+  "settings.ftp.password": "Password",
+  "settings.ftp.folder": "Base folder",
 
   /* ===== settings dialog help ===================================== */
   "settings.help.aria": "Show technical help",

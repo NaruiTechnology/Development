@@ -68,6 +68,11 @@ import {
   writeAdminConfig,
   writeConfig,
 } from "./configManager";
+import {
+  uploadMergedFigureToConfiguredFtp,
+  uploadScanArtifactsToConfiguredFtp,
+  testConfiguredFtpConnection,
+} from "./ftpUpload";
 
 const app = express();
 let server: http.Server;
@@ -992,42 +997,26 @@ app.post("/api/admin/iobeam/operation/output-data", async (req, res) => {
       return;
     }
 
-    const timestamp = formatScanTimestamp(new Date());
-    const resolution = normalizeInteger(body?.resolution, 0);
-    const latencyBytes = normalizeInteger(body?.latency_bytes, 0);
-    const vectorResolution = normalizeInteger(body?.vector_resolution, 0);
-    const csvFilename =
-      kind === "raster"
-        ? `raster_${resolution}x${resolution}_${timestamp}.csv`
-        : `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.csv`;
-    const imageFilename =
-      kind === "raster"
-        ? `raster_${resolution}x${resolution}_${timestamp}.png`
-        : `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.png`;
-    const description = buildOperationOutputDescription({
+    const output = await recordOperationScanOutput(
       kind,
       activityId,
-      chunks: normalizeInteger(body?.chunks, 0),
-      resolution,
-      latencyBytes,
-      vectorResolution,
-      csvFilename,
-      imageFilename,
-    });
-
-    const outputId = await recordOutputDataInDb({
-      activity_id: activityId,
-      csv_filename: csvFilename,
-      image_filename: imageFilename,
-      description,
-      scan_result: jsonObjectOrSelf(body?.scan_result, body),
-    });
+      body as Record<string, unknown> | null,
+      jsonObjectOrSelf(body?.scan_result, body),
+      normalizeInteger(body?.chunks, 0),
+    );
 
     res.json({
       ok: true,
-      output_data_id: outputId,
-      csv_filename: csvFilename,
-      image_filename: imageFilename,
+      output_data_id: output.outputId,
+      csv_filename: output.csvFilename,
+      image_filename: output.imageFilename,
+    });
+
+    void uploadScanArtifactsToConfiguredFtp(kind, {
+      csvFilename: output.csvFilename,
+      imageFilename: output.imageFilename,
+    }).catch((err) => {
+      console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
     });
   } catch (err) {
     sendConfigError(res, err);
@@ -1049,6 +1038,44 @@ app.post(
 
 app.post("/api/admin/restart-services", async (_req, res) => {
   await restartServicesAndRespond(res);
+});
+
+app.post("/api/admin/ftp/merged-figure", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
+      throw new ConfigError("scan privilege required to upload merged figures", 403);
+    }
+
+    const body = req.body as { kind?: unknown; data_url?: unknown } | null;
+    const kind = String(body?.kind ?? "").trim().toLowerCase();
+    if (kind !== "raster" && kind !== "vector") {
+      res.status(400).json({ ok: false, error: "kind must be raster or vector" });
+      return;
+    }
+
+    const imageBuffer = pngBufferFromDataUrl(body?.data_url);
+    if (!imageBuffer) {
+      res.status(400).json({ ok: false, error: "data_url must be a PNG data URL" });
+      return;
+    }
+
+    const filename = `${kind}_merged_${formatScanTimestamp(new Date())}.png`;
+    await uploadMergedFigureToConfiguredFtp(filename, imageBuffer);
+    res.json({ ok: true, filename });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.get("/api/admin/ftp/test-connection", async (_req, res) => {
+  try {
+    await requireAdminPrivilege(_req, "only Admin or Auditor accounts can test FTP configuration");
+    const status = await testConfiguredFtpConnection();
+    res.json({ ok: true, ...status });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
 });
 
 app.use("/api/scan/raster/run", requireScanPrivilege);
@@ -1473,8 +1500,8 @@ async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown)
 
 async function authorizeStreamConfigSave(req: ScanAuthRequest, nextData: unknown): Promise<void> {
   const info = await readWithBackup();
-  if (!pinsConfigEqual(info.data, nextData)) {
-    await requireAdminPrivilege(req, "only Admin or Auditor accounts can edit PINS");
+  if (!pinsConfigEqual(info.data, nextData) || !ftpConfigEqual(info.data, nextData)) {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can edit PINS or FTP");
   }
 }
 
@@ -1603,8 +1630,15 @@ async function proxyScanRunWithTelemetry(
   }
 
   const chunks = normalizeInteger(parsed.chunks, normalizeInteger(body?.chunks, 0));
-  await recordOperationScanOutput(kind, activityId, body, parsed, chunks).catch((err) => {
+  const output = buildScanArtifactInfo(kind, activityId, body, parsed, chunks);
+  await recordOperationScanOutput(kind, activityId, body, parsed, chunks, output).catch((err) => {
     console.warn(`[operation-data] failed to record ${kind} scan output:`, err);
+  });
+  void uploadScanArtifactsToConfiguredFtp(kind, {
+    csvFilename: output.csvFilename,
+    imageFilename: output.imageFilename,
+  }).catch((err) => {
+    console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
   });
 }
 
@@ -1641,42 +1675,36 @@ async function recordOperationScanOutput(
   body: Record<string, unknown> | null,
   response: Record<string, unknown>,
   chunks: number,
-): Promise<number> {
-  const timestamp = formatScanTimestamp(new Date());
-  const resolution = normalizeInteger(response.resolution ?? body?.resolution, 0);
-  const latencyBytes = normalizeInteger(response.latency_bytes ?? body?.latency_bytes, 0);
-  const vectorResolution = normalizeInteger(response.vector_resolution ?? body?.vector_resolution, 0);
-  const csvFilename =
-    kind === "raster"
-      ? `raster_${resolution}x${resolution}_${timestamp}.csv`
-      : `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.csv`;
-  const imageFilename =
-    kind === "raster"
-      ? `raster_${resolution}x${resolution}_${timestamp}.png`
-      : `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.png`;
-  const description = buildOperationOutputDescription({
-    kind,
-    activityId,
-    chunks,
-    resolution,
-    latencyBytes,
-    vectorResolution,
-    csvFilename,
-    imageFilename,
-  });
-
-  return recordOutputDataInDb({
+  output: ScanArtifactInfo = buildScanArtifactInfo(kind, activityId, body, response, chunks),
+): Promise<{ outputId: number; csvFilename: string; imageFilename: string }> {
+  const outputId = await recordOutputDataInDb({
     activity_id: activityId,
-    csv_filename: csvFilename,
-    image_filename: imageFilename,
-    description,
+    csv_filename: output.csvFilename,
+    image_filename: output.imageFilename,
+    description: output.description,
     scan_result: response,
   });
+  return {
+    outputId,
+    csvFilename: output.csvFilename,
+    imageFilename: output.imageFilename,
+  };
 }
 
 function normalizeScaleUnit(value: unknown): string {
   const unit = String(value ?? "").trim();
   return unit.slice(0, 10) || "dac";
+}
+
+function pngBufferFromDataUrl(value: unknown): Buffer | null {
+  const raw = String(value ?? "").trim();
+  const match = raw.match(/^data:image\/png;base64,(.+)$/i);
+  if (!match) return null;
+  try {
+    return Buffer.from(match[1], "base64");
+  } catch {
+    return null;
+  }
 }
 
 function formatScanTimestamp(date: Date): string {
@@ -1709,6 +1737,57 @@ function buildOperationOutputDescription(payload: {
     csv_filename: payload.csvFilename,
     image_filename: payload.imageFilename,
   });
+}
+
+interface ScanArtifactInfo {
+  csvFilename: string;
+  imageFilename: string;
+  description: string;
+}
+
+function buildScanArtifactInfo(
+  kind: "raster" | "vector",
+  activityId: number,
+  body: Record<string, unknown> | null,
+  response: Record<string, unknown>,
+  chunks: number,
+): ScanArtifactInfo {
+  const timestamp = formatScanTimestamp(new Date());
+  const resolution = normalizeInteger(response.resolution ?? body?.resolution, 0);
+  const latencyBytes = normalizeInteger(response.latency_bytes ?? body?.latency_bytes, 0);
+  const vectorResolution = normalizeInteger(response.vector_resolution ?? body?.vector_resolution, 0);
+  const filenames = buildScanArtifactFilenames(kind, resolution, latencyBytes, vectorResolution, timestamp);
+  return {
+    ...filenames,
+    description: buildOperationOutputDescription({
+      kind,
+      activityId,
+      chunks,
+      resolution,
+      latencyBytes,
+      vectorResolution,
+      csvFilename: filenames.csvFilename,
+      imageFilename: filenames.imageFilename,
+    }),
+  };
+}
+
+function buildScanArtifactFilenames(
+  kind: "raster" | "vector",
+  resolution: number,
+  latencyBytes: number,
+  vectorResolution: number,
+  timestamp: string,
+): { csvFilename: string; imageFilename: string } {
+  return kind === "raster"
+    ? {
+        csvFilename: `raster_${resolution}x${resolution}_${timestamp}.csv`,
+        imageFilename: `raster_${resolution}x${resolution}_${timestamp}.png`,
+      }
+    : {
+        csvFilename: `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.csv`,
+        imageFilename: `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.png`,
+      };
 }
 
 function changedAdminRoleUsers(beforeUsers: AdminUser[], afterUsers: AdminUser[]): AdminUser[] {
@@ -1796,8 +1875,16 @@ function pinsConfigEqual(left: unknown, right: unknown): boolean {
   return stableJson(readStreamPins(left)) === stableJson(readStreamPins(right));
 }
 
+function ftpConfigEqual(left: unknown, right: unknown): boolean {
+  return stableJson(readStreamFtp(left)) === stableJson(readStreamFtp(right));
+}
+
 function readStreamPins(data: unknown): unknown {
   return readConfigPath(data, ["Actions", 0, "streamData", "actionData", "pins"]);
+}
+
+function readStreamFtp(data: unknown): unknown {
+  return readConfigPath(data, ["Actions", 0, "streamData", "actionData", "ftp"]);
 }
 
 function readConfigPath(data: unknown, pathParts: ReadonlyArray<string | number>): unknown {
