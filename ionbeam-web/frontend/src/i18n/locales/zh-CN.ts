@@ -228,6 +228,9 @@ export const zhCN: Partial<TranslationTable> = {
   "canvas.meta.beam.title": "根据最近接收的 ADC 样本索引推算出的束流当前位置。",
   "canvas.meta.adcNow.title": "束流当前位置的 ADC 数值。",
   "canvas.meta.adcRange.title": "已接收样本的原始 ADC 范围。画布将此范围自动缩放为可见灰度。",
+  "canvas.editor.context.undo": "撤销上一步编辑",
+  "canvas.editor.context.remove": "移除所选内容",
+  "canvas.editor.context.clear": "清除所有编辑",
 
   /* ===== phase enum =============================================== */
   "phase.idle": "空闲",
