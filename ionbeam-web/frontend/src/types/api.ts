@@ -99,6 +99,8 @@ export interface ScanResult {
   kind: "raster" | "vector";
   chunks: number;
   bytes: number;
+  csv_filename?: string | null;
+  image_filename?: string | null;
 
   // raster-only:
   resolution?: number | null;
@@ -125,6 +127,8 @@ export interface LastScanMeta {
   resolution?: number | null;
   latency_bytes?: number | null;
   pattern?: string | null;
+  csv_filename?: string | null;
+  image_filename?: string | null;
 }
 
 /** Server defaults harvested from streamData.json by GET /defaults.

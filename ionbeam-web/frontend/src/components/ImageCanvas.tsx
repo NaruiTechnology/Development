@@ -24,6 +24,7 @@ import {
 import type { ROIRequest } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
 import { Icon } from "./Icon";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 
@@ -121,6 +122,9 @@ export function ImageCanvas({
   const [commentDraft, setCommentDraft] = useState<CommentDraft | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [mergedFigureUrl, setMergedFigureUrl] = useState<string | null>(null);
+  const [mergedFigureFilename, setMergedFigureFilename] = useState<string | null>(null);
+  const [mergeConfirmOpen, setMergeConfirmOpen] = useState(false);
+  const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
 
@@ -145,6 +149,7 @@ export function ImageCanvas({
 
   const phase = useAppSelector((s) => s.scan.phase);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
+  const lastOutput = useAppSelector((s) => s.scan.lastOutput);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
   const showServerFigure = phase === "completed" || phase === "paused";
@@ -153,6 +158,7 @@ export function ImageCanvas({
   const editorEnabled =
     (phase === "completed" || phase === "paused") &&
     (hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl));
+  const toolbarVisible = phase === "completed" || phase === "paused";
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
 
@@ -206,6 +212,16 @@ export function ImageCanvas({
     return () => window.cancelAnimationFrame(handle);
   }, [onRenderedImageChange, kind, phase, revision, renderMode, cursor, vectorCursor, hasLiveCanvasData]);
 
+  useEffect(() => {
+    const filename =
+      lastOutput?.kind === kind && typeof lastOutput.image_filename === "string"
+        ? lastOutput.image_filename.trim()
+        : lastResult?.kind === kind && typeof lastResult.image_filename === "string"
+          ? lastResult.image_filename.trim()
+          : "";
+    setMergedFigureFilename(filename || null);
+  }, [kind, lastOutput, lastResult]);
+
   const clearEditorState = useCallback(
     (notifyMerged = true) => {
       annotationSeqRef.current = 0;
@@ -215,6 +231,8 @@ export function ImageCanvas({
       setCommentDraft(null);
       setContextMenu(null);
       setMergedFigureUrl(null);
+      setMergeConfirmOpen(false);
+      setMergeBusy(false);
       setEditorError(null);
       if (notifyMerged && (kind === "raster" || kind === "vector")) {
         onMergedFigureChange?.(kind, null);
@@ -274,8 +292,8 @@ export function ImageCanvas({
 
     const url =
       kind === "vector"
-        ? `/api/scan/last/figure?render=${encodeURIComponent(renderMode)}&view=texture`
-        : "/api/scan/last/figure?view=texture";
+        ? apiUrl(`/api/scan/last/figure?render=${encodeURIComponent(renderMode)}&view=texture`)
+        : apiUrl("/api/scan/last/figure?view=texture");
 
     fetch(url)
       .then(async (r) => {
@@ -523,11 +541,7 @@ export function ImageCanvas({
 
   async function mergeAnnotationsIntoImage() {
     if (!annotations.length) return;
-    const confirmed = window.confirm(
-      t("canvas.editor.merge.confirm", { count: annotations.length })
-    );
-    if (!confirmed) return;
-
+    setMergeBusy(true);
     try {
       const sourceCanvas = canvasRef.current;
       const exportCanvas = document.createElement("canvas");
@@ -556,14 +570,17 @@ export function ImageCanvas({
       setEditorError(null);
       if (kind === "raster" || kind === "vector") {
         onMergedFigureChange?.(kind, mergedUrl);
-        await uploadMergedFigure(kind, mergedUrl);
+        await uploadMergedFigure(kind, mergedUrl, mergedFigureFilename);
       }
+      setMergeConfirmOpen(false);
     } catch (error: any) {
       setEditorError(error?.message ?? t("canvas.editor.merge.error"));
+    } finally {
+      setMergeBusy(false);
     }
   }
 
-  const toolbar = editorEnabled ? (
+  const toolbar = toolbarVisible ? (
         <div className="canvas-toolbox" role="toolbar" aria-label={t("canvas.editor.toolbar.aria")}>
           <div className="canvas-toolbox__cluster" role="radiogroup" aria-label={t("canvas.editor.toolbar.tools")}>
             {(
@@ -640,7 +657,7 @@ export function ImageCanvas({
               className="canvas-toolbox__action"
               disabled={!annotations.length}
               title={t("canvas.editor.merge")}
-              onClick={() => void mergeAnnotationsIntoImage()}
+              onClick={() => setMergeConfirmOpen(true)}
             >
               <Icon name="save" tone="success" />
             </button>
@@ -665,6 +682,68 @@ export function ImageCanvas({
   return (
     <div>
       {toolbarHost && toolbar ? createPortal(toolbar, toolbarHost) : toolbar}
+
+      {mergeConfirmOpen && createPortal(
+        <div className="modal-backdrop canvas-merge-confirm__backdrop" role="presentation">
+          <div
+            className="modal canvas-merge-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="canvas-merge-confirm-title"
+            aria-describedby="canvas-merge-confirm-message"
+          >
+            <div className="modal__header">
+              <div id="canvas-merge-confirm-title" className="modal__title">
+                {t("canvas.editor.merge.confirm.title")}
+              </div>
+              <button
+                type="button"
+                className="modal__close"
+                disabled={mergeBusy}
+                onClick={() => setMergeConfirmOpen(false)}
+                aria-label={t("help.close")}
+              >
+                <Icon name="x" />
+              </button>
+            </div>
+            <div id="canvas-merge-confirm-message" className="modal__body canvas-merge-confirm__body">
+              {t("canvas.editor.merge.confirm", { count: annotations.length })}
+            </div>
+            <div className="settings-footer">
+              <div className="settings-footer__row">
+                <span
+                  className="scan-busy"
+                  data-visible={mergeBusy ? "true" : "false"}
+                  aria-hidden={!mergeBusy}
+                >
+                  <span className="scan-busy__spinner" />
+                </span>
+                <span className="spacer" />
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  disabled={mergeBusy}
+                  onClick={() => setMergeConfirmOpen(false)}
+                >
+                  {t("settings.confirm.cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={mergeBusy}
+                  onClick={() => void mergeAnnotationsIntoImage()}
+                >
+                  <Icon name="save" />
+                  {mergeBusy
+                    ? t("canvas.editor.merge.uploading")
+                    : t("canvas.editor.merge.confirm.yes")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {showModeToggle && (
         <div className="row" style={{ marginBottom: 10, gap: 8 }}>
@@ -1457,13 +1536,15 @@ function scaleSample(value: number, lo: number, hi: number): number {
 async function uploadMergedFigure(
   kind: Extract<ScanKind, "raster" | "vector">,
   dataUrl: string,
+  filename: string | null,
 ): Promise<void> {
-  const response = await fetch("/api/admin/ftp/merged-figure", {
+  const response = await fetch(apiUrl("/api/admin/ftp/merged-figure"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({
       kind,
       data_url: dataUrl,
+      filename,
     }),
   });
   if (!response.ok) {

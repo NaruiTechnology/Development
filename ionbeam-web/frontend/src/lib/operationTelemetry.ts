@@ -1,4 +1,6 @@
 import { scanAuthHeaders } from "./authIdentity";
+import { apiUrl } from "./backendUrl";
+import { readJsonResponse } from "./readJsonResponse";
 
 export interface ScanOperationStartContext {
   kind: "raster" | "vector";
@@ -24,7 +26,7 @@ export async function recordScanOperationStart(
   context: ScanOperationStartContext,
 ): Promise<number | null> {
   try {
-    const r = await fetch("/api/admin/iobeam/operation/input-setup", {
+    const r = await fetch(apiUrl("/api/admin/iobeam/operation/input-setup"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify(context),
@@ -34,7 +36,10 @@ export async function recordScanOperationStart(
       console.warn(`[operation-telemetry] input setup failed: HTTP ${r.status} ${text}`);
       return null;
     }
-    const data = (await r.json()) as { ok?: boolean; activity_id?: number };
+    const data = await readJsonResponse<{ ok?: boolean; activity_id?: number }>(
+      r,
+      "operation input setup"
+    );
     const activityId = Number(data.activity_id);
     return Number.isInteger(activityId) && activityId > 0 ? activityId : null;
   } catch (err) {
@@ -51,7 +56,7 @@ export async function recordScanOperationOutput(
     if (!Number.isInteger(activityId ?? NaN) || (activityId ?? 0) <= 0) {
       return;
     }
-    const r = await fetch("/api/admin/iobeam/operation/output-data", {
+    const r = await fetch(apiUrl("/api/admin/iobeam/operation/output-data"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify({

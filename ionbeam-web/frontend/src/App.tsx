@@ -21,6 +21,8 @@ import {
 
 import { Header } from "./components/Header";
 import type { SignedInUser } from "./components/AuthDialog";
+import { apiUrl } from "./lib/backendUrl";
+import { readJsonResponse } from "./lib/readJsonResponse";
 import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
 import { RasterParameters } from "./components/RasterParameters";
@@ -115,8 +117,17 @@ export function App() {
     }
     let cancelled = false;
 
-    fetch("/api/admin/iobeam/auth/current-account", { headers: scanAuthHeaders() })
-      .then((r) => (r.ok ? r.json() : null))
+    fetch(apiUrl("/api/admin/iobeam/auth/current-account"), { headers: scanAuthHeaders() })
+      .then(async (r) =>
+        r.ok
+          ? await readJsonResponse<{
+              login?: unknown;
+              registered?: unknown;
+              session_expired?: unknown;
+              user?: SignedInUser | null;
+            }>(r, "current account")
+          : null
+      )
       .then((data: { login?: unknown; registered?: unknown; session_expired?: unknown; user?: SignedInUser | null } | null) => {
         if (cancelled || !data) return;
         const currentLogin = String(data.login ?? "").toLowerCase();

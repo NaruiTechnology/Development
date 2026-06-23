@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useTranslation, type LocaleCode, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
 import { siteLabelKey } from "../lib/sites";
 import { Icon } from "./Icon";
 
@@ -192,7 +193,7 @@ export function ManagementReport({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/iobeam/equipment")
+    fetch(apiUrl("/api/admin/iobeam/equipment"))
       .then(async (r) => {
         const data = (await r.json().catch(() => null)) as EquipmentResponse | null;
         if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
@@ -218,7 +219,7 @@ export function ManagementReport({
 
     setLoading(true);
     setError(null);
-    fetch(`/api/admin/iobeam/reports/activity?${params}`)
+    fetch(apiUrl(`/api/admin/iobeam/reports/activity?${params}`))
       .then(async (r) => {
         const data = (await r.json().catch(() => null)) as ActivityReportResponse | null;
         if (!r.ok || !data?.ok) {
@@ -341,7 +342,7 @@ export function ManagementReport({
     setCleanupState("running");
     setCleanupMessage(null);
     try {
-      const r = await fetch("/api/admin/iobeam/activity/dedupe", {
+      const r = await fetch(apiUrl("/api/admin/iobeam/activity/dedupe"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       });

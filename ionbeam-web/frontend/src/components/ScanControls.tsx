@@ -25,6 +25,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useAppDispatch, useAppSelector } from "../store";
+import { apiUrl } from "../lib/backendUrl";
 import {
   clearROIImage,
   runRasterValidated,
@@ -205,7 +206,7 @@ export function ScanControls({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/iobeam/equipment")
+    fetch(apiUrl("/api/admin/iobeam/equipment"))
       .then(async (r) => {
         const data = (await r.json().catch(() => null)) as EquipmentResponse | null;
         if (!r.ok || !data?.ok) throw new Error(`equipment: HTTP ${r.status}`);
@@ -238,7 +239,7 @@ export function ScanControls({
 
   async function refreshScanPrivilege(): Promise<boolean> {
     try {
-      const r = await fetch("/api/admin/iobeam/auth/current-account", {
+      const r = await fetch(apiUrl("/api/admin/iobeam/auth/current-account"), {
         cache: "no-store",
         headers: scanAuthHeaders(),
       });

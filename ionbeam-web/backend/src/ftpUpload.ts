@@ -179,17 +179,25 @@ async function uploadBufferWithCurl(
   filename: string,
   buffer: Buffer,
 ): Promise<void> {
+  const remotePath = buildRemotePath(ftp.folder, subdir, filename);
   const target = new URL(`ftp://${ftp.host}`);
-  target.pathname = buildRemotePath(ftp.folder, subdir, filename);
+  target.pathname = remotePath;
   await runCurl(
     [
       "--silent",
       "--show-error",
       "--fail",
       "--ftp-create-dirs",
+      "--ftp-method",
+      "nocwd",
       "--disable-epsv",
       "--user",
       `${ftp.username}:${ftp.password}`,
+      // Quote commands run before curl changes directories. Use the full
+      // remote path so an existing image is deleted from img/, not the
+      // account's login directory. The leading * tolerates a missing file.
+      "--quote",
+      `*DELE ${remotePath}`,
       "--upload-file",
       "-",
       target.toString(),

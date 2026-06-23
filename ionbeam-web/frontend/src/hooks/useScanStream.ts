@@ -50,6 +50,7 @@ import type { RasterRequest, VectorRequest } from "../types/api";
 import type { RootState } from "../store";
 import { registerScanActionStop } from "./scanActionRegistry";
 import { withScanAuthQuery } from "../lib/authIdentity";
+import { wsUrl } from "../lib/backendUrl";
 
 type Closure = "pause" | "stop";
 
@@ -66,6 +67,7 @@ export function useScanStream() {
   // stale-closure bug where the dispatch fires after a user-initiated
   // reset.
   const phase = useAppSelector((s: RootState) => s.scan.phase);
+  const chunksReceived = useAppSelector((s: RootState) => s.scan.chunksReceived);
   const vectorLineShiftPerXRow = useAppSelector((s: RootState) => {
     const raw = s.status.defaults?.vector?.lineShiftPerXRow;
     const n = Number(raw);
@@ -73,6 +75,8 @@ export function useScanStream() {
   });
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  const chunksReceivedRef = useRef(chunksReceived);
+  chunksReceivedRef.current = chunksReceived;
 
   // Ensure WS is closed when the component using this hook unmounts so we
   // don't leak streams across page navigations.
@@ -105,7 +109,14 @@ export function useScanStream() {
         // the close handler. Don't transition phase here — onclose will.
       };
       ws.onclose = (ev) => {
-        finalize(closureKindRef.current, sawDoneRef.current, phaseRef.current, ev, dispatch);
+        finalize(
+          closureKindRef.current,
+          sawDoneRef.current,
+          phaseRef.current,
+          chunksReceivedRef.current,
+          ev,
+          dispatch,
+        );
         wsRef.current = null;
       };
     },
@@ -160,7 +171,14 @@ export function useScanStream() {
         /* see startRaster */
       };
       ws.onclose = (ev) => {
-        finalize(closureKindRef.current, sawDoneRef.current, phaseRef.current, ev, dispatch);
+        finalize(
+          closureKindRef.current,
+          sawDoneRef.current,
+          phaseRef.current,
+          chunksReceivedRef.current,
+          ev,
+          dispatch,
+        );
         wsRef.current = null;
       };
     },
@@ -195,8 +213,7 @@ export function useScanStream() {
 /* -------- helpers ------------------------------------------------------ */
 
 function openWs(path: string): WebSocket {
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return new WebSocket(`${proto}//${window.location.host}${withScanAuthQuery(path)}`);
+  return new WebSocket(wsUrl(withScanAuthQuery(path)));
 }
 
 function stopExisting(ref: React.MutableRefObject<WebSocket | null>): void {
@@ -241,7 +258,14 @@ function handleRasterMessage(
       const msg = JSON.parse(ev.data);
       if (msg.event === "done") {
         sawDoneRef.current = true;
-        dispatch(streamCompleted({ chunks: msg.chunks }));
+        dispatch(
+          streamCompleted({
+            chunks: msg.chunks,
+            kind: "raster",
+            csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
+            image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
+          }),
+        );
       } else if (msg.event === "error") {
         dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
       }
@@ -269,7 +293,14 @@ function handleVectorMessage(
       if (msg.event === "done") {
         sawDoneRef.current = true;
         dispatch(correctVectorLineShift({ lineShiftPerXRow }));
-        dispatch(streamCompleted({ chunks: msg.chunks }));
+        dispatch(
+          streamCompleted({
+            chunks: msg.chunks,
+            kind: "vector",
+            csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
+            image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
+          }),
+        );
       } else if (msg.event === "error") {
         dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
       }
@@ -291,6 +322,7 @@ function finalize(
   closure: Closure | null,
   sawDone: boolean,
   currentPhase: string,
+  currentChunks: number,
   ev: CloseEvent,
   dispatch: ReturnType<typeof useAppDispatch>
 ): void {
@@ -306,6 +338,10 @@ function finalize(
   // "completed", or the user already saw an explicit error message, leave
   // it. Otherwise the close itself is the news, so transition to error.
   if (sawDone) return;
+  if (ev.code === 1000 && (currentPhase === "running" || currentPhase === "stopping")) {
+    dispatch(streamCompleted({ chunks: currentChunks }));
+    return;
+  }
   if (currentPhase === "running" || currentPhase === "stopping") {
     const reason = ev.reason || `WebSocket closed (code ${ev.code})`;
     dispatch(streamErrored(reason));

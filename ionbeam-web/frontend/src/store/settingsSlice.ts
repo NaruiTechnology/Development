@@ -33,6 +33,8 @@ import {
   type PayloadAction,
 } from "@reduxjs/toolkit";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 
 export interface SettingsConfigInfo {
   path: string;
@@ -125,12 +127,12 @@ const initialState: SettingsState = {
 export const fetchSettingsConfig = createAsyncThunk<SettingsConfigInfo>(
   "settings/fetch",
   async () => {
-    const r = await fetch("/api/admin/config");
+    const r = await fetch(apiUrl("/api/admin/config"));
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`fetch config: HTTP ${r.status} ${text}`);
     }
-    return (await r.json()) as SettingsConfigInfo;
+    return await readJsonResponse<SettingsConfigInfo>(r, "fetch config");
   }
 );
 
@@ -138,7 +140,7 @@ export const saveSettingsConfig = createAsyncThunk<
   SaveResponse,
   unknown
 >("settings/save", async (data) => {
-  const r = await fetch("/api/admin/config", {
+  const r = await fetch(apiUrl("/api/admin/config"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
@@ -147,13 +149,13 @@ export const saveSettingsConfig = createAsyncThunk<
     const text = await r.text();
     throw new Error(`save config: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as SaveResponse;
+  return await readJsonResponse<SaveResponse>(r, "save config");
 });
 
 export const restoreSettingsConfig = createAsyncThunk<SaveResponse>(
   "settings/restore",
   async () => {
-    const r = await fetch("/api/admin/config/restore", {
+    const r = await fetch(apiUrl("/api/admin/config/restore"), {
       method: "POST",
       headers: scanAuthHeaders(),
     });
@@ -161,19 +163,19 @@ export const restoreSettingsConfig = createAsyncThunk<SaveResponse>(
       const text = await r.text();
       throw new Error(`restore config: HTTP ${r.status} ${text}`);
     }
-    return (await r.json()) as SaveResponse;
+    return await readJsonResponse<SaveResponse>(r, "restore config");
   }
 );
 
 export const restartSettingsServices = createAsyncThunk<SaveResponse>(
   "settings/restartServices",
   async () => {
-    const r = await fetch("/api/admin/restart-services", { method: "POST" });
+    const r = await fetch(apiUrl("/api/admin/restart-services"), { method: "POST" });
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`restart services: HTTP ${r.status} ${text}`);
     }
-    return (await r.json()) as SaveResponse;
+    return await readJsonResponse<SaveResponse>(r, "restart services");
   }
 );
 

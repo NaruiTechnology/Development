@@ -31,6 +31,8 @@ import { clearLastResult, clearROIImage, clearROISelection, streamReset } from "
 import { resetRaster, resetVector } from "../store/imageSlice";
 import { fetchDefaultsMetadata, previewConfigDefaults } from "../store/statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 import {
   ACTION_DATA_PATH,
   FTP_PATH,
@@ -1186,16 +1188,16 @@ function FtpTab({
 }
 
 async function fetchAdminConfig(): Promise<SettingsConfigInfo> {
-  const r = await fetch("/api/admin/iobeam/config");
+  const r = await fetch(apiUrl("/api/admin/iobeam/config"));
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`fetch admin config: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as SettingsConfigInfo;
+  return await readJsonResponse<SettingsConfigInfo>(r, "fetch admin config");
 }
 
 async function saveAdminConfig(data: unknown): Promise<void> {
-  const r = await fetch("/api/admin/iobeam/config", {
+  const r = await fetch(apiUrl("/api/admin/iobeam/config"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
@@ -1207,7 +1209,7 @@ async function saveAdminConfig(data: unknown): Promise<void> {
 }
 
 async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseApplyResponse> {
-  const r = await fetch("/api/admin/iobeam/db/apply", {
+  const r = await fetch(apiUrl("/api/admin/iobeam/db/apply"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
@@ -1216,23 +1218,23 @@ async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseAppl
     const text = await r.text();
     throw new Error(`apply admin database setup: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as AdminDatabaseApplyResponse;
+  return await readJsonResponse<AdminDatabaseApplyResponse>(r, "apply admin database setup");
 }
 
 async function fetchAdminDatabaseConnection(includePassword = false): Promise<AdminDatabaseConnectionResponse> {
   const qs = includePassword ? "?include_password=1" : "";
-  const r = await fetch(`/api/admin/iobeam/db/connection${qs}`, {
+  const r = await fetch(apiUrl(`/api/admin/iobeam/db/connection${qs}`), {
     headers: scanAuthHeaders(),
   });
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`fetch admin database connection: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as AdminDatabaseConnectionResponse;
+  return await readJsonResponse<AdminDatabaseConnectionResponse>(r, "fetch admin database connection");
 }
 
 async function restoreAdminConfig(): Promise<void> {
-  const r = await fetch("/api/admin/iobeam/config/restore", { method: "POST" });
+  const r = await fetch(apiUrl("/api/admin/iobeam/config/restore"), { method: "POST" });
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`restore admin config: HTTP ${r.status} ${text}`);
@@ -1240,16 +1242,16 @@ async function restoreAdminConfig(): Promise<void> {
 }
 
 async function fetchStreamConfig(): Promise<SettingsConfigInfo> {
-  const r = await fetch("/api/admin/config");
+  const r = await fetch(apiUrl("/api/admin/config"));
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`fetch stream config: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as SettingsConfigInfo;
+  return await readJsonResponse<SettingsConfigInfo>(r, "fetch stream config");
 }
 
 async function saveStreamConfig(data: unknown): Promise<void> {
-  const r = await fetch("/api/admin/config", {
+  const r = await fetch(apiUrl("/api/admin/config"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
@@ -1261,7 +1263,7 @@ async function saveStreamConfig(data: unknown): Promise<void> {
 }
 
 async function restoreStreamConfig(): Promise<void> {
-  const r = await fetch("/api/admin/config/restore", {
+  const r = await fetch(apiUrl("/api/admin/config/restore"), {
     method: "POST",
     headers: scanAuthHeaders(),
   });
@@ -1600,11 +1602,11 @@ function composeAdminRoleRequestEmail(user: AdminUserRow, recipients: string[]) 
 }
 
 async function fetchCurrentAccountRole(): Promise<number | null> {
-  const r = await fetch("/api/admin/iobeam/auth/current-account", {
+  const r = await fetch(apiUrl("/api/admin/iobeam/auth/current-account"), {
     headers: scanAuthHeaders(),
   });
   if (!r.ok) return null;
-  const data = (await r.json()) as CurrentAccountResponse;
+  const data = await readJsonResponse<CurrentAccountResponse>(r, "current account");
   return typeof data.user?.role === "number" ? data.user.role : null;
 }
 
@@ -1863,7 +1865,7 @@ function AdminTab({
     setFtpConnectionState("checking");
     setFtpConnectionMessage(t("settings.ftp.testing"));
     try {
-      const r = await fetch("/api/admin/ftp/test-connection", {
+      const r = await fetch(apiUrl("/api/admin/ftp/test-connection"), {
         headers: scanAuthHeaders(),
       });
       const data = (await r.json().catch(() => null)) as FtpConnectionResponse | null;
@@ -2377,7 +2379,7 @@ function AllowedHostsTab({
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/admin/iobeam/hosts", { headers: scanAuthHeaders() });
+      const r = await fetch(apiUrl("/api/admin/iobeam/hosts"), { headers: scanAuthHeaders() });
       const data = (await r.json().catch(() => null)) as AllowedHostsResponse | null;
       if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
       const hosts = normalizeAllowedHostList(Array.isArray(data.hosts) ? data.hosts : []);
@@ -2420,7 +2422,7 @@ function AllowedHostsTab({
     setNotice(null);
     setNoticeTone("success");
     try {
-      const r = await fetch("/api/admin/iobeam/hosts", {
+      const r = await fetch(apiUrl("/api/admin/iobeam/hosts"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
         body: JSON.stringify({ hosts: draftHosts }),

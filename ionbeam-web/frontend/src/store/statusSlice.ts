@@ -1,4 +1,6 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { readJsonResponse } from "../lib/readJsonResponse";
+import { apiUrl } from "../lib/backendUrl";
 import type { ServiceStatus, ServerDefaults } from "../types/api";
 
 const DEFAULTS_CACHE_KEY = "ionbeam:last-good-defaults";
@@ -40,9 +42,9 @@ const initialState: StatusState = {
 export const fetchStatus = createAsyncThunk<ServiceStatus>(
   "status/fetch",
   async () => {
-    const r = await fetch("/api/status");
+    const r = await fetch(apiUrl("/api/status"));
     if (!r.ok) throw new Error(`status: HTTP ${r.status}`);
-    return (await r.json()) as ServiceStatus;
+    return await readJsonResponse<ServiceStatus>(r, "status");
   }
 );
 
@@ -52,8 +54,8 @@ export const fetchDefaults = createAsyncThunk<ServerDefaults>(
     let lastError = "";
     for (let attempt = 0; attempt < 8; attempt++) {
       try {
-        const r = await fetch("/api/defaults");
-        if (r.ok) return (await r.json()) as ServerDefaults;
+        const r = await fetch(apiUrl("/api/defaults"));
+        if (r.ok) return await readJsonResponse<ServerDefaults>(r, "defaults");
         lastError = `defaults: HTTP ${r.status}`;
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
@@ -69,9 +71,9 @@ export const fetchDefaultsMetadata = createAsyncThunk<
 >(
   "status/defaultsMetadata",
   async () => {
-    const r = await fetch("/api/defaults", { cache: "no-store" });
+    const r = await fetch(apiUrl("/api/defaults"), { cache: "no-store" });
     if (!r.ok) throw new Error(`defaults metadata: HTTP ${r.status}`);
-    const defaults = (await r.json()) as ServerDefaults;
+    const defaults = await readJsonResponse<ServerDefaults>(r, "defaults metadata");
     return {
       is_production: defaults.is_production,
       simulation: defaults.simulation,

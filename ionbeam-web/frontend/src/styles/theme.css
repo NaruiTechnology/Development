@@ -2053,6 +2053,21 @@ body {
   color: var(--c-text);
 }
 
+.canvas-merge-confirm__backdrop {
+  z-index: 160;
+  backdrop-filter: blur(3px);
+}
+
+.canvas-merge-confirm {
+  max-width: 440px;
+  border-top: 3px solid var(--c-accent);
+}
+
+.canvas-merge-confirm__body {
+  padding-block: 24px;
+  font-size: 14px;
+}
+
 /* ---------- dwell-help modal content --------------------------------- */
 
 .dwell-help p { margin: 0 0 10px; }

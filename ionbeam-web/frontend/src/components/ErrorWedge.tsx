@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
+import { apiUrl } from "../lib/backendUrl";
 import { Icon } from "./Icon";
 import type { SignedInUser } from "./AuthDialog";
 
@@ -83,7 +84,7 @@ export function ErrorWedge({ signedInUser }: { signedInUser: SignedInUser | null
 }
 
 async function fetchAuditorEmails(): Promise<string[]> {
-  const r = await fetch("/api/admin/iobeam/config", { cache: "no-store" });
+  const r = await fetch(apiUrl("/api/admin/iobeam/config"), { cache: "no-store" });
   if (!r.ok) return [];
   const data = (await r.json().catch(() => null)) as AdminConfigResponse | null;
   const root = data?.data;

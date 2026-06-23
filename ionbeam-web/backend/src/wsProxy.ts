@@ -170,14 +170,25 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed?.event === "done") {
         completionHandled = true;
-        void recordAndUploadScanCompletion(
-          kind,
-          scanRequest,
-          activityIdPromise,
-          parsed,
-        ).catch((err) => {
-          console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
-        });
+        void recordAndUploadScanCompletion(kind, scanRequest, activityIdPromise, parsed)
+          .then((output) => {
+            if (!output) return;
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(
+                JSON.stringify({
+                  event: "done",
+                  chunks: normalizeInteger(parsed.chunks, 0),
+                  csv_filename: output.csvFilename,
+                  image_filename: output.imageFilename,
+                }),
+                { binary: false },
+              );
+            }
+          })
+          .catch((err) => {
+            console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+          });
+        return;
       }
     }
     if (client.readyState === WebSocket.OPEN) {
@@ -321,10 +332,10 @@ async function recordAndUploadScanCompletion(
   requestBody: Record<string, unknown> | null,
   activityIdPromise: Promise<number | null> | null,
   response: Record<string, unknown>,
-): Promise<void> {
+): Promise<{ csvFilename: string; imageFilename: string } | null> {
   const activityId = activityIdPromise ? await activityIdPromise : null;
   if (!activityId) {
-    return;
+    return null;
   }
 
   const chunks = normalizeInteger(response.chunks, 0);
@@ -336,10 +347,16 @@ async function recordAndUploadScanCompletion(
     description: output.description,
     scan_result: response,
   });
-  await uploadScanArtifactsToConfiguredFtp(kind, {
+  void uploadScanArtifactsToConfiguredFtp(kind, {
     csvFilename: output.csvFilename,
     imageFilename: output.imageFilename,
+  }).catch((err) => {
+    console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
   });
+  return {
+    csvFilename: output.csvFilename,
+    imageFilename: output.imageFilename,
+  };
 }
 
 function buildScanArtifactInfo(

@@ -1,4 +1,5 @@
 import { scanAuthHeaders } from "./authIdentity";
+import { apiUrl } from "./backendUrl";
 
 interface StoredAdminUser {
   id?: unknown;
@@ -12,7 +13,7 @@ export function recordScanActivity(kind: ActivityScanKind): void {
   const userId = currentAdminUserId();
   const equipmentId = currentEquipmentId();
 
-  void fetch("/api/admin/iobeam/activity", {
+  void fetch(apiUrl("/api/admin/iobeam/activity"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({

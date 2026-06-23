@@ -246,6 +246,31 @@ const DEFAULT_SITE = SITE_OPTIONS[0];
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "256mb" })); // scan DB flow may post large CSV/PNG blobs
+app.use((req, res, next) => {
+  const origin = req.get("origin");
+  const allowed =
+    !origin ||
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) ||
+    origin === "http://localhost:5173" ||
+    origin === "http://127.0.0.1:5173" ||
+    origin === "http://localhost:4173" ||
+    origin === "http://127.0.0.1:4173";
+
+  if (allowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin ?? "*");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Iobeam-Auth");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Vary", "Origin");
+  }
+
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+
+  next();
+});
 
 // Health endpoint for ops / load balancers.
 app.get("/healthz", (_req, res) => {
@@ -1047,7 +1072,7 @@ app.post("/api/admin/ftp/merged-figure", async (req, res) => {
       throw new ConfigError("scan privilege required to upload merged figures", 403);
     }
 
-    const body = req.body as { kind?: unknown; data_url?: unknown } | null;
+    const body = req.body as { kind?: unknown; data_url?: unknown; filename?: unknown } | null;
     const kind = String(body?.kind ?? "").trim().toLowerCase();
     if (kind !== "raster" && kind !== "vector") {
       res.status(400).json({ ok: false, error: "kind must be raster or vector" });
@@ -1060,7 +1085,18 @@ app.post("/api/admin/ftp/merged-figure", async (req, res) => {
       return;
     }
 
-    const filename = `${kind}_merged_${formatScanTimestamp(new Date())}.png`;
+    const suppliedFilename = normalizePngFilename(body?.filename);
+    let filename = suppliedFilename;
+    if (!filename) {
+      const telemetry = await readOperationTelemetrySummaryFromDb();
+      const latestOutput = telemetry.latest_output_data;
+      const latestFilename = normalizePngFilename(latestOutput?.image_filename);
+      filename = latestFilename?.toLowerCase().startsWith(`${kind}_`) ? latestFilename : null;
+    }
+    if (!filename) {
+      throw new ConfigError("no original scan filename available for merged figure upload", 409);
+    }
+
     await uploadMergedFigureToConfiguredFtp(filename, imageBuffer);
     res.json({ ok: true, filename });
   } catch (err) {
@@ -1110,7 +1146,26 @@ if (config.mock) {
         "figure rendering is not available in MOCK=1 mode (matplotlib runs on the Python service only)",
     });
   });
-} else {
+  app.get("/api/scan/last/meta", async (_req, res) => {
+    const telemetry = await readOperationTelemetrySummaryFromDb();
+    const latestOutput = telemetry.latest_output_data;
+    if (!latestOutput) {
+      res.json(null);
+      return;
+    }
+
+    const scanResult = latestOutput.scan_result;
+    res.json({
+      kind: String(scanResult.kind ?? ""),
+      chunks: normalizeInteger(scanResult.chunks, 0),
+      source: scanResult.validation ? "validated" : "stream",
+      resolution: scanResult.resolution ?? null,
+      latency_bytes: scanResult.latency_bytes ?? null,
+      pattern: scanResult.kind === "vector" ? (scanResult.process_time_s != null ? "validated" : null) : null,
+      csv_filename: latestOutput.csv_filename,
+      image_filename: latestOutput.image_filename,
+    });
+  });
   app.post("/api/scan/raster/run", async (req, res) => {
     await proxyScanRunWithTelemetry("raster", req, res);
   });
@@ -1119,6 +1174,50 @@ if (config.mock) {
   });
   app.use("/api", buildRestProxy());
 }
+
+// Keep /api/status explicit in the real backend too so the dev server never
+// falls through to the SPA index.html if the proxy router is bypassed or
+// reloaded late.
+app.get("/api/status", async (_req, res) => {
+  try {
+    const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
+      headers: config.glasgowToken
+        ? { Authorization: `Bearer ${config.glasgowToken}` }
+        : undefined,
+      signal: AbortSignal.timeout(2_000),
+    });
+    const contentType = (upstream.headers.get("content-type") ?? "").toLowerCase();
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      throw new Error(`upstream status returned HTTP ${upstream.status}`);
+    }
+    if (!contentType.includes("application/json")) {
+      res.status(502).json({
+        error: "upstream_invalid_content_type",
+        detail: `upstream /status returned ${contentType || "unknown content type"} instead of JSON`,
+        upstream_status: upstream.status,
+      });
+      return;
+    }
+    try {
+      res.status(upstream.status).json(JSON.parse(text));
+    } catch {
+      res.status(502).json({
+        error: "upstream_invalid_json",
+        detail: "upstream /status returned invalid JSON",
+        upstream_status: upstream.status,
+      });
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    res.json({
+      state: "disconnected",
+      last_error: `glasgow_service unreachable: ${detail}`,
+      scans_completed: 0,
+      chunks_in_flight: 0,
+    });
+  }
+});
 
 // Static (production) — only mount if the build output actually exists, so
 // `npm run dev` doesn't 404 itself.
@@ -1613,9 +1712,9 @@ async function proxyScanRunWithTelemetry(
 
   const responseText = await upstream.text();
   const contentType = upstream.headers.get("content-type") ?? "application/json";
-  res.status(upstream.status).type(contentType).send(responseText);
 
   if (!upstream.ok || !activityId) {
+    res.status(upstream.status).type(contentType).send(responseText);
     return;
   }
 
@@ -1626,6 +1725,11 @@ async function proxyScanRunWithTelemetry(
     parsed = null;
   }
   if (!parsed) {
+    res.status(502).json({
+      error: "upstream_invalid_json",
+      detail: `scan/${kind}/run returned ${contentType || "unknown content type"} instead of JSON`,
+      upstream_status: upstream.status,
+    });
     return;
   }
 
@@ -1639,6 +1743,12 @@ async function proxyScanRunWithTelemetry(
     imageFilename: output.imageFilename,
   }).catch((err) => {
     console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+  });
+
+  res.status(upstream.status).json({
+    ...parsed,
+    csv_filename: output.csvFilename,
+    image_filename: output.imageFilename,
   });
 }
 
@@ -1705,6 +1815,14 @@ function pngBufferFromDataUrl(value: unknown): Buffer | null {
   } catch {
     return null;
   }
+}
+
+function normalizePngFilename(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw !== path.basename(raw) || !raw.toLowerCase().endsWith(".png")) {
+    return null;
+  }
+  return raw;
 }
 
 function formatScanTimestamp(date: Date): string {

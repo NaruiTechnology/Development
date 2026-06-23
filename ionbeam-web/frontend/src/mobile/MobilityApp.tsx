@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppDispatch } from "../store";
 import { useTranslation } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 import { AuthDialog, type SignedInUser } from "../components/AuthDialog";
 import { SettingsDialog } from "../components/SettingsDialog";
 import { Icon } from "../components/Icon";
@@ -51,18 +53,18 @@ export function MobilityApp() {
     }
 
     let cancelled = false;
-    fetch("/api/admin/iobeam/auth/current-account", {
+    fetch(apiUrl("/api/admin/iobeam/auth/current-account"), {
       cache: "no-store",
       headers: scanAuthHeaders(),
     })
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as {
+        return await readJsonResponse<{
           registered?: boolean;
           session_expired?: boolean;
           login?: string;
           user?: SignedInUser | null;
-        };
+        }>(r, "current account");
       })
       .then((data) => {
         if (cancelled) return;

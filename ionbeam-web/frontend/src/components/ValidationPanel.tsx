@@ -22,6 +22,8 @@ import {
   downloadBlob,
 } from "../lib/csvExport";
 import { useTranslation } from "../i18n";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
@@ -129,8 +131,11 @@ export function ValidationPanel({
       setDbFlowState("checking");
       setDbFlowErr(null);
       try {
-        const r = await fetch("/api/admin/iobeam/db/status");
-        const data = (await r.json()) as { ok?: boolean; enabled?: boolean; error?: string };
+        const r = await fetch(apiUrl("/api/admin/iobeam/db/status"));
+        const data = await readJsonResponse<{ ok?: boolean; enabled?: boolean; error?: string }>(
+          r,
+          "db status"
+        );
         if (cancelled) return;
         if (r.ok && data.enabled) {
           setDbFlowState("ready");
@@ -217,7 +222,7 @@ export function ValidationPanel({
 
   async function csvDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
     if (haveValidatedData) {
-      const r = await fetch("/api/scan/last/csv");
+      const r = await fetch(apiUrl("/api/scan/last/csv"));
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
       const blob = await r.blob();
       return {
@@ -260,7 +265,7 @@ export function ValidationPanel({
       kind === "vector"
         ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`
         : "/api/scan/last/figure";
-    const r = await fetch(url);
+    const r = await fetch(apiUrl(url));
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
       throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);
