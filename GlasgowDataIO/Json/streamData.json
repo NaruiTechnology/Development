@@ -138,10 +138,10 @@
                     },
                     "ftp": {
                         "enabled": true,
-                        "host": "localhost",
-                        "username": "vboxuser",
-                        "password": "ionbeam123",
-                        "folder": "/tmp/ftp"
+                        "host": "124.221.175.89",
+                        "username": "deployworkspace",
+                        "password": "DWS_112233",
+                        "folder": "/upload"
                     }
                 },
                 "timeout": 60
