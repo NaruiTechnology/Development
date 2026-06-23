@@ -91,7 +91,8 @@ CREATE TABLE IF NOT EXISTS activity (
     activity_type   nchar(150)  NOT NULL,
     date            timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_signed_in  timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    session_lifetime_limit_days integer NOT NULL DEFAULT 1
+    session_lifetime_limit_days integer NOT NULL DEFAULT 1,
+    update_date     timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 DO $$
@@ -168,6 +169,7 @@ ALTER TABLE activity
     DROP COLUMN IF EXISTS image_file_name,
     ADD COLUMN IF NOT EXISTS equipment_id integer,
     ADD COLUMN IF NOT EXISTS session_lifetime_limit_days integer NOT NULL DEFAULT 1,
+    ADD COLUMN IF NOT EXISTS update_date timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ALTER COLUMN last_signed_in SET DEFAULT CURRENT_TIMESTAMP;
 
 UPDATE activity
@@ -201,7 +203,9 @@ UPDATE activity
 ALTER TABLE activity
     ALTER COLUMN last_signed_in SET NOT NULL,
     ALTER COLUMN session_lifetime_limit_days SET DEFAULT 1,
-    ALTER COLUMN session_lifetime_limit_days SET NOT NULL;
+    ALTER COLUMN session_lifetime_limit_days SET NOT NULL,
+    ALTER COLUMN update_date SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN update_date SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_session_user_login_time
     ON session (user_id, login_time DESC);
@@ -377,12 +381,13 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     INSERT INTO activity (
-        user_id, activity_type, date, last_signed_in, session_lifetime_limit_days
+        user_id, activity_type, date, last_signed_in, session_lifetime_limit_days, update_date
     )
     VALUES (
         p_user_id, p_activity_type, COALESCE(p_date, CURRENT_TIMESTAMP),
         COALESCE(p_last_signed_in, CURRENT_TIMESTAMP),
-        GREATEST(1, COALESCE(p_session_lifetime_limit_days, 1))
+        GREATEST(1, COALESCE(p_session_lifetime_limit_days, 1)),
+        CURRENT_TIMESTAMP
     )
     RETURNING id INTO p_id;
 END;
@@ -404,7 +409,8 @@ BEGIN
            activity_type = p_activity_type,
            date = COALESCE(p_date, CURRENT_TIMESTAMP),
            last_signed_in = COALESCE(p_last_signed_in, CURRENT_TIMESTAMP),
-           session_lifetime_limit_days = GREATEST(1, COALESCE(p_session_lifetime_limit_days, 1))
+           session_lifetime_limit_days = GREATEST(1, COALESCE(p_session_lifetime_limit_days, 1)),
+           update_date = CURRENT_TIMESTAMP
      WHERE id = p_id;
 END;
 $$;
@@ -436,6 +442,7 @@ AS $$
             btrim(u.last_name::text) AS last_name,
             btrim(a.activity_type::text) AS activity_type,
             a.date,
+            a.update_date,
             CASE
                 WHEN upper(btrim(a.activity_type::text)) LIKE '%RASTER%' THEN 'raster'
                 WHEN upper(btrim(a.activity_type::text)) LIKE '%VECTOR%'
@@ -536,7 +543,7 @@ AS $$
             ) g
         ), '[]'::jsonb),
         'recent', COALESCE((
-            SELECT jsonb_agg(row_to_json(r) ORDER BY r.date DESC)
+            SELECT jsonb_agg(row_to_json(r) ORDER BY COALESCE(r.update_date, r.date) DESC, r.date DESC)
             FROM (
                 SELECT
                     user_id,
@@ -544,9 +551,10 @@ AS $$
                     activity_type,
                     scan_kind,
                     location,
-                    date
+                    date,
+                    update_date
                 FROM normalized
-                ORDER BY date DESC
+                ORDER BY COALESCE(update_date, date) DESC, date DESC
                 LIMIT 24
             ) r
         ), '[]'::jsonb)
@@ -1036,7 +1044,7 @@ LANGUAGE sql
 AS $$
     INSERT INTO activity (
         user_id, equipment_id, activity_type, date, last_signed_in,
-        session_lifetime_limit_days
+        session_lifetime_limit_days, update_date
     )
     VALUES (
         NULLIF(p_payload->>'user_id', '')::integer,
@@ -1050,10 +1058,27 @@ AS $$
         left(btrim(COALESCE(p_payload->>'activity_type', 'scan_result')), 150)::nchar(150),
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP,
-        GREATEST(1, COALESCE(NULLIF(p_payload->>'session_lifetime_limit_days', '')::integer, 1))
+        GREATEST(1, COALESCE(NULLIF(p_payload->>'session_lifetime_limit_days', '')::integer, 1)),
+        CURRENT_TIMESTAMP
     )
     RETURNING id;
 $$;
+
+CREATE OR REPLACE FUNCTION fn_touch_activity_update_date()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.update_date = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_activity_update_date ON activity;
+CREATE TRIGGER trg_activity_update_date
+BEFORE UPDATE ON activity
+FOR EACH ROW
+EXECUTE FUNCTION fn_touch_activity_update_date();
 
 CREATE OR REPLACE FUNCTION fn_admin_activity_report(p_payload jsonb)
 RETURNS jsonb
@@ -1079,6 +1104,7 @@ AS $$
             btrim(e.name::text) AS equipment_name,
             btrim(a.activity_type::text) AS activity_type,
             a.date,
+            a.update_date,
             COALESCE(
                 NULLIF(btrim(latest_session.site::text), ''),
                 NULLIF(btrim(u.site::text), ''),
@@ -1241,7 +1267,7 @@ AS $$
             ) g
         ), '[]'::jsonb),
         'recent', COALESCE((
-            SELECT jsonb_agg(row_to_json(r) ORDER BY r.date DESC)
+            SELECT jsonb_agg(row_to_json(r) ORDER BY COALESCE(r.update_date, r.date) DESC, r.date DESC)
             FROM (
                 SELECT
                     user_id,
@@ -1252,9 +1278,10 @@ AS $$
                     site_name AS location,
                     equipment_id,
                     equipment_label AS equipment_name,
-                    date
+                    date,
+                    update_date
                 FROM normalized
-                ORDER BY date DESC
+                ORDER BY COALESCE(update_date, date) DESC, date DESC
                 LIMIT 24
             ) r
         ), '[]'::jsonb)

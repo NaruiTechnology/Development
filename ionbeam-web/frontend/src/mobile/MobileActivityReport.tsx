@@ -95,6 +95,7 @@ interface ActivityReportResponse {
     equipment_id?: number | null;
     equipment_name?: string;
     date: string;
+    update_date?: string;
   }>;
   report_error?: string | null;
   error?: string;

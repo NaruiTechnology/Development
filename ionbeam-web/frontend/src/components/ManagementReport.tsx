@@ -85,6 +85,7 @@ interface RecentActivity {
   equipment_id?: number | null;
   equipment_name?: string;
   date: string;
+  update_date?: string;
 }
 
 interface ActivityReportResponse {

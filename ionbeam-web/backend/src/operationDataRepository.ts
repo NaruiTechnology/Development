@@ -40,6 +40,7 @@ export interface OperationTelemetrySummary {
     scale_unit: string;
     ev: number;
     scan_parameters: Record<string, unknown>;
+    update_date: string;
   } | null;
   latest_output_data: {
     id: number;
@@ -48,6 +49,7 @@ export interface OperationTelemetrySummary {
     image_filename: string;
     description: string;
     scan_result: Record<string, unknown>;
+    update_date: string;
   } | null;
 }
 
@@ -93,9 +95,9 @@ export async function readOperationTelemetrySummaryFromDb(): Promise<OperationTe
         SELECT to_jsonb(t)
           FROM (
             SELECT id, activity_id, start_xy, end_xy, dwell, scale_unit, ev
-                 , scan_parameters
+                 , scan_parameters, update_date
               FROM input_setup
-             ORDER BY id DESC
+             ORDER BY update_date DESC, id DESC
              LIMIT 1
           ) t
       ),
@@ -103,9 +105,9 @@ export async function readOperationTelemetrySummaryFromDb(): Promise<OperationTe
         SELECT to_jsonb(t)
           FROM (
             SELECT id, activity_id, csv_filename, image_filename, description
-                 , scan_result
+                 , scan_result, update_date
               FROM output_data
-             ORDER BY id DESC
+             ORDER BY update_date DESC, id DESC
              LIMIT 1
           ) t
       )
@@ -182,6 +184,7 @@ function normalizeInputSetup(value: unknown): OperationTelemetrySummary["latest_
     scale_unit: String(row.scale_unit ?? ""),
     ev: Number(row.ev ?? 0) || 0,
     scan_parameters: normalizeObject(row.scan_parameters),
+    update_date: String(row.update_date ?? ""),
   };
 }
 
@@ -198,6 +201,7 @@ function normalizeOutputData(value: unknown): OperationTelemetrySummary["latest_
     image_filename: String(row.image_filename ?? ""),
     description: String(row.description ?? ""),
     scan_result: normalizeObject(row.scan_result),
+    update_date: String(row.update_date ?? ""),
   };
 }
 

@@ -181,6 +181,7 @@ interface OperationTelemetryStatusResponse {
     scale_unit: string;
     ev: number;
     scan_parameters: Record<string, unknown>;
+    update_date: string;
   } | null;
   latest_output_data?: {
     id: number;
@@ -189,6 +190,7 @@ interface OperationTelemetryStatusResponse {
     image_filename: string;
     description: string;
     scan_result: Record<string, unknown>;
+    update_date: string;
   } | null;
   error?: string;
 }

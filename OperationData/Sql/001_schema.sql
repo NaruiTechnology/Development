@@ -9,11 +9,13 @@ CREATE TABLE IF NOT EXISTS input_setup (
     dwell       integer NOT NULL,
     scale_unit  varchar(10) NOT NULL,
     ev          numeric(18, 6) NOT NULL,
-    scan_parameters jsonb NOT NULL DEFAULT '{}'::jsonb
+    scan_parameters jsonb NOT NULL DEFAULT '{}'::jsonb,
+    update_date timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 ALTER TABLE input_setup
-    ADD COLUMN IF NOT EXISTS scan_parameters jsonb NOT NULL DEFAULT '{}'::jsonb;
+    ADD COLUMN IF NOT EXISTS scan_parameters jsonb NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS update_date timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 CREATE INDEX IF NOT EXISTS idx_input_setup_activity_id
     ON input_setup (activity_id);
@@ -27,11 +29,13 @@ CREATE TABLE IF NOT EXISTS output_data (
     csv_filename   varchar(255) NOT NULL,
     image_filename varchar(255) NOT NULL,
     description    text NOT NULL,
-    scan_result    jsonb NOT NULL DEFAULT '{}'::jsonb
+    scan_result    jsonb NOT NULL DEFAULT '{}'::jsonb,
+    update_date    timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 ALTER TABLE output_data
-    ADD COLUMN IF NOT EXISTS scan_result jsonb NOT NULL DEFAULT '{}'::jsonb;
+    ADD COLUMN IF NOT EXISTS scan_result jsonb NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS update_date timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 CREATE INDEX IF NOT EXISTS idx_output_data_activity_id
     ON output_data (activity_id);
@@ -44,7 +48,7 @@ RETURNS integer
 LANGUAGE sql
 AS $$
     INSERT INTO input_setup (
-        activity_id, start_xy, end_xy, dwell, scale_unit, ev, scan_parameters
+        activity_id, start_xy, end_xy, dwell, scale_unit, ev, scan_parameters, update_date
     )
     VALUES (
         NULLIF(p_payload->>'activity_id', '')::integer,
@@ -53,7 +57,8 @@ AS $$
         COALESCE(NULLIF(p_payload->>'dwell', '')::integer, 0),
         left(btrim(COALESCE(p_payload->>'scale_unit', '')), 10)::varchar(10),
         COALESCE(NULLIF(p_payload->>'ev', '')::numeric, 0),
-        COALESCE(p_payload->'scan_parameters', '{}'::jsonb)
+        COALESCE(p_payload->'scan_parameters', '{}'::jsonb),
+        CURRENT_TIMESTAMP
     )
     RETURNING id;
 $$;
@@ -63,14 +68,37 @@ RETURNS integer
 LANGUAGE sql
 AS $$
     INSERT INTO output_data (
-        activity_id, csv_filename, image_filename, description, scan_result
+        activity_id, csv_filename, image_filename, description, scan_result, update_date
     )
     VALUES (
         NULLIF(p_payload->>'activity_id', '')::integer,
         left(btrim(COALESCE(p_payload->>'csv_filename', '')), 255)::varchar(255),
         left(btrim(COALESCE(p_payload->>'image_filename', '')), 255)::varchar(255),
         COALESCE(NULLIF(btrim(p_payload->>'description'), ''), 'scan output'),
-        COALESCE(p_payload->'scan_result', '{}'::jsonb)
+        COALESCE(p_payload->'scan_result', '{}'::jsonb),
+        CURRENT_TIMESTAMP
     )
     RETURNING id;
 $$;
+
+CREATE OR REPLACE FUNCTION fn_touch_operation_update_date()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.update_date = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_input_setup_update_date ON input_setup;
+CREATE TRIGGER trg_input_setup_update_date
+BEFORE UPDATE ON input_setup
+FOR EACH ROW
+EXECUTE FUNCTION fn_touch_operation_update_date();
+
+DROP TRIGGER IF EXISTS trg_output_data_update_date ON output_data;
+CREATE TRIGGER trg_output_data_update_date
+BEFORE UPDATE ON output_data
+FOR EACH ROW
+EXECUTE FUNCTION fn_touch_operation_update_date();
