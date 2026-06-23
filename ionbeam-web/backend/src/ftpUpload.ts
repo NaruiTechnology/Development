@@ -134,7 +134,10 @@ async function fetchArtifactWithRetry(resourcePath: string, attempts = 4): Promi
 
 async function testFtpConnection(ftp: FtpSettings): Promise<FtpConnectionResult> {
   const target = new URL(`ftp://${ftp.host}`);
-  target.pathname = buildRemotePath(ftp.folder, "csv", "");
+  // Only verify access to the configured base folder here. The actual
+  // upload step creates `csv/` and `img/` as needed, so the connection
+  // check must not fail just because those subdirectories do not exist yet.
+  target.pathname = buildRemoteFolderPath(ftp.folder);
 
   try {
     await runCurl(
@@ -251,6 +254,11 @@ function buildRemotePath(baseFolder: string, subdir: UploadSubdir, filename: str
   const cleanName = filename.replace(/^\/+/, "");
   const suffix = cleanName ? `/${cleanName}` : "";
   return `${cleanBase}/${subdir}${suffix}`.replace(/\/{2,}/g, "/");
+}
+
+function buildRemoteFolderPath(baseFolder: string): string {
+  const cleanBase = baseFolder.replace(/\\/g, "/").replace(/\/+$/, "").replace(/^\/+/, "");
+  return `/${cleanBase}/`.replace(/\/{2,}/g, "/");
 }
 
 function readConfigPath(data: unknown, pathParts: ReadonlyArray<string | number>): unknown {

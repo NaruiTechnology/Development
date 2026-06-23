@@ -27,11 +27,15 @@ import { URL } from "node:url";
 import { Buffer } from "node:buffer";
 import { config } from "./config";
 import { streamMockRaster, streamMockVector } from "./mockHardware";
+import { recordActivityInDb } from "./adminDbRepository";
+import type { AdminUser } from "./adminDbRepository";
+import { recordInputSetupInDb, recordOutputDataInDb } from "./operationDataRepository";
+import { uploadScanArtifactsToConfiguredFtp } from "./ftpUpload";
 
 type ScanKind = "raster" | "vector";
 type RawData = Buffer | ArrayBuffer | Buffer[];
 type ScanUpgradeAuthorization =
-  | { ok: true }
+  | { ok: true; actor?: AdminUser }
   | { ok: false; status: number; message: string };
 type ScanUpgradeAuthorize = (
   req: IncomingMessage,
@@ -79,9 +83,9 @@ export function attachWsProxy(
 
       wss.handleUpgrade(req, socket, head, (clientWs) => {
         if (config.mock) {
-          handleMock(clientWs, kind, req);
+          handleMock(clientWs, kind, req, auth);
         } else {
-          handleProxy(clientWs, kind, req);
+          handleProxy(clientWs, kind, req, auth);
         }
       });
     })().catch((err) => {
@@ -102,6 +106,7 @@ function handleProxy(
   client: WebSocket,
   kind: ScanKind,
   req: IncomingMessage,
+  auth: Extract<ScanUpgradeAuthorization, { ok: true }>,
 ): void {
   const upstreamUrl = `${config.proxyTargetWs}/scan/${kind}/stream`;
   const headers: Record<string, string> = {};
@@ -110,6 +115,10 @@ function handleProxy(
   }
 
   const upstream = new WebSocket(upstreamUrl, { headers });
+  const actor = auth.actor ?? null;
+  let scanRequest: Record<string, unknown> | null = null;
+  let activityIdPromise: Promise<number | null> | null = null;
+  let completionHandled = false;
 
   // Buffer client frames sent before upstream is open. Almost always this
   // is just the first JSON request; bufferless drop loses scan params.
@@ -118,6 +127,18 @@ function handleProxy(
   let upstreamOpen = false;
 
   client.on("message", (data: RawData, isBinary: boolean) => {
+    if (!isBinary && scanRequest === null) {
+      const parsed = parseJsonMessage(data);
+      if (parsed) {
+        scanRequest = parsed;
+        if (actor) {
+          activityIdPromise = recordScanStart(kind, actor, parsed).catch((err) => {
+            console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
+            return null;
+          });
+        }
+      }
+    }
     if (upstreamOpen) {
       upstream.send(data, { binary: isBinary });
     } else {
@@ -145,6 +166,20 @@ function handleProxy(
   });
 
   upstream.on("message", (data: RawData, isBinary: boolean) => {
+    if (!isBinary && !completionHandled) {
+      const parsed = parseJsonMessage(data);
+      if (parsed?.event === "done") {
+        completionHandled = true;
+        void recordAndUploadScanCompletion(
+          kind,
+          scanRequest,
+          activityIdPromise,
+          parsed,
+        ).catch((err) => {
+          console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+        });
+      }
+    }
     if (client.readyState === WebSocket.OPEN) {
       client.send(data, { binary: isBinary });
     }
@@ -189,8 +224,12 @@ function handleMock(
   client: WebSocket,
   kind: ScanKind,
   req: IncomingMessage,
+  auth: Extract<ScanUpgradeAuthorization, { ok: true }>,
 ): void {
   console.log(`[ws][mock] ${req.socket.remoteAddress} -> ${kind} stream`);
+  const actor = auth.actor ?? null;
+  let activityIdPromise: Promise<number | null> | null = null;
+  let scanRequest: Record<string, unknown> | null = null;
   client.once("message", async (raw: RawData) => {
     let body: any;
     try {
@@ -200,6 +239,15 @@ function handleMock(
       client.send(JSON.stringify({ event: "error", code: "bad_json" }));
       client.close(1003, "bad json");
       return;
+    }
+    scanRequest = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+    if (scanRequest) {
+      if (actor) {
+        activityIdPromise = recordScanStart(kind, actor, scanRequest).catch((err) => {
+          console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
+          return null;
+        });
+      }
     }
     try {
       if (kind === "raster") {
@@ -226,7 +274,154 @@ function handleMock(
         client.send(JSON.stringify({ event: "error", message: String(e) }));
       }
     } finally {
+      if (activityIdPromise && scanRequest) {
+        void recordAndUploadScanCompletion(
+          kind,
+          scanRequest,
+          activityIdPromise,
+          { event: "done", chunks: 0 },
+        ).catch((err) => {
+          console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+        });
+      }
       if (client.readyState === WebSocket.OPEN) client.close(1000);
     }
   });
+}
+
+async function recordScanStart(
+  kind: ScanKind,
+  actor: AdminUser,
+  body: Record<string, unknown>,
+): Promise<number | null> {
+  const activityId = await recordActivityInDb(
+    Number(actor.id ?? 0),
+    null,
+    `${kind}_scan`,
+    Math.max(1, Math.trunc(actor.session_lifetime_limit_days ?? 1)),
+  );
+  if (!activityId) {
+    return null;
+  }
+
+  await recordInputSetupInDb({
+    activity_id: activityId,
+    start_xy: normalizeDecimal(body.start_xy, 0),
+    end_xy: normalizeDecimal(body.end_xy, 0),
+    dwell: normalizeInteger(body.dwell, 0),
+    scale_unit: normalizeScaleUnit(body.scale_unit),
+    ev: normalizeDecimal(body.ev, 0),
+    scan_parameters: body,
+  });
+  return activityId;
+}
+
+async function recordAndUploadScanCompletion(
+  kind: ScanKind,
+  requestBody: Record<string, unknown> | null,
+  activityIdPromise: Promise<number | null> | null,
+  response: Record<string, unknown>,
+): Promise<void> {
+  const activityId = activityIdPromise ? await activityIdPromise : null;
+  if (!activityId) {
+    return;
+  }
+
+  const chunks = normalizeInteger(response.chunks, 0);
+  const output = buildScanArtifactInfo(kind, activityId, requestBody, response, chunks);
+  await recordOutputDataInDb({
+    activity_id: activityId,
+    csv_filename: output.csvFilename,
+    image_filename: output.imageFilename,
+    description: output.description,
+    scan_result: response,
+  });
+  await uploadScanArtifactsToConfiguredFtp(kind, {
+    csvFilename: output.csvFilename,
+    imageFilename: output.imageFilename,
+  });
+}
+
+function buildScanArtifactInfo(
+  kind: ScanKind,
+  activityId: number,
+  body: Record<string, unknown> | null,
+  response: Record<string, unknown>,
+  chunks: number,
+): { csvFilename: string; imageFilename: string; description: string } {
+  const timestamp = formatScanTimestamp(new Date());
+  const resolution = normalizeInteger(response.resolution ?? body?.resolution, 0);
+  const latencyBytes = normalizeInteger(response.latency_bytes ?? body?.latency_bytes, 0);
+  const vectorResolution = normalizeInteger(response.vector_resolution ?? body?.vector_resolution, 0);
+  const filenames = buildScanArtifactFilenames(kind, resolution, latencyBytes, vectorResolution, timestamp);
+  return {
+    ...filenames,
+    description: JSON.stringify({
+      kind,
+      activity_id: activityId,
+      chunks,
+      resolution: resolution || null,
+      latency_bytes: latencyBytes || null,
+      vector_resolution: vectorResolution || null,
+      csv_filename: filenames.csvFilename,
+      image_filename: filenames.imageFilename,
+    }),
+  };
+}
+
+function buildScanArtifactFilenames(
+  kind: ScanKind,
+  resolution: number,
+  latencyBytes: number,
+  vectorResolution: number,
+  timestamp: string,
+): { csvFilename: string; imageFilename: string } {
+  return kind === "raster"
+    ? {
+        csvFilename: `raster_${resolution}x${resolution}_${timestamp}.csv`,
+        imageFilename: `raster_${resolution}x${resolution}_${timestamp}.png`,
+      }
+    : {
+        csvFilename: `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.csv`,
+        imageFilename: `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.png`,
+      };
+}
+
+function formatScanTimestamp(date: Date): string {
+  const yy = String(date.getUTCFullYear() % 100).padStart(2, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const min = String(date.getUTCMinutes()).padStart(2, "0");
+  const ss = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${yy}${mm}${dd}_${hh}${min}${ss}`;
+}
+
+function normalizeInteger(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function normalizeDecimal(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeScaleUnit(value: unknown): string {
+  const unit = String(value ?? "").trim();
+  return unit.slice(0, 10) || "dac";
+}
+
+function parseJsonMessage(data: RawData): Record<string, unknown> | null {
+  try {
+    const text = Buffer.isBuffer(data)
+      ? data.toString("utf8")
+      : Array.isArray(data)
+        ? Buffer.concat(data).toString("utf8")
+        : Buffer.from(data).toString("utf8");
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
