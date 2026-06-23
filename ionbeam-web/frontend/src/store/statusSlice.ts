@@ -1,6 +1,28 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { ServiceStatus, ServerDefaults } from "../types/api";
 
+const DEFAULTS_CACHE_KEY = "ionbeam:last-good-defaults";
+
+function loadCachedDefaults(): ServerDefaults | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(DEFAULTS_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ServerDefaults;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedDefaults(defaults: ServerDefaults) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DEFAULTS_CACHE_KEY, JSON.stringify(defaults));
+  } catch {
+    // Ignore storage quota or privacy-mode failures.
+  }
+}
+
 interface StatusState {
   service: ServiceStatus | null;
   defaults: ServerDefaults | null;
@@ -10,7 +32,7 @@ interface StatusState {
 
 const initialState: StatusState = {
   service: null,
-  defaults: null,
+  defaults: loadCachedDefaults(),
   fetching: false,
   lastError: null,
 };
@@ -80,6 +102,7 @@ const slice = createSlice({
         is_production: a.payload.is_production ?? s.defaults?.is_production,
         version: a.payload.version ?? s.defaults?.version,
       };
+      saveCachedDefaults(s.defaults);
       s.lastError = null;
     },
   },
@@ -98,10 +121,13 @@ const slice = createSlice({
     });
     b.addCase(fetchDefaults.fulfilled, (s, a) => {
       s.defaults = a.payload;
+      saveCachedDefaults(a.payload);
       s.lastError = null;
     });
     b.addCase(fetchDefaults.rejected, (s, a) => {
-      s.lastError = a.error.message ?? "defaults fetch failed";
+      if (!s.defaults) {
+        s.lastError = a.error.message ?? "defaults fetch failed";
+      }
     });
     b.addCase(fetchDefaultsMetadata.fulfilled, (s, a) => {
       s.defaults = {
@@ -110,10 +136,13 @@ const slice = createSlice({
         is_production: a.payload.is_production ?? s.defaults?.is_production,
         version: a.payload.version ?? s.defaults?.version,
       };
+      saveCachedDefaults(s.defaults);
       s.lastError = null;
     });
     b.addCase(fetchDefaultsMetadata.rejected, (s, a) => {
-      s.lastError = a.error.message ?? "defaults metadata fetch failed";
+      if (!s.defaults) {
+        s.lastError = a.error.message ?? "defaults metadata fetch failed";
+      }
     });
   },
 });

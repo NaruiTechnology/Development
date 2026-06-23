@@ -1612,13 +1612,6 @@ body {
   height: 18px;
 }
 
-.canvas-toolbox__tool .icon--highlightTool,
-.canvas-toolbox__tool .icon--commentTool,
-.canvas-toolbox__tool .icon--rectangleTool,
-.canvas-toolbox__tool .icon--circleTool {
-  filter: brightness(0) saturate(100%) invert(74%) sepia(49%) saturate(1448%) hue-rotate(176deg) brightness(102%) contrast(103%);
-}
-
 .canvas-toolbox__tool:disabled,
 .canvas-toolbox__action:disabled {
   opacity: 0.45;
@@ -1639,14 +1632,16 @@ body {
 }
 
 .canvas-toolbox__field input[type="color"] {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: 1px solid var(--c-border);
-  border-radius: 0;
+  border-radius: 3px;
   background: transparent;
   cursor: pointer;
   overflow: hidden;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .canvas-toolbox__field input[type="color"]::-webkit-color-swatch-wrapper {
@@ -1655,12 +1650,12 @@ body {
 
 .canvas-toolbox__field input[type="color"]::-webkit-color-swatch {
   border: 0;
-  border-radius: 0;
+  border-radius: 3px;
 }
 
 .canvas-toolbox__field input[type="color"]::-moz-color-swatch {
   border: 0;
-  border-radius: 0;
+  border-radius: 3px;
 }
 
 .canvas-toolbox__select {

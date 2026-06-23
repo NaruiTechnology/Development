@@ -2249,23 +2249,37 @@ function scheduleBackendRestartAfterResponse(
 }
 
 function restartBackend(restart: BackendRestartResult): void {
-  if (restart.mode === "command" && restart.command) {
-    const child = spawn("bash", ["-lc", `sleep 1; exec ${restart.command}`], {
-      detached: true,
-      stdio: "ignore",
-      cwd: path.resolve(__dirname, ".."),
-      env: process.env,
-    });
-    child.unref();
+  const spawnReplacement = () => {
+    if (restart.mode === "command" && restart.command) {
+      const child = spawn("bash", ["-lc", `sleep 1; exec ${restart.command}`], {
+        detached: true,
+        stdio: "ignore",
+        cwd: path.resolve(__dirname, ".."),
+        env: process.env,
+      });
+      child.unref();
+    }
+  };
+
+  try {
+    server.closeAllConnections?.();
+    server.closeIdleConnections?.();
+  } catch {
+    // Best-effort only; older Node builds may not expose both helpers.
   }
 
   server.close(() => {
+    spawnReplacement();
     process.exit(0);
   });
 
+  // If the close callback never fires, force the process down so the
+  // port is released. The detached restart command is only spawned from
+  // the close callback, so we would rather fail closed than race the new
+  // listener against a socket that is still being torn down.
   setTimeout(() => {
     process.exit(0);
-  }, 2_000).unref();
+  }, 5_000).unref();
 }
 
 function sendConfigError(res: express.Response, err: unknown): void {

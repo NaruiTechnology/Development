@@ -88,6 +88,8 @@ interface SettingsState {
   error: string | null;
   /** Last restart-command result, surfaced under the buttons after a save. */
   lastRestart: RestartResult | null;
+  /** True while the backend proxy is restarting after a config save. */
+  backendRestarting: boolean;
   /** "Backup created on first read" notice; consumed by the dialog once. */
   backupNotice: boolean;
 }
@@ -114,6 +116,7 @@ const initialState: SettingsState = {
   hasBackup: false,
   error: null,
   lastRestart: null,
+  backendRestarting: false,
   backupNotice: false,
 };
 
@@ -194,6 +197,7 @@ const slice = createSlice({
       s.error = null;
       s.backupNotice = false;
       s.lastRestart = null;
+      s.backendRestarting = false;
     },
     setActiveTab(s, a: PayloadAction<SettingsTab>) {
       s.activeTab = a.payload;
@@ -223,6 +227,9 @@ const slice = createSlice({
     },
     clearLastRestart(s) {
       s.lastRestart = null;
+    },
+    setBackendRestarting(s, a: PayloadAction<boolean>) {
+      s.backendRestarting = a.payload;
     },
   },
   extraReducers: (b) => {
@@ -256,6 +263,7 @@ const slice = createSlice({
     b.addCase(saveSettingsConfig.fulfilled, (s, a) => {
       s.saving = false;
       s.lastRestart = a.payload.restart;
+      s.backendRestarting = Boolean(a.payload.backend_restart?.scheduled);
       // The save endpoint doesn't echo the saved JSON back (saves a
       // round-trip on a multi-KB blob); promote the draft to source
       // ourselves so the next "discard changes" / dirty check works.
@@ -275,6 +283,7 @@ const slice = createSlice({
     b.addCase(restoreSettingsConfig.fulfilled, (s, a) => {
       s.restoring = false;
       s.lastRestart = a.payload.restart;
+      s.backendRestarting = Boolean(a.payload.backend_restart?.scheduled);
       // The server overwrote the live file with the backup. The
       // component dispatches fetchSettingsConfig() right after the
       // restore thunk resolves, so source/draft reload to the
@@ -294,6 +303,7 @@ const slice = createSlice({
     b.addCase(restartSettingsServices.fulfilled, (s, a) => {
       s.saving = false;
       s.lastRestart = a.payload.restart;
+      s.backendRestarting = Boolean(a.payload.backend_restart?.scheduled);
     });
     b.addCase(restartSettingsServices.rejected, (s, a) => {
       s.saving = false;
@@ -312,6 +322,7 @@ export const {
   setError,
   consumeBackupNotice,
   clearLastRestart,
+  setBackendRestarting,
 } = slice.actions;
 
 export default slice.reducer;

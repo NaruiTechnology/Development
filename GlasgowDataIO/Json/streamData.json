@@ -9,7 +9,7 @@
         {
             "streamData": {
                 "actionData": {
-                    "ev": 1000.0,
+                    "ev": 1000,
                     "voltage": 2.5,
                     "bufferSize": "1024*1024",
                     "enableEbeam": false,

@@ -85,6 +85,8 @@ export function ScanControls({
   const vector = useAppSelector((s) => s.scan.vector);
   const roiState = useAppSelector((s) => s.scan.roi);
   const defaults = useAppSelector((s) => s.status.defaults);
+  const settingsSaving = useAppSelector((s) => s.settings.saving);
+  const backendRestarting = useAppSelector((s) => s.settings.backendRestarting);
   const roi = roiState.selection;
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
@@ -102,7 +104,7 @@ export function ScanControls({
   const closing = phase === "stopping";
   const paused = phase === "paused";
   const busy = streaming || closing;
-  const controlsDisabled = disabled || scanActive;
+  const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
 
   async function onRun() {
     if (disabled || kind === "roi") return;

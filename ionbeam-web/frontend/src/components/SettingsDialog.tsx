@@ -29,7 +29,7 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
 import { clearLastResult, clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
-import { fetchDefaults, previewConfigDefaults } from "../store/statusSlice";
+import { fetchDefaultsMetadata, previewConfigDefaults } from "../store/statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import {
   ACTION_DATA_PATH,
@@ -41,6 +41,7 @@ import {
   clearError,
   clearLastRestart,
   closeDialog,
+  setBackendRestarting,
   consumeBackupNotice,
   fetchSettingsConfig,
   readPath,
@@ -48,7 +49,6 @@ import {
   saveSettingsConfig,
   setActiveTab,
   setDraft,
-  setError,
   writePath,
   type SettingsConfigInfo,
   type SettingsTab,
@@ -106,15 +106,8 @@ export function SettingsDialog({
 }
 
 async function refreshDefaultsForSettings(dispatch: AppDispatch) {
-  const result = await dispatch(fetchDefaults());
-  if (fetchDefaults.rejected.match(result)) {
-    dispatch(
-      setError(
-        result.error.message ??
-          "Service restart completed, but refreshed defaults could not be loaded.",
-      ),
-    );
-  }
+  const result = await dispatch(fetchDefaultsMetadata());
+  return fetchDefaultsMetadata.fulfilled.match(result);
 }
 
 function resetPartialROISelection(dispatch: AppDispatch) {
@@ -256,7 +249,9 @@ function SettingsModalShell({
       }
       resetScanImages(dispatch, rasterResolution);
       dispatch(previewConfigDefaults(configDefaultsPreview(draft)));
-      await refreshDefaultsForSettings(dispatch);
+      if (await refreshDefaultsForSettings(dispatch)) {
+        dispatch(setBackendRestarting(false));
+      }
     }
     // The restart result is surfaced via `lastRestart`; we don't
     // auto-close the dialog so the operator can see whether it
@@ -282,7 +277,9 @@ function SettingsModalShell({
       } else {
         resetPartialROISelection(dispatch);
       }
-      await refreshDefaultsForSettings(dispatch);
+      if (await refreshDefaultsForSettings(dispatch)) {
+        dispatch(setBackendRestarting(false));
+      }
     }
   }
 
