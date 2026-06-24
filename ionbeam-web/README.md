@@ -131,6 +131,19 @@ The mobility-only path adds:
 * verification / launch URLs switched to the mobility route
 * an `Allowed Hosts` admin tab that persists the Vite dev-server allowlist in `iobeam_admin.hosts` and regenerates `frontend/src/generated/allowedHosts.ts`
 
+### Database upgrade
+
+To reapply the current admin and operation schemas to an existing PostgreSQL
+deployment, run:
+
+```bash
+cd backend
+npm run db:migrate:update-date
+```
+
+This is the supported in-place path for adding the new `update_date` column and
+its associated defaults/triggers on live databases.
+
 ### Local mobility verification
 
 You can verify the mobility surface locally without pushing to a remote host:

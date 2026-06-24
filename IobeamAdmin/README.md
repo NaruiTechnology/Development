@@ -8,6 +8,14 @@ Contents:
 - `Sql/001_schema.sql` - PostgreSQL tables and stored procedures, including the mobility host allowlist table.
 - `Sql/002_seed_root_user.sql` - bootstrap admin account.
 
+For in-place schema upgrades on a live deployment, use the ionbeam-web backend
+runner:
+
+```bash
+cd /home/vboxuser/Project/IobeamTech/Development/ionbeam-web/backend
+npm run db:migrate:update-date
+```
+
 This module is intentionally separate from `GlasgowDataIO` and
 `ionbeam-web`; the deployment workflow installs PostgreSQL and loads the
 schema during host provisioning.
