@@ -10,7 +10,7 @@
             "streamData": {
                 "actionData": {
                     "ev": 1000,
-                    "voltage": 2.5,
+                    "voltage": 3.3,
                     "bufferSize": "1024*1024",
                     "enableEbeam": false,
                     "enableIbeam": true,
@@ -131,7 +131,7 @@
                         "mode": "image",
                         "imageResolution": 64,
                         "source": "pattern",
-                        "patternKind": "checker",
+                        "patternKind": "bars",
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,
                         "seed": 42
