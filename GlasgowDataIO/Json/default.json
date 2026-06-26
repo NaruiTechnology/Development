@@ -9,6 +9,7 @@
             "writeData": {
                 "actionData": {
                     "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
+                    "ev": 1000.0,
                     "voltage": 2.5,
                     "port": "A",
                     "length": 8
@@ -20,6 +21,7 @@
             "readData": {
                 "actionData": {
                     "commandFormat": "glasgow run control-gpio -V {} --pins {} {}",
+                    "ev": 1000.0,
                     "voltage": 2.8,
                     "port": "A",
                     "pinList": [0,1,2,3,4,5,6,7]

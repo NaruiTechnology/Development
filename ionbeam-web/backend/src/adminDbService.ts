@@ -46,6 +46,18 @@ export function pgConnectionFromRuntimeConfig(source: Config = config): PgConnec
   };
 }
 
+export function pgConnectionFromOperationRuntimeConfig(source: Config = config): PgConnection {
+  return {
+    host: source.operationDbHost,
+    port: source.operationDbPort,
+    database: source.operationDbName,
+    user: source.operationDbUser,
+    password: source.operationDbPassword,
+    sslMode: source.operationDbSslMode,
+    commandTimeoutMs: source.operationDbCommandTimeoutMs,
+  };
+}
+
 export function pgConnectionFromAdminConfig(data: unknown, fallback: PgConnection = pgConnectionFromRuntimeConfig()): PgConnection {
   const db = readRecord(data, ["Database"]);
   const connectionString = stringValue(db.ConnectionString ?? db.connectionString);
@@ -70,7 +82,49 @@ export function pgConnectionFromAdminConfig(data: unknown, fallback: PgConnectio
   };
 }
 
+export function pgConnectionFromOperationConfig(
+  data: unknown,
+  fallback: PgConnection = pgConnectionFromOperationRuntimeConfig(),
+): PgConnection {
+  const nested = readRecord(data, ["Database"]);
+  const root = data && typeof data === "object" && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : {};
+  const db = Object.keys(nested).length > 0 ? nested : root;
+  const connectionString = stringValue(db.ConnectionString ?? db.connectionString);
+  const parsed = connectionString ? parsePostgresConnectionString(connectionString) : null;
+  return {
+    host: stringValue(db.Host ?? db.host) || parsed?.host || fallback.host,
+    port: numberValue(db.Port ?? db.port) || parsed?.port || fallback.port,
+    database:
+      stringValue(db.DatabaseName ?? db.databaseName ?? db.Database ?? db.database) ||
+      parsed?.database ||
+      "operation_data",
+    user: stringValue(db.User ?? db.user ?? db.Username ?? db.username) || parsed?.user || fallback.user,
+    password:
+      stringValue(db.Password ?? db.password) ||
+      parsed?.password ||
+      fallback.password,
+    sslMode: stringValue(db.SslMode ?? db.sslMode) || parsed?.sslMode || fallback.sslMode || null,
+    commandTimeoutMs:
+      numberValue(db.CommandTimeoutMs ?? db.commandTimeoutMs) ||
+      parsed?.commandTimeoutMs ||
+      fallback.commandTimeoutMs,
+  };
+}
+
 export async function applyAdminDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {
+  return applyDatabaseSetup(options, ["public", "iobeam_admin", "ionbeam_asset"]);
+}
+
+export async function applyOperationDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {
+  return applyDatabaseSetup(options, ["operation_data"]);
+}
+
+async function applyDatabaseSetup(
+  options: AdminDatabaseSetupOptions,
+  grantSchemas: string[],
+): Promise<AdminDatabaseSetupResult> {
   const connection = options.connection;
   const steps: AdminDatabaseSetupResult["steps"] = [];
   const adminDatabase = options.adminDatabase || "postgres";
@@ -96,7 +150,12 @@ export async function applyAdminDatabaseSetup(options: AdminDatabaseSetupOptions
   if (options.ensureRole !== false) {
     const roleName = (options.roleName || connection.user).trim();
     if (roleName) {
-      await runPsql(["-v", "ON_ERROR_STOP=1"], connection.database, roleGrantSql(connection.database, roleName), connection);
+      await runPsql(
+        ["-v", "ON_ERROR_STOP=1"],
+        connection.database,
+        roleGrantSql(connection.database, roleName, grantSchemas),
+        connection,
+      );
       steps.push({ name: "ensure-role", ok: true, detail: `ensured role and grants for ${roleName}` });
     }
   }
@@ -262,10 +321,24 @@ function readSql(filePath: string): string {
   return fs.readFileSync(filePath, "utf8");
 }
 
-function roleGrantSql(dbName: string, roleName: string): string {
+function roleGrantSql(dbName: string, roleName: string, schemas: string[]): string {
   const dbIdent = quoteIdent(dbName);
   const roleIdent = quoteIdent(roleName);
   const roleLiteral = sqlLiteral(roleName);
+  const schemaList = schemas.length > 0 ? schemas : ["public"];
+  const schemaGrantLines = schemaList.flatMap((schemaName) => {
+    const schemaIdent = quoteIdent(schemaName);
+    return [
+      `GRANT USAGE, CREATE ON SCHEMA ${schemaIdent} TO ${roleIdent};`,
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${schemaIdent} TO ${roleIdent};`,
+      `GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA ${schemaIdent} TO ${roleIdent};`,
+      `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ${schemaIdent} TO ${roleIdent};`,
+      `GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA ${schemaIdent} TO ${roleIdent};`,
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${schemaIdent} GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${roleIdent};`,
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${schemaIdent} GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ${roleIdent};`,
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${schemaIdent} GRANT EXECUTE ON FUNCTIONS TO ${roleIdent};`,
+    ];
+  });
   return [
     "DO $$",
     "BEGIN",
@@ -277,15 +350,7 @@ function roleGrantSql(dbName: string, roleName: string): string {
     "END",
     "$$;",
     `GRANT CONNECT ON DATABASE ${dbIdent} TO ${roleIdent};`,
-    `GRANT USAGE, CREATE ON SCHEMA public TO ${roleIdent};`,
-    `GRANT USAGE, CREATE ON SCHEMA iobeam_admin TO ${roleIdent};`,
-    `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iobeam_admin TO ${roleIdent};`,
-    `GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA iobeam_admin TO ${roleIdent};`,
-    `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA iobeam_admin TO ${roleIdent};`,
-    `GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA iobeam_admin TO ${roleIdent};`,
-    `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${roleIdent};`,
-    `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ${roleIdent};`,
-    `ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT EXECUTE ON FUNCTIONS TO ${roleIdent};`,
+    ...schemaGrantLines,
   ].join("\n");
 }
 

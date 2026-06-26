@@ -59,7 +59,7 @@ BEGIN
 END;
 $$;
 
-INSERT INTO Equipment (name, model, serial_number, site, description)
+INSERT INTO ionbeam_asset.equipment (name, model, serial_number, site, description)
 VALUES (
     'FEI Helios NanoLab 600i DualBeam',
     '',

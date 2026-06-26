@@ -239,6 +239,9 @@ export const zhTW: Partial<TranslationTable> = {
   "canvas.meta.beam.title": "根據最近接收的 ADC 樣本索引推算的束流目前位置。",
   "canvas.meta.adcNow.title": "束流目前位置的 ADC 數值。",
   "canvas.meta.adcRange.title": "已接收樣本的原始 ADC 範圍。畫布會將此範圍自動縮放為可見灰階。",
+  "canvas.editor.context.undo": "復原上一個編輯",
+  "canvas.editor.context.remove": "移除所選項目",
+  "canvas.editor.context.clear": "清除所有編輯",
 
   /* ===== phase enum =============================================== */
   "phase.idle": "閒置",
@@ -435,7 +438,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.general.enableEbeam": "啟用電子束",
   "settings.general.enableIbeam": "啟用離子束",
   "settings.admin.db.password.show": "顯示資料庫密碼",
-  "settings.general.voltage": "Glasgow revC3 連接埠 A/B 的電壓",
+  "settings.general.ev": "束能量（eV）",
   "settings.general.frequency": "頻率 (Hz)",
   "settings.general.point": "點數",
   "settings.general.waveForm": "波形",
@@ -504,7 +507,7 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== settings dialog help ===================================== */
   "settings.help.aria": "顯示技術說明",
-  "settings.help.generalVoltage.title": "電壓",
+  "settings.help.generalVoltage.title": "束能量",
   "settings.help.generalBuffer.title": "緩衝區大小",
   "settings.help.rasterPixels.title": "光柵像素",
   "settings.help.rasterResolution.title": "光柵解析度",

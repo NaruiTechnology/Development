@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useTranslation } from "../i18n";
 import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 import { Icon } from "./Icon";
 
 export interface SignedInUser {
@@ -115,13 +117,13 @@ export function AuthDialog({
     if (cachedLogin) setLogin(cachedLogin);
 
     Promise.all([
-      fetch("/api/admin/iobeam/auth/current-account", { cache: "no-store" }).then(async (r) => {
+      fetch(apiUrl("/api/admin/iobeam/auth/current-account"), { cache: "no-store" }).then(async (r) => {
         if (!r.ok) throw new Error(await responseError(r));
-        return (await r.json()) as CurrentAccountResponse;
+        return await readJsonResponse<CurrentAccountResponse>(r, "current account");
       }),
-      fetch("/api/admin/iobeam/auth/users", { cache: "no-store" }).then(async (r) => {
+      fetch(apiUrl("/api/admin/iobeam/auth/users"), { cache: "no-store" }).then(async (r) => {
         if (!r.ok) throw new Error(await responseError(r));
-        return (await r.json()) as ActiveUsersResponse;
+        return await readJsonResponse<ActiveUsersResponse>(r, "auth users");
       }),
     ])
       .then(([data, usersResponse]) => {
@@ -204,7 +206,7 @@ export function AuthDialog({
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/admin/iobeam/auth/send-sms", {
+      const r = await fetch(apiUrl("/api/admin/iobeam/auth/send-sms"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ login: smsLogin, user_id: smsUser?.id ?? undefined }),
@@ -214,7 +216,7 @@ export function AuthDialog({
         throw new Error(t("auth.registration.required"));
       }
       if (!r.ok) throw new Error(await responseError(r));
-      const data = (await r.json()) as SendSmsResponse;
+      const data = await readJsonResponse<SendSmsResponse>(r, "send sms");
       setChallengeId(data.challenge_id);
       setMaskedPhone(data.phone_number);
       setDevCode(data.dev_code ?? "");
@@ -234,13 +236,13 @@ export function AuthDialog({
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/admin/iobeam/auth/register", {
+      const r = await fetch(apiUrl("/api/admin/iobeam/auth/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...registration, site }),
       });
       if (!r.ok) throw new Error(await responseError(r));
-      const data = (await r.json()) as RegisterResponse;
+      const data = await readJsonResponse<RegisterResponse>(r, "register");
       setActiveUsers((users) => [...users.filter((user) => user.id !== data.user.id), data.user]);
       setSelectedUserId(userIdValue(data.user));
       setLogin(data.user.login_name);
@@ -259,7 +261,7 @@ export function AuthDialog({
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/admin/iobeam/auth/verify-sms", {
+      const r = await fetch(apiUrl("/api/admin/iobeam/auth/verify-sms"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -271,7 +273,7 @@ export function AuthDialog({
         }),
       });
       if (!r.ok) throw new Error(await responseError(r));
-      const data = (await r.json()) as VerifySmsResponse;
+      const data = await readJsonResponse<VerifySmsResponse>(r, "verify sms");
       window.localStorage.setItem("ionbeam:adminUser", JSON.stringify(data.user));
       window.localStorage.setItem("ionbeam:lastAdminLogin", data.user.login_name);
       onSignedIn(data.user);

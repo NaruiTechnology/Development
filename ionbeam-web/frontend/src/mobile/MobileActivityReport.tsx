@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useTranslation } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
 import { Icon } from "../components/Icon";
 import { siteLabelKey } from "../lib/sites";
 import type { TranslationKey } from "../i18n";
@@ -94,6 +95,7 @@ interface ActivityReportResponse {
     equipment_id?: number | null;
     equipment_name?: string;
     date: string;
+    update_date?: string;
   }>;
   report_error?: string | null;
   error?: string;
@@ -147,7 +149,7 @@ export function MobileActivityReport({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/iobeam/equipment", { headers: scanAuthHeaders() })
+    fetch(apiUrl("/api/admin/iobeam/equipment"), { headers: scanAuthHeaders() })
       .then(async (r) => {
         const data = (await r.json().catch(() => null)) as { ok?: boolean; equipment?: EquipmentOption[]; error?: string } | null;
         if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
@@ -174,7 +176,7 @@ export function MobileActivityReport({
     setLoading(true);
     setError(null);
 
-    fetch(`/api/admin/iobeam/reports/activity?${params.toString()}`, {
+    fetch(apiUrl(`/api/admin/iobeam/reports/activity?${params.toString()}`), {
       headers: scanAuthHeaders(),
     })
       .then(async (r) => {

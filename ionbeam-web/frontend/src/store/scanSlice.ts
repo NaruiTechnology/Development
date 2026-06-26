@@ -11,8 +11,9 @@ import type {
   ROIRequest,
 } from "../types/api";
 import { fetchDefaults } from "./statusSlice";
-import { recordScanActivity } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 
 export type ScanKind = "raster" | "vector" | "roi";
 export type ScanPhase =
@@ -33,12 +34,20 @@ interface ScanState {
   chunksReceived: number;
   /** Result of the last blocking POST call (validated). */
   lastResult: ScanResult | null;
+  /** Latest scan output filenames, regardless of validated vs streamed run. */
+  lastOutput: {
+    kind: "raster" | "vector";
+    csv_filename: string | null;
+    image_filename: string | null;
+  } | null;
   errorMessage: string | null;
 
   /** Most recent params, kept editable in state. */
   raster: RasterRequest;
   vector: VectorRequest;
   roi: ROIState;
+  /** Manual beam energy entry shared by the raster/vector panels. */
+  beamEnergyEv: number;
 
   /** How the vector image is rendered onto the canvas. Per-session — not
    *  persisted to localStorage — because the right choice depends on the
@@ -89,6 +98,7 @@ const initialState: ScanState = {
   bytesReceived: 0,
   chunksReceived: 0,
   lastResult: null,
+  lastOutput: null,
   errorMessage: null,
   raster: defaultRaster,
   vector: defaultVector,
@@ -107,12 +117,18 @@ const initialState: ScanState = {
     imageKind: "none",
     keep_loaded_bitmap_after_scan: true,
   },
+  beamEnergyEv: 1000.0,
   vectorRenderMode: "decimated",
 };
 
 function numberDefault(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+
+function floatDefault(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function booleanDefault(value: unknown, fallback: boolean): boolean {
@@ -258,32 +274,28 @@ function normalizeROIPatch(
 export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
   "scan/runRasterValidated",
   async (req, { signal }) => {
-    const r = await fetch("/api/scan/raster/run", {
+    const r = await fetch(apiUrl("/api/scan/raster/run"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify(req),
       signal,
     });
     if (!r.ok) throw new Error(await scanRunErrorMessage(r, "raster run"));
-    const result = (await r.json()) as ScanResult;
-    recordScanActivity("raster");
-    return result;
+    return await readJsonResponse<ScanResult>(r, "raster run");
   }
 );
 
 export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
   "scan/runVectorValidated",
   async (req, { signal }) => {
-    const r = await fetch("/api/scan/vector/run", {
+    const r = await fetch(apiUrl("/api/scan/vector/run"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify(req),
       signal,
     });
     if (!r.ok) throw new Error(await scanRunErrorMessage(r, "vector run"));
-    const result = (await r.json()) as ScanResult;
-    recordScanActivity("vector");
-    return result;
+    return await readJsonResponse<ScanResult>(r, "vector run");
   }
 );
 
@@ -312,6 +324,9 @@ const slice = createSlice({
     updateVector(s, a: PayloadAction<Partial<VectorRequest>>) {
       s.vector = { ...s.vector, ...normalizeVectorPatch(a.payload, s.vector) };
     },
+    updateBeamEnergyEv(s, a: PayloadAction<number>) {
+      s.beamEnergyEv = floatDefault(a.payload, s.beamEnergyEv);
+    },
     updateROI(s, a: PayloadAction<Partial<ROIState>>) {
       s.roi = { ...s.roi, ...normalizeROIPatch(a.payload, s.roi) };
       if ("selection" in a.payload) {
@@ -332,6 +347,9 @@ const slice = createSlice({
     clearLastResult(s) {
       s.lastResult = null;
     },
+    clearLastOutput(s) {
+      s.lastOutput = null;
+    },
     setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
       s.vectorRenderMode = a.payload;
     },
@@ -341,6 +359,7 @@ const slice = createSlice({
       s.bytesReceived = 0;
       s.chunksReceived = 0;
       s.lastResult = null;
+      s.lastOutput = null;
       s.errorMessage = null;
     },
     streamProgress(
@@ -369,10 +388,22 @@ const slice = createSlice({
     },
     streamCompleted(
       s,
-      a: PayloadAction<{ chunks: number } | undefined>
+      a: PayloadAction<{
+        chunks: number;
+        kind?: "raster" | "vector";
+        csv_filename?: string | null;
+        image_filename?: string | null;
+      } | undefined>
     ) {
       s.phase = "completed";
       if (a.payload?.chunks !== undefined) s.chunksReceived = a.payload.chunks;
+      if (a.payload?.kind) {
+        s.lastOutput = {
+          kind: a.payload.kind,
+          csv_filename: a.payload.csv_filename ?? null,
+          image_filename: a.payload.image_filename ?? null,
+        };
+      }
     },
     streamErrored(s, a: PayloadAction<string>) {
       s.phase = "error";
@@ -383,6 +414,7 @@ const slice = createSlice({
       s.bytesReceived = 0;
       s.chunksReceived = 0;
       s.errorMessage = null;
+      s.lastOutput = null;
     },
   },
   extraReducers: (b) => {
@@ -391,11 +423,17 @@ const slice = createSlice({
       s.bytesReceived = 0;
       s.chunksReceived = 0;
       s.lastResult = null;
+      s.lastOutput = null;
       s.errorMessage = null;
     });
     b.addCase(runRasterValidated.fulfilled, (s, a) => {
       s.phase = "completed";
       s.lastResult = a.payload;
+      s.lastOutput = {
+        kind: "raster",
+        csv_filename: a.payload.csv_filename ?? null,
+        image_filename: a.payload.image_filename ?? null,
+      };
     });
     b.addCase(runRasterValidated.rejected, (s, a) => {
       if (a.meta.aborted) {
@@ -411,11 +449,17 @@ const slice = createSlice({
       s.bytesReceived = 0;
       s.chunksReceived = 0;
       s.lastResult = null;
+      s.lastOutput = null;
       s.errorMessage = null;
     });
     b.addCase(runVectorValidated.fulfilled, (s, a) => {
       s.phase = "completed";
       s.lastResult = a.payload;
+      s.lastOutput = {
+        kind: "vector",
+        csv_filename: a.payload.csv_filename ?? null,
+        image_filename: a.payload.image_filename ?? null,
+      };
     });
     b.addCase(runVectorValidated.rejected, (s, a) => {
       if (a.meta.aborted) {
@@ -428,6 +472,7 @@ const slice = createSlice({
     });
     b.addCase(fetchDefaults.fulfilled, (s, a) => {
       applyServerDefaults(s, a.payload);
+      s.beamEnergyEv = floatDefault(a.payload.ev, s.beamEnergyEv);
     });
   },
 });
@@ -436,10 +481,12 @@ export const {
   setKind,
   updateRaster,
   updateVector,
+  updateBeamEnergyEv,
   updateROI,
   clearROIImage,
   clearROISelection,
   clearLastResult,
+  clearLastOutput,
   setVectorRenderMode,
   streamStarted,
   streamProgress,

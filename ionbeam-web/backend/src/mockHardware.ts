@@ -24,6 +24,7 @@ interface RasterParams {
   resolution: number;
   dwell: number;
   latency_bytes: number;
+  voltage?: number;
   cookie?: number;
   frame_blank?: boolean;
   simulation_bitmap?: SimulationBitmapPayload | null;
@@ -33,6 +34,7 @@ interface VectorParams {
   pattern: "default" | "custom";
   points?: Array<[number, number, number]>;
   latency_bytes: number;
+  voltage?: number;
   /** Edge length for default-pattern sweeps (256 / 512 / 1024 / 2048).
    *  Total samples = edge². Coverage is always the full DAC range. */
   vector_resolution?: number;
@@ -321,7 +323,15 @@ export async function streamMockRaster(
   }
 
   if (ws.readyState === ws.OPEN) {
-    ws.send(JSON.stringify({ event: "done", chunks }));
+    const ts = shortTimestampSuffix();
+    ws.send(
+      JSON.stringify({
+        event: "done",
+        chunks,
+        csv_filename: `raster_${p.resolution}x${p.resolution}_${ts}.csv`,
+        image_filename: `raster_${p.resolution}x${p.resolution}_${ts}.png`,
+      }),
+    );
   }
 }
 
@@ -382,7 +392,19 @@ export async function streamMockVector(
   }
 
   if (ws.readyState === ws.OPEN) {
-    ws.send(JSON.stringify({ event: "done", chunks }));
+    const ts = shortTimestampSuffix();
+    const edge = p.pattern === "custom"
+      ? Math.max(1, p.points?.length ?? 0)
+      : Math.max(1, p.vector_resolution ?? 2048);
+    const base = `vector_latency_${p.latency_bytes || edge}`;
+    ws.send(
+      JSON.stringify({
+        event: "done",
+        chunks,
+        csv_filename: `${base}_${ts}.csv`,
+        image_filename: `${base}_${ts}.png`,
+      }),
+    );
   }
 }
 
@@ -402,11 +424,16 @@ export const mockRest = {
     const raster = action.rasterScan ?? {};
     const vector = action.vectorScan ?? {};
     const selectedBeam = action.enableEbeam ? "ebeam" : "ion";
+    const ev = finiteNumber(action.ev, 1000.0);
+    const voltage = finiteNumber(action.voltage, 2.5);
     return {
       is_production: false,
+      ev,
+      voltage,
       simulation: action.simulation ?? {},
       raster: {
         ...raster,
+        voltage,
         resolution: finiteNumber(raster.resolution, 512),
         dwell: finiteNumber(raster.dwell, 2),
         latency: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
@@ -414,6 +441,7 @@ export const mockRest = {
       },
       vector: {
         ...vector,
+        voltage,
         latency: finiteNumber(vector.latency, 8196),
         outputMode: vector.outputMode ?? "SixteenBit",
       },
@@ -425,17 +453,24 @@ export const mockRest = {
     const total = req.resolution * req.resolution;
     const pixelsPerChunk = Math.max(1, Math.floor(req.latency_bytes / Math.max(1, req.dwell)));
     const expected = Math.ceil(total / pixelsPerChunk);
+    const ts = shortTimestampSuffix();
+    const csvFilename = `raster_${req.resolution}x${req.resolution}_${ts}.csv`;
+    const imageFilename = `raster_${req.resolution}x${req.resolution}_${ts}.png`;
     // Cache so /scan/last/* mock endpoints have something to return.
     mockLastScan = {
       kind: "raster",
       resolution: req.resolution,
       latency_bytes: req.latency_bytes,
       source: "validated",
+      csv_filename: csvFilename,
+      image_filename: imageFilename,
     };
     return {
       kind: "raster",
       chunks: expected,
       bytes: total * 2,
+      csv_filename: csvFilename,
+      image_filename: imageFilename,
       resolution: req.resolution,
       dwell: req.dwell,
       expected_chunks: expected,
@@ -467,17 +502,24 @@ export const mockRest = {
     }
     const valuesPerChunk = Math.max(64, Math.floor(req.latency_bytes / 2));
     const chunks = Math.max(1, Math.ceil(totalSamples / valuesPerChunk));
+    const ts = shortTimestampSuffix();
+    const csvFilename = `vector_latency_${req.latency_bytes}_${ts}.csv`;
+    const imageFilename = `vector_latency_${req.latency_bytes}_${ts}.png`;
     mockLastScan = {
       kind: "vector",
       latency_bytes: req.latency_bytes,
       pattern: req.pattern,
       vector_resolution: req.vector_resolution,
       source: "validated",
+      csv_filename: csvFilename,
+      image_filename: imageFilename,
     };
     return {
       kind: "vector",
       chunks,
       bytes: chunks * req.latency_bytes,
+      csv_filename: csvFilename,
+      image_filename: imageFilename,
       process_time_s: req.pre_process ? 0.012 : null,
       send_time_s: 0.4,
       has_data: true,
@@ -506,11 +548,11 @@ export const mockRest = {
       for (let c = 0; c < 4; c++) row.push((r * 17 + c * 31) & 0xffff);
       rows.push(row.join(" "));
     }
-    const ts = shortTimestampSuffix();
     const filename =
-      mockLastScan.kind === "raster"
-        ? `raster_${mockLastScan.resolution}x${mockLastScan.resolution}_${ts}.csv`
-        : `vector_latency_${mockLastScan.latency_bytes}_${ts}.csv`;
+      mockLastScan.csv_filename ??
+      (mockLastScan.kind === "raster"
+        ? `raster_${mockLastScan.resolution}x${mockLastScan.resolution}_${shortTimestampSuffix()}.csv`
+        : `vector_latency_${mockLastScan.latency_bytes}_${shortTimestampSuffix()}.csv`);
     return { filename, body: rows.join("\r\n") + "\r\n" };
   },
 };
@@ -533,5 +575,7 @@ let mockLastScan:
       pattern?: string;
       vector_resolution?: number;
       source: "validated" | "stream";
+      csv_filename?: string;
+      image_filename?: string;
     }
   | null = null;

@@ -21,13 +21,28 @@ export function buildRestProxy(): Router {
           : undefined,
         signal: AbortSignal.timeout(2_000),
       });
+      const contentType = (upstream.headers.get("content-type") ?? "").toLowerCase();
+      const text = await upstream.text();
       if (!upstream.ok) {
         throw new Error(`upstream status returned HTTP ${upstream.status}`);
       }
-      res
-        .status(upstream.status)
-        .type(upstream.headers.get("content-type") ?? "application/json")
-        .send(await upstream.text());
+      if (!contentType.includes("application/json")) {
+        res.status(502).json({
+          error: "upstream_invalid_content_type",
+          detail: `upstream /status returned ${contentType || "unknown content type"} instead of JSON`,
+          upstream_status: upstream.status,
+        });
+        return;
+      }
+      try {
+        res.status(upstream.status).json(JSON.parse(text));
+      } catch {
+        res.status(502).json({
+          error: "upstream_invalid_json",
+          detail: "upstream /status returned invalid JSON",
+          upstream_status: upstream.status,
+        });
+      }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       res.json({
@@ -43,6 +58,7 @@ export function buildRestProxy(): Router {
     target: config.proxyTargetHttp,
     changeOrigin: true,
     pathRewrite: { "^/api": "" },
+    selfHandleResponse: true,
     on: {
       // Inject the bearer token if configured. Browsers must not see it.
       proxyReq: (proxyReq, req) => {
@@ -52,6 +68,43 @@ export function buildRestProxy(): Router {
         // body-parser may have already consumed the request body; re-write
         // it onto the proxied request so POST /scan/raster/run gets its JSON.
         fixRequestBody(proxyReq, req);
+      },
+      proxyRes: (proxyRes, req, res) => {
+        const contentType = String(proxyRes.headers["content-type"] ?? "").toLowerCase();
+        const chunks: Buffer[] = [];
+        proxyRes.on("data", (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        proxyRes.on("end", () => {
+          const body = Buffer.concat(chunks);
+          const statusCode = proxyRes.statusCode ?? 502;
+          const headers = Object.fromEntries(
+            Object.entries(proxyRes.headers).filter(([name]) => {
+              const lower = name.toLowerCase();
+              return lower !== "content-length" && lower !== "transfer-encoding";
+            })
+          );
+          const targetUrl = `${req.method} ${req.url ?? "/api"}`;
+
+          if (contentType.includes("text/html") || contentType.includes("application/xhtml+xml")) {
+            if (!res.headersSent) {
+              res.writeHead(502, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({
+                  error: "upstream_invalid_content_type",
+                  detail: `upstream ${targetUrl} returned ${contentType || "unknown content type"}`,
+                  upstream_status: statusCode,
+                })
+              );
+            }
+            return;
+          }
+
+          if (!res.headersSent) {
+            res.writeHead(statusCode, headers as Record<string, string | string[]>);
+            res.end(body);
+          }
+        });
       },
       error: (err, _req, res) => {
         // Surface upstream-down failures as a clean JSON error rather than a

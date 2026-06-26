@@ -152,6 +152,40 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             or dbConfig.get("CommandTimeoutMs")
             or 30000
         )
+        opDbHost = str(
+            actionData.get("operationDbHost")
+            or dbConfig.get("Host")
+            or dbHost
+        ).strip()
+        opDbPort = int(
+            actionData.get("operationDbPort")
+            or dbConfig.get("Port")
+            or dbPort
+        )
+        opDbName = str(
+            actionData.get("operationDbName")
+            or "operation_data"
+        ).strip()
+        opDbUser = str(
+            actionData.get("operationDbUser")
+            or dbConfig.get("User")
+            or dbUser
+        ).strip()
+        opDbPassword = str(
+            actionData.get("operationDbPassword")
+            or dbConfig.get("Password")
+            or dbPassword
+        ).strip()
+        opDbSslMode = str(
+            actionData.get("operationDbSslMode")
+            or dbConfig.get("SslMode")
+            or dbSslMode
+        ).strip()
+        opDbTimeout = int(
+            actionData.get("operationDbCommandTimeoutMs")
+            or dbConfig.get("CommandTimeoutMs")
+            or dbTimeout
+        )
         lines = [
             "PROXY_TARGET_HTTP={}".format(proxyTargetHttp),
             "PROXY_TARGET_WS={}".format(proxyTargetWs),
@@ -174,6 +208,17 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         if dbSslMode:
             lines.append("IOBEAM_ADMIN_DB_SSLMODE={}".format(dbSslMode))
         lines.append("IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS={}".format(dbTimeout))
+        lines.extend([
+            "IOBEAM_OPERATION_DB_HOST={}".format(opDbHost),
+            "IOBEAM_OPERATION_DB_PORT={}".format(opDbPort),
+            "IOBEAM_OPERATION_DB_NAME={}".format(opDbName),
+            "IOBEAM_OPERATION_DB_USER={}".format(opDbUser),
+        ])
+        if opDbPassword:
+            lines.append("IOBEAM_OPERATION_DB_PASSWORD={}".format(opDbPassword))
+        if opDbSslMode:
+            lines.append("IOBEAM_OPERATION_DB_SSLMODE={}".format(opDbSslMode))
+        lines.append("IOBEAM_OPERATION_DB_COMMAND_TIMEOUT_MS={}".format(opDbTimeout))
         lines.extend([
             "GLASGOW_RESTART_CMD={}".format(
                 os.path.join(backendDir, "scripts", "restart-glasgow-service.sh")),

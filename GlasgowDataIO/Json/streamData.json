@@ -9,6 +9,7 @@
         {
             "streamData": {
                 "actionData": {
+                    "ev": 1000,
                     "voltage": 2.5,
                     "bufferSize": "1024*1024",
                     "enableEbeam": false,
@@ -131,10 +132,17 @@
                         "mode": "image",
                         "imageResolution": 64,
                         "source": "pattern",
-                        "patternKind": "bars",
+                        "patternKind": "checker",
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,
                         "seed": 42
+                    },
+                    "ftp": {
+                        "enabled": true,
+                        "host": "124.221.175.89",
+                        "username": "deployworkspace",
+                        "password": "DWS_112233",
+                        "folder": "/upload"
                     }
                 },
                 "timeout": 60

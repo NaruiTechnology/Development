@@ -25,6 +25,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useAppDispatch, useAppSelector } from "../store";
+import { apiUrl } from "../lib/backendUrl";
 import {
   clearROIImage,
   runRasterValidated,
@@ -85,6 +86,8 @@ export function ScanControls({
   const vector = useAppSelector((s) => s.scan.vector);
   const roiState = useAppSelector((s) => s.scan.roi);
   const defaults = useAppSelector((s) => s.status.defaults);
+  const settingsSaving = useAppSelector((s) => s.settings.saving);
+  const backendRestarting = useAppSelector((s) => s.settings.backendRestarting);
   const roi = roiState.selection;
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
@@ -102,7 +105,7 @@ export function ScanControls({
   const closing = phase === "stopping";
   const paused = phase === "paused";
   const busy = streaming || closing;
-  const controlsDisabled = disabled || scanActive;
+  const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
 
   async function onRun() {
     if (disabled || kind === "roi") return;
@@ -203,7 +206,7 @@ export function ScanControls({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/iobeam/equipment")
+    fetch(apiUrl("/api/admin/iobeam/equipment"))
       .then(async (r) => {
         const data = (await r.json().catch(() => null)) as EquipmentResponse | null;
         if (!r.ok || !data?.ok) throw new Error(`equipment: HTTP ${r.status}`);
@@ -236,7 +239,7 @@ export function ScanControls({
 
   async function refreshScanPrivilege(): Promise<boolean> {
     try {
-      const r = await fetch("/api/admin/iobeam/auth/current-account", {
+      const r = await fetch(apiUrl("/api/admin/iobeam/auth/current-account"), {
         cache: "no-store",
         headers: scanAuthHeaders(),
       });

@@ -29,10 +29,13 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
 import { clearLastResult, clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
-import { fetchDefaults, previewConfigDefaults } from "../store/statusSlice";
+import { fetchDefaultsMetadata, previewConfigDefaults } from "../store/statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 import {
   ACTION_DATA_PATH,
+  FTP_PATH,
   PINS_PATH,
   RASTER_PATH,
   SIMULATION_PATH,
@@ -40,6 +43,7 @@ import {
   clearError,
   clearLastRestart,
   closeDialog,
+  setBackendRestarting,
   consumeBackupNotice,
   fetchSettingsConfig,
   readPath,
@@ -47,7 +51,6 @@ import {
   saveSettingsConfig,
   setActiveTab,
   setDraft,
-  setError,
   writePath,
   type SettingsConfigInfo,
   type SettingsTab,
@@ -105,15 +108,8 @@ export function SettingsDialog({
 }
 
 async function refreshDefaultsForSettings(dispatch: AppDispatch) {
-  const result = await dispatch(fetchDefaults());
-  if (fetchDefaults.rejected.match(result)) {
-    dispatch(
-      setError(
-        result.error.message ??
-          "Service restart completed, but refreshed defaults could not be loaded.",
-      ),
-    );
-  }
+  const result = await dispatch(fetchDefaultsMetadata());
+  return fetchDefaultsMetadata.fulfilled.match(result);
 }
 
 function resetPartialROISelection(dispatch: AppDispatch) {
@@ -211,6 +207,7 @@ function SettingsModalShell({
 
   const busy = loading || saving || restoring;
   const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+  const canEditFtp = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const visibleTabs: SettingsTab[] = mobilityMode
     ? ["admin"]
     : ["general", "raster", "vector", "pins", "simulation", "admin"];
@@ -254,7 +251,9 @@ function SettingsModalShell({
       }
       resetScanImages(dispatch, rasterResolution);
       dispatch(previewConfigDefaults(configDefaultsPreview(draft)));
-      await refreshDefaultsForSettings(dispatch);
+      if (await refreshDefaultsForSettings(dispatch)) {
+        dispatch(setBackendRestarting(false));
+      }
     }
     // The restart result is surfaced via `lastRestart`; we don't
     // auto-close the dialog so the operator can see whether it
@@ -280,7 +279,9 @@ function SettingsModalShell({
       } else {
         resetPartialROISelection(dispatch);
       }
-      await refreshDefaultsForSettings(dispatch);
+      if (await refreshDefaultsForSettings(dispatch)) {
+        dispatch(setBackendRestarting(false));
+      }
     }
   }
 
@@ -377,6 +378,7 @@ function SettingsModalShell({
             }}
           mobilityMode={mobilityMode}
           canEditPins={canEditPins}
+          canEditFtp={canEditFtp}
         />
         )}
       </div>
@@ -471,6 +473,7 @@ function SettingsTabButton({
       vector: "settings.tabs.vector",
       pins: "settings.tabs.pins",
       simulation: "settings.tabs.simulation",
+      ftp: "settings.tabs.ftp",
       admin: "settings.tabs.admin",
     } as const
   )[tab];
@@ -498,6 +501,7 @@ function SettingsTabBody({
   onSelectAdminSubTab,
   mobilityMode,
   canEditPins,
+  canEditFtp,
 }: {
   tab: SettingsTab;
   draft: unknown;
@@ -507,6 +511,7 @@ function SettingsTabBody({
   onSelectAdminSubTab: (tab: AdminSubTab) => void;
   mobilityMode: boolean;
   canEditPins: boolean;
+  canEditFtp: boolean;
 }) {
   switch (tab) {
     case "general":
@@ -519,6 +524,8 @@ function SettingsTabBody({
       return <PinsTab draft={draft} disabled={!canEditPins} />;
     case "simulation":
       return <SimulationTab draft={draft} />;
+    case "ftp":
+      return <FtpTab draft={draft} disabled={!canEditFtp} />;
     case "admin":
       return (
         <AdminTab
@@ -549,7 +556,11 @@ function GeneralTab({ draft }: { draft: unknown }) {
   const deviceId = stringField(draft, ["Glasgow", "Device0", "Id"], "");
 
   // actionData scalars.
-  const voltage = numberField(draft, [...ACTION_DATA_PATH, "voltage"], 0);
+  const ev = numberField(
+    draft,
+    [...ACTION_DATA_PATH, "ev"],
+    1000,
+  );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
   const enableEbeam = boolField(draft, [...ACTION_DATA_PATH, "enableEbeam"], false);
   const enableIbeam = boolField(draft, [...ACTION_DATA_PATH, "enableIbeam"], true);
@@ -605,11 +616,11 @@ function GeneralTab({ draft }: { draft: unknown }) {
 
       <div className="field-row">
         <NumberField
-          label={t("settings.general.voltage")}
+          label={t("settings.general.ev")}
           help={<SettingsHelp topic="generalVoltage" />}
-          value={voltage}
+          value={ev}
           step="any"
-          onChange={(v) => set([...ACTION_DATA_PATH, "voltage"], v)}
+          onChange={(v) => set([...ACTION_DATA_PATH, "ev"], v)}
         />
         <TextField
           label={t("settings.general.bufferSize")}
@@ -1088,17 +1099,105 @@ function SimulationTab({ draft }: { draft: unknown }) {
   );
 }
 
+function FtpTab({
+  draft,
+  disabled = false,
+  onChangeDraft,
+}: {
+  draft: unknown;
+  disabled?: boolean;
+  onChangeDraft?: (next: unknown) => void;
+}) {
+  const dispatch = useAppDispatch();
+  const { t } = useTranslation();
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
+  const enabled = boolField(draft, [...FTP_PATH, "enabled"], true);
+  const host = stringField(draft, [...FTP_PATH, "host"], "localhost");
+  const username = stringField(draft, [...FTP_PATH, "username"], "vboxuser");
+  const password = stringField(draft, [...FTP_PATH, "password"], "ionbeam123");
+  const folder = stringField(draft, [...FTP_PATH, "folder"], "/tmp/ftp");
+
+  function set(p: ReadonlyArray<string | number>, v: unknown) {
+    const next = writePath(draft, p, v);
+    if (onChangeDraft) {
+      onChangeDraft(next);
+      return;
+    }
+    dispatch(setDraft(next));
+  }
+
+  return (
+    <div className="settings-form">
+      <p className="settings-form__hint">{t("settings.ftp.hint")}</p>
+      {disabled && (
+        <p className="settings-form__hint" style={{ color: "var(--c-danger)" }}>
+          {t("settings.admin.privilegeRequired")}
+        </p>
+      )}
+
+      <div className="settings-flags">
+        <CheckboxField
+          label={t("settings.ftp.enabled")}
+          value={enabled}
+          onChange={(v) => set([...FTP_PATH, "enabled"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">{t("settings.ftp.group.connection")}</h4>
+      <div className="field-row">
+        <TextField
+          label={t("settings.ftp.host")}
+          value={host}
+          disabled={disabled || !enabled}
+          onChange={(v) => set([...FTP_PATH, "host"], v)}
+        />
+        <TextField
+          label={t("settings.ftp.username")}
+          value={username}
+          disabled={disabled || !enabled}
+          onChange={(v) => set([...FTP_PATH, "username"], v)}
+        />
+      </div>
+
+      <div className="field-row">
+        <PasswordField
+          label={t("settings.ftp.password")}
+          value={password}
+          visible={passwordVisible}
+          configured={false}
+          revealLabel={t("settings.admin.db.password.show")}
+          disabled={disabled || !enabled}
+          onReveal={() => setPasswordVisible(true)}
+          onHide={() => setPasswordVisible(false)}
+          onChange={(v) => set([...FTP_PATH, "password"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">{t("settings.ftp.group.destination")}</h4>
+      <div className="field-row">
+        <TextField
+          label={t("settings.ftp.folder")}
+          value={folder}
+          disabled={disabled || !enabled}
+          onChange={(v) => set([...FTP_PATH, "folder"], v)}
+        />
+      </div>
+    </div>
+  );
+}
+
 async function fetchAdminConfig(): Promise<SettingsConfigInfo> {
-  const r = await fetch("/api/admin/iobeam/config");
+  const r = await fetch(apiUrl("/api/admin/iobeam/config"));
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`fetch admin config: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as SettingsConfigInfo;
+  return await readJsonResponse<SettingsConfigInfo>(r, "fetch admin config");
 }
 
 async function saveAdminConfig(data: unknown): Promise<void> {
-  const r = await fetch("/api/admin/iobeam/config", {
+  const r = await fetch(apiUrl("/api/admin/iobeam/config"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
@@ -1110,7 +1209,7 @@ async function saveAdminConfig(data: unknown): Promise<void> {
 }
 
 async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseApplyResponse> {
-  const r = await fetch("/api/admin/iobeam/db/apply", {
+  const r = await fetch(apiUrl("/api/admin/iobeam/db/apply"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
@@ -1119,26 +1218,58 @@ async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseAppl
     const text = await r.text();
     throw new Error(`apply admin database setup: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as AdminDatabaseApplyResponse;
+  return await readJsonResponse<AdminDatabaseApplyResponse>(r, "apply admin database setup");
 }
 
 async function fetchAdminDatabaseConnection(includePassword = false): Promise<AdminDatabaseConnectionResponse> {
   const qs = includePassword ? "?include_password=1" : "";
-  const r = await fetch(`/api/admin/iobeam/db/connection${qs}`, {
+  const r = await fetch(apiUrl(`/api/admin/iobeam/db/connection${qs}`), {
     headers: scanAuthHeaders(),
   });
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`fetch admin database connection: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as AdminDatabaseConnectionResponse;
+  return await readJsonResponse<AdminDatabaseConnectionResponse>(r, "fetch admin database connection");
 }
 
 async function restoreAdminConfig(): Promise<void> {
-  const r = await fetch("/api/admin/iobeam/config/restore", { method: "POST" });
+  const r = await fetch(apiUrl("/api/admin/iobeam/config/restore"), { method: "POST" });
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`restore admin config: HTTP ${r.status} ${text}`);
+  }
+}
+
+async function fetchStreamConfig(): Promise<SettingsConfigInfo> {
+  const r = await fetch(apiUrl("/api/admin/config"));
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`fetch stream config: HTTP ${r.status} ${text}`);
+  }
+  return await readJsonResponse<SettingsConfigInfo>(r, "fetch stream config");
+}
+
+async function saveStreamConfig(data: unknown): Promise<void> {
+  const r = await fetch(apiUrl("/api/admin/config"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+    body: JSON.stringify({ data }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`save stream config: HTTP ${r.status} ${text}`);
+  }
+}
+
+async function restoreStreamConfig(): Promise<void> {
+  const r = await fetch(apiUrl("/api/admin/config/restore"), {
+    method: "POST",
+    headers: scanAuthHeaders(),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`restore stream config: HTTP ${r.status} ${text}`);
   }
 }
 
@@ -1220,6 +1351,14 @@ interface AllowedHostsResponse {
   sync_warning?: string;
 }
 
+interface FtpConnectionResponse {
+  ok: boolean;
+  enabled: boolean;
+  reachable: boolean;
+  message?: string;
+  error?: string;
+}
+
 const ADMIN_ROLE_OPTIONS = [
   { value: 3, key: "settings.admin.role.admin" },
   { value: 2, key: "settings.admin.role.developer" },
@@ -1229,7 +1368,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "configuration" | "users" | "equipment" | "allowedHosts";
+type AdminSubTab = "configuration" | "users" | "equipment" | "allowedHosts" | "ftp";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1463,11 +1602,11 @@ function composeAdminRoleRequestEmail(user: AdminUserRow, recipients: string[]) 
 }
 
 async function fetchCurrentAccountRole(): Promise<number | null> {
-  const r = await fetch("/api/admin/iobeam/auth/current-account", {
+  const r = await fetch(apiUrl("/api/admin/iobeam/auth/current-account"), {
     headers: scanAuthHeaders(),
   });
   if (!r.ok) return null;
-  const data = (await r.json()) as CurrentAccountResponse;
+  const data = await readJsonResponse<CurrentAccountResponse>(r, "current account");
   return typeof data.user?.role === "number" ? data.user.role : null;
 }
 
@@ -1499,6 +1638,15 @@ function AdminTab({
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
   const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
   const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
+  const [ftpSource, setFtpSource] = useState<unknown | null>(null);
+  const [ftpDraft, setFtpDraft] = useState<unknown | null>(null);
+  const [ftpConfigPath, setFtpConfigPath] = useState("");
+  const [ftpHasBackup, setFtpHasBackup] = useState(false);
+  const [ftpLoading, setFtpLoading] = useState(false);
+  const [ftpSaving, setFtpSaving] = useState(false);
+  const [ftpRestoring, setFtpRestoring] = useState(false);
+  const [ftpConnectionState, setFtpConnectionState] = useState<"idle" | "checking" | "ok" | "warn" | "error">("idle");
+  const [ftpConnectionMessage, setFtpConnectionMessage] = useState<string | null>(null);
   const privilegeNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showPrivilegeNotice() {
@@ -1523,6 +1671,13 @@ function AdminTab({
     }
   }, [activeSubTab, mobilityMode, onSelectSubTab]);
 
+  useEffect(() => {
+    if (activeSubTab !== "ftp" || ftpDraft !== null || ftpLoading) {
+      return;
+    }
+    void loadFtp();
+  }, [activeSubTab, ftpDraft, ftpLoading]);
+
   async function load() {
     setLoading(true);
     setLocalError(null);
@@ -1546,6 +1701,26 @@ function AdminTab({
       setLocalError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadFtp() {
+    setFtpLoading(true);
+    setLocalError(null);
+    try {
+      const info = await fetchStreamConfig();
+      setFtpSource(info.data);
+      setFtpDraft(info.data);
+      setFtpConfigPath(info.path);
+      setFtpHasBackup(info.has_backup);
+      if (info.backup_created) {
+        setNotice(t("settings.backupCreated"));
+      }
+      await testFtpConnection();
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFtpLoading(false);
     }
   }
 
@@ -1654,6 +1829,67 @@ function AdminTab({
     }
   }
 
+  async function onSaveFtp() {
+    if (ftpDraft === null) return;
+    setFtpSaving(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      await saveStreamConfig(ftpDraft);
+      setFtpSource(ftpDraft);
+      setNotice(t("settings.ftp.save.ok"));
+      await testFtpConnection();
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFtpSaving(false);
+    }
+  }
+
+  async function onRestoreFtp() {
+    setFtpRestoring(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      await restoreStreamConfig();
+      await loadFtp();
+      setNotice(t("settings.ftp.restore.ok"));
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFtpRestoring(false);
+    }
+  }
+
+  async function testFtpConnection() {
+    setFtpConnectionState("checking");
+    setFtpConnectionMessage(t("settings.ftp.testing"));
+    try {
+      const r = await fetch(apiUrl("/api/admin/ftp/test-connection"), {
+        headers: scanAuthHeaders(),
+      });
+      const data = (await r.json().catch(() => null)) as FtpConnectionResponse | null;
+      if (!r.ok || !data?.ok) {
+        throw new Error(data?.message || data?.error || `HTTP ${r.status}`);
+      }
+      if (!data.enabled) {
+        setFtpConnectionState("idle");
+        setFtpConnectionMessage(t("settings.ftp.disabled"));
+        return;
+      }
+      if (data.reachable) {
+        setFtpConnectionState("ok");
+        setFtpConnectionMessage(data.message || t("settings.ftp.reachable"));
+      } else {
+        setFtpConnectionState("warn");
+        setFtpConnectionMessage(data.message || t("settings.ftp.unreachable"));
+      }
+    } catch (err) {
+      setFtpConnectionState("error");
+      setFtpConnectionMessage(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function onRevealDbPassword() {
     if (draft === null) return;
     if (!canManageAdminConfig) {
@@ -1681,6 +1917,16 @@ function AdminTab({
     currentAccountRole !== null &&
     currentAccountRole < ADMIN_ROLE &&
     adminRoleApprovalRequired(source, draft);
+  const ftpBusy = ftpLoading || ftpSaving || ftpRestoring;
+  const ftpDirty = ftpDraft !== null && ftpDraft !== ftpSource;
+  const ftpNoticeTone =
+    ftpConnectionState === "error"
+      ? "error"
+      : ftpConnectionState === "warn"
+        ? "warning"
+        : ftpConnectionState === "ok"
+          ? "success"
+          : "info";
 
   if (loading && draft === null) {
     return <div className="settings-loading">{t("settings.admin.loading")}</div>;
@@ -1749,6 +1995,12 @@ function AdminTab({
           tab="allowedHosts"
           active={activeSubTab}
           label={t("settings.admin.group.allowedHosts")}
+          onSelect={onSelectSubTab}
+        />
+        <AdminSubTabButton
+          tab="ftp"
+          active={activeSubTab}
+          label={t("settings.admin.group.ftp")}
           onSelect={onSelectSubTab}
         />
       </div>
@@ -2004,6 +2256,101 @@ function AdminTab({
           onBlockedAction={showPrivilegeNotice}
         />
       )}
+
+      {activeSubTab === "ftp" && (
+        <>
+          {!mobilityMode && ftpConfigPath && (
+            <div className="settings-path-strip" title={ftpConfigPath}>
+              <span className="settings-path-strip__label">
+                {t("settings.boundTo")}
+              </span>
+              <code className="settings-path-strip__path">{ftpConfigPath}</code>
+            </div>
+          )}
+
+          {ftpConnectionMessage && (
+            <SettingsNotice
+              tone={ftpNoticeTone}
+              volatile={ftpConnectionState === "checking"}
+              message={ftpConnectionMessage}
+              onDismiss={() => {
+                setFtpConnectionState("idle");
+                setFtpConnectionMessage(null);
+              }}
+            />
+          )}
+
+          {ftpLoading && ftpDraft === null ? (
+            <div className="settings-loading">{t("settings.loading")}</div>
+          ) : ftpDraft === null ? (
+            <div className="settings-loading">{t("settings.empty")}</div>
+          ) : (
+            <FtpTab
+              draft={ftpDraft}
+              disabled={!canManageAdminConfig}
+              onChangeDraft={setFtpDraft}
+            />
+          )}
+
+          <div className="settings-footer__row">
+            <span
+              className="scan-busy"
+              data-visible={ftpBusy ? "true" : "false"}
+              aria-hidden={!ftpBusy}
+            >
+              <span className="scan-busy__spinner" />
+            </span>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => void loadFtp()}
+              disabled={ftpBusy}
+              title={t("settings.reload.title")}
+            >
+              <Icon name="refresh" tone="accent" />
+              {t("settings.reload")}
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => void testFtpConnection()}
+              disabled={ftpBusy}
+              title={t("settings.ftp.test.title")}
+            >
+              <Icon name="check" tone="accent" />
+              {t("settings.ftp.test")}
+            </button>
+            <span className="spacer" />
+            <button
+              type="button"
+              className="btn btn--warn"
+              disabled={ftpBusy || !ftpHasBackup}
+              onClick={() => void onRestoreFtp()}
+              title={t("settings.btn.default.title")}
+            >
+              <Icon name="refresh" tone="warn" />
+              {t("settings.btn.default")}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={ftpBusy || !ftpDirty}
+              aria-disabled={!canManageAdminConfig}
+              onClick={() => {
+                if (!canManageAdminConfig) {
+                  showPrivilegeNotice();
+                  return;
+                }
+                void onSaveFtp();
+              }}
+              title={t("settings.btn.saveAs.title")}
+            >
+              <Icon name="download" />
+              {t("settings.btn.saveAs")}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2032,7 +2379,7 @@ function AllowedHostsTab({
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/admin/iobeam/hosts", { headers: scanAuthHeaders() });
+      const r = await fetch(apiUrl("/api/admin/iobeam/hosts"), { headers: scanAuthHeaders() });
       const data = (await r.json().catch(() => null)) as AllowedHostsResponse | null;
       if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
       const hosts = normalizeAllowedHostList(Array.isArray(data.hosts) ? data.hosts : []);
@@ -2075,7 +2422,7 @@ function AllowedHostsTab({
     setNotice(null);
     setNoticeTone("success");
     try {
-      const r = await fetch("/api/admin/iobeam/hosts", {
+      const r = await fetch(apiUrl("/api/admin/iobeam/hosts"), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
         body: JSON.stringify({ hosts: draftHosts }),
@@ -2709,10 +3056,10 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
   generalVoltage: (
     <>
       <p>
-        Default beam-control voltage from <code>actionData.voltage</code>.
-        It is loaded with the rest of <code>streamData.json</code> and
-        should match the analog range expected by the connected scan
-        electronics.
+        Beam energy in electron-volts from <code>actionData.ev</code>.
+        This is not the Glasgow I/O port voltage. It is stored with the
+        rest of <code>streamData.json</code> and should match the beam
+        energy expected by the microscope configuration.
       </p>
     </>
   ),
@@ -2907,6 +3254,7 @@ function PasswordField({
   visible,
   configured,
   revealLabel,
+  disabled = false,
   onReveal,
   onHide,
   onChange,
@@ -2916,6 +3264,7 @@ function PasswordField({
   visible: boolean;
   configured: boolean;
   revealLabel: string;
+  disabled?: boolean;
   onReveal: () => void;
   onHide: () => void;
   onChange: (v: string) => void;
@@ -2928,12 +3277,14 @@ function PasswordField({
           type={visible ? "text" : "password"}
           className="input"
           value={visible ? value : configured ? "********" : value}
+          disabled={disabled}
           readOnly={!visible && configured}
           onChange={(e) => onChange(e.target.value)}
         />
         <button
           type="button"
           className="modal__close settings-password-field__reveal"
+          disabled={disabled}
           onPointerDown={(event) => {
             event.preventDefault();
             onReveal();
@@ -3057,7 +3408,7 @@ function SettingsNotice({
   message,
   onDismiss,
 }: {
-  tone: "info" | "success" | "error";
+  tone: "info" | "success" | "warning" | "error";
   volatile?: boolean;
   message: string;
   onDismiss: () => void;

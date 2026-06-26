@@ -1,11 +1,14 @@
 type IconName =
   | "check"
+  | "circleTool"
   | "cog"
+  | "commentTool"
   | "crop"
   | "download"
   | "globe"
   | "grid"
   | "help"
+  | "highlightTool"
   | "image"
   | "home"
   | "layers"
@@ -16,6 +19,7 @@ type IconName =
   | "play"
   | "plus"
   | "refresh"
+  | "rectangleTool"
   | "route"
   | "scan"
   | "save"
@@ -39,10 +43,11 @@ export function Icon({
   tone?: "accent" | "danger" | "success" | "tab" | "warn";
 }) {
   const imageSource = imageSources[name];
+  const className = `${tone ? `icon icon--${tone}` : "icon"} icon--${name}`;
   if (imageSource) {
     return (
       <img
-        className={tone ? `icon icon--${tone}` : "icon"}
+        className={className}
         src={imageSource}
         alt=""
         aria-hidden
@@ -51,8 +56,8 @@ export function Icon({
   }
 
   return (
-    <svg className={tone ? `icon icon--${tone}` : "icon"} viewBox="0 0 24 24" aria-hidden>
-      {paths[name]}
+    <svg className={className} viewBox="0 0 24 24" aria-hidden>
+      {paths[name] ?? null}
     </svg>
   );
 }
@@ -62,8 +67,23 @@ const imageSources: Partial<Record<IconName, string>> = {
   sheet: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC2klEQVR4nGNgGAWjYBSMgmEJODtdpHjbPXy5210bOFtcNnM0OT1jGJSg3p5FcEqwttAkvzjBCb4TBfp9dvP3eL3h7fb8z9Pp8Z+73e0/V6vLf85m5/8D7VQG4TlJvJILI20k54anic0Jmyg2M+SIyPSg78JTA/8LTQ74LzjR779Av+9//l7v/wPuAbmlmYKyqxJtZJcn5MssjVskvST2qtSiqL+SCyL/S8yL+C8+J+y/2KzQ/6Izgv8PSg8orEn+L78q6b/cioT/ssvi/sssif0vtSj6PyUeMDziThY2OOJ2eEh7wPCIO+mxN+qB7lEP/B90HkAGMIfhA6MekEfyQO3pRSiGZ+2fhOIB1dlx/z/+/AqXrzkwd3B5QH5p/P/r7x/BDb/1/sl/idlhcA9MO78RLnf9zcP/Qr2+gy8PhO5qRQmhuJ1dYA8YLEr7/+PPL7i4z6rKwZuJtz44BXfouVe3wR5YcWM/XGzl9f2DMw/IQD1gviYPJbRTdvf+//PvL5gNygNqs+IGfynUf2Ed3JL3P77A2RUHZg3eUkgGyQNKi+L/P/vyBsWyy6/v/xeZFDA0KjLVxYn/n319i+KBR59e/ZeaGjo0PLDoxh64w198fQdnd59aOfiTUMD2xv///v8DW/D998//sTs64BaCMrfpgozB6wGFpfH/b75/Ardg4vn14GJ078PzcLEjjy//F+j1GZwe6L+4Hm74h59f/qstTAR7wG5l4f+//yCxAgJJWzoHXx5w2FT2/ydS+d94cglKW2j97SNwuRdf3v2XmRQyeDwgvzz+/6lXt+AOfP713X+FBbEoHjBZnPn/998/cDUzzm4cfElIaig3p2VGPeA8eCoyiVEPuI96YEh5wOCw2yGGETe4i3N4fUGUscTcsLhBP7xOzgSHwAS/Dv4+n82DdoKDaPCfgZGv102Fp8sjlLvdrY2z1WUbR7Pzc+INGAWjYBSMAoYhAgBEtnuV0kUiSgAAAABJRU5ErkJggg==",
 };
 
-const paths: Record<IconName, JSX.Element> = {
+const paths: Partial<Record<IconName, JSX.Element>> = {
   check: <path d="M5 12.5l4 4L19 6.5" />,
+  highlightTool: (
+    <>
+      <path d="M5 15h6.5l4.5-4.5-3.5-3.5L8 11v4z" />
+      <path d="M10.2 6.8l3 3" />
+      <path d="M6 16h8" />
+    </>
+  ),
+  commentTool: (
+    <>
+      <path d="M4 5h16v10H9l-5 4v-4H4z" />
+      <path d="M8 9h8M8 12h4" />
+    </>
+  ),
+  rectangleTool: <rect x="5" y="5" width="14" height="12" rx="1.5" />,
+  circleTool: <circle cx="12" cy="12" r="6.5" />,
   cog: (
     <path
       fill="currentColor"

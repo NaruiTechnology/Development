@@ -230,6 +230,9 @@ export const zhCN: Partial<TranslationTable> = {
   "canvas.meta.beam.title": "根据最近接收的 ADC 样本索引推算出的束流当前位置。",
   "canvas.meta.adcNow.title": "束流当前位置的 ADC 数值。",
   "canvas.meta.adcRange.title": "已接收样本的原始 ADC 范围。画布将此范围自动缩放为可见灰度。",
+  "canvas.editor.context.undo": "撤销上一步编辑",
+  "canvas.editor.context.remove": "移除所选内容",
+  "canvas.editor.context.clear": "清除所有编辑",
 
   /* ===== phase enum =============================================== */
   "phase.idle": "空闲",
@@ -429,7 +432,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.general.enableEbeam": "启用电子束",
   "settings.general.enableIbeam": "启用离子束",
   "settings.admin.db.password.show": "显示数据库密码",
-  "settings.general.voltage": "Glasgow revC3 端口 A/B 的电压",
+  "settings.general.ev": "束能量（eV）",
   "settings.general.frequency": "频率 (Hz)",
   "settings.general.point": "点数",
   "settings.general.waveForm": "波形",
@@ -498,7 +501,7 @@ export const zhCN: Partial<TranslationTable> = {
 
   /* ===== settings dialog help ===================================== */
   "settings.help.aria": "显示技术帮助",
-  "settings.help.generalVoltage.title": "电压",
+  "settings.help.generalVoltage.title": "束能量",
   "settings.help.generalBuffer.title": "缓冲区大小",
   "settings.help.rasterPixels.title": "光栅像素",
   "settings.help.rasterResolution.title": "光栅分辨率",

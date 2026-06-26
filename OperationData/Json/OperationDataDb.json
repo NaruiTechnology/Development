@@ -1,0 +1,12 @@
+{
+  "Provider": "PostgreSQL",
+  "DatabaseName": "operation_data",
+  "Schema": "operation_data",
+  "Host": "124.221.175.89",
+  "Port": 5432,
+  "User": "deployworkspace",
+  "Password": "DWS_112233",
+  "ConnectionString": "postgresql://deployworkspace:DWS_112233@124.221.175.89:5432/operation_data",
+  "SslMode": "",
+  "CommandTimeoutMs": 30000
+}

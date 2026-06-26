@@ -22,6 +22,8 @@ import {
   downloadBlob,
 } from "../lib/csvExport";
 import { useTranslation } from "../i18n";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
@@ -43,7 +45,13 @@ type DirectoryHandle = {
 const OUTPUT_PREFIX_STORAGE_KEY = "ionbeam:downloadOutputPrefix";
 const DEFAULT_DOWNLOAD_PATH_LABEL = defaultDownloadPathLabel();
 
-export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
+export function ValidationPanel({
+  disabled = false,
+  mergedFigureUrl = null,
+}: {
+  disabled?: boolean;
+  mergedFigureUrl?: string | null;
+}) {
   const { t, fmt } = useTranslation();
   const result = useAppSelector((s) => s.scan.lastResult);
   const error = useAppSelector((s) => s.scan.errorMessage);
@@ -123,8 +131,11 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
       setDbFlowState("checking");
       setDbFlowErr(null);
       try {
-        const r = await fetch("/api/admin/iobeam/db/status");
-        const data = (await r.json()) as { ok?: boolean; enabled?: boolean; error?: string };
+        const r = await fetch(apiUrl("/api/admin/iobeam/db/status"));
+        const data = await readJsonResponse<{ ok?: boolean; enabled?: boolean; error?: string }>(
+          r,
+          "db status"
+        );
         if (cancelled) return;
         if (r.ok && data.enabled) {
           setDbFlowState("ready");
@@ -211,7 +222,7 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
 
   async function csvDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
     if (haveValidatedData) {
-      const r = await fetch("/api/scan/last/csv");
+      const r = await fetch(apiUrl("/api/scan/last/csv"));
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
       const blob = await r.blob();
       return {
@@ -236,11 +247,25 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
   }
 
   async function figureDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
+    if (mergedFigureUrl) {
+      const merged = await fetch(mergedFigureUrl);
+      if (!merged.ok) {
+        throw new Error(`HTTP ${merged.status}: merged figure export failed`);
+      }
+      return {
+        blob: await merged.blob(),
+        filename: defaultDownloadFilename(scanKind, "png", {
+          resolution: result?.resolution ?? rasterRes,
+          latency_bytes: vectorLatency,
+        }, outputPrefix),
+      };
+    }
+
     const url =
       kind === "vector"
         ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`
         : "/api/scan/last/figure";
-    const r = await fetch(url);
+    const r = await fetch(apiUrl(url));
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
       throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);

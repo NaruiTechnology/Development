@@ -35,6 +35,7 @@ import {
 } from "./adminDbService";
 import {
   buildActivityReportFromDb,
+  adminActivityExistsInDb,
   dedupeActivityRowsFromDb,
   listAllowedHostsFromDb,
   findAdminUserInDb,
@@ -50,6 +51,11 @@ import {
   type AdminUser,
   type Equipment,
 } from "./adminDbRepository";
+import {
+  recordInputSetupInDb,
+  recordOutputDataInDb,
+  readOperationTelemetrySummaryFromDb,
+} from "./operationDataRepository";
 import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
 import {
   ConfigError,
@@ -62,6 +68,11 @@ import {
   writeAdminConfig,
   writeConfig,
 } from "./configManager";
+import {
+  uploadMergedFigureToConfiguredFtp,
+  uploadScanArtifactsToConfiguredFtp,
+  testConfiguredFtpConnection,
+} from "./ftpUpload";
 
 const app = express();
 let server: http.Server;
@@ -157,9 +168,59 @@ interface DbApplyResponse {
   error?: string;
 }
 
+interface OperationTelemetryStatusResponse {
+  ok: boolean;
+  input_setup_count?: number;
+  output_data_count?: number;
+  latest_input_setup?: {
+    id: number;
+    activity_id: number;
+    start_xy: number;
+    end_xy: number;
+    dwell: number;
+    scale_unit: string;
+    ev: number;
+    scan_parameters: Record<string, unknown>;
+    update_date: string;
+  } | null;
+  latest_output_data?: {
+    id: number;
+    activity_id: number;
+    csv_filename: string;
+    image_filename: string;
+    description: string;
+    scan_result: Record<string, unknown>;
+    update_date: string;
+  } | null;
+  error?: string;
+}
+
 interface ActivityDedupeResponse {
   ok: boolean;
   deleted: number;
+}
+
+interface ScanTelemetryStartRequest {
+  kind?: unknown;
+  start_xy?: unknown;
+  end_xy?: unknown;
+  dwell?: unknown;
+  scale_unit?: unknown;
+  ev?: unknown;
+  resolution?: unknown;
+  latency_bytes?: unknown;
+  vector_resolution?: unknown;
+  scan_parameters?: unknown;
+}
+
+interface ScanTelemetryOutputRequest {
+  activity_id?: unknown;
+  kind?: unknown;
+  resolution?: unknown;
+  latency_bytes?: unknown;
+  vector_resolution?: unknown;
+  chunks?: unknown;
+  scan_result?: unknown;
 }
 
 const smsChallenges = new Map<string, SmsChallenge>();
@@ -187,6 +248,31 @@ const DEFAULT_SITE = SITE_OPTIONS[0];
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "256mb" })); // scan DB flow may post large CSV/PNG blobs
+app.use((req, res, next) => {
+  const origin = req.get("origin");
+  const allowed =
+    !origin ||
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) ||
+    origin === "http://localhost:5173" ||
+    origin === "http://127.0.0.1:5173" ||
+    origin === "http://localhost:4173" ||
+    origin === "http://127.0.0.1:4173";
+
+  if (allowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin ?? "*");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Iobeam-Auth");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Vary", "Origin");
+  }
+
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+
+  next();
+});
 
 // Health endpoint for ops / load balancers.
 app.get("/healthz", (_req, res) => {
@@ -674,6 +760,22 @@ app.get(
   },
 );
 
+app.get(
+  "/api/admin/iobeam/operation/status",
+  async (req, res: express.Response<OperationTelemetryStatusResponse>) => {
+    try {
+      await requireAdminPrivilege(req, "only Admin or Auditor accounts can view operation scan telemetry");
+      const summary = await readOperationTelemetrySummaryFromDb();
+      res.json({
+        ok: true,
+        ...summary,
+      });
+    } catch (err) {
+      sendConfigError(res, err);
+    }
+  },
+);
+
 app.post(
   "/api/admin/iobeam/db/apply",
   async (req, res: express.Response<DbApplyResponse>) => {
@@ -853,6 +955,101 @@ app.post("/api/admin/iobeam/activity", async (req, res) => {
   }
 });
 
+app.post("/api/admin/iobeam/operation/input-setup", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
+      throw new ConfigError("scan privilege required to record operation inputs", 403);
+    }
+    const body = req.body as ScanTelemetryStartRequest | null;
+    const kind = String(body?.kind ?? "").trim().toLowerCase();
+    if (kind !== "raster" && kind !== "vector") {
+      res.status(400).json({ ok: false, error: "kind must be raster or vector" });
+      return;
+    }
+
+    const userId = Number(actor.id ?? 0);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      res.status(400).json({ ok: false, error: "current account does not have a database id" });
+      return;
+    }
+
+    const lifetimeDays = Math.max(1, Math.trunc(actor.session_lifetime_limit_days ?? 1));
+    const activityId = await recordActivityInDb(
+      userId,
+      null,
+      `${kind}_scan`,
+      lifetimeDays,
+    );
+    if (!activityId) {
+      throw new ConfigError("failed to record admin activity for scan start", 500);
+    }
+
+    const inputId = await recordInputSetupInDb({
+      activity_id: activityId,
+      start_xy: normalizeDecimal(body?.start_xy, 0),
+      end_xy: normalizeDecimal(body?.end_xy, 0),
+      dwell: normalizeInteger(body?.dwell, 0),
+      scale_unit: normalizeScaleUnit(body?.scale_unit),
+      ev: normalizeDecimal(body?.ev, 0),
+      scan_parameters: jsonObjectOrSelf(body?.scan_parameters, body),
+    });
+
+    res.json({ ok: true, activity_id: activityId, input_setup_id: inputId });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post("/api/admin/iobeam/operation/output-data", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
+      throw new ConfigError("scan privilege required to record operation outputs", 403);
+    }
+    const body = req.body as ScanTelemetryOutputRequest | null;
+    const activityId = normalizePositiveInteger(body?.activity_id);
+    if (!activityId) {
+      res.status(400).json({ ok: false, error: "activity_id must be a positive integer" });
+      return;
+    }
+    if (!(await adminActivityExistsInDb(activityId))) {
+      res.status(404).json({ ok: false, error: "unknown activity_id" });
+      return;
+    }
+
+    const kind = String(body?.kind ?? "").trim().toLowerCase();
+    if (kind !== "raster" && kind !== "vector") {
+      res.status(400).json({ ok: false, error: "kind must be raster or vector" });
+      return;
+    }
+
+    const output = await recordOperationScanOutput(
+      kind,
+      activityId,
+      body as Record<string, unknown> | null,
+      jsonObjectOrSelf(body?.scan_result, body),
+      normalizeInteger(body?.chunks, 0),
+    );
+
+    res.json({
+      ok: true,
+      output_data_id: output.outputId,
+      csv_filename: output.csvFilename,
+      image_filename: output.imageFilename,
+    });
+
+    void uploadScanArtifactsToConfiguredFtp(kind, {
+      csvFilename: output.csvFilename,
+      imageFilename: output.imageFilename,
+    }).catch((err) => {
+      console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+    });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
 app.post(
   "/api/admin/iobeam/activity/dedupe",
   async (req, res: express.Response<ActivityDedupeResponse | ConfigSaveResponse>) => {
@@ -868,6 +1065,55 @@ app.post(
 
 app.post("/api/admin/restart-services", async (_req, res) => {
   await restartServicesAndRespond(res);
+});
+
+app.post("/api/admin/ftp/merged-figure", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
+      throw new ConfigError("scan privilege required to upload merged figures", 403);
+    }
+
+    const body = req.body as { kind?: unknown; data_url?: unknown; filename?: unknown } | null;
+    const kind = String(body?.kind ?? "").trim().toLowerCase();
+    if (kind !== "raster" && kind !== "vector") {
+      res.status(400).json({ ok: false, error: "kind must be raster or vector" });
+      return;
+    }
+
+    const imageBuffer = pngBufferFromDataUrl(body?.data_url);
+    if (!imageBuffer) {
+      res.status(400).json({ ok: false, error: "data_url must be a PNG data URL" });
+      return;
+    }
+
+    const suppliedFilename = normalizePngFilename(body?.filename);
+    let filename = suppliedFilename;
+    if (!filename) {
+      const telemetry = await readOperationTelemetrySummaryFromDb();
+      const latestOutput = telemetry.latest_output_data;
+      const latestFilename = normalizePngFilename(latestOutput?.image_filename);
+      filename = latestFilename?.toLowerCase().startsWith(`${kind}_`) ? latestFilename : null;
+    }
+    if (!filename) {
+      throw new ConfigError("no original scan filename available for merged figure upload", 409);
+    }
+
+    await uploadMergedFigureToConfiguredFtp(filename, imageBuffer);
+    res.json({ ok: true, filename });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.get("/api/admin/ftp/test-connection", async (_req, res) => {
+  try {
+    await requireAdminPrivilege(_req, "only Admin or Auditor accounts can test FTP configuration");
+    const status = await testConfiguredFtpConnection();
+    res.json({ ok: true, ...status });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
 });
 
 app.use("/api/scan/raster/run", requireScanPrivilege);
@@ -902,9 +1148,78 @@ if (config.mock) {
         "figure rendering is not available in MOCK=1 mode (matplotlib runs on the Python service only)",
     });
   });
-} else {
+  app.get("/api/scan/last/meta", async (_req, res) => {
+    const telemetry = await readOperationTelemetrySummaryFromDb();
+    const latestOutput = telemetry.latest_output_data;
+    if (!latestOutput) {
+      res.json(null);
+      return;
+    }
+
+    const scanResult = latestOutput.scan_result;
+    res.json({
+      kind: String(scanResult.kind ?? ""),
+      chunks: normalizeInteger(scanResult.chunks, 0),
+      source: scanResult.validation ? "validated" : "stream",
+      resolution: scanResult.resolution ?? null,
+      latency_bytes: scanResult.latency_bytes ?? null,
+      pattern: scanResult.kind === "vector" ? (scanResult.process_time_s != null ? "validated" : null) : null,
+      csv_filename: latestOutput.csv_filename,
+      image_filename: latestOutput.image_filename,
+    });
+  });
+  app.post("/api/scan/raster/run", async (req, res) => {
+    await proxyScanRunWithTelemetry("raster", req, res);
+  });
+  app.post("/api/scan/vector/run", async (req, res) => {
+    await proxyScanRunWithTelemetry("vector", req, res);
+  });
   app.use("/api", buildRestProxy());
 }
+
+// Keep /api/status explicit in the real backend too so the dev server never
+// falls through to the SPA index.html if the proxy router is bypassed or
+// reloaded late.
+app.get("/api/status", async (_req, res) => {
+  try {
+    const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
+      headers: config.glasgowToken
+        ? { Authorization: `Bearer ${config.glasgowToken}` }
+        : undefined,
+      signal: AbortSignal.timeout(2_000),
+    });
+    const contentType = (upstream.headers.get("content-type") ?? "").toLowerCase();
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      throw new Error(`upstream status returned HTTP ${upstream.status}`);
+    }
+    if (!contentType.includes("application/json")) {
+      res.status(502).json({
+        error: "upstream_invalid_content_type",
+        detail: `upstream /status returned ${contentType || "unknown content type"} instead of JSON`,
+        upstream_status: upstream.status,
+      });
+      return;
+    }
+    try {
+      res.status(upstream.status).json(JSON.parse(text));
+    } catch {
+      res.status(502).json({
+        error: "upstream_invalid_json",
+        detail: "upstream /status returned invalid JSON",
+        upstream_status: upstream.status,
+      });
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    res.json({
+      state: "disconnected",
+      last_error: `glasgow_service unreachable: ${detail}`,
+      scans_completed: 0,
+      chunks_in_flight: 0,
+    });
+  }
+});
 
 // Static (production) — only mount if the build output actually exists, so
 // `npm run dev` doesn't 404 itself.
@@ -1286,8 +1601,8 @@ async function authorizeAdminConfigSave(req: ScanAuthRequest, nextData: unknown)
 
 async function authorizeStreamConfigSave(req: ScanAuthRequest, nextData: unknown): Promise<void> {
   const info = await readWithBackup();
-  if (!pinsConfigEqual(info.data, nextData)) {
-    await requireAdminPrivilege(req, "only Admin or Auditor accounts can edit PINS");
+  if (!pinsConfigEqual(info.data, nextData) || !ftpConfigEqual(info.data, nextData)) {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can edit PINS or FTP");
   }
 }
 
@@ -1319,7 +1634,7 @@ async function requireScanPrivilege(
   }
 }
 
-async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true; actor: AdminUser } | { ok: false; status: number; message: string }> {
   try {
     const actor = await currentAdminActor(req);
     if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
@@ -1329,7 +1644,7 @@ async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } 
         message: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
       };
     }
-    return { ok: true };
+    return { ok: true, actor };
   } catch (err) {
     return {
       ok: false,
@@ -1341,6 +1656,258 @@ async function authorizeScanUpgrade(req: IncomingMessage): Promise<{ ok: true } 
 
 function hasRasterVectorScanPrivilege(role: number): boolean {
   return role >= ROLE_SUPER_USER;
+}
+
+function normalizeInteger(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function normalizePositiveInteger(value: unknown): number {
+  const n = normalizeInteger(value, 0);
+  return n > 0 ? n : 0;
+}
+
+function normalizeDecimal(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function jsonObjectOrSelf(value: unknown, fallback: unknown): Record<string, unknown> {
+  if (value && typeof value === "object") {
+    return value as Record<string, unknown>;
+  }
+  if (fallback && typeof fallback === "object") {
+    return fallback as Record<string, unknown>;
+  }
+  return {};
+}
+
+async function proxyScanRunWithTelemetry(
+  kind: "raster" | "vector",
+  req: express.Request,
+  res: express.Response,
+): Promise<void> {
+  const body = req.body as Record<string, unknown> | null;
+  const actor = await currentAdminActor(req).catch(() => null);
+  if (!actor || !actor.is_active || !hasRasterVectorScanPrivilege(actor.role)) {
+    res.status(403).json({
+      ok: false,
+      error: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
+    });
+    return;
+  }
+
+  const activityId = await recordOperationScanStart(kind, actor, body).catch((err) => {
+    console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
+    return null;
+  });
+
+  const upstream = await fetch(`${config.proxyTargetHttp}/scan/${kind}/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(config.glasgowToken ? { Authorization: `Bearer ${config.glasgowToken}` } : {}),
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  const responseText = await upstream.text();
+  const contentType = upstream.headers.get("content-type") ?? "application/json";
+
+  if (!upstream.ok || !activityId) {
+    res.status(upstream.status).type(contentType).send(responseText);
+    return;
+  }
+
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = responseText ? (JSON.parse(responseText) as Record<string, unknown>) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed) {
+    res.status(502).json({
+      error: "upstream_invalid_json",
+      detail: `scan/${kind}/run returned ${contentType || "unknown content type"} instead of JSON`,
+      upstream_status: upstream.status,
+    });
+    return;
+  }
+
+  const chunks = normalizeInteger(parsed.chunks, normalizeInteger(body?.chunks, 0));
+  const output = buildScanArtifactInfo(kind, activityId, body, parsed, chunks);
+  await recordOperationScanOutput(kind, activityId, body, parsed, chunks, output).catch((err) => {
+    console.warn(`[operation-data] failed to record ${kind} scan output:`, err);
+  });
+  void uploadScanArtifactsToConfiguredFtp(kind, {
+    csvFilename: output.csvFilename,
+    imageFilename: output.imageFilename,
+  }).catch((err) => {
+    console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+  });
+
+  res.status(upstream.status).json({
+    ...parsed,
+    csv_filename: output.csvFilename,
+    image_filename: output.imageFilename,
+  });
+}
+
+async function recordOperationScanStart(
+  kind: "raster" | "vector",
+  actor: AdminUser,
+  body: Record<string, unknown> | null,
+): Promise<number | null> {
+  const activityId = await recordActivityInDb(
+    Number(actor.id ?? 0),
+    null,
+    `${kind}_scan`,
+    Math.max(1, Math.trunc(actor.session_lifetime_limit_days ?? 1)),
+  );
+  if (!activityId) {
+    return null;
+  }
+
+  await recordInputSetupInDb({
+    activity_id: activityId,
+    start_xy: normalizeDecimal(body?.start_xy, 0),
+    end_xy: normalizeDecimal(body?.end_xy, 0),
+    dwell: normalizeInteger(body?.dwell, 0),
+    scale_unit: normalizeScaleUnit(body?.scale_unit),
+    ev: normalizeDecimal(body?.ev, 0),
+    scan_parameters: body ?? {},
+  });
+  return activityId;
+}
+
+async function recordOperationScanOutput(
+  kind: "raster" | "vector",
+  activityId: number,
+  body: Record<string, unknown> | null,
+  response: Record<string, unknown>,
+  chunks: number,
+  output: ScanArtifactInfo = buildScanArtifactInfo(kind, activityId, body, response, chunks),
+): Promise<{ outputId: number; csvFilename: string; imageFilename: string }> {
+  const outputId = await recordOutputDataInDb({
+    activity_id: activityId,
+    csv_filename: output.csvFilename,
+    image_filename: output.imageFilename,
+    description: output.description,
+    scan_result: response,
+  });
+  return {
+    outputId,
+    csvFilename: output.csvFilename,
+    imageFilename: output.imageFilename,
+  };
+}
+
+function normalizeScaleUnit(value: unknown): string {
+  const unit = String(value ?? "").trim();
+  return unit.slice(0, 10) || "dac";
+}
+
+function pngBufferFromDataUrl(value: unknown): Buffer | null {
+  const raw = String(value ?? "").trim();
+  const match = raw.match(/^data:image\/png;base64,(.+)$/i);
+  if (!match) return null;
+  try {
+    return Buffer.from(match[1], "base64");
+  } catch {
+    return null;
+  }
+}
+
+function normalizePngFilename(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw !== path.basename(raw) || !raw.toLowerCase().endsWith(".png")) {
+    return null;
+  }
+  return raw;
+}
+
+function formatScanTimestamp(date: Date): string {
+  const yy = String(date.getUTCFullYear() % 100).padStart(2, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const min = String(date.getUTCMinutes()).padStart(2, "0");
+  const ss = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${yy}${mm}${dd}_${hh}${min}${ss}`;
+}
+
+function buildOperationOutputDescription(payload: {
+  kind: string;
+  activityId: number;
+  chunks: number;
+  resolution: number;
+  latencyBytes: number;
+  vectorResolution: number;
+  csvFilename: string;
+  imageFilename: string;
+}): string {
+  return JSON.stringify({
+    kind: payload.kind,
+    activity_id: payload.activityId,
+    chunks: payload.chunks,
+    resolution: payload.resolution || null,
+    latency_bytes: payload.latencyBytes || null,
+    vector_resolution: payload.vectorResolution || null,
+    csv_filename: payload.csvFilename,
+    image_filename: payload.imageFilename,
+  });
+}
+
+interface ScanArtifactInfo {
+  csvFilename: string;
+  imageFilename: string;
+  description: string;
+}
+
+function buildScanArtifactInfo(
+  kind: "raster" | "vector",
+  activityId: number,
+  body: Record<string, unknown> | null,
+  response: Record<string, unknown>,
+  chunks: number,
+): ScanArtifactInfo {
+  const timestamp = formatScanTimestamp(new Date());
+  const resolution = normalizeInteger(response.resolution ?? body?.resolution, 0);
+  const latencyBytes = normalizeInteger(response.latency_bytes ?? body?.latency_bytes, 0);
+  const vectorResolution = normalizeInteger(response.vector_resolution ?? body?.vector_resolution, 0);
+  const filenames = buildScanArtifactFilenames(kind, resolution, latencyBytes, vectorResolution, timestamp);
+  return {
+    ...filenames,
+    description: buildOperationOutputDescription({
+      kind,
+      activityId,
+      chunks,
+      resolution,
+      latencyBytes,
+      vectorResolution,
+      csvFilename: filenames.csvFilename,
+      imageFilename: filenames.imageFilename,
+    }),
+  };
+}
+
+function buildScanArtifactFilenames(
+  kind: "raster" | "vector",
+  resolution: number,
+  latencyBytes: number,
+  vectorResolution: number,
+  timestamp: string,
+): { csvFilename: string; imageFilename: string } {
+  return kind === "raster"
+    ? {
+        csvFilename: `raster_${resolution}x${resolution}_${timestamp}.csv`,
+        imageFilename: `raster_${resolution}x${resolution}_${timestamp}.png`,
+      }
+    : {
+        csvFilename: `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.csv`,
+        imageFilename: `vector_latency_${latencyBytes || vectorResolution || 0}_${timestamp}.png`,
+      };
 }
 
 function changedAdminRoleUsers(beforeUsers: AdminUser[], afterUsers: AdminUser[]): AdminUser[] {
@@ -1428,8 +1995,16 @@ function pinsConfigEqual(left: unknown, right: unknown): boolean {
   return stableJson(readStreamPins(left)) === stableJson(readStreamPins(right));
 }
 
+function ftpConfigEqual(left: unknown, right: unknown): boolean {
+  return stableJson(readStreamFtp(left)) === stableJson(readStreamFtp(right));
+}
+
 function readStreamPins(data: unknown): unknown {
   return readConfigPath(data, ["Actions", 0, "streamData", "actionData", "pins"]);
+}
+
+function readStreamFtp(data: unknown): unknown {
+  return readConfigPath(data, ["Actions", 0, "streamData", "actionData", "ftp"]);
 }
 
 function readConfigPath(data: unknown, pathParts: ReadonlyArray<string | number>): unknown {
@@ -1794,23 +2369,37 @@ function scheduleBackendRestartAfterResponse(
 }
 
 function restartBackend(restart: BackendRestartResult): void {
-  if (restart.mode === "command" && restart.command) {
-    const child = spawn("bash", ["-lc", `sleep 1; exec ${restart.command}`], {
-      detached: true,
-      stdio: "ignore",
-      cwd: path.resolve(__dirname, ".."),
-      env: process.env,
-    });
-    child.unref();
+  const spawnReplacement = () => {
+    if (restart.mode === "command" && restart.command) {
+      const child = spawn("bash", ["-lc", `sleep 1; exec ${restart.command}`], {
+        detached: true,
+        stdio: "ignore",
+        cwd: path.resolve(__dirname, ".."),
+        env: process.env,
+      });
+      child.unref();
+    }
+  };
+
+  try {
+    server.closeAllConnections?.();
+    server.closeIdleConnections?.();
+  } catch {
+    // Best-effort only; older Node builds may not expose both helpers.
   }
 
   server.close(() => {
+    spawnReplacement();
     process.exit(0);
   });
 
+  // If the close callback never fires, force the process down so the
+  // port is released. The detached restart command is only spawned from
+  // the close callback, so we would rather fail closed than race the new
+  // listener against a socket that is still being torn down.
   setTimeout(() => {
     process.exit(0);
-  }, 2_000).unref();
+  }, 5_000).unref();
 }
 
 function sendConfigError(res: express.Response, err: unknown): void {
