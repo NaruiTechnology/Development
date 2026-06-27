@@ -5,6 +5,7 @@ import type {
   VectorRequest,
 } from "../types/api";
 import type { ROIState } from "../store/scanSlice";
+import { ROI_CANVAS_EDGE, viewportBounds } from "./roiGeometry";
 
 const MAX_POINTS = 250_000;
 const DAC_MAX = 16383;
@@ -42,10 +43,9 @@ const DAC_MAX = 16383;
  *     a zero-width DAC ROI would trip the Pydantic non-empty
  *     validator on the backend.
  *
- * The bitmap path (`bitmapSelectionToVector`) does the equivalent
- * mapping via bitmap pixel coordinates and produces consistent DAC
- * codes — see `cropToDacROI` below. The two paths agree to within
- * single-pixel rounding error.
+ * The bitmap path keeps using the same world-unit ROI → DAC mapping;
+ * calibration only changes which pixels are cropped from the source
+ * image before those pixels are forwarded as `simulation_bitmap`.
  */
 export function worldSelectionToDacROI(
   selection: ROIRequest,
@@ -271,8 +271,6 @@ async function bitmapSelectionToVector(
 
   const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
   const pixels: number[] = [];
-  const dacRoi = cropToDacROI(crop, sourceW, sourceH);
-
   for (let y = 0; y < sampleH; y++) {
     for (let x = 0; x < sampleW; x++) {
       const i = (y * sampleW + x) * 4;
@@ -284,7 +282,7 @@ async function bitmapSelectionToVector(
   }
 
   const value = {
-    roi: dacRoi,
+    roi: worldSelectionToDacROI(roi.selection, roi),
     simulationBitmap: {
       width: sampleW,
       height: sampleH,
@@ -309,36 +307,43 @@ function selectionCrop(
   const sx1 = Math.max(sel.x_start, sel.x_end);
   const sy0 = Math.min(sel.y_start, sel.y_end);
   const sy1 = Math.max(sel.y_start, sel.y_end);
+  const bounds = viewportBounds(roi);
 
   const left = clamp01((sx0 - x0) / Math.max(1, x1 - x0));
   const right = clamp01((sx1 - x0) / Math.max(1, x1 - x0));
   const top = clamp01((sy0 - y0) / Math.max(1, y1 - y0));
   const bottom = clamp01((sy1 - y0) / Math.max(1, y1 - y0));
 
-  const px0 = Math.max(0, Math.min(sourceW - 1, Math.floor(left * sourceW)));
-  const px1 = Math.max(px0 + 1, Math.min(sourceW, Math.ceil(right * sourceW)));
-  const py0 = Math.max(0, Math.min(sourceH - 1, Math.floor(top * sourceH)));
-  const py1 = Math.max(py0 + 1, Math.min(sourceH, Math.ceil(bottom * sourceH)));
+  const px0 = Math.max(
+    0,
+    Math.min(
+      sourceW - 1,
+      Math.floor(((bounds.left + left * bounds.width) / ROI_CANVAS_EDGE) * sourceW)
+    )
+  );
+  const px1 = Math.max(
+    px0 + 1,
+    Math.min(
+      sourceW,
+      Math.ceil(((bounds.left + right * bounds.width) / ROI_CANVAS_EDGE) * sourceW)
+    )
+  );
+  const py0 = Math.max(
+    0,
+    Math.min(
+      sourceH - 1,
+      Math.floor(((bounds.top + top * bounds.height) / ROI_CANVAS_EDGE) * sourceH)
+    )
+  );
+  const py1 = Math.max(
+    py0 + 1,
+    Math.min(
+      sourceH,
+      Math.ceil(((bounds.top + bottom * bounds.height) / ROI_CANVAS_EDGE) * sourceH)
+    )
+  );
 
   return { x: px0, y: py0, w: px1 - px0, h: py1 - py0 };
-}
-
-function cropToDacROI(
-  crop: { x: number; y: number; w: number; h: number },
-  sourceW: number,
-  sourceH: number
-): ROIRequest {
-  const x0 = Math.round((crop.x / Math.max(1, sourceW - 1)) * DAC_MAX);
-  const x1 = Math.round(((crop.x + crop.w - 1) / Math.max(1, sourceW - 1)) * DAC_MAX);
-  const y0 = Math.round((crop.y / Math.max(1, sourceH - 1)) * DAC_MAX);
-  const y1 = Math.round(((crop.y + crop.h - 1) / Math.max(1, sourceH - 1)) * DAC_MAX);
-
-  return {
-    x_start: Math.max(0, Math.min(DAC_MAX, x0)),
-    x_end: Math.max(0, Math.min(DAC_MAX, Math.max(x0 + 1, x1))),
-    y_start: Math.max(0, Math.min(DAC_MAX, y0)),
-    y_end: Math.max(0, Math.min(DAC_MAX, Math.max(y0 + 1, y1))),
-  };
 }
 
 function isPartialSelection(roi: ROIState): boolean {
@@ -365,6 +370,10 @@ function extractionKey(roi: ROIState): string {
     x_end: roi.x_end,
     y_origin: roi.y_origin,
     y_end: roi.y_end,
+    viewport_x_start: roi.viewport_x_start,
+    viewport_x_end: roi.viewport_x_end,
+    viewport_y_start: roi.viewport_y_start,
+    viewport_y_end: roi.viewport_y_end,
     selection: r
       ? {
           x_start: r.x_start,
@@ -383,10 +392,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error("failed to load ROI bitmap"));
     img.src = src;
   });
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
 }
 
 function clamp01(n: number): number {

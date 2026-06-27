@@ -31,6 +31,7 @@ import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { ROIScanPreview } from "./components/ROIScanPreview";
+import { ROICalibrationCard } from "./components/ROICalibrationCard";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -95,6 +96,7 @@ export function App() {
   });
   const settingsTarget = useMemo(() => parseSettingsTarget(window.location.search), []);
   const hasPartialROI = isPartialROISelection(roiState);
+  const showROISideCard = kind === "roi" && (roiState.calibration_enabled || hasPartialROI);
   const isSignedIn = Boolean(signedInUser);
 
   useEffect(() => {
@@ -173,7 +175,7 @@ export function App() {
       const rect = main.getBoundingClientRect();
       const maxRight = Math.max(
         MIN_RIGHT_PANEL_WIDTH,
-        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (hasPartialROI ? 236 : 0)
+        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROISideCard ? 236 : 0)
       );
       const next = Math.min(
         maxRight,
@@ -198,7 +200,7 @@ export function App() {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [isResizing, hasPartialROI]);
+  }, [isResizing, showROISideCard]);
 
   const scanActive = phase === "running" || phase === "stopping";
   const panelDisabled = scanActive || !isSignedIn;
@@ -267,7 +269,7 @@ export function App() {
     const rect = main.getBoundingClientRect();
     const maxRight = Math.max(
       MIN_RIGHT_PANEL_WIDTH,
-      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (hasPartialROI ? 236 : 0)
+      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROISideCard ? 236 : 0)
     );
     const next = Math.min(maxRight, Math.max(MIN_RIGHT_PANEL_WIDTH, rightPanelWidth + delta));
     setRightPanelWidth(next);
@@ -285,6 +287,8 @@ export function App() {
       ? "card.rasterImage"
       : kind === "vector"
       ? "card.vectorPattern"
+      : roiState.calibration_enabled
+      ? "card.calibration"
       : "card.selectROI";
 
   return (
@@ -310,7 +314,7 @@ export function App() {
       <main
         ref={mainRef}
         className={`app-main${isResizing ? " app-main--resizing" : ""}${
-          hasPartialROI ? " app-main--with-roi-preview" : ""
+          showROISideCard ? " app-main--with-roi-preview" : ""
         }`}
         style={layoutStyle}
       >
@@ -445,14 +449,20 @@ export function App() {
 
         </section>
 
-        {hasPartialROI && (
+        {showROISideCard && (
           <section className="roi-preview-column">
             <div className="card roi-preview-card">
               <div className="card__header">
-                <span className="card__title">{t("card.roiPreview")}</span>
+                <span className="card__title">
+                  {t(roiState.calibration_enabled ? "card.calibration" : "card.roiPreview")}
+                </span>
               </div>
               <div className="card__body">
-                <ROIScanPreview backgroundImageUrl={roiScanImageUrl} />
+                {roiState.calibration_enabled ? (
+                  <ROICalibrationCard disabled={panelDisabled} />
+                ) : (
+                  <ROIScanPreview backgroundImageUrl={roiScanImageUrl} />
+                )}
               </div>
             </div>
           </section>

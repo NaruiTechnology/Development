@@ -3,19 +3,22 @@ import { useEffect, useRef, useState } from "react";
 import { clearROIImage, clearROISelection, updateROI, type ROIState } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
+import { clearBitmapSelectionCache, worldSelectionToDacROI } from "../lib/bitmapVector";
 import {
-  clearBitmapSelectionCache,
-  worldSelectionToDacROI,
-} from "../lib/bitmapVector";
+  ROI_CANVAS_EDGE,
+  ROI_VIEWPORT_MIN_SPAN,
+  canvasPointToWorld,
+  clampCanvasPointToViewport,
+  clampViewportCoordinate,
+  viewportBounds,
+  worldToCanvasX,
+  worldToCanvasY,
+} from "../lib/roiGeometry";
 import { useTranslation, type TranslationApi, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
 
-const EDGE = 640;
-// Scale-unit values are stored in state as ASCII codes ("um" / "mm" / …)
-// because the wire-format API doesn't carry units (everything is
-// linearly remapped to DAC codes). The display labels use the actual
-// Unicode symbols; we don't translate these because they're SI-standard
-// notation that operators read the same way in every language.
+type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
+
 const UNITS = [
   { value: "um", label: "μm" },
   { value: "mm", label: "mm" },
@@ -36,12 +39,8 @@ export function ROIEditor({
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
-  const simulationSource = useAppSelector((s) => {
-    const raw = s.status.defaults?.simulation?.source;
-    return typeof raw === "string" ? raw : "";
-  });
-  const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -49,12 +48,9 @@ export function ROIEditor({
   const [draft, setDraft] = useState<ROIRequest | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
+  const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
-  const imageFileSourceEnabled = isProduction || simulationSource === "file";
-  const imageFileSourcePrompt = !imageFileSourceEnabled
-    ? t("roi.imageSourceFileRequired", { source: simulationSource || "unset" })
-    : "";
   const bitmapCleanupDisabled = !hasLoadedImage || !hasPartialRegion;
   const backgroundSource =
     backgroundImageUrl && backgroundImageUrl !== suppressedBackgroundUrl
@@ -85,17 +81,13 @@ export function ROIEditor({
         const dataUrl = imageToDataUrl(img, fillStyle);
         if (dataUrl) {
           promotedBackgroundRef.current = backgroundImageUrl;
-          // The imageName field shows in the controls header and in
-          // download filenames; localising it at promote-time means
-          // the operator sees their language. If they switch locales
-          // later it stays at the old name — that's acceptable
-          // because the name is treated as a label for a specific
-          // capture, not a UI string.
-          dispatch(updateROI({
-            imageName: t("roi.imageName.lastScan"),
-            imageDataUrl: dataUrl,
-            imageKind: "lastScan",
-          }));
+          dispatch(
+            updateROI({
+              imageName: t("roi.imageName.lastScan"),
+              imageDataUrl: dataUrl,
+              imageKind: "lastScan",
+            })
+          );
         }
       }
       draw();
@@ -105,13 +97,11 @@ export function ROIEditor({
       draw();
     };
     img.src = imageSource;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageSource]);
+  }, [backgroundImageUrl, dispatch, imageSource, t]);
 
   useEffect(() => {
     draw();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roi, draft, tr.locale]);
+  }, [draft, roi, tr.locale]);
 
   useEffect(() => {
     if (!dragStartRef.current) {
@@ -119,13 +109,33 @@ export function ROIEditor({
     }
   }, [roi.selection]);
 
+  useEffect(() => {
+    if (!activeHandle) return;
+    const handle = activeHandle;
+
+    function onPointerMove(event: PointerEvent) {
+      event.preventDefault();
+      updateCalibrationViewport(handle, event.clientX, event.clientY);
+    }
+
+    function onPointerUp() {
+      setActiveHandle(null);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [activeHandle, roi]);
+
   function loadFile(file: File) {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
         clearBitmapSelectionCache();
         setSuppressedBackgroundUrl(null);
-        // file.name comes from the OS — leave it verbatim.
         dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result, imageKind: "file" }));
       }
     };
@@ -135,16 +145,15 @@ export function ROIEditor({
   function canvasPoint(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
     const r = canvas.getBoundingClientRect();
-    return {
-      x: clamp(Math.round(((e.clientX - r.left) / r.width) * EDGE), 0, EDGE),
-      y: clamp(Math.round(((e.clientY - r.top) / r.height) * EDGE), 0, EDGE),
+    const raw = {
+      x: clampViewportCoordinate(((e.clientX - r.left) / r.width) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
+      y: clampViewportCoordinate(((e.clientY - r.top) / r.height) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
     };
+    return clampCanvasPointToViewport(raw, viewportBounds(roi));
   }
 
-  function toDut(p: { x: number; y: number }) {
-    const x = Math.round(lerp(roi.x_origin, roi.x_end, p.x / EDGE));
-    const y = Math.round(lerp(roi.y_origin, roi.y_end, p.y / EDGE));
-    return { x, y };
+  function toDut(point: { x: number; y: number }) {
+    return canvasPointToWorld(point, roi, viewportBounds(roi));
   }
 
   function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }): ROIRequest {
@@ -163,42 +172,142 @@ export function ROIEditor({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, EDGE, EDGE);
+    ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
 
     const img = imageRef.current;
     if (img) {
-      ctx.drawImage(img, 0, 0, EDGE, EDGE);
+      ctx.drawImage(img, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    } else {
+      ctx.fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
+      ctx.fillRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
     }
 
-    ctx.save();
-    ctx.strokeStyle = "rgba(95, 184, 255, 0.85)";
-    ctx.fillStyle = "rgba(230, 238, 249, 0.92)";
-    ctx.lineWidth = 1;
-    ctx.font = "12px ui-monospace, monospace";
-    drawScale(ctx, roi, unitLabel(roi.scale_unit), tr);
-    ctx.restore();
+    if (roi.calibration_enabled) {
+      drawCalibrationViewport(ctx, roi);
+    } else {
+      ctx.save();
+      ctx.strokeStyle = "rgba(95, 184, 255, 0.85)";
+      ctx.fillStyle = "rgba(230, 238, 249, 0.92)";
+      ctx.lineWidth = 1;
+      ctx.font = "12px ui-monospace, monospace";
+      drawScale(ctx, roi, unitLabel(roi.scale_unit), tr);
+      ctx.restore();
+    }
 
-    const selected = draft ?? roi.selection;
-    if (selected) drawSelection(ctx, selected);
+    const selected = roi.calibration_enabled ? null : draft ?? roi.selection;
+    if (selected) drawSelection(ctx, selected, roi);
   }
 
-  function drawSelection(ctx: CanvasRenderingContext2D, selected: ROIRequest) {
-    const x0 = dutToCanvas(selected.x_start, roi.x_origin, roi.x_end);
-    const x1 = dutToCanvas(selected.x_end, roi.x_origin, roi.x_end);
-    const y0 = dutToCanvas(selected.y_start, roi.y_origin, roi.y_end);
-    const y1 = dutToCanvas(selected.y_end, roi.y_origin, roi.y_end);
+  function drawSelection(ctx: CanvasRenderingContext2D, selected: ROIRequest, nextROI: ROIState) {
+    const bounds = viewportBounds(nextROI);
+    const x0 = worldToCanvasX(selected.x_start, nextROI, bounds);
+    const x1 = worldToCanvasX(selected.x_end, nextROI, bounds);
+    const y0 = worldToCanvasY(selected.y_start, nextROI, bounds);
+    const y1 = worldToCanvasY(selected.y_end, nextROI, bounds);
     ctx.save();
     ctx.strokeStyle = "#ff2d2d";
     ctx.fillStyle = "#ff2d2d";
     ctx.lineWidth = 0.8;
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
-    // "S" and "E" are visual mnemonics on the canvas (Start / End). We
-    // keep them as single letters even in Chinese because they refer
-    // to the on-canvas points and need to be visually compact; the
-    // matching prose labels in the field-row above are translated.
     drawLabel(ctx, x0 + 4, y0 + 14, `S(${selected.x_start}, ${selected.y_start})`);
     drawLabel(ctx, x1 + 4, y1 - 6, `E(${selected.x_end}, ${selected.y_end})`);
     ctx.restore();
+  }
+
+  function drawCalibrationViewport(ctx: CanvasRenderingContext2D, nextROI: ROIState) {
+    const bounds = viewportBounds(nextROI, "draft");
+    ctx.save();
+    ctx.fillStyle = "rgba(3, 7, 18, 0.6)";
+    ctx.fillRect(0, 0, ROI_CANVAS_EDGE, bounds.top);
+    ctx.fillRect(0, bounds.bottom, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE - bounds.bottom);
+    ctx.fillRect(0, bounds.top, bounds.left, bounds.height);
+    ctx.fillRect(bounds.right, bounds.top, ROI_CANVAS_EDGE - bounds.right, bounds.height);
+    ctx.strokeStyle = "lawngreen";
+    ctx.lineWidth = 0.2;
+    ctx.strokeRect(bounds.left, bounds.top, bounds.width, bounds.height);
+    drawLabel(
+      ctx,
+      bounds.left + 8,
+      Math.max(18, bounds.top - 10),
+      `X ${formatOneDecimal(nextROI.calibration_x_origin)} → ${formatOneDecimal(nextROI.calibration_x_end)} ${unitLabel(nextROI.scale_unit)}`
+    );
+    drawLabel(
+      ctx,
+      bounds.left + 8,
+      Math.min(ROI_CANVAS_EDGE - 8, bounds.bottom + 18),
+      `Y ${formatOneDecimal(nextROI.calibration_y_origin)} → ${formatOneDecimal(nextROI.calibration_y_end)} ${unitLabel(nextROI.scale_unit)}`
+    );
+    ctx.restore();
+  }
+
+  function updateCalibrationViewport(handle: CalibrationHandle, clientX: number, clientY: number) {
+    const wrap = canvasWrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const rawX = ((clientX - rect.left) / rect.width) * ROI_CANVAS_EDGE;
+    const rawY = ((clientY - rect.top) / rect.height) * ROI_CANVAS_EDGE;
+
+    if (handle === "x-start") {
+      dispatch(
+        updateROI({
+          calibration_viewport_x_start: clampViewportCoordinate(
+            rawX,
+            0,
+            roi.calibration_viewport_x_end - ROI_VIEWPORT_MIN_SPAN
+          ),
+        })
+      );
+      return;
+    }
+    if (handle === "x-end") {
+      dispatch(
+        updateROI({
+          calibration_viewport_x_end: clampViewportCoordinate(
+            rawX,
+            roi.calibration_viewport_x_start + ROI_VIEWPORT_MIN_SPAN,
+            ROI_CANVAS_EDGE
+          ),
+        })
+      );
+      return;
+    }
+    if (handle === "y-start") {
+      dispatch(
+        updateROI({
+          calibration_viewport_y_start: clampViewportCoordinate(
+            rawY,
+            0,
+            roi.calibration_viewport_y_end - ROI_VIEWPORT_MIN_SPAN
+          ),
+        })
+      );
+      return;
+    }
+    dispatch(
+      updateROI({
+        calibration_viewport_y_end: clampViewportCoordinate(
+          rawY,
+          roi.calibration_viewport_y_start + ROI_VIEWPORT_MIN_SPAN,
+          ROI_CANVAS_EDGE
+        ),
+      })
+    );
+  }
+
+  function beginCalibration() {
+    dispatch(
+      updateROI({
+        calibration_enabled: true,
+        calibration_x_origin: roi.x_origin,
+        calibration_x_end: roi.x_end,
+        calibration_y_origin: roi.y_origin,
+        calibration_y_end: roi.y_end,
+        calibration_viewport_x_start: roi.viewport_x_start,
+        calibration_viewport_x_end: roi.viewport_x_end,
+        calibration_viewport_y_start: roi.viewport_y_start,
+        calibration_viewport_y_end: roi.viewport_y_end,
+      })
+    );
   }
 
   function clearLoadedImage() {
@@ -214,30 +323,31 @@ export function ROIEditor({
     dispatch(clearROISelection());
   }
 
+  const confirmedBounds = viewportBounds(roi);
+  const draftBounds = viewportBounds(roi, "draft");
+
   return (
     <div>
       {(variant === "controls" || variant === "all") && (
         <>
           <div className="button-row" style={{ marginBottom: 10 }}>
-            <button
-              className="btn"
-              disabled={disabled || !imageFileSourceEnabled}
-              title={!disabled && imageFileSourcePrompt ? imageFileSourcePrompt : undefined}
-              onClick={() => fileRef.current?.click()}
-            >
+            <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
               <Icon name="upload" tone="accent" />
               {t("roi.select")}
             </button>
             <button
               className="btn btn--ghost"
-              disabled={disabled || !imageFileSourceEnabled || !hasLoadedImage}
-              title={!disabled && imageFileSourcePrompt ? imageFileSourcePrompt : undefined}
+              disabled={disabled || !hasLoadedImage}
               onClick={clearLoadedImage}
             >
               <Icon name="trash" tone="danger" />
               {t("roi.clearImage")}
             </button>
-            <button className="btn btn--ghost" disabled={disabled || !hasPartialRegion} onClick={clearPartialRegion}>
+            <button
+              className="btn btn--ghost"
+              disabled={disabled || roi.calibration_enabled || !hasPartialRegion}
+              onClick={clearPartialRegion}
+            >
               <Icon name="crop" tone="warn" />
               {t("roi.clearRegion")}
             </button>
@@ -245,7 +355,7 @@ export function ROIEditor({
             <input
               ref={fileRef}
               type="file"
-              accept=".bmp,.png,.jpg,.jpeg,image/bmp,image/png,image/jpeg"
+              accept="image/*,.bmp,.png,.jpg,.jpeg,.svg,.webp"
               style={{ display: "none" }}
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -253,64 +363,19 @@ export function ROIEditor({
               }}
             />
           </div>
-          {imageFileSourcePrompt && (
-            <div className="roi-source-prompt" role="status">
-              {imageFileSourcePrompt}
-            </div>
-          )}
 
-          <div className="field-row">
-            <Num
-              labelKey="roi.xOrigin"
-              value={roi.x_origin}
-              min={0}
-              max={Math.max(0, roi.x_end - 1)}
-              rangeText={t("roi.error.rangeXLessThanEnd", { max: Math.max(0, roi.x_end - 1) })}
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={roi.calibration_enabled}
               disabled={disabled}
-              onChange={(v) => {
-                clearBitmapSelectionCache();
-                dispatch(updateROI({ x_origin: v }));
+              onChange={(event) => {
+                if (event.target.checked) beginCalibration();
+                else dispatch(updateROI({ calibration_enabled: false }));
               }}
             />
-            <Num
-              labelKey="roi.xEnd"
-              value={roi.x_end}
-              min={Math.min(16383, roi.x_origin + 1)}
-              max={16383}
-              rangeText={t("roi.error.rangeXGreaterThanOrigin", { min: Math.min(16383, roi.x_origin + 1) })}
-              disabled={disabled}
-              onChange={(v) => {
-                clearBitmapSelectionCache();
-                dispatch(updateROI({ x_end: v }));
-              }}
-            />
-          </div>
-          <div className="field-row">
-            <Num
-              labelKey="roi.yOrigin"
-              value={roi.y_origin}
-              min={0}
-              max={Math.max(0, roi.y_end - 1)}
-              rangeText={t("roi.error.rangeYLessThanEnd", { max: Math.max(0, roi.y_end - 1) })}
-              disabled={disabled}
-              onChange={(v) => {
-                clearBitmapSelectionCache();
-                dispatch(updateROI({ y_origin: v }));
-              }}
-            />
-            <Num
-              labelKey="roi.yEnd"
-              value={roi.y_end}
-              min={Math.min(16383, roi.y_origin + 1)}
-              max={16383}
-              rangeText={t("roi.error.rangeYGreaterThanOrigin", { min: Math.min(16383, roi.y_origin + 1) })}
-              disabled={disabled}
-              onChange={(v) => {
-                clearBitmapSelectionCache();
-                dispatch(updateROI({ y_end: v }));
-              }}
-            />
-          </div>
+            {t("roi.calibrate")}
+          </label>
 
           <label className="checkbox">
             <input
@@ -332,80 +397,6 @@ export function ROIEditor({
             {t("roi.keepBitmap")}
           </label>
 
-          <div className="field-row">
-            <CoordinateField
-              labelKey="roi.start"
-              value={selectionStart(roi)}
-              disabled={disabled}
-              validate={(p) => validateStartPoint(p, roi, tr)}
-              onChange={(p) => {
-                const end = selectionEnd(roi);
-                clearBitmapSelectionCache();
-                dispatch(
-                  updateROI({
-                    selection: {
-                      x_start: p.x,
-                      y_start: p.y,
-                      x_end: end.x,
-                      y_end: end.y,
-                    },
-                  })
-                );
-              }}
-            />
-            <CoordinateField
-              labelKey="roi.end"
-              value={selectionEnd(roi)}
-              disabled={disabled}
-              validate={(p) => validateEndPoint(p, roi, tr)}
-              onChange={(p) => {
-                const start = selectionStart(roi);
-                clearBitmapSelectionCache();
-                dispatch(
-                  updateROI({
-                    selection: {
-                      x_start: start.x,
-                      y_start: start.y,
-                      x_end: p.x,
-                      y_end: p.y,
-                    },
-                  })
-                );
-              }}
-            />
-          </div>
-
-          {/* DAC mapping diagnostic readout. See the verbatim comment in
-              the original file for full background — it remaps a world-
-              units selection onto the DAC range 0..16383 for sanity. */}
-          {roi.selection && (
-            <div
-              className="muted"
-              style={{
-                fontSize: 11,
-                marginTop: 2,
-                marginBottom: 8,
-                fontFamily: "var(--font-mono)",
-              }}
-            >
-              {(() => {
-                const dac = worldSelectionToDacROI(roi.selection, roi);
-                return (
-                  <>
-                    {t("roi.dacEquivalent")}&nbsp;
-                    S({dac.x_start}, {dac.y_start}) → E({dac.x_end}, {dac.y_end})
-                    &nbsp;<span style={{ opacity: 0.7 }}>
-                      {t("roi.dacMappingNote", {
-                        xRange: fmtRange(roi.x_origin, roi.x_end),
-                        yRange: fmtRange(roi.y_origin, roi.y_end),
-                        unit: unitLabel(roi.scale_unit),
-                      })}
-                    </span>
-                  </>
-                );
-              })()}
-            </div>
-          )}
           <div className="field">
             <label>{t("roi.scaleUnit")}</label>
             <select
@@ -419,18 +410,149 @@ export function ROIEditor({
               ))}
             </select>
           </div>
+
+          {!roi.calibration_enabled ? (
+            <>
+              <div className="field-row">
+                <Num
+                  labelKey="roi.xOrigin"
+                  value={roi.x_origin}
+                  disabled={disabled}
+                  validate={(value) =>
+                    value < roi.x_end
+                      ? null
+                      : t("roi.error.xOriginBeforeEnd", { end: formatOneDecimal(roi.x_end) })
+                  }
+                  onChange={(value) => {
+                    clearBitmapSelectionCache();
+                    dispatch(updateROI({ x_origin: value, calibration_x_origin: value }));
+                  }}
+                />
+                <Num
+                  labelKey="roi.xEnd"
+                  value={roi.x_end}
+                  disabled={disabled}
+                  validate={(value) =>
+                    value > roi.x_origin
+                      ? null
+                      : t("roi.error.xEndAfterOrigin", { origin: formatOneDecimal(roi.x_origin) })
+                  }
+                  onChange={(value) => {
+                    clearBitmapSelectionCache();
+                    dispatch(updateROI({ x_end: value, calibration_x_end: value }));
+                  }}
+                />
+              </div>
+              <div className="field-row">
+                <Num
+                  labelKey="roi.yOrigin"
+                  value={roi.y_origin}
+                  disabled={disabled}
+                  validate={(value) =>
+                    value < roi.y_end
+                      ? null
+                      : t("roi.error.yOriginBeforeEnd", { end: formatOneDecimal(roi.y_end) })
+                  }
+                  onChange={(value) => {
+                    clearBitmapSelectionCache();
+                    dispatch(updateROI({ y_origin: value, calibration_y_origin: value }));
+                  }}
+                />
+                <Num
+                  labelKey="roi.yEnd"
+                  value={roi.y_end}
+                  disabled={disabled}
+                  validate={(value) =>
+                    value > roi.y_origin
+                      ? null
+                      : t("roi.error.yEndAfterOrigin", { origin: formatOneDecimal(roi.y_origin) })
+                  }
+                  onChange={(value) => {
+                    clearBitmapSelectionCache();
+                    dispatch(updateROI({ y_end: value, calibration_y_end: value }));
+                  }}
+                />
+              </div>
+
+              <div className="field-row">
+                <CoordinateField
+                  labelKey="roi.start"
+                  value={selectionStart(roi)}
+                  disabled={disabled}
+                  validate={(p) => validateStartPoint(p, roi, tr)}
+                  onChange={(p) => {
+                    const end = selectionEnd(roi);
+                    clearBitmapSelectionCache();
+                    dispatch(
+                      updateROI({
+                        selection: {
+                          x_start: p.x,
+                          y_start: p.y,
+                          x_end: end.x,
+                          y_end: end.y,
+                        },
+                      })
+                    );
+                  }}
+                />
+                <CoordinateField
+                  labelKey="roi.end"
+                  value={selectionEnd(roi)}
+                  disabled={disabled}
+                  validate={(p) => validateEndPoint(p, roi, tr)}
+                  onChange={(p) => {
+                    const start = selectionStart(roi);
+                    clearBitmapSelectionCache();
+                    dispatch(
+                      updateROI({
+                        selection: {
+                          x_start: start.x,
+                          y_start: start.y,
+                          x_end: p.x,
+                          y_end: p.y,
+                        },
+                      })
+                    );
+                  }}
+                />
+              </div>
+
+              {roi.selection && (
+                <div className="muted roi-dac-readout">
+                  {(() => {
+                    const dac = worldSelectionToDacROI(roi.selection, roi);
+                    return (
+                      <>
+                        {t("roi.dacEquivalent")}&nbsp;
+                        S({dac.x_start}, {dac.y_start}) → E({dac.x_end}, {dac.y_end})
+                        &nbsp;<span style={{ opacity: 0.7 }}>
+                          {t("roi.dacMappingNote", {
+                            xRange: fmtRange(roi.x_origin, roi.x_end),
+                            yRange: fmtRange(roi.y_origin, roi.y_end),
+                            unit: unitLabel(roi.scale_unit),
+                          })}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="roi-calibration-note">{t("roi.calibration.pending")}</div>
+          )}
         </>
       )}
 
       {(variant === "canvas" || variant === "all") && (
-        <div className="roi-canvas-wrap">
+        <div ref={canvasWrapRef} className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}>
           <canvas
             ref={canvasRef}
             className={disabled ? "is-disabled" : undefined}
-            width={EDGE}
-            height={EDGE}
+            width={ROI_CANVAS_EDGE}
+            height={ROI_CANVAS_EDGE}
             onPointerDown={(e) => {
-              if (disabled) return;
+              if (disabled || roi.calibration_enabled) return;
               e.preventDefault();
               e.currentTarget.setPointerCapture(e.pointerId);
               const p = canvasPoint(e);
@@ -439,7 +561,7 @@ export function ROIEditor({
               setTip({ x: e.clientX, y: e.clientY, text: `(${d.x}, ${d.y})` });
             }}
             onPointerMove={(e) => {
-              if (disabled) return;
+              if (disabled || roi.calibration_enabled) return;
               e.preventDefault();
               const p = canvasPoint(e);
               const d = toDut(p);
@@ -450,7 +572,7 @@ export function ROIEditor({
               }
             }}
             onPointerUp={(e) => {
-              if (disabled) return;
+              if (disabled || roi.calibration_enabled) return;
               e.preventDefault();
               if (!dragStartRef.current) return;
               const next = rectFromPoints(dragStartRef.current, canvasPoint(e));
@@ -466,6 +588,73 @@ export function ROIEditor({
               setTip(null);
             }}
           />
+          {roi.calibration_enabled && (
+            <>
+              <div className="roi-calibration-ruler roi-calibration-ruler--top">
+                <div
+                  className="roi-calibration-ruler__track"
+                  style={{ left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%`, width: `${draftBounds.width / ROI_CANVAS_EDGE * 100}%` }}
+                />
+                <button
+                  className="roi-calibration-handle roi-calibration-handle--top"
+                  style={{ left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%` }}
+                  disabled={disabled}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    setActiveHandle("x-start");
+                  }}
+                  aria-label={t("roi.xOrigin")}
+                />
+                <button
+                  className="roi-calibration-handle roi-calibration-handle--top roi-calibration-handle--end"
+                  style={{ left: `${draftBounds.right / ROI_CANVAS_EDGE * 100}%` }}
+                  disabled={disabled}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    setActiveHandle("x-end");
+                  }}
+                  aria-label={t("roi.xEnd")}
+                />
+              </div>
+              <div className="roi-calibration-ruler roi-calibration-ruler--left">
+                <div
+                  className="roi-calibration-ruler__track roi-calibration-ruler__track--vertical"
+                  style={{ top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%`, height: `${draftBounds.height / ROI_CANVAS_EDGE * 100}%` }}
+                />
+                <button
+                  className="roi-calibration-handle roi-calibration-handle--left"
+                  style={{ top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%` }}
+                  disabled={disabled}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    setActiveHandle("y-start");
+                  }}
+                  aria-label={t("roi.yOrigin")}
+                />
+                <button
+                  className="roi-calibration-handle roi-calibration-handle--left roi-calibration-handle--end"
+                  style={{ top: `${draftBounds.bottom / ROI_CANVAS_EDGE * 100}%` }}
+                  disabled={disabled}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    setActiveHandle("y-end");
+                  }}
+                  aria-label={t("roi.yEnd")}
+                />
+              </div>
+            </>
+          )}
+          {!roi.calibration_enabled && confirmedBounds.width > 0 && confirmedBounds.height > 0 && (
+            <div
+              className="roi-canvas-viewport"
+              style={{
+                left: `${confirmedBounds.left / ROI_CANVAS_EDGE * 100}%`,
+                top: `${confirmedBounds.top / ROI_CANVAS_EDGE * 100}%`,
+                width: `${confirmedBounds.width / ROI_CANVAS_EDGE * 100}%`,
+                height: `${confirmedBounds.height / ROI_CANVAS_EDGE * 100}%`,
+              }}
+            />
+          )}
           {tip && (
             <div className="roi-tooltip" style={{ left: tip.x + 10, top: tip.y + 10 }}>
               {tip.text}
@@ -473,7 +662,6 @@ export function ROIEditor({
           )}
         </div>
       )}
-
     </div>
   );
 }
@@ -508,16 +696,9 @@ function Num(props: {
   labelKey: TranslationKey;
   value: number;
   disabled: boolean;
+  validate: (value: number) => string | null;
   onChange: (v: number) => void;
-  min?: number;
-  max?: number;
-  /** Pre-formatted range text for the "must be between {range}" message,
-   *  e.g. "0 and 4095 (less than X end)". Built by the caller because
-   *  the range depends on sibling field values. */
-  rangeText?: string;
 }) {
-  const min = props.min ?? 0;
-  const max = props.max ?? 16383;
   const { t } = useTranslation();
   const label = t(props.labelKey);
   const [text, setText] = useState(formatOneDecimal(props.value));
@@ -531,18 +712,19 @@ function Num(props: {
   function commit(next: string) {
     setText(next);
     if (next === "") {
-      // The required / NaN / >1-decimal cases were previously distinct
-      // English messages in the original; collapsed to a single
-      // numeric-range message here since the translation table has
-      // one slot per category and these three are all "you gave us
-      // something not in [min..max]".
-      setWarning(t("roi.error.numericRange", { label, range: props.rangeText ?? `${min} ${max}` }));
+      setWarning(t("roi.error.pointValueRequired", { label }));
       return;
     }
 
     const parsed = Number(next);
-    if (!Number.isFinite(parsed) || !hasAtMostOneDecimal(next) || parsed < min || parsed > max) {
-      setWarning(t("roi.error.numericRange", { label, range: props.rangeText ?? `${min} ${max}` }));
+    if (!Number.isFinite(parsed) || !hasAtMostOneDecimal(next)) {
+      setWarning(t("roi.error.pointValueRequired", { label }));
+      return;
+    }
+
+    const validation = props.validate(parsed);
+    if (validation) {
+      setWarning(validation);
       return;
     }
 
@@ -618,20 +800,6 @@ function CoordinateField(props: {
   );
 }
 
-function clamp(n: number, lo: number, hi: number) {
-  if (!Number.isFinite(n)) return lo;
-  return Math.min(hi, Math.max(lo, n));
-}
-
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t;
-}
-
-function dutToCanvas(v: number, a: number, b: number) {
-  if (a === b) return 0;
-  return ((v - a) / (b - a)) * EDGE;
-}
-
 function unitLabel(value: string) {
   return UNITS.find((u) => u.value === value)?.label ?? value;
 }
@@ -640,8 +808,8 @@ function drawLabel(ctx: CanvasRenderingContext2D, x: number, y: number, text: st
   ctx.save();
   ctx.font = "12px ui-monospace, monospace";
   const w = ctx.measureText(text).width + 8;
-  const bx = Math.min(Math.max(0, x), EDGE - w);
-  const by = Math.min(Math.max(14, y), EDGE - 2);
+  const bx = Math.min(Math.max(0, x), ROI_CANVAS_EDGE - w);
+  const by = Math.min(Math.max(14, y), ROI_CANVAS_EDGE - 2);
   ctx.fillStyle = "rgba(0, 0, 0, 0.52)";
   ctx.fillRect(bx - 2, by - 12, w, 16);
   ctx.fillStyle = "#ffffff";
@@ -655,10 +823,10 @@ function drawScale(
   unit: string,
   tr: TranslationApi,
 ) {
+  const bounds = viewportBounds(roi);
   const major = 4;
   const minorPerMajor = 5;
   const minorTicks = major * minorPerMajor;
-  const axisPad = 28;
 
   ctx.save();
   ctx.strokeStyle = "rgba(95, 184, 255, 0.9)";
@@ -667,30 +835,32 @@ function drawScale(
   ctx.font = "12px ui-monospace, monospace";
 
   ctx.beginPath();
-  ctx.moveTo(0, axisPad);
-  ctx.lineTo(EDGE, axisPad);
-  ctx.moveTo(axisPad, 0);
-  ctx.lineTo(axisPad, EDGE);
+  ctx.moveTo(bounds.left, bounds.top);
+  ctx.lineTo(bounds.right, bounds.top);
+  ctx.moveTo(bounds.left, bounds.top);
+  ctx.lineTo(bounds.left, bounds.bottom);
   ctx.stroke();
 
   for (let i = 0; i <= minorTicks; i++) {
     const isMajor = i % minorPerMajor === 0;
-    const p = (i / minorTicks) * EDGE;
+    const t = i / minorTicks;
+    const x = bounds.left + bounds.width * t;
+    const y = bounds.top + bounds.height * t;
     const len = isMajor ? 10 : 5;
     ctx.beginPath();
-    ctx.moveTo(p, axisPad);
-    ctx.lineTo(p, axisPad + len);
-    ctx.moveTo(axisPad, p);
-    ctx.lineTo(axisPad + len, p);
+    ctx.moveTo(x, bounds.top);
+    ctx.lineTo(x, bounds.top + len);
+    ctx.moveTo(bounds.left, y);
+    ctx.lineTo(bounds.left + len, y);
     ctx.stroke();
 
     if (roi.show_grid && isMajor) {
       ctx.save();
       ctx.beginPath();
-      ctx.moveTo(p, 0);
-      ctx.lineTo(p, EDGE);
-      ctx.moveTo(0, p);
-      ctx.lineTo(EDGE, p);
+      ctx.moveTo(x, bounds.top);
+      ctx.lineTo(x, bounds.bottom);
+      ctx.moveTo(bounds.left, y);
+      ctx.lineTo(bounds.right, y);
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
       ctx.lineWidth = 0.3;
@@ -702,27 +872,23 @@ function drawScale(
     }
 
     if (isMajor) {
-      const t = i / minorTicks;
-      const xLabel = `${roundScale(lerp(roi.x_origin, roi.x_end, t))}`;
-      const yLabel = `${roundScale(lerp(roi.y_origin, roi.y_end, t))}`;
-      ctx.fillText(xLabel, Math.min(p + 3, EDGE - 46), axisPad + 24);
-      ctx.fillText(yLabel, axisPad + 14, Math.max(12, p - 3));
+      const xLabel = `${roundScale(roi.x_origin + (roi.x_end - roi.x_origin) * t)}`;
+      const yLabel = `${roundScale(roi.y_origin + (roi.y_end - roi.y_origin) * t)}`;
+      ctx.fillText(xLabel, Math.min(x + 3, bounds.right - 46), bounds.top + 24);
+      ctx.fillText(yLabel, bounds.left + 14, Math.max(bounds.top + 12, y - 3));
     }
   }
 
-  // The on-canvas "Start ..." / "End ..." labels — translated via the
-  // passed-in API. Width is bounded by the drawLabel measurement loop,
-  // so long Chinese phrases ("起点 (x, y) μm") still fit.
   drawLabel(
     ctx,
-    EDGE - 240,
-    axisPad + 42,
+    Math.max(bounds.left + 12, bounds.right - 240),
+    bounds.top + 42,
     tr.t("roi.canvas.start", { point: formatROIStart(roi), unit }),
   );
   drawLabel(
     ctx,
-    axisPad + 14,
-    EDGE - 8,
+    bounds.left + 14,
+    bounds.bottom - 8,
     tr.t("roi.canvas.end", { point: formatROIEnd(roi), unit }),
   );
   ctx.restore();
@@ -768,10 +934,14 @@ function validateStartPoint(
 ): string | null {
   const { t } = tr;
   const end = selectionEnd(roi);
-  if (p.x < roi.x_origin || p.x > roi.x_end) {
+  const xLo = Math.min(roi.x_origin, roi.x_end);
+  const xHi = Math.max(roi.x_origin, roi.x_end);
+  const yLo = Math.min(roi.y_origin, roi.y_end);
+  const yHi = Math.max(roi.y_origin, roi.y_end);
+  if (p.x < xLo || p.x > xHi) {
     return t("roi.error.startXBounds", { origin: roi.x_origin, end: roi.x_end });
   }
-  if (p.y < roi.y_origin || p.y > roi.y_end) {
+  if (p.y < yLo || p.y > yHi) {
     return t("roi.error.startYBounds", { origin: roi.y_origin, end: roi.y_end });
   }
   if (p.x >= end.x) return t("roi.error.startXLessThanEnd", { end: end.x });
@@ -786,10 +956,14 @@ function validateEndPoint(
 ): string | null {
   const { t } = tr;
   const start = selectionStart(roi);
-  if (p.x < roi.x_origin || p.x > roi.x_end) {
+  const xLo = Math.min(roi.x_origin, roi.x_end);
+  const xHi = Math.max(roi.x_origin, roi.x_end);
+  const yLo = Math.min(roi.y_origin, roi.y_end);
+  const yHi = Math.max(roi.y_origin, roi.y_end);
+  if (p.x < xLo || p.x > xHi) {
     return t("roi.error.endXBounds", { origin: roi.x_origin, end: roi.x_end });
   }
-  if (p.y < roi.y_origin || p.y > roi.y_end) {
+  if (p.y < yLo || p.y > yHi) {
     return t("roi.error.endYBounds", { origin: roi.y_origin, end: roi.y_end });
   }
   if (p.x <= start.x) return t("roi.error.endXGreaterThanStart", { start: start.x });

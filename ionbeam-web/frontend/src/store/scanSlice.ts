@@ -60,6 +60,19 @@ export interface ROIState {
   x_end: number;
   y_origin: number;
   y_end: number;
+  viewport_x_start: number;
+  viewport_x_end: number;
+  viewport_y_start: number;
+  viewport_y_end: number;
+  calibration_enabled: boolean;
+  calibration_x_origin: number;
+  calibration_x_end: number;
+  calibration_y_origin: number;
+  calibration_y_end: number;
+  calibration_viewport_x_start: number;
+  calibration_viewport_x_end: number;
+  calibration_viewport_y_start: number;
+  calibration_viewport_y_end: number;
   x_scale_length: number;
   y_scale_length: number;
   scale_unit: string;
@@ -108,6 +121,19 @@ const initialState: ScanState = {
     x_end: 100,
     y_origin: 0,
     y_end: 100,
+    viewport_x_start: 0,
+    viewport_x_end: 640,
+    viewport_y_start: 0,
+    viewport_y_end: 640,
+    calibration_enabled: false,
+    calibration_x_origin: 0,
+    calibration_x_end: 100,
+    calibration_y_origin: 0,
+    calibration_y_end: 100,
+    calibration_viewport_x_start: 0,
+    calibration_viewport_x_end: 640,
+    calibration_viewport_y_start: 0,
+    calibration_viewport_y_end: 640,
     x_scale_length: 100,
     y_scale_length: 100,
     scale_unit: "um",
@@ -345,6 +371,22 @@ const slice = createSlice({
         s.vector.roi = a.payload.selection ?? null;
       }
     },
+    confirmROICalibration(s) {
+      s.roi.x_origin = s.roi.calibration_x_origin;
+      s.roi.x_end = s.roi.calibration_x_end;
+      s.roi.y_origin = s.roi.calibration_y_origin;
+      s.roi.y_end = s.roi.calibration_y_end;
+      // After calibration is applied, the operator works against the
+      // full live canvas with the new DUT scale. The draft calibration
+      // viewport remains stored separately for the next calibration pass.
+      s.roi.viewport_x_start = 0;
+      s.roi.viewport_x_end = 640;
+      s.roi.viewport_y_start = 0;
+      s.roi.viewport_y_end = 640;
+      s.roi.selection = null;
+      s.raster.roi = null;
+      s.vector.roi = null;
+    },
     clearROIImage(s) {
       s.roi.imageName = "No image selected";
       s.roi.imageDataUrl = null;
@@ -494,6 +536,7 @@ export const {
   updateVector,
   updateBeamEnergyEv,
   updateROI,
+  confirmROICalibration,
   clearROIImage,
   clearROISelection,
   clearLastResult,
