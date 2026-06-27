@@ -210,37 +210,42 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
     if bitmap is None or not bitmap.pixels:
         return None
 
-    values_per_chunk = max(64, req.latency_bytes // 2)
     chunks: List[array.array] = []
-    if req.pattern is VectorPattern.custom and req.points:
-        total = len(req.points)
-        for start in range(0, total, values_per_chunk):
-            samples = array.array("H")
-            for x, y, _dwell in req.points[start:start + values_per_chunk]:
-                samples.append(_bitmap_sample_point(bitmap, req.roi, x, y))
-            chunks.append(samples)
-    elif req.pattern is VectorPattern.custom:
-        total = bitmap.width * bitmap.height
-        for start in range(0, total, values_per_chunk):
-            samples = array.array("H")
-            for idx in range(start, min(start + values_per_chunk, total)):
-                x = idx // bitmap.height
-                y = idx % bitmap.height
-                samples.append(_bitmap_sample(
-                    bitmap,
-                    0.0 if bitmap.width <= 1 else x / (bitmap.width - 1),
-                    0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
-                ))
-            chunks.append(samples)
-    else:
-        samples = array.array("H")
-        for x, y, _dwell in _roi_vector_iter(req.vector_resolution, req.roi):
-            samples.append(_bitmap_sample_point(bitmap, req.roi, x, y))
-            if len(samples) >= values_per_chunk:
-                chunks.append(samples)
-                samples = array.array("H")
+    samples = array.array("H")
+    total_dwell = 0
+
+    def flush() -> None:
+        nonlocal samples, total_dwell
         if samples:
             chunks.append(samples)
+            samples = array.array("H")
+            total_dwell = 0
+
+    if req.pattern is VectorPattern.custom and req.points:
+        iter_points = iter(req.points)
+        sample_value = lambda x, y: _bitmap_sample_point(bitmap, req.roi, x, y)
+    elif req.pattern is VectorPattern.custom:
+        def generated_points():
+            for idx in range(bitmap.width * bitmap.height):
+                x = idx // bitmap.height
+                y = idx % bitmap.height
+                yield x, y, req.dwell
+        iter_points = generated_points()
+        sample_value = lambda x, y: _bitmap_sample(
+            bitmap,
+            0.0 if bitmap.width <= 1 else x / (bitmap.width - 1),
+            0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
+        )
+    else:
+        iter_points = _roi_vector_iter(req.vector_resolution, req.roi, dwell=req.dwell)
+        sample_value = lambda x, y: _bitmap_sample_point(bitmap, req.roi, x, y)
+
+    for x, y, dwell in iter_points:
+        samples.append(sample_value(x, y))
+        total_dwell += max(1, int(dwell))
+        if total_dwell >= max(1, req.latency_bytes) or len(samples) >= 65536:
+            flush()
+    flush()
     return chunks
 
 
@@ -609,6 +614,7 @@ class DeviceService:
                     "kind": "vector",
                     "chunks": simulated_chunks,
                     "latency_bytes": req.latency_bytes,
+                    "dwell": req.dwell,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
