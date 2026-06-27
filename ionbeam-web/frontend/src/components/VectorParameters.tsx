@@ -118,7 +118,6 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
             max={2048}
             disabled={disabled}
             title={resolutionTitle}
-            helperText={t("vector.resolution.help")}
             onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
           />
           <PresetNumberField

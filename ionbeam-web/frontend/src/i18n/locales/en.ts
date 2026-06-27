@@ -180,7 +180,6 @@ export const en = {
   "vector.resolution.option.1024": "1024 × 1024 — stride 2",
   "vector.resolution.option.512": "512 × 512 — stride 4",
   "vector.resolution.option.256": "256 × 256 — stride 8",
-  "vector.resolution.help": "Smaller resolution → faster scan, sparser sampling. Coverage is always the full 0..2047 DAC range.",
   "vector.resolution.title.native": "Native: every DAC code is sampled.",
   "vector.resolution.title.stride": "Stride {stride}: every {stride}th DAC code is sampled. Full DAC range still covered.",
   "vector.resolution.title.custom": "Custom resolution {resolution}: evenly remapped across the full DAC range.",

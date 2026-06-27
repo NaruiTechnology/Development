@@ -165,7 +165,6 @@ export const zhTW: Partial<TranslationTable> = {
   "vector.resolution.option.1024": "1024 × 1024 — 步長 2",
   "vector.resolution.option.512": "512 × 512 — 步長 4",
   "vector.resolution.option.256": "256 × 256 — 步長 8",
-  "vector.resolution.help": "解析度越小 → 掃描越快、取樣越稀疏。涵蓋範圍始終為完整的 0..2047 DAC 範圍。",
   "vector.resolution.title.native": "原生：取樣每個 DAC 碼值。",
   "vector.resolution.title.stride": "步長 {stride}：每 {stride} 個 DAC 碼值取樣一次。仍涵蓋完整的 DAC 範圍。",
   "vector.resolution.title.custom": "自訂解析度 {resolution}：仍均勻映射到完整 DAC 範圍。",
