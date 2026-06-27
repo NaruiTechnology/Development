@@ -170,7 +170,10 @@ export const restoreSettingsConfig = createAsyncThunk<SaveResponse>(
 export const restartSettingsServices = createAsyncThunk<SaveResponse>(
   "settings/restartServices",
   async () => {
-    const r = await fetch(apiUrl("/api/admin/restart-services"), { method: "POST" });
+    const r = await fetch(apiUrl("/api/admin/restart-services"), {
+      method: "POST",
+      headers: scanAuthHeaders(),
+    });
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`restart services: HTTP ${r.status} ${text}`);
