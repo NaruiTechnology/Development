@@ -166,6 +166,10 @@ export function ImageCanvas({
     kind === "vector" && vectorPattern === "default" && vectorEdge > 0
       ? Math.max(1, Math.floor(DAC_RANGE / vectorEdge))
       : 1;
+  const hasExactNativeStride =
+    kind === "vector" && vectorPattern === "default" && vectorEdge > 0
+      ? DAC_RANGE % vectorEdge === 0
+      : true;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -174,8 +178,8 @@ export function ImageCanvas({
     if (kind === "raster") {
       const s = paintGrayscale(canvas, frame, resolution, cursor);
       setStats(s);
-    } else if (kind === "vector" && vectorPattern === "default" && renderMode === "native" && stride > 1) {
-      const s = paintVectorDefaultBlockFill(canvas, vectorImage, vectorEdge, vectorCursor, stride);
+    } else if (kind === "vector" && vectorPattern === "default" && renderMode === "native" && vectorEdge < DAC_RANGE) {
+      const s = paintVectorDefaultBlockFill(canvas, vectorImage, vectorEdge, vectorCursor);
       setStats(s);
     } else if (kind === "vector" && vectorPattern === "default") {
       const s = paintVectorDefault(canvas, vectorImage, vectorEdge, vectorCursor);
@@ -767,7 +771,12 @@ export function ImageCanvas({
                 title={
                   m === "decimated"
                     ? t("canvas.view.decimated.title", { edge: vectorEdge })
-                    : t("canvas.view.native.title", { edge: DAC_RANGE, stride })
+                    : hasExactNativeStride
+                    ? t("canvas.view.native.title", { edge: DAC_RANGE, stride })
+                    : t("canvas.view.native.title.custom", {
+                        edge: DAC_RANGE,
+                        sourceEdge: vectorEdge,
+                      })
                 }
                 onClick={() => dispatch(setVectorRenderMode(m))}
               >
@@ -778,7 +787,7 @@ export function ImageCanvas({
               </button>
             ))}
           </div>
-          {stride === 1 && (
+          {vectorEdge === DAC_RANGE && (
             <span className="muted" style={{ fontSize: 11 }}>
               {t("canvas.view.identical")}
             </span>
@@ -1461,9 +1470,8 @@ function paintVectorDefaultBlockFill(
   buf: Uint16Array,
   edge: number,
   populated: number,
-  stride: number
 ): PaintStats {
-  const nativeSize = edge * stride;
+  const nativeSize = DAC_RANGE;
   if (canvas.width !== nativeSize || canvas.height !== nativeSize) {
     canvas.width = nativeSize;
     canvas.height = nativeSize;
@@ -1491,12 +1499,16 @@ function paintVectorDefaultBlockFill(
     if (cellCol >= edge) break;
     const cellIdx = cellRow * edge + cellCol;
     const g = scaleSample(buf[cellIdx], range.min, range.max);
-    const baseY = cellRow * stride;
-    const baseX = cellCol * stride;
+    const baseY = Math.floor((cellRow * nativeSize) / edge);
+    const nextY = Math.floor(((cellRow + 1) * nativeSize) / edge);
+    const baseX = Math.floor((cellCol * nativeSize) / edge);
+    const nextX = Math.floor(((cellCol + 1) * nativeSize) / edge);
+    const blockHeight = Math.max(1, nextY - baseY);
+    const blockWidth = Math.max(1, nextX - baseX);
 
-    for (let dy = 0; dy < stride; dy++) {
+    for (let dy = 0; dy < blockHeight; dy++) {
       let p = ((baseY + dy) * nativeSize + baseX) * 4;
-      for (let dx = 0; dx < stride; dx++) {
+      for (let dx = 0; dx < blockWidth; dx++) {
         data[p + 0] = g;
         data[p + 1] = g;
         data[p + 2] = g;

@@ -57,8 +57,13 @@ import {
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
 import { Icon } from "./Icon";
+import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
+
+const RASTER_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
+const VECTOR_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
+const DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
 
 export function SettingsDialog({
   targetAccountId = null,
@@ -679,9 +684,9 @@ function RasterTab({ draft }: { draft: unknown }) {
 
   const pixels = numberField(draft, [...RASTER_PATH, "pixels"], 0);
   const frameBlank = boolField(draft, [...RASTER_PATH, "frameBlank"], false);
-  const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 0);
-  const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 0);
-  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 0);
+  const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 512);
+  const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 8);
+  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 2);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
@@ -698,10 +703,13 @@ function RasterTab({ draft }: { draft: unknown }) {
           value={pixels}
           onChange={(v) => set([...RASTER_PATH, "pixels"], v)}
         />
-        <NumberField
-          label={t("settings.raster.resolution")}
-          help={<SettingsHelp topic="rasterResolution" />}
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.raster.resolution")} help={<SettingsHelp topic="rasterResolution" />} />}
           value={resolution}
+          options={RASTER_RESOLUTION_OPTIONS}
+          min={1}
+          max={2048}
+          disabled={false}
           onChange={(v) => set([...RASTER_PATH, "resolution"], v)}
         />
       </div>
@@ -713,10 +721,13 @@ function RasterTab({ draft }: { draft: unknown }) {
           value={adcLatency}
           onChange={(v) => set([...RASTER_PATH, "adcLatency"], v)}
         />
-        <NumberField
-          label={t("settings.raster.dwell")}
-          help={<SettingsHelp topic="rasterDwell" />}
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.raster.dwell")} help={<SettingsHelp topic="rasterDwell" />} />}
           value={dwell}
+          options={DWELL_OPTIONS}
+          min={1}
+          max={65535}
+          disabled={false}
           onChange={(v) => set([...RASTER_PATH, "dwell"], v)}
         />
       </div>
@@ -738,6 +749,8 @@ function VectorTab({ draft }: { draft: unknown }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
+  const vectorResolution = numberField(draft, [...VECTOR_PATH, "vectorResolution"], 2048);
+  const dwell = numberField(draft, [...VECTOR_PATH, "dwell"], 1);
   const latency = numberField(draft, [...VECTOR_PATH, "latency"], 0);
   const adcLatency = numberField(draft, [...VECTOR_PATH, "adcLatency"], 0);
   const lineShift = numberField(draft, [...VECTOR_PATH, "lineShiftPerXRow"], 0);
@@ -750,6 +763,27 @@ function VectorTab({ draft }: { draft: unknown }) {
   return (
     <div className="settings-form">
       <h4 className="settings-form__group">{t("settings.vector.group.scan")}</h4>
+
+      <div className="field-row">
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.vector.resolution")} help={<SettingsHelp topic="vectorResolution" />} />}
+          value={vectorResolution}
+          options={VECTOR_RESOLUTION_OPTIONS}
+          min={1}
+          max={2048}
+          disabled={false}
+          onChange={(v) => set([...VECTOR_PATH, "vectorResolution"], v)}
+        />
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.vector.dwell")} help={<SettingsHelp topic="vectorDwell" />} />}
+          value={dwell}
+          options={DWELL_OPTIONS}
+          min={1}
+          max={65535}
+          disabled={false}
+          onChange={(v) => set([...VECTOR_PATH, "dwell"], v)}
+        />
+      </div>
 
       <div className="field-row">
         <NumberField
@@ -2989,6 +3023,8 @@ type SettingsHelpTopic =
   | "rasterAdcLatency"
   | "rasterDwell"
   | "rasterFrameBlank"
+  | "vectorResolution"
+  | "vectorDwell"
   | "vectorLatency"
   | "vectorAdcLatency"
   | "vectorLineShift"
@@ -3039,6 +3075,8 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, { title: TranslationKey }> =
   rasterAdcLatency: { title: "settings.help.rasterAdcLatency.title" },
   rasterDwell: { title: "settings.help.rasterDwell.title" },
   rasterFrameBlank: { title: "settings.help.rasterFrameBlank.title" },
+  vectorResolution: { title: "settings.help.vectorResolution.title" },
+  vectorDwell: { title: "settings.help.vectorDwell.title" },
   vectorLatency: { title: "settings.help.vectorLatency.title" },
   vectorAdcLatency: { title: "settings.help.vectorAdcLatency.title" },
   vectorLineShift: { title: "settings.help.vectorLineShift.title" },
@@ -3115,6 +3153,26 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
         When enabled, the macro blanks the beam at frame boundaries and
         during abort cleanup. Leave it off for fastest live preview; enable
         it for beam-sensitive samples.
+      </p>
+    </>
+  ),
+  vectorResolution: (
+    <>
+      <p>
+        Default-vector sweep resolution. The scan still covers the full
+        DAC range, but this value controls how many evenly spaced sample
+        sites are visited on each axis. Presets are common powers of two;
+        custom values allow finer control from <code>1..2048</code>.
+      </p>
+    </>
+  ),
+  vectorDwell: (
+    <>
+      <p>
+        Default-vector dwell in 125 ns sample periods. This only affects
+        the built-in default sweep. Custom point lists already carry a
+        per-point <code>dwell</code> value in each <code>x, y, dwell</code>
+        triple.
       </p>
     </>
   ),

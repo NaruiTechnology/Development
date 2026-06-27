@@ -85,6 +85,7 @@ const defaultVector: VectorRequest = {
   pattern: "default",
   points: null,
   vector_resolution: 2048,
+  dwell: 1,
   latency_bytes: 8196,
   output_mode: "SixteenBit",
   cookie: 123,
@@ -196,6 +197,16 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
 
   state.vector = {
     ...state.vector,
+    vector_resolution: numberDefault(
+      vectorParams.vector_resolution ??
+        vector.vector_resolution ??
+        vector.vectorResolution,
+      state.vector.vector_resolution
+    ),
+    dwell: numberDefault(
+      vectorParams.dwell ?? vector.dwell,
+      state.vector.dwell
+    ),
     latency_bytes: numberDefault(
       vectorParams.latency_bytes ?? vector.latency_bytes ?? vector.latency,
       state.vector.latency_bytes

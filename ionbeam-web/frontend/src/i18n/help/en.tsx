@@ -427,13 +427,14 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><strong>1024 — stride 2</strong>: every 2nd DAC code. ¼ the points, ¼ the scan time.</li>
         <li><strong>512 — stride 4</strong>: every 4th DAC code. 1/16th the points and time.</li>
         <li><strong>256 — stride 8</strong>: every 8th DAC code. 1/64th the points; useful for fast preview scans.</li>
+        <li><strong>Custom values 1..2048</strong>: still cover the full DAC range, but the sample spacing is distributed as evenly as possible instead of matching an exact integer stride.</li>
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>Allowed values are 256, 512, 1024, 2048.</strong> The
-        backend rejects anything else — the stride must be an
-        integer divisor of 2048, or the sweep wouldn&apos;t close
-        cleanly at the edges of the DAC range.
+        <strong>Allowed values are 1..2048.</strong> The preset powers
+        of two keep the mapping exact on the 2048 x 2048 DAC preview
+        grid, while custom values trade that neat stride relationship
+        for finer control over total point count.
       </div>
 
       <p>

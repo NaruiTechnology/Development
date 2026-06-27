@@ -109,10 +109,16 @@ class VectorRequest(BaseModel):
     vector_resolution: int = Field(
         2048,
         description=(
-            "Default-pattern sample density on each axis. Allowed: 256, 512, 1024, 2048. "
+            "Default-pattern sample density on each axis. Allowed: 1..2048. "
             "Coverage is always full DAC range; smaller values just sample sparser. "
             "Ignored when pattern=custom."
         ),
+    )
+    dwell:          int  = Field(
+        1,
+        ge=1,
+        le=65535,
+        description="Default-pattern dwell time units (125 ns each). Ignored when pattern=custom.",
     )
     latency_bytes:  int  = Field(8196, ge=2, description="Matches `vectorScan.latency` in streamData.json.")
     output_mode:    str  = Field("SixteenBit", description="SixteenBit or EightBit.")
@@ -138,20 +144,17 @@ class VectorRequest(BaseModel):
     @field_validator("vector_resolution")
     @classmethod
     def _check_vector_resolution(cls, v: int) -> int:
-        # Whitelist rather than range — anything outside {256,512,1024,2048}
-        # would either produce a non-integer stride or oversample the DAC
-        # range (which we don't support here; that'd be a different feature).
-        if v not in (256, 512, 1024, 2048):
-            raise ValueError(f"vector_resolution must be 256, 512, 1024, or 2048; got {v}")
+        if v < 1 or v > 2048:
+            raise ValueError(f"vector_resolution must be between 1 and 2048; got {v}")
         return v
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {"pattern": "default", "vector_resolution": 2048,
-                 "latency_bytes": 8196, "pre_process": True, "do_validate": True},
+                 "dwell": 1, "latency_bytes": 8196, "pre_process": True, "do_validate": True},
                 {"pattern": "default", "vector_resolution": 512,
-                 "latency_bytes": 8196, "pre_process": True, "do_validate": True},
+                 "dwell": 4, "latency_bytes": 8196, "pre_process": True, "do_validate": True},
                 {"pattern": "custom",
                  "points": [[0, 0, 2], [100, 100, 2], [200, 100, 2], [200, 200, 2]],
                  "latency_bytes": 8196, "do_validate": True},

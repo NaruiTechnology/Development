@@ -64,17 +64,18 @@ class DeviceBusy(RuntimeError):     ...
 class DeviceNotReady(RuntimeError): ...
 
 
-def _default_vector_iter(edge: int = 2048) -> Iterable[Tuple[int, int, int]]:
+def _default_vector_iter(edge: int = 2048, dwell: int = 1) -> Iterable[Tuple[int, int, int]]:
     """Yield (x, y, dwell) triples for a default sweep at the given edge
     resolution. Coverage is always the full 14-bit DAC range; smaller
-    edge values produce sparser sampling with stride = 16384 // edge.
-    Caller is responsible for passing an edge that divides 2048 evenly
-    (the Pydantic validator on VectorRequest.vector_resolution enforces
-    this for the public API)."""
-    stride = 16384 // edge
-    for x in range(edge):
-        for y in range(edge):
-            yield x * stride, y * stride, 1
+    edge values produce sparser sampling. Custom edge counts are
+    distributed as evenly as possible across the full range."""
+    x_range = DACCodeRange.from_resolution(edge)
+    y_range = DACCodeRange.from_resolution(edge)
+    for x_idx in range(edge):
+        x = x_range.start + ((x_idx * x_range.step) >> 8)
+        for y_idx in range(edge):
+            y = y_range.start + ((y_idx * y_range.step) >> 8)
+            yield x, y, dwell
 
 
 def _roi_bounds(roi) -> Optional[Tuple[int, int, int, int]]:
@@ -91,10 +92,10 @@ def _dac_range_for_bounds(start: int, end: int, count: int) -> DACCodeRange:
     return DACCodeRange(start=lo, count=count, step=max(1, int((span / count) * 256)))
 
 
-def _roi_vector_iter(edge: int, roi) -> Iterable[Tuple[int, int, int]]:
+def _roi_vector_iter(edge: int, roi, dwell: int = 1) -> Iterable[Tuple[int, int, int]]:
     bounds = _roi_bounds(roi)
     if bounds is None:
-        yield from _default_vector_iter(edge)
+        yield from _default_vector_iter(edge, dwell=dwell)
         return
     x0, x1, y0, y1 = bounds
     x_range = _dac_range_for_bounds(x0, x1, edge)
@@ -103,7 +104,7 @@ def _roi_vector_iter(edge: int, roi) -> Iterable[Tuple[int, int, int]]:
         x = x_range.start + ((x_idx * x_range.step) >> 8)
         for y_idx in range(edge):
             y = y_range.start + ((y_idx * y_range.step) >> 8)
-            yield x, y, 1
+            yield x, y, dwell
 
 
 # Exception types that indicate the USB connection is dead and we should
@@ -353,6 +354,7 @@ class DeviceService:
         return self._vector_params_defaults.override(
             pattern           = pattern_str,
             vector_resolution = req.vector_resolution,
+            dwell             = req.dwell,
             latency_bytes     = req.latency_bytes,
             output_mode       = req.output_mode,
             beam_type         = req.beam_type,
@@ -459,6 +461,7 @@ class DeviceService:
                     "kind": "vector",
                     "chunks": simulated_chunks,
                     "latency_bytes": req.latency_bytes,
+                    "dwell": req.dwell,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
@@ -618,6 +621,7 @@ class DeviceService:
                     kind="vector",
                     chunks=len(simulated_chunks),
                     bytes=sum(len(c) * 2 for c in simulated_chunks),
+                    dwell=req.dwell,
                     process_time_s=0.0 if req.pre_process else None,
                     send_time_s=0.0,
                     has_data=bool(simulated_chunks),
@@ -639,10 +643,10 @@ class DeviceService:
 
             eff = self._effective_vector_params(req)
             logger.debug(
-                "[vector] latency=%d pattern=%s vector_resolution=%d "
+                "[vector] dwell=%d latency=%d pattern=%s vector_resolution=%d "
                 "output_mode=%s pre_process=%s cookie=%d max_pipeline=%d "
                 "drain_floor=%d",
-                eff.latency_bytes, eff.pattern, eff.vector_resolution,
+                eff.dwell, eff.latency_bytes, eff.pattern, eff.vector_resolution,
                 eff.output_mode, eff.pre_process, eff.cookie,
                 eff.max_pipeline, eff.effective_drain_floor_pixels,
             )
@@ -666,6 +670,7 @@ class DeviceService:
                 "kind": "vector",
                 "chunks": chunks,
                 "latency_bytes": req.latency_bytes,
+                "dwell": req.dwell,
                 "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                 "points": req.points,
                 "vector_resolution": req.vector_resolution,
@@ -681,6 +686,7 @@ class DeviceService:
             kind="vector",
             chunks=len(chunks),
             bytes=total_bytes,
+            dwell=req.dwell,
             process_time_s=process_time if req.pre_process else None,
             send_time_s=send_time,
             has_data=bool(chunks),
@@ -751,9 +757,9 @@ class DeviceService:
                 # simulation_bitmap is ignored by hardware, so fall back to
                 # the regular ROI vector sweep rather than rejecting the
                 # request as custom-without-points.
-                iter_points = _roi_vector_iter(params.vector_resolution, req.roi)
+                iter_points = _roi_vector_iter(params.vector_resolution, req.roi, dwell=params.dwell)
         else:
-            iter_points = _roi_vector_iter(params.vector_resolution, req.roi)
+            iter_points = _roi_vector_iter(params.vector_resolution, req.roi, dwell=params.dwell)
 
         try:
             output_mode = OutputMode[params.output_mode]

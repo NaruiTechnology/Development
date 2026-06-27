@@ -40,10 +40,13 @@ export type VectorPattern = "default" | "custom";
 export interface VectorRequest {
   pattern: VectorPattern;
   points: Array<[number, number, number]> | null;
-  /** Default-pattern density on each axis. Allowed: 256, 512, 1024, 2048.
+  /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */
   vector_resolution: number;
+  /** Default-pattern dwell in 125 ns units. Ignored when pattern=custom,
+   *  because custom points already carry per-point dwell values. */
+  dwell: number;
   latency_bytes: number;
   output_mode: "SixteenBit" | "EightBit";
   cookie: number;

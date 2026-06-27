@@ -33,9 +33,10 @@ interface RasterParams {
 interface VectorParams {
   pattern: "default" | "custom";
   points?: Array<[number, number, number]>;
+  dwell: number;
   latency_bytes: number;
   voltage?: number;
-  /** Edge length for default-pattern sweeps (256 / 512 / 1024 / 2048).
+  /** Edge length for default-pattern sweeps (1..2048).
    *  Total samples = edge². Coverage is always the full DAC range. */
   vector_resolution?: number;
   roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
@@ -332,11 +333,12 @@ export async function streamMockVector(
     }
   } else {
     const edge = p.vector_resolution ?? 2048;
-    const stride = Math.max(1, Math.floor((1 << DAC_BITS) / edge));
     pts = new Array(edge * edge);
     for (let x = 0; x < edge; x++) {
+      const xPos = Math.min(ADC_MAX, Math.floor((x * ADC_MAX) / Math.max(1, edge - 1)));
       for (let y = 0; y < edge; y++) {
-        pts[x * edge + y] = [x * stride, y * stride, 1];
+        const yPos = Math.min(ADC_MAX, Math.floor((y * ADC_MAX) / Math.max(1, edge - 1)));
+        pts[x * edge + y] = [xPos, yPos, p.dwell];
       }
     }
   }
@@ -418,9 +420,28 @@ export const mockRest = {
       },
       vector: {
         ...vector,
+        dwell: finiteNumber(vector.dwell, 1),
+        vectorResolution: finiteNumber(vector.vectorResolution, 2048),
         voltage,
         latency: finiteNumber(vector.latency, 8196),
         outputMode: vector.outputMode ?? "SixteenBit",
+      },
+      raster_params: {
+        resolution: finiteNumber(raster.resolution, 512),
+        dwell: finiteNumber(raster.dwell, 2),
+        latency_bytes: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
+        frame_blank: Boolean(raster.frameBlank ?? false),
+        cookie: finiteNumber(raster.cookie, 123),
+        output_mode: raster.outputMode ?? "SixteenBit",
+      },
+      vector_params: {
+        vector_resolution: finiteNumber(vector.vectorResolution, 2048),
+        dwell: finiteNumber(vector.dwell, 1),
+        latency_bytes: finiteNumber(vector.latency, 8196),
+        cookie: finiteNumber(vector.cookie, 123),
+        output_mode: vector.outputMode ?? "SixteenBit",
+        pre_process: Boolean(vector.preProcess ?? false),
+        do_validate: Boolean(vector.doValidate ?? true),
       },
       selected_beam: selectedBeam,
       version: typeof streamDataConfig.Version === "string" ? streamDataConfig.Version : "",
@@ -495,6 +516,7 @@ export const mockRest = {
       kind: "vector",
       chunks,
       bytes: chunks * req.latency_bytes,
+      dwell: req.dwell,
       csv_filename: csvFilename,
       image_filename: imageFilename,
       process_time_s: req.pre_process ? 0.012 : null,

@@ -346,11 +346,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><strong>1024 — 步長 2</strong>：每隔 2 個 DAC 碼值造訪一次。點數為 ¼，掃描時間亦為 ¼。</li>
         <li><strong>512 — 步長 4</strong>：每隔 4 個 DAC 碼值。點數與時間為 1/16。</li>
         <li><strong>256 — 步長 8</strong>：每隔 8 個 DAC 碼值。點數為 1/64；適用於快速預覽掃描。</li>
+        <li><strong>自訂值 1..2048</strong>：仍涵蓋完整 DAC 範圍，但取樣間距會盡量平均分布，而不是嚴格的整數步長。</li>
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>允許值為 256、512、1024、2048。</strong>後端會拒絕其他取值 —
-        步長必須是 2048 的整數因子，否則掃描在 DAC 範圍兩端無法整齊閉合。
+        <strong>允許範圍為 1..2048。</strong> 2 的冪預設能在 2048 x 2048 DAC 預覽網格上保持整齊映射；
+        自訂值則用來更細地控制總點數。
       </div>
 
       <p>

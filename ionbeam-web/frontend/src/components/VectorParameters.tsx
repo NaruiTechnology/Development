@@ -9,7 +9,7 @@ import { useState } from "react";
 
 import { updateVector } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
-import { useTranslation, type TranslationKey } from "../i18n";
+import { useTranslation } from "../i18n";
 import { LatencyHelp } from "./LatencyHelp";
 import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
@@ -19,18 +19,12 @@ import { CustomPointsHelp } from "./CustomPointsHelp";
 import { PreProcessHelp } from "./PreProcessHelp";
 import { ValidationHelp } from "./ValidationHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
+import { DwellHelp } from "./DwellHelp";
+import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 
 const MAX_POINTS = 1_000_000;
-
-// vector_resolution → translation-key + stride map. Defined here, not
-// in i18n/locales/en.ts, because the canonical schema there only
-// stores the labels — the stride numbers are app logic.
-const VECTOR_RES_OPTIONS: Array<{ value: number; labelKey: TranslationKey }> = [
-  { value: 2048, labelKey: "vector.resolution.option.2048" },
-  { value: 1024, labelKey: "vector.resolution.option.1024" },
-  { value: 512, labelKey: "vector.resolution.option.512" },
-  { value: 256, labelKey: "vector.resolution.option.256" },
-];
+const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256] as const;
+const VECTOR_DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
 
 export function VectorParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
@@ -74,12 +68,16 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
     dispatch(updateVector({ points: out }));
   }
 
-  // Build the stride tooltip for the resolution select once per render.
-  const stride = 2048 / v.vector_resolution;
+  const vectorResolutionOptions: PresetNumberOption[] = VECTOR_RES_OPTIONS.map((value) => ({
+    value,
+    label: t(`vector.resolution.option.${value}` as const),
+  }));
   const resolutionTitle =
-    stride === 1
+    v.vector_resolution === 2048
       ? t("vector.resolution.title.native")
-      : t("vector.resolution.title.stride", { stride });
+      : 2048 % v.vector_resolution === 0
+      ? t("vector.resolution.title.stride", { stride: 2048 / v.vector_resolution })
+      : t("vector.resolution.title.custom", { resolution: v.vector_resolution });
 
   return (
     <div>
@@ -106,29 +104,37 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
       </div>
 
       {v.pattern === "default" && (
-        <div className="field">
-          <label>
-            {t("vector.resolution")}
-            <VectorResolutionHelp />
-          </label>
-          <select
-            className="select"
-            value={String(v.vector_resolution)}
-            disabled={disabled}
-            onChange={(e) =>
-              dispatch(
-                updateVector({ vector_resolution: Number(e.target.value) })
-              )
+        <div className="field-row">
+          <PresetNumberField
+            label={
+              <label>
+                {t("vector.resolution")}
+                <VectorResolutionHelp />
+              </label>
             }
+            value={v.vector_resolution}
+            options={vectorResolutionOptions}
+            min={1}
+            max={2048}
+            disabled={disabled}
             title={resolutionTitle}
-          >
-            {VECTOR_RES_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {t(o.labelKey)}
-              </option>
-            ))}
-          </select>
-          <small className="muted">{t("vector.resolution.help")}</small>
+            helperText={t("vector.resolution.help")}
+            onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
+          />
+          <PresetNumberField
+            label={
+              <label>
+                {t("vector.dwell")}
+                <DwellHelp />
+              </label>
+            }
+            value={v.dwell}
+            options={VECTOR_DWELL_OPTIONS}
+            min={1}
+            max={65535}
+            disabled={disabled}
+            onChange={(value) => dispatch(updateVector({ dwell: value }))}
+          />
         </div>
       )}
 
