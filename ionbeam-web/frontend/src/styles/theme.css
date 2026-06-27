@@ -1565,8 +1565,98 @@ body {
   -webkit-user-drag: none;
 }
 
+.canvas-axis-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  color: rgba(230, 238, 249, 0.95);
+  font: 12px ui-monospace, monospace;
+}
+
+.canvas-axis-overlay__axis {
+  position: absolute;
+  background: rgba(95, 184, 255, 0.9);
+}
+
+.canvas-axis-overlay__axis--x {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+}
+
+.canvas-axis-overlay__axis--y {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.canvas-axis-overlay__tick {
+  position: absolute;
+  background: rgba(95, 184, 255, 0.9);
+}
+
+.canvas-axis-overlay__tick--x {
+  top: 0;
+  width: 1px;
+  height: 5px;
+  transform: translateX(-0.5px);
+}
+
+.canvas-axis-overlay__tick--y {
+  left: 0;
+  width: 5px;
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
+.canvas-axis-overlay__tick--x.canvas-axis-overlay__tick--major {
+  height: 10px;
+}
+
+.canvas-axis-overlay__tick--y.canvas-axis-overlay__tick--major {
+  width: 10px;
+}
+
+.canvas-axis-overlay__value,
+.canvas-axis-overlay__label {
+  position: absolute;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72);
+}
+
+.canvas-axis-overlay__value--x {
+  top: 16px;
+  transform: translateX(3px);
+}
+
+.canvas-axis-overlay__value--y {
+  left: 14px;
+  transform: translateY(-50%);
+}
+
+.canvas-axis-overlay__label {
+  padding: 2px 4px;
+  background: rgba(0, 0, 0, 0.52);
+}
+
+.canvas-axis-overlay__label--start {
+  right: 12px;
+  top: 32px;
+}
+
+.canvas-axis-overlay__label--end {
+  left: 14px;
+  bottom: 8px;
+}
+
 .server-figure {
-  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   width: 100%;
   height: 100%;
   object-fit: fill;

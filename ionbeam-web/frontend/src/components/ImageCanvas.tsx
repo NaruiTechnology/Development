@@ -25,6 +25,7 @@ import type { ROIRequest } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
+import { hasConfirmedCalibration } from "../lib/roiGeometry";
 import { Icon } from "./Icon";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 
@@ -159,6 +160,7 @@ export function ImageCanvas({
     (phase === "completed" || phase === "paused") &&
     (hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl));
   const toolbarVisible = phase === "completed" || phase === "paused";
+  const showCalibratedAxes = kind !== "roi" && hasConfirmedCalibration(roi);
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
 
@@ -811,6 +813,7 @@ export function ImageCanvas({
             display: displayedFigureUrl ? "none" : undefined,
           }}
         />
+        {showCalibratedAxes && <LiveAxisOverlay roi={roi} t={t} />}
         {displayedFigureUrl && (
           <img
             className="server-figure"
@@ -1143,6 +1146,101 @@ function currentBeamPosition(args: CurrentBeamArgs): CurrentBeamPosition | null 
     ...mapIndexToRegion(col, row, args.vectorEdge, args.region),
     adc: args.vectorImage[row * args.vectorEdge + col] ?? 0,
   };
+}
+
+function unitLabel(value: string) {
+  switch (value) {
+    case "um":
+      return "μm";
+    case "mm":
+    case "cm":
+    case "nm":
+      return value;
+    default:
+      return value;
+  }
+}
+
+function formatOneDecimal(v: number) {
+  return Number.isFinite(v) ? v.toFixed(1) : "0.0";
+}
+
+function LiveAxisOverlay({
+  roi,
+  t,
+}: {
+  roi: ROIState;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}) {
+  const minorTicks = 20;
+  const majorEvery = 5;
+  const ticks = Array.from({ length: minorTicks + 1 }, (_, i) => {
+    const ratio = i / minorTicks;
+    return {
+      key: i,
+      ratio,
+      percent: `${ratio * 100}%`,
+      major: i % majorEvery === 0,
+      xLabel: formatOneDecimal(roi.x_origin + (roi.x_end - roi.x_origin) * ratio),
+      yLabel: formatOneDecimal(roi.y_origin + (roi.y_end - roi.y_origin) * ratio),
+    };
+  });
+  const unit = unitLabel(roi.scale_unit);
+
+  return (
+    <div className="canvas-axis-overlay" aria-hidden="true">
+      <div className="canvas-axis-overlay__axis canvas-axis-overlay__axis--x" />
+      <div className="canvas-axis-overlay__axis canvas-axis-overlay__axis--y" />
+      {ticks.map((tick) => (
+        <div
+          key={`x-${tick.key}`}
+          className={`canvas-axis-overlay__tick canvas-axis-overlay__tick--x${
+            tick.major ? " canvas-axis-overlay__tick--major" : ""
+          }`}
+          style={{ left: tick.percent }}
+        />
+      ))}
+      {ticks.map((tick) => (
+        <div
+          key={`y-${tick.key}`}
+          className={`canvas-axis-overlay__tick canvas-axis-overlay__tick--y${
+            tick.major ? " canvas-axis-overlay__tick--major" : ""
+          }`}
+          style={{ top: tick.percent }}
+        />
+      ))}
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`xl-${tick.key}`}
+          className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
+          style={{ left: tick.percent }}
+        >
+          {tick.xLabel}
+        </span>
+      ))}
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`yl-${tick.key}`}
+          className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
+          style={{ top: tick.percent }}
+        >
+          {tick.yLabel}
+        </span>
+      ))}
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--start">
+        {t("roi.canvas.start", {
+          point: `(${formatOneDecimal(roi.x_origin)}, ${formatOneDecimal(roi.y_origin)})`,
+          unit,
+        })}
+      </span>
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end">
+        {t("roi.canvas.end", {
+          point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
+          unit,
+        })}
+      </span>
+    </div>
+  );
 }
 
 function mapIndexToRegion(

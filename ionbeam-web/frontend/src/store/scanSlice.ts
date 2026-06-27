@@ -73,6 +73,7 @@ export interface ROIState {
   calibration_viewport_x_end: number;
   calibration_viewport_y_start: number;
   calibration_viewport_y_end: number;
+  calibration_confirmed: boolean;
   x_scale_length: number;
   y_scale_length: number;
   scale_unit: string;
@@ -134,6 +135,7 @@ const initialState: ScanState = {
     calibration_viewport_x_end: 640,
     calibration_viewport_y_start: 0,
     calibration_viewport_y_end: 640,
+    calibration_confirmed: false,
     x_scale_length: 100,
     y_scale_length: 100,
     scale_unit: "um",
@@ -306,6 +308,27 @@ function normalizeROIPatch(
   };
 }
 
+function calibrationPatchTouchesConfirmedMapping(patch: Partial<ROIState>): boolean {
+  return [
+    "x_origin",
+    "x_end",
+    "y_origin",
+    "y_end",
+    "viewport_x_start",
+    "viewport_x_end",
+    "viewport_y_start",
+    "viewport_y_end",
+    "calibration_x_origin",
+    "calibration_x_end",
+    "calibration_y_origin",
+    "calibration_y_end",
+    "calibration_viewport_x_start",
+    "calibration_viewport_x_end",
+    "calibration_viewport_y_start",
+    "calibration_viewport_y_end",
+  ].some((key) => Object.prototype.hasOwnProperty.call(patch, key));
+}
+
 /* -------- blocking REST runs ------------------------------------------- */
 
 export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
@@ -366,6 +389,9 @@ const slice = createSlice({
     },
     updateROI(s, a: PayloadAction<Partial<ROIState>>) {
       s.roi = { ...s.roi, ...normalizeROIPatch(a.payload, s.roi) };
+      if (calibrationPatchTouchesConfirmedMapping(a.payload)) {
+        s.roi.calibration_confirmed = false;
+      }
       if ("selection" in a.payload) {
         s.raster.roi = a.payload.selection ?? null;
         s.vector.roi = a.payload.selection ?? null;
@@ -383,6 +409,7 @@ const slice = createSlice({
       s.roi.viewport_x_end = 640;
       s.roi.viewport_y_start = 0;
       s.roi.viewport_y_end = 640;
+      s.roi.calibration_confirmed = true;
       s.roi.selection = null;
       s.raster.roi = null;
       s.vector.roi = null;

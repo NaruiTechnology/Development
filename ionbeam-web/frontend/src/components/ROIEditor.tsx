@@ -7,6 +7,7 @@ import { clearBitmapSelectionCache, worldSelectionToDacROI } from "../lib/bitmap
 import {
   ROI_CANVAS_EDGE,
   ROI_VIEWPORT_MIN_SPAN,
+  ROI_AXIS_FONT,
   canvasPointToWorld,
   clampCanvasPointToViewport,
   clampViewportCoordinate,
@@ -189,7 +190,7 @@ export function ROIEditor({
       ctx.strokeStyle = "rgba(95, 184, 255, 0.85)";
       ctx.fillStyle = "rgba(230, 238, 249, 0.92)";
       ctx.lineWidth = 1;
-      ctx.font = "12px ui-monospace, monospace";
+      ctx.font = ROI_AXIS_FONT;
       drawScale(ctx, roi, unitLabel(roi.scale_unit), tr);
       ctx.restore();
     }
@@ -298,6 +299,7 @@ export function ROIEditor({
     dispatch(
       updateROI({
         calibration_enabled: true,
+        calibration_confirmed: false,
         calibration_x_origin: roi.x_origin,
         calibration_x_end: roi.x_end,
         calibration_y_origin: roi.y_origin,
@@ -806,7 +808,7 @@ function unitLabel(value: string) {
 
 function drawLabel(ctx: CanvasRenderingContext2D, x: number, y: number, text: string) {
   ctx.save();
-  ctx.font = "12px ui-monospace, monospace";
+  ctx.font = ROI_AXIS_FONT;
   const w = ctx.measureText(text).width + 8;
   const bx = Math.min(Math.max(0, x), ROI_CANVAS_EDGE - w);
   const by = Math.min(Math.max(14, y), ROI_CANVAS_EDGE - 2);
@@ -832,7 +834,7 @@ function drawScale(
   ctx.strokeStyle = "rgba(95, 184, 255, 0.9)";
   ctx.fillStyle = "rgba(230, 238, 249, 0.95)";
   ctx.lineWidth = 1;
-  ctx.font = "12px ui-monospace, monospace";
+  ctx.font = ROI_AXIS_FONT;
 
   ctx.beginPath();
   ctx.moveTo(bounds.left, bounds.top);

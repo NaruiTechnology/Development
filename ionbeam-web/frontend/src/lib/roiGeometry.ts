@@ -2,6 +2,7 @@ import type { ROIState } from "../store/scanSlice";
 
 export const ROI_CANVAS_EDGE = 640;
 export const ROI_VIEWPORT_MIN_SPAN = 24;
+export const ROI_AXIS_FONT = "12px ui-monospace, monospace";
 
 type ViewportSource = Pick<
   ROIState,
@@ -25,6 +26,13 @@ export interface ViewportBounds {
 }
 
 type ViewportMode = "confirmed" | "draft";
+
+export function hasConfirmedCalibration(roi: {
+  calibration_enabled: boolean;
+  calibration_confirmed: boolean;
+}): boolean {
+  return !roi.calibration_enabled && roi.calibration_confirmed;
+}
 
 export function viewportBounds(roi: ViewportSource, mode: ViewportMode = "confirmed"): ViewportBounds {
   const x0 =
