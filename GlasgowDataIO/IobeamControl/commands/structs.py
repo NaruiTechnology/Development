@@ -163,10 +163,10 @@ class u16(int):
         if val < 0:
             raise ValueError(f"{val} < 0. Only positive integers are valid")
         if val > 65535:
-            raise ValueError(f"{val} > 16383. Value overflows 14 bits")
+            raise ValueError(f"{val} > 65535. Value overflows 16 bits")
     def __new__(self, val:int):
         self.__init__(self, val)
-        return val & 0b11111111111111
+        return val & 0xFFFF
 
 class fp8_8(int):
     """

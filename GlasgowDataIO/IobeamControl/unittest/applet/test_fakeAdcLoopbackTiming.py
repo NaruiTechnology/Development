@@ -82,4 +82,4 @@ class FakeAdcLoopbackTimingTest(unittest.TestCase):
         sim.add_testbench(bench)
         sim.run()
 
-        self.assertEqual(observed, [10 * 64, 20 * 64, 30 * 64, 40 * 64])
+        self.assertEqual(observed, [10, 20, 30, 40])

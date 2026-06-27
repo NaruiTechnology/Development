@@ -17,15 +17,14 @@ class Supersampler(wiring.Component):
     dac_stream: In(StreamSignature(DACStream)) # type: ignore
 
     ADC_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
-        "adc_code":   14,
+        "adc_code":   16,
     }))
     adc_stream: Out(ADC_STREAM_SIGNATURE) # type: ignore
 
     super_dac_stream: Out(StreamSignature(SuperDACStream)) # type: ignore
 
     SUPER_ADC_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
-        "adc_code":   14,
-        "adc_ovf":    1,  # ignored
+        "adc_code":   16,
         "last":       1,
     }))
     super_adc_stream: In(SUPER_ADC_STREAM_SIGNATURE) # type: ignore

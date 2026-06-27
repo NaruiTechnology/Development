@@ -246,7 +246,7 @@ class IobeamDataSubtarget(Elaboratable):
             # Real ADC path: external chip drives data bus during
             # ADC_Wait/ADC_Read (data_oe == 0). data.i is the latched
             # value from the input buffer.
-            m.d.comb += executor.bus.data_i.eq(data_buf.i)
+            m.d.comb += executor.bus.data_i.eq(Cat(data_buf.i, Const(0, 2)))
         else:
             # No loopback, no data pins -> tie data_i low. The design
             # synthesises but reads will be all zeros.

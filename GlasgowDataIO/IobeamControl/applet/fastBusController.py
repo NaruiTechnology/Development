@@ -14,14 +14,8 @@ class FastBusController(wiring.Component):
     inline_blank: Out(BlankRequest) # type: ignore
 
     # Ignored
-    # adc_stream: Out(StreamSignature(data.StructLayout({
-    #     "adc_code": 14,
-    #     "adc_ovf":  1,
-    #     "last":     1,
-    # })))
     ADC_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
-        "adc_code": 14,
-        "adc_ovf":  1,
+        "adc_code": 16,
         "last":     1,
     }))
     adc_stream: Out(ADC_STREAM_SIGNATURE) # type: ignore
@@ -86,4 +80,3 @@ class FastBusController(wiring.Component):
                     
 
         return m
-
