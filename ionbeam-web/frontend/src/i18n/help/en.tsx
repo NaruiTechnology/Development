@@ -30,7 +30,8 @@ export type HelpKey =
   | "vectorResolution"
   | "customPoints"
   | "preProcess"
-  | "canvasView";
+  | "canvasView"
+  | "magCalibration";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
   dwell: () => (
@@ -589,6 +590,60 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         sample order and image sparsity. Use <strong>Native</strong>
         when you want to inspect the DAC-space footprint of a reduced
         vector grid.
+      </p>
+    </>
+  ),
+
+  magCalibration: () => (
+    <>
+      <p>
+        Magnification calibration maps a microscope magnification value
+        to the full horizontal field of view (HFOV) in meters for the
+        selected beam.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>HFOV formula.</strong>{" "}
+        <code>HFOV_m = measured_length_m × (image_resolution_px / measured_line_px)</code>.
+        The measured length is the real-world distance represented by
+        the line you measured, and measured pixels is that line&apos;s
+        pixel length in the image.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Magnification</strong> is the microscope mag setting for the current point.</li>
+        <li><strong>Image resolution</strong> should match the full image axis used for calibration, usually <code>max(width_px, height_px)</code>.</li>
+        <li><strong>Update curve</strong> stores the computed HFOV at the current magnification.</li>
+        <li><strong>Save</strong> persists the per-beam map under <code>magCalibration.beams[beam].m_per_fov</code>.</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>X/Y relationship.</strong> Magnification calibration
+        stores HFOV only. The ROI X/Y calibration owns the viewport-to-DUT
+        coordinate mapping. If pixels are square, VFOV is derived from
+        HFOV by the image aspect ratio; otherwise X and Y require separate
+        ROI calibration.
+      </div>
+
+      <p>
+        <strong>Import CSV</strong> expects a magnification-calibration
+        CSV exported from this panel: <code>Magnification,FOV (m)</code>.
+        It is not the normal scan output CSV. Scan result CSV files contain
+        sampled image data and are intentionally not parsed as mag-cal
+        curves.
+      </p>
+
+      <p>
+        Saved results are written into the stream configuration and served
+        back through <code>/api/admin/mag-calibration</code>. Other scan
+        logic can consume that per-beam map from defaults/config; the
+        import button itself only replaces the current mag-cal point table.
+      </p>
+
+      <p>
+        The chart is drawn on log-log axes because FOV normally changes
+        approximately inversely with magnification. CSV import/export
+        uses two data columns: magnification and FOV meters.
       </p>
     </>
   ),

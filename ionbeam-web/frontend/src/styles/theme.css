@@ -1677,6 +1677,122 @@ body {
   background: transparent;
 }
 
+.mag-calibration {
+  display: grid;
+  gap: 10px;
+}
+
+.mag-calibration__path {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.mag-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.mag-table th,
+.mag-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--c-border-soft);
+  text-align: left;
+}
+
+.mag-table th {
+  color: var(--c-text-dim);
+  font-weight: 600;
+}
+
+.mag-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.mag-chart {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--c-bg-elev);
+}
+
+.mag-chart__plot {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mag-chart__background {
+  fill: var(--c-bg-elev);
+}
+
+.mag-chart__axis {
+  stroke: rgba(95, 184, 255, 0.85);
+  stroke-width: 1.2;
+}
+
+.mag-chart__grid {
+  stroke: gray;
+  stroke-width: 0.35;
+  stroke-opacity: 0.7;
+  stroke-dasharray: 5 5;
+}
+
+.mag-chart__grid--minor {
+  stroke-width: 0.2;
+  stroke-opacity: 0.5;
+  stroke-dasharray: 2 5;
+}
+
+.mag-chart__tick {
+  stroke: rgba(95, 184, 255, 0.72);
+  stroke-width: 1;
+}
+
+.mag-chart__minor-tick {
+  stroke: rgba(95, 184, 255, 0.55);
+  stroke-width: 0.8;
+}
+
+.mag-chart__line {
+  fill: none;
+  stroke: lawngreen;
+  stroke-width: 1.6;
+}
+
+.mag-chart__dot {
+  fill: cyan;
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 1;
+}
+
+.mag-chart__text {
+  fill: var(--c-text);
+  font: 12px ui-monospace, monospace;
+}
+
+.mag-chart__tick-text {
+  fill: var(--c-text-dim);
+  font: 10px ui-monospace, monospace;
+  text-anchor: middle;
+}
+
+.mag-chart__tick-text--y {
+  text-anchor: end;
+}
+
+.mag-chart__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+
 .canvas-toolbox__cluster {
   display: inline-flex;
   align-items: center;

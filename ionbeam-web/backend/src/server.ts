@@ -223,6 +223,23 @@ interface ScanTelemetryOutputRequest {
   scan_result?: unknown;
 }
 
+interface MagCalibrationBeam {
+  path: string;
+  m_per_fov: Record<string, number>;
+}
+
+interface MagCalibrationConfig {
+  selected_beam: string;
+  beams: Record<string, MagCalibrationBeam>;
+}
+
+interface MagCalibrationResponse {
+  ok: boolean;
+  selected_beam?: string;
+  beams?: Record<string, MagCalibrationBeam>;
+  error?: string;
+}
+
 const smsChallenges = new Map<string, SmsChallenge>();
 const SMS_CODE_TTL_MS = 5 * 60 * 1000;
 const ROLE_USER = 0;
@@ -1065,6 +1082,35 @@ app.post(
 
 app.post("/api/admin/restart-services", async (_req, res) => {
   await restartServicesAndRespond(res);
+});
+
+app.get("/api/admin/mag-calibration", async (_req, res: express.Response<MagCalibrationResponse>) => {
+  try {
+    const info = await readWithBackup();
+    const mag = readMagCalibrationConfig(info.data);
+    res.json({ ok: true, selected_beam: mag.selected_beam, beams: mag.beams });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post("/api/admin/mag-calibration", async (req, res: express.Response<MagCalibrationResponse>) => {
+  try {
+    const info = await readWithBackup();
+    const beam = normalizeMagBeam(req.body?.beam);
+    const points = normalizeMagPoints(req.body?.m_per_fov);
+    const pathValue = typeof req.body?.path === "string" ? req.body.path.trim() : "";
+    const next = writeMagCalibrationConfig(info.data, beam, points, pathValue);
+    await writeConfig(next);
+    const restart = await restartService();
+    if (!restart.ok) {
+      console.warn(`[mag-calibration] restart failed: ${restart.error ?? restart.stderr ?? "unknown error"}`);
+    }
+    const mag = readMagCalibrationConfig(next);
+    res.json({ ok: true, selected_beam: mag.selected_beam, beams: mag.beams });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
 });
 
 app.post("/api/admin/ftp/merged-figure", async (req, res) => {
@@ -2340,6 +2386,127 @@ async function isAdminSessionExpired(user: AdminUser): Promise<boolean> {
 function clientAddress(req: express.Request): string {
   const forwardedFor = req.get("x-forwarded-for")?.split(",")[0]?.trim();
   return forwardedFor || req.ip || req.socket.remoteAddress || "";
+}
+
+function readMagCalibrationConfig(data: unknown): MagCalibrationConfig {
+  const actionData = readStreamActionData(data);
+  const raw = readRecordValue(actionData, "magCalibration");
+  const beamsRaw = readRecordValue(raw, "beams");
+  const selectedBeam = normalizeMagBeam(
+    raw.selected_beam ?? raw.selectedBeam ?? (actionData.enableEbeam ? "ebeam" : "ion")
+  );
+  const beams: Record<string, MagCalibrationBeam> = {};
+
+  for (const [beam, value] of Object.entries(beamsRaw)) {
+    const normalizedBeam = normalizeMagBeam(beam);
+    const record = readRecordValue(value);
+    beams[normalizedBeam] = {
+      path: typeof record.path === "string" ? record.path : "",
+      m_per_fov: normalizeMagPoints(record.m_per_fov ?? record.mPerFov ?? record.points),
+    };
+  }
+
+  if (!beams[selectedBeam]) {
+    beams[selectedBeam] = { path: "", m_per_fov: {} };
+  }
+  return { selected_beam: selectedBeam, beams };
+}
+
+function writeMagCalibrationConfig(
+  data: unknown,
+  beam: string,
+  points: Record<string, number>,
+  pathValue: string
+): unknown {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new ConfigError("stream config must be a JSON object", 500);
+  }
+  const next = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+  const actionData = mutableStreamActionData(next);
+  const existing = readMagCalibrationConfig(next);
+  const selectedBeam = normalizeMagBeam(beam);
+  const beams = {
+    ...existing.beams,
+    [selectedBeam]: {
+      path: pathValue,
+      m_per_fov: points,
+    },
+  };
+  actionData.magCalibration = {
+    selected_beam: selectedBeam,
+    beams,
+  };
+  return next;
+}
+
+function mutableStreamActionData(data: Record<string, unknown>): Record<string, unknown> {
+  const actions = Array.isArray(data.Actions) ? data.Actions : null;
+  const first = actions?.[0];
+  if (!first || typeof first !== "object" || Array.isArray(first)) {
+    throw new ConfigError("stream config is missing Actions[0]", 500);
+  }
+  const firstRecord = first as Record<string, unknown>;
+  const streamData = readMutableRecord(firstRecord, "streamData");
+  return readMutableRecord(streamData, "actionData");
+}
+
+function readStreamActionData(data: unknown): Record<string, unknown> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const record = data as Record<string, unknown>;
+  const actions = Array.isArray(record.Actions) ? record.Actions : [];
+  const first = actions[0];
+  if (!first || typeof first !== "object" || Array.isArray(first)) return {};
+  return readRecordValue(readRecordValue(first, "streamData"), "actionData");
+}
+
+function readMutableRecord(parent: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = parent[key];
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  const next: Record<string, unknown> = {};
+  parent[key] = next;
+  return next;
+}
+
+function readRecordValue(value: unknown, key?: string): Record<string, unknown> {
+  const target = key && value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)[key]
+    : value;
+  return target && typeof target === "object" && !Array.isArray(target)
+    ? (target as Record<string, unknown>)
+    : {};
+}
+
+function normalizeMagBeam(value: unknown): string {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (["ebeam", "electron", "e-beam"].includes(text)) return "ebeam";
+  if (["ion", "ibeam", "i-beam"].includes(text)) return "ion";
+  return text || "ion";
+}
+
+function normalizeMagPoints(value: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (Array.isArray(value)) {
+    for (const row of value) {
+      if (!Array.isArray(row) || row.length < 2) continue;
+      addMagPoint(out, row[0], row[1]);
+    }
+  } else if (value && typeof value === "object") {
+    for (const [mag, fov] of Object.entries(value as Record<string, unknown>)) {
+      addMagPoint(out, mag, fov);
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(out).sort(([a], [b]) => Number(a) - Number(b))
+  );
+}
+
+function addMagPoint(out: Record<string, number>, magValue: unknown, fovValue: unknown): void {
+  const mag = Math.trunc(Number(magValue));
+  const fov = Number(fovValue);
+  if (!Number.isFinite(mag) || mag < 1 || !Number.isFinite(fov) || fov <= 0) return;
+  out[String(mag)] = fov;
 }
 
 function trimForSqlNchar(value: string, maxLength: number): string {

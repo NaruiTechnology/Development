@@ -110,6 +110,7 @@ export const zhTW: Partial<TranslationTable> = {
   "tabs.roi": "ROI",
   "tabs.raster": "光柵",
   "tabs.vector": "矢量",
+  "tabs.mag": "倍率校準",
   "tabs.roi.title": "編輯 ROI",
   "tabs.roi.title.disabled": "掃描執行期間 ROI 無法使用",
 
@@ -120,6 +121,7 @@ export const zhTW: Partial<TranslationTable> = {
   "card.vectorPattern": "矢量圖樣",
   "card.roiPreview": "ROI 預覽",
   "card.calibration": "校準",
+  "card.magCalibration": "放大倍率校準",
   "card.selectROI": "選擇 ROI",
   "card.validatedRunOptions": "驗證執行選項",
 
@@ -180,6 +182,27 @@ export const zhTW: Partial<TranslationTable> = {
   "vector.customPoints.empty": "0 個點",
   "vector.preProcess": "預先處理資料區塊（單獨計入 process_time_s 時間）",
   "vector.doValidate": "執行非空 / 填充檢查",
+
+  /* ===== magnification calibration ================================ */
+  "mag.beam": "束流",
+  "mag.beam.ion": "離子束",
+  "mag.beam.ebeam": "電子束",
+  "mag.magnification": "放大倍率",
+  "mag.measuredLengthM": "測量長度（m）",
+  "mag.measuredPixels": "測量像素",
+  "mag.imageResolution": "影像解析度",
+  "mag.hfovLengthM": "HFOV 長度（m）",
+  "mag.updateCurve": "更新曲線",
+  "mag.save": "儲存",
+  "mag.exportCsv": "匯出 CSV",
+  "mag.importCsv": "匯入 CSV",
+  "mag.chart.aria": "放大倍率校準曲線",
+  "mag.chart.fov": "FOV（m）",
+  "mag.chart.magnification": "放大倍率",
+  "mag.chart.empty": "尚未儲存校準點。",
+  "mag.table.magnification": "放大倍率",
+  "mag.table.fov": "FOV（m）",
+  "mag.table.empty": "無點",
 
   /* ===== ROI editor =============================================== */
   "roi.select": "選擇檔案",
@@ -379,6 +402,8 @@ export const zhTW: Partial<TranslationTable> = {
   "help.dwell.aria": "駐留欄位的作用是什麼？",
   "help.resolution.title": "解析度 — 像素網格大小",
   "help.resolution.aria": "解析度欄位的作用是什麼？",
+  "help.magCalibration.title": "放大倍率校準 — HFOV 映射",
+  "help.magCalibration.aria": "放大倍率校準如何計算 HFOV？",
   "help.latency.title": "延遲 — USB 流水線上的資料區塊大小",
   "help.latency.aria": "延遲欄位的作用是什麼？",
   "help.cookie.title": "Cookie — 同步標記",

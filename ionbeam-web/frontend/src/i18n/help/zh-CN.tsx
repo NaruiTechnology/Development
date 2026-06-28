@@ -489,4 +489,46 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
     </>
   ),
+
+  magCalibration: () => (
+    <>
+      <p>
+        放大倍率校准用于把显微镜放大倍率映射到所选束流的完整水平视场（HFOV，单位米）。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>HFOV 公式。</strong>{" "}
+        <code>HFOV_m = measured_length_m × (image_resolution_px / measured_line_px)</code>。
+        measured length 是测量线对应的真实物理长度；measured pixels 是该测量线在图像中的像素长度。
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Magnification</strong> 是当前校准点的显微镜放大倍率。</li>
+        <li><strong>Image resolution</strong> 应匹配校准所用完整图像轴，通常为 <code>max(width_px, height_px)</code>。</li>
+        <li><strong>Update curve</strong> 会把当前放大倍率下计算得到的 HFOV 写入曲线。</li>
+        <li><strong>Save</strong> 会按束流保存到 <code>magCalibration.beams[beam].m_per_fov</code>。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>X/Y 关系。</strong>放大倍率校准只保存 HFOV。ROI 的 X/Y 校准负责视口到 DUT
+        坐标的映射。如果像素为正方形，VFOV 可由 HFOV 按图像宽高比推导；否则 X 和 Y
+        需要分别通过 ROI 校准。
+      </div>
+
+      <p>
+        <strong>导入 CSV</strong> 需要的是从本面板导出的放大倍率校准 CSV：
+        <code>Magnification,FOV (m)</code>。它不是普通扫描输出 CSV。扫描结果 CSV
+        包含采样图像数据，不会被解析为放大倍率校准曲线。
+      </p>
+
+      <p>
+        保存结果会写入 stream 配置，并通过 <code>/api/admin/mag-calibration</code> 返回。
+        其他扫描逻辑可从 defaults/config 读取该按束流保存的映射；导入按钮本身只替换当前的校准点表。
+      </p>
+
+      <p>
+        曲线使用 log-log 坐标，因为 FOV 通常近似与放大倍率成反比。CSV 导入/导出使用两列数据：magnification 与 FOV meters。
+      </p>
+    </>
+  ),
 };

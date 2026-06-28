@@ -325,6 +325,7 @@ class DeviceService:
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
             "simulation": dict(self._simulation_defaults),
+            "mag_calibration": dict(self._action_defaults.get("magCalibration", {}) or {}),
             "raster_params": self._raster_params_defaults.to_public_dict(),
             "vector_params": self._vector_params_defaults.to_public_dict(),
             "selected_beam": (

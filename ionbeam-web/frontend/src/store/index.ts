@@ -7,6 +7,7 @@ import imageReducer from "./imageSlice";
 import themeReducer from "./themeSlice";
 import localeReducer from "./localeSlice";
 import settingsReducer from "./settingsSlice";
+import magCalibrationReducer from "./magCalibrationSlice";
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
     theme: themeReducer,
     locale: localeReducer,
     settings: settingsReducer,
+    magCalibration: magCalibrationReducer,
   },
   // The image slice carries large typed arrays (Uint16Array up to 8 MB for
   // the 2048x2048 vector render target) plus an ArrayBuffer of points for

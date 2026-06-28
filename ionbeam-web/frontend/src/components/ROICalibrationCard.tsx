@@ -43,7 +43,6 @@ export function ROICalibrationCard({ disabled }: { disabled: boolean }) {
     if (disabled || validation) return;
     clearBitmapSelectionCache();
     dispatch(confirmROICalibration());
-    dispatch(updateROI({ calibration_enabled: false }));
   }
 
   return (

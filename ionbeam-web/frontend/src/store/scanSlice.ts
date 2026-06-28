@@ -15,7 +15,7 @@ import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 
-export type ScanKind = "raster" | "vector" | "roi";
+export type ScanKind = "raster" | "vector" | "roi" | "mag";
 export type ScanPhase =
   | "idle"
   | "running"

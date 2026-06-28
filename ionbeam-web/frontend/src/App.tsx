@@ -32,6 +32,7 @@ import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
+import { MagCalibrationChart, MagCalibrationControls } from "./components/MagCalibration";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -287,6 +288,8 @@ export function App() {
       ? "card.rasterImage"
       : kind === "vector"
       ? "card.vectorPattern"
+      : kind === "mag"
+      ? "card.magCalibration"
       : roiState.calibration_enabled
       ? "card.calibration"
       : "card.selectROI";
@@ -353,19 +356,31 @@ export function App() {
                 <Icon name="route" tone="tab" />
                 {t("tabs.vector")}
               </button>
+              <button
+                role="tab"
+                className="tab"
+                aria-selected={kind === "mag"}
+                disabled={panelDisabled}
+                onClick={() => selectKind("mag")}
+              >
+                <Icon name="tools" tone="tab" />
+                {t("tabs.mag")}
+              </button>
             </div>
             <div className="card__body">
               {kind === "raster" ? (
                 <RasterParameters disabled={panelDisabled} />
               ) : kind === "vector" ? (
                 <VectorParameters disabled={panelDisabled} />
+              ) : kind === "mag" ? (
+                <MagCalibrationControls disabled={panelDisabled} />
               ) : (
                 <ROIEditor disabled={panelDisabled} variant="controls" />
               )}
             </div>
           </div>
 
-          {kind !== "roi" && (
+          {kind !== "roi" && kind !== "mag" && (
             <>
               <div className="card">
                 <div className="card__header">
@@ -437,6 +452,8 @@ export function App() {
                   variant="canvas"
                   backgroundImageUrl={roiScanImageUrl}
                 />
+              ) : kind === "mag" ? (
+                <MagCalibrationChart />
               ) : (
                 <ImageCanvas
                   kind={kind as ScanKind}

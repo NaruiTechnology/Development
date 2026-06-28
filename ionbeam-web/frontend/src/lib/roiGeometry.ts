@@ -28,10 +28,9 @@ export interface ViewportBounds {
 type ViewportMode = "confirmed" | "draft";
 
 export function hasConfirmedCalibration(roi: {
-  calibration_enabled: boolean;
   calibration_confirmed: boolean;
 }): boolean {
-  return !roi.calibration_enabled && roi.calibration_confirmed;
+  return roi.calibration_confirmed;
 }
 
 export function viewportBounds(roi: ViewportSource, mode: ViewportMode = "confirmed"): ViewportBounds {

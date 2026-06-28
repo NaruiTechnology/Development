@@ -101,6 +101,7 @@ export const zhCN: Partial<TranslationTable> = {
   "tabs.roi": "ROI",
   "tabs.raster": "光栅",
   "tabs.vector": "矢量",
+  "tabs.mag": "倍率校准",
   "tabs.roi.title": "编辑 ROI",
   "tabs.roi.title.disabled": "扫描运行期间 ROI 不可用",
 
@@ -111,6 +112,7 @@ export const zhCN: Partial<TranslationTable> = {
   "card.vectorPattern": "矢量图样",
   "card.roiPreview": "ROI 预览",
   "card.calibration": "校准",
+  "card.magCalibration": "放大倍率校准",
   "card.selectROI": "选择 ROI",
   "card.validatedRunOptions": "验证运行选项",
 
@@ -171,6 +173,27 @@ export const zhCN: Partial<TranslationTable> = {
   "vector.customPoints.empty": "0 个点",
   "vector.preProcess": "预处理数据块（单独计入 process_time_s 时间）",
   "vector.doValidate": "执行非空 / 填充检查",
+
+  /* ===== magnification calibration ================================ */
+  "mag.beam": "束流",
+  "mag.beam.ion": "离子束",
+  "mag.beam.ebeam": "电子束",
+  "mag.magnification": "放大倍率",
+  "mag.measuredLengthM": "测量长度（m）",
+  "mag.measuredPixels": "测量像素",
+  "mag.imageResolution": "图像分辨率",
+  "mag.hfovLengthM": "HFOV 长度（m）",
+  "mag.updateCurve": "更新曲线",
+  "mag.save": "保存",
+  "mag.exportCsv": "导出 CSV",
+  "mag.importCsv": "导入 CSV",
+  "mag.chart.aria": "放大倍率校准曲线",
+  "mag.chart.fov": "FOV（m）",
+  "mag.chart.magnification": "放大倍率",
+  "mag.chart.empty": "尚未保存校准点。",
+  "mag.table.magnification": "放大倍率",
+  "mag.table.fov": "FOV（m）",
+  "mag.table.empty": "无点",
 
   /* ===== ROI editor =============================================== */
   "roi.select": "选择文件",
@@ -373,6 +396,8 @@ export const zhCN: Partial<TranslationTable> = {
   "help.dwell.aria": "驻留字段的作用是什么？",
   "help.resolution.title": "分辨率 — 像素网格大小",
   "help.resolution.aria": "分辨率字段的作用是什么？",
+  "help.magCalibration.title": "放大倍率校准 — HFOV 映射",
+  "help.magCalibration.aria": "放大倍率校准如何计算 HFOV？",
   "help.latency.title": "延迟 — USB 流水线上的数据块大小",
   "help.latency.aria": "延迟字段的作用是什么？",
   "help.cookie.title": "Cookie — 同步标记",

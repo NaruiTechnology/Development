@@ -122,6 +122,7 @@ export const en = {
   "tabs.roi": "ROI",
   "tabs.raster": "Raster",
   "tabs.vector": "Vector",
+  "tabs.mag": "Mag Cal",
   "tabs.roi.title": "Edit ROI",
   "tabs.roi.title.disabled": "ROI is inactive while a scan is running",
 
@@ -132,6 +133,7 @@ export const en = {
   "card.vectorPattern": "Vector pattern",
   "card.roiPreview": "ROI preview",
   "card.calibration": "Calibration",
+  "card.magCalibration": "Magnification calibration",
   "card.selectROI": "Select ROI",
   "card.validatedRunOptions": "Validated run options",
 
@@ -195,6 +197,27 @@ export const en = {
   "vector.customPoints.empty": "0 points",
   "vector.preProcess": "Pre-process chunks (timed separately as process_time_s)",
   "vector.doValidate": "Run chunk presence checks",
+
+  /* ===== magnification calibration ================================ */
+  "mag.beam": "Beam",
+  "mag.beam.ion": "Ion",
+  "mag.beam.ebeam": "E-beam",
+  "mag.magnification": "Magnification",
+  "mag.measuredLengthM": "Measured length (m)",
+  "mag.measuredPixels": "Measured pixels",
+  "mag.imageResolution": "Image resolution",
+  "mag.hfovLengthM": "HFOV length (m)",
+  "mag.updateCurve": "Update curve",
+  "mag.save": "Save",
+  "mag.exportCsv": "Export CSV",
+  "mag.importCsv": "Import CSV",
+  "mag.chart.aria": "Magnification calibration curve",
+  "mag.chart.fov": "FOV (m)",
+  "mag.chart.magnification": "Magnification",
+  "mag.chart.empty": "No calibration points saved.",
+  "mag.table.magnification": "Magnification",
+  "mag.table.fov": "FOV (m)",
+  "mag.table.empty": "No points",
 
   /* ===== ROI editor =============================================== */
   "roi.select": "SELECT",
@@ -434,6 +457,8 @@ export const en = {
   "help.dwell.aria": "What does the dwell field do?",
   "help.resolution.title": "Resolution — pixel grid size",
   "help.resolution.aria": "What does the resolution field do?",
+  "help.magCalibration.title": "Magnification calibration — HFOV mapping",
+  "help.magCalibration.aria": "How does magnification calibration compute HFOV?",
   "help.latency.title": "Latency — chunk size on the USB pipeline",
   "help.latency.aria": "What does the latency field do?",
   "help.cookie.title": "Cookie — synchronization tag",
