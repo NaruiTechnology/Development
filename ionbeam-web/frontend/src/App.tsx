@@ -97,7 +97,8 @@ export function App() {
   });
   const settingsTarget = useMemo(() => parseSettingsTarget(window.location.search), []);
   const hasPartialROI = isPartialROISelection(roiState);
-  const showROISideCard = kind === "roi" && (roiState.calibration_enabled || hasPartialROI);
+  const showROICalibrationInControls = kind === "roi" && roiState.calibration_enabled;
+  const showROIPreviewSideCard = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
   const isSignedIn = Boolean(signedInUser);
 
   useEffect(() => {
@@ -176,7 +177,7 @@ export function App() {
       const rect = main.getBoundingClientRect();
       const maxRight = Math.max(
         MIN_RIGHT_PANEL_WIDTH,
-        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROISideCard ? 236 : 0)
+        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIPreviewSideCard ? 236 : 0)
       );
       const next = Math.min(
         maxRight,
@@ -201,7 +202,7 @@ export function App() {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [isResizing, showROISideCard]);
+  }, [isResizing, showROIPreviewSideCard]);
 
   const scanActive = phase === "running" || phase === "stopping";
   const panelDisabled = scanActive || !isSignedIn;
@@ -270,7 +271,7 @@ export function App() {
     const rect = main.getBoundingClientRect();
     const maxRight = Math.max(
       MIN_RIGHT_PANEL_WIDTH,
-      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROISideCard ? 236 : 0)
+      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIPreviewSideCard ? 236 : 0)
     );
     const next = Math.min(maxRight, Math.max(MIN_RIGHT_PANEL_WIDTH, rightPanelWidth + delta));
     setRightPanelWidth(next);
@@ -317,7 +318,7 @@ export function App() {
       <main
         ref={mainRef}
         className={`app-main${isResizing ? " app-main--resizing" : ""}${
-          showROISideCard ? " app-main--with-roi-preview" : ""
+          showROIPreviewSideCard ? " app-main--with-roi-preview" : ""
         }`}
         style={layoutStyle}
       >
@@ -358,7 +359,7 @@ export function App() {
               </button>
               <button
                 role="tab"
-                className="tab"
+                className="tab tab--mag"
                 aria-selected={kind === "mag"}
                 disabled={panelDisabled}
                 onClick={() => selectKind("mag")}
@@ -375,7 +376,10 @@ export function App() {
               ) : kind === "mag" ? (
                 <MagCalibrationControls disabled={panelDisabled} />
               ) : (
-                <ROIEditor disabled={panelDisabled} variant="controls" />
+                <>
+                  <ROIEditor disabled={panelDisabled} variant="controls" />
+                  {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
+                </>
               )}
             </div>
           </div>
@@ -466,20 +470,14 @@ export function App() {
 
         </section>
 
-        {showROISideCard && (
+        {showROIPreviewSideCard && (
           <section className="roi-preview-column">
             <div className="card roi-preview-card">
               <div className="card__header">
-                <span className="card__title">
-                  {t(roiState.calibration_enabled ? "card.calibration" : "card.roiPreview")}
-                </span>
+                <span className="card__title">{t("card.roiPreview")}</span>
               </div>
               <div className="card__body">
-                {roiState.calibration_enabled ? (
-                  <ROICalibrationCard disabled={panelDisabled} />
-                ) : (
-                  <ROIScanPreview backgroundImageUrl={roiScanImageUrl} />
-                )}
+                <ROIScanPreview backgroundImageUrl={roiScanImageUrl} />
               </div>
             </div>
           </section>

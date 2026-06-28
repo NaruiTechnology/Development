@@ -409,6 +409,7 @@ const slice = createSlice({
       s.roi.viewport_x_end = 640;
       s.roi.viewport_y_start = 0;
       s.roi.viewport_y_end = 640;
+      s.roi.calibration_enabled = false;
       s.roi.calibration_confirmed = true;
       s.roi.selection = null;
       s.raster.roi = null;
