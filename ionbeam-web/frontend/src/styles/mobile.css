@@ -5,7 +5,7 @@
   background:
     radial-gradient(circle at top, rgba(95, 184, 255, 0.22), transparent 30%),
     radial-gradient(circle at bottom right, rgba(74, 222, 128, 0.12), transparent 24%),
-    linear-gradient(180deg, #07111f 0%, #0b1320 40%, #0c1627 100%);
+    var(--c-window-bg, linear-gradient(180deg, #07111f 0%, #0b1320 40%, #0c1627 100%));
 }
 
 .mobility-shell__backdrop {
@@ -32,7 +32,7 @@
   padding: 18px;
   border: 1px solid rgba(95, 184, 255, 0.18);
   border-radius: 24px;
-  background: rgba(8, 17, 30, 0.72);
+  background: linear-gradient(135deg, rgba(32, 59, 104, 0.9) 0%, rgba(20, 41, 74, 0.8) 48%, rgba(8, 17, 30, 0.86) 100%);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(14px);
 }
@@ -167,7 +167,7 @@
   padding: 18px;
   border: 1px solid rgba(95, 184, 255, 0.12);
   border-radius: 24px;
-  background: rgba(10, 18, 32, 0.8);
+  background: linear-gradient(135deg, rgba(32, 59, 104, 0.86) 0%, rgba(20, 41, 74, 0.78) 48%, rgba(10, 18, 32, 0.86) 100%);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(14px);
 }
@@ -183,13 +183,13 @@
   margin-bottom: 14px;
   border: 1px solid rgba(95, 184, 255, 0.12);
   border-radius: 24px;
-  background: rgba(10, 18, 32, 0.8);
+  background: linear-gradient(135deg, rgba(32, 59, 104, 0.86) 0%, rgba(20, 41, 74, 0.78) 48%, rgba(10, 18, 32, 0.86) 100%);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(14px);
 }
 
 .mobility-panel--hero {
-  background: linear-gradient(180deg, rgba(17, 32, 58, 0.9), rgba(10, 18, 32, 0.82));
+  background: linear-gradient(135deg, rgba(43, 79, 133, 0.94) 0%, rgba(20, 41, 74, 0.86) 54%, rgba(10, 18, 32, 0.9) 100%);
 }
 
 .mobility-panel__header {
@@ -265,7 +265,8 @@
   padding: 14px;
   border-radius: 18px;
   border: 1px solid rgba(95, 184, 255, 0.12);
-  background: rgba(12, 22, 38, 0.8);
+  background:
+    linear-gradient(135deg, rgba(32, 59, 104, 0.88) 0%, rgba(20, 41, 74, 0.8) 48%, rgba(7, 15, 28, 0.88) 100%);
 }
 
 .mobility-metric--accent { box-shadow: inset 0 1px 0 rgba(95, 184, 255, 0.14); }
@@ -542,6 +543,7 @@
   grid-template-columns: 1fr auto;
   gap: 10px;
   padding: 12px 0 4px;
+  background: var(--c-bg-footer);
 }
 
 @media (min-width: 760px) {
