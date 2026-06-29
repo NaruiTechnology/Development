@@ -132,6 +132,8 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.stop": "停止",
   "scan.runValidated": "驗證執行",
   "scan.clear": "清除",
+  "scan.preview": "預覽",
+  "scan.preview.title": "預覽模式：略過 activity、input_setup 與 output_data 的持久化",
   "scan.busy.title": "掃描進行中",
   "scan.run.title.start": "開啟 WebSocket 並即時串流資料區塊",
   "scan.run.title.paused": "開始新的掃描（保留的影像將被取代）",

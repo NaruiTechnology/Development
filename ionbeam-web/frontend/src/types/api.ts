@@ -24,6 +24,7 @@ export interface RasterRequest {
   latency_bytes: number;  // >= 2
   frame_blank: boolean;
   cookie: number;         // 0..65535
+  preview?: boolean;
   /** Output bit-depth for the SynchronizeCommand. Backend defaults to
    *  "SixteenBit" when omitted, so this field is optional for frontends
    *  that don't expose a control for it. */
@@ -40,6 +41,7 @@ export type VectorPattern = "default" | "custom";
 export interface VectorRequest {
   pattern: VectorPattern;
   points: Array<[number, number, number]> | null;
+  preview?: boolean;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */

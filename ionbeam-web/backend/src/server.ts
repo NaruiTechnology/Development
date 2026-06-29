@@ -202,6 +202,7 @@ interface ActivityDedupeResponse {
 
 interface ScanTelemetryStartRequest {
   kind?: unknown;
+  preview?: unknown;
   start_xy?: unknown;
   end_xy?: unknown;
   dwell?: unknown;
@@ -216,6 +217,7 @@ interface ScanTelemetryStartRequest {
 interface ScanTelemetryOutputRequest {
   activity_id?: unknown;
   kind?: unknown;
+  preview?: unknown;
   resolution?: unknown;
   latency_bytes?: unknown;
   vector_resolution?: unknown;
@@ -1744,10 +1746,13 @@ async function proxyScanRunWithTelemetry(
     return;
   }
 
-  const activityId = await recordOperationScanStart(kind, actor, body).catch((err) => {
+  const preview = isPreviewScan(body);
+  const activityId = preview
+    ? null
+    : await recordOperationScanStart(kind, actor, body).catch((err) => {
     console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
     return null;
-  });
+    });
 
   const upstream = await fetch(`${config.proxyTargetHttp}/scan/${kind}/run`, {
     method: "POST",
@@ -1761,7 +1766,7 @@ async function proxyScanRunWithTelemetry(
   const responseText = await upstream.text();
   const contentType = upstream.headers.get("content-type") ?? "application/json";
 
-  if (!upstream.ok || !activityId) {
+  if (!upstream.ok || (!activityId && !preview)) {
     res.status(upstream.status).type(contentType).send(responseText);
     return;
   }
@@ -1783,15 +1788,17 @@ async function proxyScanRunWithTelemetry(
 
   const chunks = normalizeInteger(parsed.chunks, normalizeInteger(body?.chunks, 0));
   const output = buildScanArtifactInfo(kind, activityId, body, parsed, chunks);
-  await recordOperationScanOutput(kind, activityId, body, parsed, chunks, output).catch((err) => {
-    console.warn(`[operation-data] failed to record ${kind} scan output:`, err);
-  });
-  void uploadScanArtifactsToConfiguredFtp(kind, {
-    csvFilename: output.csvFilename,
-    imageFilename: output.imageFilename,
-  }).catch((err) => {
-    console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
-  });
+  if (!preview && activityId) {
+    await recordOperationScanOutput(kind, activityId, body, parsed, chunks, output).catch((err) => {
+      console.warn(`[operation-data] failed to record ${kind} scan output:`, err);
+    });
+    void uploadScanArtifactsToConfiguredFtp(kind, {
+      csvFilename: output.csvFilename,
+      imageFilename: output.imageFilename,
+    }).catch((err) => {
+      console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+    });
+  }
 
   res.status(upstream.status).json({
     ...parsed,
@@ -1885,7 +1892,7 @@ function formatScanTimestamp(date: Date): string {
 
 function buildOperationOutputDescription(payload: {
   kind: string;
-  activityId: number;
+  activityId: number | null;
   chunks: number;
   resolution: number;
   latencyBytes: number;
@@ -1913,7 +1920,7 @@ interface ScanArtifactInfo {
 
 function buildScanArtifactInfo(
   kind: "raster" | "vector",
-  activityId: number,
+  activityId: number | null,
   body: Record<string, unknown> | null,
   response: Record<string, unknown>,
   chunks: number,
@@ -1936,6 +1943,17 @@ function buildScanArtifactInfo(
       imageFilename: filenames.imageFilename,
     }),
   };
+}
+
+function isPreviewScan(body: Record<string, unknown> | null): boolean {
+  const value = body?.preview;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["true", "1", "yes", "on"].includes(normalized);
+  }
+  return false;
 }
 
 function buildScanArtifactFilenames(

@@ -22,8 +22,8 @@
   --c-window-bg:    linear-gradient(135deg, #08111e 0%, #0b1320 42%, #14294a 100%);
   --c-bg-header:    linear-gradient(90deg, #10213c 0%, #1a3157 58%, #254674 100%);
   --c-bg-footer:    linear-gradient(90deg, #08111e 0%, #10213c 58%, #1a3157 100%);
-  --c-card-bg:      linear-gradient(145deg, #1e3a6c 0%, #11203a 58%, #0d1a2f 100%);
-  --c-card-header-bg: linear-gradient(90deg, #203f6c 0%, #16294a 60%, #11203a 100%);
+  --c-card-bg:      linear-gradient(145deg, #26467c 0%, #11203a 58%, #0d1a2f 100%);
+  --c-card-header-bg: linear-gradient(90deg, #2a4978 0%, #16294a 60%, #11203a 100%);
   --c-border:       #21385f;
   --c-border-soft:  #1b2c4d;
   --c-pixel-grid:   #102036;
@@ -82,8 +82,8 @@
   --c-window-bg:    linear-gradient(135deg, #000000 0%, #080808 48%, #181818 100%);
   --c-bg-header:    linear-gradient(90deg, #050505 0%, #1c1c1c 58%, #2a2a2a 100%);
   --c-bg-footer:    linear-gradient(90deg, #000000 0%, #0d0d0d 58%, #1c1c1c 100%);
-  --c-card-bg:      linear-gradient(145deg, #252424 0%, #0c0c0c 58%, #050505 100%);
-  --c-card-header-bg: linear-gradient(90deg, #383636 0%, #161616 62%, #0c0c0c 100%);
+  --c-card-bg:      linear-gradient(145deg, #393838 0%, #0c0c0c 58%, #050505 100%);
+  --c-card-header-bg: linear-gradient(90deg, #4c4a4a 0%, #161616 62%, #0c0c0c 100%);
   --c-border:       #2a2a2a;
   --c-border-soft:  #1a1a1a;
   --c-pixel-grid:   #0d0d0d;
@@ -658,6 +658,50 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--c-text-dim);
+}
+
+.scan-preview-toggle {
+  flex: 1 0 100%;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 2px;
+  white-space: nowrap;
+}
+
+.scan-preview-toggle--active {
+  color: var(--c-warn);
+  font-weight: 600;
+}
+
+.scan-preview-toggle--active .icon {
+  animation: preview-blink 1s steps(1, end) infinite;
+}
+
+.scan-preview-toggle input {
+  border-color: color-mix(in srgb, var(--c-warn) 56%, transparent);
+}
+
+.scan-preview-toggle:not(.scan-preview-toggle--active) input {
+  border-color: color-mix(in srgb, var(--c-text) 38%, transparent);
+}
+
+.scan-preview-toggle input:checked {
+  border-color: var(--c-warn);
+  background-color: var(--c-warn);
+}
+
+.scan-preview-toggle input:disabled:checked {
+  border-color: color-mix(in srgb, var(--c-warn) 78%, var(--c-text));
+  background-color: color-mix(in srgb, var(--c-warn) 78%, var(--c-text));
+}
+
+@keyframes preview-blink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0.15;
+  }
 }
 
 .scan-busy {

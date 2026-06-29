@@ -123,6 +123,8 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.stop": "停止",
   "scan.runValidated": "验证运行",
   "scan.clear": "清除",
+  "scan.preview": "预览",
+  "scan.preview.title": "预览模式：跳过 activity、input_setup 和 output_data 的持久化",
   "scan.busy.title": "扫描进行中",
   "scan.run.title.start": "打开 WebSocket 并实时传输数据块",
   "scan.run.title.paused": "开始新的扫描（保留的图像将被替换）",

@@ -144,6 +144,8 @@ export const en = {
   "scan.stop": "Stop",
   "scan.runValidated": "Run validated",
   "scan.clear": "Clear",
+  "scan.preview": "Preview",
+  "scan.preview.title": "Preview mode: skip admin activity, input setup, and output data persistence",
   "scan.busy.title": "Scan in progress",
   "scan.run.title.start": "Open a WebSocket and stream chunks live",
   "scan.run.title.paused": "Start a fresh scan (the kept image will be replaced)",

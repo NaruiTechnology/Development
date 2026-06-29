@@ -45,6 +45,7 @@ interface ScanState {
   /** Most recent params, kept editable in state. */
   raster: RasterRequest;
   vector: VectorRequest;
+  preview: boolean;
   roi: ROIState;
   /** Manual beam energy entry shared by the raster/vector panels. */
   beamEnergyEv: number;
@@ -117,6 +118,7 @@ const initialState: ScanState = {
   errorMessage: null,
   raster: defaultRaster,
   vector: defaultVector,
+  preview: true,
   roi: {
     x_origin: 0,
     x_end: 100,
@@ -384,6 +386,9 @@ const slice = createSlice({
     updateVector(s, a: PayloadAction<Partial<VectorRequest>>) {
       s.vector = { ...s.vector, ...normalizeVectorPatch(a.payload, s.vector) };
     },
+    setPreview(s, a: PayloadAction<boolean>) {
+      s.preview = Boolean(a.payload);
+    },
     updateBeamEnergyEv(s, a: PayloadAction<number>) {
       s.beamEnergyEv = floatDefault(a.payload, s.beamEnergyEv);
     },
@@ -562,6 +567,7 @@ export const {
   setKind,
   updateRaster,
   updateVector,
+  setPreview,
   updateBeamEnergyEv,
   updateROI,
   confirmROICalibration,

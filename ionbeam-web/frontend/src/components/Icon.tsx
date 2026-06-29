@@ -8,6 +8,7 @@ type IconName =
   | "globe"
   | "grid"
   | "help"
+  | "alertTriangle"
   | "highlightTool"
   | "image"
   | "home"
@@ -113,6 +114,13 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
     <>
       <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" />
       <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </>
+  ),
+  alertTriangle: (
+    <>
+      <path d="M10.3 4.2a2 2 0 0 1 3.4 0l8.1 13.8A2 2 0 0 1 20.1 21H3.9a2 2 0 0 1-1.7-3L10.3 4.2z" />
+      <path d="M12 9v5" />
       <path d="M12 17h.01" />
     </>
   ),

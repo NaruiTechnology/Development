@@ -30,6 +30,7 @@ import {
   clearROIImage,
   runRasterValidated,
   runVectorValidated,
+  setPreview,
   streamErrored,
   streamReset,
   type ScanKind,
@@ -84,6 +85,7 @@ export function ScanControls({
   const phase = useAppSelector((s) => s.scan.phase);
   const raster = useAppSelector((s) => s.scan.raster);
   const vector = useAppSelector((s) => s.scan.vector);
+  const preview = useAppSelector((s) => s.scan.preview);
   const roiState = useAppSelector((s) => s.scan.roi);
   const defaults = useAppSelector((s) => s.status.defaults);
   const settingsSaving = useAppSelector((s) => s.settings.saving);
@@ -120,7 +122,7 @@ export function ScanControls({
           roiState,
           { isProduction, allowBitmapSimulation }
         );
-        stream.startRaster(req);
+        stream.startRaster({ ...req, preview });
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -132,7 +134,7 @@ export function ScanControls({
           roiState,
           { isProduction, allowBitmapSimulation }
         );
-        stream.startVector(req);
+        stream.startVector({ ...req, preview });
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -164,7 +166,7 @@ export function ScanControls({
           roiState,
           { isProduction, allowBitmapSimulation }
         );
-        const promise = dispatch(runRasterValidated(req));
+        const promise = dispatch(runRasterValidated({ ...req, preview }));
         const unregister = registerScanActionStop(() => {
           promise.abort();
           dispatch(streamReset());
@@ -181,7 +183,7 @@ export function ScanControls({
           roiState,
           { isProduction, allowBitmapSimulation }
         );
-        const promise = dispatch(runVectorValidated(req));
+        const promise = dispatch(runVectorValidated({ ...req, preview }));
         const unregister = registerScanActionStop(() => {
           promise.abort();
           dispatch(streamReset());
@@ -294,6 +296,19 @@ export function ScanControls({
             ))
           )}
         </select>
+      </label>
+      <label
+        className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+        title={t("scan.preview.title")}
+      >
+        <input
+          type="checkbox"
+          checked={preview}
+          disabled={controlsDisabled || kind === "roi"}
+          onChange={(event) => dispatch(setPreview(event.target.checked))}
+        />
+        {preview && <Icon name="alertTriangle" tone="warn" />}
+        <span>{t("scan.preview")}</span>
       </label>
       <button
         className="btn btn--primary"

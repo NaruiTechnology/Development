@@ -117,6 +117,7 @@ function handleProxy(
   const upstream = new WebSocket(upstreamUrl, { headers });
   const actor = auth.actor ?? null;
   let scanRequest: Record<string, unknown> | null = null;
+  let previewScan = false;
   let activityIdPromise: Promise<number | null> | null = null;
   let completionHandled = false;
 
@@ -131,7 +132,8 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed) {
         scanRequest = parsed;
-        if (actor) {
+        previewScan = isPreviewScan(parsed);
+        if (actor && !previewScan) {
           activityIdPromise = recordScanStart(kind, actor, parsed).catch((err) => {
             console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
             return null;
@@ -170,7 +172,7 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed?.event === "done") {
         completionHandled = true;
-        void recordAndUploadScanCompletion(kind, scanRequest, activityIdPromise, parsed)
+        void recordAndMaybePersistScanCompletion(kind, scanRequest, activityIdPromise, parsed, !previewScan)
           .then((output) => {
             if (!output) return;
             if (client.readyState === WebSocket.OPEN) {
@@ -241,6 +243,7 @@ function handleMock(
   const actor = auth.actor ?? null;
   let activityIdPromise: Promise<number | null> | null = null;
   let scanRequest: Record<string, unknown> | null = null;
+  let previewScan = false;
   client.once("message", async (raw: RawData) => {
     let body: any;
     try {
@@ -253,7 +256,8 @@ function handleMock(
     }
     scanRequest = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
     if (scanRequest) {
-      if (actor) {
+      previewScan = isPreviewScan(scanRequest);
+      if (actor && !previewScan) {
         activityIdPromise = recordScanStart(kind, actor, scanRequest).catch((err) => {
           console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
           return null;
@@ -286,14 +290,15 @@ function handleMock(
         client.send(JSON.stringify({ event: "error", message: String(e) }));
       }
     } finally {
-      if (activityIdPromise && scanRequest) {
-        void recordAndUploadScanCompletion(
+      if (scanRequest) {
+        void recordAndMaybePersistScanCompletion(
           kind,
           scanRequest,
           activityIdPromise,
           { event: "done", chunks: 0 },
+          !previewScan,
         ).catch((err) => {
-          console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+          console.warn(`[ftp-upload] failed to finalize ${kind} scan artifacts:`, err);
         });
       }
       if (client.readyState === WebSocket.OPEN) client.close(1000);
@@ -328,32 +333,31 @@ async function recordScanStart(
   return activityId;
 }
 
-async function recordAndUploadScanCompletion(
+async function recordAndMaybePersistScanCompletion(
   kind: ScanKind,
   requestBody: Record<string, unknown> | null,
   activityIdPromise: Promise<number | null> | null,
   response: Record<string, unknown>,
+  persist: boolean,
 ): Promise<{ csvFilename: string; imageFilename: string } | null> {
   const activityId = activityIdPromise ? await activityIdPromise : null;
-  if (!activityId) {
-    return null;
-  }
-
   const chunks = normalizeInteger(response.chunks, 0);
   const output = buildScanArtifactInfo(kind, activityId, requestBody, response, chunks);
-  await recordOutputDataInDb({
-    activity_id: activityId,
-    csv_filename: output.csvFilename,
-    image_filename: output.imageFilename,
-    description: output.description,
-    scan_result: response,
-  });
-  void uploadScanArtifactsToConfiguredFtp(kind, {
-    csvFilename: output.csvFilename,
-    imageFilename: output.imageFilename,
-  }).catch((err) => {
-    console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
-  });
+  if (persist && activityId) {
+    await recordOutputDataInDb({
+      activity_id: activityId,
+      csv_filename: output.csvFilename,
+      image_filename: output.imageFilename,
+      description: output.description,
+      scan_result: response,
+    });
+    void uploadScanArtifactsToConfiguredFtp(kind, {
+      csvFilename: output.csvFilename,
+      imageFilename: output.imageFilename,
+    }).catch((err) => {
+      console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+    });
+  }
   return {
     csvFilename: output.csvFilename,
     imageFilename: output.imageFilename,
@@ -362,7 +366,7 @@ async function recordAndUploadScanCompletion(
 
 function buildScanArtifactInfo(
   kind: ScanKind,
-  activityId: number,
+  activityId: number | null,
   body: Record<string, unknown> | null,
   response: Record<string, unknown>,
   chunks: number,
@@ -385,6 +389,17 @@ function buildScanArtifactInfo(
       image_filename: filenames.imageFilename,
     }),
   };
+}
+
+function isPreviewScan(body: Record<string, unknown> | null): boolean {
+  const value = body?.preview;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["true", "1", "yes", "on"].includes(normalized);
+  }
+  return false;
 }
 
 function buildScanArtifactFilenames(
