@@ -1911,7 +1911,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--c-text-dim);
 }
 
@@ -1949,14 +1949,14 @@ body {
 
 .canvas-toolbox__select {
   min-width: 64px;
-  height: 19px;
-  font-size: 9px;
+  height: 21px;
+  font-size: 11px;
   padding-block: 0;
 }
 
 .canvas-toolbox__hint {
   margin-left: 4px;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--c-text-dim);
   white-space: nowrap;
 }
@@ -2070,9 +2070,9 @@ body {
   transform: translate(6px, 6px);
   border: 1px solid var(--c-border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--c-panel) 94%, #0f172a 6%);
+  background: color-mix(in srgb, var(--c-panel) 88%, #0f172a 12%);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.24);
-  color: #f8fafc;
+  color: var(--c-text);
 }
 
 .canvas-editor__menu-item {
@@ -2090,11 +2090,12 @@ body {
 }
 
 .canvas-editor__menu-item:hover:not(:disabled) {
-  background: var(--c-btn-hover);
+  color: var(--c-text);
+  background: color-mix(in srgb, var(--c-accent) 16%, var(--c-bg-elev));
 }
 
 .canvas-editor__menu-item:disabled {
-  color: #94a3b8;
+  color: var(--c-text-dim);
   opacity: 0.45;
   cursor: not-allowed;
 }

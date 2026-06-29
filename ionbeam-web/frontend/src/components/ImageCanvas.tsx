@@ -247,6 +247,13 @@ export function ImageCanvas({
     [kind, onMergedFigureChange]
   );
 
+  const invalidateMergedFigure = useCallback(() => {
+    setMergedFigureUrl(null);
+    if (kind === "raster" || kind === "vector") {
+      onMergedFigureChange?.(kind, null);
+    }
+  }, [kind, onMergedFigureChange]);
+
   useEffect(() => {
     clearEditorState(true);
   }, [kind, clearEditorState]);
@@ -531,6 +538,7 @@ export function ImageCanvas({
       setSelectedAnnotationId(next.length ? next[next.length - 1].id : null);
       return next;
     });
+    invalidateMergedFigure();
     setDraftShape(null);
     setCommentDraft(null);
     setContextMenu(null);
@@ -540,6 +548,7 @@ export function ImageCanvas({
     if (!annotationId) return;
     setAnnotations((current) => current.filter((annotation) => annotation.id !== annotationId));
     setSelectedAnnotationId((current) => (current === annotationId ? null : current));
+    invalidateMergedFigure();
     setDraftShape(null);
     setCommentDraft(null);
     setContextMenu(null);
@@ -943,13 +952,30 @@ export function ImageCanvas({
               <div
                 className="canvas-editor__menu"
                 style={{ left: contextMenu.x, top: contextMenu.y }}
-                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                }}
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
               >
                 <button
                   type="button"
                   className="canvas-editor__menu-item"
                   disabled={!annotations.length}
-                  onClick={undoLastAnnotation}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    undoLastAnnotation();
+                  }}
                 >
                   {t("canvas.editor.context.undo")}
                 </button>
@@ -957,7 +983,16 @@ export function ImageCanvas({
                   type="button"
                   className="canvas-editor__menu-item"
                   disabled={!contextTargetId}
-                  onClick={() => removeAnnotation(contextTargetId)}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    removeAnnotation(contextTargetId);
+                  }}
                 >
                   {t("canvas.editor.context.remove")}
                 </button>
@@ -965,9 +1000,16 @@ export function ImageCanvas({
                   type="button"
                   className="canvas-editor__menu-item"
                   disabled={!annotations.length}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                  }}
                   onClick={() => {
                     setAnnotations([]);
                     setSelectedAnnotationId(null);
+                    invalidateMergedFigure();
                     setDraftShape(null);
                     setCommentDraft(null);
                     setContextMenu(null);
