@@ -354,7 +354,7 @@ async function recordAndMaybePersistScanCompletion(
     void uploadScanArtifactsToConfiguredFtp(kind, {
       csvFilename: output.csvFilename,
       imageFilename: output.imageFilename,
-    }).catch((err) => {
+    }, !persist).catch((err) => {
       console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
     });
   }

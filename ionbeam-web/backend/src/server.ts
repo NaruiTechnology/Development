@@ -1795,7 +1795,7 @@ async function proxyScanRunWithTelemetry(
     void uploadScanArtifactsToConfiguredFtp(kind, {
       csvFilename: output.csvFilename,
       imageFilename: output.imageFilename,
-    }).catch((err) => {
+    }, preview).catch((err) => {
       console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
     });
   }
