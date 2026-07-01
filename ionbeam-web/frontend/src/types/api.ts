@@ -63,7 +63,13 @@ export interface VectorRequest {
 export interface SimulationBitmap {
   width: number;
   height: number;
-  pixels: number[];
+  pixels: SimulationBitmapPixel[];
+}
+
+export interface SimulationBitmapPixel {
+  value: number;
+  /** When true, the scan sampler treats this pixel as skipped/blanked. */
+  isHighlighted?: boolean | null;
 }
 
 /**

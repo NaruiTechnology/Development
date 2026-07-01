@@ -75,10 +75,12 @@ export function ScanControls({
   kind,
   disabled = false,
   scanActive = false,
+  grayScaleSelection = null,
 }: {
   kind: ScanKind;
   disabled?: boolean;
   scanActive?: boolean;
+  grayScaleSelection?: number | null;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -120,7 +122,11 @@ export function ScanControls({
         const req = await rasterRequestWithBitmapSelection(
           { ...raster, roi },
           roiState,
-          { isProduction, allowBitmapSimulation }
+          {
+            isProduction,
+            allowBitmapSimulation,
+            grayScaleSelection,
+          }
         );
         stream.startRaster({ ...req, preview });
       } catch (e: any) {
@@ -132,7 +138,11 @@ export function ScanControls({
         const req = await vectorRequestWithBitmapSelection(
           { ...vector, roi },
           roiState,
-          { isProduction, allowBitmapSimulation }
+          {
+            isProduction,
+            allowBitmapSimulation,
+            grayScaleSelection,
+          }
         );
         stream.startVector({ ...req, preview });
       } catch (e: any) {
@@ -164,7 +174,11 @@ export function ScanControls({
         const req = await rasterRequestWithBitmapSelection(
           { ...raster, roi },
           roiState,
-          { isProduction, allowBitmapSimulation }
+          {
+            isProduction,
+            allowBitmapSimulation,
+            grayScaleSelection,
+          }
         );
         const promise = dispatch(runRasterValidated({ ...req, preview }));
         const unregister = registerScanActionStop(() => {
@@ -181,7 +195,11 @@ export function ScanControls({
         const req = await vectorRequestWithBitmapSelection(
           { ...vector, roi },
           roiState,
-          { isProduction, allowBitmapSimulation }
+          {
+            isProduction,
+            allowBitmapSimulation,
+            grayScaleSelection,
+          }
         );
         const promise = dispatch(runVectorValidated({ ...req, preview }));
         const unregister = registerScanActionStop(() => {

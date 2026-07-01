@@ -25,6 +25,7 @@ export type ScanPhase =
   | "error";
 
 export type VectorRenderMode = "native" | "decimated";
+const ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY = "ionbeam.roiGrayScaleStepDelta";
 
 interface ScanState {
   kind: ScanKind;
@@ -49,6 +50,10 @@ interface ScanState {
   roi: ROIState;
   /** Manual beam energy entry shared by the raster/vector panels. */
   beamEnergyEv: number;
+
+  /** Committed grayscale filter for the ROI image viewer. */
+  roiGrayScaleSelection: number | null;
+  roiGrayScaleStepDelta: number;
 
   /** How the vector image is rendered onto the canvas. Per-session — not
    *  persisted to localStorage — because the right choice depends on the
@@ -88,7 +93,7 @@ export interface ROIState {
 
 const defaultRaster: RasterRequest = {
   resolution: 512,
-  dwell: 2,
+  dwell: 16,
   latency_bytes: 16384,
   frame_blank: false,
   cookie: 123,
@@ -149,6 +154,8 @@ const initialState: ScanState = {
     keep_loaded_bitmap_after_scan: true,
   },
   beamEnergyEv: 1000.0,
+  roiGrayScaleSelection: null,
+  roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
   vectorRenderMode: "decimated",
 };
 
@@ -331,6 +338,34 @@ function calibrationPatchTouchesConfirmedMapping(patch: Partial<ROIState>): bool
   ].some((key) => Object.prototype.hasOwnProperty.call(patch, key));
 }
 
+function clampGrayScaleStepDelta(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 10;
+  return Math.max(1, Math.min(255, Math.round(n)));
+}
+
+function loadInitialGrayScaleStepDelta(): number {
+  if (typeof window === "undefined") return 10;
+  try {
+    return clampGrayScaleStepDelta(window.localStorage.getItem(ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY));
+  } catch {
+    return 10;
+  }
+}
+
+export function persistGrayScaleStepDelta(stepDelta: number): void {
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY,
+        String(clampGrayScaleStepDelta(stepDelta))
+      );
+    }
+  } catch {
+    /* localStorage may be disabled */
+  }
+}
+
 /* -------- blocking REST runs ------------------------------------------- */
 
 export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
@@ -400,6 +435,15 @@ const slice = createSlice({
       if ("selection" in a.payload) {
         s.raster.roi = a.payload.selection ?? null;
         s.vector.roi = a.payload.selection ?? null;
+      }
+    },
+    setROIGrayScaleSelection(
+      s,
+      a: PayloadAction<{ selection: number | null; stepDelta?: number }>
+    ) {
+      s.roiGrayScaleSelection = a.payload.selection === null ? null : Math.max(0, Math.min(255, Math.round(a.payload.selection)));
+      if (a.payload.stepDelta !== undefined) {
+        s.roiGrayScaleStepDelta = clampGrayScaleStepDelta(a.payload.stepDelta);
       }
     },
     confirmROICalibration(s) {
@@ -573,6 +617,7 @@ export const {
   confirmROICalibration,
   clearROIImage,
   clearROISelection,
+  setROIGrayScaleSelection,
   clearLastResult,
   clearLastOutput,
   setVectorRenderMode,

@@ -360,6 +360,97 @@ body {
   display: none;
 }
 
+.roi-spectrum {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.roi-spectrum__chain {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  background: var(--c-bg-elev);
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+}
+
+.roi-spectrum__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 18px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.roi-spectrum__box[data-selected="true"] {
+  box-shadow:
+    inset 0 0 0 2px var(--c-accent-hot),
+    0 0 0 1px rgba(5, 10, 20, 0.42);
+}
+
+.roi-spectrum__box:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+.roi-spectrum__box-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.roi-spectrum__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.roi-spectrum__step-input {
+  width: 64px;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.roi-spectrum__step-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-bg-elev-2);
+  color: var(--c-text);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.roi-spectrum__confirm-btn {
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.roi-spectrum__step-btn:hover {
+  border-color: var(--c-accent);
+}
+
+.roi-spectrum__step-btn:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
 .card__title {
   font-size: 12px;
   font-weight: 600;
@@ -2125,7 +2216,9 @@ body {
   background: var(--c-bg-elev);
 }
 
-.roi-canvas-wrap canvas {
+.roi-canvas-layer {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -2134,11 +2227,25 @@ body {
   -webkit-user-drag: none;
 }
 
-.roi-canvas-wrap canvas.is-disabled {
+.roi-canvas-layer--base {
+  z-index: 0;
+}
+
+.roi-canvas-layer--mask {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.roi-canvas-layer--annotation {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.roi-canvas-layer.is-disabled {
   cursor: not-allowed;
 }
 
-.roi-canvas-wrap--calibrating canvas {
+.roi-canvas-wrap--calibrating .roi-canvas-layer {
   cursor: default;
 }
 
@@ -2447,6 +2554,36 @@ body {
 .canvas-merge-confirm__body {
   padding-block: 24px;
   font-size: 14px;
+}
+
+.gray-scale-confirm {
+  max-width: 520px;
+  border-top: 3px solid var(--c-accent);
+}
+
+.gray-scale-confirm__backdrop {
+  z-index: 161;
+  backdrop-filter: blur(3px);
+}
+
+.gray-scale-confirm__body {
+  display: grid;
+  gap: 10px;
+  padding-block: 22px;
+  font-size: 14px;
+}
+
+.gray-scale-confirm__body p {
+  margin: 0;
+}
+
+.gray-scale-confirm__note {
+  color: var(--c-text-dim);
+  font-size: 12px;
+}
+
+.gray-scale-confirm__footer {
+  justify-content: flex-end;
 }
 
 /* ---------- dwell-help modal content --------------------------------- */

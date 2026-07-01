@@ -113,7 +113,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
           <thead>
             <tr>
               <th>Resolution</th><th>DAC stride</th><th>Total pixels</th>
-              <th>Frame time<br /><span className="muted">(dwell = 2)</span></th>
+              <th>Frame time<br /><span className="muted">(dwell = 16)</span></th>
               <th>16-bit output</th>
             </tr>
           </thead>

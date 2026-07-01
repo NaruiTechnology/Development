@@ -813,214 +813,214 @@ export function ImageCanvas({
           if (editorEnabled) openContextMenu(event, null);
         }}
       >
-        <canvas
-          ref={canvasRef}
-          width={nativeEdge}
-          height={nativeEdge}
-          onDragStart={(e) => e.preventDefault()}
-          style={{
-            display: displayedFigureUrl ? "none" : undefined,
-          }}
-        />
-        {showCalibratedAxes && <LiveAxisOverlay roi={roi} t={t} />}
-        {displayedFigureUrl && (
-          <img
-            className="server-figure"
-            src={displayedFigureUrl}
-            alt={t("canvas.serverFigure.alt", { kind: kindLabel })}
-            draggable={false}
+          <canvas
+            ref={canvasRef}
+            width={nativeEdge}
+            height={nativeEdge}
             onDragStart={(e) => e.preventDefault()}
+            style={{
+              display: displayedFigureUrl ? "none" : undefined,
+            }}
           />
-        )}
-        {editorEnabled && (
-          <div
-            className="canvas-editor-layer"
-            data-tool={activeTool}
-            onPointerDown={handleEditorPointerDown}
-            onPointerMove={handleEditorPointerMove}
-            onPointerUp={handleEditorPointerUp}
-            onClick={handleEditorSurfaceClick}
-          >
-            {annotations.map((annotation, index) => (
-              annotation.kind === "rectangle" || annotation.kind === "circle" ? (
-                <div
-                  key={annotation.id}
-                  role="button"
-                  tabIndex={0}
-                  className={`canvas-editor__shape canvas-editor__shape--${annotation.kind}`}
-                  data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
-                  style={shapeStyle(annotation)}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelectedAnnotationId(annotation.id);
-                    setContextMenu(null);
-                  }}
-                  onContextMenu={(event) => openContextMenu(event, annotation.id)}
-                  title={t(
-                    annotation.kind === "rectangle"
-                      ? "canvas.editor.tool.rectangle"
-                      : "canvas.editor.tool.circle"
-                  )}
-                />
-              ) : (
-                <button
-                  key={annotation.id}
-                  type="button"
-                  className={`canvas-editor__annotation canvas-editor__annotation--${annotation.kind}`}
-                  data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
-                  style={{
-                    left: `${annotation.x * 100}%`,
-                    top: `${annotation.y * 100}%`,
-                  }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelectedAnnotationId(annotation.id);
-                    setContextMenu(null);
-                  }}
-                  onContextMenu={(event) => openContextMenu(event, annotation.id)}
-                  title={
-                    annotation.kind === "comment"
-                      ? annotation.text
-                      : t("canvas.editor.tool.highlight")
-                  }
-                >
-                  <span
-                    className="canvas-editor__annotation-index"
+          {showCalibratedAxes && <LiveAxisOverlay roi={roi} t={t} />}
+          {displayedFigureUrl && (
+            <img
+              className="server-figure"
+              src={displayedFigureUrl}
+              alt={t("canvas.serverFigure.alt", { kind: kindLabel })}
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+            />
+          )}
+          {editorEnabled && (
+            <div
+              className="canvas-editor-layer"
+              data-tool={activeTool}
+              onPointerDown={handleEditorPointerDown}
+              onPointerMove={handleEditorPointerMove}
+              onPointerUp={handleEditorPointerUp}
+              onClick={handleEditorSurfaceClick}
+            >
+              {annotations.map((annotation, index) => (
+                annotation.kind === "rectangle" || annotation.kind === "circle" ? (
+                  <div
+                    key={annotation.id}
+                    role="button"
+                    tabIndex={0}
+                    className={`canvas-editor__shape canvas-editor__shape--${annotation.kind}`}
+                    data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
+                    style={shapeStyle(annotation)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedAnnotationId(annotation.id);
+                      setContextMenu(null);
+                    }}
+                    onContextMenu={(event) => openContextMenu(event, annotation.id)}
+                    title={t(
+                      annotation.kind === "rectangle"
+                        ? "canvas.editor.tool.rectangle"
+                        : "canvas.editor.tool.circle"
+                    )}
+                  />
+                ) : (
+                  <button
+                    key={annotation.id}
+                    type="button"
+                    className={`canvas-editor__annotation canvas-editor__annotation--${annotation.kind}`}
+                    data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
                     style={{
-                      borderColor: annotation.strokeColor,
-                      background: alphaColor(annotation.strokeColor, annotation.kind === "comment" ? 0.92 : 0.24),
+                      left: `${annotation.x * 100}%`,
+                      top: `${annotation.y * 100}%`,
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedAnnotationId(annotation.id);
+                      setContextMenu(null);
+                    }}
+                    onContextMenu={(event) => openContextMenu(event, annotation.id)}
+                    title={
+                      annotation.kind === "comment"
+                        ? annotation.text
+                        : t("canvas.editor.tool.highlight")
+                    }
+                  >
+                    <span
+                      className="canvas-editor__annotation-index"
+                      style={{
+                        borderColor: annotation.strokeColor,
+                        background: alphaColor(annotation.strokeColor, annotation.kind === "comment" ? 0.92 : 0.24),
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+                    {annotation.kind === "comment" && annotation.text && (
+                      <span className="canvas-editor__label">{annotation.text}</span>
+                    )}
+                  </button>
+                )
+              ))}
+
+              {draftShape && (
+                <div
+                  className={`canvas-editor__shape canvas-editor__shape--${draftShape.kind} canvas-editor__shape--draft`}
+                  style={shapeStyle(draftShape)}
+                />
+              )}
+
+              {commentDraft && (
+                <form
+                  className="canvas-editor__draft"
+                  style={{
+                    left: `${commentDraft.x * 100}%`,
+                    top: `${commentDraft.y * 100}%`,
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    saveCommentDraft();
+                  }}
+                >
+                  <input
+                    autoFocus
+                    className="input"
+                    value={commentDraft.text}
+                    placeholder={t("canvas.editor.comment.placeholder")}
+                    onChange={(event) =>
+                      setCommentDraft((current) =>
+                        current ? { ...current, text: event.target.value } : current
+                      )
+                    }
+                  />
+                  <div className="button-row">
+                    <button type="submit" className="btn btn--ghost">
+                      {t("canvas.editor.comment.save")}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => setCommentDraft(null)}
+                    >
+                      {t("canvas.editor.comment.cancel")}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {contextMenu && (
+                <div
+                  className="canvas-editor__menu"
+                  style={{ left: contextMenu.x, top: contextMenu.y }}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="canvas-editor__menu-item"
+                    disabled={!annotations.length}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      undoLastAnnotation();
                     }}
                   >
-                    {index + 1}
-                  </span>
-                  {annotation.kind === "comment" && annotation.text && (
-                    <span className="canvas-editor__label">{annotation.text}</span>
-                  )}
-                </button>
-              )
-            ))}
-
-            {draftShape && (
-              <div
-                className={`canvas-editor__shape canvas-editor__shape--${draftShape.kind} canvas-editor__shape--draft`}
-                style={shapeStyle(draftShape)}
-              />
-            )}
-
-            {commentDraft && (
-              <form
-                className="canvas-editor__draft"
-                style={{
-                  left: `${commentDraft.x * 100}%`,
-                  top: `${commentDraft.y * 100}%`,
-                }}
-                onClick={(event) => event.stopPropagation()}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  saveCommentDraft();
-                }}
-              >
-                <input
-                  autoFocus
-                  className="input"
-                  value={commentDraft.text}
-                  placeholder={t("canvas.editor.comment.placeholder")}
-                  onChange={(event) =>
-                    setCommentDraft((current) =>
-                      current ? { ...current, text: event.target.value } : current
-                    )
-                  }
-                />
-                <div className="button-row">
-                  <button type="submit" className="btn btn--ghost">
-                    {t("canvas.editor.comment.save")}
+                    {t("canvas.editor.context.undo")}
                   </button>
                   <button
                     type="button"
-                    className="btn btn--ghost"
-                    onClick={() => setCommentDraft(null)}
+                    className="canvas-editor__menu-item"
+                    disabled={!contextTargetId}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeAnnotation(contextTargetId);
+                    }}
                   >
-                    {t("canvas.editor.comment.cancel")}
+                    {t("canvas.editor.context.remove")}
+                  </button>
+                  <button
+                    type="button"
+                    className="canvas-editor__menu-item"
+                    disabled={!annotations.length}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={() => {
+                      setAnnotations([]);
+                      setSelectedAnnotationId(null);
+                      invalidateMergedFigure();
+                      setDraftShape(null);
+                      setCommentDraft(null);
+                      setContextMenu(null);
+                    }}
+                  >
+                    {t("canvas.editor.context.clear")}
                   </button>
                 </div>
-              </form>
-            )}
-
-            {contextMenu && (
-              <div
-                className="canvas-editor__menu"
-                style={{ left: contextMenu.x, top: contextMenu.y }}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                }}
-                onMouseDown={(event) => {
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                }}
-              >
-                <button
-                  type="button"
-                  className="canvas-editor__menu-item"
-                  disabled={!annotations.length}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    undoLastAnnotation();
-                  }}
-                >
-                  {t("canvas.editor.context.undo")}
-                </button>
-                <button
-                  type="button"
-                  className="canvas-editor__menu-item"
-                  disabled={!contextTargetId}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    removeAnnotation(contextTargetId);
-                  }}
-                >
-                  {t("canvas.editor.context.remove")}
-                </button>
-                <button
-                  type="button"
-                  className="canvas-editor__menu-item"
-                  disabled={!annotations.length}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onClick={() => {
-                    setAnnotations([]);
-                    setSelectedAnnotationId(null);
-                    invalidateMergedFigure();
-                    setDraftShape(null);
-                    setCommentDraft(null);
-                    setContextMenu(null);
-                  }}
-                >
-                  {t("canvas.editor.context.clear")}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
       </div>
 
       {showServerFigure && !serverFigureUrl && !mergedFigureUrl && (

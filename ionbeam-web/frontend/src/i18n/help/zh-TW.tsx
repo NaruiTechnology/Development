@@ -83,7 +83,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
           <thead>
             <tr>
               <th>解析度</th><th>DAC 步長</th><th>總像素數</th>
-              <th>畫面時長<br /><span className="muted">（dwell = 2）</span></th>
+              <th>畫面時長<br /><span className="muted">（dwell = 16）</span></th>
               <th>16 位元輸出</th>
             </tr>
           </thead>

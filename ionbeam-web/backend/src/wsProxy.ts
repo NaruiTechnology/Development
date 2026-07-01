@@ -268,7 +268,7 @@ function handleMock(
       if (kind === "raster") {
         await streamMockRaster(client, {
           resolution: Number(body.resolution ?? 256),
-          dwell: Number(body.dwell ?? 2),
+          dwell: Number(body.dwell ?? 16),
           latency_bytes: Number(body.latency_bytes ?? 16384),
           simulation_bitmap: body.simulation_bitmap ?? undefined,
         });

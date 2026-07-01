@@ -751,13 +751,13 @@ class DeviceService:
         params = self._effective_vector_params(req)
 
         if req.pattern is VectorPattern.custom:
-            if not req.points and not (
+            if req.points is None and not (
                 req.simulation_bitmap is not None
                 and req.roi is not None
                 and not _simulation_enabled(self._config)
             ):
-                raise ValueError("pattern=custom requires non-empty `points`")
-            if req.points:
+                raise ValueError("pattern=custom requires `points` or a production bitmap fallback")
+            if req.points is not None:
                 iter_points: Iterable[Tuple[int, int, int]] = iter(req.points)
             else:
                 # Production compatibility for browser ROI bitmap scans:

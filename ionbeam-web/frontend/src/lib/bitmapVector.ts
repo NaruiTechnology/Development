@@ -2,6 +2,7 @@ import type {
   RasterRequest,
   ROIRequest,
   SimulationBitmap,
+  SimulationBitmapPixel,
   VectorRequest,
 } from "../types/api";
 import type { ROIState } from "../store/scanSlice";
@@ -112,7 +113,11 @@ export function clearBitmapSelectionCache(): void {
 export async function rasterRequestWithBitmapSelection(
   req: RasterRequest,
   roi: ROIState,
-  options: { isProduction?: boolean; allowBitmapSimulation?: boolean } = {}
+  options: {
+    isProduction?: boolean;
+    allowBitmapSimulation?: boolean;
+    grayScaleSelection?: number | null;
+  } = {}
 ): Promise<RasterRequest> {
   // No selection at all → no ROI restriction, scan the full DAC range.
   if (!roi.selection) {
@@ -158,14 +163,23 @@ export async function rasterRequestWithBitmapSelection(
   return {
     ...req,
     roi: converted.roi,
-    simulation_bitmap: options.isProduction ? null : converted.simulationBitmap,
+    simulation_bitmap: options.isProduction
+      ? null
+      : decorateSimulationBitmap(
+          converted.simulationBitmap,
+          options.grayScaleSelection,
+        ),
   };
 }
 
 export async function vectorRequestWithBitmapSelection(
   req: VectorRequest,
   roi: ROIState,
-  options: { isProduction?: boolean; allowBitmapSimulation?: boolean } = {}
+  options: {
+    isProduction?: boolean;
+    allowBitmapSimulation?: boolean;
+    grayScaleSelection?: number | null;
+  } = {}
 ): Promise<VectorRequest> {
   // No selection → no ROI; the macro sweeps the full DAC range.
   if (!roi.selection) {
@@ -188,6 +202,29 @@ export async function vectorRequestWithBitmapSelection(
     };
   }
 
+  const converted = await bitmapSelectionToVector(roi);
+  if (!converted.simulationBitmap.pixels.length) {
+    return withoutBitmapROI(req);
+  }
+
+  const decoratedBitmap = decorateSimulationBitmap(
+    converted.simulationBitmap,
+    options.grayScaleSelection,
+  );
+
+  // Production vector scans can honor the gray-level selection by
+  // sending only the unhighlighted pixels as an explicit point list.
+  // That keeps the beam behavior aligned with the ROI highlight mask.
+  if (options.isProduction && options.grayScaleSelection !== null) {
+    return {
+      ...req,
+      pattern: "custom",
+      points: bitmapToCustomPoints(decoratedBitmap, converted.roi, req.dwell),
+      roi: converted.roi,
+      simulation_bitmap: null,
+    };
+  }
+
   // Bitmap path: keep vector scans as default-pattern ROI sweeps. The
   // cropped grayscale pixels are only a simulation input, and only when
   // the active simulation source is file-backed. Otherwise a promoted
@@ -202,18 +239,29 @@ export async function vectorRequestWithBitmapSelection(
     };
   }
 
-  const converted = await bitmapSelectionToVector(roi);
-  if (!converted.simulationBitmap.pixels.length) {
-    return withoutBitmapROI(req);
-  }
-
   return {
     ...req,
     pattern: "default",
     points: null,
     roi: converted.roi,
-    simulation_bitmap: options.isProduction ? null : converted.simulationBitmap,
+    simulation_bitmap: options.isProduction ? null : decoratedBitmap,
   };
+}
+
+export async function grayScaleSpectrumLevelsForSelection(
+  roi: ROIState
+): Promise<number[]> {
+  const converted = await bitmapSelectionToVector(roi);
+  if (!converted.simulationBitmap.pixels.length) {
+    return [];
+  }
+
+  const unique = new Set<number>();
+  for (const pixel of converted.simulationBitmap.pixels) {
+    unique.add(pixelValue(pixel));
+  }
+
+  return [...unique].sort((a, b) => a - b);
 }
 
 function withoutBitmapROI<T extends RasterRequest | VectorRequest>(req: T): T {
@@ -270,14 +318,14 @@ async function bitmapSelectionToVector(
   );
 
   const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
-  const pixels: number[] = [];
+  const pixels: SimulationBitmapPixel[] = [];
   for (let y = 0; y < sampleH; y++) {
     for (let x = 0; x < sampleW; x++) {
       const i = (y * sampleW + x) * 4;
       const alpha = data[i + 3];
       const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       const pixel = alpha === 0 ? 255 : Math.round(luma);
-      pixels.push(pixel);
+      pixels.push({ value: pixel, isHighlighted: false });
     }
   }
 
@@ -291,6 +339,68 @@ async function bitmapSelectionToVector(
   };
   cachedExtraction = { key, value };
   return value;
+}
+
+function decorateSimulationBitmap(
+  bitmap: SimulationBitmap,
+  selection: number | null | undefined,
+): SimulationBitmap {
+  const normalizedSelection = selection === null || selection === undefined
+    ? null
+    : clampGrayScale(selection);
+
+  if (normalizedSelection === null) {
+    return {
+      ...bitmap,
+      pixels: bitmap.pixels.map((pixel) => ({
+        value: pixelValue(pixel),
+        isHighlighted: false,
+      })),
+    };
+  }
+
+  return {
+    ...bitmap,
+    pixels: bitmap.pixels.map((pixel) => {
+      const value = pixelValue(pixel);
+      return {
+        value,
+        isHighlighted: value === normalizedSelection,
+      };
+    }),
+  };
+}
+
+function bitmapToCustomPoints(
+  bitmap: SimulationBitmap,
+  roi: ROIRequest,
+  dwell: number,
+): Array<[number, number, number]> {
+  if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
+    return [];
+  }
+
+  const x0 = Math.min(roi.x_start, roi.x_end);
+  const x1 = Math.max(roi.x_start, roi.x_end);
+  const y0 = Math.min(roi.y_start, roi.y_end);
+  const y1 = Math.max(roi.y_start, roi.y_end);
+  const xSpan = Math.max(1, x1 - x0);
+  const ySpan = Math.max(1, y1 - y0);
+  const xDiv = Math.max(1, bitmap.width - 1);
+  const yDiv = Math.max(1, bitmap.height - 1);
+  const pts: Array<[number, number, number]> = [];
+
+  for (let y = 0; y < bitmap.height; y++) {
+    const sampleY = y0 + Math.round((y / yDiv) * ySpan);
+    for (let x = 0; x < bitmap.width; x++) {
+      const pixel = bitmap.pixels[y * bitmap.width + x];
+      if (pixel?.isHighlighted) continue;
+      const sampleX = x0 + Math.round((x / xDiv) * xSpan);
+      pts.push([sampleX, sampleY, dwell]);
+    }
+  }
+
+  return pts;
 }
 
 function selectionCrop(
@@ -406,4 +516,14 @@ function emptyConversion(): {
     roi: { x_start: 0, x_end: 1, y_start: 0, y_end: 1 },
     simulationBitmap: { width: 0, height: 0, pixels: [] },
   };
+}
+
+function pixelValue(pixel: number | SimulationBitmapPixel): number {
+  return typeof pixel === "number" ? pixel : pixel.value;
+}
+
+function clampGrayScale(value: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(255, Math.round(n)));
 }

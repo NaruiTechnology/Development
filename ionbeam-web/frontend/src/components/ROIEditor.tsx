@@ -31,16 +31,20 @@ export function ROIEditor({
   disabled,
   variant = "all",
   backgroundImageUrl = null,
+  grayScaleSelection = null,
 }: {
   disabled: boolean;
   variant?: "controls" | "canvas" | "all";
   backgroundImageUrl?: string | null;
+  grayScaleSelection?: number | null;
 }) {
   const dispatch = useAppDispatch();
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -65,7 +69,9 @@ export function ROIEditor({
   useEffect(() => {
     if (!imageSource) {
       imageRef.current = null;
-      draw();
+      drawBaseCanvas();
+      drawHighlightMask();
+      drawAnnotationLayer();
       return;
     }
     const img = new Image();
@@ -91,18 +97,24 @@ export function ROIEditor({
           );
         }
       }
-      draw();
+      drawBaseCanvas();
+      drawHighlightMask();
+      drawAnnotationLayer();
     };
     img.onerror = () => {
       imageRef.current = null;
-      draw();
+      drawBaseCanvas();
+      drawHighlightMask();
+      drawAnnotationLayer();
     };
     img.src = imageSource;
   }, [backgroundImageUrl, dispatch, imageSource, t]);
 
   useEffect(() => {
-    draw();
-  }, [draft, roi, tr.locale]);
+    drawBaseCanvas();
+    drawHighlightMask();
+    drawAnnotationLayer();
+  }, [draft, grayScaleSelection, roi, tr.locale]);
 
   useEffect(() => {
     if (!dragStartRef.current) {
@@ -168,7 +180,7 @@ export function ROIEditor({
     };
   }
 
-  function draw() {
+  function drawBaseCanvas() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -182,6 +194,64 @@ export function ROIEditor({
       ctx.fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
       ctx.fillRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
     }
+
+  }
+
+  function drawHighlightMask() {
+    const canvas = maskCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+
+    const img = imageRef.current;
+    const activeSelection = draft ?? roi.selection;
+    if (!img || grayScaleSelection === null || !activeSelection || roi.calibration_enabled) {
+      return;
+    }
+
+    const bounds = viewportBounds(roi);
+    const x0 = worldToCanvasX(activeSelection.x_start, roi, bounds);
+    const x1 = worldToCanvasX(activeSelection.x_end, roi, bounds);
+    const y0 = worldToCanvasY(activeSelection.y_start, roi, bounds);
+    const y1 = worldToCanvasY(activeSelection.y_end, roi, bounds);
+    const left = Math.max(0, Math.min(x0, x1));
+    const top = Math.max(0, Math.min(y0, y1));
+    const width = Math.max(0, Math.abs(x1 - x0));
+    const height = Math.max(0, Math.abs(y1 - y0));
+    if (width <= 0 || height <= 0) return;
+
+    ctx.drawImage(img, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    const image = ctx.getImageData(left, top, width, height);
+    const data = image.data;
+    const match = clampGrayScale(grayScaleSelection);
+
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3];
+      if (alpha === 0) continue;
+      const value = data[i];
+      const selected = value === match;
+      if (!selected) {
+        data[i + 3] = 0;
+        continue;
+      }
+
+      const tinted = tintHighlighterPixel(data[i], data[i + 1], data[i + 2]);
+      data[i] = tinted.r;
+      data[i + 1] = tinted.g;
+      data[i + 2] = tinted.b;
+      data[i + 3] = tinted.a;
+    }
+
+    ctx.putImageData(image, left, top);
+  }
+
+  function drawAnnotationLayer() {
+    const canvas = annotationCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
 
     if (roi.calibration_enabled) {
       drawCalibrationViewport(ctx, roi);
@@ -550,7 +620,7 @@ export function ROIEditor({
         <div ref={canvasWrapRef} className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}>
           <canvas
             ref={canvasRef}
-            className={disabled ? "is-disabled" : undefined}
+            className={`roi-canvas-layer roi-canvas-layer--base${disabled ? " is-disabled" : ""}`}
             width={ROI_CANVAS_EDGE}
             height={ROI_CANVAS_EDGE}
             onPointerDown={(e) => {
@@ -589,6 +659,20 @@ export function ROIEditor({
               setDraft(null);
               setTip(null);
             }}
+          />
+          <canvas
+            ref={maskCanvasRef}
+            className="roi-canvas-layer roi-canvas-layer--mask"
+            width={ROI_CANVAS_EDGE}
+            height={ROI_CANVAS_EDGE}
+            aria-hidden="true"
+          />
+          <canvas
+            ref={annotationCanvasRef}
+            className="roi-canvas-layer roi-canvas-layer--annotation"
+            width={ROI_CANVAS_EDGE}
+            height={ROI_CANVAS_EDGE}
+            aria-hidden="true"
           />
           {roi.calibration_enabled && (
             <>
@@ -692,6 +776,25 @@ function imageToDataUrl(img: HTMLImageElement, fillStyle = "#11203a"): string | 
 function getCssColor(el: Element, variable: string, fallback: string): string {
   const value = getComputedStyle(el).getPropertyValue(variable).trim();
   return value || fallback;
+}
+
+function clampGrayScale(value: number): number {
+  return Math.max(0, Math.min(255, value | 0));
+}
+
+function tintHighlighterPixel(
+  r: number,
+  g: number,
+  b: number
+): { r: number; g: number; b: number; a: number } {
+  const opacity = 0.75;
+  const hl = { r: 255, g: 255, b: 72 };
+  return {
+    r: Math.max(0, Math.min(255, Math.round(r * (1 - opacity) + hl.r * opacity))),
+    g: Math.max(0, Math.min(255, Math.round(g * (1 - opacity) + hl.g * opacity))),
+    b: Math.max(0, Math.min(255, Math.round(b * (1 - opacity) + hl.b * opacity))),
+    a: Math.round(255 * opacity),
+  };
 }
 
 function Num(props: {

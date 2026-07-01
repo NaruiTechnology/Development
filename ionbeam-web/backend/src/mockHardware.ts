@@ -46,7 +46,12 @@ interface VectorParams {
 interface SimulationBitmapPayload {
   width: number;
   height: number;
-  pixels: number[];
+  pixels: Array<number | SimulationBitmapPixel>;
+}
+
+interface SimulationBitmapPixel {
+  value: number;
+  isHighlighted?: boolean | null;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -230,8 +235,11 @@ function sampleSimulationBitmap(
 ): number {
   const x = Math.max(0, Math.min(bitmap.width - 1, Math.round(xNorm * (bitmap.width - 1))));
   const y = Math.max(0, Math.min(bitmap.height - 1, Math.round(yNorm * (bitmap.height - 1))));
-  const px = bitmap.pixels[y * bitmap.width + x] ?? 0;
-  return Math.min(Math.max(0, Number(px) & 0xff) * 64, ADC_MAX);
+  const px = bitmap.pixels[y * bitmap.width + x];
+  if (isHighlightedPixel(px)) {
+    return 0;
+  }
+  return Math.min(Math.max(0, pixelValue(px) & 0xff) * 64, ADC_MAX);
 }
 
 function sampleSimulationBitmapPoint(
@@ -250,6 +258,17 @@ function sampleSimulationBitmapPoint(
     (x - x0) / Math.max(1, x1 - x0),
     (y - y0) / Math.max(1, y1 - y0)
   );
+}
+
+function pixelValue(pixel: number | SimulationBitmapPixel | undefined): number {
+  if (typeof pixel === "number") return pixel;
+  if (!pixel) return 0;
+  return Number(pixel.value) || 0;
+}
+
+function isHighlightedPixel(pixel: number | SimulationBitmapPixel | undefined): boolean {
+  if (typeof pixel === "number" || !pixel) return false;
+  return Boolean(pixel.isHighlighted);
 }
 
 function writeSampleBE(buf: Buffer, sampleIndex: number, value: number): void {
@@ -414,7 +433,7 @@ export const mockRest = {
         ...raster,
         voltage,
         resolution: finiteNumber(raster.resolution, 512),
-        dwell: finiteNumber(raster.dwell, 2),
+        dwell: finiteNumber(raster.dwell, 16),
         latency: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
         frameBlank: Boolean(raster.frameBlank ?? false),
       },
@@ -428,7 +447,7 @@ export const mockRest = {
       },
       raster_params: {
         resolution: finiteNumber(raster.resolution, 512),
-        dwell: finiteNumber(raster.dwell, 2),
+        dwell: finiteNumber(raster.dwell, 16),
         latency_bytes: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
         frame_blank: Boolean(raster.frameBlank ?? false),
         cookie: finiteNumber(raster.cookie, 123),

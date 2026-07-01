@@ -37,8 +37,15 @@ import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
+import { grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 
-import { setKind, streamReset, type ScanKind } from "./store/scanSlice";
+import {
+  persistGrayScaleStepDelta,
+  setKind,
+  setROIGrayScaleSelection,
+  streamReset,
+  type ScanKind,
+} from "./store/scanSlice";
 import { resetRaster, resetVector } from "./store/imageSlice";
 import { fetchDefaults } from "./store/statusSlice";
 import { useAppDispatch, useAppSelector } from "./store";
@@ -68,11 +75,17 @@ export function App() {
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
+  const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
   const [lastLiveScanImage, setLastLiveScanImage] = useState<{
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
+  const [pendingGrayScaleSelection, setPendingGrayScaleSelection] = useState<number | null>(committedGrayScaleSelection);
+  const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
+  const [grayScaleStepDelta, setGrayScaleStepDelta] = useState(committedGrayScaleStepDelta);
+  const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
   const [mergedFigureByKind, setMergedFigureByKind] = useState<{
     raster: string | null;
     vector: string | null;
@@ -220,6 +233,43 @@ export function App() {
         ? lastLiveScanImage.imageUrl
         : serverScanImageUrl
       : null;
+  const showGraySpectrum =
+    kind === "roi" && hasPartialROI && Boolean(roiState.imageDataUrl || roiScanImageUrl);
+
+  useEffect(() => {
+    if (!showGraySpectrum) {
+      setPendingGrayScaleSelection(null);
+      setGrayScaleLevels([]);
+      setGrayScaleStepDelta(10);
+    }
+  }, [showGraySpectrum]);
+
+  useEffect(() => {
+    setPendingGrayScaleSelection(committedGrayScaleSelection);
+  }, [committedGrayScaleSelection]);
+
+  useEffect(() => {
+    persistGrayScaleStepDelta(grayScaleStepDelta);
+  }, [grayScaleStepDelta]);
+
+  useEffect(() => {
+    if (!showGraySpectrum) return;
+    let cancelled = false;
+    void (async () => {
+      const spectrumROI = roiState.imageDataUrl
+        ? roiState
+        : roiScanImageUrl
+        ? { ...roiState, imageDataUrl: roiScanImageUrl }
+        : roiState;
+      const levels = await grayScaleSpectrumLevelsForSelection(spectrumROI);
+      if (cancelled) return;
+      setGrayScaleLevels(levels);
+      setPendingGrayScaleSelection((current) => (current !== null && levels.includes(current) ? current : null));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roiScanImageUrl, roiState, showGraySpectrum]);
 
   const handleRenderedImageChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
@@ -239,6 +289,41 @@ export function App() {
     },
     []
   );
+
+  const handleGrayScaleSelect = useCallback((grayScale: number | null) => {
+    setPendingGrayScaleSelection(grayScale);
+  }, []);
+
+  const handleGrayScaleStepDeltaChange = useCallback((nextStepDelta: number) => {
+    const n = Number(nextStepDelta);
+    if (!Number.isFinite(n)) return;
+    setGrayScaleStepDelta(Math.max(1, Math.min(255, Math.round(n))));
+  }, []);
+
+  const handleGrayScaleConfirm = useCallback(() => {
+    if (pendingGrayScaleSelection === null) return;
+    setGrayScaleConfirmOpen(true);
+  }, [pendingGrayScaleSelection]);
+
+  const handleGrayScaleConfirmAccept = useCallback(() => {
+    if (pendingGrayScaleSelection === null) return;
+    dispatch(
+      setROIGrayScaleSelection({
+        selection: pendingGrayScaleSelection,
+      })
+    );
+    setGrayScaleConfirmOpen(false);
+  }, [dispatch, pendingGrayScaleSelection]);
+
+  const handleGrayScaleClear = useCallback(() => {
+    dispatch(
+      setROIGrayScaleSelection({
+        selection: null,
+      })
+    );
+    setPendingGrayScaleSelection(null);
+    setGrayScaleConfirmOpen(false);
+  }, [dispatch]);
 
   function selectKind(nextKind: ScanKind) {
     if (nextKind === kind) return;
@@ -305,6 +390,14 @@ export function App() {
         onOpenScan={() => navigateTo("control")}
         scanLocked={scanActive}
       />
+
+      {grayScaleConfirmOpen && pendingGrayScaleSelection !== null && (
+        <GrayScaleConfirmDialog
+          selection={pendingGrayScaleSelection}
+          onClose={() => setGrayScaleConfirmOpen(false)}
+          onConfirm={handleGrayScaleConfirmAccept}
+        />
+      )}
 
       {route === "report" ? (
         <ReportErrorBoundary>
@@ -395,6 +488,7 @@ export function App() {
                     kind={kind as ScanKind}
                     disabled={!isSignedIn}
                     scanActive={scanActive}
+                    grayScaleSelection={committedGrayScaleSelection}
                   />
                 </div>
               </div>
@@ -445,9 +539,21 @@ export function App() {
         {/* right column */}
         <section>
           <div className="card image-panel-card">
-            <div className="card__header">
-              <span className="card__title">{t(imagePanelTitleKey)}</span>
-              <div id="image-panel-toolbar-slot" className="card__header-toolbar-slot" />
+              <div className="card__header">
+                <span className="card__title">{t(imagePanelTitleKey)}</span>
+                <div id="image-panel-toolbar-slot" className="card__header-toolbar-slot">
+                {showGraySpectrum && (
+                  <GrayScaleSpectrum
+                    selectedGrayScale={pendingGrayScaleSelection}
+                    levels={grayScaleLevels}
+                    stepDelta={grayScaleStepDelta}
+                    onSelect={handleGrayScaleSelect}
+                    onStepDeltaChange={handleGrayScaleStepDeltaChange}
+                    onConfirm={handleGrayScaleConfirm}
+                    onClear={handleGrayScaleClear}
+                  />
+                )}
+                </div>
             </div>
             <div className="card__body">
               {kind === "roi" ? (
@@ -455,6 +561,7 @@ export function App() {
                   disabled={panelDisabled}
                   variant="canvas"
                   backgroundImageUrl={roiScanImageUrl}
+                  grayScaleSelection={pendingGrayScaleSelection}
                 />
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
@@ -467,7 +574,6 @@ export function App() {
               )}
             </div>
           </div>
-
         </section>
 
         {showROIPreviewSideCard && (
@@ -500,6 +606,219 @@ function parseSettingsTarget(search: string): { accountId: number | null; login:
   const accountId = Number.isInteger(accountIdRaw) && accountIdRaw > 0 ? accountIdRaw : null;
   const login = params.get("login")?.trim() || null;
   return { accountId, login };
+}
+
+function GrayScaleConfirmDialog({
+  selection,
+  onClose,
+  onConfirm,
+}: {
+  selection: number;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const titleIdRef = useRef(`gray-scale-confirm-title-${Math.random().toString(36).slice(2, 9)}`);
+  const messageIdRef = useRef(`gray-scale-confirm-message-${Math.random().toString(36).slice(2, 9)}`);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    const timer = window.setTimeout(() => closeRef.current?.focus(), 0);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      window.clearTimeout(timer);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal-backdrop gray-scale-confirm__backdrop"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="modal gray-scale-confirm"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleIdRef.current}
+        aria-describedby={messageIdRef.current}
+      >
+        <div className="modal__header">
+          <div id={titleIdRef.current} className="modal__title">
+            {t("roi.grayScale.confirm.title")}
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            className="modal__close"
+            onClick={onClose}
+            aria-label={t("help.close")}
+            title={t("help.close")}
+          >
+            <Icon name="x" />
+          </button>
+        </div>
+        <div id={messageIdRef.current} className="modal__body gray-scale-confirm__body">
+          <p>{t("roi.grayScale.confirm.body", { selection })}</p>
+          <p className="gray-scale-confirm__note">{t("roi.grayScale.confirm.note")}</p>
+        </div>
+        <div className="settings-footer">
+          <div className="settings-footer__row gray-scale-confirm__footer">
+            <span className="spacer" />
+            <button type="button" className="btn btn--ghost" onClick={onClose}>
+              {t("settings.confirm.cancel")}
+            </button>
+            <button type="button" className="btn btn--primary" onClick={onConfirm}>
+              {t("roi.grayScale.confirm.select")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GrayScaleSpectrum({
+  selectedGrayScale,
+  levels,
+  stepDelta,
+  onSelect,
+  onStepDeltaChange,
+  onConfirm,
+  onClear,
+}: {
+  selectedGrayScale: number | null;
+  levels: number[];
+  stepDelta: number;
+  onSelect: (grayScale: number | null) => void;
+  onStepDeltaChange: (stepDelta: number) => void;
+  onConfirm: () => void;
+  onClear: () => void;
+}) {
+  const boxes = buildGrayScaleBoxes(levels, stepDelta);
+  const hasPendingSelection = selectedGrayScale !== null;
+
+  return (
+    <div className="roi-spectrum" aria-label="Grayscale spectrum">
+      <div className="roi-spectrum__chain" role="list" aria-label="Gray levels">
+        {boxes.map((grayScale) => {
+          const selected = selectedGrayScale === grayScale;
+          const textTone = grayScale < 140 ? "#f8fafc" : "#101820";
+          return (
+            <button
+              key={grayScale}
+              type="button"
+              role="listitem"
+              className="roi-spectrum__box"
+              data-selected={selected ? "true" : "false"}
+              aria-pressed={selected}
+              title={`Gray level ${grayScale}`}
+              style={{
+                backgroundColor: `rgb(${grayScale}, ${grayScale}, ${grayScale})`,
+                color: textTone,
+              }}
+              onClick={() => onSelect(selected ? null : grayScale)}
+            >
+              <span className="roi-spectrum__box-value">{grayScale}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="roi-spectrum__controls">
+        <button
+          type="button"
+          className="roi-spectrum__step-btn"
+          aria-label="Decrease gray level box count"
+          onClick={() => onStepDeltaChange(stepDelta - 1)}
+        >
+          -
+        </button>
+        <input
+          className="input roi-spectrum__step-input"
+          type="number"
+          min={1}
+          max={255}
+          step={1}
+          value={stepDelta}
+          aria-label="Gray level box count"
+          onChange={(event) => onStepDeltaChange(Number(event.target.value))}
+        />
+        <button
+          type="button"
+          className="roi-spectrum__step-btn"
+          aria-label="Increase gray level box count"
+          onClick={() => onStepDeltaChange(stepDelta + 1)}
+        >
+          +
+        </button>
+        {hasPendingSelection && (
+          <button
+            type="button"
+            className="btn btn--ghost roi-spectrum__confirm-btn"
+            onClick={onConfirm}
+          >
+            Select
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn--ghost roi-spectrum__confirm-btn"
+          disabled={selectedGrayScale === null}
+          onClick={onClear}
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function buildGrayScaleBoxes(levels: number[], stepDelta: number): number[] {
+  if (!levels.length) return [];
+  const delta = clampGrayScaleStepDelta(stepDelta);
+  const boxCount = Math.max(1, Math.min(levels.length, delta));
+  if (boxCount === 1) {
+    return [levels[Math.floor((levels.length - 1) / 2)]];
+  }
+  if (boxCount === levels.length) {
+    return levels;
+  }
+  const boxes: number[] = [];
+  const lastIndex = levels.length - 1;
+  for (let i = 0; i < boxCount; i++) {
+    const index = Math.round((i * lastIndex) / (boxCount - 1));
+    const value = levels[index];
+    if (boxes[boxes.length - 1] !== value) {
+      boxes.push(value);
+    }
+  }
+  if (boxes[0] !== levels[0]) {
+    boxes.unshift(levels[0]);
+  }
+  if (boxes[boxes.length - 1] !== levels[lastIndex]) {
+    boxes.push(levels[lastIndex]);
+  }
+  return [...new Set(boxes)].sort((a, b) => a - b);
+}
+
+function clampGrayScaleStepDelta(value: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 10;
+  return Math.max(1, Math.min(255, Math.round(n)));
 }
 
 function useAppRoute(): AppRoute {
