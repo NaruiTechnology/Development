@@ -2577,9 +2577,50 @@ body {
   margin: 0;
 }
 
-.gray-scale-confirm__note {
+.gray-scale-confirm__mode-group {
+  display: grid;
+  gap: 10px;
+  padding: 8px 0 2px;
+}
+
+.gray-scale-confirm__mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--c-bg-elev-2);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+.gray-scale-confirm__mode-option input {
+  margin-top: 3px;
+}
+
+.gray-scale-confirm__mode-option strong {
+  display: block;
+  font-size: 13px;
+}
+
+.gray-scale-confirm__mode-option small {
+  display: block;
+  margin-top: 3px;
   color: var(--c-text-dim);
   font-size: 12px;
+  line-height: 1.35;
+}
+
+.gray-scale-confirm__note {
+  display: grid;
+  gap: 6px;
+  color: var(--c-text-dim);
+  font-size: 12px;
+}
+
+.gray-scale-confirm__note ul {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .gray-scale-confirm__footer {

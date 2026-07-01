@@ -117,6 +117,7 @@ export async function rasterRequestWithBitmapSelection(
     isProduction?: boolean;
     allowBitmapSimulation?: boolean;
     grayScaleSelection?: number | null;
+    grayScaleSkipped?: boolean | null;
   } = {}
 ): Promise<RasterRequest> {
   // No selection at all → no ROI restriction, scan the full DAC range.
@@ -168,6 +169,7 @@ export async function rasterRequestWithBitmapSelection(
       : decorateSimulationBitmap(
           converted.simulationBitmap,
           options.grayScaleSelection,
+          options.grayScaleSkipped,
         ),
   };
 }
@@ -179,6 +181,7 @@ export async function vectorRequestWithBitmapSelection(
     isProduction?: boolean;
     allowBitmapSimulation?: boolean;
     grayScaleSelection?: number | null;
+    grayScaleSkipped?: boolean | null;
   } = {}
 ): Promise<VectorRequest> {
   // No selection → no ROI; the macro sweeps the full DAC range.
@@ -210,16 +213,27 @@ export async function vectorRequestWithBitmapSelection(
   const decoratedBitmap = decorateSimulationBitmap(
     converted.simulationBitmap,
     options.grayScaleSelection,
+    options.grayScaleSkipped,
   );
 
   // Production vector scans can honor the gray-level selection by
-  // sending only the unhighlighted pixels as an explicit point list.
-  // That keeps the beam behavior aligned with the ROI highlight mask.
-  if (options.isProduction && options.grayScaleSelection !== null) {
+  // sending only the pixels matching the selected mode as an explicit
+  // point list. That keeps the beam behavior aligned with the ROI
+  // highlight mask and the selected skip/splash mode.
+  if (
+    options.isProduction &&
+    options.grayScaleSelection !== null &&
+    options.grayScaleSkipped !== null
+  ) {
     return {
       ...req,
       pattern: "custom",
-      points: bitmapToCustomPoints(decoratedBitmap, converted.roi, req.dwell),
+      points: bitmapToCustomPoints(
+        decoratedBitmap,
+        converted.roi,
+        req.dwell,
+        options.grayScaleSkipped,
+      ),
       roi: converted.roi,
       simulation_bitmap: null,
     };
@@ -344,10 +358,14 @@ async function bitmapSelectionToVector(
 function decorateSimulationBitmap(
   bitmap: SimulationBitmap,
   selection: number | null | undefined,
+  skipped: boolean | null | undefined,
 ): SimulationBitmap {
   const normalizedSelection = selection === null || selection === undefined
     ? null
     : clampGrayScale(selection);
+  const normalizedSkipped = skipped === null || skipped === undefined
+    ? null
+    : Boolean(skipped);
 
   if (normalizedSelection === null) {
     return {
@@ -355,6 +373,7 @@ function decorateSimulationBitmap(
       pixels: bitmap.pixels.map((pixel) => ({
         value: pixelValue(pixel),
         isHighlighted: false,
+        isSkipped: null,
       })),
     };
   }
@@ -363,9 +382,11 @@ function decorateSimulationBitmap(
     ...bitmap,
     pixels: bitmap.pixels.map((pixel) => {
       const value = pixelValue(pixel);
+      const highlighted = value === normalizedSelection;
       return {
         value,
-        isHighlighted: value === normalizedSelection,
+        isHighlighted: highlighted,
+        isSkipped: highlighted ? normalizedSkipped : null,
       };
     }),
   };
@@ -375,6 +396,7 @@ function bitmapToCustomPoints(
   bitmap: SimulationBitmap,
   roi: ROIRequest,
   dwell: number,
+  skipped: boolean | null | undefined,
 ): Array<[number, number, number]> {
   if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
     return [];
@@ -388,13 +410,24 @@ function bitmapToCustomPoints(
   const ySpan = Math.max(1, y1 - y0);
   const xDiv = Math.max(1, bitmap.width - 1);
   const yDiv = Math.max(1, bitmap.height - 1);
+  const normalizedSkipped = skipped === null || skipped === undefined
+    ? null
+    : Boolean(skipped);
   const pts: Array<[number, number, number]> = [];
 
   for (let y = 0; y < bitmap.height; y++) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
     for (let x = 0; x < bitmap.width; x++) {
       const pixel = bitmap.pixels[y * bitmap.width + x];
-      if (pixel?.isHighlighted) continue;
+      const highlighted = Boolean(pixel?.isHighlighted);
+      const pixelSkipped = pixel?.isSkipped === null || pixel?.isSkipped === undefined
+        ? null
+        : Boolean(pixel.isSkipped);
+      if (normalizedSkipped === true) {
+        if (highlighted && pixelSkipped !== false) continue;
+      } else if (normalizedSkipped === false) {
+        if (!highlighted || pixelSkipped === true) continue;
+      }
       const sampleX = x0 + Math.round((x / xDiv) * xSpan);
       pts.push([sampleX, sampleY, dwell]);
     }

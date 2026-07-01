@@ -53,6 +53,8 @@ interface ScanState {
 
   /** Committed grayscale filter for the ROI image viewer. */
   roiGrayScaleSelection: number | null;
+  /** `true` skips highlighted pixels, `false` splashes them, `null` means no special handling. */
+  roiGrayScaleSkipped: boolean | null;
   roiGrayScaleStepDelta: number;
 
   /** How the vector image is rendered onto the canvas. Per-session — not
@@ -155,6 +157,7 @@ const initialState: ScanState = {
   },
   beamEnergyEv: 1000.0,
   roiGrayScaleSelection: null,
+  roiGrayScaleSkipped: null,
   roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
   vectorRenderMode: "decimated",
 };
@@ -439,9 +442,14 @@ const slice = createSlice({
     },
     setROIGrayScaleSelection(
       s,
-      a: PayloadAction<{ selection: number | null; stepDelta?: number }>
+      a: PayloadAction<{ selection: number | null; isSkipped?: boolean | null; stepDelta?: number }>
     ) {
       s.roiGrayScaleSelection = a.payload.selection === null ? null : Math.max(0, Math.min(255, Math.round(a.payload.selection)));
+      if (a.payload.selection === null) {
+        s.roiGrayScaleSkipped = null;
+      } else if (Object.prototype.hasOwnProperty.call(a.payload, "isSkipped")) {
+        s.roiGrayScaleSkipped = a.payload.isSkipped === null ? null : Boolean(a.payload.isSkipped);
+      }
       if (a.payload.stepDelta !== undefined) {
         s.roiGrayScaleStepDelta = clampGrayScaleStepDelta(a.payload.stepDelta);
       }

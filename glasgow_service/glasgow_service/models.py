@@ -14,7 +14,7 @@ here closes that gap. Defaulting to "SixteenBit" keeps the wire format
 backward compatible with frontends that don't send the field yet.
 """
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -85,15 +85,25 @@ class VectorPattern(str, Enum):
 class SimulationBitmap(BaseModel):
     width:  int = Field(..., ge=1, le=4096)
     height: int = Field(..., ge=1, le=4096)
-    pixels: List[int] = Field(..., max_length=1_000_000)
+    pixels: List[Union[int, "SimulationBitmapPixel"]] = Field(..., max_length=1_000_000)
 
     @field_validator("pixels")
     @classmethod
     def _pixels_are_bytes(cls, v: List[int]) -> List[int]:
         for px in v:
-            if px < 0 or px > 255:
+            if isinstance(px, SimulationBitmapPixel):
+                value = px.value
+            else:
+                value = int(px)
+            if value < 0 or value > 255:
                 raise ValueError("simulation_bitmap pixels must be 0..255")
         return v
+
+
+class SimulationBitmapPixel(BaseModel):
+    value: int = Field(..., ge=0, le=255)
+    isHighlighted: Optional[bool] = None
+    isSkipped: Optional[bool] = None
 
 
 class VectorRequest(BaseModel):

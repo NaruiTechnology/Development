@@ -70,6 +70,8 @@ export interface SimulationBitmapPixel {
   value: number;
   /** When true, the scan sampler treats this pixel as skipped/blanked. */
   isHighlighted?: boolean | null;
+  /** `true` skips highlighted pixels, `false` splashes them, `null` means normal scan. */
+  isSkipped?: boolean | null;
 }
 
 /**

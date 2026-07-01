@@ -52,6 +52,7 @@ interface SimulationBitmapPayload {
 interface SimulationBitmapPixel {
   value: number;
   isHighlighted?: boolean | null;
+  isSkipped?: boolean | null;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -231,24 +232,23 @@ function sampleFakeAdc(dacX: number, dacY: number): number {
 function sampleSimulationBitmap(
   bitmap: SimulationBitmapPayload,
   xNorm: number,
-  yNorm: number
+  yNorm: number,
+  mode: "skip" | "splash" | null
 ): number {
   const x = Math.max(0, Math.min(bitmap.width - 1, Math.round(xNorm * (bitmap.width - 1))));
   const y = Math.max(0, Math.min(bitmap.height - 1, Math.round(yNorm * (bitmap.height - 1))));
   const px = bitmap.pixels[y * bitmap.width + x];
-  if (isHighlightedPixel(px)) {
-    return 0;
-  }
-  return Math.min(Math.max(0, pixelValue(px) & 0xff) * 64, ADC_MAX);
+  return sampleBitmapPixel(px, mode);
 }
 
 function sampleSimulationBitmapPoint(
   bitmap: SimulationBitmapPayload,
   roi: VectorParams["roi"],
   x: number,
-  y: number
+  y: number,
+  mode: "skip" | "splash" | null
 ): number {
-  if (!roi) return sampleSimulationBitmap(bitmap, x / ADC_MAX, y / ADC_MAX);
+  if (!roi) return sampleSimulationBitmap(bitmap, x / ADC_MAX, y / ADC_MAX, mode);
   const x0 = Math.min(roi.x_start, roi.x_end);
   const x1 = Math.max(roi.x_start, roi.x_end);
   const y0 = Math.min(roi.y_start, roi.y_end);
@@ -256,7 +256,8 @@ function sampleSimulationBitmapPoint(
   return sampleSimulationBitmap(
     bitmap,
     (x - x0) / Math.max(1, x1 - x0),
-    (y - y0) / Math.max(1, y1 - y0)
+    (y - y0) / Math.max(1, y1 - y0),
+    mode
   );
 }
 
@@ -269,6 +270,44 @@ function pixelValue(pixel: number | SimulationBitmapPixel | undefined): number {
 function isHighlightedPixel(pixel: number | SimulationBitmapPixel | undefined): boolean {
   if (typeof pixel === "number" || !pixel) return false;
   return Boolean(pixel.isHighlighted);
+}
+
+function isSkippedPixel(pixel: number | SimulationBitmapPixel | undefined): boolean | null {
+  if (typeof pixel === "number" || !pixel) return null;
+  if (pixel.isSkipped === null || pixel.isSkipped === undefined) return null;
+  return Boolean(pixel.isSkipped);
+}
+
+function inferBitmapMode(bitmap: SimulationBitmapPayload): "skip" | "splash" | null {
+  let sawSkip = false;
+  let sawSplash = false;
+  let sawLegacyHighlight = false;
+  for (const pixel of bitmap.pixels) {
+    if (typeof pixel === "number" || !pixel) continue;
+    if (pixel.isSkipped === true) sawSkip = true;
+    else if (pixel.isSkipped === false) sawSplash = true;
+    if (pixel.isHighlighted) sawLegacyHighlight = true;
+  }
+  if (sawSplash) return "splash";
+  if (sawSkip || sawLegacyHighlight) return "skip";
+  return null;
+}
+
+function sampleBitmapPixel(
+  pixel: number | SimulationBitmapPixel | undefined,
+  mode: "skip" | "splash" | null
+): number {
+  const value = Math.min(Math.max(0, pixelValue(pixel) & 0xff) * 64, ADC_MAX);
+  const skipped = isSkippedPixel(pixel);
+  const legacyHighlight = isHighlightedPixel(pixel);
+
+  if (mode === "skip") {
+    return skipped === true || (skipped === null && legacyHighlight) ? 0 : value;
+  }
+  if (mode === "splash") {
+    return skipped === false ? value : 0;
+  }
+  return skipped === true || legacyHighlight ? 0 : value;
 }
 
 function writeSampleBE(buf: Buffer, sampleIndex: number, value: number): void {
@@ -289,6 +328,7 @@ export async function streamMockRaster(
 
   let sent = 0;
   let chunks = 0;
+  const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
   while (sent < total) {
     if (ws.readyState !== ws.OPEN) return;
@@ -305,7 +345,8 @@ export async function streamMockRaster(
         ? sampleSimulationBitmap(
             p.simulation_bitmap,
             p.resolution <= 1 ? 0 : x / (p.resolution - 1),
-            p.resolution <= 1 ? 0 : y / (p.resolution - 1)
+            p.resolution <= 1 ? 0 : y / (p.resolution - 1),
+            bitmapMode
           )
         : sampleFakeAdc(dacX, dacY);
       writeSampleBE(buf, k, sample);
@@ -365,6 +406,7 @@ export async function streamMockVector(
   const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
   let i = 0;
   let chunks = 0;
+  const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
   while (i < pts.length) {
     if (ws.readyState !== ws.OPEN) return;
@@ -374,11 +416,12 @@ export async function streamMockVector(
       const [x, y] = slice[k];
       const sample = p.simulation_bitmap
         ? p.pattern !== "custom" || (p.points && p.points.length)
-          ? sampleSimulationBitmapPoint(p.simulation_bitmap, p.roi, x, y)
+          ? sampleSimulationBitmapPoint(p.simulation_bitmap, p.roi, x, y, bitmapMode)
           : sampleSimulationBitmap(
               p.simulation_bitmap,
               p.simulation_bitmap.width <= 1 ? 0 : x / (p.simulation_bitmap.width - 1),
-              p.simulation_bitmap.height <= 1 ? 0 : y / (p.simulation_bitmap.height - 1)
+              p.simulation_bitmap.height <= 1 ? 0 : y / (p.simulation_bitmap.height - 1),
+              bitmapMode
             )
         : sampleFakeAdc(x, y);
       writeSampleBE(buf, k, sample);

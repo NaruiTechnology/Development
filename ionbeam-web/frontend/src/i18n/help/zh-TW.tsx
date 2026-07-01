@@ -103,6 +103,30 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  grayScale: () => (
+    <>
+      <p>
+        灰階光譜條會顯示目前即時影像或已載入點陣圖中存在的灰階值。
+        每個方框代表一個採樣到的灰階值，步進旋鈕用來控制在可用範圍內顯示多少個方框。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>選取某個方框本身不會改變影像。</strong>它只會標記下一次掃描動作在確認後要使用的灰階區間。
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Skip</strong> 會在選定 ROI 子區域內，對高亮灰階對應的像素進行束流消隱，使這些像素在下一次掃描中被略過。</li>
+        <li><strong>Splash</strong> 會保持高亮灰階對應像素的束流開啟，並對同一 ROI 子區域內的其他像素進行消隱。</li>
+        <li><strong>Clear</strong> 會將目前的灰階選擇重設為一般掃描行為。</li>
+        <li>此選擇僅作用於已定義的 ROI 子區域；區域外像素仍依正常掃描方式處理。</li>
+      </ul>
+
+      <p>
+        使用 <strong>Select</strong> 確認目前模式，並將其保存到掃描 store 中，供下一步掃描使用。
+      </p>
+    </>
+  ),
+
   latency: () => (
     <>
       <p>

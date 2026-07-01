@@ -107,6 +107,30 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  grayScale: () => (
+    <>
+      <p>
+        灰度光谱条会显示当前实时图像或已加载位图中存在的灰度值。
+        每个方框代表一个采样到的灰度值，步进旋钮用于控制在可用范围内显示多少个方框。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>选中某个方框本身不会改变图像。</strong>它只会标记下一次扫描操作在确认后要使用的灰度区间。
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Skip</strong> 会在选中 ROI 子区域内，对高亮灰度对应的像素进行束流消隐，使这些像素在下一次扫描中被跳过。</li>
+        <li><strong>Splash</strong> 会保持高亮灰度对应像素的束流开启，并对同一 ROI 子区域内的其他像素进行消隐。</li>
+        <li><strong>Clear</strong> 会将当前灰度选择重置为普通扫描行为。</li>
+        <li>该选择仅作用于已定义的 ROI 子区域；区域外像素仍按正常扫描方式处理。</li>
+      </ul>
+
+      <p>
+        使用 <strong>Select</strong> 确认当前模式，并将其持久化到扫描 store 中，供下一步扫描使用。
+      </p>
+    </>
+  ),
+
   latency: () => (
     <>
       <p>

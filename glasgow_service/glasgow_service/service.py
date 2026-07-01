@@ -168,7 +168,7 @@ def _bitmap_sample(bitmap, x_norm: float, y_norm: float) -> int:
     y_norm = min(1.0, max(0.0, y_norm if math.isfinite(y_norm) else 0.0))
     x = min(bitmap.width - 1, max(0, round(x_norm * (bitmap.width - 1))))
     y = min(bitmap.height - 1, max(0, round(y_norm * (bitmap.height - 1))))
-    return min(int(bitmap.pixels[y * bitmap.width + x]) * 64, 0x3FFF)
+    return min(_bitmap_pixel_value(bitmap.pixels[y * bitmap.width + x]) * 64, 0x3FFF)
 
 
 def _bitmap_sample_point(bitmap, roi, x: int, y: int) -> int:
@@ -181,6 +181,14 @@ def _bitmap_sample_point(bitmap, roi, x: int, y: int) -> int:
         (int(x) - x0) / max(1, x1 - x0),
         (int(y) - y0) / max(1, y1 - y0),
     )
+
+
+def _bitmap_pixel_value(pixel) -> int:
+    if isinstance(pixel, int):
+        return int(pixel)
+    if pixel is None:
+        return 0
+    return int(getattr(pixel, "value", 0))
 
 
 def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
@@ -926,7 +934,8 @@ class DeviceService:
         last = self._last
         simulation_bitmap = last.get("simulation_bitmap")
         if simulation_bitmap is not None and getattr(simulation_bitmap, "pixels", None):
-            img = np.asarray(simulation_bitmap.pixels, dtype=np.uint16).reshape(
+            flat = np.asarray([_bitmap_pixel_value(px) for px in simulation_bitmap.pixels], dtype=np.uint16)
+            img = flat.reshape(
                 int(simulation_bitmap.height),
                 int(simulation_bitmap.width),
             ) * 64

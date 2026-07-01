@@ -31,6 +31,7 @@ export type HelpKey =
   | "customPoints"
   | "preProcess"
   | "canvasView"
+  | "grayScale"
   | "magCalibration";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
@@ -590,6 +591,35 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         sample order and image sparsity. Use <strong>Native</strong>
         when you want to inspect the DAC-space footprint of a reduced
         vector grid.
+      </p>
+    </>
+  ),
+
+  grayScale: () => (
+    <>
+      <p>
+        The gray-scale spectrum shows the gray values currently present
+        in the rendered live image or loaded bitmap. Each box is one
+        sampled gray level, and the step spinner controls how many
+        boxes are shown across the available range.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Selecting a box does not change the image by itself.</strong>{" "}
+        It only marks the gray-level interval that the next scan action
+        will use when you confirm the choice.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Skip</strong> blanks the beam on the highlighted gray levels inside the selected ROI sub-area so those pixels are skipped during the next scan.</li>
+        <li><strong>Splash</strong> keeps the beam on for the highlighted gray levels and blanks the other pixels inside the selected ROI sub-area.</li>
+        <li><strong>Clear</strong> resets the current gray-level selection back to normal scan behavior.</li>
+        <li>The selection applies only to the defined ROI sub-area; pixels outside that area keep their normal scan handling.</li>
+      </ul>
+
+      <p>
+        Use <strong>Select</strong> to confirm the pending mode and
+        persist it into the scan store for the next scan step.
       </p>
     </>
   ),

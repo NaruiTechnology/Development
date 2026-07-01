@@ -33,6 +33,7 @@ import { ROIEditor } from "./components/ROIEditor";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
 import { MagCalibrationChart, MagCalibrationControls } from "./components/MagCalibration";
+import { GrayScaleHelp } from "./components/GrayScaleHelp";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -76,6 +77,7 @@ export function App() {
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roiState = useAppSelector((s) => s.scan.roi);
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
+  const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
   const [lastLiveScanImage, setLastLiveScanImage] = useState<{
@@ -83,6 +85,7 @@ export function App() {
     imageUrl: string;
   } | null>(null);
   const [pendingGrayScaleSelection, setPendingGrayScaleSelection] = useState<number | null>(committedGrayScaleSelection);
+  const [pendingGrayScaleSkipped, setPendingGrayScaleSkipped] = useState<boolean | null>(committedGrayScaleSkipped);
   const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
   const [grayScaleStepDelta, setGrayScaleStepDelta] = useState(committedGrayScaleStepDelta);
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
@@ -292,7 +295,10 @@ export function App() {
 
   const handleGrayScaleSelect = useCallback((grayScale: number | null) => {
     setPendingGrayScaleSelection(grayScale);
-  }, []);
+    if (grayScale !== null) {
+      setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? true);
+    }
+  }, [committedGrayScaleSkipped]);
 
   const handleGrayScaleStepDeltaChange = useCallback((nextStepDelta: number) => {
     const n = Number(nextStepDelta);
@@ -310,18 +316,21 @@ export function App() {
     dispatch(
       setROIGrayScaleSelection({
         selection: pendingGrayScaleSelection,
+        isSkipped: pendingGrayScaleSkipped,
       })
     );
     setGrayScaleConfirmOpen(false);
-  }, [dispatch, pendingGrayScaleSelection]);
+  }, [dispatch, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
 
   const handleGrayScaleClear = useCallback(() => {
     dispatch(
       setROIGrayScaleSelection({
         selection: null,
+        isSkipped: null,
       })
     );
     setPendingGrayScaleSelection(null);
+    setPendingGrayScaleSkipped(null);
     setGrayScaleConfirmOpen(false);
   }, [dispatch]);
 
@@ -394,6 +403,8 @@ export function App() {
       {grayScaleConfirmOpen && pendingGrayScaleSelection !== null && (
         <GrayScaleConfirmDialog
           selection={pendingGrayScaleSelection}
+          isSkipped={pendingGrayScaleSkipped}
+          onIsSkippedChange={setPendingGrayScaleSkipped}
           onClose={() => setGrayScaleConfirmOpen(false)}
           onConfirm={handleGrayScaleConfirmAccept}
         />
@@ -489,6 +500,7 @@ export function App() {
                     disabled={!isSignedIn}
                     scanActive={scanActive}
                     grayScaleSelection={committedGrayScaleSelection}
+                    grayScaleSkipped={committedGrayScaleSkipped}
                   />
                 </div>
               </div>
@@ -610,10 +622,14 @@ function parseSettingsTarget(search: string): { accountId: number | null; login:
 
 function GrayScaleConfirmDialog({
   selection,
+  isSkipped,
+  onIsSkippedChange,
   onClose,
   onConfirm,
 }: {
   selection: number;
+  isSkipped: boolean | null;
+  onIsSkippedChange: (value: boolean | null) => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -674,7 +690,32 @@ function GrayScaleConfirmDialog({
         </div>
         <div id={messageIdRef.current} className="modal__body gray-scale-confirm__body">
           <p>{t("roi.grayScale.confirm.body", { selection })}</p>
-          <p className="gray-scale-confirm__note">{t("roi.grayScale.confirm.note")}</p>
+          <div className="gray-scale-confirm__mode-group" role="radiogroup" aria-label={t("roi.grayScale.confirm.mode.label")}>
+            <label className="gray-scale-confirm__mode-option">
+              <input
+                type="radio"
+                name="gray-scale-skip-mode"
+                checked={isSkipped !== false}
+                onChange={() => onIsSkippedChange(true)}
+              />
+              <span>
+                <strong>{t("roi.grayScale.confirm.mode.skip")}</strong>
+                <small>{t("roi.grayScale.confirm.mode.skip.help")}</small>
+              </span>
+            </label>
+            <label className="gray-scale-confirm__mode-option">
+              <input
+                type="radio"
+                name="gray-scale-skip-mode"
+                checked={isSkipped === false}
+                onChange={() => onIsSkippedChange(false)}
+              />
+              <span>
+                <strong>{t("roi.grayScale.confirm.mode.splash")}</strong>
+                <small>{t("roi.grayScale.confirm.mode.splash.help")}</small>
+              </span>
+            </label>
+          </div>
         </div>
         <div className="settings-footer">
           <div className="settings-footer__row gray-scale-confirm__footer">
@@ -738,6 +779,7 @@ function GrayScaleSpectrum({
           );
         })}
       </div>
+      <GrayScaleHelp />
       <div className="roi-spectrum__controls">
         <button
           type="button"

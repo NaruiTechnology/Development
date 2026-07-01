@@ -76,11 +76,13 @@ export function ScanControls({
   disabled = false,
   scanActive = false,
   grayScaleSelection = null,
+  grayScaleSkipped = null,
 }: {
   kind: ScanKind;
   disabled?: boolean;
   scanActive?: boolean;
   grayScaleSelection?: number | null;
+  grayScaleSkipped?: boolean | null;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -126,6 +128,7 @@ export function ScanControls({
             isProduction,
             allowBitmapSimulation,
             grayScaleSelection,
+            grayScaleSkipped,
           }
         );
         stream.startRaster({ ...req, preview });
@@ -142,6 +145,7 @@ export function ScanControls({
             isProduction,
             allowBitmapSimulation,
             grayScaleSelection,
+            grayScaleSkipped,
           }
         );
         stream.startVector({ ...req, preview });
@@ -178,6 +182,7 @@ export function ScanControls({
             isProduction,
             allowBitmapSimulation,
             grayScaleSelection,
+            grayScaleSkipped,
           }
         );
         const promise = dispatch(runRasterValidated({ ...req, preview }));
@@ -199,6 +204,7 @@ export function ScanControls({
             isProduction,
             allowBitmapSimulation,
             grayScaleSelection,
+            grayScaleSkipped,
           }
         );
         const promise = dispatch(runVectorValidated({ ...req, preview }));
