@@ -418,7 +418,8 @@ function bitmapToCustomPoints(
   const normalizedSkipped = skipped === null || skipped === undefined
     ? null
     : Boolean(skipped);
-  const pts: VectorPoint[] = [];
+  const primaryPass: VectorPoint[] = [];
+  const secondaryPass: VectorPoint[] = [];
 
   for (let y = 0; y < bitmap.height; y++) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
@@ -431,16 +432,35 @@ function bitmapToCustomPoints(
         : normalizedSkipped === false
         ? !highlighted
         : false;
-      pts.push({
+      const point = {
         x: sampleX,
         y: sampleY,
         dwell,
         blank,
-      });
+        passIndex: normalizedSkipped === null
+          ? null
+          : highlighted
+          ? 1
+          : 2,
+      };
+
+      // Emit the selected interval as the first pass and the
+      // complement as the second pass. This keeps the blank/unblank
+      // transition boundary explicit instead of interleaving states on
+      // every pixel sample.
+      if (
+        normalizedSkipped === null ||
+        (normalizedSkipped === true && highlighted) ||
+        (normalizedSkipped === false && !highlighted)
+      ) {
+        primaryPass.push(point);
+      } else {
+        secondaryPass.push(point);
+      }
     }
   }
 
-  return pts;
+  return primaryPass.concat(secondaryPass);
 }
 
 function selectionCrop(

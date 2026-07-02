@@ -87,6 +87,7 @@ class VectorPoint(BaseModel):
     y: int = Field(..., ge=0, le=16383)
     dwell: int = Field(..., ge=1, le=65535)
     blank: Optional[bool] = None
+    passIndex: Optional[int] = Field(None, ge=1, le=2)
 
 
 class SimulationBitmap(BaseModel):
@@ -117,7 +118,7 @@ class VectorRequest(BaseModel):
     pattern:        VectorPattern = VectorPattern.default
     points:         Optional[List[Union[Tuple[int, int, int], VectorPoint]]] = Field(
         default=None,
-        description="For `custom`: list of (x, y, dwell) tuples or {x, y, dwell, blank} objects. Capped at 1M points.",
+        description="For `custom`: list of (x, y, dwell) tuples or {x, y, dwell, blank, passIndex} objects. Capped at 1M points.",
         max_length=1_000_000,
     )
     # Density of the default sweep across the 2048-DAC range. Stride is

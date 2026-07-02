@@ -84,7 +84,8 @@ def _normalize_point(point):
         if len(point) < 3:
             raise ValueError("vector point tuples must have at least 3 entries")
         blank = None if len(point) < 4 or point[3] is None else bool(point[3])
-        return int(point[0]), int(point[1]), int(point[2]), blank
+        pass_index = None if len(point) < 5 or point[4] is None else int(point[4])
+        return int(point[0]), int(point[1]), int(point[2]), blank, pass_index
 
     x = getattr(point, "x", None)
     y = getattr(point, "y", None)
@@ -92,7 +93,14 @@ def _normalize_point(point):
     if x is None or y is None or dwell is None:
         raise ValueError("vector points must provide x, y, and dwell")
     blank = getattr(point, "blank", None)
-    return int(x), int(y), int(dwell), None if blank is None else bool(blank)
+    pass_index = getattr(point, "passIndex", None)
+    return (
+        int(x),
+        int(y),
+        int(dwell),
+        None if blank is None else bool(blank),
+        None if pass_index is None else int(pass_index),
+    )
 
 
 class VectorScanCommand(BaseCommand):
@@ -186,6 +194,7 @@ class VectorScanCommand(BaseCommand):
             commands = bytearray()
             current_blank = None
             saw_explicit_blank = False
+            current_pass_index = None
 
             def get_command(pixel_count):
                 cmd = ArrayCommand(cmdtype=CmdType.VectorPixel,
@@ -195,7 +204,10 @@ class VectorScanCommand(BaseCommand):
             pixel_count = 0
             total_dwell = 0
             for point in self._iter_points:
-                x, y, dwell, blank = _normalize_point(point)
+                x, y, dwell, blank, pass_index = _normalize_point(point)
+                if pass_index is not None and current_pass_index != pass_index:
+                    self._logger.debug("vector pass index %s", pass_index)
+                    current_pass_index = pass_index
                 if blank is not None:
                     saw_explicit_blank = True
                     if current_blank is None or current_blank != blank:

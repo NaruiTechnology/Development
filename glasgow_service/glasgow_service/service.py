@@ -109,12 +109,13 @@ def _roi_vector_iter(edge: int, roi, dwell: int = 1) -> Iterable[Tuple[int, int,
 
 def _normalize_vector_point(
     point,
-) -> Tuple[int, int, int, Optional[bool]]:
+) -> Tuple[int, int, int, Optional[bool], Optional[int]]:
     if isinstance(point, tuple) or isinstance(point, list):
         if len(point) < 3:
             raise ValueError("vector point tuples must have at least 3 entries")
         blank = None if len(point) < 4 or point[3] is None else bool(point[3])
-        return int(point[0]), int(point[1]), int(point[2]), blank
+        pass_index = None if len(point) < 5 or point[4] is None else int(point[4])
+        return int(point[0]), int(point[1]), int(point[2]), blank, pass_index
 
     x = getattr(point, "x", None)
     y = getattr(point, "y", None)
@@ -122,7 +123,14 @@ def _normalize_vector_point(
     if x is None or y is None or dwell is None:
         raise ValueError("vector points must provide x, y, and dwell")
     blank = getattr(point, "blank", None)
-    return int(x), int(y), int(dwell), None if blank is None else bool(blank)
+    pass_index = getattr(point, "passIndex", None)
+    return (
+        int(x),
+        int(y),
+        int(dwell),
+        None if blank is None else bool(blank),
+        None if pass_index is None else int(pass_index),
+    )
 
 
 # Exception types that indicate the USB connection is dead and we should
@@ -316,7 +324,7 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
         sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(bitmap, req.roi, x, y)
 
     for point in iter_points:
-        x, y, dwell, blank = _normalize_vector_point(point)
+        x, y, dwell, blank, _pass_index = _normalize_vector_point(point)
         samples.append(sample_value(x, y, blank))
         total_dwell += max(1, int(dwell))
         if total_dwell >= max(1, req.latency_bytes) or len(samples) >= 65536:

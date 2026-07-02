@@ -72,6 +72,31 @@ class BitmapVectorDwellTest(unittest.TestCase):
         self.assertEqual(sum(len(chunk) for chunk in chunks), 1)
         self.assertEqual(chunks[0][0], 0)
 
+    def test_custom_bitmap_pass_index_is_accepted(self):
+        bitmap = SimulationBitmap(
+            width=1,
+            height=1,
+            pixels=[255],
+        )
+        req = VectorRequest(
+            pattern=VectorPattern.custom,
+            points=[{"x": 0, "y": 0, "dwell": 1, "blank": False, "passIndex": 2}],
+            vector_resolution=2048,
+            dwell=1,
+            latency_bytes=8,
+            output_mode="SixteenBit",
+            cookie=123,
+            pre_process=True,
+            do_validate=True,
+            roi=None,
+            simulation_bitmap=bitmap,
+        )
+
+        chunks = _bitmap_vector_chunks(req)
+        self.assertIsNotNone(chunks)
+        self.assertEqual(sum(len(chunk) for chunk in chunks), 1)
+        self.assertEqual(chunks[0][0], 16320)
+
 
 if __name__ == "__main__":
     unittest.main()

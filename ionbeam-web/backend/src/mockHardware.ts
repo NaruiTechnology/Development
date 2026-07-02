@@ -32,7 +32,7 @@ interface RasterParams {
 
 interface VectorParams {
   pattern: "default" | "custom";
-  points?: Array<[number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null }>;
+  points?: Array<[number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null; passIndex?: number | null }>;
   dwell: number;
   latency_bytes: number;
   voltage?: number;
@@ -311,18 +311,20 @@ function sampleBitmapPixel(
 }
 
 function normalizeVectorPoint(
-  point: [number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null }
-): [number, number, number, boolean | null] {
+  point: [number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null; passIndex?: number | null }
+): [number, number, number, boolean | null, number | null] {
   if (Array.isArray(point)) {
-    const arr = point as [number, number, number] & { 3?: boolean | null };
+    const arr = point as [number, number, number] & { 3?: boolean | null; 4?: number | null };
     const blank = arr.length >= 4 && arr[3] !== undefined && arr[3] !== null ? Boolean(arr[3]) : null;
-    return [Number(arr[0]) | 0, Number(arr[1]) | 0, Number(arr[2]) | 0, blank];
+    const passIndex = arr.length >= 5 && arr[4] !== undefined && arr[4] !== null ? Number(arr[4]) | 0 : null;
+    return [Number(arr[0]) | 0, Number(arr[1]) | 0, Number(arr[2]) | 0, blank, passIndex];
   }
   return [
     Number(point.x) | 0,
     Number(point.y) | 0,
     Number(point.dwell) | 0,
     point.blank === null || point.blank === undefined ? null : Boolean(point.blank),
+    point.passIndex === null || point.passIndex === undefined ? null : Number(point.passIndex) | 0,
   ];
 }
 
@@ -396,7 +398,7 @@ export async function streamMockVector(
   // Default pattern: synthesise edge² 14-bit DAC points in the same
   // (x, y) order the real FPGA emits. Custom replays the client's
   // already-14-bit DAC tuples.
-  let pts: Array<[number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null }>;
+  let pts: Array<[number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null; passIndex?: number | null }>;
   if (p.pattern === "custom" && p.points && p.points.length) {
     pts = p.points;
   } else if (p.pattern === "custom" && p.simulation_bitmap) {
@@ -429,7 +431,11 @@ export async function streamMockVector(
     const slice = pts.slice(i, i + valuesPerChunk);
     const buf = Buffer.alloc(slice.length * 2);
     for (let k = 0; k < slice.length; k++) {
-      const [x, y, , blank] = normalizeVectorPoint(slice[k] as any);
+      const [x, y, , blank, passIndex] = normalizeVectorPoint(slice[k] as any);
+      if (passIndex !== null) {
+        // Explicit pass markers are preserved in the payload for debugging,
+        // but they do not affect the generated sample values.
+      }
       const sample = p.simulation_bitmap
         ? p.pattern !== "custom" || (p.points && p.points.length)
           ? blank === true

@@ -44,6 +44,8 @@ export interface VectorPoint {
   dwell: number;
   /** When true, the beam is explicitly blanked for this point. */
   blank?: boolean | null;
+  /** Explicit custom-point pass order: 1 = primary, 2 = secondary. */
+  passIndex?: number | null;
 }
 
 export interface VectorRequest {
