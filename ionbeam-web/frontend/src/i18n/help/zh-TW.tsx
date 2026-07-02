@@ -127,6 +127,30 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  scanModes: () => (
+    <>
+      <p>
+        <strong>光柵</strong>會依照列/欄順序掃描固定的矩形網格。束流沿著完整畫面或 ROI 邊界移動，
+        因此最適合規則成像、整塊 ROI 覆蓋，以及簡單且可重複的採集。
+      </p>
+
+      <p>
+        <strong>矢量</strong>掃描的是明確的點列表。束流只會走訪你送出的座標，
+        因此更適合稀疏圖樣、不規則形狀、標註式工作，以及像灰階 skip/splash 這類選擇性束流控制。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>使用光柵</strong>：當你需要一般影像、可預測的網格間距，或不想撰寫自訂點腳本但仍要掃完整個 ROI 時。</li>
+        <li><strong>使用矢量</strong>：當你需要跳過或強調某些像素、繪製非矩形圖樣，或只針對 ROI 的部分區域做更精細的束流控制時。</li>
+        <li>兩種模式在畫面上都可以顯示相同的即時影像，但送往硬體的主機命令不同。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>經驗法則：</strong>光柵重視覆蓋，矢量重視選擇性。
+      </div>
+    </>
+  ),
+
   latency: () => (
     <>
       <p>

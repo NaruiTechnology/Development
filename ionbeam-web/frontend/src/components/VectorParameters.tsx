@@ -18,6 +18,7 @@ import { VectorResolutionHelp } from "./VectorResolutionHelp";
 import { CustomPointsHelp } from "./CustomPointsHelp";
 import { PreProcessHelp } from "./PreProcessHelp";
 import { ValidationHelp } from "./ValidationHelp";
+import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { DwellHelp } from "./DwellHelp";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
@@ -82,6 +83,13 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
   return (
     <div>
       <BeamEnergyField disabled={disabled} />
+
+      <div className="field">
+        <label>
+          {t("scan.modeGuide")}
+          <ScanModeHelp />
+        </label>
+      </div>
 
       <div className="field">
         <label>

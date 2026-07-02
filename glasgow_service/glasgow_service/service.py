@@ -168,7 +168,7 @@ def _bitmap_sample(bitmap, x_norm: float, y_norm: float) -> int:
     y_norm = min(1.0, max(0.0, y_norm if math.isfinite(y_norm) else 0.0))
     x = min(bitmap.width - 1, max(0, round(x_norm * (bitmap.width - 1))))
     y = min(bitmap.height - 1, max(0, round(y_norm * (bitmap.height - 1))))
-    return min(_bitmap_pixel_value(bitmap.pixels[y * bitmap.width + x]) * 64, 0x3FFF)
+    return _bitmap_pixel_sample(bitmap.pixels[y * bitmap.width + x], None)
 
 
 def _bitmap_sample_point(bitmap, roi, x: int, y: int) -> int:
@@ -191,10 +191,58 @@ def _bitmap_pixel_value(pixel) -> int:
     return int(getattr(pixel, "value", 0))
 
 
+def _bitmap_pixel_is_highlighted(pixel) -> bool:
+    if isinstance(pixel, int) or pixel is None:
+        return False
+    return bool(getattr(pixel, "isHighlighted", False))
+
+
+def _bitmap_pixel_is_skipped(pixel):
+    if isinstance(pixel, int) or pixel is None:
+        return None
+    value = getattr(pixel, "isSkipped", None)
+    if value is None:
+        return None
+    return bool(value)
+
+
+def _infer_bitmap_mode(bitmap) -> Optional[str]:
+    for pixel in bitmap.pixels:
+        skipped = _bitmap_pixel_is_skipped(pixel)
+        if skipped is not None:
+            return "splash" if skipped is False else "skip"
+    for pixel in bitmap.pixels:
+        if _bitmap_pixel_is_highlighted(pixel):
+            return "skip"
+    return None
+
+
+def _bitmap_pixel_sample(pixel, mode: Optional[str]) -> int:
+    value = min(_bitmap_pixel_value(pixel) * 64, 0x3FFF)
+    skipped = _bitmap_pixel_is_skipped(pixel)
+    highlighted = _bitmap_pixel_is_highlighted(pixel)
+
+    if mode == "skip":
+        return 0 if skipped is True or (skipped is None and highlighted) else value
+    if mode == "splash":
+        return value if skipped is False else 0
+    return 0 if skipped is True or highlighted else value
+
+
+def _bitmap_pixel_at(bitmap, x_norm: float, y_norm: float):
+    x_norm = min(1.0, max(0.0, x_norm if math.isfinite(x_norm) else 0.0))
+    y_norm = min(1.0, max(0.0, y_norm if math.isfinite(y_norm) else 0.0))
+    x = min(bitmap.width - 1, max(0, round(x_norm * (bitmap.width - 1))))
+    y = min(bitmap.height - 1, max(0, round(y_norm * (bitmap.height - 1))))
+    return bitmap.pixels[y * bitmap.width + x]
+
+
 def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
     bitmap = getattr(req, "simulation_bitmap", None)
     if bitmap is None or not bitmap.pixels:
         return None
+
+    bitmap_mode = _infer_bitmap_mode(bitmap)
 
     pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
     total = req.resolution * req.resolution
@@ -204,11 +252,12 @@ def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
         for idx in range(start, min(start + pixels_per_chunk, total)):
             x = idx % req.resolution
             y = idx // req.resolution
-            samples.append(_bitmap_sample(
+            px = _bitmap_pixel_at(
                 bitmap,
                 0.0 if req.resolution <= 1 else x / (req.resolution - 1),
                 0.0 if req.resolution <= 1 else y / (req.resolution - 1),
-            ))
+            )
+            samples.append(_bitmap_pixel_sample(px, bitmap_mode))
         chunks.append(samples)
     return chunks
 

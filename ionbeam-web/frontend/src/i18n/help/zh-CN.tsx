@@ -131,6 +131,30 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  scanModes: () => (
+    <>
+      <p>
+        <strong>光栅</strong>按行/列顺序扫描固定的矩形网格。束流沿完整画面或 ROI 边界移动，
+        因此它最适合规则成像、整块 ROI 覆盖以及简单且可重复的采集。
+      </p>
+
+      <p>
+        <strong>矢量</strong>扫描的是显式的点列表。束流只访问你发送的坐标，
+        因此它更适合稀疏图样、不规则形状、标注式工作，以及像灰度 skip/splash 这样的选择性束流控制。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>使用光栅</strong>：当你需要常规图像、可预测的网格间距，或者不想编写自定义点脚本但仍要扫完整个 ROI 时。</li>
+        <li><strong>使用矢量</strong>：当你需要跳过或突出某些像素、绘制非矩形图样，或者只对 ROI 的一部分做更精细的束流控制时。</li>
+        <li>两种模式在屏幕上都可以显示相同的实时图像，但发送到硬件的主机命令不同。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>经验法则：</strong>光栅偏重覆盖，矢量偏重选择性。
+      </div>
+    </>
+  ),
+
   latency: () => (
     <>
       <p>

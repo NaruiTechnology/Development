@@ -44,6 +44,7 @@ import {
   persistGrayScaleStepDelta,
   setKind,
   setROIGrayScaleSelection,
+  updateROI,
   streamReset,
   type ScanKind,
 } from "./store/scanSlice";
@@ -69,6 +70,7 @@ export function App() {
   const route = useAppRoute();
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
+  const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
   const rasterCursor = useAppSelector((s) => s.image.cursor);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
@@ -238,6 +240,32 @@ export function App() {
       : null;
   const showGraySpectrum =
     kind === "roi" && hasPartialROI && Boolean(roiState.imageDataUrl || roiScanImageUrl);
+  const grayScaleSourceKind: "raster" | "vector" | "loaded" | null =
+    kind === "roi" && showGraySpectrum
+      ? roiState.imageDataUrl
+        ? "loaded"
+        : roiScanImageUrl
+        ? lastScanKind
+        : null
+      : null;
+  const grayScaleSourceLabel =
+    grayScaleSourceKind === "raster"
+      ? t("roi.grayScale.source.raster")
+      : grayScaleSourceKind === "vector"
+      ? t("roi.grayScale.source.vector")
+      : grayScaleSourceKind === "loaded"
+      ? t("roi.grayScale.source.loaded")
+      : null;
+  const grayScaleScopeNote =
+    grayScaleSourceKind === "raster"
+      ? isProduction
+        ? t("roi.grayScale.context.raster.production")
+        : t("roi.grayScale.context.raster.preview")
+      : grayScaleSourceKind === "vector"
+      ? t("roi.grayScale.context.vector")
+      : grayScaleSourceKind === "loaded"
+      ? t("roi.grayScale.context.loaded")
+      : null;
 
   useEffect(() => {
     if (!showGraySpectrum) {
@@ -273,6 +301,19 @@ export function App() {
       cancelled = true;
     };
   }, [roiScanImageUrl, roiState, showGraySpectrum]);
+
+  useEffect(() => {
+    if (kind !== "roi") return;
+    if (!roiScanImageUrl) return;
+    if (roiState.imageKind === "lastScan" && roiState.imageDataUrl === roiScanImageUrl) return;
+    dispatch(
+      updateROI({
+        imageName: t("roi.imageName.lastScan"),
+        imageDataUrl: roiScanImageUrl,
+        imageKind: "lastScan",
+      })
+    );
+  }, [dispatch, kind, roiScanImageUrl, roiState.imageDataUrl, roiState.imageKind, t]);
 
   const handleRenderedImageChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
@@ -559,6 +600,8 @@ export function App() {
                     selectedGrayScale={pendingGrayScaleSelection}
                     levels={grayScaleLevels}
                     stepDelta={grayScaleStepDelta}
+                    sourceLabel={grayScaleSourceLabel}
+                    scopeNote={grayScaleScopeNote}
                     onSelect={handleGrayScaleSelect}
                     onStepDeltaChange={handleGrayScaleStepDeltaChange}
                     onConfirm={handleGrayScaleConfirm}
@@ -574,6 +617,7 @@ export function App() {
                   variant="canvas"
                   backgroundImageUrl={roiScanImageUrl}
                   grayScaleSelection={pendingGrayScaleSelection}
+                  grayScaleSkipped={pendingGrayScaleSkipped}
                 />
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
@@ -737,6 +781,8 @@ function GrayScaleSpectrum({
   selectedGrayScale,
   levels,
   stepDelta,
+  sourceLabel,
+  scopeNote,
   onSelect,
   onStepDeltaChange,
   onConfirm,
@@ -745,6 +791,8 @@ function GrayScaleSpectrum({
   selectedGrayScale: number | null;
   levels: number[];
   stepDelta: number;
+  sourceLabel: string | null;
+  scopeNote: string | null;
   onSelect: (grayScale: number | null) => void;
   onStepDeltaChange: (stepDelta: number) => void;
   onConfirm: () => void;
@@ -755,31 +803,37 @@ function GrayScaleSpectrum({
 
   return (
     <div className="roi-spectrum" aria-label="Grayscale spectrum">
-      <div className="roi-spectrum__chain" role="list" aria-label="Gray levels">
-        {boxes.map((grayScale) => {
-          const selected = selectedGrayScale === grayScale;
-          const textTone = grayScale < 140 ? "#f8fafc" : "#101820";
-          return (
-            <button
-              key={grayScale}
-              type="button"
-              role="listitem"
-              className="roi-spectrum__box"
-              data-selected={selected ? "true" : "false"}
-              aria-pressed={selected}
-              title={`Gray level ${grayScale}`}
-              style={{
-                backgroundColor: `rgb(${grayScale}, ${grayScale}, ${grayScale})`,
-                color: textTone,
-              }}
-              onClick={() => onSelect(selected ? null : grayScale)}
-            >
-              <span className="roi-spectrum__box-value">{grayScale}</span>
-            </button>
-          );
-        })}
+      <div className="roi-spectrum__topline">
+        <div className="roi-spectrum__chain" role="list" aria-label="Gray levels">
+          {boxes.map((grayScale) => {
+            const selected = selectedGrayScale === grayScale;
+            const textTone = grayScale < 140 ? "#f8fafc" : "#101820";
+            return (
+              <button
+                key={grayScale}
+                type="button"
+                role="listitem"
+                className="roi-spectrum__box"
+                data-selected={selected ? "true" : "false"}
+                aria-pressed={selected}
+                title={`Gray level ${grayScale}`}
+                style={{
+                  backgroundColor: `rgb(${grayScale}, ${grayScale}, ${grayScale})`,
+                  color: textTone,
+                }}
+                onClick={() => onSelect(selected ? null : grayScale)}
+              >
+                <span className="roi-spectrum__box-value">{grayScale}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="roi-spectrum__meta">
+          {sourceLabel && <span className="roi-spectrum__source-pill">{sourceLabel}</span>}
+          <GrayScaleHelp />
+        </div>
       </div>
-      <GrayScaleHelp />
+      {scopeNote && <div className="roi-spectrum__context">{scopeNote}</div>}
       <div className="roi-spectrum__controls">
         <button
           type="button"

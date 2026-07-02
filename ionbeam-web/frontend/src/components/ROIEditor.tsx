@@ -32,11 +32,13 @@ export function ROIEditor({
   variant = "all",
   backgroundImageUrl = null,
   grayScaleSelection = null,
+  grayScaleSkipped = null,
 }: {
   disabled: boolean;
   variant?: "controls" | "canvas" | "all";
   backgroundImageUrl?: string | null;
   grayScaleSelection?: number | null;
+  grayScaleSkipped?: boolean | null;
 }) {
   const dispatch = useAppDispatch();
   const tr = useTranslation();
@@ -57,6 +59,19 @@ export function ROIEditor({
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
   const bitmapCleanupDisabled = !hasLoadedImage || !hasPartialRegion;
+  const roiModeLabel = roi.calibration_enabled
+    ? t("roi.canvasMode.calibration")
+    : roi.imageKind === "lastScan"
+    ? t("roi.canvasMode.scanPreview")
+    : roi.imageKind === "file"
+    ? t("roi.canvasMode.loadedPreview")
+    : t("roi.canvasMode.selection");
+  const imageSourceLabel =
+    roi.imageKind === "lastScan"
+      ? t("roi.imageSource.lastScan")
+      : roi.imageKind === "file"
+      ? t("roi.imageSource.loaded")
+      : null;
   const backgroundSource =
     backgroundImageUrl && backgroundImageUrl !== suppressedBackgroundUrl
       ? backgroundImageUrl
@@ -114,7 +129,7 @@ export function ROIEditor({
     drawBaseCanvas();
     drawHighlightMask();
     drawAnnotationLayer();
-  }, [draft, grayScaleSelection, roi, tr.locale]);
+  }, [draft, grayScaleSelection, grayScaleSkipped, roi, tr.locale]);
 
   useEffect(() => {
     if (!dragStartRef.current) {
@@ -225,6 +240,7 @@ export function ROIEditor({
     const image = ctx.getImageData(left, top, width, height);
     const data = image.data;
     const match = clampGrayScale(grayScaleSelection);
+    const splashMode = grayScaleSkipped === false;
 
     for (let i = 0; i < data.length; i += 4) {
       const alpha = data[i + 3];
@@ -236,7 +252,9 @@ export function ROIEditor({
         continue;
       }
 
-      const tinted = tintHighlighterPixel(data[i], data[i + 1], data[i + 2]);
+      const tinted = splashMode
+        ? tintBeamHitPixel(data[i], data[i + 1], data[i + 2])
+        : tintHighlighterPixel(data[i], data[i + 1], data[i + 2]);
       data[i] = tinted.r;
       data[i + 1] = tinted.g;
       data[i + 2] = tinted.b;
@@ -618,6 +636,14 @@ export function ROIEditor({
 
       {(variant === "canvas" || variant === "all") && (
         <div ref={canvasWrapRef} className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}>
+          <div className="roi-canvas-mode" aria-live="polite">
+            <span className="roi-source-pill">{roiModeLabel}</span>
+          </div>
+          {imageSourceLabel && (
+            <div className="roi-canvas-source" aria-live="polite">
+              <span className="roi-source-pill">{imageSourceLabel}</span>
+            </div>
+          )}
           <canvas
             ref={canvasRef}
             className={`roi-canvas-layer roi-canvas-layer--base${disabled ? " is-disabled" : ""}`}
@@ -746,6 +772,12 @@ export function ROIEditor({
               {tip.text}
             </div>
           )}
+          {!roi.calibration_enabled && grayScaleSelection !== null && grayScaleSkipped === false && (
+            <div className="roi-beam-legend" aria-live="polite">
+              <span className="roi-beam-legend__swatch" />
+              <span>Splash beam-on pixels</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -787,8 +819,28 @@ function tintHighlighterPixel(
   g: number,
   b: number
 ): { r: number; g: number; b: number; a: number } {
-  const opacity = 0.75;
+  const opacity = 0.78;
   const hl = { r: 255, g: 255, b: 72 };
+  return tintPixel(r, g, b, hl, opacity);
+}
+
+function tintBeamHitPixel(
+  r: number,
+  g: number,
+  b: number
+): { r: number; g: number; b: number; a: number } {
+  const opacity = 0.96;
+  const hl = { r: 255, g: 236, b: 96 };
+  return tintPixel(r, g, b, hl, opacity);
+}
+
+function tintPixel(
+  r: number,
+  g: number,
+  b: number,
+  hl: { r: number; g: number; b: number },
+  opacity: number
+): { r: number; g: number; b: number; a: number } {
   return {
     r: Math.max(0, Math.min(255, Math.round(r * (1 - opacity) + hl.r * opacity))),
     g: Math.max(0, Math.min(255, Math.round(g * (1 - opacity) + hl.g * opacity))),

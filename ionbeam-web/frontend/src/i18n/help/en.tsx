@@ -32,6 +32,7 @@ export type HelpKey =
   | "preProcess"
   | "canvasView"
   | "grayScale"
+  | "scanModes"
   | "magCalibration";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
@@ -621,6 +622,35 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         Use <strong>Select</strong> to confirm the pending mode and
         persist it into the scan store for the next scan step.
       </p>
+    </>
+  ),
+
+  scanModes: () => (
+    <>
+      <p>
+        <strong>Raster</strong> scans a fixed rectangular grid in
+        row/column order. The beam follows the full frame or ROI
+        bounds, which makes it the natural choice for regular imaging,
+        full-frame coverage, and simple repeatable acquisition.
+      </p>
+
+      <p>
+        <strong>Vector</strong> scans an explicit list of points. The
+        beam visits only the coordinates you send, so it is better for
+        sparse patterns, irregular shapes, annotation-style work, and
+        selective beam control such as gray-level skip/splash.
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>Use Raster</strong> when you want a conventional image, predictable grid spacing, or a full ROI sweep without custom point scripting.</li>
+        <li><strong>Use Vector</strong> when you need to skip or emphasize selected pixels, draw non-rectangular patterns, or target only a subset of the ROI with finer beam control.</li>
+        <li>Both modes can render the same live image on screen, but the host command they send to the hardware is different.</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>Practical rule of thumb:</strong> Raster is for
+        coverage, vector is for selectivity.
+      </div>
     </>
   ),
 

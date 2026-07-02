@@ -24,6 +24,7 @@ import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
 import { FrameBlankHelp } from "./FrameBlankHelp";
 import { ValidationHelp } from "./ValidationHelp";
+import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 
@@ -50,6 +51,13 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
   return (
     <div>
       <BeamEnergyField disabled={disabled} />
+
+      <div className="field">
+        <label>
+          {t("scan.modeGuide")}
+          <ScanModeHelp />
+        </label>
+      </div>
 
       <div className="field-row">
         <PresetNumberField
