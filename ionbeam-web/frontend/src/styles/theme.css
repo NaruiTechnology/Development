@@ -348,6 +348,11 @@ body {
   gap: 8px;
 }
 
+.card__header .icon {
+  width: 2em;
+  height: 2em;
+}
+
 .card__header-toolbar-slot {
   margin-left: auto;
   display: flex;
@@ -934,6 +939,7 @@ body {
 }
 
 .icon {
+  display: inline-block;
   width: 1em;
   height: 1em;
   flex: 0 0 auto;
@@ -949,6 +955,7 @@ body {
 .icon--success { color: var(--c-success); }
 .icon--tab { color: var(--c-tab-icon); }
 .icon--warn { color: var(--c-warn); }
+.icon--ruler { color: lawngreen; }
 
 /* ---------- management report --------------------------------------- */
 
@@ -1552,6 +1559,14 @@ body {
   background: var(--c-bg-elev-2);
 }
 
+.tabs--top {
+  background: linear-gradient(180deg, var(--c-bg-elev-2), var(--c-bg-elev));
+}
+
+.tabs--sub {
+  background: var(--c-bg-elev);
+}
+
 .tab {
   display: inline-flex;
   align-items: center;
@@ -1568,12 +1583,23 @@ body {
   cursor: pointer;
 }
 
-.tab--roi {
-  margin-right: 18px;
+.tabs--top .tab {
+  flex: 1 1 0;
 }
 
-.tab--mag {
-  margin-left: auto;
+.tabs--sub .tab {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.tab--top {
+  font-weight: 600;
+}
+
+.tab--sub {
+  text-transform: uppercase;
 }
 
 .tab[aria-selected="true"] {
@@ -1835,6 +1861,23 @@ body {
   pointer-events: none;
   color: rgba(230, 238, 249, 0.95);
   font: 12px ui-monospace, monospace;
+}
+
+.canvas-axis-overlay__grid {
+  position: absolute;
+  background: rgba(95, 184, 255, 0.14);
+}
+
+.canvas-axis-overlay__grid--x {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.canvas-axis-overlay__grid--y {
+  left: 0;
+  right: 0;
+  height: 1px;
 }
 
 .canvas-axis-overlay__axis {
@@ -2113,6 +2156,10 @@ body {
   gap: 5px;
   font-size: 11px;
   color: var(--c-text-dim);
+}
+
+.canvas-toolbox__field--check {
+  gap: 6px;
 }
 
 .canvas-toolbox__field span {

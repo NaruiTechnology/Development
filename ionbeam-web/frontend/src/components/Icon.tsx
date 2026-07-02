@@ -1,3 +1,5 @@
+import rulerIcon from "../assets/ruler.png";
+
 type IconName =
   | "check"
   | "circleTool"
@@ -22,6 +24,7 @@ type IconName =
   | "refresh"
   | "rectangleTool"
   | "route"
+  | "ruler"
   | "scan"
   | "save"
   | "square"
@@ -43,6 +46,26 @@ export function Icon({
   name: IconName;
   tone?: "accent" | "danger" | "success" | "tab" | "warn";
 }) {
+  if (name === "ruler") {
+    return (
+      <span
+        className="icon icon--ruler"
+        aria-hidden
+        style={{
+          WebkitMaskImage: `url(${rulerIcon})`,
+          WebkitMaskPosition: "center",
+          WebkitMaskRepeat: "no-repeat",
+          WebkitMaskSize: "contain",
+          backgroundColor: "currentColor",
+          maskImage: `url(${rulerIcon})`,
+          maskPosition: "center",
+          maskRepeat: "no-repeat",
+          maskSize: "contain",
+        }}
+      />
+    );
+  }
+
   const imageSource = imageSources[name];
   const className = `${tone ? `icon icon--${tone}` : "icon"} icon--${name}`;
   if (imageSource) {

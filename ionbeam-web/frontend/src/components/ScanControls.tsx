@@ -27,7 +27,6 @@ import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../store";
 import { apiUrl } from "../lib/backendUrl";
 import {
-  clearROIImage,
   runRasterValidated,
   runVectorValidated,
   setPreview,
@@ -277,16 +276,10 @@ export function ScanControls({
   useEffect(() => {
     const completedNow = phase === "completed" && prevPhaseRef.current !== "completed";
     prevPhaseRef.current = phase;
-    if (
-      completedNow &&
-      roiState.imageDataUrl &&
-      roiState.selection &&
-      !roiState.keep_loaded_bitmap_after_scan
-    ) {
+    if (completedNow && roiState.imageDataUrl && roiState.selection) {
       clearBitmapSelectionCache();
-      dispatch(clearROIImage());
     }
-  }, [dispatch, phase, roiState.imageDataUrl, roiState.keep_loaded_bitmap_after_scan, roiState.selection]);
+  }, [phase, roiState.imageDataUrl, roiState.selection]);
 
   return (
     <div className="button-row">

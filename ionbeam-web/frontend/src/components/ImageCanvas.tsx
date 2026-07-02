@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
   setVectorRenderMode,
+  updateROI,
   type ScanKind,
   type ROIState,
   type VectorRenderMode,
@@ -25,7 +26,6 @@ import type { ROIRequest } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
-import { hasConfirmedCalibration } from "../lib/roiGeometry";
 import { Icon } from "./Icon";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 
@@ -160,7 +160,18 @@ export function ImageCanvas({
     (phase === "completed" || phase === "paused") &&
     (hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl));
   const toolbarVisible = phase === "completed" || phase === "paused";
-  const showCalibratedAxes = kind !== "roi" && hasConfirmedCalibration(roi);
+  const showCalibratedAxes = kind !== "roi";
+  const gridToggle =
+    kind === "raster" || kind === "vector" ? (
+      <label className="canvas-toolbox__field canvas-toolbox__field--check">
+        <span>{t("roi.showGrid")}</span>
+        <input
+          type="checkbox"
+          checked={roi.show_grid}
+          onChange={(event) => dispatch(updateROI({ show_grid: event.target.checked }))}
+        />
+      </label>
+    ) : null;
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
 
@@ -696,7 +707,7 @@ export function ImageCanvas({
 
   return (
     <div>
-      {toolbarHost && toolbar ? createPortal(toolbar, toolbarHost) : toolbar}
+      {toolbarHost && (gridToggle || toolbar) ? createPortal(<>{gridToggle}{toolbar}</>, toolbarHost) : toolbar}
 
       {mergeConfirmOpen && createPortal(
         <div className="modal-backdrop canvas-merge-confirm__backdrop" role="presentation">
@@ -822,7 +833,7 @@ export function ImageCanvas({
               display: displayedFigureUrl ? "none" : undefined,
             }}
           />
-          {showCalibratedAxes && <LiveAxisOverlay roi={roi} t={t} />}
+          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={roi.show_grid} t={t} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
@@ -1209,9 +1220,11 @@ function formatOneDecimal(v: number) {
 
 function LiveAxisOverlay({
   roi,
+  showGrid,
   t,
 }: {
   roi: ROIState;
+  showGrid: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }) {
   const minorTicks = 20;
@@ -1231,6 +1244,24 @@ function LiveAxisOverlay({
 
   return (
     <div className="canvas-axis-overlay" aria-hidden="true">
+      {showGrid && (
+        <>
+          {ticks.filter((tick) => tick.major).map((tick) => (
+            <div
+              key={`grid-x-${tick.key}`}
+              className="canvas-axis-overlay__grid canvas-axis-overlay__grid--x"
+              style={{ left: tick.percent }}
+            />
+          ))}
+          {ticks.filter((tick) => tick.major).map((tick) => (
+            <div
+              key={`grid-y-${tick.key}`}
+              className="canvas-axis-overlay__grid canvas-axis-overlay__grid--y"
+              style={{ top: tick.percent }}
+            />
+          ))}
+        </>
+      )}
       <div className="canvas-axis-overlay__axis canvas-axis-overlay__axis--x" />
       <div className="canvas-axis-overlay__axis canvas-axis-overlay__axis--y" />
       {ticks.map((tick) => (

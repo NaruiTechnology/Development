@@ -59,7 +59,6 @@ export function ROIEditor({
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
-  const bitmapCleanupDisabled = !hasLoadedImage || !hasPartialRegion;
   const roiModeLabel = roi.calibration_enabled
     ? t("roi.canvasMode.calibration")
     : roi.imageKind === "lastScan"
@@ -279,7 +278,7 @@ export function ROIEditor({
       ctx.fillStyle = "rgba(230, 238, 249, 0.92)";
       ctx.lineWidth = 1;
       ctx.font = ROI_AXIS_FONT;
-      drawScale(ctx, roi, unitLabel(roi.scale_unit), tr);
+      drawScale(ctx, roi, unitLabel(roi.scale_unit));
       ctx.restore();
     }
 
@@ -298,8 +297,6 @@ export function ROIEditor({
     ctx.fillStyle = "#ff2d2d";
     ctx.lineWidth = 0.8;
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
-    drawLabel(ctx, x0 + 4, y0 + 14, `S(${selected.x_start}, ${selected.y_start})`);
-    drawLabel(ctx, x1 + 4, y1 - 6, `E(${selected.x_end}, ${selected.y_end})`);
     ctx.restore();
   }
 
@@ -314,18 +311,6 @@ export function ROIEditor({
     ctx.strokeStyle = "lawngreen";
     ctx.lineWidth = 0.2;
     ctx.strokeRect(bounds.left, bounds.top, bounds.width, bounds.height);
-    drawLabel(
-      ctx,
-      bounds.left + 8,
-      Math.max(18, bounds.top - 10),
-      `X ${formatOneDecimal(nextROI.calibration_x_origin)} → ${formatOneDecimal(nextROI.calibration_x_end)} ${unitLabel(nextROI.scale_unit)}`
-    );
-    drawLabel(
-      ctx,
-      bounds.left + 8,
-      Math.min(ROI_CANVAS_EDGE - 8, bounds.bottom + 18),
-      `Y ${formatOneDecimal(nextROI.calibration_y_origin)} → ${formatOneDecimal(nextROI.calibration_y_end)} ${unitLabel(nextROI.scale_unit)}`
-    );
     ctx.restore();
   }
 
@@ -379,23 +364,6 @@ export function ROIEditor({
           roi.calibration_viewport_y_start + ROI_VIEWPORT_MIN_SPAN,
           ROI_CANVAS_EDGE
         ),
-      })
-    );
-  }
-
-  function beginCalibration() {
-    dispatch(
-      updateROI({
-        calibration_enabled: true,
-        calibration_confirmed: false,
-        calibration_x_origin: roi.x_origin,
-        calibration_x_end: roi.x_end,
-        calibration_y_origin: roi.y_origin,
-        calibration_y_end: roi.y_end,
-        calibration_viewport_x_start: roi.viewport_x_start,
-        calibration_viewport_x_end: roi.viewport_x_end,
-        calibration_viewport_y_start: roi.viewport_y_start,
-        calibration_viewport_y_end: roi.viewport_y_end,
       })
     );
   }
@@ -457,34 +425,11 @@ export function ROIEditor({
           <label className="checkbox">
             <input
               type="checkbox"
-              checked={roi.calibration_enabled}
-              disabled={disabled}
-              onChange={(event) => {
-                if (event.target.checked) beginCalibration();
-                else dispatch(updateROI({ calibration_enabled: false }));
-              }}
-            />
-            {t("roi.calibrate")}
-          </label>
-
-          <label className="checkbox">
-            <input
-              type="checkbox"
               checked={roi.show_grid}
               disabled={disabled}
               onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
             />
             {t("roi.showGrid")}
-          </label>
-
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={roi.keep_loaded_bitmap_after_scan}
-              disabled={disabled || bitmapCleanupDisabled}
-              onChange={(e) => dispatch(updateROI({ keep_loaded_bitmap_after_scan: e.target.checked }))}
-            />
-            {t("roi.keepBitmap")}
           </label>
 
           <div className="field">
@@ -700,6 +645,7 @@ export function ROIEditor({
             height={ROI_CANVAS_EDGE}
             aria-hidden="true"
           />
+          {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} />}
           {roi.calibration_enabled && (
             <>
               <div className="roi-calibration-ruler roi-calibration-ruler--top">
@@ -957,24 +903,10 @@ function unitLabel(value: string) {
   return UNITS.find((u) => u.value === value)?.label ?? value;
 }
 
-function drawLabel(ctx: CanvasRenderingContext2D, x: number, y: number, text: string) {
-  ctx.save();
-  ctx.font = ROI_AXIS_FONT;
-  const w = ctx.measureText(text).width + 8;
-  const bx = Math.min(Math.max(0, x), ROI_CANVAS_EDGE - w);
-  const by = Math.min(Math.max(14, y), ROI_CANVAS_EDGE - 2);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.52)";
-  ctx.fillRect(bx - 2, by - 12, w, 16);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(text, bx + 2, by);
-  ctx.restore();
-}
-
 function drawScale(
   ctx: CanvasRenderingContext2D,
   roi: ROIState,
   unit: string,
-  tr: TranslationApi,
 ) {
   const bounds = viewportBounds(roi);
   const major = 4;
@@ -983,7 +915,6 @@ function drawScale(
 
   ctx.save();
   ctx.strokeStyle = "rgba(95, 184, 255, 0.9)";
-  ctx.fillStyle = "rgba(230, 238, 249, 0.95)";
   ctx.lineWidth = 1;
   ctx.font = ROI_AXIS_FONT;
 
@@ -1009,42 +940,62 @@ function drawScale(
 
     if (roi.show_grid && isMajor) {
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(x, bounds.top);
-      ctx.lineTo(x, bounds.bottom);
-      ctx.moveTo(bounds.left, y);
-      ctx.lineTo(bounds.right, y);
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
-      ctx.lineWidth = 0.3;
-      ctx.stroke();
-      ctx.strokeStyle = "rgba(95, 184, 255, 0.95)";
-      ctx.lineWidth = 0.3;
-      ctx.stroke();
+      ctx.fillStyle = "rgba(95, 184, 255, 0.14)";
+      ctx.fillRect(x - 0.5, bounds.top, 1, bounds.height);
+      ctx.fillRect(bounds.left, y - 0.5, bounds.width, 1);
       ctx.restore();
     }
-
-    if (isMajor) {
-      const xLabel = `${roundScale(roi.x_origin + (roi.x_end - roi.x_origin) * t)}`;
-      const yLabel = `${roundScale(roi.y_origin + (roi.y_end - roi.y_origin) * t)}`;
-      ctx.fillText(xLabel, Math.min(x + 3, bounds.right - 46), bounds.top + 24);
-      ctx.fillText(yLabel, bounds.left + 14, Math.max(bounds.top + 12, y - 3));
-    }
   }
-
-  drawLabel(
-    ctx,
-    Math.max(bounds.left + 12, bounds.right - 240),
-    bounds.top + 42,
-    tr.t("roi.canvas.start", { point: formatROIStart(roi), unit }),
-  );
-  drawLabel(
-    ctx,
-    bounds.left + 14,
-    bounds.bottom - 8,
-    tr.t("roi.canvas.end", { point: formatROIEnd(roi), unit }),
-  );
   ctx.restore();
+}
+
+function ROIAxisOverlay({ roi }: { roi: ROIState }) {
+  const { t } = useTranslation();
+  const ticks = Array.from({ length: 21 }, (_, i) => {
+    const ratio = i / 20;
+    return {
+      key: i,
+      ratio,
+      major: i % 5 === 0,
+      xLabel: formatOneDecimal(roi.x_origin + (roi.x_end - roi.x_origin) * ratio),
+      yLabel: formatOneDecimal(roi.y_origin + (roi.y_end - roi.y_origin) * ratio),
+    };
+  });
+
+  return (
+    <div className="canvas-axis-overlay" aria-hidden="true">
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`x-${tick.key}`}
+          className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
+          style={{ left: `${tick.ratio * 100}%` }}
+        >
+          {tick.xLabel}
+        </span>
+      ))}
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`y-${tick.key}`}
+          className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
+          style={{ top: `${tick.ratio * 100}%` }}
+        >
+          {tick.yLabel}
+        </span>
+      ))}
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--start">
+        {t("roi.canvas.start", {
+          point: `(${formatOneDecimal(roi.x_origin)}, ${formatOneDecimal(roi.y_origin)})`,
+          unit: unitLabel(roi.scale_unit),
+        })}
+      </span>
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end">
+        {t("roi.canvas.end", {
+          point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
+          unit: unitLabel(roi.scale_unit),
+        })}
+      </span>
+    </div>
+  );
 }
 
 function selectionStart(roi: ROIState) {
@@ -1055,14 +1006,6 @@ function selectionStart(roi: ROIState) {
 function selectionEnd(roi: ROIState) {
   const r = roi.selection;
   return r ? { x: r.x_end, y: r.y_end } : { x: roi.x_end, y: roi.y_end };
-}
-
-function formatROIStart(roi: ROIState) {
-  return formatPointText(selectionStart(roi));
-}
-
-function formatROIEnd(roi: ROIState) {
-  return formatPointText(selectionEnd(roi));
 }
 
 function formatPointText(p: { x: number; y: number }) {

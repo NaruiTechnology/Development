@@ -46,6 +46,7 @@ import {
 } from "./lib/grayScaleSelection";
 
 import {
+  beginROICalibration,
   persistGrayScaleStepDelta,
   setKind,
   setROIGrayScaleSelection,
@@ -67,6 +68,9 @@ const MIN_RIGHT_PANEL_WIDTH = 380;
 const SPLITTER_SPACE = 32;
 const LAST_ADMIN_LOGIN_STORAGE_KEY = "ionbeam:lastAdminLogin";
 type AppRoute = "control" | "report";
+type LeftTopTab = "scan" | "calibrate";
+type ScanSubTab = "roi" | "raster" | "vector";
+type CalibrateSubTab = "dimension" | "mag";
 
 export function App() {
   const dispatch = useAppDispatch();
@@ -124,6 +128,15 @@ export function App() {
   const showROICalibrationInControls = kind === "roi" && roiState.calibration_enabled;
   const showROIPreviewSideCard = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
   const isSignedIn = Boolean(signedInUser);
+  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>(
+    kind === "mag" || roiState.calibration_enabled ? "calibrate" : "scan"
+  );
+  const [scanSubTab, setScanSubTab] = useState<ScanSubTab>(
+    kind === "raster" ? "raster" : kind === "vector" ? "vector" : "roi"
+  );
+  const [calibrateSubTab, setCalibrateSubTab] = useState<CalibrateSubTab>(
+    kind === "mag" ? "mag" : "dimension"
+  );
 
   useEffect(() => {
     dispatch(fetchDefaults());
@@ -408,6 +421,41 @@ export function App() {
     dispatch(setKind(nextKind));
   }
 
+  function activateScanSubTab(nextTab: ScanSubTab) {
+    setActiveTopTab("scan");
+    setScanSubTab(nextTab);
+    dispatch(updateROI({ calibration_enabled: false }));
+    if (nextTab === "roi") {
+      selectKind("roi");
+      return;
+    }
+    selectKind(nextTab);
+  }
+
+  function activateCalibrateSubTab(nextTab: CalibrateSubTab) {
+    setActiveTopTab("calibrate");
+    setCalibrateSubTab(nextTab);
+    if (nextTab === "dimension") {
+      if (kind !== "roi") {
+        selectKind("roi");
+      }
+      dispatch(beginROICalibration());
+      return;
+    }
+    dispatch(updateROI({ calibration_enabled: false }));
+    selectKind("mag");
+  }
+
+  function activateScanTopTab() {
+    setActiveTopTab("scan");
+    activateScanSubTab(scanSubTab);
+  }
+
+  function activateCalibrateTopTab() {
+    setActiveTopTab("calibrate");
+    activateCalibrateSubTab(calibrateSubTab);
+  }
+
   function navigateTo(nextRoute: AppRoute) {
     const nextPath = `/${nextRoute}`;
     if (window.location.pathname === nextPath) return;
@@ -485,61 +533,106 @@ export function App() {
         {/* left column */}
         <section>
           <div className="card">
-            <div className="tabs" role="tablist" aria-label={t("tabs.aria")}>
+            <div className="tabs tabs--top" role="tablist" aria-label={t("tabs.top.aria")}>
               <button
                 role="tab"
-                className="tab tab--roi"
-                aria-selected={kind === "roi"}
+                className="tab tab--top"
+                aria-selected={activeTopTab === "scan"}
                 disabled={panelDisabled}
-                onClick={() => selectKind("roi")}
-                title={panelDisabled ? t("tabs.roi.title.disabled") : t("tabs.roi.title")}
+                onClick={activateScanTopTab}
               >
-                <Icon name="target" tone="tab" />
-                {t("tabs.roi")}
+                <Icon name="scan" tone="tab" />
+                {t("tabs.scan")}
               </button>
               <button
                 role="tab"
-                className="tab"
-                aria-selected={kind === "raster"}
+                className="tab tab--top"
+                aria-selected={activeTopTab === "calibrate"}
                 disabled={panelDisabled}
-                onClick={() => selectKind("raster")}
+                onClick={activateCalibrateTopTab}
               >
-                <Icon name="grid" tone="tab" />
-                {t("tabs.raster")}
-              </button>
-              <button
-                role="tab"
-                className="tab"
-                aria-selected={kind === "vector"}
-                disabled={panelDisabled}
-                onClick={() => selectKind("vector")}
-              >
-                <Icon name="route" tone="tab" />
-                {t("tabs.vector")}
-              </button>
-              <button
-                role="tab"
-                className="tab tab--mag"
-                aria-selected={kind === "mag"}
-                disabled={panelDisabled}
-                onClick={() => selectKind("mag")}
-              >
-                <Icon name="tools" tone="tab" />
-                {t("tabs.mag")}
+                <Icon name="ruler" tone="tab" />
+                {t("tabs.calibrate")}
               </button>
             </div>
+            {activeTopTab === "scan" ? (
+              <div className="tabs tabs--sub" role="tablist" aria-label={t("tabs.scan.aria")}>
+                <button
+                  role="tab"
+                  className="tab tab--sub"
+                  aria-selected={scanSubTab === "roi"}
+                  disabled={panelDisabled}
+                  onClick={() => activateScanSubTab("roi")}
+                >
+                  <Icon name="target" tone="tab" />
+                  {t("tabs.roi")}
+                </button>
+                <button
+                  role="tab"
+                  className="tab tab--sub"
+                  aria-selected={scanSubTab === "raster"}
+                  disabled={panelDisabled}
+                  onClick={() => activateScanSubTab("raster")}
+                >
+                  <Icon name="grid" tone="tab" />
+                  {t("tabs.raster")}
+                </button>
+                <button
+                  role="tab"
+                  className="tab tab--sub"
+                  aria-selected={scanSubTab === "vector"}
+                  disabled={panelDisabled}
+                  onClick={() => activateScanSubTab("vector")}
+                >
+                  <Icon name="route" tone="tab" />
+                  {t("tabs.vector")}
+                </button>
+              </div>
+            ) : (
+              <div className="tabs tabs--sub" role="tablist" aria-label={t("tabs.calibrate.aria")}>
+                <button
+                  role="tab"
+                  className="tab tab--sub"
+                  aria-selected={calibrateSubTab === "dimension"}
+                  disabled={panelDisabled}
+                  onClick={() => activateCalibrateSubTab("dimension")}
+                >
+                  <Icon name="ruler" tone="tab" />
+                  {t("tabs.dimensionCal")}
+                </button>
+                <button
+                  role="tab"
+                  className="tab tab--sub"
+                  aria-selected={calibrateSubTab === "mag"}
+                  disabled={panelDisabled}
+                  onClick={() => activateCalibrateSubTab("mag")}
+                >
+                  <Icon name="tools" tone="tab" />
+                  {t("tabs.mag")}
+                </button>
+              </div>
+            )}
             <div className="card__body">
-              {kind === "raster" ? (
-                <RasterParameters disabled={panelDisabled} />
-              ) : kind === "vector" ? (
-                <VectorParameters disabled={panelDisabled} />
-              ) : kind === "mag" ? (
-                <MagCalibrationControls disabled={panelDisabled} />
+              {activeTopTab === "scan" ? (
+                scanSubTab === "raster" ? (
+                  <RasterParameters disabled={panelDisabled} />
+                ) : scanSubTab === "vector" ? (
+                  <VectorParameters disabled={panelDisabled} />
+                ) : (
+                  <>
+                    <ROIEditor disabled={panelDisabled} variant="controls" />
+                    {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
+                  </>
+                )
               ) : (
-                <>
-                  <ROIEditor disabled={panelDisabled} variant="controls" />
-                  {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
-                </>
+                calibrateSubTab === "mag" ? (
+                  <MagCalibrationControls disabled={panelDisabled} />
+                ) : (
+                  <>
+                    <ROIEditor disabled={panelDisabled} variant="controls" />
+                    {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
+                  </>
+                )
               )}
             </div>
           </div>

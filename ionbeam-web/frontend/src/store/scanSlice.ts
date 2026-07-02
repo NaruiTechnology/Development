@@ -91,7 +91,6 @@ export interface ROIState {
   imageName: string;
   imageDataUrl: string | null;
   imageKind: "none" | "file" | "lastScan";
-  keep_loaded_bitmap_after_scan: boolean;
 }
 
 const defaultRaster: RasterRequest = {
@@ -154,7 +153,6 @@ const initialState: ScanState = {
     imageName: "No image selected",
     imageDataUrl: null,
     imageKind: "none",
-    keep_loaded_bitmap_after_scan: true,
   },
   beamEnergyEv: 1000.0,
   roiGrayScaleSelection: null,
@@ -310,14 +308,6 @@ function normalizeROIPatch(
     ...(Object.prototype.hasOwnProperty.call(patch, "show_grid")
       ? { show_grid: booleanDefault(patch.show_grid, current.show_grid) }
       : {}),
-    ...(Object.prototype.hasOwnProperty.call(patch, "keep_loaded_bitmap_after_scan")
-      ? {
-          keep_loaded_bitmap_after_scan: booleanDefault(
-            patch.keep_loaded_bitmap_after_scan,
-            current.keep_loaded_bitmap_after_scan
-          ),
-        }
-      : {}),
   };
 }
 
@@ -440,6 +430,18 @@ const slice = createSlice({
         s.raster.roi = a.payload.selection ?? null;
         s.vector.roi = a.payload.selection ?? null;
       }
+    },
+    beginROICalibration(s) {
+      s.roi.calibration_enabled = true;
+      s.roi.calibration_confirmed = false;
+      s.roi.calibration_x_origin = s.roi.x_origin;
+      s.roi.calibration_x_end = s.roi.x_end;
+      s.roi.calibration_y_origin = s.roi.y_origin;
+      s.roi.calibration_y_end = s.roi.y_end;
+      s.roi.calibration_viewport_x_start = s.roi.viewport_x_start;
+      s.roi.calibration_viewport_x_end = s.roi.viewport_x_end;
+      s.roi.calibration_viewport_y_start = s.roi.viewport_y_start;
+      s.roi.calibration_viewport_y_end = s.roi.viewport_y_end;
     },
     setROIGrayScaleSelection(
       s,
@@ -623,6 +625,7 @@ export const {
   setPreview,
   updateBeamEnergyEv,
   updateROI,
+  beginROICalibration,
   confirmROICalibration,
   clearROIImage,
   clearROISelection,
