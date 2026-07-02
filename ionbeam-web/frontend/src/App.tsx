@@ -253,8 +253,6 @@ export function App() {
       ? t("roi.grayScale.source.raster")
       : grayScaleSourceKind === "vector"
       ? t("roi.grayScale.source.vector")
-      : grayScaleSourceKind === "loaded"
-      ? t("roi.grayScale.source.loaded")
       : null;
   const grayScaleScopeNote =
     grayScaleSourceKind === "raster"
@@ -263,8 +261,6 @@ export function App() {
         : t("roi.grayScale.context.raster.preview")
       : grayScaleSourceKind === "vector"
       ? t("roi.grayScale.context.vector")
-      : grayScaleSourceKind === "loaded"
-      ? t("roi.grayScale.context.loaded")
       : null;
 
   useEffect(() => {
@@ -833,7 +829,7 @@ function GrayScaleSpectrum({
           <GrayScaleHelp />
         </div>
       </div>
-      {scopeNote && <div className="roi-spectrum__context">{scopeNote}</div>}
+      {scopeNote && <span className="roi-spectrum__context">{scopeNote}</span>}
       <div className="roi-spectrum__controls">
         <button
           type="button"

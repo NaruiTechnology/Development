@@ -354,6 +354,9 @@ body {
   align-items: center;
   min-width: 0;
   flex: 0 1 auto;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .card__header-toolbar-slot:empty {
@@ -361,12 +364,14 @@ body {
 }
 
 .roi-spectrum {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
   min-width: 0;
+  width: max-content;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .roi-spectrum__topline {
@@ -374,6 +379,7 @@ body {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 .roi-spectrum__chain {
@@ -394,8 +400,8 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  margin-left: auto;
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 .roi-spectrum__source-pill {
@@ -414,11 +420,12 @@ body {
 }
 
 .roi-spectrum__context {
-  margin-left: auto;
   max-width: 100%;
   color: var(--c-text-muted);
   font-size: 11px;
   line-height: 1.25;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .roi-source-pill {
@@ -472,6 +479,7 @@ body {
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .roi-spectrum__step-input {
