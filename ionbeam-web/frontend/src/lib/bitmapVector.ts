@@ -3,9 +3,16 @@ import type {
   ROIRequest,
   SimulationBitmap,
   SimulationBitmapPixel,
+  VectorPoint,
   VectorRequest,
 } from "../types/api";
 import type { ROIState } from "../store/scanSlice";
+import {
+  clampGrayScale,
+  grayScaleSelectionContains,
+  normalizeGrayScaleSelection,
+  type GrayScaleSelection,
+} from "./grayScaleSelection";
 import { ROI_CANVAS_EDGE, viewportBounds } from "./roiGeometry";
 
 const MAX_POINTS = 250_000;
@@ -116,7 +123,7 @@ export async function rasterRequestWithBitmapSelection(
   options: {
     isProduction?: boolean;
     allowBitmapSimulation?: boolean;
-    grayScaleSelection?: number | null;
+    grayScaleSelection?: GrayScaleSelection;
     grayScaleSkipped?: boolean | null;
   } = {}
 ): Promise<RasterRequest> {
@@ -168,7 +175,7 @@ export async function rasterRequestWithBitmapSelection(
       ? null
       : decorateSimulationBitmap(
           converted.simulationBitmap,
-          options.grayScaleSelection,
+          options.grayScaleSelection ?? null,
           options.grayScaleSkipped,
         ),
   };
@@ -180,7 +187,7 @@ export async function vectorRequestWithBitmapSelection(
   options: {
     isProduction?: boolean;
     allowBitmapSimulation?: boolean;
-    grayScaleSelection?: number | null;
+    grayScaleSelection?: GrayScaleSelection;
     grayScaleSkipped?: boolean | null;
   } = {}
 ): Promise<VectorRequest> {
@@ -212,14 +219,14 @@ export async function vectorRequestWithBitmapSelection(
 
   const decoratedBitmap = decorateSimulationBitmap(
     converted.simulationBitmap,
-    options.grayScaleSelection,
+    options.grayScaleSelection ?? null,
     options.grayScaleSkipped,
   );
 
   // Production vector scans can honor the gray-level selection by
-  // sending only the pixels matching the selected mode as an explicit
-  // point list. That keeps the beam behavior aligned with the ROI
-  // highlight mask and the selected skip/splash mode.
+  // sending the cropped bitmap as an explicit point list with a per-
+  // point blank flag. That lets the FPGA blank or unblank the beam at
+  // each vector point instead of the host just omitting pixels.
   if (
     options.isProduction &&
     options.grayScaleSelection !== null &&
@@ -357,12 +364,10 @@ async function bitmapSelectionToVector(
 
 function decorateSimulationBitmap(
   bitmap: SimulationBitmap,
-  selection: number | null | undefined,
+  selection: GrayScaleSelection,
   skipped: boolean | null | undefined,
 ): SimulationBitmap {
-  const normalizedSelection = selection === null || selection === undefined
-    ? null
-    : clampGrayScale(selection);
+  const normalizedSelection = normalizeGrayScaleSelection(selection);
   const normalizedSkipped = skipped === null || skipped === undefined
     ? null
     : Boolean(skipped);
@@ -382,7 +387,7 @@ function decorateSimulationBitmap(
     ...bitmap,
     pixels: bitmap.pixels.map((pixel) => {
       const value = pixelValue(pixel);
-      const highlighted = value === normalizedSelection;
+      const highlighted = grayScaleSelectionContains(normalizedSelection, value);
       return {
         value,
         isHighlighted: highlighted,
@@ -397,7 +402,7 @@ function bitmapToCustomPoints(
   roi: ROIRequest,
   dwell: number,
   skipped: boolean | null | undefined,
-): Array<[number, number, number]> {
+): VectorPoint[] {
   if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
     return [];
   }
@@ -413,23 +418,25 @@ function bitmapToCustomPoints(
   const normalizedSkipped = skipped === null || skipped === undefined
     ? null
     : Boolean(skipped);
-  const pts: Array<[number, number, number]> = [];
+  const pts: VectorPoint[] = [];
 
   for (let y = 0; y < bitmap.height; y++) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
     for (let x = 0; x < bitmap.width; x++) {
       const pixel = bitmap.pixels[y * bitmap.width + x];
       const highlighted = Boolean(pixel?.isHighlighted);
-      const pixelSkipped = pixel?.isSkipped === null || pixel?.isSkipped === undefined
-        ? null
-        : Boolean(pixel.isSkipped);
-      if (normalizedSkipped === true) {
-        if (highlighted && pixelSkipped !== false) continue;
-      } else if (normalizedSkipped === false) {
-        if (!highlighted || pixelSkipped === true) continue;
-      }
       const sampleX = x0 + Math.round((x / xDiv) * xSpan);
-      pts.push([sampleX, sampleY, dwell]);
+      const blank = normalizedSkipped === true
+        ? highlighted
+        : normalizedSkipped === false
+        ? !highlighted
+        : false;
+      pts.push({
+        x: sampleX,
+        y: sampleY,
+        dwell,
+        blank,
+      });
     }
   }
 
@@ -553,10 +560,4 @@ function emptyConversion(): {
 
 function pixelValue(pixel: number | SimulationBitmapPixel): number {
   return typeof pixel === "number" ? pixel : pixel.value;
-}
-
-function clampGrayScale(value: number): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(255, Math.round(n)));
 }

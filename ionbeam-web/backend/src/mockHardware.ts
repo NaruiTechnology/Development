@@ -32,7 +32,7 @@ interface RasterParams {
 
 interface VectorParams {
   pattern: "default" | "custom";
-  points?: Array<[number, number, number]>;
+  points?: Array<[number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null }>;
   dwell: number;
   latency_bytes: number;
   voltage?: number;
@@ -233,7 +233,7 @@ function sampleSimulationBitmap(
   bitmap: SimulationBitmapPayload,
   xNorm: number,
   yNorm: number,
-  mode: "skip" | "splash" | null
+  mode: "skip" | "spot" | null
 ): number {
   const x = Math.max(0, Math.min(bitmap.width - 1, Math.round(xNorm * (bitmap.width - 1))));
   const y = Math.max(0, Math.min(bitmap.height - 1, Math.round(yNorm * (bitmap.height - 1))));
@@ -246,7 +246,7 @@ function sampleSimulationBitmapPoint(
   roi: VectorParams["roi"],
   x: number,
   y: number,
-  mode: "skip" | "splash" | null
+  mode: "skip" | "spot" | null
 ): number {
   if (!roi) return sampleSimulationBitmap(bitmap, x / ADC_MAX, y / ADC_MAX, mode);
   const x0 = Math.min(roi.x_start, roi.x_end);
@@ -278,24 +278,24 @@ function isSkippedPixel(pixel: number | SimulationBitmapPixel | undefined): bool
   return Boolean(pixel.isSkipped);
 }
 
-function inferBitmapMode(bitmap: SimulationBitmapPayload): "skip" | "splash" | null {
+function inferBitmapMode(bitmap: SimulationBitmapPayload): "skip" | "spot" | null {
   let sawSkip = false;
-  let sawSplash = false;
+  let sawSpot = false;
   let sawLegacyHighlight = false;
   for (const pixel of bitmap.pixels) {
     if (typeof pixel === "number" || !pixel) continue;
     if (pixel.isSkipped === true) sawSkip = true;
-    else if (pixel.isSkipped === false) sawSplash = true;
+    else if (pixel.isSkipped === false) sawSpot = true;
     if (pixel.isHighlighted) sawLegacyHighlight = true;
   }
-  if (sawSplash) return "splash";
+  if (sawSpot) return "spot";
   if (sawSkip || sawLegacyHighlight) return "skip";
   return null;
 }
 
 function sampleBitmapPixel(
   pixel: number | SimulationBitmapPixel | undefined,
-  mode: "skip" | "splash" | null
+  mode: "skip" | "spot" | null
 ): number {
   const value = Math.min(Math.max(0, pixelValue(pixel) & 0xff) * 64, ADC_MAX);
   const skipped = isSkippedPixel(pixel);
@@ -304,10 +304,26 @@ function sampleBitmapPixel(
   if (mode === "skip") {
     return skipped === true || (skipped === null && legacyHighlight) ? 0 : value;
   }
-  if (mode === "splash") {
+  if (mode === "spot") {
     return skipped === false ? value : 0;
   }
   return skipped === true || legacyHighlight ? 0 : value;
+}
+
+function normalizeVectorPoint(
+  point: [number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null }
+): [number, number, number, boolean | null] {
+  if (Array.isArray(point)) {
+    const arr = point as [number, number, number] & { 3?: boolean | null };
+    const blank = arr.length >= 4 && arr[3] !== undefined && arr[3] !== null ? Boolean(arr[3]) : null;
+    return [Number(arr[0]) | 0, Number(arr[1]) | 0, Number(arr[2]) | 0, blank];
+  }
+  return [
+    Number(point.x) | 0,
+    Number(point.y) | 0,
+    Number(point.dwell) | 0,
+    point.blank === null || point.blank === undefined ? null : Boolean(point.blank),
+  ];
 }
 
 function writeSampleBE(buf: Buffer, sampleIndex: number, value: number): void {
@@ -380,7 +396,7 @@ export async function streamMockVector(
   // Default pattern: synthesise edge² 14-bit DAC points in the same
   // (x, y) order the real FPGA emits. Custom replays the client's
   // already-14-bit DAC tuples.
-  let pts: Array<[number, number, number]>;
+  let pts: Array<[number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null }>;
   if (p.pattern === "custom" && p.points && p.points.length) {
     pts = p.points;
   } else if (p.pattern === "custom" && p.simulation_bitmap) {
@@ -413,10 +429,12 @@ export async function streamMockVector(
     const slice = pts.slice(i, i + valuesPerChunk);
     const buf = Buffer.alloc(slice.length * 2);
     for (let k = 0; k < slice.length; k++) {
-      const [x, y] = slice[k];
+      const [x, y, , blank] = normalizeVectorPoint(slice[k] as any);
       const sample = p.simulation_bitmap
         ? p.pattern !== "custom" || (p.points && p.points.length)
-          ? sampleSimulationBitmapPoint(p.simulation_bitmap, p.roi, x, y, bitmapMode)
+          ? blank === true
+            ? 0
+            : sampleSimulationBitmapPoint(p.simulation_bitmap, p.roi, x, y, bitmapMode)
           : sampleSimulationBitmap(
               p.simulation_bitmap,
               p.simulation_bitmap.width <= 1 ? 0 : x / (p.simulation_bitmap.width - 1),

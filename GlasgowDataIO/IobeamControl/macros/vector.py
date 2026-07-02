@@ -79,6 +79,22 @@ def default_iter(resolution=2048):
             yield x, y, 1
 
 
+def _normalize_point(point):
+    if isinstance(point, tuple) or isinstance(point, list):
+        if len(point) < 3:
+            raise ValueError("vector point tuples must have at least 3 entries")
+        blank = None if len(point) < 4 or point[3] is None else bool(point[3])
+        return int(point[0]), int(point[1]), int(point[2]), blank
+
+    x = getattr(point, "x", None)
+    y = getattr(point, "y", None)
+    dwell = getattr(point, "dwell", None)
+    if x is None or y is None or dwell is None:
+        raise ValueError("vector points must provide x, y, and dwell")
+    blank = getattr(point, "blank", None)
+    return int(x), int(y), int(dwell), None if blank is None else bool(blank)
+
+
 class VectorScanCommand(BaseCommand):
     def __init__(
         self,
@@ -168,6 +184,8 @@ class VectorScanCommand(BaseCommand):
                 yield commands, pixel_count
         else:
             commands = bytearray()
+            current_blank = None
+            saw_explicit_blank = False
 
             def get_command(pixel_count):
                 cmd = ArrayCommand(cmdtype=CmdType.VectorPixel,
@@ -176,7 +194,13 @@ class VectorScanCommand(BaseCommand):
 
             pixel_count = 0
             total_dwell = 0
-            for (x, y, dwell) in self._iter_points:
+            for point in self._iter_points:
+                x, y, dwell, blank = _normalize_point(point)
+                if blank is not None:
+                    saw_explicit_blank = True
+                    if current_blank is None or current_blank != blank:
+                        commands.extend(bytes(BlankCommand(enable=blank, inline=True)))
+                        current_blank = blank
                 pixel_count += 1
                 total_dwell += dwell
                 commands.extend(struct.pack(">HHH", x, y, dwell))
@@ -194,6 +218,8 @@ class VectorScanCommand(BaseCommand):
                     total_dwell = 0
 
             if pixel_count > 0:
+                if saw_explicit_blank and current_blank is False:
+                    commands.extend(bytes(BlankCommand(enable=True)))
                 cmd = get_command(pixel_count)
                 yield (memoryview(cmd + commands), pixel_count)
 

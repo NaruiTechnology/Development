@@ -4,6 +4,7 @@ import { clearROIImage, clearROISelection, updateROI, type ROIState } from "../s
 import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache, worldSelectionToDacROI } from "../lib/bitmapVector";
+import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import {
   ROI_CANVAS_EDGE,
   ROI_VIEWPORT_MIN_SPAN,
@@ -37,7 +38,7 @@ export function ROIEditor({
   disabled: boolean;
   variant?: "controls" | "canvas" | "all";
   backgroundImageUrl?: string | null;
-  grayScaleSelection?: number | null;
+  grayScaleSelection?: GrayScaleSelection;
   grayScaleSkipped?: boolean | null;
 }) {
   const dispatch = useAppDispatch();
@@ -239,20 +240,19 @@ export function ROIEditor({
     ctx.drawImage(img, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
     const image = ctx.getImageData(left, top, width, height);
     const data = image.data;
-    const match = clampGrayScale(grayScaleSelection);
-    const splashMode = grayScaleSkipped === false;
+    const spotMode = grayScaleSkipped === false;
 
     for (let i = 0; i < data.length; i += 4) {
       const alpha = data[i + 3];
       if (alpha === 0) continue;
       const value = data[i];
-      const selected = value === match;
+      const selected = grayScaleSelectionContains(grayScaleSelection, value);
       if (!selected) {
         data[i + 3] = 0;
         continue;
       }
 
-      const tinted = splashMode
+      const tinted = spotMode
         ? tintBeamHitPixel(data[i], data[i + 1], data[i + 2])
         : tintHighlighterPixel(data[i], data[i + 1], data[i + 2]);
       data[i] = tinted.r;
@@ -775,7 +775,7 @@ export function ROIEditor({
           {!roi.calibration_enabled && grayScaleSelection !== null && grayScaleSkipped === false && (
             <div className="roi-beam-legend" aria-live="polite">
               <span className="roi-beam-legend__swatch" />
-              <span>Splash beam-on pixels</span>
+              <span>Spot beam-on pixels</span>
             </div>
           )}
         </div>
@@ -808,10 +808,6 @@ function imageToDataUrl(img: HTMLImageElement, fillStyle = "#11203a"): string | 
 function getCssColor(el: Element, variable: string, fallback: string): string {
   const value = getComputedStyle(el).getPropertyValue(variable).trim();
   return value || fallback;
-}
-
-function clampGrayScale(value: number): number {
-  return Math.max(0, Math.min(255, value | 0));
 }
 
 function tintHighlighterPixel(

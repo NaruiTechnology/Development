@@ -612,8 +612,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </div>
 
       <ul className="dwell-help__list">
-        <li><strong>Skip</strong> blanks the beam on the highlighted gray levels inside the selected ROI sub-area so those pixels are skipped during the next scan.</li>
-        <li><strong>Splash</strong> keeps the beam on for the highlighted gray levels and blanks the other pixels inside the selected ROI sub-area.</li>
+        <li><strong>Skip</strong> sends explicit blanked vector points for the highlighted gray levels inside the selected ROI sub-area, so those pixels are skipped during the next scan.</li>
+        <li><strong>Spot</strong> sends explicit unblanked vector points for the highlighted gray levels and blanks the other pixels inside the selected ROI sub-area.</li>
         <li><strong>Clear</strong> resets the current gray-level selection back to normal scan behavior.</li>
         <li>The selection applies only to the defined ROI sub-area; pixels outside that area keep their normal scan handling.</li>
       </ul>
@@ -638,7 +638,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <strong>Vector</strong> scans an explicit list of points. The
         beam visits only the coordinates you send, so it is better for
         sparse patterns, irregular shapes, annotation-style work, and
-        selective beam control such as gray-level skip/splash.
+        selective beam control such as gray-level skip/spot.
       </p>
 
       <ul className="dwell-help__list">

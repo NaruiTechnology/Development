@@ -115,8 +115,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </div>
 
       <ul className="dwell-help__list">
-        <li><strong>Skip</strong> 會在選定 ROI 子區域內，對高亮灰階對應的像素進行束流消隱，使這些像素在下一次掃描中被略過。</li>
-        <li><strong>Splash</strong> 會保持高亮灰階對應像素的束流開啟，並對同一 ROI 子區域內的其他像素進行消隱。</li>
+        <li><strong>Skip</strong> 會在選定 ROI 子區域內，對高亮灰階對應的像素送出顯式消隱向量點，因此這些像素會在下一次掃描中被略過。</li>
+        <li><strong>Spot</strong> 會在選定 ROI 子區域內，對高亮灰階對應的像素送出顯式取消消隱向量點，並對同一 ROI 子區域內的其他像素進行消隱。</li>
         <li><strong>Clear</strong> 會將目前的灰階選擇重設為一般掃描行為。</li>
         <li>此選擇僅作用於已定義的 ROI 子區域；區域外像素仍依正常掃描方式處理。</li>
       </ul>
@@ -136,7 +136,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <p>
         <strong>矢量</strong>掃描的是明確的點列表。束流只會走訪你送出的座標，
-        因此更適合稀疏圖樣、不規則形狀、標註式工作，以及像灰階 skip/splash 這類選擇性束流控制。
+        因此更適合稀疏圖樣、不規則形狀、標註式工作，以及像灰階 skip/spot 這類選擇性束流控制。
       </p>
 
       <ul className="dwell-help__list">

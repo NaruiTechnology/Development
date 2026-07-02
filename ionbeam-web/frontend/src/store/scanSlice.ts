@@ -10,6 +10,7 @@ import type {
   VectorRequest,
   ROIRequest,
 } from "../types/api";
+import { normalizeGrayScaleSelection, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { fetchDefaults } from "./statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
@@ -51,9 +52,9 @@ interface ScanState {
   /** Manual beam energy entry shared by the raster/vector panels. */
   beamEnergyEv: number;
 
-  /** Committed grayscale filter for the ROI image viewer. */
-  roiGrayScaleSelection: number | null;
-  /** `true` skips highlighted pixels, `false` splashes them, `null` means no special handling. */
+  /** Committed grayscale interval for the ROI image viewer. */
+  roiGrayScaleSelection: GrayScaleSelection;
+  /** `true` skips highlighted pixels, `false` spots them, `null` means no special handling. */
   roiGrayScaleSkipped: boolean | null;
   roiGrayScaleStepDelta: number;
 
@@ -442,9 +443,9 @@ const slice = createSlice({
     },
     setROIGrayScaleSelection(
       s,
-      a: PayloadAction<{ selection: number | null; isSkipped?: boolean | null; stepDelta?: number }>
+      a: PayloadAction<{ selection: GrayScaleSelection; isSkipped?: boolean | null; stepDelta?: number }>
     ) {
-      s.roiGrayScaleSelection = a.payload.selection === null ? null : Math.max(0, Math.min(255, Math.round(a.payload.selection)));
+      s.roiGrayScaleSelection = normalizeGrayScaleSelection(a.payload.selection);
       if (a.payload.selection === null) {
         s.roiGrayScaleSkipped = null;
       } else if (Object.prototype.hasOwnProperty.call(a.payload, "isSkipped")) {

@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ROIRequest } from "../types/api";
+import type { ROIRequest, VectorPoint } from "../types/api";
 
 /**
  * Image / pixel buffers, kept here (outside the serialisability check)
@@ -67,8 +67,8 @@ const initialState: ImageState = {
 
 interface SetupVectorPayload {
   pattern: VectorPattern;
-  /** (x, y, dwell) triples copied from VectorRequest.points for custom mode. */
-  points?: Array<[number, number, number]> | null;
+  /** Custom points copied from VectorRequest.points for custom mode. */
+  points?: Array<[number, number, number] | VectorPoint> | null;
   /** Edge of the render target. Defaults to 2048 (FPGA DAC range). */
   edge?: number;
   /** Active ROI in 14-bit DAC coordinates. Used to map custom points to pixels. */
@@ -117,10 +117,11 @@ const slice = createSlice({
         const renderFlat = new Float32Array(pts.length * 2);
         const bounds = customPointBounds(pts, a.payload.roi);
         for (let i = 0; i < pts.length; i++) {
-          flat[2 * i] = pts[i][0];
-          flat[2 * i + 1] = pts[i][1];
-          renderFlat[2 * i] = mapCoordToPixel(pts[i][0], bounds.x0, bounds.x1, edge);
-          renderFlat[2 * i + 1] = mapCoordToPixel(pts[i][1], bounds.y0, bounds.y1, edge);
+          const [x, y] = pointCoords(pts[i]);
+          flat[2 * i] = x;
+          flat[2 * i + 1] = y;
+          renderFlat[2 * i] = mapCoordToPixel(x, bounds.x0, bounds.x1, edge);
+          renderFlat[2 * i + 1] = mapCoordToPixel(y, bounds.y0, bounds.y1, edge);
         }
         state.vectorCustomPoints = flat;
         state.vectorCustomRenderPoints = renderFlat;
@@ -265,7 +266,7 @@ export const {
 export default slice.reducer;
 
 function customPointBounds(
-  points: Array<[number, number, number]>,
+  points: Array<[number, number, number] | VectorPoint>,
   roi?: ROIRequest | null
 ): { x0: number; x1: number; y0: number; y1: number } {
   if (roi) {
@@ -280,7 +281,8 @@ function customPointBounds(
   let x1 = -Infinity;
   let y0 = Infinity;
   let y1 = -Infinity;
-  for (const [x, y] of points) {
+  for (const point of points) {
+    const [x, y] = pointCoords(point);
     if (x < x0) x0 = x;
     if (x > x1) x1 = x;
     if (y < y0) y0 = y;
@@ -295,6 +297,13 @@ function customPointBounds(
     y1 = 16383;
   }
   return { x0, x1, y0, y1 };
+}
+
+function pointCoords(point: [number, number, number] | VectorPoint): [number, number] {
+  if (Array.isArray(point)) {
+    return [point[0], point[1]];
+  }
+  return [point.x, point.y];
 }
 
 function mapCoordToPixel(value: number, start: number, end: number, edge: number): number {

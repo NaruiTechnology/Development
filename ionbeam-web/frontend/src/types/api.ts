@@ -38,9 +38,17 @@ export interface RasterRequest {
 
 export type VectorPattern = "default" | "custom";
 
+export interface VectorPoint {
+  x: number;
+  y: number;
+  dwell: number;
+  /** When true, the beam is explicitly blanked for this point. */
+  blank?: boolean | null;
+}
+
 export interface VectorRequest {
   pattern: VectorPattern;
-  points: Array<[number, number, number]> | null;
+  points: Array<[number, number, number] | VectorPoint> | null;
   preview?: boolean;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
@@ -70,7 +78,7 @@ export interface SimulationBitmapPixel {
   value: number;
   /** When true, the scan sampler treats this pixel as skipped/blanked. */
   isHighlighted?: boolean | null;
-  /** `true` skips highlighted pixels, `false` splashes them, `null` means normal scan. */
+  /** `true` skips highlighted pixels, `false` spots them, `null` means normal scan. */
   isSkipped?: boolean | null;
 }
 

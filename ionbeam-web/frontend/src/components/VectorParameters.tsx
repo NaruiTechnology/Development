@@ -22,6 +22,7 @@ import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { DwellHelp } from "./DwellHelp";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import type { VectorPoint } from "../types/api";
 
 const MAX_POINTS = 1_000_000;
 const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256] as const;
@@ -32,7 +33,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
   const { t, fmt } = useTranslation();
   const v = useAppSelector((s) => s.scan.vector);
   const [pointsText, setPointsText] = useState<string>(
-    v.points ? v.points.map((p) => p.join(",")).join("\n") : ""
+    v.points ? v.points.map((p) => formatPoint(p)).join("\n") : ""
   );
   const [pointsErr, setPointsErr] = useState<string | null>(null);
 
@@ -264,6 +265,13 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
       </label>
     </div>
   );
+}
+
+function formatPoint(point: [number, number, number] | VectorPoint): string {
+  if (Array.isArray(point)) {
+    return point.join(",");
+  }
+  return [point.x, point.y, point.dwell].join(",");
 }
 
 function clamp(s: string, lo: number, hi: number, fallback: number): number {

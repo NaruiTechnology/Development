@@ -39,6 +39,11 @@ import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
 import { grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
+import {
+  formatGrayScaleSelection,
+  normalizeGrayScaleSelection,
+  type GrayScaleSelection,
+} from "./lib/grayScaleSelection";
 
 import {
   persistGrayScaleStepDelta,
@@ -86,7 +91,8 @@ export function App() {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
-  const [pendingGrayScaleSelection, setPendingGrayScaleSelection] = useState<number | null>(committedGrayScaleSelection);
+  const [pendingGrayScaleSelection, setPendingGrayScaleSelection] = useState<GrayScaleSelection>(committedGrayScaleSelection);
+  const [pendingGrayScaleAnchor, setPendingGrayScaleAnchor] = useState<number | null>(null);
   const [pendingGrayScaleSkipped, setPendingGrayScaleSkipped] = useState<boolean | null>(committedGrayScaleSkipped);
   const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
   const [grayScaleStepDelta, setGrayScaleStepDelta] = useState(committedGrayScaleStepDelta);
@@ -266,6 +272,7 @@ export function App() {
   useEffect(() => {
     if (!showGraySpectrum) {
       setPendingGrayScaleSelection(null);
+      setPendingGrayScaleAnchor(null);
       setGrayScaleLevels([]);
       setGrayScaleStepDelta(10);
     }
@@ -273,6 +280,7 @@ export function App() {
 
   useEffect(() => {
     setPendingGrayScaleSelection(committedGrayScaleSelection);
+    setPendingGrayScaleAnchor(null);
   }, [committedGrayScaleSelection]);
 
   useEffect(() => {
@@ -291,7 +299,9 @@ export function App() {
       const levels = await grayScaleSpectrumLevelsForSelection(spectrumROI);
       if (cancelled) return;
       setGrayScaleLevels(levels);
-      setPendingGrayScaleSelection((current) => (current !== null && levels.includes(current) ? current : null));
+      setPendingGrayScaleSelection((current) =>
+        current !== null && current.every((value) => levels.includes(value)) ? current : null
+      );
     })();
     return () => {
       cancelled = true;
@@ -330,12 +340,20 @@ export function App() {
     []
   );
 
-  const handleGrayScaleSelect = useCallback((grayScale: number | null) => {
-    setPendingGrayScaleSelection(grayScale);
-    if (grayScale !== null) {
-      setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? true);
-    }
-  }, [committedGrayScaleSkipped]);
+  const handleGrayScaleSelect = useCallback((grayScale: number) => {
+    setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? true);
+    setPendingGrayScaleSelection((current) => {
+      if (pendingGrayScaleAnchor === null || current === null) {
+        setPendingGrayScaleAnchor(grayScale);
+        setGrayScaleConfirmOpen(false);
+        return [grayScale, grayScale];
+      }
+      const next = normalizeGrayScaleSelection([pendingGrayScaleAnchor, grayScale]);
+      setPendingGrayScaleAnchor(null);
+      setGrayScaleConfirmOpen(true);
+      return next;
+    });
+  }, [committedGrayScaleSkipped, pendingGrayScaleAnchor]);
 
   const handleGrayScaleStepDeltaChange = useCallback((nextStepDelta: number) => {
     const n = Number(nextStepDelta);
@@ -344,12 +362,12 @@ export function App() {
   }, []);
 
   const handleGrayScaleConfirm = useCallback(() => {
-    if (pendingGrayScaleSelection === null) return;
+    if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
     setGrayScaleConfirmOpen(true);
-  }, [pendingGrayScaleSelection]);
+  }, [pendingGrayScaleAnchor, pendingGrayScaleSelection]);
 
   const handleGrayScaleConfirmAccept = useCallback(() => {
-    if (pendingGrayScaleSelection === null) return;
+    if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
     dispatch(
       setROIGrayScaleSelection({
         selection: pendingGrayScaleSelection,
@@ -357,7 +375,7 @@ export function App() {
       })
     );
     setGrayScaleConfirmOpen(false);
-  }, [dispatch, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
+  }, [dispatch, pendingGrayScaleAnchor, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
 
   const handleGrayScaleClear = useCallback(() => {
     dispatch(
@@ -367,6 +385,7 @@ export function App() {
       })
     );
     setPendingGrayScaleSelection(null);
+    setPendingGrayScaleAnchor(null);
     setPendingGrayScaleSkipped(null);
     setGrayScaleConfirmOpen(false);
   }, [dispatch]);
@@ -437,7 +456,7 @@ export function App() {
         scanLocked={scanActive}
       />
 
-      {grayScaleConfirmOpen && pendingGrayScaleSelection !== null && (
+      {grayScaleConfirmOpen && pendingGrayScaleSelection !== null && pendingGrayScaleAnchor === null && (
         <GrayScaleConfirmDialog
           selection={pendingGrayScaleSelection}
           isSkipped={pendingGrayScaleSkipped}
@@ -536,8 +555,6 @@ export function App() {
                     kind={kind as ScanKind}
                     disabled={!isSignedIn}
                     scanActive={scanActive}
-                    grayScaleSelection={committedGrayScaleSelection}
-                    grayScaleSkipped={committedGrayScaleSkipped}
                   />
                 </div>
               </div>
@@ -594,6 +611,7 @@ export function App() {
                 {showGraySpectrum && (
                   <GrayScaleSpectrum
                     selectedGrayScale={pendingGrayScaleSelection}
+                    selectionAnchor={pendingGrayScaleAnchor}
                     levels={grayScaleLevels}
                     stepDelta={grayScaleStepDelta}
                     sourceLabel={grayScaleSourceLabel}
@@ -608,7 +626,7 @@ export function App() {
             </div>
             <div className="card__body">
               {kind === "roi" ? (
-                <ROIEditor
+                  <ROIEditor
                   disabled={panelDisabled}
                   variant="canvas"
                   backgroundImageUrl={roiScanImageUrl}
@@ -667,7 +685,7 @@ function GrayScaleConfirmDialog({
   onClose,
   onConfirm,
 }: {
-  selection: number;
+  selection: GrayScaleSelection;
   isSkipped: boolean | null;
   onIsSkippedChange: (value: boolean | null) => void;
   onClose: () => void;
@@ -729,7 +747,7 @@ function GrayScaleConfirmDialog({
           </button>
         </div>
         <div id={messageIdRef.current} className="modal__body gray-scale-confirm__body">
-          <p>{t("roi.grayScale.confirm.body", { selection })}</p>
+          <p>{t("roi.grayScale.confirm.body", { selection: formatGrayScaleSelection(selection) })}</p>
           <div className="gray-scale-confirm__mode-group" role="radiogroup" aria-label={t("roi.grayScale.confirm.mode.label")}>
             <label className="gray-scale-confirm__mode-option">
               <input
@@ -751,8 +769,8 @@ function GrayScaleConfirmDialog({
                 onChange={() => onIsSkippedChange(false)}
               />
               <span>
-                <strong>{t("roi.grayScale.confirm.mode.splash")}</strong>
-                <small>{t("roi.grayScale.confirm.mode.splash.help")}</small>
+                <strong>{t("roi.grayScale.confirm.mode.spot")}</strong>
+                <small>{t("roi.grayScale.confirm.mode.spot.help")}</small>
               </span>
             </label>
           </div>
@@ -775,6 +793,7 @@ function GrayScaleConfirmDialog({
 
 function GrayScaleSpectrum({
   selectedGrayScale,
+  selectionAnchor,
   levels,
   stepDelta,
   sourceLabel,
@@ -784,25 +803,42 @@ function GrayScaleSpectrum({
   onConfirm,
   onClear,
 }: {
-  selectedGrayScale: number | null;
+  selectedGrayScale: GrayScaleSelection;
+  selectionAnchor: number | null;
   levels: number[];
   stepDelta: number;
   sourceLabel: string | null;
   scopeNote: string | null;
-  onSelect: (grayScale: number | null) => void;
+  onSelect: (grayScale: number) => void;
   onStepDeltaChange: (stepDelta: number) => void;
   onConfirm: () => void;
   onClear: () => void;
 }) {
   const boxes = buildGrayScaleBoxes(levels, stepDelta);
-  const hasPendingSelection = selectedGrayScale !== null;
+  const hasPendingSelection = selectedGrayScale !== null && selectionAnchor === null;
+  const selectedMin = selectedGrayScale ? Math.min(selectedGrayScale[0], selectedGrayScale[1]) : null;
+  const selectedMax = selectedGrayScale ? Math.max(selectedGrayScale[0], selectedGrayScale[1]) : null;
 
   return (
     <div className="roi-spectrum" aria-label="Grayscale spectrum">
       <div className="roi-spectrum__topline">
         <div className="roi-spectrum__chain" role="list" aria-label="Gray levels">
           {boxes.map((grayScale) => {
-            const selected = selectedGrayScale === grayScale;
+            const selected =
+              selectedMin !== null &&
+              selectedMax !== null &&
+              grayScale >= selectedMin &&
+              grayScale <= selectedMax;
+            const endpoint =
+              selectedMin !== null && selectedMax !== null
+                ? grayScale === selectedMin && grayScale === selectedMax
+                  ? "both"
+                  : grayScale === selectedMin
+                  ? "start"
+                  : grayScale === selectedMax
+                  ? "end"
+                  : null
+                : null;
             const textTone = grayScale < 140 ? "#f8fafc" : "#101820";
             return (
               <button
@@ -811,13 +847,23 @@ function GrayScaleSpectrum({
                 role="listitem"
                 className="roi-spectrum__box"
                 data-selected={selected ? "true" : "false"}
+                data-endpoint={endpoint ?? undefined}
+                data-pending={selectionAnchor !== null && grayScale === selectionAnchor ? "true" : "false"}
                 aria-pressed={selected}
-                title={`Gray level ${grayScale}`}
+                title={
+                  endpoint === "start"
+                    ? `Start gray level ${grayScale}`
+                    : endpoint === "end"
+                    ? `End gray level ${grayScale}`
+                    : endpoint === "both"
+                    ? `Gray level ${grayScale} (start and end)`
+                    : `Gray level ${grayScale}`
+                }
                 style={{
                   backgroundColor: `rgb(${grayScale}, ${grayScale}, ${grayScale})`,
                   color: textTone,
                 }}
-                onClick={() => onSelect(selected ? null : grayScale)}
+                onClick={() => onSelect(grayScale)}
               >
                 <span className="roi-spectrum__box-value">{grayScale}</span>
               </button>
