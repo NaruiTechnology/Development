@@ -22,6 +22,11 @@ export function ROICalibrationCard({ disabled }: { disabled: boolean }) {
   const xSpan = Math.abs(roi.calibration_x_end - roi.calibration_x_origin);
   const ySpan = Math.abs(roi.calibration_y_end - roi.calibration_y_origin);
   const unit = UNITS[roi.scale_unit] ?? roi.scale_unit;
+  const calibrationDirty =
+    roi.calibration_x_origin !== roi.x_origin ||
+    roi.calibration_x_end !== roi.x_end ||
+    roi.calibration_y_origin !== roi.y_origin ||
+    roi.calibration_y_end !== roi.y_end;
 
   const validation = useMemo(() => {
     if (roi.calibration_x_end <= roi.calibration_x_origin) {
@@ -101,8 +106,21 @@ export function ROICalibrationCard({ disabled }: { disabled: boolean }) {
         <span>{t("roi.calibration.hfov", { value: formatOneDecimal(xSpan), unit, pixels: bounds.width })}</span>
         <span>{t("roi.calibration.vfov", { value: formatOneDecimal(ySpan), unit, pixels: bounds.height })}</span>
       </div>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={roi.show_grid}
+          disabled={disabled}
+          onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
+        />
+        {t("roi.showGrid")}
+      </label>
       {validation && <div className="field-warning">{validation}</div>}
-      <button className="btn btn--primary" disabled={disabled || Boolean(validation)} onClick={confirmCalibration}>
+      <button
+        className={`btn ${calibrationDirty ? "btn--gold" : "btn--primary"}`}
+        disabled={disabled || Boolean(validation)}
+        onClick={confirmCalibration}
+      >
         {t("roi.confirmCalibration")}
       </button>
     </div>

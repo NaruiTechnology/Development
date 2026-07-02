@@ -472,14 +472,12 @@ const slice = createSlice({
       s.roi.x_end = s.roi.calibration_x_end;
       s.roi.y_origin = s.roi.calibration_y_origin;
       s.roi.y_end = s.roi.calibration_y_end;
-      // After calibration is applied, the operator works against the
-      // full live canvas with the new DUT scale. The draft calibration
-      // viewport remains stored separately for the next calibration pass.
+      // Commit the measured dimensions but keep calibration mode open so
+      // the operator can review or refine the setup before leaving it.
       s.roi.viewport_x_start = 0;
       s.roi.viewport_x_end = 640;
       s.roi.viewport_y_start = 0;
       s.roi.viewport_y_end = 640;
-      s.roi.calibration_enabled = false;
       s.roi.calibration_confirmed = true;
       s.roi.selection = null;
       s.raster.roi = null;

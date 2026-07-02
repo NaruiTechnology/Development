@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { clearROIImage, clearROISelection, updateROI, type ROIState } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
-import { clearBitmapSelectionCache, worldSelectionToDacROI } from "../lib/bitmapVector";
+import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import {
   ROI_CANVAS_EDGE,
@@ -59,9 +59,8 @@ export function ROIEditor({
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
-  const roiModeLabel = roi.calibration_enabled
-    ? t("roi.canvasMode.calibration")
-    : roi.imageKind === "lastScan"
+  const activeSelection = draft ?? roi.selection;
+  const roiModeLabel = roi.imageKind === "lastScan"
     ? t("roi.canvasMode.scanPreview")
     : roi.imageKind === "file"
     ? t("roi.canvasMode.loadedPreview")
@@ -552,20 +551,19 @@ export function ROIEditor({
                 />
               </div>
 
-              {roi.selection && (
+              {activeSelection && (
                 <div className="muted roi-dac-readout">
                   {(() => {
-                    const dac = worldSelectionToDacROI(roi.selection, roi);
+                    const startX = Math.min(activeSelection.x_start, activeSelection.x_end);
+                    const endX = Math.max(activeSelection.x_start, activeSelection.x_end);
+                    const widthX = Math.abs(activeSelection.x_end - activeSelection.x_start);
+                    const unit = unitLabel(roi.scale_unit);
                     return (
                       <>
-                        {t("roi.dacEquivalent")}&nbsp;
-                        S({dac.x_start}, {dac.y_start}) → E({dac.x_end}, {dac.y_end})
+                        {t("roi.selectionExtent")}&nbsp;
+                        S({formatOneDecimal(startX)} {unit}) → E({formatOneDecimal(endX)} {unit})
                         &nbsp;<span style={{ opacity: 0.7 }}>
-                          {t("roi.dacMappingNote", {
-                            xRange: fmtRange(roi.x_origin, roi.x_end),
-                            yRange: fmtRange(roi.y_origin, roi.y_end),
-                            unit: unitLabel(roi.scale_unit),
-                          })}
+                          w : {formatOneDecimal(widthX)} {unit}
                         </span>
                       </>
                     );
@@ -582,7 +580,7 @@ export function ROIEditor({
       {(variant === "canvas" || variant === "all") && (
         <div ref={canvasWrapRef} className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}>
           <div className="roi-canvas-mode" aria-live="polite">
-            <span className="roi-source-pill">{roiModeLabel}</span>
+            {!roi.calibration_enabled && <span className="roi-source-pill">{roiModeLabel}</span>}
           </div>
           {imageSourceLabel && (
             <div className="roi-canvas-source" aria-live="polite">
@@ -647,6 +645,9 @@ export function ROIEditor({
           />
           {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} />}
           {roi.calibration_enabled && (
+            <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} />
+          )}
+          {roi.calibration_enabled && (
             <>
               <div className="roi-calibration-ruler roi-calibration-ruler--top">
                 <div
@@ -663,6 +664,12 @@ export function ROIEditor({
                   }}
                   aria-label={t("roi.xOrigin")}
                 />
+                <span
+                  className="roi-calibration-handle-value roi-calibration-handle-value--top-start"
+                  style={{ left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%` }}
+                >
+                  {formatDimensionValue(calibrationXValueAt(roi, draftBounds.left), roi.scale_unit)}
+                </span>
                 <button
                   className="roi-calibration-handle roi-calibration-handle--top roi-calibration-handle--end"
                   style={{ left: `${draftBounds.right / ROI_CANVAS_EDGE * 100}%` }}
@@ -673,6 +680,12 @@ export function ROIEditor({
                   }}
                   aria-label={t("roi.xEnd")}
                 />
+                <span
+                  className="roi-calibration-handle-value roi-calibration-handle-value--top-end"
+                  style={{ left: `${draftBounds.right / ROI_CANVAS_EDGE * 100}%` }}
+                >
+                  {formatDimensionValue(calibrationXValueAt(roi, draftBounds.right), roi.scale_unit)}
+                </span>
               </div>
               <div className="roi-calibration-ruler roi-calibration-ruler--left">
                 <div
@@ -689,6 +702,12 @@ export function ROIEditor({
                   }}
                   aria-label={t("roi.yOrigin")}
                 />
+                <span
+                  className="roi-calibration-handle-value roi-calibration-handle-value--left-start"
+                  style={{ top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%` }}
+                >
+                  {formatDimensionValue(calibrationYValueAt(roi, draftBounds.top), roi.scale_unit)}
+                </span>
                 <button
                   className="roi-calibration-handle roi-calibration-handle--left roi-calibration-handle--end"
                   style={{ top: `${draftBounds.bottom / ROI_CANVAS_EDGE * 100}%` }}
@@ -699,7 +718,39 @@ export function ROIEditor({
                   }}
                   aria-label={t("roi.yEnd")}
                 />
+                <span
+                  className="roi-calibration-handle-value roi-calibration-handle-value--left-end"
+                  style={{ top: `${draftBounds.bottom / ROI_CANVAS_EDGE * 100}%` }}
+                >
+                  {formatDimensionValue(calibrationYValueAt(roi, draftBounds.bottom), roi.scale_unit)}
+                </span>
               </div>
+              <span
+                className="roi-calibration-span-value roi-calibration-span-value--top"
+                style={{
+                  left: `${(draftBounds.left + draftBounds.width / 2) / ROI_CANVAS_EDGE * 100}%`,
+                  top: `${(draftBounds.top + 8) / ROI_CANVAS_EDGE * 100}%`,
+                }}
+              >
+                {formatAxisSpanLabel(
+                  "w",
+                  Math.abs(calibrationXValueAt(roi, draftBounds.right) - calibrationXValueAt(roi, draftBounds.left)),
+                  roi.scale_unit
+                )}
+              </span>
+              <span
+                className="roi-calibration-span-value roi-calibration-span-value--left"
+                style={{
+                  left: `${Math.max(0, draftBounds.left - 2) / ROI_CANVAS_EDGE * 100}%`,
+                  top: `${(draftBounds.top + draftBounds.height / 2) / ROI_CANVAS_EDGE * 100}%`,
+                }}
+              >
+                {formatAxisSpanLabel(
+                  "h",
+                  Math.abs(calibrationYValueAt(roi, draftBounds.bottom) - calibrationYValueAt(roi, draftBounds.top)),
+                  roi.scale_unit
+                )}
+              </span>
             </>
           )}
           {!roi.calibration_enabled && confirmedBounds.width > 0 && confirmedBounds.height > 0 && (
@@ -903,6 +954,35 @@ function unitLabel(value: string) {
   return UNITS.find((u) => u.value === value)?.label ?? value;
 }
 
+function formatDimensionValue(value: number, unit: string) {
+  return `${formatOneDecimal(value)} ${unitLabel(unit)}`;
+}
+
+function formatAxisSpanLabel(axis: "w" | "h", value: number, unit: string) {
+  return `${axis.toUpperCase()} : ${formatDimensionValue(value, unit)}`;
+}
+
+function calibrationXValueAt(roi: ROIState, canvasX: number) {
+  return interpolateCanvasPosition(
+    canvasX,
+    roi.calibration_x_origin,
+    roi.calibration_x_end
+  );
+}
+
+function calibrationYValueAt(roi: ROIState, canvasY: number) {
+  return interpolateCanvasPosition(
+    canvasY,
+    roi.calibration_y_origin,
+    roi.calibration_y_end
+  );
+}
+
+function interpolateCanvasPosition(position: number, start: number, end: number) {
+  const t = Math.min(1, Math.max(0, position / ROI_CANVAS_EDGE));
+  return start + (end - start) * t;
+}
+
 function drawScale(
   ctx: CanvasRenderingContext2D,
   roi: ROIState,
@@ -991,6 +1071,127 @@ function ROIAxisOverlay({ roi }: { roi: ROIState }) {
       <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end">
         {t("roi.canvas.end", {
           point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
+          unit: unitLabel(roi.scale_unit),
+        })}
+      </span>
+    </div>
+  );
+}
+
+function ROICalibrationAxisOverlay({
+  roi,
+  showGrid,
+}: {
+  roi: ROIState;
+  showGrid: boolean;
+}) {
+  const { t } = useTranslation();
+  const draftBounds = viewportBounds(roi, "draft");
+  const ticks = Array.from({ length: 21 }, (_, i) => {
+    const ratio = i / 20;
+    return {
+      key: i,
+      ratio,
+      major: i % 5 === 0,
+      xLabel: `${Math.round(ratio * 100)}%`,
+      yLabel: `${Math.round(ratio * 100)}%`,
+      x: `${ratio * 100}%`,
+      y: `${ratio * 100}%`,
+    };
+  });
+
+  return (
+    <div className="canvas-axis-overlay" aria-hidden="true">
+      {showGrid &&
+        ticks.filter((tick) => tick.major).map((tick) => (
+          <span
+            key={`grid-x-${tick.key}`}
+            className="canvas-axis-overlay__grid canvas-axis-overlay__grid--x"
+            style={{
+              left: tick.x,
+              top: "0%",
+              height: "100%",
+            }}
+          />
+        ))}
+      {showGrid &&
+        ticks.filter((tick) => tick.major).map((tick) => (
+          <span
+            key={`grid-y-${tick.key}`}
+            className="canvas-axis-overlay__grid canvas-axis-overlay__grid--y"
+            style={{
+              left: "0%",
+              top: tick.y,
+              width: "100%",
+            }}
+          />
+        ))}
+      <span
+        className="canvas-axis-overlay__axis canvas-axis-overlay__axis--x"
+        style={{ left: "0%", top: "0%", width: "100%" }}
+      />
+      <span
+        className="canvas-axis-overlay__axis canvas-axis-overlay__axis--y"
+        style={{ left: "0%", top: "0%", height: "100%" }}
+      />
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`tick-x-${tick.key}`}
+          className="canvas-axis-overlay__tick canvas-axis-overlay__tick--x canvas-axis-overlay__tick--major"
+          style={{ left: tick.x, top: "0%" }}
+        />
+      ))}
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`tick-y-${tick.key}`}
+          className="canvas-axis-overlay__tick canvas-axis-overlay__tick--y canvas-axis-overlay__tick--major"
+          style={{ left: "0%", top: tick.y }}
+        />
+      ))}
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`x-${tick.key}`}
+          className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
+          style={{ left: tick.x, top: "16px" }}
+        >
+          {tick.xLabel}
+        </span>
+      ))}
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`y-${tick.key}`}
+          className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
+          style={{ left: "14px", top: tick.y }}
+        >
+          {tick.yLabel}
+        </span>
+      ))}
+      <span
+        className="canvas-axis-overlay__label canvas-axis-overlay__label--start"
+        style={{
+          left: "12px",
+          top: "32px",
+          right: "auto",
+          bottom: "auto",
+        }}
+      >
+        {t("roi.canvas.start", {
+          point: `(${formatOneDecimal(roi.calibration_x_origin)}, ${formatOneDecimal(roi.calibration_y_origin)})`,
+          unit: unitLabel(roi.scale_unit),
+        })}
+      </span>
+      <span
+        className="canvas-axis-overlay__label canvas-axis-overlay__label--end"
+        style={{
+          left: "14px",
+          top: "auto",
+          right: "auto",
+          bottom: "8px",
+          transform: "none",
+        }}
+      >
+        {t("roi.canvas.end", {
+          point: `(${formatOneDecimal(roi.calibration_x_end)}, ${formatOneDecimal(roi.calibration_y_end)})`,
           unit: unitLabel(roi.scale_unit),
         })}
       </span>

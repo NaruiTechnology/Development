@@ -49,6 +49,10 @@
   --c-btn-primary-hover:linear-gradient(180deg, #2e88dc 0%, #2068b0 100%);
   --c-btn-primary-bord: #3d8ed5;
   --c-btn-primary-text: #fff;
+  --c-btn-gold-grad:    linear-gradient(180deg, #facc15 0%, #d97706 100%);
+  --c-btn-gold-hover:   linear-gradient(180deg, #fde047 0%, #ea580c 100%);
+  --c-btn-gold-bord:    #f59e0b;
+  --c-btn-gold-text:    #1f1300;
 
   /* progress bar fill */
   --c-progress-fill:    linear-gradient(90deg, #2b78c2, #5fb8ff);
@@ -106,6 +110,10 @@
   --c-btn-primary-hover:linear-gradient(180deg, #2e88dc 0%, #2068b0 100%);
   --c-btn-primary-bord: #3d8ed5;
   --c-btn-primary-text: #fff;
+  --c-btn-gold-grad:    linear-gradient(180deg, #facc15 0%, #d97706 100%);
+  --c-btn-gold-hover:   linear-gradient(180deg, #fde047 0%, #ea580c 100%);
+  --c-btn-gold-bord:    #f59e0b;
+  --c-btn-gold-text:    #1f1300;
 
   --c-progress-fill:    linear-gradient(90deg, #2b78c2, #5fb8ff);
 
@@ -156,6 +164,10 @@
   --c-btn-primary-hover:linear-gradient(180deg, #3187d6 0%, #2068b0 100%);
   --c-btn-primary-bord: #1f5fa0;
   --c-btn-primary-text: #ffffff;
+  --c-btn-gold-grad:    linear-gradient(180deg, #facc15 0%, #d97706 100%);
+  --c-btn-gold-hover:   linear-gradient(180deg, #fde047 0%, #ea580c 100%);
+  --c-btn-gold-bord:    #f59e0b;
+  --c-btn-gold-text:    #1f1300;
 
   --c-progress-fill:    linear-gradient(90deg, #1f6fc2, #5fb8ff);
 
@@ -813,6 +825,13 @@ body {
   color: var(--c-btn-primary-text);
 }
 .btn--primary:hover:not(:disabled) { background: var(--c-btn-primary-hover); }
+
+.btn--gold {
+  background: var(--c-btn-gold-grad);
+  border-color: var(--c-btn-gold-bord);
+  color: var(--c-btn-gold-text);
+}
+.btn--gold:hover:not(:disabled) { background: var(--c-btn-gold-hover); }
 
 .btn--warn   { border-color: var(--c-warn-border); color: var(--c-warn); }
 .btn--danger { border-color: var(--c-danger-border); color: var(--c-danger); }
@@ -2515,6 +2534,81 @@ body {
   border-bottom: 9px solid transparent;
   border-left: 12.6px solid cyan;
   filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.28));
+}
+
+.roi-calibration-handle-value {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--c-accent) 42%, var(--c-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-bg-elev) 72%, black);
+  color: var(--c-text);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+.roi-calibration-span-value {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--c-accent) 42%, var(--c-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-bg-elev) 72%, black);
+  color: var(--c-text);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+.roi-calibration-span-value--top {
+  transform: translate(-50%, 0);
+}
+
+.roi-calibration-span-value--left {
+  transform: translate(-100%, -50%) rotate(-90deg);
+  transform-origin: center;
+}
+
+.roi-calibration-handle-value--top-start {
+  transform: translate(8px, 16px);
+}
+
+.roi-calibration-handle-value--top-end {
+  transform: translate(-100%, 16px);
+}
+
+.roi-calibration-handle-value--left-start {
+  transform: translate(16px, -50%);
+}
+
+.roi-calibration-handle-value--left-end {
+  transform: translate(16px, -100%);
+}
+
+.roi-calibration-area-value {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--c-accent) 48%, var(--c-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-bg-elev) 78%, black);
+  color: var(--c-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.72);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, -50%);
 }
 
 .roi-calibration-handle:disabled {
