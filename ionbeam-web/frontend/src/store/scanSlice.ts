@@ -87,6 +87,8 @@ export interface ROIState {
   y_scale_length: number;
   scale_unit: string;
   show_grid: boolean;
+  raster_show_grid: boolean;
+  vector_show_grid: boolean;
   selection: ROIRequest | null;
   imageName: string;
   imageDataUrl: string | null;
@@ -149,6 +151,8 @@ const initialState: ScanState = {
     y_scale_length: 100,
     scale_unit: "um",
     show_grid: true,
+    raster_show_grid: true,
+    vector_show_grid: true,
     selection: null,
     imageName: "No image selected",
     imageDataUrl: null,
@@ -307,6 +311,12 @@ function normalizeROIPatch(
     ...patch,
     ...(Object.prototype.hasOwnProperty.call(patch, "show_grid")
       ? { show_grid: booleanDefault(patch.show_grid, current.show_grid) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "raster_show_grid")
+      ? { raster_show_grid: booleanDefault(patch.raster_show_grid, current.raster_show_grid) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_grid")
+      ? { vector_show_grid: booleanDefault(patch.vector_show_grid, current.vector_show_grid) }
       : {}),
   };
 }

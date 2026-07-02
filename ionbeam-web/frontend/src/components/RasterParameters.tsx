@@ -14,7 +14,7 @@
  */
 import { type ReactNode } from "react";
 
-import { updateRaster } from "../store/scanSlice";
+import { updateRaster, updateROI } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
 import { DwellHelp } from "./DwellHelp";
@@ -36,6 +36,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const r = useAppSelector((s) => s.scan.raster);
+  const roi = useAppSelector((s) => s.scan.roi);
 
   // The footnote in the original code interpolates two <b> spans into a
   // sentence. Localised text reorders those spans (e.g. zh-CN puts
@@ -157,6 +158,16 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         />
         {t("raster.frameBlank")}
         <FrameBlankHelp />
+      </label>
+
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={roi.raster_show_grid}
+          disabled={disabled}
+          onChange={(e) => dispatch(updateROI({ raster_show_grid: e.target.checked }))}
+        />
+        {t("roi.showGrid")}
       </label>
 
       <div className="divider" />

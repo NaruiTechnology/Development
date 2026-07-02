@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 
-import { updateVector } from "../store/scanSlice";
+import { updateVector, updateROI } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
 import { LatencyHelp } from "./LatencyHelp";
@@ -32,6 +32,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
   const v = useAppSelector((s) => s.scan.vector);
+  const roi = useAppSelector((s) => s.scan.roi);
   const [pointsText, setPointsText] = useState<string>(
     v.points ? v.points.map((p) => formatPoint(p)).join("\n") : ""
   );
@@ -207,6 +208,16 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           }
         />
       </div>
+
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={roi.vector_show_grid}
+          disabled={disabled}
+          onChange={(e) => dispatch(updateROI({ vector_show_grid: e.target.checked }))}
+        />
+        {t("roi.showGrid")}
+      </label>
 
       {v.pattern === "custom" && (
         <div className="field">

@@ -161,17 +161,12 @@ export function ImageCanvas({
     (hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl));
   const toolbarVisible = phase === "completed" || phase === "paused";
   const showCalibratedAxes = kind !== "roi";
-  const gridToggle =
-    kind === "raster" || kind === "vector" ? (
-      <label className="canvas-toolbox__field canvas-toolbox__field--check">
-        <span>{t("roi.showGrid")}</span>
-        <input
-          type="checkbox"
-          checked={roi.show_grid}
-          onChange={(event) => dispatch(updateROI({ show_grid: event.target.checked }))}
-        />
-      </label>
-    ) : null;
+  const showGrid =
+    kind === "raster"
+      ? roi.raster_show_grid
+      : kind === "vector"
+        ? roi.vector_show_grid
+        : roi.show_grid;
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
 
@@ -707,7 +702,7 @@ export function ImageCanvas({
 
   return (
     <div>
-      {toolbarHost && (gridToggle || toolbar) ? createPortal(<>{gridToggle}{toolbar}</>, toolbarHost) : toolbar}
+      {toolbarHost && toolbar ? createPortal(<>{toolbar}</>, toolbarHost) : toolbar}
 
       {mergeConfirmOpen && createPortal(
         <div className="modal-backdrop canvas-merge-confirm__backdrop" role="presentation">
@@ -833,7 +828,7 @@ export function ImageCanvas({
               display: displayedFigureUrl ? "none" : undefined,
             }}
           />
-          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={roi.show_grid} t={t} />}
+          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
