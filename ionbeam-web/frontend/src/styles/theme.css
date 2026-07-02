@@ -474,38 +474,33 @@ body {
   outline-offset: 1px;
 }
 
+.roi-spectrum__box[data-endpoint]::before,
 .roi-spectrum__box[data-endpoint]::after {
   position: absolute;
-  top: -7px;
-  right: -5px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 11px;
-  height: 11px;
-  padding: 0 2px;
-  border-radius: 999px;
-  background: var(--c-accent-hot);
-  color: #08111e;
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  box-shadow: 0 0 0 1px rgba(5, 10, 20, 0.45);
+  top: -8px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 7px solid #ff4b4b;
+  filter: drop-shadow(0 0 1px rgba(5, 10, 20, 0.7));
   content: "";
 }
 
 .roi-spectrum__box[data-endpoint="start"]::after {
-  content: "S";
+  left: 2px;
 }
 
 .roi-spectrum__box[data-endpoint="end"]::after {
-  content: "E";
+  right: 2px;
+}
+
+.roi-spectrum__box[data-endpoint="both"]::before {
+  left: 2px;
 }
 
 .roi-spectrum__box[data-endpoint="both"]::after {
-  content: "SE";
-  min-width: 14px;
+  right: 2px;
 }
 
 .roi-spectrum__box:focus-visible {
