@@ -464,7 +464,7 @@ body {
 }
 
 .roi-spectrum__box[data-selected="true"] {
-  background: rgba(255, 255, 72, 0.65) !important;
+  background: rgba(93, 246, 73, 0.9) !important;
   color: #101820 !important;
   box-shadow: none;
 }
