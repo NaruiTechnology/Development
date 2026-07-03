@@ -65,6 +65,7 @@ export function ROIEditor({
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
   const [animatedVectorSamples, setAnimatedVectorSamples] = useState(0);
+  const [canvasResetToken, setCanvasResetToken] = useState(0);
   const vectorPhase = useAppSelector((s) => s.scan.phase);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
@@ -145,7 +146,7 @@ export function ROIEditor({
       drawAnnotationLayer();
     };
     img.src = imageSource;
-  }, [backgroundImageUrl, dispatch, imageSource, t]);
+  }, [backgroundImageUrl, canvasResetToken, dispatch, imageSource, t]);
 
   useEffect(() => {
     drawBaseCanvas();
@@ -523,7 +524,12 @@ export function ROIEditor({
   function clearLoadedImage() {
     clearBitmapSelectionCache();
     imageRef.current = null;
+    promotedBackgroundRef.current = null;
     setSuppressedBackgroundUrl(backgroundImageUrl);
+    if (fileRef.current) {
+      fileRef.current.value = "";
+    }
+    setCanvasResetToken((n) => n + 1);
     dispatch(clearROIImage());
   }
 

@@ -102,6 +102,11 @@ export function App() {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
+  const suppressedROIScanImageUrlRef = useRef<string | null>(null);
+  const previousROIImageRef = useRef({
+    imageDataUrl: roiState.imageDataUrl,
+  });
+  const [suppressedROIScanImageUrl, setSuppressedROIScanImageUrl] = useState<string | null>(null);
   const [pendingGrayScaleSelection, setPendingGrayScaleSelection] = useState<GrayScaleSelection>(committedGrayScaleSelection);
   const [pendingGrayScaleAnchor, setPendingGrayScaleAnchor] = useState<number | null>(null);
   const [pendingGrayScaleSkipped, setPendingGrayScaleSkipped] = useState<boolean | null>(committedGrayScaleSkipped);
@@ -267,12 +272,16 @@ export function App() {
         ? lastLiveScanImage.imageUrl
         : serverScanImageUrl
       : null;
+  const activeROIScanImageUrl =
+    roiScanImageUrl && roiScanImageUrl !== suppressedROIScanImageUrl
+      ? roiScanImageUrl
+      : null;
   const showGraySpectrum =
-    kind === "roi" && hasPartialROI && Boolean(roiState.imageDataUrl || roiScanImageUrl);
+    kind === "roi" && hasPartialROI && Boolean(roiState.imageDataUrl || activeROIScanImageUrl);
   const grayScaleSourceKind = resolveGrayScaleSourceKind({
     showGraySpectrum: kind === "roi" && showGraySpectrum,
     roiImageDataUrl: roiState.imageDataUrl,
-    roiScanImageUrl,
+    roiScanImageUrl: activeROIScanImageUrl,
     lastScanKind,
   });
   const grayScaleSourceLabel = grayScaleSourceLabelForKind(grayScaleSourceKind, t);
@@ -311,13 +320,35 @@ export function App() {
   }, [grayScaleStepDelta]);
 
   useEffect(() => {
+    const previous = previousROIImageRef.current;
+    const clearedImage = previous.imageDataUrl !== null && roiState.imageDataUrl === null;
+
+    if (clearedImage && roiScanImageUrl) {
+      suppressedROIScanImageUrlRef.current = roiScanImageUrl;
+      setSuppressedROIScanImageUrl(roiScanImageUrl);
+    } else if (
+      suppressedROIScanImageUrlRef.current !== null &&
+      (roiState.imageKind === "file" ||
+        !roiScanImageUrl ||
+        roiScanImageUrl !== suppressedROIScanImageUrlRef.current)
+    ) {
+      suppressedROIScanImageUrlRef.current = null;
+      setSuppressedROIScanImageUrl(null);
+    }
+
+    previousROIImageRef.current = {
+      imageDataUrl: roiState.imageDataUrl,
+    };
+  }, [roiScanImageUrl, roiState.imageDataUrl, roiState.imageKind]);
+
+  useEffect(() => {
     if (!showGraySpectrum) return;
     let cancelled = false;
     void (async () => {
       const spectrumROI = roiState.imageDataUrl
         ? roiState
-        : roiScanImageUrl
-        ? { ...roiState, imageDataUrl: roiScanImageUrl }
+        : activeROIScanImageUrl
+        ? { ...roiState, imageDataUrl: activeROIScanImageUrl }
         : roiState;
       const levels = await grayScaleSpectrumLevelsForSelection(spectrumROI);
       if (cancelled) return;
@@ -329,11 +360,13 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [roiScanImageUrl, roiState, showGraySpectrum]);
+  }, [activeROIScanImageUrl, roiState, showGraySpectrum]);
 
   useEffect(() => {
     if (kind !== "roi") return;
     if (!roiScanImageUrl) return;
+    if (roiState.imageKind === "file") return;
+    if (suppressedROIScanImageUrlRef.current === roiScanImageUrl) return;
     if (roiState.imageKind === "lastScan" && roiState.imageDataUrl === roiScanImageUrl) return;
     dispatch(
       updateROI({
@@ -755,7 +788,7 @@ export function App() {
                   <ROIEditor
                     disabled={panelDisabled}
                     variant="canvas"
-                    backgroundImageUrl={roiScanImageUrl}
+                    backgroundImageUrl={activeROIScanImageUrl}
                     grayScaleSelection={pendingGrayScaleSelection}
                     grayScaleSkipped={pendingGrayScaleSkipped}
                     liveVectorPreview={roiActionCanvasVisible}
@@ -780,7 +813,7 @@ export function App() {
                 <span className="card__title">{t("card.roiPreview")}</span>
               </div>
               <div className="card__body">
-                <ROIScanPreview backgroundImageUrl={roiScanImageUrl} />
+                <ROIScanPreview backgroundImageUrl={activeROIScanImageUrl} />
               </div>
             </div>
           </section>
