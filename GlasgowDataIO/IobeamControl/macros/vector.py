@@ -192,6 +192,7 @@ class VectorScanCommand(BaseCommand):
                 yield commands, pixel_count
         else:
             commands = bytearray()
+            vector_body = bytearray()
             current_blank = None
             saw_explicit_blank = False
             current_pass_index = None
@@ -201,7 +202,16 @@ class VectorScanCommand(BaseCommand):
                                    array_length=pixel_count - 1)
                 return bytes(cmd)
 
-            pixel_count = 0
+            def flush_vector_body():
+                nonlocal vector_body, vector_body_count
+                if vector_body_count > 0:
+                    commands.extend(get_command(vector_body_count))
+                    commands.extend(vector_body)
+                    vector_body = bytearray()
+                    vector_body_count = 0
+
+            chunk_pixel_count = 0
+            vector_body_count = 0
             total_dwell = 0
             for point in self._iter_points:
                 x, y, dwell, blank, pass_index = _normalize_point(point)
@@ -211,29 +221,31 @@ class VectorScanCommand(BaseCommand):
                 if blank is not None:
                     saw_explicit_blank = True
                     if current_blank is None or current_blank != blank:
+                        flush_vector_body()
                         commands.extend(bytes(BlankCommand(enable=blank, inline=True)))
                         current_blank = blank
-                pixel_count += 1
+                chunk_pixel_count += 1
+                vector_body_count += 1
                 total_dwell += dwell
-                commands.extend(struct.pack(">HHH", x, y, dwell))
+                vector_body.extend(struct.pack(">HHH", x, y, dwell))
                 if total_dwell >= latency:
-                    cmd = get_command(pixel_count)
-                    yield (memoryview(cmd + commands), pixel_count)
+                    flush_vector_body()
+                    yield (memoryview(commands), chunk_pixel_count)
                     commands = bytearray()
-                    pixel_count = 0
+                    chunk_pixel_count = 0
                     total_dwell = 0
-                if pixel_count == 65536:
-                    cmd = get_command(pixel_count)
-                    yield (memoryview(cmd + commands), pixel_count)
+                if chunk_pixel_count == 65536:
+                    flush_vector_body()
+                    yield (memoryview(commands), chunk_pixel_count)
                     commands = bytearray()
-                    pixel_count = 0
+                    chunk_pixel_count = 0
                     total_dwell = 0
 
-            if pixel_count > 0:
+            if chunk_pixel_count > 0:
+                flush_vector_body()
                 if saw_explicit_blank and current_blank is False:
                     commands.extend(bytes(BlankCommand(enable=True)))
-                cmd = get_command(pixel_count)
-                yield (memoryview(cmd + commands), pixel_count)
+                yield (memoryview(commands), chunk_pixel_count)
 
     @BaseCommand.log_transfer
     async def transfer(self, stream, *, latency: int = 65536 * 65536):

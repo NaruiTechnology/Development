@@ -1093,7 +1093,12 @@ class DeviceService:
             pattern = last.get("pattern", "default")
             points = last.get("points")
             if pattern == "custom" and points:
-                iter_list = list(points)
+                iter_list = [
+                    (x, y, dwell)
+                    for x, y, dwell, _blank, _pass_index in (
+                        _normalize_vector_point(point) for point in points
+                    )
+                ]
             else:
                 iter_list = list(_roi_vector_iter(edge, last.get("roi")))
                 if len(iter_list) < samples.size and edge != DEFAULT_EDGE:
