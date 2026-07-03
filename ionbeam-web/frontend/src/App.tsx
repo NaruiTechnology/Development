@@ -69,7 +69,7 @@ import { scanAuthHeaders } from "./lib/authIdentity";
 import { openDialog as openSettingsDialog, setActiveTab } from "./store/settingsSlice";
 
 const RIGHT_PANEL_STORAGE_KEY = "ionbeam:rightPanelWidth";
-const DEFAULT_RIGHT_PANEL_WIDTH = 720;
+const DEFAULT_RIGHT_PANEL_WIDTH = 400;
 const MIN_LEFT_PANEL_WIDTH = 320;
 const MIN_RIGHT_PANEL_WIDTH = 380;
 const SPLITTER_SPACE = 32;
