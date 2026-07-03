@@ -492,6 +492,8 @@ const slice = createSlice({
       s.roi.selection = null;
       s.raster.roi = null;
       s.vector.roi = null;
+      s.roiGrayScaleSelection = null;
+      s.roiGrayScaleSkipped = null;
     },
     clearLastResult(s) {
       s.lastResult = null;

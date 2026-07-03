@@ -41,8 +41,8 @@ import {
   clearBitmapSelectionCache,
   rasterRequestWithBitmapSelection,
   vectorRequestWithBitmapSelection,
+  vectorRequestWithROIGrayScaleAction,
 } from "../lib/bitmapVector";
-import { type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 import { RunValidatedHelp } from "./RunValidatedHelp";
@@ -75,10 +75,14 @@ export function ScanControls({
   kind,
   disabled = false,
   scanActive = false,
+  roiAction = false,
+  onActionRunStart,
 }: {
   kind: ScanKind;
   disabled?: boolean;
   scanActive?: boolean;
+  roiAction?: boolean;
+  onActionRunStart?: () => void;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -90,6 +94,8 @@ export function ScanControls({
   const defaults = useAppSelector((s) => s.status.defaults);
   const settingsSaving = useAppSelector((s) => s.settings.saving);
   const backendRestarting = useAppSelector((s) => s.settings.backendRestarting);
+  const roiGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
+  const roiGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const roi = roiState.selection;
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
@@ -110,9 +116,29 @@ export function ScanControls({
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
 
   async function onRun() {
-    if (disabled || kind === "roi") return;
+    if (disabled || (kind === "roi" && !roiAction)) return;
     const allowed = await refreshScanPrivilege();
     if (!allowed) {
+      return;
+    }
+    if (roiAction) {
+      try {
+        if (roiGrayScaleSelection === null || roiGrayScaleSkipped === null) {
+          throw new Error(t("roi.actionRun.selectionRequired"));
+        }
+        const req = await vectorRequestWithROIGrayScaleAction(
+          { ...vector, roi },
+          roiState,
+          {
+            grayScaleSelection: roiGrayScaleSelection,
+            grayScaleSkipped: roiGrayScaleSkipped,
+          }
+        );
+        onActionRunStart?.();
+        stream.startVector({ ...req, preview });
+      } catch (e: any) {
+        dispatch(streamErrored(e?.message ?? String(e)));
+      }
       return;
     }
     if (kind === "raster") {
@@ -123,6 +149,8 @@ export function ScanControls({
           {
             isProduction,
             allowBitmapSimulation,
+            grayScaleSelection: roiGrayScaleSelection,
+            grayScaleSkipped: roiGrayScaleSkipped,
           }
         );
         stream.startRaster({ ...req, preview });
@@ -138,6 +166,8 @@ export function ScanControls({
           {
             isProduction,
             allowBitmapSimulation,
+            grayScaleSelection: roiGrayScaleSelection,
+            grayScaleSkipped: roiGrayScaleSkipped,
           }
         );
         stream.startVector({ ...req, preview });
@@ -173,6 +203,8 @@ export function ScanControls({
           {
             isProduction,
             allowBitmapSimulation,
+            grayScaleSelection: roiGrayScaleSelection,
+            grayScaleSkipped: roiGrayScaleSkipped,
           }
         );
         const promise = dispatch(runRasterValidated({ ...req, preview }));
@@ -193,6 +225,8 @@ export function ScanControls({
           {
             isProduction,
             allowBitmapSimulation,
+            grayScaleSelection: roiGrayScaleSelection,
+            grayScaleSkipped: roiGrayScaleSkipped,
           }
         );
         const promise = dispatch(runVectorValidated({ ...req, preview }));
@@ -280,6 +314,72 @@ export function ScanControls({
       clearBitmapSelectionCache();
     }
   }, [phase, roiState.imageDataUrl, roiState.selection]);
+
+  if (roiAction) {
+    return (
+      <div className="button-row">
+        <label className="scan-equipment-field">
+          <span>{t("scan.equipment.label")}</span>
+          <select
+            className="select"
+            value={equipmentId}
+            disabled={controlsDisabled || equipment.length === 0}
+            onChange={(event) => onEquipmentChange(event.target.value)}
+            title={t("scan.equipment.title")}
+          >
+            {equipment.length === 0 ? (
+              <option value="">{t("scan.equipment.empty")}</option>
+            ) : (
+              equipment.map((row) => (
+                <option key={row.id ?? row.serial_number} value={String(row.id)}>
+                  {row.name}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+        <label
+          className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+          title={t("scan.preview.title")}
+        >
+          <input
+            type="checkbox"
+            checked={preview}
+            disabled={controlsDisabled}
+            onChange={(event) => dispatch(setPreview(event.target.checked))}
+          />
+          {preview && <Icon name="alertTriangle" tone="warn" />}
+          <span>{t("scan.preview")}</span>
+        </label>
+        <button
+          className="btn btn--primary"
+          disabled={runDisabled}
+          onClick={onRun}
+          title={t("roi.actionRun.title")}
+        >
+          <Icon name="play" tone="success" />
+          {t("roi.actionRun")}
+        </button>
+        <button
+          className="btn btn--danger"
+          disabled={stopDisabled}
+          onClick={onStop}
+          title={t("scan.stop.title")}
+        >
+          <Icon name="square" tone="danger" />
+          {t("scan.stop")}
+        </button>
+        <span
+          className="scan-busy"
+          data-visible={busy ? "true" : "false"}
+          aria-hidden={!busy}
+          title={t("scan.busy.title")}
+        >
+          <span className="scan-busy__spinner" />
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="button-row">

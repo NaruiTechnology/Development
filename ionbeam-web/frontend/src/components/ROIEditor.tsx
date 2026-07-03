@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
-import { clearROIImage, clearROISelection, updateROI, type ROIState } from "../store/scanSlice";
+import { clearROIImage, clearROISelection, streamReset, updateROI, type ROIState } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
+import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import {
   ROI_CANVAS_EDGE,
   ROI_VIEWPORT_MIN_SPAN,
@@ -34,12 +35,16 @@ export function ROIEditor({
   backgroundImageUrl = null,
   grayScaleSelection = null,
   grayScaleSkipped = null,
+  allowClearRegionWhileDisabled = false,
+  liveVectorPreview = false,
 }: {
   disabled: boolean;
   variant?: "controls" | "canvas" | "all";
   backgroundImageUrl?: string | null;
   grayScaleSelection?: GrayScaleSelection;
   grayScaleSkipped?: boolean | null;
+  allowClearRegionWhileDisabled?: boolean;
+  liveVectorPreview?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const tr = useTranslation();
@@ -47,16 +52,34 @@ export function ROIEditor({
   const roi = useAppSelector((s) => s.scan.roi);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const promotedBackgroundRef = useRef<string | null>(null);
+  const animatedVectorSamplesRef = useRef(0);
   const [draft, setDraft] = useState<ROIRequest | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
+  const [animatedVectorSamples, setAnimatedVectorSamples] = useState(0);
+  const vectorPhase = useAppSelector((s) => s.scan.phase);
+  const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
+  const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
+  const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
+  const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
+  const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
+  const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
+  const targetLiveVectorSamples = vectorPattern === "custom" && vectorCustomCount > 0
+    ? Math.min(vectorCursor, vectorCustomCount)
+    : vectorCursor;
+  const liveVectorSamples = animatedVectorSamples;
+  const liveVectorProgressPct =
+    liveVectorPreview && vectorPattern === "custom" && vectorCustomCount > 0
+      ? Math.min(100, (liveVectorSamples / vectorCustomCount) * 100)
+      : 0;
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
   const activeSelection = draft ?? roi.selection;
@@ -127,8 +150,73 @@ export function ROIEditor({
   useEffect(() => {
     drawBaseCanvas();
     drawHighlightMask();
+    drawLiveVectorOverlay();
     drawAnnotationLayer();
-  }, [draft, grayScaleSelection, grayScaleSkipped, roi, tr.locale]);
+  }, [
+    draft,
+    grayScaleSelection,
+    grayScaleSkipped,
+    roi,
+    tr.locale,
+    liveVectorPreview,
+    vectorPhase,
+    vectorCursor,
+    vectorPattern,
+    vectorCustomPoints,
+    vectorCustomCount,
+    animatedVectorSamples,
+    bytesReceived,
+    chunksReceived,
+  ]);
+
+  useEffect(() => {
+    animatedVectorSamplesRef.current = animatedVectorSamples;
+  }, [animatedVectorSamples]);
+
+  useEffect(() => {
+    if (!liveVectorPreview || vectorPattern !== "custom" || vectorCustomCount <= 0) {
+      setAnimatedVectorSamples(0);
+      animatedVectorSamplesRef.current = 0;
+      return;
+    }
+
+    const target = Math.max(0, Math.min(vectorCustomCount, targetLiveVectorSamples));
+    const start = animatedVectorSamplesRef.current;
+    if (start === target) return;
+
+    let frame = 0;
+    let cancelled = false;
+    let last = performance.now();
+
+    function tick(now: number) {
+      if (cancelled) return;
+      const current = animatedVectorSamplesRef.current;
+      const elapsed = Math.max(16, now - last);
+      last = now;
+      const remaining = target - current;
+      if (remaining <= 0) {
+        if (current !== target) {
+          animatedVectorSamplesRef.current = target;
+          setAnimatedVectorSamples(target);
+        }
+        return;
+      }
+
+      const step = Math.max(1, Math.ceil((vectorCustomCount / 48) * (elapsed / 16)));
+      const next = Math.min(target, current + Math.min(step, remaining));
+      animatedVectorSamplesRef.current = next;
+      setAnimatedVectorSamples(next);
+      if (next < target) {
+        frame = window.requestAnimationFrame(tick);
+      }
+    }
+
+    frame = window.requestAnimationFrame(tick);
+    return () => {
+      cancelled = true;
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [liveVectorPreview, vectorPattern, vectorCustomCount, targetLiveVectorSamples]);
 
   useEffect(() => {
     if (!dragStartRef.current) {
@@ -262,6 +350,71 @@ export function ROIEditor({
     ctx.putImageData(image, left, top);
   }
 
+  function drawLiveVectorOverlay() {
+    const canvas = liveCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    if (
+      !liveVectorPreview ||
+      vectorPattern !== "custom" ||
+      !vectorCustomPoints ||
+      !roi.selection
+    ) {
+      return;
+    }
+
+    const limit = Math.min(liveVectorSamples, vectorCustomPoints.length / 2, vectorCustomCount);
+    if (limit <= 0) return;
+
+    const pointBounds = pointArrayBounds(vectorCustomPoints);
+    const selection = roi.selection;
+    const worldXSpan = Math.max(1e-6, selection.x_end - selection.x_start);
+    const worldYSpan = Math.max(1e-6, selection.y_end - selection.y_start);
+    const pointXSpan = Math.max(1e-6, pointBounds.x1 - pointBounds.x0);
+    const pointYSpan = Math.max(1e-6, pointBounds.y1 - pointBounds.y0);
+    const trace: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < limit; i++) {
+      const x = vectorCustomPoints[2 * i] | 0;
+      const y = vectorCustomPoints[2 * i + 1] | 0;
+      const worldX = selection.x_start + ((x - pointBounds.x0) / pointXSpan) * worldXSpan;
+      const worldY = selection.y_start + ((y - pointBounds.y0) / pointYSpan) * worldYSpan;
+      const canvasX = Math.round(worldToCanvasX(worldX, roi, viewportBounds(roi)));
+      const canvasY = Math.round(worldToCanvasY(worldY, roi, viewportBounds(roi)));
+      if (canvasX < 0 || canvasX >= ROI_CANVAS_EDGE || canvasY < 0 || canvasY >= ROI_CANVAS_EDGE) continue;
+      trace.push({ x: canvasX, y: canvasY });
+    }
+
+    if (trace.length >= 1) {
+      ctx.save();
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.globalCompositeOperation = "difference";
+      ctx.strokeStyle = "rgba(128, 128, 128, 0.28)";
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      for (let i = 0; i < trace.length; i++) {
+        const p = trace[i];
+        const top = Math.max(0, p.y - 5);
+        const bottom = Math.min(ROI_CANVAS_EDGE, p.y + 5);
+        ctx.moveTo(p.x + 0.5, top + 0.5);
+        ctx.lineTo(p.x + 0.5, bottom + 0.5);
+      }
+      ctx.stroke();
+
+      const last = trace[trace.length - 1];
+      ctx.fillStyle = "rgba(128, 128, 128, 0.4)";
+      ctx.strokeStyle = "rgba(128, 128, 128, 0.4)";
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.arc(last.x + 0.5, last.y + 0.5, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   function drawAnnotationLayer() {
     const canvas = annotationCanvasRef.current;
     if (!canvas) return;
@@ -294,7 +447,7 @@ export function ROIEditor({
     ctx.save();
     ctx.strokeStyle = "#ff2d2d";
     ctx.fillStyle = "#ff2d2d";
-    ctx.lineWidth = 0.8;
+    ctx.lineWidth = 0.75;
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     ctx.restore();
   }
@@ -376,8 +529,10 @@ export function ROIEditor({
 
   function clearPartialRegion() {
     clearBitmapSelectionCache();
+    stopAllScanActions();
     setDraft(null);
     dispatch(clearROISelection());
+    dispatch(streamReset());
   }
 
   const confirmedBounds = viewportBounds(roi);
@@ -402,7 +557,7 @@ export function ROIEditor({
             </button>
             <button
               className="btn btn--ghost"
-              disabled={disabled || roi.calibration_enabled || !hasPartialRegion}
+              disabled={(disabled && !allowClearRegionWhileDisabled) || roi.calibration_enabled || !hasPartialRegion}
               onClick={clearPartialRegion}
             >
               <Icon name="crop" tone="warn" />
@@ -637,6 +792,13 @@ export function ROIEditor({
             aria-hidden="true"
           />
           <canvas
+            ref={liveCanvasRef}
+            className="roi-canvas-layer roi-canvas-layer--live"
+            width={ROI_CANVAS_EDGE}
+            height={ROI_CANVAS_EDGE}
+            aria-hidden="true"
+          />
+          <canvas
             ref={annotationCanvasRef}
             className="roi-canvas-layer roi-canvas-layer--annotation"
             width={ROI_CANVAS_EDGE}
@@ -768,6 +930,38 @@ export function ROIEditor({
             <div className="roi-tooltip" style={{ left: tip.x + 10, top: tip.y + 10 }}>
               {tip.text}
             </div>
+          )}
+          {liveVectorPreview && (
+            <>
+              <div className="progress roi-canvas-progress">
+                <span
+                  style={{
+                    width: `${liveVectorProgressPct}%`,
+                  }}
+                />
+              </div>
+              <div className="canvas-meta roi-canvas-meta">
+                <span>
+                  {t("canvas.meta.phase")} <b>{t(`phase.${vectorPhase}` as TranslationKey)}</b>
+                </span>
+                <span>
+                  {t("canvas.meta.chunks")} <b>{formatCount(chunksReceived)}</b>
+                </span>
+                <span>
+                  {t("canvas.meta.bytes")} <b>{formatCount(bytesReceived)}</b>
+                </span>
+                <span>
+                  {t("canvas.meta.samples")}{" "}
+                  <b>
+                    {formatCount(liveVectorSamples)}
+                    {vectorPattern === "custom" && vectorCustomCount > 0 ? ` / ${formatCount(vectorCustomCount)}` : ""}
+                  </b>
+                </span>
+                <span>
+                  {t("canvas.meta.progress")} <b>{Math.round(liveVectorProgressPct)}%</b>
+                </span>
+              </div>
+            </>
           )}
           {!roi.calibration_enabled && grayScaleSelection !== null && grayScaleSkipped === false && (
             <div className="roi-beam-legend" aria-live="polite">
@@ -960,6 +1154,29 @@ function formatDimensionValue(value: number, unit: string) {
 
 function formatAxisSpanLabel(axis: "w" | "h", value: number, unit: string) {
   return `${axis.toUpperCase()} : ${formatDimensionValue(value, unit)}`;
+}
+
+function formatCount(value: number) {
+  return Number.isFinite(value) ? Math.round(value).toLocaleString() : "0";
+}
+
+function pointArrayBounds(points: Float32Array): { x0: number; x1: number; y0: number; y1: number } {
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < points.length; i += 2) {
+    const x = points[i];
+    const y = points[i + 1];
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  if (!Number.isFinite(x0) || !Number.isFinite(x1)) {
+    return { x0: 0, x1: 1, y0: 0, y1: 1 };
+  }
+  return { x0, x1, y0, y1 };
 }
 
 function calibrationXValueAt(roi: ROIState, canvasX: number) {

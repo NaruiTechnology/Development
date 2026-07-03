@@ -97,11 +97,11 @@ function drawPreview(
   ctx.fillRect(left + width, top, ROI_CANVAS_EDGE - left - width, height);
 
   ctx.strokeStyle = "#ff2d2d";
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 0.75;
   ctx.strokeRect(left + 1.5, top + 1.5, Math.max(1, width - 3), Math.max(1, height - 3));
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.82)";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 0.5;
   ctx.setLineDash([8, 6]);
   ctx.strokeRect(left + 8, top + 8, Math.max(1, width - 16), Math.max(1, height - 16));
   ctx.restore();

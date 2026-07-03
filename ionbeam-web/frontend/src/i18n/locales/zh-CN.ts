@@ -145,6 +145,9 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.roleRequest.noRecipients": "没有配置任何有效的 Auditor 邮箱地址。",
   "scan.roleRequest.failed": "无法打开邮件草稿：{error}",
   "scan.modeGuide": "光栅与矢量",
+  "roi.actionRun": "Action run",
+  "roi.actionRun.title": "以矢量扫描方式运行已确认的 ROI 灰度选择",
+  "roi.actionRun.selectionRequired": "请先确认灰度级 Skip 或 Spot 选择，再运行 ROI 动作。",
   "common.custom": "自定义",
 
   /* ===== raster parameter form ==================================== */
@@ -271,6 +274,7 @@ export const zhCN: Partial<TranslationTable> = {
   "canvas.meta.resolution": "分辨率",
   "canvas.meta.pixels": "像素",
   "canvas.meta.samples": "样本",
+  "canvas.meta.progress": "进度",
   "canvas.meta.roi": "ROI",
   "canvas.meta.beam": "束流位置",
   "canvas.meta.adcNow": "当前 ADC",
@@ -496,7 +500,6 @@ export const zhCN: Partial<TranslationTable> = {
   "roi.grayScale.context.raster.production": "生产环境下的光栅仍保持矩形覆盖。此处的灰度选择仅用于预览，不会消隐、跳过或改写束流路径。",
   "roi.grayScale.context.raster.preview": "仅用于光栅预览。灰度选择不会改变扫描路径。",
   "roi.grayScale.context.vector": "矢量预览。灰度选择可提交为束流选择性行为。",
-  "roi.grayScale.context.loaded": "已加载图像预览。灰度选择只会筛选当前显示的 ROI 视图。",
   "settings.general.group.runtime": "运行时",
   "settings.general.group.actionData": "动作数据",
   "settings.general.group.beam": "束流启用",

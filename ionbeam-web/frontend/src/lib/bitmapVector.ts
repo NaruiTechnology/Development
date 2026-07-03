@@ -269,6 +269,48 @@ export async function vectorRequestWithBitmapSelection(
   };
 }
 
+export async function vectorRequestWithROIGrayScaleAction(
+  req: VectorRequest,
+  roi: ROIState,
+  options: {
+    grayScaleSelection: GrayScaleSelection;
+    grayScaleSkipped: boolean | null;
+  }
+): Promise<VectorRequest> {
+  const selection = normalizeGrayScaleSelection(options.grayScaleSelection);
+  if (!roi.selection || !roi.imageDataUrl || selection === null || options.grayScaleSkipped === null) {
+    return vectorRequestWithBitmapSelection(req, roi, {
+      isProduction: true,
+      grayScaleSelection: selection,
+      grayScaleSkipped: options.grayScaleSkipped,
+    });
+  }
+
+  const converted = await bitmapSelectionToVector(roi);
+  if (!converted.simulationBitmap.pixels.length) {
+    return withoutBitmapROI(req);
+  }
+
+  const decoratedBitmap = decorateSimulationBitmap(
+    converted.simulationBitmap,
+    selection,
+    options.grayScaleSkipped,
+  );
+  return {
+    ...req,
+    pattern: "custom",
+    points: bitmapToROIActionPoints(
+      decoratedBitmap,
+      converted.roi,
+      req.dwell,
+      selection,
+      options.grayScaleSkipped,
+    ),
+    roi: converted.roi,
+    simulation_bitmap: null,
+  };
+}
+
 export async function grayScaleSpectrumLevelsForSelection(
   roi: ROIState
 ): Promise<number[]> {
@@ -461,6 +503,46 @@ function bitmapToCustomPoints(
   }
 
   return primaryPass.concat(secondaryPass);
+}
+
+function bitmapToROIActionPoints(
+  bitmap: SimulationBitmap,
+  fullRoi: ROIRequest,
+  dwell: number,
+  selection: [number, number],
+  skipped: boolean,
+): VectorPoint[] {
+  if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
+    return [];
+  }
+
+  const x0 = Math.min(fullRoi.x_start, fullRoi.x_end);
+  const x1 = Math.max(fullRoi.x_start, fullRoi.x_end);
+  const y0 = Math.min(fullRoi.y_start, fullRoi.y_end);
+  const y1 = Math.max(fullRoi.y_start, fullRoi.y_end);
+  const xDiv = Math.max(1, bitmap.width - 1);
+  const yDiv = Math.max(1, bitmap.height - 1);
+  const xSpan = Math.max(1, x1 - x0);
+  const ySpan = Math.max(1, y1 - y0);
+  const points: VectorPoint[] = [];
+
+  for (let y = 0; y < bitmap.height; y++) {
+    const sampleY = y0 + Math.round((y / yDiv) * ySpan);
+    for (let x = 0; x < bitmap.width; x++) {
+      const sampleX = x0 + Math.round((x / xDiv) * xSpan);
+      const pixel = bitmap.pixels[y * bitmap.width + x];
+      const highlighted = grayScaleSelectionContains(selection, pixelValue(pixel));
+      const blank = skipped ? highlighted : !highlighted;
+      points.push({
+        x: sampleX,
+        y: sampleY,
+        dwell,
+        blank,
+      });
+    }
+  }
+
+  return points;
 }
 
 function selectionCrop(

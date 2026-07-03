@@ -154,6 +154,9 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.roleRequest.noRecipients": "沒有設定任何有效的 Auditor 信箱地址。",
   "scan.roleRequest.failed": "無法開啟郵件草稿：{error}",
   "scan.modeGuide": "光柵與矢量",
+  "roi.actionRun": "Action run",
+  "roi.actionRun.title": "以矢量掃描方式執行已確認的 ROI 灰階選擇",
+  "roi.actionRun.selectionRequired": "請先確認灰階 Skip 或 Spot 選擇，再執行 ROI 動作。",
   "common.custom": "自訂",
 
   /* ===== raster parameter form ==================================== */
@@ -280,6 +283,7 @@ export const zhTW: Partial<TranslationTable> = {
   "canvas.meta.resolution": "解析度",
   "canvas.meta.pixels": "像素",
   "canvas.meta.samples": "樣本",
+  "canvas.meta.progress": "進度",
   "canvas.meta.roi": "ROI",
   "canvas.meta.beam": "束流位置",
   "canvas.meta.adcNow": "目前 ADC",
@@ -502,7 +506,6 @@ export const zhTW: Partial<TranslationTable> = {
   "roi.grayScale.context.raster.production": "生產環境下的光柵仍維持矩形覆蓋。此處的灰階選取僅供預覽，不會消隱、跳過或改寫束流路徑。",
   "roi.grayScale.context.raster.preview": "僅供光柵預覽。灰階選取不會改變掃描路徑。",
   "roi.grayScale.context.vector": "矢量預覽。灰階選取可提交為束流選擇性行為。",
-  "roi.grayScale.context.loaded": "已載入影像預覽。灰階選取只會篩選目前顯示的 ROI 視圖。",
   "settings.general.group.runtime": "執行時",
   "settings.general.group.actionData": "動作資料",
   "settings.general.group.beam": "束流啟用",

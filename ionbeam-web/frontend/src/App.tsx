@@ -44,6 +44,13 @@ import {
   normalizeGrayScaleSelection,
   type GrayScaleSelection,
 } from "./lib/grayScaleSelection";
+import {
+  grayScaleScopeNoteForKind,
+  grayScaleSourceLabelForKind,
+  resolveROIActionKind,
+  shouldShowROIActionControls,
+  resolveGrayScaleSourceKind,
+} from "./lib/grayScaleUI";
 
 import {
   beginROICalibration,
@@ -101,6 +108,8 @@ export function App() {
   const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
   const [grayScaleStepDelta, setGrayScaleStepDelta] = useState(committedGrayScaleStepDelta);
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
+  const [roiActionLocked, setROIActionLocked] = useState(false);
+  const [roiActionCanvasVisible, setROIActionCanvasVisible] = useState(false);
   const [mergedFigureByKind, setMergedFigureByKind] = useState<{
     raster: string | null;
     vector: string | null;
@@ -243,6 +252,7 @@ export function App() {
 
   const scanActive = phase === "running" || phase === "stopping";
   const panelDisabled = scanActive || !isSignedIn;
+  const rasterVectorTabsDisabled = panelDisabled || roiActionLocked;
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
     (lastScanKind === "vector" && vectorCursor > 0) ||
@@ -259,35 +269,35 @@ export function App() {
       : null;
   const showGraySpectrum =
     kind === "roi" && hasPartialROI && Boolean(roiState.imageDataUrl || roiScanImageUrl);
-  const grayScaleSourceKind: "raster" | "vector" | "loaded" | null =
-    kind === "roi" && showGraySpectrum
-      ? roiState.imageDataUrl
-        ? "loaded"
-        : roiScanImageUrl
-        ? lastScanKind
-        : null
-      : null;
-  const grayScaleSourceLabel =
-    grayScaleSourceKind === "raster"
-      ? t("roi.grayScale.source.raster")
-      : grayScaleSourceKind === "vector"
-      ? t("roi.grayScale.source.vector")
-      : null;
-  const grayScaleScopeNote =
-    grayScaleSourceKind === "raster"
-      ? isProduction
-        ? t("roi.grayScale.context.raster.production")
-        : t("roi.grayScale.context.raster.preview")
-      : grayScaleSourceKind === "vector"
-      ? t("roi.grayScale.context.vector")
-      : null;
+  const grayScaleSourceKind = resolveGrayScaleSourceKind({
+    showGraySpectrum: kind === "roi" && showGraySpectrum,
+    roiImageDataUrl: roiState.imageDataUrl,
+    roiScanImageUrl,
+    lastScanKind,
+  });
+  const grayScaleSourceLabel = grayScaleSourceLabelForKind(grayScaleSourceKind, t);
+  const grayScaleScopeNote = grayScaleScopeNoteForKind(grayScaleSourceKind, isProduction, t);
+  const actionScanKind = resolveROIActionKind(kind, lastScanKind) ?? lastScanKind;
+  const showROIActionControls = shouldShowROIActionControls({
+    kind,
+    showGraySpectrum,
+    committedGrayScaleSelection,
+  });
+
+  useEffect(() => {
+    if (!roiState.selection || phase === "completed" || phase === "error" || phase === "idle") {
+      setROIActionLocked(false);
+    }
+    if (!roiState.selection || phase === "idle" || phase === "error") {
+      setROIActionCanvasVisible(false);
+    }
+  }, [phase, roiState.selection]);
 
   useEffect(() => {
     if (!showGraySpectrum) {
       setPendingGrayScaleSelection(null);
       setPendingGrayScaleAnchor(null);
       setGrayScaleLevels([]);
-      setGrayScaleStepDelta(10);
     }
   }, [showGraySpectrum]);
 
@@ -571,7 +581,7 @@ export function App() {
                   role="tab"
                   className="tab tab--sub"
                   aria-selected={scanSubTab === "raster"}
-                  disabled={panelDisabled}
+                  disabled={rasterVectorTabsDisabled}
                   onClick={() => activateScanSubTab("raster")}
                 >
                   <Icon name="grid" tone="tab" />
@@ -581,7 +591,7 @@ export function App() {
                   role="tab"
                   className="tab tab--sub"
                   aria-selected={scanSubTab === "vector"}
-                  disabled={panelDisabled}
+                  disabled={rasterVectorTabsDisabled}
                   onClick={() => activateScanSubTab("vector")}
                 >
                   <Icon name="route" tone="tab" />
@@ -620,7 +630,25 @@ export function App() {
                   <VectorParameters disabled={panelDisabled} />
                 ) : (
                   <>
-                    <ROIEditor disabled={panelDisabled} variant="controls" />
+                    <ROIEditor
+                      disabled={panelDisabled}
+                      variant="controls"
+                      allowClearRegionWhileDisabled={roiActionLocked}
+                    />
+                    {showROIActionControls && kind === "roi" && (
+                      <div className="roi-action-controls">
+                        <ScanControls
+                          kind={actionScanKind}
+                          disabled={!isSignedIn}
+                          scanActive={scanActive}
+                          roiAction
+                          onActionRunStart={() => {
+                            setROIActionLocked(true);
+                            setROIActionCanvasVisible(true);
+                          }}
+                        />
+                      </div>
+                    )}
                     {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
                   </>
                 )
@@ -629,7 +657,11 @@ export function App() {
                   <MagCalibrationControls disabled={panelDisabled} />
                 ) : (
                   <>
-                    <ROIEditor disabled={panelDisabled} variant="controls" />
+                    <ROIEditor
+                      disabled={panelDisabled}
+                      variant="controls"
+                      allowClearRegionWhileDisabled={roiActionLocked}
+                    />
                     {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
                   </>
                 )
@@ -637,7 +669,7 @@ export function App() {
             </div>
           </div>
 
-          {kind !== "roi" && kind !== "mag" && (
+          {showROIActionControls && kind !== "roi" && (
             <>
               <div className="card">
                 <div className="card__header">
@@ -645,7 +677,7 @@ export function App() {
                 </div>
                 <div className="card__body">
                   <ScanControls
-                    kind={kind as ScanKind}
+                    kind={actionScanKind}
                     disabled={!isSignedIn}
                     scanActive={scanActive}
                   />
@@ -658,8 +690,9 @@ export function App() {
                 <ValidationPanel
                   disabled={!isSignedIn}
                   mergedFigureUrl={
-                    kind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
+                    actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
                   }
+                  kindOverride={actionScanKind}
                 />
               </div>
               <ErrorWedge signedInUser={signedInUser} />
@@ -720,12 +753,13 @@ export function App() {
             <div className="card__body">
               {kind === "roi" ? (
                   <ROIEditor
-                  disabled={panelDisabled}
-                  variant="canvas"
-                  backgroundImageUrl={roiScanImageUrl}
-                  grayScaleSelection={pendingGrayScaleSelection}
-                  grayScaleSkipped={pendingGrayScaleSkipped}
-                />
+                    disabled={panelDisabled}
+                    variant="canvas"
+                    backgroundImageUrl={roiScanImageUrl}
+                    grayScaleSelection={pendingGrayScaleSelection}
+                    grayScaleSkipped={pendingGrayScaleSkipped}
+                    liveVectorPreview={roiActionCanvasVisible}
+                  />
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
               ) : (

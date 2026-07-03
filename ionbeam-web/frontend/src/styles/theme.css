@@ -869,6 +869,7 @@ body {
 }
 
 .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.roi-action-controls { margin-top: 12px; }
 .scan-action-with-help { display: inline-flex; align-items: center; gap: 4px; }
 
 .scan-equipment-field {
@@ -2454,6 +2455,11 @@ body {
   pointer-events: none;
 }
 
+.roi-canvas-layer--live {
+  z-index: 1;
+  pointer-events: none;
+}
+
 .roi-canvas-layer--annotation {
   z-index: 2;
   pointer-events: none;
@@ -2471,6 +2477,29 @@ body {
   position: absolute;
   border: 1px dashed rgba(255, 255, 255, 0.4);
   pointer-events: none;
+}
+
+.roi-canvas-progress {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 34px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.roi-canvas-meta {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  z-index: 5;
+  pointer-events: none;
+  justify-content: space-between;
+  background: rgba(10, 12, 16, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
 }
 
 .roi-calibration-ruler {

@@ -48,16 +48,18 @@ const DEFAULT_DOWNLOAD_PATH_LABEL = defaultDownloadPathLabel();
 export function ValidationPanel({
   disabled = false,
   mergedFigureUrl = null,
+  kindOverride = null,
 }: {
   disabled?: boolean;
   mergedFigureUrl?: string | null;
+  kindOverride?: "raster" | "vector" | null;
 }) {
   const { t, fmt } = useTranslation();
   const result = useAppSelector((s) => s.scan.lastResult);
   const error = useAppSelector((s) => s.scan.errorMessage);
   const phase = useAppSelector((s) => s.scan.phase);
   const kind = useAppSelector((s) => s.scan.kind);
-  const scanKind = kind === "vector" ? "vector" : "raster";
+  const scanKind = kindOverride ?? (kind === "vector" ? "vector" : "raster");
 
   const rasterFrame = useAppSelector((s) => s.image.frame);
   const rasterRes = useAppSelector((s) => s.image.resolution);

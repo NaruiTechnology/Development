@@ -169,6 +169,9 @@ export const en = {
   "scan.equipment.label": "Equipment",
   "scan.equipment.title": "Select the equipment attached to this scan activity record",
   "scan.equipment.empty": "No equipment configured",
+  "roi.actionRun": "Action run",
+  "roi.actionRun.title": "Run the committed ROI gray-level selection as a vector-style scan",
+  "roi.actionRun.selectionRequired": "Confirm a gray-level Skip or Spot selection before running the ROI action.",
   "common.custom": "Custom",
 
   /* ===== raster parameter form ==================================== */
@@ -329,6 +332,7 @@ export const en = {
   "canvas.meta.resolution": "resolution",
   "canvas.meta.pixels": "pixels",
   "canvas.meta.samples": "samples",
+  "canvas.meta.progress": "progress",
   "canvas.meta.roi": "ROI",
   "canvas.meta.beam": "beam",
   "canvas.meta.adcNow": "ADC now",
@@ -567,7 +571,6 @@ export const en = {
   "roi.grayScale.context.raster.production": "Production raster stays rectangular. Gray selection is preview-only here and does not blank, skip, or redirect the beam.",
   "roi.grayScale.context.raster.preview": "Raster preview only. Gray selection does not change the scan path.",
   "roi.grayScale.context.vector": "Vector preview. Gray selection can be committed to beam-selective behavior.",
-  "roi.grayScale.context.loaded": "Loaded image preview. Gray selection only filters the displayed ROI view.",
   "settings.general.group.runtime": "Runtime",
   "settings.general.group.actionData": "Action data",
   "settings.general.group.beam": "Beam enable",
