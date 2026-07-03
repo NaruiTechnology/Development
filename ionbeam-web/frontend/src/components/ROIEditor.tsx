@@ -29,6 +29,8 @@ const UNITS = [
   { value: "nm", label: "nm" },
 ];
 
+const ROI_DRAG_THRESHOLD = 8;
+
 export function ROIEditor({
   disabled,
   variant = "all",
@@ -782,6 +784,7 @@ export function ROIEditor({
               e.currentTarget.setPointerCapture(e.pointerId);
               const p = canvasPoint(e);
               dragStartRef.current = p;
+              setDraft(null);
               const d = toDut(p);
               setTip({ x: e.clientX, y: e.clientY, text: `(${d.x}, ${d.y})` });
             }}
@@ -791,18 +794,31 @@ export function ROIEditor({
               const p = canvasPoint(e);
               const d = toDut(p);
               if (dragStartRef.current) {
-                const next = rectFromPoints(dragStartRef.current, p);
-                setDraft(next);
+                const dx = Math.abs(p.x - dragStartRef.current.x);
+                const dy = Math.abs(p.y - dragStartRef.current.y);
+                if (Math.max(dx, dy) >= ROI_DRAG_THRESHOLD / ROI_CANVAS_EDGE) {
+                  const next = rectFromPoints(dragStartRef.current, p);
+                  setDraft(next);
+                }
                 setTip({ x: e.clientX, y: e.clientY, text: `(${d.x}, ${d.y})` });
               }
             }}
             onPointerUp={(e) => {
               if (disabled || roi.calibration_enabled) return;
               e.preventDefault();
-              if (!dragStartRef.current) return;
-              const next = rectFromPoints(dragStartRef.current, canvasPoint(e));
+              const start = dragStartRef.current;
+              if (!start) return;
+              const nextPoint = canvasPoint(e);
+              const dx = Math.abs(nextPoint.x - start.x);
+              const dy = Math.abs(nextPoint.y - start.y);
+              const didDrag = Math.max(dx, dy) >= ROI_DRAG_THRESHOLD / ROI_CANVAS_EDGE;
               dragStartRef.current = null;
               setDraft(null);
+              if (!didDrag) {
+                setTip(null);
+                return;
+              }
+              const next = rectFromPoints(start, nextPoint);
               clearBitmapSelectionCache();
               dispatch(updateROI({ selection: next }));
               setTip(null);
