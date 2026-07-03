@@ -54,6 +54,7 @@ import {
 
 import {
   beginROICalibration,
+  clearROISelection,
   persistGrayScaleStepDelta,
   setKind,
   setROIGrayScaleSelection,
@@ -310,6 +311,29 @@ export function App() {
     }
   }, [showGraySpectrum]);
 
+  const resetROIActionContext = useCallback(
+    (options?: { clearSelection?: boolean }) => {
+      clearBitmapSelectionCache();
+      if (options?.clearSelection) {
+        dispatch(clearROISelection());
+      }
+      dispatch(
+        setROIGrayScaleSelection({
+          selection: null,
+          isSkipped: null,
+        })
+      );
+      setPendingGrayScaleSelection(null);
+      setPendingGrayScaleAnchor(null);
+      setPendingGrayScaleSkipped(null);
+      setGrayScaleLevels([]);
+      setGrayScaleConfirmOpen(false);
+      setROIActionLocked(false);
+      setROIActionCanvasVisible(false);
+    },
+    [dispatch]
+  );
+
   useEffect(() => {
     setPendingGrayScaleSelection(committedGrayScaleSelection);
     setPendingGrayScaleAnchor(null);
@@ -361,6 +385,13 @@ export function App() {
       cancelled = true;
     };
   }, [activeROIScanImageUrl, roiState, showGraySpectrum]);
+
+  const previousROISelectionRef = useRef(roiState.selection);
+  useEffect(() => {
+    if (previousROISelectionRef.current === roiState.selection) return;
+    previousROISelectionRef.current = roiState.selection;
+    resetROIActionContext();
+  }, [resetROIActionContext, roiState.selection]);
 
   useEffect(() => {
     if (kind !== "roi") return;
@@ -448,9 +479,9 @@ export function App() {
 
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
-    clearBitmapSelectionCache();
     suppressedROIScanImageUrlRef.current = null;
     setSuppressedROIScanImageUrl(null);
+    resetROIActionContext({ clearSelection: true });
     dispatch(
       updateROI({
         imageName: t("roi.imageName.lastScan"),
@@ -458,7 +489,7 @@ export function App() {
         imageKind: "lastScan",
       })
     );
-  }, [dispatch, roiScanImageUrl, t]);
+  }, [dispatch, resetROIActionContext, roiScanImageUrl, t]);
 
   function selectKind(nextKind: ScanKind) {
     if (nextKind === kind) return;
@@ -466,6 +497,8 @@ export function App() {
 
     const nextScanKind = nextKind === "raster" || nextKind === "vector" ? nextKind : null;
     const currentScanKind = kind === "raster" || kind === "vector" ? kind : hasPriorScanImage ? lastScanKind : null;
+
+    resetROIActionContext({ clearSelection: true });
 
     if (currentScanKind && nextScanKind && currentScanKind !== nextScanKind) {
       dispatch(streamReset());
