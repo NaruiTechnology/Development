@@ -407,8 +407,8 @@ export function ROIEditor({
     const dotRadius = Math.max(1.4, Math.min(2.4, ROI_CANVAS_EDGE / 1024));
     ctx.save();
     ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "rgba(236, 72, 153, 0.72)";
-    ctx.strokeStyle = "rgba(255, 221, 236, 0.88)";
+    ctx.fillStyle = "rgba(100, 0, 0, 0.5732)";
+    ctx.strokeStyle = "rgba(246, 8, 8, 0.44)";
     ctx.lineWidth = 0.75;
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
