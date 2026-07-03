@@ -233,6 +233,7 @@ export const en = {
 
   /* ===== ROI editor =============================================== */
   "roi.select": "SELECT",
+  "roi.loadLastScan": "Load last scan",
   "roi.clearImage": "Clear image",
   "roi.clearRegion": "Clear region",
   "roi.calibrate": "Calibrate",

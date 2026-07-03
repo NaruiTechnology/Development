@@ -38,7 +38,7 @@ import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
-import { grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
+import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 import {
   formatGrayScaleSelection,
   normalizeGrayScaleSelection,
@@ -446,6 +446,20 @@ export function App() {
     setGrayScaleConfirmOpen(false);
   }, [dispatch]);
 
+  const handleLoadLastScan = useCallback(() => {
+    if (!roiScanImageUrl) return;
+    clearBitmapSelectionCache();
+    suppressedROIScanImageUrlRef.current = null;
+    setSuppressedROIScanImageUrl(null);
+    dispatch(
+      updateROI({
+        imageName: t("roi.imageName.lastScan"),
+        imageDataUrl: roiScanImageUrl,
+        imageKind: "lastScan",
+      })
+    );
+  }, [dispatch, roiScanImageUrl, t]);
+
   function selectKind(nextKind: ScanKind) {
     if (nextKind === kind) return;
     if (scanActive) return;
@@ -667,6 +681,8 @@ export function App() {
                       disabled={panelDisabled}
                       variant="controls"
                       allowClearRegionWhileDisabled={roiActionLocked}
+                      lastScanImageUrl={roiScanImageUrl}
+                      onLoadLastScan={handleLoadLastScan}
                     />
                     {showROIActionControls && kind === "roi" && (
                       <div className="roi-action-controls">
@@ -694,6 +710,8 @@ export function App() {
                       disabled={panelDisabled}
                       variant="controls"
                       allowClearRegionWhileDisabled={roiActionLocked}
+                      lastScanImageUrl={roiScanImageUrl}
+                      onLoadLastScan={handleLoadLastScan}
                     />
                     {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
                   </>

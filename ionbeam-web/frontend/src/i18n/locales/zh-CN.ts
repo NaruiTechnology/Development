@@ -209,6 +209,7 @@ export const zhCN: Partial<TranslationTable> = {
 
   /* ===== ROI editor =============================================== */
   "roi.select": "选择文件",
+  "roi.loadLastScan": "加载上次扫描",
   "roi.clearImage": "清除图像",
   "roi.clearRegion": "清除区域",
   "roi.calibrate": "校准",

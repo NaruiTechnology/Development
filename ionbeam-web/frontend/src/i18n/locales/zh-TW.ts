@@ -218,6 +218,7 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== ROI editor =============================================== */
   "roi.select": "選擇檔案",
+  "roi.loadLastScan": "載入上次掃描",
   "roi.clearImage": "清除影像",
   "roi.clearRegion": "清除區域",
   "roi.calibrate": "校準",

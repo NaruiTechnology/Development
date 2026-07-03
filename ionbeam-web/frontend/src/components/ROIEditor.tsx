@@ -33,18 +33,22 @@ export function ROIEditor({
   disabled,
   variant = "all",
   backgroundImageUrl = null,
+  lastScanImageUrl = null,
   grayScaleSelection = null,
   grayScaleSkipped = null,
   allowClearRegionWhileDisabled = false,
   liveVectorPreview = false,
+  onLoadLastScan,
 }: {
   disabled: boolean;
   variant?: "controls" | "canvas" | "all";
   backgroundImageUrl?: string | null;
+  lastScanImageUrl?: string | null;
   grayScaleSelection?: GrayScaleSelection;
   grayScaleSkipped?: boolean | null;
   allowClearRegionWhileDisabled?: boolean;
   liveVectorPreview?: boolean;
+  onLoadLastScan?: () => void;
 }) {
   const dispatch = useAppDispatch();
   const tr = useTranslation();
@@ -553,6 +557,21 @@ export function ROIEditor({
               <Icon name="upload" tone="accent" />
               {t("roi.select")}
             </button>
+            {lastScanImageUrl && (
+              <button
+                className="btn btn--ghost"
+                disabled={disabled || roi.imageKind === "lastScan"}
+                onClick={() => {
+                  if (fileRef.current) {
+                    fileRef.current.value = "";
+                  }
+                  onLoadLastScan?.();
+                }}
+              >
+                <Icon name="download" tone="accent" />
+                {t("roi.loadLastScan")}
+              </button>
+            )}
             <button
               className="btn btn--ghost"
               disabled={disabled || !hasLoadedImage}
