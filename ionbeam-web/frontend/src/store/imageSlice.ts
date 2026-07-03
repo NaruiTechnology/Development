@@ -80,6 +80,10 @@ const slice = createSlice({
   name: "image",
   initialState,
   reducers: {
+    bumpRevision(state) {
+      state.revision++;
+    },
+
     /* ---------- raster -------------------------------------------------- */
 
     resetRaster(state, a: PayloadAction<{ resolution: number }>) {
@@ -255,6 +259,7 @@ const slice = createSlice({
 });
 
 export const {
+  bumpRevision,
   resetRaster,
   appendRaster,
   setupVector,

@@ -135,6 +135,8 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.run": "執行",
   "scan.pause": "暫停",
   "scan.pausing": "正在暫停…",
+  "scan.resume": "繼續",
+  "scan.resume.title": "目前執行結束後繼續剩餘的 ROI 動作循環",
   "scan.stop": "停止",
   "scan.runValidated": "驗證執行",
   "scan.clear": "清除",
@@ -157,6 +159,8 @@ export const zhTW: Partial<TranslationTable> = {
   "roi.actionRun": "Action run",
   "roi.actionRun.title": "以矢量掃描方式執行已確認的 ROI 灰階選擇",
   "roi.actionRun.selectionRequired": "請先確認灰階 Skip 或 Spot 選擇，再執行 ROI 動作。",
+  "scan.repeat": "重複",
+  "scan.repeat.title": "設定 Action run 循環重複的次數",
   "common.custom": "自訂",
 
   /* ===== raster parameter form ==================================== */

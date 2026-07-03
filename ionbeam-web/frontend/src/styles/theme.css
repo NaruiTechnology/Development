@@ -422,6 +422,12 @@ body {
   flex: 0 0 auto;
 }
 
+.roi-spectrum__meta .help-btn {
+  width: 14px;
+  height: 14px;
+  font-size: 12px;
+}
+
 .roi-spectrum__source-pill {
   display: inline-flex;
   align-items: center;
@@ -868,9 +874,102 @@ body {
   height: 100%;
 }
 
-.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.button-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .roi-action-controls { margin-top: 12px; }
 .scan-action-with-help { display: inline-flex; align-items: center; gap: 4px; }
+
+.scan-loop-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 4px;
+  align-items: center;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.scan-loop-controls__preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  flex-wrap: nowrap;
+  grid-row: 1;
+}
+
+.scan-loop-controls__preview .scan-preview-toggle {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.scan-loop-controls__buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  grid-row: 2;
+  width: 100%;
+}
+
+.scan-loop-controls__preview .scan-busy {
+  flex: 0 0 auto;
+}
+
+.scan-loop-counter-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.scan-loop-counter__label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-text-dim);
+}
+
+.scan-loop-counter {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  background: var(--c-btn-primary);
+  color: #fff;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.scan-repeat-field--inline {
+  margin-left: auto;
+}
+
+.scan-repeat-field--inline {
+  flex: 0 0 74px;
+}
+
+.scan-repeat-field {
+  width: 74px;
+}
+
+.scan-repeat-field__input {
+  padding: 4px 6px;
+}
+
+.scan-loop-counter[data-visible="false"] {
+  opacity: 0.45;
+}
 
 .scan-equipment-field {
   display: grid;
@@ -2751,10 +2850,10 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   padding: 0;
-  font-size: 16px;                   /* drives 1em icon → 16px SVG */
+  font-size: 14px;                   /* drives 1em icon → 14px SVG */
   line-height: 1;
   color: var(--c-text);              /* full-strength foreground */
   background: transparent;

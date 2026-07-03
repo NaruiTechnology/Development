@@ -3,26 +3,11 @@
  * uses the blocking REST endpoint (returns a ScanResult with timing,
  * validation report, and CSV path).
  *
- * Pause vs. Stop semantics
- * ------------------------
- * The FPGA pipeline is one-shot — once a scan starts, it runs until the
- * point list is exhausted; there is no real mid-frame pause. So Pause
- * and Stop both close the WS (which calls gen.aclose() server-side and
- * cancels the scan), and the only difference is whether the partial
- * frame on the canvas is preserved.
- *
- *   Run    : start a fresh scan
- *   Pause  : end the scan, keep the partial image (operator wants to
- *            inspect what was captured before continuing)
- *   Stop   : end the scan, clear the image
- *
- * After Pause, pressing Run starts a new scan from sample 0 and clears
- * the kept image. We don't label that "Resume" because the previous
- * implementation's "Resume" pretended the partial frame would continue
- * from where it left off — which was never true. The button stays
- * labeled "Run" so the operator knows what it actually does.
+ * ROI loops use Pause as a repeat-loop toggle: the current run is
+ * allowed to finish, then the remaining repeats are held until the
+ * operator clicks Resume.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAppDispatch, useAppSelector } from "../store";
 import { apiUrl } from "../lib/backendUrl";
@@ -34,7 +19,7 @@ import {
   streamReset,
   type ScanKind,
 } from "../store/scanSlice";
-import { resetRaster, resetVector } from "../store/imageSlice";
+import { bumpRevision, resetRaster, resetVector } from "../store/imageSlice";
 import { registerScanActionStop } from "../hooks/scanActionRegistry";
 import { useScanStream } from "../hooks/useScanStream";
 import {
@@ -48,6 +33,7 @@ import { Icon } from "./Icon";
 import { RunValidatedHelp } from "./RunValidatedHelp";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import type { VectorRequest } from "../types/api";
 
 interface EquipmentOption {
   id: number | null;
@@ -96,9 +82,21 @@ export function ScanControls({
   const backendRestarting = useAppSelector((s) => s.settings.backendRestarting);
   const roiGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const roiGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
+  const selectedBeam = defaults?.selected_beam;
   const roi = roiState.selection;
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
+  const actionLoopTimerRef = useRef<number | null>(null);
+  const actionLoopRequestRef = useRef<{ req: VectorRequest; preview: boolean } | null>(null);
+  const actionLoopRemainingRef = useRef(0);
+  const actionLoopIterationRef = useRef(0);
+  const actionLoopActiveRef = useRef(false);
+  const actionLoopPausedRef = useRef(false);
+  const actionLoopGapMs = 180;
+  const [repeat, setRepeat] = useState(1);
+  const [actionLoopIteration, setActionLoopIteration] = useState(0);
+  const [actionLoopActive, setActionLoopActive] = useState(false);
+  const [actionLoopPaused, setActionLoopPaused] = useState(false);
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
   const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
@@ -114,6 +112,48 @@ export function ScanControls({
   const paused = phase === "paused";
   const busy = streaming || closing;
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
+  const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
+
+  const clearActionLoopTimer = useCallback(() => {
+    if (actionLoopTimerRef.current !== null) {
+      window.clearTimeout(actionLoopTimerRef.current);
+      actionLoopTimerRef.current = null;
+    }
+  }, []);
+
+  const clearActionLoopState = useCallback(() => {
+    clearActionLoopTimer();
+    actionLoopRequestRef.current = null;
+    actionLoopRemainingRef.current = 0;
+    actionLoopIterationRef.current = 0;
+    actionLoopActiveRef.current = false;
+    actionLoopPausedRef.current = false;
+    setActionLoopIteration(0);
+    setActionLoopActive(false);
+    setActionLoopPaused(false);
+  }, [clearActionLoopTimer]);
+
+  const scheduleNextActionRun = useCallback(() => {
+    clearActionLoopTimer();
+    if (!actionLoopActiveRef.current || actionLoopPausedRef.current || actionLoopRemainingRef.current <= 0) {
+      return;
+    }
+    actionLoopTimerRef.current = window.setTimeout(() => {
+      actionLoopTimerRef.current = null;
+      if (!actionLoopActiveRef.current || actionLoopPausedRef.current || actionLoopRemainingRef.current <= 0) {
+        return;
+      }
+      const entry = actionLoopRequestRef.current;
+      if (!entry) {
+        return;
+      }
+      dispatch(bumpRevision());
+      actionLoopIterationRef.current += 1;
+      setActionLoopIteration(actionLoopIterationRef.current);
+      actionLoopRemainingRef.current -= 1;
+      stream.startVector({ ...entry.req, preview: entry.preview });
+    }, actionLoopGapMs);
+  }, [actionLoopGapMs, clearActionLoopTimer, dispatch, stream]);
 
   async function onRun() {
     if (disabled || (kind === "roi" && !roiAction)) return;
@@ -123,6 +163,9 @@ export function ScanControls({
     }
     if (roiAction) {
       try {
+        if (roiEbeamDisabled) {
+          return;
+        }
         if (roiGrayScaleSelection === null || roiGrayScaleSkipped === null) {
           throw new Error(t("roi.actionRun.selectionRequired"));
         }
@@ -134,6 +177,15 @@ export function ScanControls({
             grayScaleSkipped: roiGrayScaleSkipped,
           }
         );
+        clearActionLoopState();
+        actionLoopRequestRef.current = { req, preview };
+        actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)) - 1);
+        actionLoopIterationRef.current = 1;
+        setActionLoopIteration(1);
+        actionLoopActiveRef.current = true;
+        actionLoopPausedRef.current = false;
+        setActionLoopActive(true);
+        setActionLoopPaused(false);
         onActionRunStart?.();
         stream.startVector({ ...req, preview });
       } catch (e: any) {
@@ -157,8 +209,7 @@ export function ScanControls({
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
-    }
-    else {
+    } else {
       try {
         const req = await vectorRequestWithBitmapSelection(
           { ...vector, roi },
@@ -178,12 +229,30 @@ export function ScanControls({
   }
 
   function onPause() {
-    if (disabled) return;
+    if (disabled || roiEbeamDisabled) return;
+    if (roiAction) {
+      if (!actionLoopActiveRef.current && !actionLoopPausedRef.current) {
+        return;
+      }
+      if (actionLoopPausedRef.current) {
+        actionLoopPausedRef.current = false;
+        setActionLoopPaused(false);
+        if (!streaming && actionLoopActiveRef.current && actionLoopRemainingRef.current > 0) {
+          scheduleNextActionRun();
+        }
+        return;
+      }
+      actionLoopPausedRef.current = true;
+      setActionLoopPaused(true);
+      clearActionLoopTimer();
+      return;
+    }
     stream.pause();
   }
 
   function onStop() {
-    if (disabled) return;
+    if (disabled || roiEbeamDisabled) return;
+    clearActionLoopState();
     stream.stop();
     if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
@@ -248,9 +317,20 @@ export function ScanControls({
     else dispatch(resetVector());
   }
 
-  const runDisabled = controlsDisabled || streaming || closing;
-  const pauseDisabled = disabled || !streaming;
-  const stopDisabled = disabled || !(streaming || paused);
+  const runDisabled =
+    controlsDisabled ||
+    roiEbeamDisabled ||
+    streaming ||
+    closing ||
+    (roiAction && (actionLoopActive || actionLoopPaused));
+  const roiPauseEnabled = actionLoopActive || actionLoopPaused || streaming || closing || paused;
+  const pauseDisabled = roiAction ? disabled || roiEbeamDisabled || !roiPauseEnabled : disabled || !streaming;
+  const stopDisabled = disabled || roiEbeamDisabled || !(streaming || paused || closing || actionLoopActive || actionLoopPaused);
+  const roiResumeMode = roiAction && actionLoopPaused;
+  const roiPauseButtonClass = roiResumeMode ? "btn btn--primary" : `btn ${actionLoopActive || actionLoopPaused || streaming || closing || paused ? "btn--gold" : ""}`;
+  const roiPauseButtonLabel = roiResumeMode ? t("scan.resume") : t("scan.pause");
+  const roiPauseButtonTitle = roiResumeMode ? t("scan.resume.title") : t("scan.pause.title");
+  const roiPauseButtonIcon = roiResumeMode ? "play" : "pause";
 
   useEffect(() => {
     let cancelled = false;
@@ -313,7 +393,29 @@ export function ScanControls({
     if (completedNow && roiState.imageDataUrl && roiState.selection) {
       clearBitmapSelectionCache();
     }
-  }, [phase, roiState.imageDataUrl, roiState.selection]);
+    if (completedNow && actionLoopActiveRef.current && !actionLoopPausedRef.current && actionLoopRemainingRef.current > 0) {
+      clearBitmapSelectionCache();
+      dispatch(bumpRevision());
+      scheduleNextActionRun();
+      return;
+    }
+    if (completedNow && actionLoopActiveRef.current && actionLoopRemainingRef.current <= 0) {
+      clearActionLoopState();
+    }
+    if (phase === "error" || phase === "idle") {
+      clearActionLoopState();
+    }
+  }, [clearActionLoopState, phase, roiState.imageDataUrl, roiState.selection, scheduleNextActionRun]);
+
+  useEffect(() => {
+    clearActionLoopState();
+  }, [clearActionLoopState, roiAction, roiState.selection, kind]);
+
+  useEffect(() => {
+    return () => {
+      clearActionLoopState();
+    };
+  }, [clearActionLoopState]);
 
   if (roiAction) {
     return (
@@ -338,45 +440,86 @@ export function ScanControls({
             )}
           </select>
         </label>
-        <label
-          className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
-          title={t("scan.preview.title")}
-        >
-          <input
-            type="checkbox"
-            checked={preview}
-            disabled={controlsDisabled}
-            onChange={(event) => dispatch(setPreview(event.target.checked))}
-          />
-          {preview && <Icon name="alertTriangle" tone="warn" />}
-          <span>{t("scan.preview")}</span>
-        </label>
-        <button
-          className="btn btn--primary"
-          disabled={runDisabled}
-          onClick={onRun}
-          title={t("roi.actionRun.title")}
-        >
-          <Icon name="play" tone="success" />
-          {t("roi.actionRun")}
-        </button>
-        <button
-          className="btn btn--danger"
-          disabled={stopDisabled}
-          onClick={onStop}
-          title={t("scan.stop.title")}
-        >
-          <Icon name="square" tone="danger" />
-          {t("scan.stop")}
-        </button>
-        <span
-          className="scan-busy"
-          data-visible={busy ? "true" : "false"}
-          aria-hidden={!busy}
-          title={t("scan.busy.title")}
-        >
-          <span className="scan-busy__spinner" />
-        </span>
+        <div className="scan-loop-controls">
+          <div className="scan-loop-controls__preview">
+            <label
+              className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+              title={t("scan.preview.title")}
+            >
+              <input
+                type="checkbox"
+                checked={preview}
+                disabled={controlsDisabled || roiEbeamDisabled}
+                onChange={(event) => dispatch(setPreview(event.target.checked))}
+              />
+              {preview && <Icon name="alertTriangle" tone="warn" />}
+              <span>{t("scan.preview")}</span>
+            </label>
+            <span className="scan-loop-counter-wrap">
+              <span className="scan-loop-counter__label">{t("scan.repeat")}</span>
+              <span className="scan-loop-counter" title={t("scan.repeat.title")}>
+                {actionLoopIteration > 0 ? actionLoopIteration : 0}
+              </span>
+            </span>
+            <span
+              className="scan-busy"
+              data-visible={busy ? "true" : "false"}
+              aria-hidden={!busy}
+              title={t("scan.busy.title")}
+            >
+              <span className="scan-busy__spinner" />
+            </span>
+          </div>
+          <div className="scan-loop-controls__buttons">
+            <button
+              className="btn btn--primary"
+              disabled={runDisabled}
+              onClick={onRun}
+              title={t("roi.actionRun.title")}
+            >
+              <Icon name="play" tone="success" />
+              {t("roi.actionRun")}
+            </button>
+            <button
+              className={roiPauseButtonClass}
+              disabled={pauseDisabled}
+              onClick={onPause}
+              title={roiPauseButtonTitle}
+            >
+              <Icon
+                name={roiPauseButtonIcon}
+                tone={roiResumeMode ? "success" : actionLoopActive || actionLoopPaused || streaming || closing || paused ? "accent" : "warn"}
+              />
+              {roiPauseButtonLabel}
+            </button>
+            <button
+              className="btn btn--danger"
+              disabled={stopDisabled}
+              onClick={onStop}
+              title={t("scan.stop.title")}
+            >
+              <Icon name="square" tone="danger" />
+              {t("scan.stop")}
+            </button>
+            <label className="scan-repeat-field scan-repeat-field--inline" title={t("scan.repeat.title")}>
+              <span>{t("scan.repeat")}</span>
+              <input
+                className="input scan-repeat-field__input"
+                type="number"
+                min={1}
+                max={50}
+                step={1}
+                value={repeat}
+                disabled={controlsDisabled || roiEbeamDisabled}
+                onChange={(event) => {
+                  const raw = Number(event.target.value);
+                  const next = Number.isFinite(raw) ? Math.min(50, Math.max(1, Math.trunc(raw))) : 1;
+                  setRepeat(next);
+                }}
+              />
+            </label>
+          </div>
+        </div>
       </div>
     );
   }

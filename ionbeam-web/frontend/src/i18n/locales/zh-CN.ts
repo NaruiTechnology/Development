@@ -126,6 +126,8 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.run": "运行",
   "scan.pause": "暂停",
   "scan.pausing": "正在暂停…",
+  "scan.resume": "继续",
+  "scan.resume.title": "当前运行结束后继续剩余的 ROI 动作循环",
   "scan.stop": "停止",
   "scan.runValidated": "验证运行",
   "scan.clear": "清除",
@@ -148,6 +150,8 @@ export const zhCN: Partial<TranslationTable> = {
   "roi.actionRun": "Action run",
   "roi.actionRun.title": "以矢量扫描方式运行已确认的 ROI 灰度选择",
   "roi.actionRun.selectionRequired": "请先确认灰度级 Skip 或 Spot 选择，再运行 ROI 动作。",
+  "scan.repeat": "重复",
+  "scan.repeat.title": "设置 Action run 循环重复的次数",
   "common.custom": "自定义",
 
   /* ===== raster parameter form ==================================== */
