@@ -2417,10 +2417,10 @@ body {
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  border: 1px solid rgba(255, 214, 0, 0.45);
+  border: 1px solid rgba(236, 72, 153, 0.45);
   border-radius: 999px;
   background: rgba(10, 12, 16, 0.76);
-  color: #fff6c4;
+  color: #dcfce7;
   font-size: 11px;
   line-height: 1;
   pointer-events: none;
@@ -2431,7 +2431,7 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 2px;
-  background: linear-gradient(135deg, #fff27a, #ffbf2f);
+  background: linear-gradient(135deg, #fce7f3, #ec4899);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
 }
 

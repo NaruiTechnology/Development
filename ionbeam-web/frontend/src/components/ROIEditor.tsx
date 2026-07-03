@@ -365,7 +365,9 @@ export function ROIEditor({
       !liveVectorPreview ||
       vectorPattern !== "custom" ||
       !vectorCustomPoints ||
-      !roi.selection
+      !roi.selection ||
+      grayScaleSkipped === null ||
+      grayScaleSelection === null
     ) {
       return;
     }
@@ -379,7 +381,11 @@ export function ROIEditor({
     const worldYSpan = Math.max(1e-6, selection.y_end - selection.y_start);
     const pointXSpan = Math.max(1e-6, pointBounds.x1 - pointBounds.x0);
     const pointYSpan = Math.max(1e-6, pointBounds.y1 - pointBounds.y0);
-    const trace: Array<{ x: number; y: number }> = [];
+    const sourceCanvas = canvasRef.current;
+    const sourceCtx = sourceCanvas?.getContext("2d");
+    if (!sourceCanvas || !sourceCtx) return;
+    const sourceData = sourceCtx.getImageData(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE).data;
+    const points: Array<{ x: number; y: number }> = [];
     for (let i = 0; i < limit; i++) {
       const x = vectorCustomPoints[2 * i] | 0;
       const y = vectorCustomPoints[2 * i + 1] | 0;
@@ -388,36 +394,34 @@ export function ROIEditor({
       const canvasX = Math.round(worldToCanvasX(worldX, roi, viewportBounds(roi)));
       const canvasY = Math.round(worldToCanvasY(worldY, roi, viewportBounds(roi)));
       if (canvasX < 0 || canvasX >= ROI_CANVAS_EDGE || canvasY < 0 || canvasY >= ROI_CANVAS_EDGE) continue;
-      trace.push({ x: canvasX, y: canvasY });
+      const srcIdx = (canvasY * ROI_CANVAS_EDGE + canvasX) * 4;
+      const value = sourceData[srcIdx] ?? 0;
+      const selected = grayScaleSelectionContains(grayScaleSelection, value);
+      const beamOn = grayScaleSkipped === false ? selected : !selected;
+      if (!beamOn) continue;
+      points.push({ x: canvasX, y: canvasY });
     }
 
-    if (trace.length >= 1) {
-      ctx.save();
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      ctx.globalCompositeOperation = "difference";
-      ctx.strokeStyle = "rgba(128, 128, 128, 0.28)";
-      ctx.lineWidth = 1.0;
-      ctx.beginPath();
-      for (let i = 0; i < trace.length; i++) {
-        const p = trace[i];
-        const top = Math.max(0, p.y - 5);
-        const bottom = Math.min(ROI_CANVAS_EDGE, p.y + 5);
-        ctx.moveTo(p.x + 0.5, top + 0.5);
-        ctx.lineTo(p.x + 0.5, bottom + 0.5);
-      }
-      ctx.stroke();
+    if (points.length === 0) return;
 
-      const last = trace[trace.length - 1];
-      ctx.fillStyle = "rgba(128, 128, 128, 0.4)";
-      ctx.strokeStyle = "rgba(128, 128, 128, 0.4)";
-      ctx.lineWidth = 1.0;
+    const dotRadius = Math.max(1.4, Math.min(2.4, ROI_CANVAS_EDGE / 1024));
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(236, 72, 153, 0.72)";
+    ctx.strokeStyle = "rgba(255, 221, 236, 0.88)";
+    ctx.lineWidth = 0.75;
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
       ctx.beginPath();
-      ctx.arc(last.x + 0.5, last.y + 0.5, 3, 0, Math.PI * 2);
+      ctx.arc(p.x + 0.5, p.y + 0.5, dotRadius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
-      ctx.restore();
     }
+
+    const last = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x + 0.5, last.y + 0.5, dotRadius + 0.8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawAnnotationLayer() {
