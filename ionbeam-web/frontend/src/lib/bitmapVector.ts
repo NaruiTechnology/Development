@@ -312,6 +312,36 @@ export async function vectorRequestWithROIGrayScaleAction(
   };
 }
 
+export async function vectorRequestWithAdaptiveGrayFeedback(
+  req: VectorRequest,
+  roi: ROIState,
+  options: {
+    grayScaleSelection: GrayScaleSelection;
+    grayScaleSkipped: boolean | null;
+  }
+): Promise<VectorRequest> {
+  const selection = normalizeGrayScaleSelection(options.grayScaleSelection);
+  if (!roi.selection || selection === null || options.grayScaleSkipped === null) {
+    return withoutBitmapROI(req);
+  }
+
+  const roiRequest = roi.imageDataUrl
+    ? (await bitmapSelectionToVector(roi)).roi
+    : worldSelectionToDacROI(roi.selection, roi);
+
+  return {
+    ...req,
+    pattern: "default",
+    points: null,
+    roi: roiRequest,
+    simulation_bitmap: null,
+    output_mode: "SixteenBit",
+    feedback_mode: "adaptive_gray_feedback",
+    gray_level_range: [selection[0], selection[1]],
+    gray_level_skipped: options.grayScaleSkipped,
+  };
+}
+
 export async function grayScaleSpectrumLevelsForSelection(
   roi: ROIState
 ): Promise<number[]> {
@@ -333,6 +363,13 @@ function withoutBitmapROI<T extends RasterRequest | VectorRequest>(req: T): T {
     ...req,
     roi: null,
     simulation_bitmap: null,
+    ...(Object.prototype.hasOwnProperty.call(req, "feedback_mode")
+      ? {
+          feedback_mode: "standard",
+          gray_level_range: null,
+          gray_level_skipped: null,
+        }
+      : {}),
   };
 }
 

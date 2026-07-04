@@ -82,6 +82,11 @@ class VectorPattern(str, Enum):
     custom  = "custom"
 
 
+class VectorFeedbackMode(str, Enum):
+    standard = "standard"
+    adaptive_gray_feedback = "adaptive_gray_feedback"
+
+
 class VectorPoint(BaseModel):
     x: int = Field(..., ge=0, le=16383)
     y: int = Field(..., ge=0, le=16383)
@@ -149,6 +154,18 @@ class VectorRequest(BaseModel):
     )
     latency_bytes:  int  = Field(8196, ge=2, description="Matches `vectorScan.latency` in streamData.json.")
     output_mode:    str  = Field("SixteenBit", description="SixteenBit or EightBit.")
+    feedback_mode:  VectorFeedbackMode = Field(
+        VectorFeedbackMode.standard,
+        description="Vector blanking mode. adaptive_gray_feedback enables host-side feedback blanking.",
+    )
+    gray_level_range: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Confirmed gray-level interval in 8-bit UI units (0..255).",
+    )
+    gray_level_skipped: Optional[bool] = Field(
+        default=None,
+        description="True blanks values inside the range; false blanks values outside it.",
+    )
     beam_type:      str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
     cookie:         int  = Field(123, ge=0, le=0xFFFF)
@@ -174,6 +191,19 @@ class VectorRequest(BaseModel):
         if v < 1 or v > 2048:
             raise ValueError(f"vector_resolution must be between 1 and 2048; got {v}")
         return v
+
+    @field_validator("gray_level_range")
+    @classmethod
+    def _check_gray_level_range(cls, v: Optional[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+        if v is None:
+            return None
+        if len(v) != 2:
+            raise ValueError("gray_level_range must contain exactly two entries")
+        lo = int(v[0])
+        hi = int(v[1])
+        if lo < 0 or lo > 255 or hi < 0 or hi > 255:
+            raise ValueError("gray_level_range entries must be 0..255")
+        return (min(lo, hi), max(lo, hi))
 
     model_config = {
         "json_schema_extra": {

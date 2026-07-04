@@ -37,6 +37,7 @@ export interface RasterRequest {
 }
 
 export type VectorPattern = "default" | "custom";
+export type VectorFeedbackMode = "standard" | "adaptive_gray_feedback";
 
 export interface VectorPoint {
   x: number;
@@ -66,6 +67,11 @@ export interface VectorRequest {
   dwell: number;
   latency_bytes: number;
   output_mode: "SixteenBit" | "EightBit";
+  feedback_mode?: VectorFeedbackMode;
+  /** Confirmed gray interval in 8-bit UI units (0..255). */
+  gray_level_range?: [number, number] | null;
+  /** True blanks values inside the range; false blanks values outside it. */
+  gray_level_skipped?: boolean | null;
   cookie: number;
   pre_process: boolean;
   do_validate: boolean;

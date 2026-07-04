@@ -25,6 +25,7 @@ import { useScanStream } from "../hooks/useScanStream";
 import {
   clearBitmapSelectionCache,
   rasterRequestWithBitmapSelection,
+  vectorRequestWithAdaptiveGrayFeedback,
   vectorRequestWithBitmapSelection,
   vectorRequestWithROIGrayScaleAction,
 } from "../lib/bitmapVector";
@@ -101,6 +102,7 @@ export function ScanControls({
   const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
   const allowBitmapSimulation = !isProduction && Boolean(roiState.imageDataUrl);
+  const pixelFallbackBlank = Boolean(defaults?.vector?.["PixelFallbackBlank"]);
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one
@@ -166,14 +168,23 @@ export function ScanControls({
         if (roiGrayScaleSelection === null || roiGrayScaleSkipped === null) {
           throw new Error(t("roi.actionRun.selectionRequired"));
         }
-        const req = await vectorRequestWithROIGrayScaleAction(
-          { ...vector, roi },
-          roiState,
-          {
-            grayScaleSelection: roiGrayScaleSelection,
-            grayScaleSkipped: roiGrayScaleSkipped,
-          }
-        );
+        const req = pixelFallbackBlank
+          ? await vectorRequestWithAdaptiveGrayFeedback(
+              { ...vector, roi },
+              roiState,
+              {
+                grayScaleSelection: roiGrayScaleSelection,
+                grayScaleSkipped: roiGrayScaleSkipped,
+              }
+            )
+          : await vectorRequestWithROIGrayScaleAction(
+              { ...vector, roi },
+              roiState,
+              {
+                grayScaleSelection: roiGrayScaleSelection,
+                grayScaleSkipped: roiGrayScaleSkipped,
+              }
+            );
         clearActionLoopState();
         actionLoopRequestRef.current = { req, preview };
         actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
@@ -210,14 +221,23 @@ export function ScanControls({
       try {
         const req =
           roiGrayScaleSelection !== null && roiGrayScaleSkipped !== null
-            ? await vectorRequestWithROIGrayScaleAction(
-                { ...vector, roi },
-                roiState,
-                {
-                  grayScaleSelection: roiGrayScaleSelection,
-                  grayScaleSkipped: roiGrayScaleSkipped,
-                }
-              )
+            ? await (pixelFallbackBlank
+                ? vectorRequestWithAdaptiveGrayFeedback(
+                    { ...vector, roi },
+                    roiState,
+                    {
+                      grayScaleSelection: roiGrayScaleSelection,
+                      grayScaleSkipped: roiGrayScaleSkipped,
+                    }
+                  )
+                : vectorRequestWithROIGrayScaleAction(
+                    { ...vector, roi },
+                    roiState,
+                    {
+                      grayScaleSelection: roiGrayScaleSelection,
+                      grayScaleSkipped: roiGrayScaleSkipped,
+                    }
+                  ))
             : await vectorRequestWithBitmapSelection(
                 { ...vector, roi },
                 roiState,
@@ -297,14 +317,23 @@ export function ScanControls({
       try {
         const req =
           roiGrayScaleSelection !== null && roiGrayScaleSkipped !== null
-            ? await vectorRequestWithROIGrayScaleAction(
-                { ...vector, roi },
-                roiState,
-                {
-                  grayScaleSelection: roiGrayScaleSelection,
-                  grayScaleSkipped: roiGrayScaleSkipped,
-                }
-              )
+            ? await (pixelFallbackBlank
+                ? vectorRequestWithAdaptiveGrayFeedback(
+                    { ...vector, roi },
+                    roiState,
+                    {
+                      grayScaleSelection: roiGrayScaleSelection,
+                      grayScaleSkipped: roiGrayScaleSkipped,
+                    }
+                  )
+                : vectorRequestWithROIGrayScaleAction(
+                    { ...vector, roi },
+                    roiState,
+                    {
+                      grayScaleSelection: roiGrayScaleSelection,
+                      grayScaleSkipped: roiGrayScaleSkipped,
+                    }
+                  ))
             : await vectorRequestWithBitmapSelection(
                 { ...vector, roi },
                 roiState,

@@ -546,6 +546,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.vector.adcLatency": "ADC 延迟",
   "settings.vector.lineShiftPerXRow": "每 X 行的行位移",
   "settings.vector.drainFloorPixels": "排空底位（像素）",
+  "settings.vector.pixelFallbackBlank": "备用逐像素消隐",
   "settings.vector.display.enabled": "启用",
   "settings.vector.display.openViewer": "打开查看器",
 
@@ -607,6 +608,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.help.vectorAdcLatency.title": "矢量 ADC 延迟",
   "settings.help.vectorLineShift.title": "矢量行位移",
   "settings.help.vectorDrainFloor.title": "矢量排空底位",
+  "settings.help.vectorPixelFallbackBlank.title": "备用逐像素消隐",
   "settings.help.simulationEnabled.title": "启用仿真",
   "settings.help.simulationMode.title": "仿真模式",
   "settings.help.simulationResolution.title": "仿真分辨率",

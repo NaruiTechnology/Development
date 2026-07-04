@@ -552,6 +552,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.vector.adcLatency": "ADC 延遲",
   "settings.vector.lineShiftPerXRow": "每 X 列的列位移",
   "settings.vector.drainFloorPixels": "排空底位（像素）",
+  "settings.vector.pixelFallbackBlank": "備用逐像素消隱",
   "settings.vector.display.enabled": "啟用",
   "settings.vector.display.openViewer": "開啟檢視器",
 
@@ -613,6 +614,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.help.vectorAdcLatency.title": "矢量 ADC 延遲",
   "settings.help.vectorLineShift.title": "矢量列位移",
   "settings.help.vectorDrainFloor.title": "矢量排空底位",
+  "settings.help.vectorPixelFallbackBlank.title": "備用逐像素消隱",
   "settings.help.simulationEnabled.title": "啟用模擬",
   "settings.help.simulationMode.title": "模擬模式",
   "settings.help.simulationResolution.title": "模擬解析度",

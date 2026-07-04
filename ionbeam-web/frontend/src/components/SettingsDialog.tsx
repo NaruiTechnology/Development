@@ -755,6 +755,7 @@ function VectorTab({ draft }: { draft: unknown }) {
   const adcLatency = numberField(draft, [...VECTOR_PATH, "adcLatency"], 0);
   const lineShift = numberField(draft, [...VECTOR_PATH, "lineShiftPerXRow"], 0);
   const drainFloor = numberField(draft, [...VECTOR_PATH, "drainFloorPixels"], 0);
+  const pixelFallbackBlank = boolField(draft, [...VECTOR_PATH, "PixelFallbackBlank"], false);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
@@ -813,6 +814,15 @@ function VectorTab({ draft }: { draft: unknown }) {
           help={<SettingsHelp topic="vectorDrainFloor" />}
           value={drainFloor}
           onChange={(v) => set([...VECTOR_PATH, "drainFloorPixels"], v)}
+        />
+      </div>
+
+      <div className="settings-flags">
+        <CheckboxField
+          label={t("settings.vector.pixelFallbackBlank")}
+          help={<SettingsHelp topic="vectorPixelFallbackBlank" />}
+          value={pixelFallbackBlank}
+          onChange={(v) => set([...VECTOR_PATH, "PixelFallbackBlank"], v)}
         />
       </div>
     </div>
@@ -3029,6 +3039,7 @@ type SettingsHelpTopic =
   | "vectorAdcLatency"
   | "vectorLineShift"
   | "vectorDrainFloor"
+  | "vectorPixelFallbackBlank"
   | "simulationEnabled"
   | "simulationMode"
   | "simulationResolution"
@@ -3081,6 +3092,7 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, { title: TranslationKey }> =
   vectorAdcLatency: { title: "settings.help.vectorAdcLatency.title" },
   vectorLineShift: { title: "settings.help.vectorLineShift.title" },
   vectorDrainFloor: { title: "settings.help.vectorDrainFloor.title" },
+  vectorPixelFallbackBlank: { title: "settings.help.vectorPixelFallbackBlank.title" },
   simulationEnabled: { title: "settings.help.simulationEnabled.title" },
   simulationMode: { title: "settings.help.simulationMode.title" },
   simulationResolution: { title: "settings.help.simulationResolution.title" },
@@ -3209,6 +3221,22 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
         Minimum number of extra pixels drained at the end of a vector scan.
         This protects the tail of the ADC pipeline so the last real points
         are not left behind in device buffers.
+      </p>
+    </>
+  ),
+  vectorPixelFallbackBlank: (
+    <>
+      <p>
+        Enables the software-side fallback blanking mode for VECTOR
+        gray-level filtering. The host compares returned ADC samples
+        against the confirmed gray range and sends blanking updates for
+        the following point or calibrated small window.
+      </p>
+      <p>
+        This mode forces <code>SixteenBit</code> output so the full ADC
+        range is available to the threshold decision. Leave it disabled
+        for the normal precomputed vector path when throughput matters
+        more than per-point feedback control.
       </p>
     </>
   ),

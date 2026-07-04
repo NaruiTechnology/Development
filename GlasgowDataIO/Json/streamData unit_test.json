@@ -43,6 +43,9 @@
                         "adcLatency": 8,
                         "beamType": "Ion",
                         "externalControl": true,
+                        "PixelFallbackBlank": false,
+                        "adaptiveFeedbackWindowPoints": 1,
+                        "adaptiveFeedbackPipelineDelayPoints": 0,
                         "lineShiftPerXRow": 5.5,
                         "drainFloorPixels": 21000,
                         "display": {

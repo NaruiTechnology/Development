@@ -14,6 +14,8 @@ AutomationPy.buildingblocks.scan_params for the dataclass.
 
 import asyncio
 import struct
+from collections import deque
+from dataclasses import dataclass
 
 # Import path note: must match the prefix used by callers
 # (GlasgowDataIO.IobeamControl.*) so isinstance checks line up across
@@ -30,6 +32,23 @@ from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 
 
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
+
+
+@dataclass(frozen=True)
+class AdaptiveGrayFeedbackConfig:
+    gray_min: int
+    gray_max: int
+    blank_when_inside: bool
+    window_points: int = 1
+    pipeline_delay_points: int = 0
+
+    def __post_init__(self):
+        lo = max(0, min(0x3FFF, int(self.gray_min)))
+        hi = max(0, min(0x3FFF, int(self.gray_max)))
+        object.__setattr__(self, "gray_min", min(lo, hi))
+        object.__setattr__(self, "gray_max", max(lo, hi))
+        object.__setattr__(self, "window_points", max(1, int(self.window_points)))
+        object.__setattr__(self, "pipeline_delay_points", max(0, int(self.pipeline_delay_points)))
 
 
 # Module-level defaults. Single source of truth lives in
@@ -112,6 +131,7 @@ class VectorScanCommand(BaseCommand):
         external_control: bool = True,
         iter_points=None,
         drain_floor_pixels=None,
+        adaptive_gray_feedback: AdaptiveGrayFeedbackConfig | None = None,
         *,
         # --- pipeline tuning (overridable per-build via VectorParams) -----
         max_pipeline: int               = DEFAULT_MAX_PIPELINE,
@@ -149,10 +169,16 @@ class VectorScanCommand(BaseCommand):
             iter_points = default_iter()
 
         self._iter_points = iter_points
+        self._adaptive_gray_feedback = adaptive_gray_feedback
         self._processed_points = []
+        self._processed_adaptive_points = None
         self._processed = False
         self._cookie = cookie
-        self._output_mode = output_mode
+        self._output_mode = (
+            OutputMode.SixteenBit
+            if self._adaptive_gray_feedback is not None
+            else output_mode
+        )
         self._beam_type = beam_type
         self._external_control = bool(external_control)
 
@@ -176,15 +202,103 @@ class VectorScanCommand(BaseCommand):
                 f"output_mode={self._output_mode}, "
                 f"beam_type={self._beam_type}, "
                 f"external_control={self._external_control}, "
+                f"adaptive_gray_feedback={self._adaptive_gray_feedback}, "
                 f"max_pipeline={self._max_pipeline}, "
                 f"drain_floor_pixels={self._drain_floor_pixels}")
 
     def _pre_process_chunks(self, latency):
         print("Pre-processing commands...")
+        if self._adaptive_gray_feedback is not None:
+            self._processed_adaptive_points = [
+                _normalize_point(point) for point in self._iter_points
+            ]
+            self._processed = True
+            print("Done processing")
+            return
         for commands, pixel_count in self._iter_chunks(latency):
             self._processed_points.append((commands, pixel_count))
         self._processed = True
         print("Done processing")
+
+    def _iter_adaptive_points(self):
+        if self._processed and self._processed_adaptive_points is not None:
+            yield from self._processed_adaptive_points
+            return
+        for point in self._iter_points:
+            yield _normalize_point(point)
+
+    @staticmethod
+    def _feedback_sample_value(samples) -> int:
+        if samples is None or len(samples) == 0:
+            return 0
+        return int(sum(int(sample) for sample in samples) / len(samples))
+
+    def _feedback_blank_decision(self, samples) -> bool:
+        cfg = self._adaptive_gray_feedback
+        assert cfg is not None
+        sample_value = self._feedback_sample_value(samples)
+        in_range = cfg.gray_min <= sample_value <= cfg.gray_max
+        return in_range if cfg.blank_when_inside else not in_range
+
+    def _feedback_default_blank(self) -> bool:
+        cfg = self._adaptive_gray_feedback
+        assert cfg is not None
+        return False if cfg.blank_when_inside else True
+
+    async def _transfer_adaptive(self, stream):
+        cfg = self._adaptive_gray_feedback
+        assert cfg is not None
+
+        await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
+        await ExternalCtrlCommand(enable=self._external_control).transfer(stream)
+        await SynchronizeCommand(
+            cookie=self._cookie, raster=False, output=OutputMode.SixteenBit,
+        ).transfer(stream)
+
+        # Discard the FFFF + cookie reply.
+        await stream.read(4)
+
+        pending_decisions = deque()
+        default_blank = self._feedback_default_blank()
+        blank_state = default_blank
+        points_iter = self._iter_adaptive_points()
+
+        while True:
+            window = []
+            for _ in range(cfg.window_points):
+                try:
+                    window.append(next(points_iter))
+                except StopIteration:
+                    break
+            if not window:
+                break
+
+            if len(pending_decisions) > cfg.pipeline_delay_points:
+                blank_state = pending_decisions.popleft()
+
+            commands = bytearray()
+            commands.extend(bytes(BlankCommand(enable=blank_state, inline=True)))
+            commands.extend(bytes(ArrayCommand(
+                cmdtype=CmdType.VectorPixel,
+                array_length=len(window) - 1,
+            )))
+            for x, y, dwell, _blank, pass_index in window:
+                if pass_index is not None:
+                    self._logger.debug("adaptive vector pass index %s", pass_index)
+                commands.extend(struct.pack(">HHH", x, y, dwell))
+            if self.abort.is_set():
+                commands.extend(bytes(BlankCommand(enable=True, inline=False)))
+            await stream.write(commands)
+            await stream.flush()
+            await FlushCommand().transfer(stream)
+            samples = await self.recv_res(len(window), stream, OutputMode.SixteenBit)
+            pending_decisions.append(self._feedback_blank_decision(samples))
+            yield samples
+            if self.abort.is_set():
+                break
+
+        await BlankCommand(enable=True, inline=False).transfer(stream)
+        await FlushCommand().transfer(stream)
 
     def _iter_chunks(self, latency):
         if self._processed:
@@ -249,6 +363,11 @@ class VectorScanCommand(BaseCommand):
 
     @BaseCommand.log_transfer
     async def transfer(self, stream, *, latency: int = 65536 * 65536):
+        if self._adaptive_gray_feedback is not None:
+            async for chunk in self._transfer_adaptive(stream):
+                yield chunk
+            return
+
         self._logger.debug(
             f"transfer - {latency=} max_pipeline={self._max_pipeline} "
             f"drain_floor={self._drain_floor_pixels}"

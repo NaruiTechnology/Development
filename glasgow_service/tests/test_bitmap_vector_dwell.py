@@ -1,7 +1,12 @@
 import unittest
+from pathlib import Path
 
+from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
 from glasgow_service.models import SimulationBitmap, VectorPattern, VectorRequest
-from glasgow_service.service import _bitmap_vector_chunks
+from glasgow_service.service import DeviceService, _bitmap_vector_chunks
+
+
+CONFIG_PATH = Path(__file__).resolve().parents[2] / "GlasgowDataIO" / "Json" / "streamData unit_test.json"
 
 
 class BitmapVectorDwellTest(unittest.TestCase):
@@ -96,6 +101,63 @@ class BitmapVectorDwellTest(unittest.TestCase):
         self.assertIsNotNone(chunks)
         self.assertEqual(sum(len(chunk) for chunk in chunks), 1)
         self.assertEqual(chunks[0][0], 16320)
+
+    def test_adaptive_feedback_forces_sixteen_bit_when_enabled(self):
+        svc = DeviceService(str(CONFIG_PATH))
+        svc._vector_defaults["PixelFallbackBlank"] = True
+        svc._vector_defaults["adaptiveFeedbackWindowPoints"] = 1
+        svc._vector_defaults["adaptiveFeedbackPipelineDelayPoints"] = 2
+
+        req = VectorRequest(
+            pattern=VectorPattern.default,
+            points=None,
+            vector_resolution=32,
+            dwell=1,
+            latency_bytes=8,
+            output_mode="EightBit",
+            feedback_mode="adaptive_gray_feedback",
+            gray_level_range=(10, 20),
+            gray_level_skipped=True,
+            cookie=123,
+            pre_process=False,
+            do_validate=True,
+            roi=None,
+            simulation_bitmap=None,
+        )
+
+        cmd = svc._build_vector_cmd(req)
+
+        self.assertEqual(cmd._output_mode, OutputMode.SixteenBit)
+        self.assertIsNotNone(cmd._adaptive_gray_feedback)
+        self.assertEqual(cmd._adaptive_gray_feedback.gray_min, 640)
+        self.assertEqual(cmd._adaptive_gray_feedback.gray_max, 1280)
+        self.assertEqual(cmd._adaptive_gray_feedback.pipeline_delay_points, 2)
+
+    def test_adaptive_feedback_is_gated_by_pixel_fallback_blank(self):
+        svc = DeviceService(str(CONFIG_PATH))
+        svc._vector_defaults["PixelFallbackBlank"] = False
+
+        req = VectorRequest(
+            pattern=VectorPattern.default,
+            points=None,
+            vector_resolution=32,
+            dwell=1,
+            latency_bytes=8,
+            output_mode="EightBit",
+            feedback_mode="adaptive_gray_feedback",
+            gray_level_range=(10, 20),
+            gray_level_skipped=True,
+            cookie=123,
+            pre_process=False,
+            do_validate=True,
+            roi=None,
+            simulation_bitmap=None,
+        )
+
+        cmd = svc._build_vector_cmd(req)
+
+        self.assertEqual(cmd._output_mode, OutputMode.EightBit)
+        self.assertIsNone(cmd._adaptive_gray_feedback)
 
 
 if __name__ == "__main__":

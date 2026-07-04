@@ -38,7 +38,9 @@ from pathlib import Path
 from typing import AsyncIterator, Iterable, List, Optional, Tuple
 
 from GlasgowDataIO.IobeamControl.macros import RasterScanCommand
-from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
+from GlasgowDataIO.IobeamControl.macros.vector import (
+    AdaptiveGrayFeedbackConfig, VectorScanCommand,
+)
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, BeamType
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
@@ -364,6 +366,11 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
     return chunks
 
 
+def _gray_range_to_u14(gray_range: Tuple[int, int]) -> Tuple[int, int]:
+    lo, hi = sorted((int(gray_range[0]), int(gray_range[1])))
+    return min(lo * 64, 0x3FFF), min(hi * 64, 0x3FFF)
+
+
 class DeviceService:
     """One scan at a time. One USB connection, lazily opened, dropped on error."""
 
@@ -484,6 +491,31 @@ class DeviceService:
             pre_process       = req.pre_process,
             do_validate       = req.do_validate,
             points            = req.points,
+        )
+
+    def _adaptive_gray_feedback_config(
+        self, req: "VectorRequest"
+    ) -> Optional[AdaptiveGrayFeedbackConfig]:
+        if not bool(self._vector_defaults.get("PixelFallbackBlank", False)):
+            return None
+        if getattr(req, "feedback_mode", None) != "adaptive_gray_feedback":
+            mode = getattr(req, "feedback_mode", None)
+            if getattr(mode, "value", None) != "adaptive_gray_feedback":
+                return None
+        if req.gray_level_range is None or req.gray_level_skipped is None:
+            return None
+
+        gray_min, gray_max = _gray_range_to_u14(req.gray_level_range)
+        window_points = int(self._vector_defaults.get("adaptiveFeedbackWindowPoints", 1) or 1)
+        pipeline_delay_points = int(
+            self._vector_defaults.get("adaptiveFeedbackPipelineDelayPoints", 0) or 0
+        )
+        return AdaptiveGrayFeedbackConfig(
+            gray_min=gray_min,
+            gray_max=gray_max,
+            blank_when_inside=bool(req.gray_level_skipped),
+            window_points=window_points,
+            pipeline_delay_points=pipeline_delay_points,
         )
 
     # -------- internal: lazy connect / drop-on-error ----------------------
@@ -766,10 +798,10 @@ class DeviceService:
             eff = self._effective_vector_params(req)
             logger.debug(
                 "[vector] dwell=%d latency=%d pattern=%s vector_resolution=%d "
-                "output_mode=%s pre_process=%s cookie=%d max_pipeline=%d "
-                "drain_floor=%d",
+                "output_mode=%s feedback_mode=%s pre_process=%s cookie=%d "
+                "max_pipeline=%d drain_floor=%d",
                 eff.dwell, eff.latency_bytes, eff.pattern, eff.vector_resolution,
-                eff.output_mode, eff.pre_process, eff.cookie,
+                cmd._output_mode, req.feedback_mode, eff.pre_process, eff.cookie,
                 eff.max_pipeline, eff.effective_drain_floor_pixels,
             )
             t0 = time.perf_counter()
@@ -864,6 +896,7 @@ class DeviceService:
         """Same shape as raster: every macro tunable comes from the
         effective params object."""
         params = self._effective_vector_params(req)
+        adaptive_feedback = self._adaptive_gray_feedback_config(req)
 
         if req.pattern is VectorPattern.custom:
             if req.points is None and not (
@@ -901,11 +934,12 @@ class DeviceService:
 
         return VectorScanCommand(
             cookie=params.cookie,
-            output_mode=output_mode,
+            output_mode=OutputMode.SixteenBit if adaptive_feedback is not None else output_mode,
             beam_type=beam_type,
             external_control=params.external_control,
             iter_points=iter_points,
             drain_floor_pixels=params.effective_drain_floor_pixels,
+            adaptive_gray_feedback=adaptive_feedback,
             max_pipeline=params.max_pipeline,
             fpga_pipeline_depth_pixels=params.fpga_pipeline_depth_pixels,
             drain_safety_factor=params.drain_safety_factor,

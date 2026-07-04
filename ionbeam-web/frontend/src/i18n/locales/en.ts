@@ -616,6 +616,7 @@ export const en = {
   "settings.vector.adcLatency": "ADC latency",
   "settings.vector.lineShiftPerXRow": "Line shift per X row",
   "settings.vector.drainFloorPixels": "Drain floor (pixels)",
+  "settings.vector.pixelFallbackBlank": "Fallback pixel blank",
   "settings.vector.display.enabled": "Enabled",
   "settings.vector.display.openViewer": "Open viewer",
 
@@ -783,6 +784,7 @@ export const en = {
   "settings.help.vectorAdcLatency.title": "Vector ADC latency",
   "settings.help.vectorLineShift.title": "Vector line shift",
   "settings.help.vectorDrainFloor.title": "Vector drain floor",
+  "settings.help.vectorPixelFallbackBlank.title": "Fallback pixel blank",
   "settings.help.simulationEnabled.title": "Simulation enabled",
   "settings.help.simulationMode.title": "Simulation mode",
   "settings.help.simulationResolution.title": "Simulation resolution",
