@@ -387,6 +387,32 @@ body {
   flex: 0 0 auto;
 }
 
+.image-panel-card__header-main {
+  display: grid;
+  grid-template-columns: max-content max-content max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+.image-panel-card__header-main > .card__title,
+.image-panel-card__header-main > .canvas-grid-toggle {
+  min-width: 0;
+}
+
+.image-panel-card__toolbar-slot {
+  grid-column: 4;
+  justify-self: stretch;
+  width: 100%;
+  margin-left: 0;
+  min-width: 0;
+}
+
+.image-panel-card__toolbar-slot:empty {
+  display: none;
+}
+
 .roi-spectrum {
   display: flex;
   flex-wrap: nowrap;
@@ -614,9 +640,11 @@ body {
 .vector-gray-levels {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   min-width: 0;
   width: 100%;
   padding: 2px 0;
+  white-space: nowrap;
 }
 
 .vector-gray-level-toggle {
@@ -624,18 +652,29 @@ body {
 }
 
 .vector-gray-levels__panel {
+  min-width: 0;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.vector-gray-levels__actions {
   display: grid;
-  grid-template-columns: minmax(420px, 1fr) auto;
-  grid-template-rows: auto auto;
+  grid-template-columns: minmax(260px, 1fr) auto;
   align-items: center;
   column-gap: 8px;
-  row-gap: 2px;
+  min-width: 0;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.vector-gray-levels__slider-shell {
+  display: grid;
+  grid-template-rows: auto auto;
   min-width: 0;
   width: 100%;
 }
 
 .vector-gray-levels__values {
-  grid-column: 1;
   position: relative;
   height: 14px;
   line-height: 1;
@@ -646,7 +685,7 @@ body {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  color: rgb(72, 75, 224);
+  color: lawngreen;
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1;
@@ -663,7 +702,6 @@ body {
 
 .vector-gray-levels__slider {
   position: relative;
-  grid-column: 1;
   width: 100%;
   height: 54px;
   padding: 0 4px;
@@ -722,7 +760,7 @@ body {
   top: 11px;
   left: 50%;
   transform: translateX(-50%);
-  color: var(--c-text);
+  color: gray;
   font-family: var(--font-mono);
   font-size: 12px;
   font-style: normal;
@@ -793,8 +831,6 @@ body {
 }
 
 .vector-gray-levels__select {
-  grid-column: 2;
-  grid-row: 1 / span 2;
   min-height: 28px;
   padding: 4px 10px;
   white-space: nowrap;
