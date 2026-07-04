@@ -106,15 +106,6 @@ export function ROICalibrationCard({ disabled }: { disabled: boolean }) {
         <span>{t("roi.calibration.hfov", { value: formatOneDecimal(xSpan), unit, pixels: bounds.width })}</span>
         <span>{t("roi.calibration.vfov", { value: formatOneDecimal(ySpan), unit, pixels: bounds.height })}</span>
       </div>
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={roi.show_grid}
-          disabled={disabled}
-          onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
-        />
-        {t("roi.showGrid")}
-      </label>
       {validation && <div className="field-warning">{validation}</div>}
       <button
         className={`btn ${calibrationDirty ? "btn--gold" : "btn--primary"}`}

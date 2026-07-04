@@ -209,16 +209,6 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
         />
       </div>
 
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={roi.vector_show_grid}
-          disabled={disabled}
-          onChange={(e) => dispatch(updateROI({ vector_show_grid: e.target.checked }))}
-        />
-        {t("roi.showGrid")}
-      </label>
-
       {v.pattern === "custom" && (
         <div className="field">
           <label>

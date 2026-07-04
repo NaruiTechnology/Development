@@ -380,6 +380,12 @@ body {
   display: none;
 }
 
+.card__header .canvas-grid-toggle {
+  padding: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .roi-spectrum {
   display: flex;
   flex-wrap: nowrap;
@@ -1707,10 +1713,12 @@ body {
 }
 
 .tabs--sub .tab {
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 8px 10px;
   font-size: 11px;
   letter-spacing: 0.14em;
+  white-space: nowrap;
 }
 
 .tab--top {
@@ -1976,7 +1984,7 @@ body {
 .canvas-axis-overlay {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 6;
   pointer-events: none;
   color: rgba(230, 238, 249, 0.95);
   font: 12px ui-monospace, monospace;
@@ -1985,6 +1993,7 @@ body {
 .canvas-axis-overlay__grid {
   position: absolute;
   background: rgba(95, 184, 255, 0.14);
+  z-index: 0;
 }
 
 .canvas-axis-overlay__grid--x {
@@ -2002,6 +2011,7 @@ body {
 .canvas-axis-overlay__axis {
   position: absolute;
   background: rgba(95, 184, 255, 0.9);
+  z-index: 1;
 }
 
 .canvas-axis-overlay__axis--x {
@@ -2021,6 +2031,7 @@ body {
 .canvas-axis-overlay__tick {
   position: absolute;
   background: rgba(95, 184, 255, 0.9);
+  z-index: 1;
 }
 
 .canvas-axis-overlay__tick--x {
@@ -2051,6 +2062,7 @@ body {
   line-height: 1;
   white-space: nowrap;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72);
+  z-index: 1;
 }
 
 .canvas-axis-overlay__value--x {
@@ -2065,17 +2077,17 @@ body {
 
 .canvas-axis-overlay__label {
   padding: 2px 4px;
-  background: rgba(0, 0, 0, 0.52);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .canvas-axis-overlay__label--start {
-  right: 12px;
-  top: 32px;
+  left: 12px;
+  top: 12px;
 }
 
 .canvas-axis-overlay__label--end {
-  left: 14px;
-  bottom: 8px;
+  left: 12px;
+  top: 34px;
 }
 
 .server-figure {

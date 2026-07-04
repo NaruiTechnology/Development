@@ -607,16 +607,6 @@ export function ROIEditor({
             />
           </div>
 
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={roi.show_grid}
-              disabled={disabled}
-              onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
-            />
-            {t("roi.showGrid")}
-          </label>
-
           <div className="field">
             <label>{t("roi.scaleUnit")}</label>
             <select
@@ -1432,7 +1422,7 @@ function ROICalibrationAxisOverlay({
         className="canvas-axis-overlay__label canvas-axis-overlay__label--start"
         style={{
           left: "12px",
-          top: "32px",
+          top: "12px",
           right: "auto",
           bottom: "auto",
         }}
@@ -1445,10 +1435,10 @@ function ROICalibrationAxisOverlay({
       <span
         className="canvas-axis-overlay__label canvas-axis-overlay__label--end"
         style={{
-          left: "14px",
-          top: "auto",
+          left: "12px",
+          top: "34px",
           right: "auto",
-          bottom: "8px",
+          bottom: "auto",
           transform: "none",
         }}
       >

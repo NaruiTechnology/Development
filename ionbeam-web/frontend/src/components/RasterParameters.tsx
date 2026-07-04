@@ -160,16 +160,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         <FrameBlankHelp />
       </label>
 
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={roi.raster_show_grid}
-          disabled={disabled}
-          onChange={(e) => dispatch(updateROI({ raster_show_grid: e.target.checked }))}
-        />
-        {t("roi.showGrid")}
-      </label>
-
       <div className="divider" />
 
       <div className="card__title" style={{ marginBottom: 6 }}>

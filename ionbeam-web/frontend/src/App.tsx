@@ -293,6 +293,38 @@ export function App() {
     showGraySpectrum,
     committedGrayScaleSelection,
   });
+  const gridLineToggle =
+    kind === "roi" ? (
+      <label className="checkbox canvas-grid-toggle">
+        <input
+          type="checkbox"
+          checked={roiState.show_grid}
+          disabled={panelDisabled}
+          onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
+        />
+        {t("roi.showGrid")}
+      </label>
+    ) : kind === "raster" ? (
+      <label className="checkbox canvas-grid-toggle">
+        <input
+          type="checkbox"
+          checked={roiState.raster_show_grid}
+          disabled={panelDisabled}
+          onChange={(e) => dispatch(updateROI({ raster_show_grid: e.target.checked }))}
+        />
+        {t("roi.showGrid")}
+      </label>
+    ) : kind === "vector" ? (
+      <label className="checkbox canvas-grid-toggle">
+        <input
+          type="checkbox"
+          checked={roiState.vector_show_grid}
+          disabled={panelDisabled}
+          onChange={(e) => dispatch(updateROI({ vector_show_grid: e.target.checked }))}
+        />
+        {t("roi.showGrid")}
+      </label>
+    ) : null;
 
   useEffect(() => {
     if (!roiState.selection || phase === "completed" || phase === "error" || phase === "idle") {
@@ -817,6 +849,7 @@ export function App() {
           <div className="card image-panel-card">
               <div className="card__header">
                 <span className="card__title">{t(imagePanelTitleKey)}</span>
+                {gridLineToggle}
                 <div id="image-panel-toolbar-slot" className="card__header-toolbar-slot">
                 {showGraySpectrum && (
                   <GrayScaleSpectrum
