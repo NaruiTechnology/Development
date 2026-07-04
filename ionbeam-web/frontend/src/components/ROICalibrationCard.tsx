@@ -5,6 +5,7 @@ import { confirmROICalibration, updateROI } from "../store/scanSlice";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { viewportBounds } from "../lib/roiGeometry";
 import { useTranslation, type TranslationKey } from "../i18n";
+import { Icon } from "./Icon";
 
 const UNITS: Record<string, string> = {
   um: "μm",
@@ -13,7 +14,15 @@ const UNITS: Record<string, string> = {
   nm: "nm",
 };
 
-export function ROICalibrationCard({ disabled }: { disabled: boolean }) {
+export function ROICalibrationCard({
+  disabled,
+  lastScanImageUrl = null,
+  onLoadLastScan,
+}: {
+  disabled: boolean;
+  lastScanImageUrl?: string | null;
+  onLoadLastScan?: () => void;
+}) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const roi = useAppSelector((s) => s.scan.roi);
@@ -53,6 +62,19 @@ export function ROICalibrationCard({ disabled }: { disabled: boolean }) {
   return (
     <div className="roi-calibration-card">
       <p className="muted roi-calibration-card__hint">{t("roi.calibration.instructions")}</p>
+      {lastScanImageUrl && onLoadLastScan && (
+        <div className="button-row">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={disabled || roi.imageKind === "lastScan"}
+            onClick={() => onLoadLastScan()}
+          >
+            <Icon name="download" tone="accent" />
+            {t("roi.loadLastScan")}
+          </button>
+        </div>
+      )}
       <div className="field-row">
         <CalibrationField
           labelKey="roi.xOrigin"

@@ -257,7 +257,9 @@ export function ROIEditor({
     reader.onload = () => {
       if (typeof reader.result === "string") {
         clearBitmapSelectionCache();
+        setDraft(null);
         setSuppressedBackgroundUrl(null);
+        dispatch(clearROISelection());
         dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result, imageKind: "file" }));
       }
     };

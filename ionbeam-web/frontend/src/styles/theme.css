@@ -2017,7 +2017,7 @@ body {
 .canvas-axis-overlay__grid {
   position: absolute;
   background: rgba(95, 184, 255, 0.14);
-  z-index: 0;
+  z-index: 9999;
 }
 
 .canvas-axis-overlay__grid--x {

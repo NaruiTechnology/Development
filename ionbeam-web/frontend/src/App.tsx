@@ -750,7 +750,13 @@ export function App() {
                         />
                       </div>
                     )}
-                    {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
+                    {showROICalibrationInControls && (
+                      <ROICalibrationCard
+                        disabled={panelDisabled}
+                        lastScanImageUrl={roiScanImageUrl}
+                        onLoadLastScan={handleLoadLastScan}
+                      />
+                    )}
                   </>
                 )
               ) : (
@@ -765,7 +771,13 @@ export function App() {
                       lastScanImageUrl={roiScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
                     />
-                    {showROICalibrationInControls && <ROICalibrationCard disabled={panelDisabled} />}
+                    {showROICalibrationInControls && (
+                      <ROICalibrationCard
+                        disabled={panelDisabled}
+                        lastScanImageUrl={roiScanImageUrl}
+                        onLoadLastScan={handleLoadLastScan}
+                      />
+                    )}
                   </>
                 )
               )}
