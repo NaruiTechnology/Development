@@ -646,6 +646,17 @@ body {
   margin-left: 4px;
 }
 
+.vector-gray-level-toggle .help-btn {
+  width: 14px;
+  height: 14px;
+  font-size: 12px;
+}
+
+.vector-gray-level-toggle .help-btn .icon {
+  width: 1em;
+  height: 1em;
+}
+
 .vector-gray-levels__panel {
   min-width: 0;
   width: 100%;
