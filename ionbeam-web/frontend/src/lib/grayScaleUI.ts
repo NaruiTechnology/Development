@@ -54,7 +54,7 @@ export function grayScaleSourceLabelForKind(
     case "vector":
       return t("roi.grayScale.source.vector");
     case "loaded":
-      return t("roi.grayScale.source.loaded");
+      return null;
     default:
       return null;
   }

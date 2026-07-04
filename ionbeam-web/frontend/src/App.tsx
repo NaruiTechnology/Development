@@ -496,19 +496,6 @@ export function App() {
     setGrayScaleConfirmOpen(false);
   }, [dispatch, pendingGrayScaleAnchor, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
 
-  const handleGrayScaleClear = useCallback(() => {
-    dispatch(
-      setROIGrayScaleSelection({
-        selection: null,
-        isSkipped: null,
-      })
-    );
-    setPendingGrayScaleSelection(null);
-    setPendingGrayScaleAnchor(null);
-    setPendingGrayScaleSkipped(null);
-    setGrayScaleConfirmOpen(false);
-  }, [dispatch]);
-
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
     suppressedROIScanImageUrlRef.current = null;
@@ -861,8 +848,6 @@ export function App() {
                     scopeNote={grayScaleScopeNote}
                     onSelect={handleGrayScaleSelect}
                     onStepDeltaChange={handleGrayScaleStepDeltaChange}
-                    onConfirm={handleGrayScaleConfirm}
-                    onClear={handleGrayScaleClear}
                   />
                 )}
                 </div>
@@ -1044,8 +1029,6 @@ function GrayScaleSpectrum({
   scopeNote,
   onSelect,
   onStepDeltaChange,
-  onConfirm,
-  onClear,
 }: {
   selectedGrayScale: GrayScaleSelection;
   selectionAnchor: number | null;
@@ -1055,8 +1038,6 @@ function GrayScaleSpectrum({
   scopeNote: string | null;
   onSelect: (grayScale: number) => void;
   onStepDeltaChange: (stepDelta: number) => void;
-  onConfirm: () => void;
-  onClear: () => void;
 }) {
   const boxes = buildGrayScaleBoxes(levels, stepDelta);
   const hasPendingSelection = selectedGrayScale !== null && selectionAnchor === null;
@@ -1116,7 +1097,6 @@ function GrayScaleSpectrum({
         </div>
         <div className="roi-spectrum__meta">
           {sourceLabel && <span className="roi-spectrum__source-pill">{sourceLabel}</span>}
-          <GrayScaleHelp />
         </div>
       </div>
       {scopeNote && <span className="roi-spectrum__context">{scopeNote}</span>}
@@ -1147,23 +1127,9 @@ function GrayScaleSpectrum({
         >
           +
         </button>
-        {hasPendingSelection && (
-          <button
-            type="button"
-            className="btn btn--ghost roi-spectrum__confirm-btn"
-            onClick={onConfirm}
-          >
-            Select
-          </button>
-        )}
-        <button
-          type="button"
-          className="btn btn--ghost roi-spectrum__confirm-btn"
-          disabled={selectedGrayScale === null}
-          onClick={onClear}
-        >
-          Clear
-        </button>
+        <div className="roi-spectrum__help">
+          <GrayScaleHelp />
+        </div>
       </div>
     </div>
   );

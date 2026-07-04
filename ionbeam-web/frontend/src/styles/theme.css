@@ -544,9 +544,30 @@ body {
 .roi-spectrum__controls {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex: 0 0 auto;
   white-space: nowrap;
+  padding-right: 4px;
+}
+
+.roi-spectrum__help {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.roi-spectrum__controls .help-btn {
+  width: 12px;
+  height: 12px;
+  font-size: 8px;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  transform: scale(0.85);
+  transform-origin: center;
+  flex: 0 0 auto;
 }
 
 .roi-spectrum__hint {
@@ -962,15 +983,18 @@ body {
 }
 
 .scan-repeat-field--inline {
-  flex: 0 0 74px;
+  flex: 0 0 37px;
 }
 
 .scan-repeat-field {
-  width: 74px;
+  width: 37px;
 }
 
 .scan-repeat-field__input {
-  padding: 4px 6px;
+  width: 100%;
+  padding: 2px 3px;
+  font-size: 11px;
+  line-height: 1.1;
 }
 
 .scan-loop-counter[data-visible="false"] {

@@ -614,7 +614,6 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <ul className="dwell-help__list">
         <li><strong>Skip</strong> sends explicit blanked vector points for the highlighted gray levels inside the selected ROI sub-area, so those pixels are skipped during the next scan.</li>
         <li><strong>Spot</strong> sends explicit unblanked vector points for the highlighted gray levels and blanks the other pixels inside the selected ROI sub-area.</li>
-        <li><strong>Clear</strong> resets the current gray-level selection back to normal scan behavior.</li>
         <li>The selection applies only to the defined ROI sub-area; pixels outside that area keep their normal scan handling.</li>
       </ul>
 
