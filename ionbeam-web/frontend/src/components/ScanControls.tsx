@@ -150,7 +150,6 @@ export function ScanControls({
       dispatch(bumpRevision());
       actionLoopIterationRef.current += 1;
       setActionLoopIteration(actionLoopIterationRef.current);
-      actionLoopRemainingRef.current -= 1;
       stream.startVector({ ...entry.req, preview: entry.preview });
     }, actionLoopGapMs);
   }, [actionLoopGapMs, clearActionLoopTimer, dispatch, stream]);
@@ -179,9 +178,9 @@ export function ScanControls({
         );
         clearActionLoopState();
         actionLoopRequestRef.current = { req, preview };
-        actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)) - 1);
-        actionLoopIterationRef.current = 1;
-        setActionLoopIteration(1);
+        actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
+        actionLoopIterationRef.current = actionLoopRemainingRef.current;
+        setActionLoopIteration(actionLoopIterationRef.current);
         actionLoopActiveRef.current = true;
         actionLoopPausedRef.current = false;
         setActionLoopActive(true);
@@ -331,6 +330,10 @@ export function ScanControls({
   const roiPauseButtonLabel = roiResumeMode ? t("scan.resume") : t("scan.pause");
   const roiPauseButtonTitle = roiResumeMode ? t("scan.resume.title") : t("scan.pause.title");
   const roiPauseButtonIcon = roiResumeMode ? "play" : "pause";
+  const actionLoopDisplayCount =
+    actionLoopActive || actionLoopPaused || streaming || closing || paused
+      ? actionLoopIteration
+      : repeat;
 
   useEffect(() => {
     let cancelled = false;
@@ -393,13 +396,18 @@ export function ScanControls({
     if (completedNow && roiState.imageDataUrl && roiState.selection) {
       clearBitmapSelectionCache();
     }
-    if (completedNow && actionLoopActiveRef.current && !actionLoopPausedRef.current && actionLoopRemainingRef.current > 0) {
-      clearBitmapSelectionCache();
-      dispatch(bumpRevision());
-      scheduleNextActionRun();
-      return;
-    }
-    if (completedNow && actionLoopActiveRef.current && actionLoopRemainingRef.current <= 0) {
+    if (completedNow && actionLoopActiveRef.current) {
+      if (actionLoopRemainingRef.current > 0) {
+        actionLoopRemainingRef.current -= 1;
+        actionLoopIterationRef.current = actionLoopRemainingRef.current;
+        setActionLoopIteration(actionLoopIterationRef.current);
+      }
+      if (!actionLoopPausedRef.current && actionLoopRemainingRef.current > 0) {
+        clearBitmapSelectionCache();
+        dispatch(bumpRevision());
+        scheduleNextActionRun();
+        return;
+      }
       clearActionLoopState();
     }
     if (phase === "error" || phase === "idle") {
@@ -458,7 +466,7 @@ export function ScanControls({
             <span className="scan-loop-counter-wrap">
               <span className="scan-loop-counter__label">{t("scan.repeat")}</span>
               <span className="scan-loop-counter" title={t("scan.repeat.title")}>
-                {actionLoopIteration > 0 ? actionLoopIteration : 0}
+                {actionLoopDisplayCount}
               </span>
             </span>
             <span
