@@ -387,50 +387,6 @@ body {
   flex: 0 0 auto;
 }
 
-.image-panel-card__header-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  min-width: 0;
-  width: 100%;
-}
-
-.image-panel-card__header--vector {
-  flex-direction: row;
-  align-items: stretch;
-}
-
-.image-panel-card__toolbar-slot {
-  min-width: 0;
-}
-
-.image-panel-card__toolbar-slot--vector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  flex: 1 1 auto;
-  width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-}
-
-.image-panel-card__toolbar-slot--vector .vector-gray-levels {
-  flex: 1 1 auto;
-  width: 100%;
-}
-
-.image-panel-card__toolbar-slot--vector .vector-gray-levels__panel {
-  min-width: 0;
-  width: 100%;
-}
-
-.image-panel-card__toolbar-slot--vector .vector-gray-levels__actions {
-  width: 100%;
-}
-
 .roi-spectrum {
   display: flex;
   flex-wrap: nowrap;
@@ -669,14 +625,17 @@ body {
 
 .vector-gray-levels__panel {
   display: grid;
-  grid-template-columns: minmax(420px, 1fr);
+  grid-template-columns: minmax(420px, 1fr) auto;
+  grid-template-rows: auto auto;
   align-items: center;
   column-gap: 8px;
+  row-gap: 2px;
   min-width: 0;
   width: 100%;
 }
 
 .vector-gray-levels__values {
+  grid-column: 1;
   position: relative;
   height: 14px;
   line-height: 1;
@@ -687,7 +646,7 @@ body {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  color: goldenrod;
+  color: rgb(72, 75, 224);
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1;
@@ -695,11 +654,11 @@ body {
 }
 
 .vector-gray-levels__value--min {
-  transform: translateX(-50%);
+  transform: translateX(-10%);
 }
 
 .vector-gray-levels__value--max {
-  transform: translateX(-50%);
+  transform: translateX(-90%);
 }
 
 .vector-gray-levels__slider {
@@ -768,28 +727,6 @@ body {
   font-size: 12px;
   font-style: normal;
   line-height: 1;
-  opacity: 0.5;
-}
-
-.vector-gray-levels__actions {
-  grid-column: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  width: 100%;
-}
-
-.vector-gray-levels__slider-shell {
-  position: relative;
-  grid-column: 1;
-  width: 100%;
-  min-width: 0;
-}
-
-.vector-gray-levels__actions .vector-gray-levels__slider {
-  width: 100%;
 }
 
 .vector-gray-levels__range {
@@ -857,7 +794,7 @@ body {
 
 .vector-gray-levels__select {
   grid-column: 2;
-  justify-self: end;
+  grid-row: 1 / span 2;
   min-height: 28px;
   padding: 4px 10px;
   white-space: nowrap;
