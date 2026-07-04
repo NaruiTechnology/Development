@@ -208,16 +208,26 @@ export function ScanControls({
       }
     } else {
       try {
-        const req = await vectorRequestWithBitmapSelection(
-          { ...vector, roi },
-          roiState,
-          {
-            isProduction,
-            allowBitmapSimulation,
-            grayScaleSelection: roiGrayScaleSelection,
-            grayScaleSkipped: roiGrayScaleSkipped,
-          }
-        );
+        const req =
+          roiGrayScaleSelection !== null && roiGrayScaleSkipped !== null
+            ? await vectorRequestWithROIGrayScaleAction(
+                { ...vector, roi },
+                roiState,
+                {
+                  grayScaleSelection: roiGrayScaleSelection,
+                  grayScaleSkipped: roiGrayScaleSkipped,
+                }
+              )
+            : await vectorRequestWithBitmapSelection(
+                { ...vector, roi },
+                roiState,
+                {
+                  isProduction,
+                  allowBitmapSimulation,
+                  grayScaleSelection: roiGrayScaleSelection,
+                  grayScaleSkipped: roiGrayScaleSkipped,
+                }
+              );
         stream.startVector({ ...req, preview });
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -285,16 +295,26 @@ export function ScanControls({
     }
     else {
       try {
-        const req = await vectorRequestWithBitmapSelection(
-          { ...vector, roi },
-          roiState,
-          {
-            isProduction,
-            allowBitmapSimulation,
-            grayScaleSelection: roiGrayScaleSelection,
-            grayScaleSkipped: roiGrayScaleSkipped,
-          }
-        );
+        const req =
+          roiGrayScaleSelection !== null && roiGrayScaleSkipped !== null
+            ? await vectorRequestWithROIGrayScaleAction(
+                { ...vector, roi },
+                roiState,
+                {
+                  grayScaleSelection: roiGrayScaleSelection,
+                  grayScaleSkipped: roiGrayScaleSkipped,
+                }
+              )
+            : await vectorRequestWithBitmapSelection(
+                { ...vector, roi },
+                roiState,
+                {
+                  isProduction,
+                  allowBitmapSimulation,
+                  grayScaleSelection: roiGrayScaleSelection,
+                  grayScaleSkipped: roiGrayScaleSkipped,
+                }
+              );
         const promise = dispatch(runVectorValidated({ ...req, preview }));
         const unregister = registerScanActionStop(() => {
           promise.abort();

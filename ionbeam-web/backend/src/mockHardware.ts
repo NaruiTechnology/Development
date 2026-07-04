@@ -20,6 +20,19 @@ import type { WebSocket } from "ws";
 
 import { config } from "./config";
 
+type VectorPointTuple =
+  | [number, number, number]
+  | [number, number, number, boolean | null]
+  | [number, number, number, boolean | null, number | null];
+
+type VectorPointObject = {
+  x: number;
+  y: number;
+  dwell: number;
+  blank?: boolean | null;
+  passIndex?: number | null;
+};
+
 interface RasterParams {
   resolution: number;
   dwell: number;
@@ -32,7 +45,7 @@ interface RasterParams {
 
 interface VectorParams {
   pattern: "default" | "custom";
-  points?: Array<[number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null; passIndex?: number | null }>;
+  points?: Array<VectorPointTuple | VectorPointObject>;
   dwell: number;
   latency_bytes: number;
   voltage?: number;
@@ -311,7 +324,7 @@ function sampleBitmapPixel(
 }
 
 function normalizeVectorPoint(
-  point: [number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null; passIndex?: number | null }
+  point: VectorPointTuple | VectorPointObject
 ): [number, number, number, boolean | null, number | null] {
   if (Array.isArray(point)) {
     const arr = point as [number, number, number] & { 3?: boolean | null; 4?: number | null };
@@ -398,7 +411,7 @@ export async function streamMockVector(
   // Default pattern: synthesise edge² 14-bit DAC points in the same
   // (x, y) order the real FPGA emits. Custom replays the client's
   // already-14-bit DAC tuples.
-  let pts: Array<[number, number, number] | { x: number; y: number; dwell: number; blank?: boolean | null; passIndex?: number | null }>;
+  let pts: Array<VectorPointTuple | VectorPointObject>;
   if (p.pattern === "custom" && p.points && p.points.length) {
     pts = p.points;
   } else if (p.pattern === "custom" && p.simulation_bitmap) {

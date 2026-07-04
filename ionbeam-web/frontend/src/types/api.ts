@@ -48,9 +48,14 @@ export interface VectorPoint {
   passIndex?: number | null;
 }
 
+export type VectorPointTuple =
+  | [number, number, number]
+  | [number, number, number, boolean | null]
+  | [number, number, number, boolean | null, number | null];
+
 export interface VectorRequest {
   pattern: VectorPattern;
-  points: Array<[number, number, number] | VectorPoint> | null;
+  points: Array<VectorPointTuple | VectorPoint> | null;
   preview?: boolean;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample

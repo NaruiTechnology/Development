@@ -187,6 +187,11 @@ export const zhCN: Partial<TranslationTable> = {
   "vector.customPoints.error.format": "第 {line} 行：应为 \"x,y,驻留\"",
   "vector.customPoints.count": "{count} 个点",
   "vector.customPoints.empty": "0 个点",
+  "vector.grayLevels": "灰度级",
+  "vector.grayLevels.range": "灰度级范围",
+  "vector.grayLevels.min": "最小灰度级",
+  "vector.grayLevels.max": "最大灰度级",
+  "vector.grayLevels.select": "选择",
   "vector.preProcess": "预处理数据块（单独计入 process_time_s 时间）",
   "vector.doValidate": "执行非空 / 填充检查",
 

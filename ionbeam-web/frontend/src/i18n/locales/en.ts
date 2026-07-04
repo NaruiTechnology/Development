@@ -211,6 +211,11 @@ export const en = {
   "vector.customPoints.error.format": "line {line}: expected \"x,y,dwell\"",
   "vector.customPoints.count": "{count} points",
   "vector.customPoints.empty": "0 points",
+  "vector.grayLevels": "Gray level filter",
+  "vector.grayLevels.range": "Grey level range",
+  "vector.grayLevels.min": "Minimum grey level",
+  "vector.grayLevels.max": "Maximum grey level",
+  "vector.grayLevels.select": "Select",
   "vector.preProcess": "Pre-process chunks (timed separately as process_time_s)",
   "vector.doValidate": "Run chunk presence checks",
 

@@ -196,6 +196,11 @@ export const zhTW: Partial<TranslationTable> = {
   "vector.customPoints.error.format": "第 {line} 行：應為 \"x,y,駐留\"",
   "vector.customPoints.count": "{count} 個點",
   "vector.customPoints.empty": "0 個點",
+  "vector.grayLevels": "灰階級",
+  "vector.grayLevels.range": "灰階級範圍",
+  "vector.grayLevels.min": "最小灰階級",
+  "vector.grayLevels.max": "最大灰階級",
+  "vector.grayLevels.select": "選擇",
   "vector.preProcess": "預先處理資料區塊（單獨計入 process_time_s 時間）",
   "vector.doValidate": "執行非空 / 填充檢查",
 

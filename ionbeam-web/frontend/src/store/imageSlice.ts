@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ROIRequest, VectorPoint } from "../types/api";
+import type { ROIRequest, VectorPoint, VectorPointTuple } from "../types/api";
 
 /**
  * Image / pixel buffers, kept here (outside the serialisability check)
@@ -38,6 +38,10 @@ interface ImageState {
   vectorCustomPoints: Float32Array | null;
   /** For custom pattern only: flat render-space (x, y) pairs, length 2*N. */
   vectorCustomRenderPoints: Float32Array | null;
+  /** For custom pattern only: 1 when the point is explicitly beam-blanked. */
+  vectorCustomBlankMask: Uint8Array | null;
+  /** For custom pattern only: 1 when the point is a selected Spot beam-on pixel. */
+  vectorCustomSpotMask: Uint8Array | null;
   vectorCustomCount: number;
   /** Number of ADC samples received so far. */
   vectorCursor: number;
@@ -59,6 +63,8 @@ const initialState: ImageState = {
   vectorImage: new Uint16Array(VEC_EDGE * VEC_EDGE),
   vectorCustomPoints: null,
   vectorCustomRenderPoints: null,
+  vectorCustomBlankMask: null,
+  vectorCustomSpotMask: null,
   vectorCustomCount: 0,
   vectorCursor: 0,
 
@@ -68,7 +74,7 @@ const initialState: ImageState = {
 interface SetupVectorPayload {
   pattern: VectorPattern;
   /** Custom points copied from VectorRequest.points for custom mode. */
-  points?: Array<[number, number, number] | VectorPoint> | null;
+  points?: Array<VectorPointTuple | VectorPoint> | null;
   /** Edge of the render target. Defaults to 2048 (FPGA DAC range). */
   edge?: number;
   /** Active ROI in 14-bit DAC coordinates. Used to map custom points to pixels. */
@@ -119,6 +125,8 @@ const slice = createSlice({
         const pts = a.payload.points;
         const flat = new Float32Array(pts.length * 2);
         const renderFlat = new Float32Array(pts.length * 2);
+        const blankMask = new Uint8Array(pts.length);
+        const spotMask = new Uint8Array(pts.length);
         const bounds = customPointBounds(pts, a.payload.roi);
         for (let i = 0; i < pts.length; i++) {
           const [x, y] = pointCoords(pts[i]);
@@ -126,9 +134,13 @@ const slice = createSlice({
           flat[2 * i + 1] = y;
           renderFlat[2 * i] = mapCoordToPixel(x, bounds.x0, bounds.x1, edge);
           renderFlat[2 * i + 1] = mapCoordToPixel(y, bounds.y0, bounds.y1, edge);
+          blankMask[i] = pointBlanked(pts[i]) ? 1 : 0;
+          spotMask[i] = pointSpotHighlighted(pts[i]) ? 1 : 0;
         }
         state.vectorCustomPoints = flat;
         state.vectorCustomRenderPoints = renderFlat;
+        state.vectorCustomBlankMask = blankMask;
+        state.vectorCustomSpotMask = spotMask;
         state.vectorCustomCount = pts.length;
       } else if (pattern === "custom" && a.payload.simulationBitmap) {
         const width = Math.max(1, a.payload.simulationBitmap.width | 0);
@@ -155,10 +167,14 @@ const slice = createSlice({
         }
         state.vectorCustomPoints = flat;
         state.vectorCustomRenderPoints = renderFlat;
+        state.vectorCustomBlankMask = null;
+        state.vectorCustomSpotMask = null;
         state.vectorCustomCount = count;
       } else {
         state.vectorCustomPoints = null;
         state.vectorCustomRenderPoints = null;
+        state.vectorCustomBlankMask = null;
+        state.vectorCustomSpotMask = null;
         state.vectorCustomCount = 0;
       }
       state.revision++;
@@ -271,7 +287,7 @@ export const {
 export default slice.reducer;
 
 function customPointBounds(
-  points: Array<[number, number, number] | VectorPoint>,
+  points: Array<VectorPointTuple | VectorPoint>,
   roi?: ROIRequest | null
 ): { x0: number; x1: number; y0: number; y1: number } {
   if (roi) {
@@ -304,11 +320,22 @@ function customPointBounds(
   return { x0, x1, y0, y1 };
 }
 
-function pointCoords(point: [number, number, number] | VectorPoint): [number, number] {
+function pointCoords(point: VectorPointTuple | VectorPoint): [number, number] {
   if (Array.isArray(point)) {
     return [point[0], point[1]];
   }
   return [point.x, point.y];
+}
+
+function pointBlanked(point: VectorPointTuple | VectorPoint): boolean {
+  return Array.isArray(point) ? point[3] === true : point.blank === true;
+}
+
+function pointSpotHighlighted(point: VectorPointTuple | VectorPoint): boolean {
+  if (Array.isArray(point)) {
+    return point[4] === 1 && point[3] === false;
+  }
+  return point.passIndex === 1 && point.blank === false;
 }
 
 function mapCoordToPixel(value: number, start: number, end: number, edge: number): number {

@@ -133,6 +133,37 @@ def _normalize_vector_point(
     )
 
 
+def _log_vector_point_flags(points) -> None:
+    if not points:
+        return
+    blank_true = 0
+    blank_false = 0
+    blank_none = 0
+    pass_one = 0
+    pass_two = 0
+    other_pass = 0
+    for point in points:
+        _x, _y, _dwell, blank, pass_index = _normalize_vector_point(point)
+        if blank is True:
+            blank_true += 1
+        elif blank is False:
+            blank_false += 1
+        else:
+            blank_none += 1
+        if pass_index == 1:
+            pass_one += 1
+        elif pass_index == 2:
+            pass_two += 1
+        elif pass_index is not None:
+            other_pass += 1
+    logger.debug(
+        "[vector] custom point flags total=%d blank_true=%d blank_false=%d "
+        "blank_none=%d pass1=%d pass2=%d pass_other=%d",
+        len(points), blank_true, blank_false, blank_none,
+        pass_one, pass_two, other_pass,
+    )
+
+
 # Exception types that indicate the USB connection is dead and we should
 # drop our reference so the next request reconnects. Matched by name to
 # avoid importing classes that might not be public.
@@ -842,6 +873,7 @@ class DeviceService:
             ):
                 raise ValueError("pattern=custom requires `points` or a production bitmap fallback")
             if req.points is not None:
+                _log_vector_point_flags(req.points)
                 iter_points = iter(req.points)
             else:
                 # Production compatibility for browser ROI bitmap scans:

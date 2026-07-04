@@ -4,6 +4,7 @@ import type {
   SimulationBitmap,
   SimulationBitmapPixel,
   VectorPoint,
+  VectorPointTuple,
   VectorRequest,
 } from "../types/api";
 import type { ROIState } from "../store/scanSlice";
@@ -444,7 +445,7 @@ function bitmapToCustomPoints(
   roi: ROIRequest,
   dwell: number,
   skipped: boolean | null | undefined,
-): VectorPoint[] {
+): VectorPointTuple[] {
   if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
     return [];
   }
@@ -460,8 +461,8 @@ function bitmapToCustomPoints(
   const normalizedSkipped = skipped === null || skipped === undefined
     ? null
     : Boolean(skipped);
-  const primaryPass: VectorPoint[] = [];
-  const secondaryPass: VectorPoint[] = [];
+  const primaryPass: VectorPointTuple[] = [];
+  const secondaryPass: VectorPointTuple[] = [];
 
   for (let y = 0; y < bitmap.height; y++) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
@@ -474,17 +475,17 @@ function bitmapToCustomPoints(
         : normalizedSkipped === false
         ? !highlighted
         : false;
-      const point = {
-        x: sampleX,
-        y: sampleY,
+      const point: VectorPointTuple = [
+        sampleX,
+        sampleY,
         dwell,
         blank,
-        passIndex: normalizedSkipped === null
+        normalizedSkipped === null
           ? null
           : highlighted
           ? 1
           : 2,
-      };
+      ];
 
       // Emit the selected interval as the first pass and the
       // complement as the second pass. This keeps the blank/unblank
@@ -511,7 +512,7 @@ function bitmapToROIActionPoints(
   dwell: number,
   selection: [number, number],
   skipped: boolean,
-): VectorPoint[] {
+): VectorPointTuple[] {
   if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
     return [];
   }
@@ -524,7 +525,7 @@ function bitmapToROIActionPoints(
   const yDiv = Math.max(1, bitmap.height - 1);
   const xSpan = Math.max(1, x1 - x0);
   const ySpan = Math.max(1, y1 - y0);
-  const points: VectorPoint[] = [];
+  const points: VectorPointTuple[] = [];
 
   for (let y = 0; y < bitmap.height; y++) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
@@ -533,12 +534,7 @@ function bitmapToROIActionPoints(
       const pixel = bitmap.pixels[y * bitmap.width + x];
       const highlighted = grayScaleSelectionContains(selection, pixelValue(pixel));
       const blank = skipped ? highlighted : !highlighted;
-      points.push({
-        x: sampleX,
-        y: sampleY,
-        dwell,
-        blank,
-      });
+      points.push([sampleX, sampleY, dwell, blank, highlighted ? 1 : 2]);
     }
   }
 

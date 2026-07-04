@@ -22,7 +22,7 @@ import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { DwellHelp } from "./DwellHelp";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
-import type { VectorPoint } from "../types/api";
+import type { VectorPoint, VectorPointTuple } from "../types/api";
 
 const MAX_POINTS = 1_000_000;
 const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256] as const;
@@ -268,7 +268,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
   );
 }
 
-function formatPoint(point: [number, number, number] | VectorPoint): string {
+function formatPoint(point: VectorPointTuple | VectorPoint): string {
   if (Array.isArray(point)) {
     return point.join(",");
   }

@@ -114,6 +114,8 @@ export function App() {
   const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
   const [grayScaleStepDelta, setGrayScaleStepDelta] = useState(committedGrayScaleStepDelta);
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
+  const [vectorGrayLevelsEnabled, setVectorGrayLevelsEnabled] = useState(false);
+  const [vectorGrayRange, setVectorGrayRange] = useState<[number, number]>([0, 255]);
   const [roiActionLocked, setROIActionLocked] = useState(false);
   const [roiActionCanvasVisible, setROIActionCanvasVisible] = useState(false);
   const [mergedFigureByKind, setMergedFigureByKind] = useState<{
@@ -325,6 +327,14 @@ export function App() {
         {t("roi.showGrid")}
       </label>
     ) : null;
+  const clearCommittedGrayScaleSelection = useCallback(() => {
+    dispatch(
+      setROIGrayScaleSelection({
+        selection: null,
+        isSkipped: null,
+      })
+    );
+  }, [dispatch]);
 
   useEffect(() => {
     if (!roiState.selection || phase === "completed" || phase === "error" || phase === "idle") {
@@ -349,12 +359,7 @@ export function App() {
       if (options?.clearSelection) {
         dispatch(clearROISelection());
       }
-      dispatch(
-        setROIGrayScaleSelection({
-          selection: null,
-          isSkipped: null,
-        })
-      );
+      clearCommittedGrayScaleSelection();
       setPendingGrayScaleSelection(null);
       setPendingGrayScaleAnchor(null);
       setPendingGrayScaleSkipped(null);
@@ -363,7 +368,7 @@ export function App() {
       setROIActionLocked(false);
       setROIActionCanvasVisible(false);
     },
-    [dispatch]
+    [clearCommittedGrayScaleSelection, dispatch]
   );
 
   useEffect(() => {
@@ -495,6 +500,40 @@ export function App() {
     );
     setGrayScaleConfirmOpen(false);
   }, [dispatch, pendingGrayScaleAnchor, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
+
+  const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
+    setVectorGrayLevelsEnabled(checked);
+    if (checked) {
+      setVectorGrayRange([0, 255]);
+      setPendingGrayScaleSelection([0, 255]);
+      setPendingGrayScaleAnchor(null);
+      setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
+      return;
+    }
+    setVectorGrayRange([0, 255]);
+    clearCommittedGrayScaleSelection();
+    setPendingGrayScaleSelection(null);
+    setPendingGrayScaleAnchor(null);
+    setPendingGrayScaleSkipped(null);
+    setGrayScaleConfirmOpen(false);
+  }, [clearCommittedGrayScaleSelection, committedGrayScaleSkipped]);
+
+  const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
+    const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
+    setVectorGrayRange(normalized);
+    setPendingGrayScaleSelection(normalized);
+    setPendingGrayScaleAnchor(null);
+    setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
+  }, [committedGrayScaleSkipped]);
+
+  const handleVectorGrayRangeSelect = useCallback(() => {
+    if (!vectorGrayLevelsEnabled) return;
+    const normalized = normalizeGrayScaleSelection(vectorGrayRange) ?? [0, 255];
+    setPendingGrayScaleSelection(normalized);
+    setPendingGrayScaleAnchor(null);
+    setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
+    setGrayScaleConfirmOpen(true);
+  }, [committedGrayScaleSkipped, vectorGrayLevelsEnabled, vectorGrayRange]);
 
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
@@ -846,22 +885,49 @@ export function App() {
         {/* right column */}
         <section>
           <div className="card image-panel-card">
-              <div className="card__header">
-                <span className="card__title">{t(imagePanelTitleKey)}</span>
-                {gridLineToggle}
-                <div id="image-panel-toolbar-slot" className="card__header-toolbar-slot">
-                {showGraySpectrum && (
-                  <GrayScaleSpectrum
-                    selectedGrayScale={pendingGrayScaleSelection}
-                    selectionAnchor={pendingGrayScaleAnchor}
-                    levels={grayScaleLevels}
-                    stepDelta={grayScaleStepDelta}
-                    sourceLabel={grayScaleSourceLabel}
-                    scopeNote={grayScaleScopeNote}
-                    onSelect={handleGrayScaleSelect}
-                    onStepDeltaChange={handleGrayScaleStepDeltaChange}
-                  />
-                )}
+              <div className={`card__header image-panel-card__header${kind === "vector" ? " image-panel-card__header--vector" : ""}`}>
+                <div className="image-panel-card__header-main">
+                  <span className="card__title">{t(imagePanelTitleKey)}</span>
+                  {gridLineToggle}
+                  {kind === "vector" && (
+                    <label className="checkbox canvas-grid-toggle vector-gray-level-toggle">
+                      <input
+                        type="checkbox"
+                        checked={vectorGrayLevelsEnabled}
+                        disabled={panelDisabled}
+                        onChange={(event) => handleVectorGrayLevelsToggle(event.target.checked)}
+                      />
+                      {t("vector.grayLevels")}
+                    </label>
+                  )}
+                  <div
+                    id="image-panel-toolbar-slot"
+                    className={`card__header-toolbar-slot image-panel-card__toolbar-slot${kind === "vector" ? " image-panel-card__toolbar-slot--vector" : ""}`}
+                  >
+                    {kind === "vector" ? (
+                      vectorGrayLevelsEnabled && (
+                        <VectorGrayLevelSelector
+                          enabled={vectorGrayLevelsEnabled}
+                          range={vectorGrayRange}
+                          disabled={panelDisabled}
+                          onRangeChange={handleVectorGrayRangeChange}
+                          onRangeCommit={handleVectorGrayRangeSelect}
+                          onSelect={handleVectorGrayRangeSelect}
+                        />
+                      )
+                    ) : showGraySpectrum ? (
+                      <GrayScaleSpectrum
+                        selectedGrayScale={pendingGrayScaleSelection}
+                        selectionAnchor={pendingGrayScaleAnchor}
+                        levels={grayScaleLevels}
+                        stepDelta={grayScaleStepDelta}
+                        sourceLabel={grayScaleSourceLabel}
+                        scopeNote={grayScaleScopeNote}
+                        onSelect={handleGrayScaleSelect}
+                        onStepDeltaChange={handleGrayScaleStepDeltaChange}
+                      />
+                    ) : null}
+                  </div>
                 </div>
             </div>
             <div className="card__body">
@@ -1032,6 +1098,127 @@ function GrayScaleConfirmDialog({
   );
 }
 
+function VectorGrayLevelSelector({
+  enabled,
+  range,
+  disabled,
+  onRangeChange,
+  onRangeCommit,
+  onSelect,
+}: {
+  enabled: boolean;
+  range: [number, number];
+  disabled: boolean;
+  onRangeChange: (range: [number, number]) => void;
+  onRangeCommit: () => void;
+  onSelect: () => void;
+}) {
+  const { t } = useTranslation();
+  const min = Math.min(range[0], range[1]);
+  const max = Math.max(range[0], range[1]);
+  const majorTicks = useMemo(() => {
+    const ticks: number[] = [];
+    for (let value = 0; value <= 240; value += 20) ticks.push(value);
+    ticks.push(255);
+    return ticks;
+  }, []);
+  const minorTicks = useMemo(() => {
+    const ticks: number[] = [];
+    for (let value = 5; value <= 255; value += 5) {
+      if (value % 20 !== 0 && value !== 255) ticks.push(value);
+    }
+    return ticks;
+  }, []);
+
+  function setMin(value: number) {
+    const next = clampVectorGrayLevel(value);
+    onRangeChange([Math.min(next, max), max]);
+  }
+
+  function setMax(value: number) {
+    const next = clampVectorGrayLevel(value);
+    onRangeChange([min, Math.max(next, min)]);
+  }
+
+  return (
+    <div className="vector-gray-levels">
+      {enabled && (
+        <div className="vector-gray-levels__panel">
+          <div className="vector-gray-levels__actions">
+            <div className="vector-gray-levels__slider-shell">
+              <div className="vector-gray-levels__values">
+                <span
+                  className="vector-gray-levels__value vector-gray-levels__value--min"
+                  style={{ left: `${(min / 255) * 100}%` }}
+                >
+                  {min}
+                </span>
+                <span
+                  className="vector-gray-levels__value vector-gray-levels__value--max"
+                  style={{ left: `${(max / 255) * 100}%` }}
+                >
+                  {max}
+                </span>
+              </div>
+              <div className="vector-gray-levels__slider" aria-label={t("vector.grayLevels.range")}>
+                <div className="vector-gray-levels__track" />
+                <div
+                  className="vector-gray-levels__selection"
+                  style={{
+                    left: `${(min / 255) * 100}%`,
+                    width: `${((max - min) / 255) * 100}%`,
+                  }}
+                />
+                <div className="vector-gray-levels__ticks vector-gray-levels__ticks--minor">
+                  {minorTicks.map((value) => (
+                    <span key={value} style={{ left: `${(value / 255) * 100}%` }} />
+                  ))}
+                </div>
+                <div className="vector-gray-levels__ticks vector-gray-levels__ticks--major">
+                  {majorTicks.map((value) => (
+                    <span key={value} style={{ left: `${(value / 255) * 100}%` }}>
+                      <i>{value}</i>
+                    </span>
+                  ))}
+                </div>
+                <input
+                  className="vector-gray-levels__range vector-gray-levels__range--min"
+                  type="range"
+                  min={0}
+                  max={255}
+                  step={1}
+                  value={min}
+                  disabled={disabled}
+                  aria-label={t("vector.grayLevels.min")}
+                  onChange={(event) => setMin(Number(event.target.value))}
+                  onPointerUp={onRangeCommit}
+                  onKeyUp={onRangeCommit}
+                />
+                <input
+                  className="vector-gray-levels__range vector-gray-levels__range--max"
+                  type="range"
+                  min={0}
+                  max={255}
+                  step={1}
+                  value={max}
+                  disabled={disabled}
+                  aria-label={t("vector.grayLevels.max")}
+                  onChange={(event) => setMax(Number(event.target.value))}
+                  onPointerUp={onRangeCommit}
+                  onKeyUp={onRangeCommit}
+                />
+              </div>
+            </div>
+            <button type="button" className="btn btn--primary vector-gray-levels__select" disabled={disabled} onClick={onSelect}>
+              {t("vector.grayLevels.select")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GrayScaleSpectrum({
   selectedGrayScale,
   selectionAnchor,
@@ -1179,6 +1366,12 @@ function clampGrayScaleStepDelta(value: number): number {
   const n = Number(value);
   if (!Number.isFinite(n)) return 10;
   return Math.max(1, Math.min(255, Math.round(n)));
+}
+
+function clampVectorGrayLevel(value: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(255, Math.round(n)));
 }
 
 function useAppRoute(): AppRoute {
