@@ -460,7 +460,7 @@ export function App() {
   );
 
   const handleGrayScaleSelect = useCallback((grayScale: number) => {
-    setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? true);
+    setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
     setPendingGrayScaleSelection((current) => {
       if (pendingGrayScaleAnchor === null || current === null) {
         setPendingGrayScaleAnchor(grayScale);
@@ -994,24 +994,24 @@ function GrayScaleConfirmDialog({
               <input
                 type="radio"
                 name="gray-scale-skip-mode"
-                checked={isSkipped !== false}
-                onChange={() => onIsSkippedChange(true)}
-              />
-              <span>
-                <strong>{t("roi.grayScale.confirm.mode.skip")}</strong>
-                <small>{t("roi.grayScale.confirm.mode.skip.help")}</small>
-              </span>
-            </label>
-            <label className="gray-scale-confirm__mode-option">
-              <input
-                type="radio"
-                name="gray-scale-skip-mode"
                 checked={isSkipped === false}
                 onChange={() => onIsSkippedChange(false)}
               />
               <span>
                 <strong>{t("roi.grayScale.confirm.mode.spot")}</strong>
                 <small>{t("roi.grayScale.confirm.mode.spot.help")}</small>
+              </span>
+            </label>
+            <label className="gray-scale-confirm__mode-option">
+              <input
+                type="radio"
+                name="gray-scale-skip-mode"
+                checked={isSkipped === true}
+                onChange={() => onIsSkippedChange(true)}
+              />
+              <span>
+                <strong>{t("roi.grayScale.confirm.mode.skip")}</strong>
+                <small>{t("roi.grayScale.confirm.mode.skip.help")}</small>
               </span>
             </label>
           </div>

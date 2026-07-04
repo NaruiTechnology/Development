@@ -148,8 +148,6 @@ export function ScanControls({
         return;
       }
       dispatch(bumpRevision());
-      actionLoopIterationRef.current += 1;
-      setActionLoopIteration(actionLoopIterationRef.current);
       stream.startVector({ ...entry.req, preview: entry.preview });
     }, actionLoopGapMs);
   }, [actionLoopGapMs, clearActionLoopTimer, dispatch, stream]);
@@ -334,6 +332,7 @@ export function ScanControls({
     actionLoopActive || actionLoopPaused || streaming || closing || paused
       ? actionLoopIteration
       : repeat;
+  const actionLoopCounterLive = roiAction && (actionLoopActive || streaming || closing) && !actionLoopPaused;
 
   useEffect(() => {
     let cancelled = false;
@@ -465,7 +464,11 @@ export function ScanControls({
             </label>
             <span className="scan-loop-counter-wrap">
               <span className="scan-loop-counter__label">{t("scan.repeat")}</span>
-              <span className="scan-loop-counter" title={t("scan.repeat.title")}>
+              <span
+                className="scan-loop-counter"
+                data-live={actionLoopCounterLive ? "true" : "false"}
+                title={t("scan.repeat.title")}
+              >
                 {actionLoopDisplayCount}
               </span>
             </span>
