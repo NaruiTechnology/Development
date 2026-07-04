@@ -32,6 +32,8 @@ export type HelpKey =
   | "preProcess"
   | "canvasView"
   | "grayScale"
+  | "vectorGrayLevelFilter"
+  | "vectorPixelFallbackBlank"
   | "scanModes"
   | "magCalibration";
 
@@ -620,6 +622,83 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>
         Use <strong>Select</strong> to confirm the pending mode and
         persist it into the scan store for the next scan step.
+      </p>
+    </>
+  ),
+
+  vectorGrayLevelFilter: () => (
+    <>
+      <p>
+        This toggle is the vector-only gray level fallback path. We
+        tried the same-pixel blanking idea first, but host-side
+        causality makes that impossible in the current stream: the ADC
+        sample arrives after the beam has already moved on.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Final behavior:</strong> when this is enabled and a gray
+        range is confirmed, the backend switches vector scans into
+        <code>adaptive_gray_feedback</code>, forces{" "}
+        <code>SixteenBit</code> output, sends tiny point/window batches,
+        waits for the returned ADC samples, compares them to the
+        selected range, and emits the next <code>BlankCommand</code>
+        from that result.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li>Raster stays out of scope. This help applies only to vector scans.</li>
+        <li>The gray range is compared against the confirmed interval from the ROI/gray selection flow.</li>
+        <li>Pipeline-delay compensation is still configurable, because the next physical point may not be the next logical point.</li>
+      </ul>
+
+      <p>
+        The compromise is throughput for feedback control. The host-side
+        loop is a fallback, not a full same-pixel closed loop.
+      </p>
+    </>
+  ),
+
+  vectorPixelFallbackBlank: () => (
+    <>
+      <p>
+        This is the fallback path for vector gray-level blanking. The
+        current behavior is precomputed blanking: bitmap or gray filter
+        data is expanded into points with blank flags, the stream is
+        sent, the FPGA executes it, and ADC samples come back later.
+      </p>
+
+      <p>
+        The proposed fallback is delayed feedback: send point N, receive
+        ADC for point N, compare the gray range, then choose
+        <code>BlankCommand</code> for point N+1 or N+K. That only works
+        if the scan loop runs in an adaptive lockstep mode. The current
+        vector macro does not do that; it pre-builds and sends chunks
+        ahead of time, then receives ADC chunks later.
+      </p>
+
+      <p>
+        Because of buffering and FPGA pipeline delay, the decision may
+        not affect the immediate next point. In practice it may affect
+        <code>N + pipelineDelay</code>, so the delay has to be
+        calibrated.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Proposed fallback mode:</strong> add an
+        <code>adaptive_gray_feedback</code> VECTOR mode, force
+        <code>output_mode = SixteenBit</code> for 14-bit thresholding,
+        send very small command batches, wait for ADC samples, compare
+        them against the gray-level range, emit <code>BlankCommand</code>
+        before the next point/window, and add pipeline-delay
+        compensation because the next logical point may not be the next
+        physical point.
+      </div>
+
+      <p>
+        Tradeoff: this is much slower than the current streaming vector
+        scan. USB round trips and FPGA buffering will dominate. As a
+        software fallback, though, it is technically reasonable and
+        better than doing nothing.
       </p>
     </>
   ),

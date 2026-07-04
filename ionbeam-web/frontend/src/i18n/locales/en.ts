@@ -508,6 +508,8 @@ export const en = {
   "help.preProcess.aria": "What does the pre-process chunks field do?",
   "help.grayScale.title": "Gray-scale spectrum — ROI highlight selection",
   "help.grayScale.aria": "How does the gray-scale spectrum selection work?",
+  "help.vectorGrayLevelFilter.title": "Vector gray level filter — fallback blanking",
+  "help.vectorGrayLevelFilter.aria": "Help for the vector gray level filter fallback path",
   "help.scanModes.title": "Raster vs vector — scan behavior and use cases",
   "help.scanModes.aria": "What is the difference between raster and vector scans?",
 

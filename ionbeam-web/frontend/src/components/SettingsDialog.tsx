@@ -58,6 +58,7 @@ import {
 import { HelpPopover } from "./HelpPopover";
 import { Icon } from "./Icon";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import { VectorPixelFallbackBlankHelp } from "./VectorPixelFallbackBlankHelp";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
 
@@ -755,7 +756,7 @@ function VectorTab({ draft }: { draft: unknown }) {
   const adcLatency = numberField(draft, [...VECTOR_PATH, "adcLatency"], 0);
   const lineShift = numberField(draft, [...VECTOR_PATH, "lineShiftPerXRow"], 0);
   const drainFloor = numberField(draft, [...VECTOR_PATH, "drainFloorPixels"], 0);
-  const pixelFallbackBlank = boolField(draft, [...VECTOR_PATH, "PixelFallbackBlank"], false);
+  const pixelFallbackBlank = boolField(draft, [...VECTOR_PATH, "PixelFallbackBlank"], true);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
@@ -3224,22 +3225,7 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
       </p>
     </>
   ),
-  vectorPixelFallbackBlank: (
-    <>
-      <p>
-        Enables the software-side fallback blanking mode for VECTOR
-        gray-level filtering. The host compares returned ADC samples
-        against the confirmed gray range and sends blanking updates for
-        the following point or calibrated small window.
-      </p>
-      <p>
-        This mode forces <code>SixteenBit</code> output so the full ADC
-        range is available to the threshold decision. Leave it disabled
-        for the normal precomputed vector path when throughput matters
-        more than per-point feedback control.
-      </p>
-    </>
-  ),
+  vectorPixelFallbackBlank: <VectorPixelFallbackBlankHelp />,
   simulationEnabled: (
     <>
       <p>

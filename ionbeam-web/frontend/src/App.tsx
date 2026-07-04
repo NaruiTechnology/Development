@@ -34,6 +34,7 @@ import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
 import { MagCalibrationChart, MagCalibrationControls } from "./components/MagCalibration";
 import { GrayScaleHelp } from "./components/GrayScaleHelp";
+import { VectorGrayLevelHelp } from "./components/VectorGrayLevelHelp";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -116,6 +117,7 @@ export function App() {
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
   const [vectorGrayLevelsEnabled, setVectorGrayLevelsEnabled] = useState(false);
   const [vectorGrayRange, setVectorGrayRange] = useState<[number, number]>([0, 255]);
+  const [repeat, setRepeat] = useState(1);
   const [roiActionLocked, setROIActionLocked] = useState(false);
   const [roiActionCanvasVisible, setROIActionCanvasVisible] = useState(false);
   const [mergedFigureByKind, setMergedFigureByKind] = useState<{
@@ -777,15 +779,18 @@ export function App() {
                     />
                     {showROIActionControls && kind === "roi" && (
                       <div className="roi-action-controls">
-                        <ScanControls
-                          kind={actionScanKind}
-                          disabled={!isSignedIn}
-                          scanActive={scanActive}
-                          roiAction
-                          onActionRunStart={() => {
-                            setROIActionLocked(true);
-                            setROIActionCanvasVisible(true);
-                          }}
+                    <ScanControls
+                      kind={actionScanKind}
+                      disabled={!isSignedIn}
+                      scanActive={scanActive}
+                      repeat={repeat}
+                      onRepeatChange={setRepeat}
+                      showRepeatControl
+                      roiAction
+                      onActionRunStart={() => {
+                        setROIActionLocked(true);
+                        setROIActionCanvasVisible(true);
+                      }}
                         />
                       </div>
                     )}
@@ -834,6 +839,9 @@ export function App() {
                     kind={actionScanKind}
                     disabled={!isSignedIn}
                     scanActive={scanActive}
+                    repeat={repeat}
+                    onRepeatChange={setRepeat}
+                    showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled && committedGrayScaleSelection !== null}
                   />
                 </div>
               </div>
@@ -898,6 +906,7 @@ export function App() {
                         onChange={(event) => handleVectorGrayLevelsToggle(event.target.checked)}
                       />
                       {t("vector.grayLevels")}
+                      <VectorGrayLevelHelp />
                     </label>
                   )}
                   <div

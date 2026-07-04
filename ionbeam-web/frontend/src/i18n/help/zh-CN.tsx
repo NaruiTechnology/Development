@@ -130,6 +130,64 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  vectorGrayLevelFilter: () => (
+    <>
+      <p>
+        这个开关是仅用于矢量扫描的灰度备用路径。我们最先尝试过“同像素即时消隐”，
+        但在当前主机流里这是做不到的，因为 ADC 采样到达时，束流已经移动到下一个点。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>最终行为：</strong>启用后且灰度范围已确认时，后端会把矢量扫描切换为
+        <code>adaptive_gray_feedback</code>，强制使用 <code>SixteenBit</code> 输出，
+        发送很小的点/窗口批次，等待返回的 ADC 采样，将其与选定范围比较，并根据结果发出下一条{" "}
+        <code>BlankCommand</code>。
+      </div>
+
+      <ul className="dwell-help__list">
+        <li>光柵不在此范围内。这个帮助只针对矢量扫描。</li>
+        <li>灰度范围与 ROI / 灰度选择流程中确认的区间比较。</li>
+        <li>流水线延迟补偿仍然可配置，因为“下一个物理点”未必等于“下一个逻辑点”。</li>
+      </ul>
+
+      <p>
+        这个方案的代价是吞吐量换反馈控制。它是主机侧的备用闭环，不是同像素实时闭环。
+      </p>
+    </>
+  ),
+
+  vectorPixelFallbackBlank: () => (
+    <>
+      <p>
+        这是矢量灰阶消隐的备用路径。当前行为是预先计算消隐：把位图或灰阶滤波数据展开为带消隐标志的点，
+        然后发送整段流，FPGA 执行，ADC 采样再稍后返回。
+      </p>
+
+      <p>
+        提议的备用方案是延迟反馈：发送点 N，接收点 N 的 ADC，比较灰阶范围，然后为点 N+1 或 N+K 选择{" "}
+        <code>BlankCommand</code>。这只有在扫描循环以自适应锁步模式运行时才可行。
+        目前的矢量宏并不是这样做的；它会提前构建并发送数据块，然后再接收后续的 ADC 数据块。
+      </p>
+
+      <p>
+        由于缓冲和 FPGA 流水线延迟，这个决定未必会影响紧随其后的那个点。实际生效的可能是{" "}
+        <code>N + pipelineDelay</code>，因此这段延迟必须先校准。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>建议的备用模式：</strong>增加一个 <code>adaptive_gray_feedback</code> 矢量模式，
+        在 14 位阈值比较时强制使用 <code>output_mode = SixteenBit</code>，发送非常小的命令批次，
+        等待 ADC 采样，和灰阶范围比较，并在下一个点/窗口之前发出 <code>BlankCommand</code>；
+        同时加入流水线延迟补偿，因为“下一个逻辑点”未必就是“下一个物理点”。
+      </div>
+
+      <p>
+        代价是速度会明显慢于当前的流式矢量扫描。USB 往返和 FPGA 缓冲会成为主要开销。
+        作为软件备用方案，它在技术上是合理的，但不会快。
+      </p>
+    </>
+  ),
+
   scanModes: () => (
     <>
       <p>

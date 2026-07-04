@@ -453,6 +453,8 @@ export const zhTW: Partial<TranslationTable> = {
   "help.preProcess.aria": "預先處理資料區塊欄位的作用是什麼？",
   "help.grayScale.title": "灰階光譜條 — ROI 高亮選擇",
   "help.grayScale.aria": "灰階光譜條的選取方式是什麼？",
+  "help.vectorGrayLevelFilter.title": "矢量灰階過濾 — 備用逐像素消隱",
+  "help.vectorGrayLevelFilter.aria": "矢量灰階過濾備用路徑的說明",
   "help.scanModes.title": "光柵與矢量 — 掃描行為與使用情境",
   "help.scanModes.aria": "光柵掃描和矢量掃描有什麼差異？",
 

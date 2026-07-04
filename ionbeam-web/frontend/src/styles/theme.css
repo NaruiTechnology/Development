@@ -586,14 +586,9 @@ body {
 }
 
 .roi-spectrum__controls .help-btn {
-  width: 12px;
-  height: 12px;
-  font-size: 8px;
   margin: 0;
   padding: 0;
   overflow: visible;
-  transform: scale(0.85);
-  transform-origin: center;
   flex: 0 0 auto;
 }
 
@@ -662,9 +657,24 @@ body {
   grid-template-columns: minmax(260px, 1fr) auto;
   align-items: center;
   column-gap: 8px;
+  padding-left: 6px;
   min-width: 0;
   width: 100%;
   white-space: nowrap;
+}
+
+.scan-repeat-field--shared {
+  gap: 6px;
+}
+
+.scan-repeat-field--shared .scan-repeat-field__input {
+  width: 52px;
+}
+
+.scan-loop-counter--compact {
+  min-width: 40px;
+  padding: 4px 8px;
+  font-size: 24px;
 }
 
 .vector-gray-levels__slider-shell {
@@ -833,6 +843,7 @@ body {
 .vector-gray-levels__select {
   min-height: 28px;
   padding: 4px 10px;
+  padding-right: 16px;
   white-space: nowrap;
 }
 
@@ -1166,6 +1177,23 @@ body {
   width: 100%;
 }
 
+.scan-loop-controls__buttons--roi {
+  flex-wrap: nowrap;
+}
+
+.scan-loop-controls__buttons--roi > .btn {
+  flex: 0 0 auto;
+}
+
+.scan-loop-controls__footer {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  grid-row: 3;
+  width: 100%;
+  min-width: 0;
+}
+
 .scan-loop-controls__preview .scan-busy {
   flex: 0 0 auto;
 }
@@ -1174,9 +1202,16 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
   flex: 0 0 auto;
   min-width: 0;
+}
+
+.scan-loop-counter-wrap--push-right {
+  margin-left: auto;
+}
+
+.scan-loop-counter-wrap--controls {
+  padding-top: 4px;
 }
 
 .scan-loop-counter__label {
@@ -1225,6 +1260,13 @@ body {
   padding: 2px 3px;
   font-size: 11px;
   line-height: 1.1;
+}
+
+.button-row__repeat-footer {
+  flex: 1 1 100%;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
 }
 
 .scan-loop-counter[data-visible="false"] {

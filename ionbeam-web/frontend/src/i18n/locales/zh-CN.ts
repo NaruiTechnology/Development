@@ -447,6 +447,8 @@ export const zhCN: Partial<TranslationTable> = {
   "help.preProcess.aria": "预处理数据块字段的作用是什么？",
   "help.grayScale.title": "灰度光谱条 — ROI 高亮选择",
   "help.grayScale.aria": "灰度光谱条的选择方式是什么？",
+  "help.vectorGrayLevelFilter.title": "矢量灰度过滤 — 备用逐像素消隐",
+  "help.vectorGrayLevelFilter.aria": "矢量灰度过滤备用路径的帮助说明",
   "help.scanModes.title": "光栅与矢量 — 扫描行为与使用场景",
   "help.scanModes.aria": "光栅扫描和矢量扫描有什么区别？",
 

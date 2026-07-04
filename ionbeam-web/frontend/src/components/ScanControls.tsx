@@ -63,12 +63,18 @@ export function ScanControls({
   disabled = false,
   scanActive = false,
   roiAction = false,
+  repeat,
+  onRepeatChange,
+  showRepeatControl = true,
   onActionRunStart,
 }: {
   kind: ScanKind;
   disabled?: boolean;
   scanActive?: boolean;
   roiAction?: boolean;
+  repeat: number;
+  onRepeatChange: (next: number) => void;
+  showRepeatControl?: boolean;
   onActionRunStart?: () => void;
 }) {
   const dispatch = useAppDispatch();
@@ -94,7 +100,6 @@ export function ScanControls({
   const actionLoopActiveRef = useRef(false);
   const actionLoopPausedRef = useRef(false);
   const actionLoopGapMs = 180;
-  const [repeat, setRepeat] = useState(1);
   const [actionLoopIteration, setActionLoopIteration] = useState(0);
   const [actionLoopActive, setActionLoopActive] = useState(false);
   const [actionLoopPaused, setActionLoopPaused] = useState(false);
@@ -377,11 +382,6 @@ export function ScanControls({
   const roiPauseButtonLabel = roiResumeMode ? t("scan.resume") : t("scan.pause");
   const roiPauseButtonTitle = roiResumeMode ? t("scan.resume.title") : t("scan.pause.title");
   const roiPauseButtonIcon = roiResumeMode ? "play" : "pause";
-  const actionLoopDisplayCount =
-    actionLoopActive || actionLoopPaused || streaming || closing || paused
-      ? actionLoopIteration
-      : repeat;
-  const actionLoopCounterLive = roiAction && (actionLoopActive || streaming || closing) && !actionLoopPaused;
 
   useEffect(() => {
     let cancelled = false;
@@ -511,16 +511,6 @@ export function ScanControls({
               {preview && <Icon name="alertTriangle" tone="warn" />}
               <span>{t("scan.preview")}</span>
             </label>
-            <span className="scan-loop-counter-wrap">
-              <span className="scan-loop-counter__label">{t("scan.repeat")}</span>
-              <span
-                className="scan-loop-counter"
-                data-live={actionLoopCounterLive ? "true" : "false"}
-                title={t("scan.repeat.title")}
-              >
-                {actionLoopDisplayCount}
-              </span>
-            </span>
             <span
               className="scan-busy"
               data-visible={busy ? "true" : "false"}
@@ -530,7 +520,7 @@ export function ScanControls({
               <span className="scan-busy__spinner" />
             </span>
           </div>
-          <div className="scan-loop-controls__buttons">
+          <div className="scan-loop-controls__buttons scan-loop-controls__buttons--roi">
             <button
               className="btn btn--primary"
               disabled={runDisabled}
@@ -561,24 +551,17 @@ export function ScanControls({
               <Icon name="square" tone="danger" />
               {t("scan.stop")}
             </button>
-            <label className="scan-repeat-field scan-repeat-field--inline" title={t("scan.repeat.title")}>
-              <span>{t("scan.repeat")}</span>
-              <input
-                className="input scan-repeat-field__input"
-                type="number"
-                min={1}
-                max={50}
-                step={1}
-                value={repeat}
-                disabled={controlsDisabled || roiEbeamDisabled}
-                onChange={(event) => {
-                  const raw = Number(event.target.value);
-                  const next = Number.isFinite(raw) ? Math.min(50, Math.max(1, Math.trunc(raw))) : 1;
-                  setRepeat(next);
-                }}
-              />
-            </label>
           </div>
+          {showRepeatControl && (
+            <div className="scan-loop-controls__footer">
+              <RepeatControl
+                repeat={repeat}
+                displayCount={actionLoopActive || actionLoopPaused || streaming || closing || paused ? actionLoopIteration : repeat}
+                disabled={controlsDisabled || roiEbeamDisabled}
+                onRepeatChange={onRepeatChange}
+              />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -665,6 +648,11 @@ export function ScanControls({
         <Icon name="x" tone="danger" />
         {t("scan.clear")}
       </button>
+      {showRepeatControl && (
+        <div className="button-row__repeat-footer">
+          <RepeatControl repeat={repeat} disabled={controlsDisabled} onRepeatChange={onRepeatChange} />
+        </div>
+      )}
       <span
         className="scan-busy"
         data-visible={busy ? "true" : "false"}
@@ -673,6 +661,46 @@ export function ScanControls({
       >
         <span className="scan-busy__spinner" />
       </span>
+    </div>
+  );
+}
+
+function RepeatControl({
+  repeat,
+  displayCount,
+  disabled,
+  onRepeatChange,
+}: {
+  repeat: number;
+  displayCount?: number;
+  disabled: boolean;
+  onRepeatChange: (next: number) => void;
+}) {
+  const { t } = useTranslation();
+  const count = displayCount ?? repeat;
+  return (
+    <div className="scan-loop-counter-wrap scan-loop-counter-wrap--shared scan-loop-counter-wrap--controls" title={t("scan.repeat.title")}>
+      <span className="scan-loop-counter__label">{t("scan.repeat")}</span>
+      <span className="scan-loop-counter scan-loop-counter--compact" aria-hidden="true">
+        {count}
+      </span>
+      <label className="scan-repeat-field scan-repeat-field--shared">
+        <span>{t("scan.repeat")}</span>
+        <input
+          className="input scan-repeat-field__input"
+          type="number"
+          min={1}
+          max={50}
+          step={1}
+          value={repeat}
+          disabled={disabled}
+          onChange={(event) => {
+            const raw = Number(event.target.value);
+            const next = Number.isFinite(raw) ? Math.min(50, Math.max(1, Math.trunc(raw))) : 1;
+            onRepeatChange(next);
+          }}
+        />
+      </label>
     </div>
   );
 }
