@@ -25,6 +25,7 @@ import { useScanStream } from "../hooks/useScanStream";
 import {
   clearBitmapSelectionCache,
   rasterRequestWithBitmapSelection,
+  vectorRequestWithAdaptiveGrayFeedback,
   vectorRequestWithBitmapSelection,
   vectorRequestWithROIGrayScaleAction,
 } from "../lib/bitmapVector";
@@ -109,6 +110,16 @@ export function ScanControls({
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
   const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
+  const vectorPixelFallbackBlank = (() => {
+    const vectorParams = defaults?.vector_params;
+    if (vectorParams && typeof vectorParams === "object") {
+      const normalized = (vectorParams as Record<string, unknown>).pixelFallbackBlank;
+      if (typeof normalized === "boolean") return normalized;
+    }
+    const vectorDefaults = defaults?.vector;
+    if (!vectorDefaults || typeof vectorDefaults !== "object") return false;
+    return (vectorDefaults as Record<string, unknown>).PixelFallbackBlank === true;
+  })();
   const allowBitmapSimulation = !isProduction && Boolean(roiState.imageDataUrl);
   const activeVectorGrayScaleSelection =
     kind === "vector" && vectorGrayScaleSelection !== null ? vectorGrayScaleSelection : null;
@@ -142,6 +153,45 @@ export function ScanControls({
     if (req.pattern === "custom" && req.points !== null) return "roi_gray_action";
     return "bitmap_selection";
   };
+
+  const buildVectorRequest = useCallback(async () => {
+    console.info("[scan/vector] adaptive gate", {
+      vectorPixelFallbackBlank,
+      scanGrayScaleSelection,
+      scanGrayScaleSkipped,
+      isProduction,
+      allowBitmapSimulation,
+    });
+    if (vectorPixelFallbackBlank && scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null) {
+      return vectorRequestWithAdaptiveGrayFeedback(
+        { ...vector, roi },
+        roiState,
+        {
+          grayScaleSelection: scanGrayScaleSelection,
+          grayScaleSkipped: scanGrayScaleSkipped,
+        }
+      );
+    }
+    return vectorRequestWithBitmapSelection(
+      { ...vector, roi },
+      roiState,
+      {
+        isProduction,
+        allowBitmapSimulation,
+        grayScaleSelection: scanGrayScaleSelection,
+        grayScaleSkipped: scanGrayScaleSkipped,
+      }
+    );
+  }, [
+    allowBitmapSimulation,
+    isProduction,
+    roi,
+    roiState,
+    scanGrayScaleSelection,
+    scanGrayScaleSkipped,
+    vector,
+    vectorPixelFallbackBlank,
+  ]);
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one
@@ -249,16 +299,7 @@ export function ScanControls({
       }
     } else {
       try {
-        const req = await vectorRequestWithBitmapSelection(
-          { ...vector, roi },
-          roiState,
-          {
-            isProduction,
-            allowBitmapSimulation,
-            grayScaleSelection: scanGrayScaleSelection,
-            grayScaleSkipped: scanGrayScaleSkipped,
-          }
-        );
+        const req = await buildVectorRequest();
         logVectorRequestContext(
           "stream",
           req,
@@ -331,16 +372,7 @@ export function ScanControls({
     }
     else {
       try {
-        const req = await vectorRequestWithBitmapSelection(
-          { ...vector, roi },
-          roiState,
-          {
-            isProduction,
-            allowBitmapSimulation,
-            grayScaleSelection: scanGrayScaleSelection,
-            grayScaleSkipped: scanGrayScaleSkipped,
-          }
-        );
+        const req = await buildVectorRequest();
         logVectorRequestContext(
           "validated",
           req,
