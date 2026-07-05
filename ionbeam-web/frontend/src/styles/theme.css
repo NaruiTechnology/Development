@@ -456,9 +456,11 @@ body {
 }
 
 .roi-spectrum__meta .help-btn {
-  width: 14px;
-  height: 14px;
-  font-size: 12px;
+  width: 12px;
+  height: 12px;
+  font-size: 8px;
+  transform: scale(0.85);
+  transform-origin: center;
 }
 
 .roi-spectrum__source-pill {
@@ -591,9 +593,14 @@ body {
 }
 
 .roi-spectrum__controls .help-btn {
+  width: 12px;
+  height: 12px;
+  font-size: 8px;
   margin: 0;
   padding: 0;
   overflow: visible;
+  transform: scale(0.85);
+  transform-origin: center;
   flex: 0 0 auto;
 }
 

@@ -425,8 +425,14 @@ export function ScanControls({
   const roiPauseButtonLabel = roiResumeMode ? t("scan.resume") : t("scan.pause");
   const roiPauseButtonTitle = roiResumeMode ? t("scan.resume.title") : t("scan.pause.title");
   const roiPauseButtonIcon = roiResumeMode ? "play" : "pause";
+  const loopDisplayOffset =
+    kind === "vector" && (actionLoopActive || actionLoopPaused || streaming || closing || paused)
+      ? 1
+      : 0;
   const repeatDisplayCount =
-    actionLoopActive || actionLoopPaused || streaming || closing || paused ? actionLoopIteration : repeat;
+    actionLoopActive || actionLoopPaused || streaming || closing || paused
+      ? Math.max(0, actionLoopIteration - loopDisplayOffset)
+      : repeat;
 
   useEffect(() => {
     let cancelled = false;

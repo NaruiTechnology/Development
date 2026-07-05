@@ -31,7 +31,8 @@ import { Icon } from "./Icon";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 
 const DAC_RANGE = 2048;
-const ROI_ACTION_SPOT_COLOR = { r: 97, g: 0, b: 0 };
+const ROI_ACTION_BLANK_COLOR = { r: 97, g: 0, b: 0 };
+const ROI_ACTION_HIGHLIGHT_COLOR = { r: 253, g: 224, b: 71 };
 
 interface PaintStats {
   min: number;
@@ -101,10 +102,14 @@ export function ImageCanvas({
   kind,
   onRenderedImageChange,
   onMergedFigureChange,
+  vectorGrayScaleSelection = null,
+  vectorGrayScaleSkipped = null,
 }: {
   kind: ScanKind;
   onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
   onMergedFigureChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
+  vectorGrayScaleSelection?: [number, number] | null;
+  vectorGrayScaleSkipped?: boolean | null;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
@@ -159,11 +164,12 @@ export function ImageCanvas({
   const lastOutput = useAppSelector((s) => s.scan.lastOutput);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
+  const hasPaintedCanvasImage = stats.populated > 0;
   const showServerFigure = phase === "completed" || phase === "paused";
   const hasLiveCanvasData =
     kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
   const hasRenderedCanvasImage =
-    hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
+    hasPaintedCanvasImage || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
   const editorEnabled = (phase === "completed" || phase === "paused") && hasRenderedCanvasImage;
   const toolbarVisible = phase === "completed" || phase === "paused";
   const editorToolbarVisible = toolbarVisible && hasRenderedCanvasImage;
@@ -177,9 +183,23 @@ export function ImageCanvas({
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
   const vectorGraySpotSelection =
-    kind === "vector" && roiGrayScaleSelection && roiGrayScaleSkipped === false
+    kind === "vector" && vectorGrayScaleSelection !== null
+      ? vectorGrayScaleSelection
+      : kind === "vector" && roiGrayScaleSelection !== null
       ? roiGrayScaleSelection
       : null;
+  const vectorGraySpotSkipped =
+    kind === "vector" && vectorGrayScaleSelection !== null
+      ? vectorGrayScaleSkipped
+      : kind === "vector" && roiGrayScaleSelection !== null
+      ? roiGrayScaleSkipped
+      : null;
+  const vectorGraySpotColor =
+    kind === "vector" && vectorGrayScaleSelection !== null
+      ? ROI_ACTION_BLANK_COLOR
+      : vectorGraySpotSkipped === false
+      ? ROI_ACTION_HIGHLIGHT_COLOR
+      : ROI_ACTION_BLANK_COLOR;
 
   const stride =
     kind === "vector" && vectorPattern === "default" && vectorEdge > 0
@@ -204,10 +224,18 @@ export function ImageCanvas({
         vectorEdge,
         vectorCursor,
         vectorGraySpotSelection,
+        vectorGraySpotColor,
       );
       setStats(s);
     } else if (kind === "vector" && vectorPattern === "default") {
-      const s = paintVectorDefault(canvas, vectorImage, vectorEdge, vectorCursor, vectorGraySpotSelection);
+      const s = paintVectorDefault(
+        canvas,
+        vectorImage,
+        vectorEdge,
+        vectorCursor,
+        vectorGraySpotSelection,
+        vectorGraySpotColor,
+      );
       setStats(s);
     } else if (kind === "vector" && vectorCustomRenderPoints) {
       const s = paintVectorCustom(
@@ -218,6 +246,7 @@ export function ImageCanvas({
         vectorCursor,
         vectorCustomBlankMask,
         vectorCustomSpotMask,
+        vectorGraySpotColor,
       );
       setStats(s);
     } else {
@@ -286,6 +315,7 @@ export function ImageCanvas({
   }, [kind, onMergedFigureChange]);
 
   useEffect(() => {
+    setStats({ min: 0, max: 0, populated: 0 });
     clearEditorState(true);
   }, [kind, clearEditorState]);
 
@@ -1578,7 +1608,8 @@ function paintVectorDefault(
   buf: Uint16Array,
   edge: number,
   populated: number,
-  graySpotSelection: GrayScaleSelection = null
+  graySpotSelection: GrayScaleSelection = null,
+  graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
     canvas.width = edge;
@@ -1601,7 +1632,7 @@ function paintVectorDefault(
     const g = scaleSample(sample, range.min, range.max);
     const p = idx * 4;
     if (sampleInGraySpotSelection(sample, graySpotSelection)) {
-      paintSpotPixel(data, p);
+      paintSpotPixel(data, p, graySpotColor);
     } else {
       data[p + 0] = g;
       data[p + 1] = g;
@@ -1622,6 +1653,7 @@ function paintVectorCustom(
   populated: number,
   blankMask: Uint8Array | null,
   spotMask: Uint8Array | null,
+  graySpotColor: { r: number; g: number; b: number },
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
     canvas.width = edge;
@@ -1652,15 +1684,16 @@ function paintVectorCustom(
   const img = ctx.createImageData(edge, edge);
   const data = img.data;
   for (let i = 0; i < limit; i++) {
-    if (blankMask?.[i] === 1) continue;
     const x = points[2 * i] | 0;
     const y = points[2 * i + 1] | 0;
     if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
     const idx = y * edge + x;
     const g = scaleSample(buf[idx], lo, hi);
     const p = idx * 4;
-    if (spotMask?.[i] === 1) {
-      paintSpotPixel(data, p);
+    if (blankMask?.[i] === 1) {
+      paintSpotPixel(data, p, ROI_ACTION_BLANK_COLOR);
+    } else if (spotMask?.[i] === 1) {
+      paintSpotPixel(data, p, graySpotColor);
     } else {
       data[p + 0] = g;
       data[p + 1] = g;
@@ -1679,7 +1712,7 @@ function paintVectorCustom(
       const y = points[2 * i + 1] | 0;
       if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
       const p = (y * edge + x) * 4;
-      paintSpotPixel(data, p);
+      paintSpotPixel(data, p, graySpotColor);
       data[p + 3] = 255;
     }
   }
@@ -1694,6 +1727,7 @@ function paintVectorDefaultBlockFill(
   edge: number,
   populated: number,
   graySpotSelection: GrayScaleSelection = null,
+  graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
 ): PaintStats {
   const nativeSize = DAC_RANGE;
   if (canvas.width !== nativeSize || canvas.height !== nativeSize) {
@@ -1736,7 +1770,7 @@ function paintVectorDefaultBlockFill(
       let p = ((baseY + dy) * nativeSize + baseX) * 4;
       for (let dx = 0; dx < blockWidth; dx++) {
         if (isSpot) {
-          paintSpotPixel(data, p);
+          paintSpotPixel(data, p, graySpotColor);
         } else {
           data[p + 0] = g;
           data[p + 1] = g;
@@ -1780,10 +1814,14 @@ function sampleInGraySpotSelection(sample: number, selection: GrayScaleSelection
   return grayScaleSelectionContains(selection, sample >> 8);
 }
 
-function paintSpotPixel(data: Uint8ClampedArray, offset: number): void {
-  data[offset + 0] = ROI_ACTION_SPOT_COLOR.r;
-  data[offset + 1] = ROI_ACTION_SPOT_COLOR.g;
-  data[offset + 2] = ROI_ACTION_SPOT_COLOR.b;
+function paintSpotPixel(
+  data: Uint8ClampedArray,
+  offset: number,
+  color: { r: number; g: number; b: number }
+): void {
+  data[offset + 0] = color.r;
+  data[offset + 1] = color.g;
+  data[offset + 2] = color.b;
 }
 
 async function uploadMergedFigure(

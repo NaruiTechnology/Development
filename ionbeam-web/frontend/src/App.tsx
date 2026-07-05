@@ -125,8 +125,11 @@ export function App() {
   const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
   const [grayScaleStepDelta, setGrayScaleStepDelta] = useState(committedGrayScaleStepDelta);
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
+  const [grayScaleConfirmTarget, setGrayScaleConfirmTarget] = useState<"roi" | "vector">("roi");
+  const [grayScaleCommitCount, setGrayScaleCommitCount] = useState(0);
   const [vectorGrayLevelsEnabled, setVectorGrayLevelsEnabled] = useState(false);
   const [vectorGrayRange, setVectorGrayRange] = useState<[number, number]>([0, 255]);
+  const [vectorGrayScaleSkipped, setVectorGrayScaleSkipped] = useState<boolean | null>(null);
   const [vectorGrayRangeCommitCount, setVectorGrayRangeCommitCount] = useState(0);
   const [repeat, setRepeat] = useState(1);
   const [roiActionLocked, setROIActionLocked] = useState(false);
@@ -363,6 +366,7 @@ export function App() {
       setPendingGrayScaleSelection(null);
       setPendingGrayScaleAnchor(null);
       setGrayScaleLevels([]);
+      setGrayScaleCommitCount(0);
     }
   }, [showGraySpectrum]);
 
@@ -378,6 +382,7 @@ export function App() {
       setPendingGrayScaleSkipped(null);
       setGrayScaleLevels([]);
       setGrayScaleConfirmOpen(false);
+      setGrayScaleCommitCount(0);
       setROIActionLocked(false);
       setROIActionCanvasVisible(false);
     },
@@ -457,6 +462,12 @@ export function App() {
     roiState.viewport_y_end,
   ]);
 
+  useEffect(() => {
+    if (!showGraySpectrum) return;
+    if (grayScaleStepDelta >= 2) return;
+    setGrayScaleStepDelta(10);
+  }, [grayScaleStepDelta, showGraySpectrum]);
+
   const previousROISelectionRef = useRef(roiState.selection);
   useEffect(() => {
     if (previousROISelectionRef.current === roiState.selection) return;
@@ -500,19 +511,24 @@ export function App() {
   );
 
   const handleGrayScaleSelect = useCallback((grayScale: number) => {
+    setGrayScaleConfirmTarget("roi");
     setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
-    setPendingGrayScaleSelection((current) => {
-      if (pendingGrayScaleAnchor === null || current === null) {
-        setPendingGrayScaleAnchor(grayScale);
-        setGrayScaleConfirmOpen(false);
-        return [grayScale, grayScale];
-      }
-      const next = normalizeGrayScaleSelection([pendingGrayScaleAnchor, grayScale]);
-      setPendingGrayScaleAnchor(null);
-      setGrayScaleConfirmOpen(true);
-      return next;
-    });
-  }, [committedGrayScaleSkipped, pendingGrayScaleAnchor]);
+    if (grayScaleCommitCount === 0) {
+      setPendingGrayScaleAnchor(grayScale);
+      setPendingGrayScaleSelection([grayScale, grayScale]);
+      setGrayScaleCommitCount(1);
+      setGrayScaleConfirmOpen(false);
+      return;
+    }
+    const next =
+      pendingGrayScaleAnchor !== null && pendingGrayScaleSelection !== null
+        ? normalizeGrayScaleSelection([pendingGrayScaleAnchor, grayScale])
+        : [grayScale, grayScale];
+    setPendingGrayScaleAnchor(null);
+    setPendingGrayScaleSelection((next ?? [grayScale, grayScale]) as GrayScaleSelection);
+    setGrayScaleCommitCount(0);
+    setGrayScaleConfirmOpen(true);
+  }, [committedGrayScaleSkipped, grayScaleCommitCount, pendingGrayScaleAnchor, pendingGrayScaleSelection]);
 
   const handleGrayScaleStepDeltaChange = useCallback((nextStepDelta: number) => {
     const n = Number(nextStepDelta);
@@ -527,42 +543,32 @@ export function App() {
 
   const handleGrayScaleConfirmAccept = useCallback(() => {
     if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
-    dispatch(
-      setROIGrayScaleSelection({
-        selection: pendingGrayScaleSelection,
-        isSkipped: pendingGrayScaleSkipped,
-      })
-    );
+    if (grayScaleConfirmTarget === "vector") {
+      setVectorGrayScaleSkipped(true);
+    } else {
+      dispatch(
+        setROIGrayScaleSelection({
+          selection: pendingGrayScaleSelection,
+          isSkipped: pendingGrayScaleSkipped,
+        })
+      );
+    }
     setGrayScaleConfirmOpen(false);
-    setVectorGrayRangeCommitCount(0);
-  }, [dispatch, pendingGrayScaleAnchor, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
+  }, [dispatch, grayScaleConfirmTarget, pendingGrayScaleAnchor, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
 
   const applyVectorGrayLevelsToggle = useCallback((checked: boolean) => {
     setVectorGrayLevelsEnabled(checked);
     if (checked) {
       const defaultRange: [number, number] = [0, 255];
-      const nextSkipped = committedGrayScaleSkipped ?? false;
+      const nextSkipped = true;
       setVectorGrayRange(defaultRange);
-      setPendingGrayScaleSelection(defaultRange);
-      setPendingGrayScaleAnchor(null);
-      setPendingGrayScaleSkipped(nextSkipped);
+      setVectorGrayScaleSkipped(nextSkipped);
       dispatch(updateVector({ vector_resolution: 128, output_mode: "SixteenBit" }));
-      dispatch(
-        setROIGrayScaleSelection({
-          selection: defaultRange,
-          isSkipped: nextSkipped,
-        })
-      );
       return;
     }
     setVectorGrayRange([0, 255]);
-    clearCommittedGrayScaleSelection();
-    setPendingGrayScaleSelection(null);
-    setPendingGrayScaleAnchor(null);
-    setPendingGrayScaleSkipped(null);
-    setGrayScaleConfirmOpen(false);
-    setVectorGrayRangeCommitCount(0);
-  }, [clearCommittedGrayScaleSelection, committedGrayScaleSkipped, dispatch]);
+    setVectorGrayScaleSkipped(null);
+  }, [committedGrayScaleSkipped, dispatch]);
 
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
     if (settingsDraft !== null) {
@@ -582,31 +588,21 @@ export function App() {
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
     const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
     setVectorGrayRange(normalized);
-    setPendingGrayScaleSelection(normalized);
-    setPendingGrayScaleAnchor(null);
-    setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
-  }, [committedGrayScaleSkipped]);
+  }, []);
 
   const handleVectorGrayRangeSelect = useCallback(() => {
     if (!vectorGrayLevelsEnabled) return;
-    const normalized = normalizeGrayScaleSelection(vectorGrayRange) ?? [0, 255];
-    setPendingGrayScaleSelection(normalized);
+    setGrayScaleConfirmTarget("vector");
+    setPendingGrayScaleSelection(vectorGrayRange);
     setPendingGrayScaleAnchor(null);
-    const nextSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped ?? false;
-    setPendingGrayScaleSkipped(nextSkipped);
-    dispatch(
-      setROIGrayScaleSelection({
-        selection: normalized,
-        isSkipped: nextSkipped,
-      })
-    );
+    setPendingGrayScaleSkipped(true);
     if (vectorGrayRangeCommitCount === 0) {
       setVectorGrayRangeCommitCount(1);
       return;
     }
     setVectorGrayRangeCommitCount(0);
     setGrayScaleConfirmOpen(true);
-  }, [committedGrayScaleSkipped, dispatch, pendingGrayScaleSkipped, vectorGrayLevelsEnabled, vectorGrayRange, vectorGrayRangeCommitCount]);
+  }, [committedGrayScaleSkipped, vectorGrayLevelsEnabled, vectorGrayRange, vectorGrayRangeCommitCount]);
 
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
@@ -627,11 +623,11 @@ export function App() {
     if (scanActive) return;
 
     const nextScanKind = nextKind === "raster" || nextKind === "vector" ? nextKind : null;
-    const currentScanKind = kind === "raster" || kind === "vector" ? kind : hasPriorScanImage ? lastScanKind : null;
+    const currentScanKind = kind === "raster" || kind === "vector" ? kind : null;
 
     resetROIActionContext({ clearSelection: true });
 
-    if (currentScanKind && nextScanKind && currentScanKind !== nextScanKind) {
+    if (nextScanKind && (currentScanKind === null || currentScanKind !== nextScanKind)) {
       dispatch(streamReset());
       dispatch(resetRaster({ resolution: rasterResolution }));
       dispatch(resetVector());
@@ -733,6 +729,7 @@ export function App() {
           onIsSkippedChange={setPendingGrayScaleSkipped}
           onClose={() => {
             setGrayScaleConfirmOpen(false);
+            setGrayScaleCommitCount(0);
             setVectorGrayRangeCommitCount(0);
           }}
           onConfirm={handleGrayScaleConfirmAccept}
@@ -854,20 +851,20 @@ export function App() {
                     />
                     {showROIActionControls && kind === "roi" && (
                       <div className="roi-action-controls">
-                    <ScanControls
-                      kind={actionScanKind}
-                      disabled={!isSignedIn}
-                      scanActive={scanActive}
-                      repeat={repeat}
-                      onRepeatChange={setRepeat}
-                      showRepeatControl
-                      vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
-                      vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? pendingGrayScaleSkipped : null}
-                      roiAction
-                      onActionRunStart={() => {
-                        setROIActionLocked(true);
-                        setROIActionCanvasVisible(true);
-                      }}
+                        <ScanControls
+                          kind={actionScanKind}
+                          disabled={!isSignedIn}
+                          scanActive={scanActive}
+                          repeat={repeat}
+                          onRepeatChange={setRepeat}
+                          showRepeatControl
+                          vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
+                          vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                          roiAction
+                          onActionRunStart={() => {
+                            setROIActionLocked(true);
+                            setROIActionCanvasVisible(true);
+                          }}
                         />
                       </div>
                     )}
@@ -920,7 +917,7 @@ export function App() {
                     onRepeatChange={setRepeat}
                     showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
                     vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
-                    vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? pendingGrayScaleSkipped : null}
+                    vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
                   />
                 </div>
               </div>
@@ -1020,7 +1017,7 @@ export function App() {
             </div>
             <div className="card__body">
               {kind === "roi" ? (
-                  <ROIEditor
+                    <ROIEditor
                     disabled={panelDisabled}
                     variant="canvas"
                     backgroundImageUrl={activeROIScanImageUrl}
@@ -1035,6 +1032,8 @@ export function App() {
                   kind={kind as ScanKind}
                   onRenderedImageChange={handleRenderedImageChange}
                   onMergedFigureChange={handleMergedFigureChange}
+                  vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
+                  vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
                 />
               )}
             </div>
