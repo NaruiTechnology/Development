@@ -157,6 +157,15 @@ export function useScanStream() {
 
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
+        console.info("[scan/vector] ws-send", {
+          preview: Boolean(req.preview),
+          pattern: req.pattern,
+          feedback_mode: req.feedback_mode ?? null,
+          gray_level_range: req.gray_level_range ?? null,
+          gray_level_skipped: req.gray_level_skipped ?? null,
+          roi: req.roi != null,
+          simulation_bitmap: req.simulation_bitmap != null,
+        });
         ws.send(JSON.stringify(req));
       };
       ws.onmessage = (ev) =>

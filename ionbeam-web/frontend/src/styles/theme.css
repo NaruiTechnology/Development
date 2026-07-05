@@ -854,7 +854,7 @@ body {
 .vector-gray-levels__select {
   min-height: 28px;
   padding: 4px 10px;
-  padding-right: 16px;
+  padding-right: 22px;
   white-space: nowrap;
 }
 
@@ -2396,6 +2396,7 @@ body {
 .canvas-axis-overlay__label {
   padding: 2px 4px;
   background: rgba(0, 0, 0, 0.2);
+  color: dimgray;
 }
 
 .canvas-axis-overlay__label--start {

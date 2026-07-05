@@ -22,6 +22,7 @@
  * process instead.
  */
 import type { Server as HttpServer, IncomingMessage } from "node:http";
+import fs from "node:fs";
 import { WebSocket, WebSocketServer } from "ws";
 import { URL } from "node:url";
 import { Buffer } from "node:buffer";
@@ -45,6 +46,7 @@ const STREAM_PATHS: Record<string, ScanKind> = {
   "/ws/scan/raster/stream": "raster",
   "/ws/scan/vector/stream": "vector",
 };
+const VECTOR_TRACE_LOG_FILE = "/tmp/ionbeam-vector-trace.log";
 
 export function attachWsProxy(
   server: HttpServer,
@@ -133,6 +135,18 @@ function handleProxy(
       if (parsed) {
         scanRequest = parsed;
         previewScan = isPreviewScan(parsed);
+        if (kind === "vector") {
+          appendVectorTrace("request", {
+            at: new Date().toISOString(),
+            preview: previewScan,
+            pattern: parsed.pattern ?? null,
+            feedback_mode: parsed.feedback_mode ?? null,
+            gray_level_range: parsed.gray_level_range ?? null,
+            gray_level_skipped: parsed.gray_level_skipped ?? null,
+            roi: parsed.roi != null,
+            simulation_bitmap: parsed.simulation_bitmap != null,
+          });
+        }
         if (actor && !previewScan) {
           activityIdPromise = recordScanStart(kind, actor, parsed).catch((err) => {
             console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
@@ -229,6 +243,21 @@ function handleProxy(
     `[ws] ${req.socket.remoteAddress} -> ${upstreamUrl}` +
       (config.glasgowToken ? " (with bearer)" : "")
   );
+}
+
+function appendVectorTrace(
+  kind: "request" | "response",
+  payload: Record<string, unknown>,
+): void {
+  try {
+    fs.appendFileSync(
+      VECTOR_TRACE_LOG_FILE,
+      `${JSON.stringify({ kind, ...payload })}\n`,
+      "utf8",
+    );
+  } catch (err) {
+    console.warn(`[ws][vector] failed to append trace to ${VECTOR_TRACE_LOG_FILE}:`, err);
+  }
 }
 
 /* -------- MOCK=1 path -------------------------------------------------- */

@@ -788,6 +788,7 @@ class DeviceService:
         async with self._acquire("vector"):
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(req)
+            adaptive_feedback = getattr(cmd, "_adaptive_gray_feedback", None)
 
             if req.pre_process:
                 t0 = time.perf_counter()
@@ -798,10 +799,10 @@ class DeviceService:
             eff = self._effective_vector_params(req)
             logger.debug(
                 "[vector] dwell=%d latency=%d pattern=%s vector_resolution=%d "
-                "output_mode=%s feedback_mode=%s pre_process=%s cookie=%d "
+                "output_mode=%s feedback_mode=%s adaptive_feedback=%s pre_process=%s cookie=%d "
                 "max_pipeline=%d drain_floor=%d",
                 eff.dwell, eff.latency_bytes, eff.pattern, eff.vector_resolution,
-                cmd._output_mode, req.feedback_mode, eff.pre_process, eff.cookie,
+                cmd._output_mode, req.feedback_mode, adaptive_feedback is not None, eff.pre_process, eff.cookie,
                 eff.max_pipeline, eff.effective_drain_floor_pixels,
             )
             t0 = time.perf_counter()

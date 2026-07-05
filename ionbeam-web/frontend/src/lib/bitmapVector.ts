@@ -279,7 +279,7 @@ export async function vectorRequestWithROIGrayScaleAction(
   }
 ): Promise<VectorRequest> {
   const selection = normalizeGrayScaleSelection(options.grayScaleSelection);
-  if (!roi.selection || !roi.imageDataUrl || selection === null || options.grayScaleSkipped === null) {
+  if (selection === null || options.grayScaleSkipped === null) {
     return vectorRequestWithBitmapSelection(req, roi, {
       isProduction: true,
       grayScaleSelection: selection,
@@ -287,7 +287,7 @@ export async function vectorRequestWithROIGrayScaleAction(
     });
   }
 
-  const converted = await bitmapSelectionToVector(roi);
+  const converted = await bitmapSelectionToVector(roiWithFullSelection(roi));
   if (!converted.simulationBitmap.pixels.length) {
     return withoutBitmapROI(req);
   }
@@ -321,13 +321,19 @@ export async function vectorRequestWithAdaptiveGrayFeedback(
   }
 ): Promise<VectorRequest> {
   const selection = normalizeGrayScaleSelection(options.grayScaleSelection);
-  if (!roi.selection || selection === null || options.grayScaleSkipped === null) {
+  if (selection === null || options.grayScaleSkipped === null) {
     return withoutBitmapROI(req);
   }
 
-  const roiRequest = roi.imageDataUrl
-    ? (await bitmapSelectionToVector(roi)).roi
-    : worldSelectionToDacROI(roi.selection, roi);
+  const activeROI = roiWithFullSelection(roi);
+  const roiSelection = activeROI.selection;
+  if (!roiSelection) {
+    return withoutBitmapROI(req);
+  }
+
+  const roiRequest = activeROI.imageDataUrl
+    ? (await bitmapSelectionToVector(activeROI)).roi
+    : worldSelectionToDacROI(roiSelection, activeROI);
 
   return {
     ...req,
@@ -629,6 +635,19 @@ function selectionCrop(
   );
 
   return { x: px0, y: py0, w: px1 - px0, h: py1 - py0 };
+}
+
+function roiWithFullSelection(roi: ROIState): ROIState {
+  if (roi.selection) return roi;
+  return {
+    ...roi,
+    selection: {
+      x_start: Math.min(roi.x_origin, roi.x_end),
+      x_end: Math.max(roi.x_origin, roi.x_end),
+      y_start: Math.min(roi.y_origin, roi.y_end),
+      y_end: Math.max(roi.y_origin, roi.y_end),
+    },
+  };
 }
 
 function isPartialSelection(roi: ROIState): boolean {

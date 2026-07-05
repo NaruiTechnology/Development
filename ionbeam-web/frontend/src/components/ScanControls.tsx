@@ -25,7 +25,6 @@ import { useScanStream } from "../hooks/useScanStream";
 import {
   clearBitmapSelectionCache,
   rasterRequestWithBitmapSelection,
-  vectorRequestWithAdaptiveGrayFeedback,
   vectorRequestWithBitmapSelection,
   vectorRequestWithROIGrayScaleAction,
 } from "../lib/bitmapVector";
@@ -66,6 +65,8 @@ export function ScanControls({
   repeat,
   onRepeatChange,
   showRepeatControl = true,
+  vectorGrayScaleSelection = null,
+  vectorGrayScaleSkipped = null,
   onActionRunStart,
 }: {
   kind: ScanKind;
@@ -75,6 +76,8 @@ export function ScanControls({
   repeat: number;
   onRepeatChange: (next: number) => void;
   showRepeatControl?: boolean;
+  vectorGrayScaleSelection?: [number, number] | null;
+  vectorGrayScaleSkipped?: boolean | null;
   onActionRunStart?: () => void;
 }) {
   const dispatch = useAppDispatch();
@@ -107,7 +110,38 @@ export function ScanControls({
   const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
   const allowBitmapSimulation = !isProduction && Boolean(roiState.imageDataUrl);
-  const pixelFallbackBlank = Boolean(defaults?.vector?.["PixelFallbackBlank"]);
+  const activeVectorGrayScaleSelection =
+    kind === "vector" && vectorGrayScaleSelection !== null ? vectorGrayScaleSelection : null;
+  const activeVectorGrayScaleSkipped =
+    kind === "vector" && vectorGrayScaleSkipped !== null ? vectorGrayScaleSkipped : null;
+  const scanGrayScaleSelection =
+    activeVectorGrayScaleSelection ?? roiGrayScaleSelection;
+  const scanGrayScaleSkipped =
+    activeVectorGrayScaleSkipped ?? roiGrayScaleSkipped;
+
+  const logVectorRequestContext = (source: "stream" | "validated", req: VectorRequest, branch: string) => {
+    if (kind !== "vector") return;
+    console.info("[scan/vector] build", {
+      source,
+      branch,
+      vectorGrayScaleSelection: activeVectorGrayScaleSelection,
+      vectorGrayScaleSkipped: activeVectorGrayScaleSkipped,
+      roiGrayScaleSelection,
+      roiGrayScaleSkipped,
+      pattern: req.pattern,
+      feedback_mode: req.feedback_mode,
+      gray_level_range: req.gray_level_range ?? null,
+      gray_level_skipped: req.gray_level_skipped ?? null,
+      roi: req.roi != null,
+      simulation_bitmap: req.simulation_bitmap != null,
+    });
+  };
+
+  const resolveVectorBranch = (req: VectorRequest): string => {
+    if (req.feedback_mode === "adaptive_gray_feedback") return "adaptive_gray_feedback";
+    if (req.pattern === "custom" && req.points !== null) return "roi_gray_action";
+    return "bitmap_selection";
+  };
 
   // Phase taxonomy:
   //   idle/completed/error  → no active stream; safe to start a new one
@@ -170,26 +204,17 @@ export function ScanControls({
         if (roiEbeamDisabled) {
           return;
         }
-        if (roiGrayScaleSelection === null || roiGrayScaleSkipped === null) {
+        if (scanGrayScaleSelection === null || scanGrayScaleSkipped === null) {
           throw new Error(t("roi.actionRun.selectionRequired"));
         }
-        const req = pixelFallbackBlank
-          ? await vectorRequestWithAdaptiveGrayFeedback(
-              { ...vector, roi },
-              roiState,
-              {
-                grayScaleSelection: roiGrayScaleSelection,
-                grayScaleSkipped: roiGrayScaleSkipped,
-              }
-            )
-          : await vectorRequestWithROIGrayScaleAction(
-              { ...vector, roi },
-              roiState,
-              {
-                grayScaleSelection: roiGrayScaleSelection,
-                grayScaleSkipped: roiGrayScaleSkipped,
-              }
-            );
+        const req = await vectorRequestWithROIGrayScaleAction(
+          { ...vector, roi },
+          roiState,
+          {
+            grayScaleSelection: scanGrayScaleSelection,
+            grayScaleSkipped: scanGrayScaleSkipped,
+          }
+        );
         clearActionLoopState();
         actionLoopRequestRef.current = { req, preview };
         actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
@@ -214,8 +239,8 @@ export function ScanControls({
           {
             isProduction,
             allowBitmapSimulation,
-            grayScaleSelection: roiGrayScaleSelection,
-            grayScaleSkipped: roiGrayScaleSkipped,
+            grayScaleSelection: scanGrayScaleSelection,
+            grayScaleSkipped: scanGrayScaleSkipped,
           }
         );
         stream.startRaster({ ...req, preview });
@@ -224,35 +249,21 @@ export function ScanControls({
       }
     } else {
       try {
-        const req =
-          roiGrayScaleSelection !== null && roiGrayScaleSkipped !== null
-            ? await (pixelFallbackBlank
-                ? vectorRequestWithAdaptiveGrayFeedback(
-                    { ...vector, roi },
-                    roiState,
-                    {
-                      grayScaleSelection: roiGrayScaleSelection,
-                      grayScaleSkipped: roiGrayScaleSkipped,
-                    }
-                  )
-                : vectorRequestWithROIGrayScaleAction(
-                    { ...vector, roi },
-                    roiState,
-                    {
-                      grayScaleSelection: roiGrayScaleSelection,
-                      grayScaleSkipped: roiGrayScaleSkipped,
-                    }
-                  ))
-            : await vectorRequestWithBitmapSelection(
-                { ...vector, roi },
-                roiState,
-                {
-                  isProduction,
-                  allowBitmapSimulation,
-                  grayScaleSelection: roiGrayScaleSelection,
-                  grayScaleSkipped: roiGrayScaleSkipped,
-                }
-              );
+        const req = await vectorRequestWithBitmapSelection(
+          { ...vector, roi },
+          roiState,
+          {
+            isProduction,
+            allowBitmapSimulation,
+            grayScaleSelection: scanGrayScaleSelection,
+            grayScaleSkipped: scanGrayScaleSkipped,
+          }
+        );
+        logVectorRequestContext(
+          "stream",
+          req,
+          resolveVectorBranch(req),
+        );
         stream.startVector({ ...req, preview });
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -320,35 +331,21 @@ export function ScanControls({
     }
     else {
       try {
-        const req =
-          roiGrayScaleSelection !== null && roiGrayScaleSkipped !== null
-            ? await (pixelFallbackBlank
-                ? vectorRequestWithAdaptiveGrayFeedback(
-                    { ...vector, roi },
-                    roiState,
-                    {
-                      grayScaleSelection: roiGrayScaleSelection,
-                      grayScaleSkipped: roiGrayScaleSkipped,
-                    }
-                  )
-                : vectorRequestWithROIGrayScaleAction(
-                    { ...vector, roi },
-                    roiState,
-                    {
-                      grayScaleSelection: roiGrayScaleSelection,
-                      grayScaleSkipped: roiGrayScaleSkipped,
-                    }
-                  ))
-            : await vectorRequestWithBitmapSelection(
-                { ...vector, roi },
-                roiState,
-                {
-                  isProduction,
-                  allowBitmapSimulation,
-                  grayScaleSelection: roiGrayScaleSelection,
-                  grayScaleSkipped: roiGrayScaleSkipped,
-                }
-              );
+        const req = await vectorRequestWithBitmapSelection(
+          { ...vector, roi },
+          roiState,
+          {
+            isProduction,
+            allowBitmapSimulation,
+            grayScaleSelection: scanGrayScaleSelection,
+            grayScaleSkipped: scanGrayScaleSkipped,
+          }
+        );
+        logVectorRequestContext(
+          "validated",
+          req,
+          resolveVectorBranch(req),
+        );
         const promise = dispatch(runVectorValidated({ ...req, preview }));
         const unregister = registerScanActionStop(() => {
           promise.abort();

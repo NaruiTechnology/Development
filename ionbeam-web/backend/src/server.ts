@@ -1269,6 +1269,46 @@ app.get("/api/status", async (_req, res) => {
   }
 });
 
+app.get("/api/defaults", async (_req, res) => {
+  try {
+    const upstream = await fetch(`${config.proxyTargetHttp}/defaults`, {
+      headers: config.glasgowToken
+        ? { Authorization: `Bearer ${config.glasgowToken}` }
+        : undefined,
+      signal: AbortSignal.timeout(2_000),
+    });
+    const contentType = (upstream.headers.get("content-type") ?? "").toLowerCase();
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      throw new Error(`upstream defaults returned HTTP ${upstream.status}`);
+    }
+    if (!contentType.includes("application/json")) {
+      res.status(502).json({
+        error: "upstream_invalid_content_type",
+        detail: `upstream /defaults returned ${contentType || "unknown content type"} instead of JSON`,
+        upstream_status: upstream.status,
+      });
+      return;
+    }
+    try {
+      res.status(upstream.status).json(JSON.parse(text));
+    } catch {
+      res.status(502).json({
+        error: "upstream_invalid_json",
+        detail: "upstream /defaults returned invalid JSON",
+        upstream_status: upstream.status,
+      });
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    res.status(502).json({
+      error: "defaults_unreachable",
+      detail: `glasgow_service unreachable: ${detail}`,
+      upstream: config.proxyTargetHttp,
+    });
+  }
+});
+
 // Static (production) — only mount if the build output actually exists, so
 // `npm run dev` doesn't 404 itself.
 if (config.mobilityOnly) {
@@ -1747,6 +1787,20 @@ async function proxyScanRunWithTelemetry(
   }
 
   const preview = isPreviewScan(body);
+  if (kind === "vector") {
+    const requestTrace = {
+      at: new Date().toISOString(),
+      preview,
+      pattern: body?.pattern ?? null,
+      feedback_mode: body?.feedback_mode ?? null,
+      gray_level_range: body?.gray_level_range ?? null,
+      gray_level_skipped: body?.gray_level_skipped ?? null,
+      roi: body?.roi != null,
+      simulation_bitmap: body?.simulation_bitmap != null,
+    };
+    console.info("[scan/vector] request", requestTrace);
+    appendVectorTrace("request", requestTrace);
+  }
   const activityId = preview
     ? null
     : await recordOperationScanStart(kind, actor, body).catch((err) => {
@@ -1765,6 +1819,18 @@ async function proxyScanRunWithTelemetry(
 
   const responseText = await upstream.text();
   const contentType = upstream.headers.get("content-type") ?? "application/json";
+
+  if (kind === "vector") {
+    const responseTrace = {
+      at: new Date().toISOString(),
+      ok: upstream.ok,
+      status: upstream.status,
+      preview,
+      content_type: contentType,
+    };
+    console.info("[scan/vector] response", responseTrace);
+    appendVectorTrace("response", responseTrace);
+  }
 
   if (!upstream.ok || (!activityId && !preview)) {
     res.status(upstream.status).type(contentType).send(responseText);
@@ -1805,6 +1871,23 @@ async function proxyScanRunWithTelemetry(
     csv_filename: output.csvFilename,
     image_filename: output.imageFilename,
   });
+}
+
+const VECTOR_TRACE_LOG_FILE = "/tmp/ionbeam-vector-trace.log";
+
+function appendVectorTrace(
+  kind: "request" | "response",
+  payload: Record<string, unknown>,
+): void {
+  try {
+    fs.appendFileSync(
+      VECTOR_TRACE_LOG_FILE,
+      `${JSON.stringify({ kind, ...payload })}\n`,
+      "utf8",
+    );
+  } catch (err) {
+    console.warn(`[scan/vector] failed to append trace to ${VECTOR_TRACE_LOG_FILE}:`, err);
+  }
 }
 
 async function recordOperationScanStart(

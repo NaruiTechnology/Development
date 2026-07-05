@@ -415,7 +415,11 @@ export function App() {
         : roiState;
       const levels = await grayScaleSpectrumLevelsForSelection(spectrumROI);
       if (cancelled) return;
-      setGrayScaleLevels(levels);
+      setGrayScaleLevels((current) =>
+        current.length === levels.length && current.every((value, index) => value === levels[index])
+          ? current
+          : levels
+      );
       setPendingGrayScaleSelection((current) =>
         current !== null && current.every((value) => levels.includes(value)) ? current : null
       );
@@ -423,7 +427,24 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeROIScanImageUrl, roiState, showGraySpectrum]);
+  }, [
+    activeROIScanImageUrl,
+    showGraySpectrum,
+    roiState.imageDataUrl,
+    roiState.imageKind,
+    roiState.selection?.x_start,
+    roiState.selection?.x_end,
+    roiState.selection?.y_start,
+    roiState.selection?.y_end,
+    roiState.x_origin,
+    roiState.x_end,
+    roiState.y_origin,
+    roiState.y_end,
+    roiState.viewport_x_start,
+    roiState.viewport_x_end,
+    roiState.viewport_y_start,
+    roiState.viewport_y_end,
+  ]);
 
   const previousROISelectionRef = useRef(roiState.selection);
   useEffect(() => {
@@ -435,6 +456,7 @@ export function App() {
   useEffect(() => {
     if (kind !== "roi") return;
     if (!roiScanImageUrl) return;
+    if (phase === "running" || phase === "stopping") return;
     if (roiState.imageKind === "file") return;
     if (suppressedROIScanImageUrlRef.current === roiScanImageUrl) return;
     if (roiState.imageKind === "lastScan" && roiState.imageDataUrl === roiScanImageUrl) return;
@@ -445,7 +467,7 @@ export function App() {
         imageKind: "lastScan",
       })
     );
-  }, [dispatch, kind, roiScanImageUrl, roiState.imageDataUrl, roiState.imageKind, t]);
+  }, [dispatch, kind, phase, roiScanImageUrl, roiState.imageDataUrl, roiState.imageKind, t]);
 
   const handleRenderedImageChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
@@ -506,10 +528,18 @@ export function App() {
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
     setVectorGrayLevelsEnabled(checked);
     if (checked) {
-      setVectorGrayRange([0, 255]);
-      setPendingGrayScaleSelection([0, 255]);
+      const defaultRange: [number, number] = [0, 255];
+      const nextSkipped = committedGrayScaleSkipped ?? false;
+      setVectorGrayRange(defaultRange);
+      setPendingGrayScaleSelection(defaultRange);
       setPendingGrayScaleAnchor(null);
-      setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
+      setPendingGrayScaleSkipped(nextSkipped);
+      dispatch(
+        setROIGrayScaleSelection({
+          selection: defaultRange,
+          isSkipped: nextSkipped,
+        })
+      );
       return;
     }
     setVectorGrayRange([0, 255]);
@@ -533,9 +563,16 @@ export function App() {
     const normalized = normalizeGrayScaleSelection(vectorGrayRange) ?? [0, 255];
     setPendingGrayScaleSelection(normalized);
     setPendingGrayScaleAnchor(null);
-    setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
+    const nextSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped ?? false;
+    setPendingGrayScaleSkipped(nextSkipped);
+    dispatch(
+      setROIGrayScaleSelection({
+        selection: normalized,
+        isSkipped: nextSkipped,
+      })
+    );
     setGrayScaleConfirmOpen(true);
-  }, [committedGrayScaleSkipped, vectorGrayLevelsEnabled, vectorGrayRange]);
+  }, [committedGrayScaleSkipped, dispatch, pendingGrayScaleSkipped, vectorGrayLevelsEnabled, vectorGrayRange]);
 
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
@@ -786,6 +823,8 @@ export function App() {
                       repeat={repeat}
                       onRepeatChange={setRepeat}
                       showRepeatControl
+                      vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
+                      vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? pendingGrayScaleSkipped : null}
                       roiAction
                       onActionRunStart={() => {
                         setROIActionLocked(true);
@@ -841,7 +880,9 @@ export function App() {
                     scanActive={scanActive}
                     repeat={repeat}
                     onRepeatChange={setRepeat}
-                    showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled && committedGrayScaleSelection !== null}
+                    showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
+                    vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
+                    vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? pendingGrayScaleSkipped : null}
                   />
                 </div>
               </div>

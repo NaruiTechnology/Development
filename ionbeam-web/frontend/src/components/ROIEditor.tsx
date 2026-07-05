@@ -121,6 +121,12 @@ export function ROIEditor({
     const img = new Image();
     img.onload = () => {
       imageRef.current = img;
+      if (vectorPhase === "running") {
+        drawBaseCanvas();
+        drawHighlightMask();
+        drawAnnotationLayer();
+        return;
+      }
       if (
         backgroundImageUrl &&
         imageSource === backgroundImageUrl &&
@@ -152,7 +158,7 @@ export function ROIEditor({
       drawAnnotationLayer();
     };
     img.src = imageSource;
-  }, [backgroundImageUrl, canvasResetToken, dispatch, imageSource, t]);
+  }, [backgroundImageUrl, canvasResetToken, dispatch, imageSource, t, vectorPhase]);
 
   useEffect(() => {
     drawBaseCanvas();
