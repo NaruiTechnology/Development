@@ -1167,7 +1167,6 @@ app.get("/api/admin/ftp/test-connection", async (_req, res) => {
 app.use("/api/scan/raster/run", requireScanPrivilege);
 app.use("/api/scan/vector/run", requireScanPrivilege);
 
-// MOCK responses live BEFORE the proxy mount so they win.
 if (config.mock) {
   app.get("/api/status", (_req, res) => res.json(mockRest.status()));
   app.get("/api/defaults", (_req, res) => res.json(mockRest.defaults()));
@@ -1216,14 +1215,19 @@ if (config.mock) {
       image_filename: latestOutput.image_filename,
     });
   });
-  app.post("/api/scan/raster/run", async (req, res) => {
-    await proxyScanRunWithTelemetry("raster", req, res);
-  });
-  app.post("/api/scan/vector/run", async (req, res) => {
-    await proxyScanRunWithTelemetry("vector", req, res);
-  });
-  app.use("/api", buildRestProxy());
 }
+
+// Real scan POST routes must stay outside the mock branch so normal runs
+// do not fall through to the Express 404 handler.
+app.post("/api/scan/raster/run", async (req, res) => {
+  await proxyScanRunWithTelemetry("raster", req, res);
+});
+app.post("/api/scan/vector/run", async (req, res) => {
+  await proxyScanRunWithTelemetry("vector", req, res);
+});
+
+// Proxy any remaining /api/* traffic to the Glasgow service.
+app.use("/api", buildRestProxy());
 
 // Keep /api/status explicit in the real backend too so the dev server never
 // falls through to the SPA index.html if the proxy router is bypassed or

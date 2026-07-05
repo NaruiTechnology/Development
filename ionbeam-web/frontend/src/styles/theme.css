@@ -655,7 +655,7 @@ body {
   width: 14px;
   height: 14px;
   font-size: 12px;
-  color: red;
+  color: #ff5f5f;
 }
 
 .vector-gray-level-toggle .help-btn .icon {
@@ -665,8 +665,8 @@ body {
 
 .vector-gray-level-toggle .help-btn:hover,
 .vector-gray-level-toggle .help-btn:focus-visible {
-  color: red;
-  box-shadow: 0 0 0 2px color-mix(in srgb, red 28%, transparent);
+  color: #ff8080;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ff5f5f 34%, transparent);
 }
 
 .vector-gray-levels__panel {

@@ -130,6 +130,10 @@ export function ScanControls({
     activeVectorGrayScaleSelection ?? roiGrayScaleSelection;
   const scanGrayScaleSkipped =
     activeVectorGrayScaleSkipped ?? roiGrayScaleSkipped;
+  const vectorGrayFilterActive =
+    kind === "vector" &&
+    activeVectorGrayScaleSelection !== null &&
+    activeVectorGrayScaleSkipped !== null;
 
   const logVectorRequestContext = (source: "stream" | "validated", req: VectorRequest, branch: string) => {
     if (kind !== "vector") return;
@@ -686,7 +690,7 @@ export function ScanControls({
       <span className="scan-action-with-help">
         <button
           className="btn"
-          disabled={runDisabled || kind === "roi"}
+          disabled={runDisabled || kind === "roi" || vectorGrayFilterActive}
           onClick={onRunValidated}
           title={t("scan.runValidated.title")}
         >
