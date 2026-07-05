@@ -27,6 +27,7 @@ import { ValidationHelp } from "./ValidationHelp";
 import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import { NumberStepperInput } from "./NumberStepperField";
 
 const RES_PRESETS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
 const DWELL_PRESETS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
@@ -111,16 +112,16 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
             {t("raster.cookie")}
             <CookieHelp />
           </label>
-          <input
-            className="input"
-            type="number"
-            min={0}
-            max={0xffff}
+          <NumberStepperInput
             value={r.cookie}
             disabled={disabled}
-            onChange={(e) =>
-              dispatch(updateRaster({ cookie: clamp(e.target.value, 0, 0xffff, 123) }))
+            onValueChange={(next) =>
+              dispatch(updateRaster({ cookie: clamp(next, 0, 0xffff, 123) }))
             }
+            min={0}
+            max={0xffff}
+            step={1}
+            inputMode="numeric"
           />
         </div>
       </div>

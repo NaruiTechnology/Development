@@ -129,8 +129,13 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   vectorGrayLevelFilter: () => (
     <>
       <p>
-        這個開關是僅供矢量掃描使用的灰階備用路徑。我們最先嘗試過「同像素即時消隱」，
+        這個開關控制僅供矢量掃描使用的灰階備用路徑。我們最先嘗試過「同像素即時消隱」，
         但在目前的主機串流裡這做不到，因為 ADC 取樣到達時，束流已經移到下一個點。
+      </p>
+
+      <p>
+        目前的備用行為是預先計算消隱：把點陣圖或灰階濾波資料展開為帶消隱標誌的點，
+        然後送出整段串流，FPGA 執行，ADC 取樣稍後回傳。
       </p>
 
       <div className="dwell-help__rule">
@@ -147,38 +152,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <p>
-        這個方案的代價是以吞吐量換取回饋控制。它是主機側的備用閉迴路，不是同像素即時閉迴路。
-      </p>
-    </>
-  ),
-
-  vectorPixelFallbackBlank: () => (
-    <>
-      <p>
-        這是矢量灰階消隱的備用路徑。現有行為是預先計算消隱：把點陣圖或灰階濾波資料展開為帶消隱標誌的點，
-        然後送出整段串流，FPGA 執行，ADC 取樣稍後回傳。
-      </p>
-
-      <p>
-        提議的備用方案是延遲回饋：送出點 N，接收點 N 的 ADC，比較灰階範圍，然後為點 N+1 或 N+K 選擇{" "}
-        <code>BlankCommand</code>。這只有在掃描迴圈以自適應鎖步模式運作時才可行。
-        目前的矢量巨集不是這樣做的；它會提前建立並送出資料區塊，然後再接收後續的 ADC 資料區塊。
-      </p>
-
-      <p>
-        由於緩衝與 FPGA 流水線延遲，這個決定未必會影響緊接著的那個點。實際生效的可能是{" "}
-        <code>N + pipelineDelay</code>，因此這段延遲必須先校準。
-      </p>
-
-      <div className="dwell-help__rule">
-        <strong>建議的備用模式：</strong>增加一個 <code>adaptive_gray_feedback</code> 矢量模式，
-        在 14 位元閾值比較時強制使用 <code>output_mode = SixteenBit</code>，送出非常小的命令批次，
-        等待 ADC 取樣，與灰階範圍比較，並在下一個點/視窗之前發出 <code>BlankCommand</code>；
-        同時加入流水線延遲補償，因為「下一個邏輯點」未必就是「下一個物理點」。
-      </div>
-
-      <p>
-        代價是速度會明顯慢於目前的串流式矢量掃描。USB 往返與 FPGA 緩衝會成為主要開銷。
+        這個方案的代價是速度會明顯慢於目前的串流式矢量掃描。USB 往返與 FPGA 緩衝會成為主要開銷。
         作為軟體備援方案，它在技術上是合理的，但不會快。
       </p>
     </>

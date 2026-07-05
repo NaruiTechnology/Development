@@ -6,6 +6,7 @@ import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { viewportBounds } from "../lib/roiGeometry";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
+import { NumberStepperInput } from "./NumberStepperField";
 
 const UNITS: Record<string, string> = {
   um: "μm",
@@ -180,14 +181,13 @@ function CalibrationField(props: {
   return (
     <div className="field">
       <label>{t(props.labelKey)}</label>
-      <input
-        className={`input${warning ? " input--invalid" : ""}`}
-        type="number"
-        step="any"
+      <NumberStepperInput
         value={text}
+        step={0.1}
         disabled={props.disabled}
-        aria-invalid={warning ? "true" : "false"}
-        onChange={(event) => commit(event.target.value)}
+        invalid={Boolean(warning)}
+        inputMode="decimal"
+        onValueChange={commit}
       />
       {warning && <div className="field-warning">{warning}</div>}
     </div>

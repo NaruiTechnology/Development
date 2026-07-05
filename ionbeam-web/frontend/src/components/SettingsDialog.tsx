@@ -58,7 +58,7 @@ import {
 import { HelpPopover } from "./HelpPopover";
 import { Icon } from "./Icon";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
-import { VectorPixelFallbackBlankHelp } from "./VectorPixelFallbackBlankHelp";
+import { NumberStepperInput } from "./NumberStepperField";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
 
@@ -756,10 +756,18 @@ function VectorTab({ draft }: { draft: unknown }) {
   const adcLatency = numberField(draft, [...VECTOR_PATH, "adcLatency"], 0);
   const lineShift = numberField(draft, [...VECTOR_PATH, "lineShiftPerXRow"], 0);
   const drainFloor = numberField(draft, [...VECTOR_PATH, "drainFloorPixels"], 0);
-  const pixelFallbackBlank = boolField(draft, [...VECTOR_PATH, "PixelFallbackBlank"], true);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
+  }
+
+  function validateCustomVectorResolution(value: number): string | null {
+    const intValue = Math.trunc(value);
+    if (intValue < 128) return t("vector.resolution.validation.min128");
+    if (!Number.isInteger(intValue) || (intValue & (intValue - 1)) !== 0) {
+      return t("vector.resolution.validation.powerOfTwo");
+    }
+    return null;
   }
 
   return (
@@ -774,6 +782,7 @@ function VectorTab({ draft }: { draft: unknown }) {
           min={1}
           max={2048}
           disabled={false}
+          customValidate={validateCustomVectorResolution}
           onChange={(v) => set([...VECTOR_PATH, "vectorResolution"], v)}
         />
         <PresetNumberField
@@ -818,14 +827,6 @@ function VectorTab({ draft }: { draft: unknown }) {
         />
       </div>
 
-      <div className="settings-flags">
-        <CheckboxField
-          label={t("settings.vector.pixelFallbackBlank")}
-          help={<SettingsHelp topic="vectorPixelFallbackBlank" />}
-          value={pixelFallbackBlank}
-          onChange={(v) => set([...VECTOR_PATH, "PixelFallbackBlank"], v)}
-        />
-      </div>
     </div>
   );
 }
@@ -2675,15 +2676,16 @@ function AdminUsersTable({
             key={`${user.id ?? "new"}-${index}`}
             ref={rowRef}
           >
-            <input
-              aria-label={t("settings.admin.user.id")}
-              className="input"
-              type="number"
+            <NumberStepperInput
               value={user.id ?? ""}
               disabled={disabled}
-              onChange={(e) =>
-                onUpdate(index, "id", e.target.value === "" ? null : Number(e.target.value))
+              onValueChange={(value) =>
+                onUpdate(index, "id", value === "" ? null : Number(value))
               }
+              step={1}
+              min={0}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.user.id")}
             />
             <input
               aria-label={t("settings.admin.user.login")}
@@ -2755,21 +2757,20 @@ function AdminUsersTable({
                 </option>
               ))}
             </select>
-            <input
-              aria-label={t("settings.admin.user.sessionLifetimeDays")}
-              className="input"
-              type="number"
-              min={1}
-              step={1}
+            <NumberStepperInput
               value={user.session_lifetime_limit_days}
               disabled={disabled}
-              onChange={(e) =>
+              onValueChange={(value) =>
                 onUpdate(
                   index,
                   "session_lifetime_limit_days",
-                  Math.max(1, Math.trunc(Number(e.target.value) || 1)),
+                  Math.max(1, Math.trunc(Number(value) || 1)),
                 )
               }
+              step={1}
+              min={1}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.user.sessionLifetimeDays")}
             />
             <label className="settings-admin-table__check">
               <input
@@ -2912,15 +2913,16 @@ function EquipmentTable({
 
           return (
           <div className="settings-equipment-table__row" role="row" key={`${row.id ?? "new"}-${index}`}>
-            <input
-              aria-label={t("settings.admin.equipment.id")}
-              className="input"
-              type="number"
+            <NumberStepperInput
               value={row.id ?? ""}
               disabled={disabled}
-              onChange={(e) =>
-                onUpdate(index, "id", e.target.value === "" ? null : Number(e.target.value))
+              onValueChange={(value) =>
+                onUpdate(index, "id", value === "" ? null : Number(value))
               }
+              step={1}
+              min={0}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.equipment.id")}
             />
             <input
               aria-label={t("settings.admin.equipment.name")}
@@ -3040,7 +3042,6 @@ type SettingsHelpTopic =
   | "vectorAdcLatency"
   | "vectorLineShift"
   | "vectorDrainFloor"
-  | "vectorPixelFallbackBlank"
   | "simulationEnabled"
   | "simulationMode"
   | "simulationResolution"
@@ -3093,7 +3094,6 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, { title: TranslationKey }> =
   vectorAdcLatency: { title: "settings.help.vectorAdcLatency.title" },
   vectorLineShift: { title: "settings.help.vectorLineShift.title" },
   vectorDrainFloor: { title: "settings.help.vectorDrainFloor.title" },
-  vectorPixelFallbackBlank: { title: "settings.help.vectorPixelFallbackBlank.title" },
   simulationEnabled: { title: "settings.help.simulationEnabled.title" },
   simulationMode: { title: "settings.help.simulationMode.title" },
   simulationResolution: { title: "settings.help.simulationResolution.title" },
@@ -3225,7 +3225,6 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
       </p>
     </>
   ),
-  vectorPixelFallbackBlank: <VectorPixelFallbackBlankHelp />,
   simulationEnabled: (
     <>
       <p>
@@ -3397,16 +3396,14 @@ function NumberField({
   return (
     <div className="field">
       <FieldLabel label={label} help={help} />
-      <input
-        type="number"
-        step={step ?? "1"}
-        className="input"
+      <NumberStepperInput
         value={local}
-        onChange={(e) => {
-          setLocal(e.target.value);
-          const n = Number(e.target.value);
+        onValueChange={(next) => {
+          setLocal(next);
+          const n = Number(next);
           if (Number.isFinite(n)) onChange(n);
         }}
+        step={step === "any" ? 1 : Number(step ?? 1)}
       />
     </div>
   );

@@ -153,6 +153,7 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.repeat": "重复",
   "scan.repeat.title": "设置 Action run 循环重复的次数",
   "common.custom": "自定义",
+  "common.invalidNumber": "无效数字。",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "分辨率",
@@ -174,9 +175,12 @@ export const zhCN: Partial<TranslationTable> = {
   "vector.resolution.option.1024": "1024 × 1024 — 步长 2",
   "vector.resolution.option.512": "512 × 512 — 步长 4",
   "vector.resolution.option.256": "256 × 256 — 步长 8",
+  "vector.resolution.option.128": "128 × 128 — 步长 16",
   "vector.resolution.title.native": "原生：采样每个 DAC 码值。",
   "vector.resolution.title.stride": "步长 {stride}：每 {stride} 个 DAC 码值采样一次。仍覆盖完整的 DAC 范围。",
   "vector.resolution.title.custom": "自定义分辨率 {resolution}：仍均匀映射到完整 DAC 范围。",
+  "vector.resolution.validation.powerOfTwo": "必须是 2 的幂。",
+  "vector.resolution.validation.min128": "必须大于或等于 128。",
   "vector.latencyBytes": "延迟（字节）",
   "vector.outputMode": "输出模式",
   "vector.cookie": "Cookie",
@@ -548,7 +552,6 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.vector.adcLatency": "ADC 延迟",
   "settings.vector.lineShiftPerXRow": "每 X 行的行位移",
   "settings.vector.drainFloorPixels": "排空底位（像素）",
-  "settings.vector.pixelFallbackBlank": "备用逐像素消隐",
   "settings.vector.display.enabled": "启用",
   "settings.vector.display.openViewer": "打开查看器",
 
@@ -610,7 +613,6 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.help.vectorAdcLatency.title": "矢量 ADC 延迟",
   "settings.help.vectorLineShift.title": "矢量行位移",
   "settings.help.vectorDrainFloor.title": "矢量排空底位",
-  "settings.help.vectorPixelFallbackBlank.title": "备用逐像素消隐",
   "settings.help.simulationEnabled.title": "启用仿真",
   "settings.help.simulationMode.title": "仿真模式",
   "settings.help.simulationResolution.title": "仿真分辨率",

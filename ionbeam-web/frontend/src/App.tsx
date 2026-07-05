@@ -34,6 +34,7 @@ import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
 import { MagCalibrationChart, MagCalibrationControls } from "./components/MagCalibration";
 import { GrayScaleHelp } from "./components/GrayScaleHelp";
+import { NumberStepperInput } from "./components/NumberStepperField";
 import { VectorGrayLevelHelp } from "./components/VectorGrayLevelHelp";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
@@ -59,6 +60,7 @@ import {
   persistGrayScaleStepDelta,
   setKind,
   setROIGrayScaleSelection,
+  updateVector,
   updateROI,
   streamReset,
   type ScanKind,
@@ -68,7 +70,14 @@ import { fetchDefaults } from "./store/statusSlice";
 import { useAppDispatch, useAppSelector } from "./store";
 import { useTranslation } from "./i18n";
 import { scanAuthHeaders } from "./lib/authIdentity";
-import { openDialog as openSettingsDialog, setActiveTab } from "./store/settingsSlice";
+import {
+  openDialog as openSettingsDialog,
+  readPath,
+  setActiveTab,
+  VECTOR_PATH,
+  setDraft,
+  writePath,
+} from "./store/settingsSlice";
 
 const RIGHT_PANEL_STORAGE_KEY = "ionbeam:rightPanelWidth";
 const DEFAULT_RIGHT_PANEL_WIDTH = 400;
@@ -99,6 +108,7 @@ export function App() {
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
+  const settingsDraft = useAppSelector((s) => s.settings.draft);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
   const [lastLiveScanImage, setLastLiveScanImage] = useState<{
     kind: Extract<ScanKind, "raster" | "vector">;
@@ -117,6 +127,7 @@ export function App() {
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
   const [vectorGrayLevelsEnabled, setVectorGrayLevelsEnabled] = useState(false);
   const [vectorGrayRange, setVectorGrayRange] = useState<[number, number]>([0, 255]);
+  const [vectorGrayRangeCommitCount, setVectorGrayRangeCommitCount] = useState(0);
   const [repeat, setRepeat] = useState(1);
   const [roiActionLocked, setROIActionLocked] = useState(false);
   const [roiActionCanvasVisible, setROIActionCanvasVisible] = useState(false);
@@ -523,9 +534,10 @@ export function App() {
       })
     );
     setGrayScaleConfirmOpen(false);
+    setVectorGrayRangeCommitCount(0);
   }, [dispatch, pendingGrayScaleAnchor, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
 
-  const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
+  const applyVectorGrayLevelsToggle = useCallback((checked: boolean) => {
     setVectorGrayLevelsEnabled(checked);
     if (checked) {
       const defaultRange: [number, number] = [0, 255];
@@ -534,6 +546,7 @@ export function App() {
       setPendingGrayScaleSelection(defaultRange);
       setPendingGrayScaleAnchor(null);
       setPendingGrayScaleSkipped(nextSkipped);
+      dispatch(updateVector({ vector_resolution: 128, output_mode: "SixteenBit" }));
       dispatch(
         setROIGrayScaleSelection({
           selection: defaultRange,
@@ -548,7 +561,23 @@ export function App() {
     setPendingGrayScaleAnchor(null);
     setPendingGrayScaleSkipped(null);
     setGrayScaleConfirmOpen(false);
-  }, [clearCommittedGrayScaleSelection, committedGrayScaleSkipped]);
+    setVectorGrayRangeCommitCount(0);
+  }, [clearCommittedGrayScaleSelection, committedGrayScaleSkipped, dispatch]);
+
+  const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
+    if (settingsDraft !== null) {
+      dispatch(setDraft(writePath(settingsDraft, [...VECTOR_PATH, "PixelFallbackBlank"], checked)));
+    }
+    setVectorGrayRangeCommitCount(0);
+    applyVectorGrayLevelsToggle(checked);
+  }, [applyVectorGrayLevelsToggle, dispatch, settingsDraft]);
+
+  useEffect(() => {
+    if (settingsDraft === null) return;
+    const nextEnabled = readPath(settingsDraft, [...VECTOR_PATH, "PixelFallbackBlank"]) === true;
+    if (nextEnabled === vectorGrayLevelsEnabled) return;
+    applyVectorGrayLevelsToggle(nextEnabled);
+  }, [applyVectorGrayLevelsToggle, settingsDraft, vectorGrayLevelsEnabled]);
 
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
     const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
@@ -571,8 +600,13 @@ export function App() {
         isSkipped: nextSkipped,
       })
     );
+    if (vectorGrayRangeCommitCount === 0) {
+      setVectorGrayRangeCommitCount(1);
+      return;
+    }
+    setVectorGrayRangeCommitCount(0);
     setGrayScaleConfirmOpen(true);
-  }, [committedGrayScaleSkipped, dispatch, pendingGrayScaleSkipped, vectorGrayLevelsEnabled, vectorGrayRange]);
+  }, [committedGrayScaleSkipped, dispatch, pendingGrayScaleSkipped, vectorGrayLevelsEnabled, vectorGrayRange, vectorGrayRangeCommitCount]);
 
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
@@ -611,6 +645,7 @@ export function App() {
   function activateScanSubTab(nextTab: ScanSubTab) {
     setActiveTopTab("scan");
     setScanSubTab(nextTab);
+    setRepeat(1);
     dispatch(updateROI({ calibration_enabled: false }));
     if (nextTab === "roi") {
       selectKind("roi");
@@ -696,7 +731,10 @@ export function App() {
           selection={pendingGrayScaleSelection}
           isSkipped={pendingGrayScaleSkipped}
           onIsSkippedChange={setPendingGrayScaleSkipped}
-          onClose={() => setGrayScaleConfirmOpen(false)}
+          onClose={() => {
+            setGrayScaleConfirmOpen(false);
+            setVectorGrayRangeCommitCount(0);
+          }}
           onConfirm={handleGrayScaleConfirmAccept}
         />
       )}
@@ -1350,32 +1388,17 @@ function GrayScaleSpectrum({
       </div>
       {scopeNote && <span className="roi-spectrum__context">{scopeNote}</span>}
       <div className="roi-spectrum__controls">
-        <button
-          type="button"
-          className="roi-spectrum__step-btn"
-          aria-label="Decrease gray level box count"
-          onClick={() => onStepDeltaChange(stepDelta - 1)}
-        >
-          -
-        </button>
-        <input
-          className="input roi-spectrum__step-input"
-          type="number"
-          min={1}
-          max={255}
-          step={1}
-          value={stepDelta}
-          aria-label="Gray level box count"
-          onChange={(event) => onStepDeltaChange(Number(event.target.value))}
-        />
-        <button
-          type="button"
-          className="roi-spectrum__step-btn"
-          aria-label="Increase gray level box count"
-          onClick={() => onStepDeltaChange(stepDelta + 1)}
-        >
-          +
-        </button>
+        <div className="roi-spectrum__stepper-wrap">
+          <NumberStepperInput
+            value={stepDelta}
+            min={1}
+            max={255}
+            step={1}
+            inputMode="numeric"
+            ariaLabel="Gray level box count"
+            onValueChange={(next) => onStepDeltaChange(Number(next))}
+          />
+        </div>
         <div className="roi-spectrum__help">
           <GrayScaleHelp />
         </div>

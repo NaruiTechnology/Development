@@ -19,6 +19,7 @@ import {
 } from "../lib/roiGeometry";
 import { useTranslation, type TranslationApi, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
+import { NumberStepperInput } from "./NumberStepperField";
 
 type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
 
@@ -1123,14 +1124,13 @@ function Num(props: {
   return (
     <div className="field">
       <label>{label}</label>
-      <input
-        className={`input${warning ? " input--invalid" : ""}`}
-        type="number"
-        step={0.1}
+      <NumberStepperInput
         value={text}
+        step={0.1}
         disabled={props.disabled}
-        aria-invalid={warning ? "true" : "false"}
-        onChange={(e) => commit(e.target.value)}
+        invalid={Boolean(warning)}
+        inputMode="decimal"
+        onValueChange={commit}
       />
       {warning && <div className="field-warning">{warning}</div>}
     </div>

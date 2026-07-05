@@ -33,7 +33,6 @@ export type HelpKey =
   | "canvasView"
   | "grayScale"
   | "vectorGrayLevelFilter"
-  | "vectorPixelFallbackBlank"
   | "scanModes"
   | "magCalibration";
 
@@ -629,21 +628,28 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   vectorGrayLevelFilter: () => (
     <>
       <p>
-        This toggle is the vector-only gray level fallback path. We
-        tried the same-pixel blanking idea first, but host-side
+        This toggle controls the vector-only gray level fallback path.
+        We tried the same-pixel blanking idea first, but host-side
         causality makes that impossible in the current stream: the ADC
         sample arrives after the beam has already moved on.
       </p>
 
-      <div className="dwell-help__rule">
-        <strong>Final behavior:</strong> when this is enabled and a gray
-        range is confirmed, the backend switches vector scans into
+      <p>
+        The current fallback behavior is precomputed blanking: bitmap or
+        gray filter data is expanded into points with blank flags, the
+        stream is sent, the FPGA executes it, and ADC samples come back
+        later.
+      </p>
+
+      <p>
+        When this toggle is enabled and a gray range is confirmed, the
+        backend switches vector scans into
         <code>adaptive_gray_feedback</code>, forces{" "}
         <code>SixteenBit</code> output, sends tiny point/window batches,
         waits for the returned ADC samples, compares them to the
         selected range, and emits the next <code>BlankCommand</code>
         from that result.
-      </div>
+      </p>
 
       <ul className="dwell-help__list">
         <li>Raster stays out of scope. This help applies only to vector scans.</li>
@@ -651,37 +657,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li>Pipeline-delay compensation is still configurable, because the next physical point may not be the next logical point.</li>
       </ul>
 
-      <p>
-        The compromise is throughput for feedback control. The host-side
-        loop is a fallback, not a full same-pixel closed loop.
-      </p>
-    </>
-  ),
-
-  vectorPixelFallbackBlank: () => (
-    <>
-      <p>
-        This is the fallback path for vector gray-level blanking. The
-        current behavior is precomputed blanking: bitmap or gray filter
-        data is expanded into points with blank flags, the stream is
-        sent, the FPGA executes it, and ADC samples come back later.
-      </p>
-
-      <p>
-        The proposed fallback is delayed feedback: send point N, receive
-        ADC for point N, compare the gray range, then choose
-        <code>BlankCommand</code> for point N+1 or N+K. That only works
-        if the scan loop runs in an adaptive lockstep mode. The current
-        vector macro does not do that; it pre-builds and sends chunks
-        ahead of time, then receives ADC chunks later.
-      </p>
-
-      <p>
-        Because of buffering and FPGA pipeline delay, the decision may
-        not affect the immediate next point. In practice it may affect
-        <code>N + pipelineDelay</code>, so the delay has to be
-        calibrated.
-      </p>
+      <div className="dwell-help__rule">
+        <strong>Final behavior:</strong> the host-side loop is a
+        fallback, not a full same-pixel closed loop. It is slower than
+        direct blanking, but keeps the gray-level filter and fallback
+        blanking tied together in the vector scan path.
+      </div>
 
       <div className="dwell-help__rule">
         <strong>Proposed fallback mode:</strong> add an

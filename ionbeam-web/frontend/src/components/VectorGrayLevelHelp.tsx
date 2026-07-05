@@ -13,6 +13,7 @@ export function VectorGrayLevelHelp() {
     <HelpPopover
       title={t("help.vectorGrayLevelFilter.title")}
       ariaLabel={t("help.vectorGrayLevelFilter.aria")}
+      iconName="alertTriangle"
     >
       {useHelpBody("vectorGrayLevelFilter")}
     </HelpPopover>

@@ -16,6 +16,7 @@ import {
 } from "../store/magCalibrationSlice";
 import { Icon } from "./Icon";
 import { MagCalibrationHelp } from "./MagCalibrationHelp";
+import { NumberStepperInput } from "./NumberStepperField";
 
 export function MagCalibrationControls({ disabled }: { disabled: boolean }) {
   const { t } = useTranslation();
@@ -318,14 +319,13 @@ function NumberField(props: {
   return (
     <div className="field">
       <label>{props.label}</label>
-      <input
-        className="input"
-        type="number"
-        min={props.min}
-        step={props.step}
+      <NumberStepperInput
         value={props.value}
+        min={props.min}
+        step={props.step === "any" ? 1 : props.step}
         disabled={props.disabled}
-        onChange={(event) => props.onChange(Number(event.target.value))}
+        inputMode={props.step === "any" ? "decimal" : "numeric"}
+        onValueChange={(next) => props.onChange(Number(next))}
       />
     </div>
   );

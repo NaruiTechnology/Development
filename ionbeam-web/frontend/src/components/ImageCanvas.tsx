@@ -626,7 +626,7 @@ export function ImageCanvas({
     }
   }
 
-  const toolbar = toolbarVisible ? (
+  const toolbar = editorToolbarVisible ? (
         <div className="canvas-toolbox" role="toolbar" aria-label={t("canvas.editor.toolbar.aria")}>
           <div className="canvas-toolbox__cluster" role="radiogroup" aria-label={t("canvas.editor.toolbar.tools")}>
             {(

@@ -32,6 +32,7 @@ import {
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 import { RunValidatedHelp } from "./RunValidatedHelp";
+import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import type { VectorRequest } from "../types/api";
@@ -224,6 +225,18 @@ export function ScanControls({
     setActionLoopPaused(false);
   }, [clearActionLoopTimer]);
 
+  const startActionLoop = useCallback((req: VectorRequest) => {
+    clearActionLoopState();
+    actionLoopRequestRef.current = { req, preview };
+    actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
+    actionLoopIterationRef.current = actionLoopRemainingRef.current;
+    setActionLoopIteration(actionLoopIterationRef.current);
+    actionLoopActiveRef.current = true;
+    actionLoopPausedRef.current = false;
+    setActionLoopActive(true);
+    setActionLoopPaused(false);
+  }, [clearActionLoopState, preview, repeat]);
+
   const scheduleNextActionRun = useCallback(() => {
     clearActionLoopTimer();
     if (!actionLoopActiveRef.current || actionLoopPausedRef.current || actionLoopRemainingRef.current <= 0) {
@@ -265,15 +278,7 @@ export function ScanControls({
             grayScaleSkipped: scanGrayScaleSkipped,
           }
         );
-        clearActionLoopState();
-        actionLoopRequestRef.current = { req, preview };
-        actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
-        actionLoopIterationRef.current = actionLoopRemainingRef.current;
-        setActionLoopIteration(actionLoopIterationRef.current);
-        actionLoopActiveRef.current = true;
-        actionLoopPausedRef.current = false;
-        setActionLoopActive(true);
-        setActionLoopPaused(false);
+        startActionLoop(req);
         onActionRunStart?.();
         stream.startVector({ ...req, preview });
       } catch (e: any) {
@@ -305,6 +310,11 @@ export function ScanControls({
           req,
           resolveVectorBranch(req),
         );
+        if (Math.trunc(repeat) > 1) {
+          startActionLoop(req);
+        } else {
+          clearActionLoopState();
+        }
         stream.startVector({ ...req, preview });
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -411,6 +421,8 @@ export function ScanControls({
   const roiPauseButtonLabel = roiResumeMode ? t("scan.resume") : t("scan.pause");
   const roiPauseButtonTitle = roiResumeMode ? t("scan.resume.title") : t("scan.pause.title");
   const roiPauseButtonIcon = roiResumeMode ? "play" : "pause";
+  const repeatDisplayCount =
+    actionLoopActive || actionLoopPaused || streaming || closing || paused ? actionLoopIteration : repeat;
 
   useEffect(() => {
     let cancelled = false;
@@ -585,7 +597,7 @@ export function ScanControls({
             <div className="scan-loop-controls__footer">
               <RepeatControl
                 repeat={repeat}
-                displayCount={actionLoopActive || actionLoopPaused || streaming || closing || paused ? actionLoopIteration : repeat}
+                displayCount={repeatDisplayCount}
                 disabled={controlsDisabled || roiEbeamDisabled}
                 onRepeatChange={onRepeatChange}
               />
@@ -631,6 +643,16 @@ export function ScanControls({
         {preview && <Icon name="alertTriangle" tone="warn" />}
         <span>{t("scan.preview")}</span>
       </label>
+      {kind === "vector" && (
+        <span
+          className="scan-busy"
+          data-visible={busy ? "true" : "false"}
+          aria-hidden={!busy}
+          title={t("scan.busy.title")}
+        >
+          <span className="scan-busy__spinner" />
+        </span>
+      )}
       <button
         className="btn btn--primary"
         disabled={runDisabled || kind === "roi"}
@@ -679,17 +701,14 @@ export function ScanControls({
       </button>
       {showRepeatControl && (
         <div className="button-row__repeat-footer">
-          <RepeatControl repeat={repeat} disabled={controlsDisabled} onRepeatChange={onRepeatChange} />
+          <RepeatControl
+            repeat={repeat}
+            displayCount={repeatDisplayCount}
+            disabled={controlsDisabled}
+            onRepeatChange={onRepeatChange}
+          />
         </div>
       )}
-      <span
-        className="scan-busy"
-        data-visible={busy ? "true" : "false"}
-        aria-hidden={!busy}
-        title={t("scan.busy.title")}
-      >
-        <span className="scan-busy__spinner" />
-      </span>
     </div>
   );
 }
@@ -714,19 +733,17 @@ function RepeatControl({
         {count}
       </span>
       <label className="scan-repeat-field scan-repeat-field--shared">
-        <span>{t("scan.repeat")}</span>
-        <input
-          className="input scan-repeat-field__input"
-          type="number"
+        <NumberStepperInput
+          value={repeat}
           min={1}
           max={50}
           step={1}
-          value={repeat}
+          inputMode="numeric"
           disabled={disabled}
-          onChange={(event) => {
-            const raw = Number(event.target.value);
-            const next = Number.isFinite(raw) ? Math.min(50, Math.max(1, Math.trunc(raw))) : 1;
-            onRepeatChange(next);
+          onValueChange={(next) => {
+            const raw = Number(next);
+            const value = Number.isFinite(raw) ? Math.min(50, Math.max(1, Math.trunc(raw))) : 1;
+            onRepeatChange(value);
           }}
         />
       </label>

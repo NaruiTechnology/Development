@@ -177,6 +177,7 @@ export const en = {
   "roi.actionRun.title": "Run the committed ROI gray-level selection as a vector-style scan",
   "roi.actionRun.selectionRequired": "Confirm a gray-level Skip or Spot selection before running the ROI action.",
   "common.custom": "Custom",
+  "common.invalidNumber": "Invalid number.",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "Resolution",
@@ -198,9 +199,12 @@ export const en = {
   "vector.resolution.option.1024": "1024 × 1024 — stride 2",
   "vector.resolution.option.512": "512 × 512 — stride 4",
   "vector.resolution.option.256": "256 × 256 — stride 8",
+  "vector.resolution.option.128": "128 × 128 — stride 16",
   "vector.resolution.title.native": "Native: every DAC code is sampled.",
   "vector.resolution.title.stride": "Stride {stride}: every {stride}th DAC code is sampled. Full DAC range still covered.",
   "vector.resolution.title.custom": "Custom resolution {resolution}: evenly remapped across the full DAC range.",
+  "vector.resolution.validation.powerOfTwo": "Must be a power of 2.",
+  "vector.resolution.validation.min128": "Must be at least 128.",
   "vector.latencyBytes": "Latency (bytes)",
   "vector.outputMode": "Output mode",
   "vector.cookie": "Cookie",
@@ -618,7 +622,6 @@ export const en = {
   "settings.vector.adcLatency": "ADC latency",
   "settings.vector.lineShiftPerXRow": "Line shift per X row",
   "settings.vector.drainFloorPixels": "Drain floor (pixels)",
-  "settings.vector.pixelFallbackBlank": "Fallback pixel blank",
   "settings.vector.display.enabled": "Enabled",
   "settings.vector.display.openViewer": "Open viewer",
 
@@ -786,7 +789,6 @@ export const en = {
   "settings.help.vectorAdcLatency.title": "Vector ADC latency",
   "settings.help.vectorLineShift.title": "Vector line shift",
   "settings.help.vectorDrainFloor.title": "Vector drain floor",
-  "settings.help.vectorPixelFallbackBlank.title": "Fallback pixel blank",
   "settings.help.simulationEnabled.title": "Simulation enabled",
   "settings.help.simulationMode.title": "Simulation mode",
   "settings.help.simulationResolution.title": "Simulation resolution",

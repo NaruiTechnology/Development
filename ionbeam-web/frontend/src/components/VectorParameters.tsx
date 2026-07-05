@@ -22,11 +22,21 @@ import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { DwellHelp } from "./DwellHelp";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import { NumberStepperInput } from "./NumberStepperField";
 import type { VectorPoint, VectorPointTuple } from "../types/api";
 
 const MAX_POINTS = 1_000_000;
-const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256] as const;
+const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256, 128] as const;
 const VECTOR_DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
+
+function validateCustomVectorResolution(value: number, t: (key: "vector.resolution.validation.powerOfTwo" | "vector.resolution.validation.min128") => string): string | null {
+  const intValue = Math.trunc(value);
+  if (intValue < 128) return t("vector.resolution.validation.min128");
+  if (!Number.isInteger(intValue) || (intValue & (intValue - 1)) !== 0) {
+    return t("vector.resolution.validation.powerOfTwo");
+  }
+  return null;
+}
 
 export function VectorParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
@@ -115,21 +125,22 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
 
       {v.pattern === "default" && (
         <div className="field-row">
-          <PresetNumberField
-            label={
-              <label>
-                {t("vector.resolution")}
-                <VectorResolutionHelp />
+        <PresetNumberField
+          label={
+            <label>
+              {t("vector.resolution")}
+              <VectorResolutionHelp />
               </label>
             }
             value={v.vector_resolution}
-            options={vectorResolutionOptions}
-            min={1}
-            max={2048}
-            disabled={disabled}
-            title={resolutionTitle}
-            onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
-          />
+          options={vectorResolutionOptions}
+          min={1}
+          max={2048}
+          disabled={disabled}
+          title={resolutionTitle}
+          customValidate={(value) => validateCustomVectorResolution(value, t)}
+          onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
+        />
           <PresetNumberField
             label={
               <label>
@@ -153,16 +164,16 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
             {t("vector.latencyBytes")}
             <LatencyHelp />
           </label>
-          <input
-            className="input"
-            type="number"
-            min={2}
+          <NumberStepperInput
             value={v.latency_bytes}
+            min={2}
+            step={1}
+            inputMode="numeric"
             disabled={disabled}
-            onChange={(e) =>
+            onValueChange={(next) =>
               dispatch(
                 updateVector({
-                  latency_bytes: clamp(e.target.value, 2, 1 << 20, 8196),
+                  latency_bytes: clamp(next, 2, 1 << 20, 8196),
                 })
               )
             }
@@ -196,15 +207,15 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           {t("vector.cookie")}
           <CookieHelp />
         </label>
-        <input
-          className="input"
-          type="number"
+        <NumberStepperInput
+          value={v.cookie}
           min={0}
           max={0xffff}
-          value={v.cookie}
+          step={1}
+          inputMode="numeric"
           disabled={disabled}
-          onChange={(e) =>
-            dispatch(updateVector({ cookie: clamp(e.target.value, 0, 0xffff, 123) }))
+          onValueChange={(next) =>
+            dispatch(updateVector({ cookie: clamp(next, 0, 0xffff, 123) }))
           }
         />
       </div>
