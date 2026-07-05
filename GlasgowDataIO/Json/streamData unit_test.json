@@ -111,6 +111,6 @@
     "LogName": "StreamDataUnitTest",
     "Verbose": true,
     "DemoWithCLI": true,
-    "IsProduction": false,
+    "IsProduction": true,
     "DumpData": true
 }
