@@ -726,7 +726,7 @@ export function ImageCanvas({
 
   return (
     <div>
-      {toolbarHost && toolbar ? createPortal(<>{toolbar}</>, toolbarHost) : toolbar}
+      {!showModeToggle && (toolbarHost && toolbar ? createPortal(<>{toolbar}</>, toolbarHost) : toolbar)}
 
       {mergeConfirmOpen && createPortal(
         <div className="modal-backdrop canvas-merge-confirm__backdrop" role="presentation">
@@ -791,7 +791,7 @@ export function ImageCanvas({
       )}
 
       {showModeToggle && (
-        <div className="row" style={{ marginBottom: 10, gap: 8 }}>
+        <div className="row" style={{ marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
           <span className="card__title" id="render-mode-label">
             {t("canvas.view")}
             <CanvasViewHelp />
@@ -833,6 +833,7 @@ export function ImageCanvas({
               {t("canvas.view.identical")}
             </span>
           )}
+          {toolbar}
         </div>
       )}
 
