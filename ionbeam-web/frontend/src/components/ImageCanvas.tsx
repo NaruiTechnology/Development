@@ -162,10 +162,11 @@ export function ImageCanvas({
   const showServerFigure = phase === "completed" || phase === "paused";
   const hasLiveCanvasData =
     kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
-  const editorEnabled =
-    (phase === "completed" || phase === "paused") &&
-    (hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl));
+  const hasRenderedCanvasImage =
+    hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
+  const editorEnabled = (phase === "completed" || phase === "paused") && hasRenderedCanvasImage;
   const toolbarVisible = phase === "completed" || phase === "paused";
+  const editorToolbarVisible = toolbarVisible && hasRenderedCanvasImage;
   const showCalibratedAxes = kind !== "roi";
   const showGrid =
     kind === "raster"
@@ -660,20 +661,20 @@ export function ImageCanvas({
           <div className="canvas-toolbox__cluster">
             <label className="canvas-toolbox__field" title={t("canvas.editor.pen.color")}>
               <span>{t("canvas.editor.pen.color.short")}</span>
-              <input
-                type="color"
-                value={strokeColor}
-                onChange={(event) => setStrokeColor(event.target.value)}
-              />
+                <input
+                  type="color"
+                  value={strokeColor}
+                  onChange={(event) => setStrokeColor(event.target.value)}
+                />
             </label>
 
             <label className="canvas-toolbox__field" title={t("canvas.editor.pen.lineStyle")}>
               <span>{t("canvas.editor.pen.lineStyle.short")}</span>
-              <select
-                className="input canvas-toolbox__select"
-                value={lineStyle}
-                onChange={(event) => setLineStyle(event.target.value as LineStyle)}
-              >
+                <select
+                  className="input canvas-toolbox__select"
+                  value={lineStyle}
+                  onChange={(event) => setLineStyle(event.target.value as LineStyle)}
+                >
                 <option value="solid">{t("canvas.editor.pen.lineStyle.solid")}</option>
                 <option value="dashed">{t("canvas.editor.pen.lineStyle.dashed")}</option>
                 <option value="dotted">{t("canvas.editor.pen.lineStyle.dotted")}</option>
@@ -682,11 +683,11 @@ export function ImageCanvas({
 
             <label className="canvas-toolbox__field" title={t("canvas.editor.pen.width")}>
               <span>{t("canvas.editor.pen.width.short")}</span>
-              <select
-                className="input canvas-toolbox__select"
-                value={String(lineWidth)}
-                onChange={(event) => setLineWidth(Number(event.target.value))}
-              >
+                <select
+                  className="input canvas-toolbox__select"
+                  value={String(lineWidth)}
+                  onChange={(event) => setLineWidth(Number(event.target.value))}
+                >
                 {[0.5, 1, 2, 3, 4, 6, 8].map((width) => (
                   <option key={width} value={width}>
                     {width}px
@@ -697,13 +698,13 @@ export function ImageCanvas({
           </div>
 
           <div className="canvas-toolbox__cluster">
-            <button
-              type="button"
-              className="canvas-toolbox__action"
+              <button
+                type="button"
+                className="canvas-toolbox__action"
               disabled={!annotations.length}
-              title={t("canvas.editor.merge")}
-              onClick={() => setMergeConfirmOpen(true)}
-            >
+                title={t("canvas.editor.merge")}
+                onClick={() => setMergeConfirmOpen(true)}
+              >
               <Icon name="save" tone="success" />
             </button>
           </div>
@@ -726,7 +727,7 @@ export function ImageCanvas({
 
   return (
     <div>
-      {!showModeToggle && (toolbarHost && toolbar ? createPortal(<>{toolbar}</>, toolbarHost) : toolbar)}
+      {!showModeToggle && editorToolbarVisible && (toolbarHost && toolbar ? createPortal(<>{toolbar}</>, toolbarHost) : toolbar)}
 
       {mergeConfirmOpen && createPortal(
         <div className="modal-backdrop canvas-merge-confirm__backdrop" role="presentation">
