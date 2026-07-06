@@ -1,4 +1,7 @@
 import rulerIcon from "../assets/ruler.png";
+import roiIcon from "../assets/ROI.png";
+import rasterIcon from "../assets/raster.png";
+import vectorIcon from "../assets/vector.png";
 
 type IconName =
   | "check"
@@ -69,9 +72,15 @@ export function Icon({
   const imageSource = imageSources[name];
   const className = `${tone ? `icon icon--${tone}` : "icon"} icon--${name}`;
   if (imageSource) {
+    const intrinsicClass =
+      name === "target"
+        ? " icon--intrinsic icon--intrinsic-roi"
+        : name === "grid" || name === "route"
+        ? " icon--intrinsic"
+        : "";
     return (
       <img
-        className={className}
+        className={`${className}${intrinsicClass}`}
         src={imageSource}
         alt=""
         aria-hidden
@@ -87,6 +96,9 @@ export function Icon({
 }
 
 const imageSources: Partial<Record<IconName, string>> = {
+  target: roiIcon,
+  grid: rasterIcon,
+  route: vectorIcon,
   fileText: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAB/klEQVR4nO3ZWUsbURgG4Pk1WrEXtuDSulBFXKkGV7DkppBWqiIi4kItYqWgiBuKN60o9EaT09te9Fac/A4VjjGJcYmJRssr5xsdpBYXMnNmlPPCC5MzE/gecmYSiKapqKg8/YAFa8GC22BBpNu9+vfr8gEBfcuK4UV5Rp58BCwa/gpACI9Pf9QAqQjYBOCyEHYCuAyE3QBuN0IGgNuJkAXgdiGsBOzmVtyJiDW1r7sWcPJtST4CFgIeUk0BLqMATAHSy5MFRGu8iJQ2UqO1XiS/LNB6YmjWXI+UtyLW8gknY9/N9+2/60a4uN7sce+EM4DQizLsvqpBvHMU4aI68Mx8pGZWEe/6Ss/y/bYuHHh76Drx+rh/yoBXe7GTXYjDj5+pp+MrzgHEMOI4ObJoDNk3aQLO5hmdO//xGzvPixAufGsCQjmlzm8hAYi8aaBvV7GdeGYBUnP+GwAaurIN/FkB4NeNTyDrNWINPmpqbs05gBhUDCP2cnJ4ntb/BwiXeOh6cwsR4APVUcDVFrrefwGJwWnj901zu/u2UPQWgLixQy/LjeMSD/4u/3EX4KhjBImB6Rvrp5M/cegbosa7x+gegX/DPJ8YnKUnF5wG2F1NAS6jAEwB0osCMAVILwrAFMA9fzHduwF90zrAL71aKiKgb4JtVFkGUFFR0VybCyA7+nk5Yx4EAAAAAElFTkSuQmCC",
   sheet: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC2klEQVR4nGNgGAWjYBSMgmEJODtdpHjbPXy5210bOFtcNnM0OT1jGJSg3p5FcEqwttAkvzjBCb4TBfp9dvP3eL3h7fb8z9Pp8Z+73e0/V6vLf85m5/8D7VQG4TlJvJILI20k54anic0Jmyg2M+SIyPSg78JTA/8LTQ74LzjR779Av+9//l7v/wPuAbmlmYKyqxJtZJcn5MssjVskvST2qtSiqL+SCyL/S8yL+C8+J+y/2KzQ/6Izgv8PSg8orEn+L78q6b/cioT/ssvi/sssif0vtSj6PyUeMDziThY2OOJ2eEh7wPCIO+mxN+qB7lEP/B90HkAGMIfhA6MekEfyQO3pRSiGZ+2fhOIB1dlx/z/+/AqXrzkwd3B5QH5p/P/r7x/BDb/1/sl/idlhcA9MO78RLnf9zcP/Qr2+gy8PhO5qRQmhuJ1dYA8YLEr7/+PPL7i4z6rKwZuJtz44BXfouVe3wR5YcWM/XGzl9f2DMw/IQD1gviYPJbRTdvf+//PvL5gNygNqs+IGfynUf2Ed3JL3P77A2RUHZg3eUkgGyQNKi+L/P/vyBsWyy6/v/xeZFDA0KjLVxYn/n319i+KBR59e/ZeaGjo0PLDoxh64w198fQdnd59aOfiTUMD2xv///v8DW/D998//sTs64BaCMrfpgozB6wGFpfH/b75/Ardg4vn14GJ078PzcLEjjy//F+j1GZwe6L+4Hm74h59f/qstTAR7wG5l4f+//yCxAgJJWzoHXx5w2FT2/ydS+d94cglKW2j97SNwuRdf3v2XmRQyeDwgvzz+/6lXt+AOfP713X+FBbEoHjBZnPn/998/cDUzzm4cfElIaig3p2VGPeA8eCoyiVEPuI96YEh5wOCw2yGGETe4i3N4fUGUscTcsLhBP7xOzgSHwAS/Dv4+n82DdoKDaPCfgZGv102Fp8sjlLvdrY2z1WUbR7Pzc+INGAWjYBSMAoYhAgBEtnuV0kUiSgAAAABJRU5ErkJggg==",
 };

@@ -1471,6 +1471,18 @@ body {
   stroke-linejoin: round;
 }
 
+.icon--intrinsic {
+  width: 24px;
+  height: 24px;
+  max-width: none;
+  max-height: none;
+}
+
+.icon--intrinsic-roi {
+  width: 28px;
+  height: 28px;
+}
+
 .icon--accent { color: var(--c-accent); }
 .icon--danger { color: var(--c-danger); }
 .icon--success { color: var(--c-success); }
