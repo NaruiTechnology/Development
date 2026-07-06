@@ -12,6 +12,7 @@ type IconName =
   | "download"
   | "globe"
   | "grid"
+  | "gridSvg"
   | "help"
   | "alertTriangle"
   | "highlightTool"
@@ -140,6 +141,12 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
     </>
   ),
   grid: (
+    <>
+      <path d="M4 4h16v16H4z" />
+      <path d="M9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16" />
+    </>
+  ),
+  gridSvg: (
     <>
       <path d="M4 4h16v16H4z" />
       <path d="M9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16" />

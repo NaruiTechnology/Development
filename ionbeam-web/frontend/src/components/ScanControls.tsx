@@ -99,7 +99,9 @@ export function ScanControls({
   const actionLoopRemainingRef = useRef(0);
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
-  const actionLoopGapMs = 180;
+  // Repeated ROI action scans need a longer settle window between runs
+  // so blank/spot updates are fully reflected before the next loop starts.
+  const actionLoopGapMs = 750;
   const [actionLoopIteration, setActionLoopIteration] = useState(0);
   const [actionLoopActive, setActionLoopActive] = useState(false);
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
