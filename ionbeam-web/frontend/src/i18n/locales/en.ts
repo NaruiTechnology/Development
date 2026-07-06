@@ -220,7 +220,7 @@ export const en = {
   "vector.grayLevels.min": "Minimum grey level",
   "vector.grayLevels.max": "Maximum grey level",
   "vector.grayLevels.select": "Select",
-  "vector.preProcess": "Pre-process chunks (recorded in process_time_s)",
+  "vector.preProcess": "Pre-process chunks",
   "vector.doValidate": "Run chunk presence checks",
 
   /* ===== magnification calibration ================================ */

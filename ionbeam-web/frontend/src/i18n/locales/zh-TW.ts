@@ -205,7 +205,7 @@ export const zhTW: Partial<TranslationTable> = {
   "vector.grayLevels.min": "最小灰階級",
   "vector.grayLevels.max": "最大灰階級",
   "vector.grayLevels.select": "選擇",
-  "vector.preProcess": "預先處理資料區塊（由 process_time_s 記錄）",
+  "vector.preProcess": "預先處理資料區塊",
   "vector.doValidate": "執行非空 / 填充檢查",
 
   /* ===== magnification calibration ================================ */

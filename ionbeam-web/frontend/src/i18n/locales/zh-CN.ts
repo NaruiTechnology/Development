@@ -196,7 +196,7 @@ export const zhCN: Partial<TranslationTable> = {
   "vector.grayLevels.min": "最小灰度级",
   "vector.grayLevels.max": "最大灰度级",
   "vector.grayLevels.select": "选择",
-  "vector.preProcess": "预处理数据块（由 process_time_s 记录）",
+  "vector.preProcess": "预处理数据块",
   "vector.doValidate": "执行非空 / 填充检查",
 
   /* ===== magnification calibration ================================ */
