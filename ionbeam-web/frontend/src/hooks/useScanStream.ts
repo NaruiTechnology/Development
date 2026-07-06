@@ -1,7 +1,7 @@
 /**
  * useScanStream — opens the WebSocket to /ws/scan/{raster,vector}/stream,
  * sends the request body, and dispatches Redux actions for each frame
- * received. Exposes start / pause / stop callbacks.
+ * received. Exposes start / stop callbacks.
  *
  * Pixel byte format (raster AND vector): the FPGA's ImageSerializer emits
  * HIGH byte then LOW byte for each uint16 ADC sample (see
@@ -17,14 +17,14 @@
  * is 2, not 8, and (x, y) is reconstructed from sample index + pattern
  * by the imageSlice reducer — NOT carried inline with each sample.
  *
- * Pause and Stop both close the WS with code 1000. The FastAPI service
+ * Stop closes the WS with code 1000. The FastAPI service
  * maps that to its WebSocketDisconnect handler which calls gen.aclose() —
  * the same path examples/ws_client.py relies on for clean cancel.
  *
  * Close-handler invariant: after the WS closes, the scan phase MUST have
  * left "running"/"stopping". Three paths get us there:
  *   - "done" event arrived first (server completed the scan)
- *   - user closed it (closureKind = pause | stop)
+ *   - user closed it (closureKind = stop)
  *   - upstream/server closed unexpectedly  -> we mark phase = error
  */
 import { useCallback, useEffect, useRef } from "react";
@@ -32,7 +32,6 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   streamCompleted,
   streamErrored,
-  streamPaused,
   streamProgress,
   streamReset,
   streamStarted,
@@ -52,7 +51,7 @@ import { registerScanActionStop } from "./scanActionRegistry";
 import { withScanAuthQuery } from "../lib/authIdentity";
 import { wsUrl } from "../lib/backendUrl";
 
-type Closure = "pause" | "stop";
+type Closure = "stop";
 
 export function useScanStream() {
   const dispatch = useAppDispatch();
@@ -194,14 +193,6 @@ export function useScanStream() {
     [dispatch, vectorLineShiftPerXRow]
   );
 
-  const pause = useCallback(() => {
-    const ws = wsRef.current;
-    if (!ws) return;
-    closureKindRef.current = "pause";
-    dispatch(streamStopping());
-    ws.close(1000, "pause");
-  }, [dispatch]);
-
   const stop = useCallback(() => {
     const ws = wsRef.current;
     if (!ws) {
@@ -216,7 +207,7 @@ export function useScanStream() {
     return registerScanActionStop(stop);
   }, [stop]);
 
-  return { startRaster, startVector, pause, stop };
+  return { startRaster, startVector, stop };
 }
 
 /* -------- helpers ------------------------------------------------------ */
@@ -335,10 +326,6 @@ function finalize(
   ev: CloseEvent,
   dispatch: ReturnType<typeof useAppDispatch>
 ): void {
-  if (closure === "pause") {
-    dispatch(streamPaused());
-    return;
-  }
   if (closure === "stop") {
     dispatch(streamReset());
     return;

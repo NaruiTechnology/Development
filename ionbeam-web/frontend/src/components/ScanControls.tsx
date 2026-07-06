@@ -1,11 +1,7 @@
 /**
- * Run / Pause / Stop button group, plus a "Run validated" button that
+ * Run / Stop button group, plus a "Run validated" button that
  * uses the blocking REST endpoint (returns a ScanResult with timing,
  * validation report, and CSV path).
- *
- * ROI loops use Pause as a repeat-loop toggle: the current run is
- * allowed to finish, then the remaining repeats are held until the
- * operator clicks Resume.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -103,11 +99,9 @@ export function ScanControls({
   const actionLoopRemainingRef = useRef(0);
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
-  const actionLoopPausedRef = useRef(false);
   const actionLoopGapMs = 180;
   const [actionLoopIteration, setActionLoopIteration] = useState(0);
   const [actionLoopActive, setActionLoopActive] = useState(false);
-  const [actionLoopPaused, setActionLoopPaused] = useState(false);
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
   const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
@@ -202,10 +196,8 @@ export function ScanControls({
   //   idle/completed/error  → no active stream; safe to start a new one
   //   running               → WS open, chunks arriving
   //   stopping              → close requested, awaiting onclose handshake
-  //   paused                → close completed, image preserved
   const streaming = phase === "running";
   const closing = phase === "stopping";
-  const paused = phase === "paused";
   const busy = streaming || closing;
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
   const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
@@ -223,10 +215,8 @@ export function ScanControls({
     actionLoopRemainingRef.current = 0;
     actionLoopIterationRef.current = 0;
     actionLoopActiveRef.current = false;
-    actionLoopPausedRef.current = false;
     setActionLoopIteration(0);
     setActionLoopActive(false);
-    setActionLoopPaused(false);
   }, [clearActionLoopTimer]);
 
   const startActionLoop = useCallback((req: VectorRequest) => {
@@ -236,19 +226,17 @@ export function ScanControls({
     actionLoopIterationRef.current = actionLoopRemainingRef.current;
     setActionLoopIteration(actionLoopIterationRef.current);
     actionLoopActiveRef.current = true;
-    actionLoopPausedRef.current = false;
     setActionLoopActive(true);
-    setActionLoopPaused(false);
   }, [clearActionLoopState, preview, repeat]);
 
   const scheduleNextActionRun = useCallback(() => {
     clearActionLoopTimer();
-    if (!actionLoopActiveRef.current || actionLoopPausedRef.current || actionLoopRemainingRef.current <= 0) {
+    if (!actionLoopActiveRef.current || actionLoopRemainingRef.current <= 0) {
       return;
     }
     actionLoopTimerRef.current = window.setTimeout(() => {
       actionLoopTimerRef.current = null;
-      if (!actionLoopActiveRef.current || actionLoopPausedRef.current || actionLoopRemainingRef.current <= 0) {
+      if (!actionLoopActiveRef.current || actionLoopRemainingRef.current <= 0) {
         return;
       }
       const entry = actionLoopRequestRef.current;
@@ -326,28 +314,6 @@ export function ScanControls({
     }
   }
 
-  function onPause() {
-    if (disabled || roiEbeamDisabled) return;
-    if (roiAction) {
-      if (!actionLoopActiveRef.current && !actionLoopPausedRef.current) {
-        return;
-      }
-      if (actionLoopPausedRef.current) {
-        actionLoopPausedRef.current = false;
-        setActionLoopPaused(false);
-        if (!streaming && actionLoopActiveRef.current && actionLoopRemainingRef.current > 0) {
-          scheduleNextActionRun();
-        }
-        return;
-      }
-      actionLoopPausedRef.current = true;
-      setActionLoopPaused(true);
-      clearActionLoopTimer();
-      return;
-    }
-    stream.pause();
-  }
-
   function onStop() {
     if (disabled || roiEbeamDisabled) return;
     clearActionLoopState();
@@ -416,21 +382,14 @@ export function ScanControls({
     roiEbeamDisabled ||
     streaming ||
     closing ||
-    (roiAction && (actionLoopActive || actionLoopPaused));
-  const roiPauseEnabled = actionLoopActive || actionLoopPaused || streaming || closing || paused;
-  const pauseDisabled = roiAction ? disabled || roiEbeamDisabled || !roiPauseEnabled : disabled || !streaming;
-  const stopDisabled = disabled || roiEbeamDisabled || !(streaming || paused || closing || actionLoopActive || actionLoopPaused);
-  const roiResumeMode = roiAction && actionLoopPaused;
-  const roiPauseButtonClass = roiResumeMode ? "btn btn--primary" : `btn ${actionLoopActive || actionLoopPaused || streaming || closing || paused ? "btn--gold" : ""}`;
-  const roiPauseButtonLabel = roiResumeMode ? t("scan.resume") : t("scan.pause");
-  const roiPauseButtonTitle = roiResumeMode ? t("scan.resume.title") : t("scan.pause.title");
-  const roiPauseButtonIcon = roiResumeMode ? "play" : "pause";
+    (roiAction && actionLoopActive);
+  const stopDisabled = disabled || roiEbeamDisabled || !(streaming || closing || actionLoopActive);
   const loopDisplayOffset =
-    kind === "vector" && (actionLoopActive || actionLoopPaused || streaming || closing || paused)
+    kind === "vector" && (actionLoopActive || streaming || closing)
       ? 1
       : 0;
   const repeatDisplayCount =
-    actionLoopActive || actionLoopPaused || streaming || closing || paused
+    actionLoopActive || streaming || closing
       ? Math.max(0, actionLoopIteration - loopDisplayOffset)
       : repeat;
 
@@ -501,7 +460,7 @@ export function ScanControls({
         actionLoopIterationRef.current = actionLoopRemainingRef.current;
         setActionLoopIteration(actionLoopIterationRef.current);
       }
-      if (!actionLoopPausedRef.current && actionLoopRemainingRef.current > 0) {
+      if (actionLoopRemainingRef.current > 0) {
         clearBitmapSelectionCache();
         dispatch(bumpRevision());
         scheduleNextActionRun();
@@ -582,18 +541,6 @@ export function ScanControls({
               {t("roi.actionRun")}
             </button>
             <button
-              className={roiPauseButtonClass}
-              disabled={pauseDisabled}
-              onClick={onPause}
-              title={roiPauseButtonTitle}
-            >
-              <Icon
-                name={roiPauseButtonIcon}
-                tone={roiResumeMode ? "success" : actionLoopActive || actionLoopPaused || streaming || closing || paused ? "accent" : "warn"}
-              />
-              {roiPauseButtonLabel}
-            </button>
-            <button
               className="btn btn--danger"
               disabled={stopDisabled}
               onClick={onStop}
@@ -667,19 +614,10 @@ export function ScanControls({
         className="btn btn--primary"
         disabled={runDisabled || kind === "roi"}
         onClick={onRun}
-        title={paused ? t("scan.run.title.paused") : t("scan.run.title.start")}
+        title={t("scan.run.title.start")}
       >
         <Icon name="play" tone="success" />
         {t("scan.run")}
-      </button>
-      <button
-        className="btn btn--warn"
-        disabled={pauseDisabled}
-        onClick={onPause}
-        title={t("scan.pause.title")}
-      >
-        <Icon name="pause" tone="warn" />
-        {closing ? t("scan.pausing") : t("scan.pause")}
       </button>
       <button
         className="btn btn--danger"

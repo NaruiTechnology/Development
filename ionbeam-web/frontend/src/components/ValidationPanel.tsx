@@ -95,8 +95,8 @@ export function ValidationPanel({
   const haveValidatedData = result?.has_data === true;
   const haveAnyData =
     haveValidatedData ||
-    (haveStreamData && (phase === "completed" || phase === "paused"));
-  const dbFlowReadyPhase = phase === "completed" || phase === "paused";
+    (haveStreamData && phase === "completed");
+  const dbFlowReadyPhase = phase === "completed";
 
   async function selectDownloadFolder() {
     if (disabled) return;

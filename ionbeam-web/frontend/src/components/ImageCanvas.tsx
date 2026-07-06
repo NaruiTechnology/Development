@@ -86,7 +86,6 @@ const PHASE_KEYS: Record<string, TranslationKey> = {
   idle: "phase.idle",
   running: "phase.running",
   stopping: "phase.stopping",
-  paused: "phase.paused",
   completed: "phase.completed",
   error: "phase.error",
 };
@@ -165,13 +164,13 @@ export function ImageCanvas({
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
   const hasPaintedCanvasImage = stats.populated > 0;
-  const showServerFigure = phase === "completed" || phase === "paused";
+  const showServerFigure = phase === "completed";
   const hasLiveCanvasData =
     kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
   const hasRenderedCanvasImage =
     hasPaintedCanvasImage || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
-  const editorEnabled = (phase === "completed" || phase === "paused") && hasRenderedCanvasImage;
-  const toolbarVisible = phase === "completed" || phase === "paused";
+  const editorEnabled = phase === "completed" && hasRenderedCanvasImage;
+  const toolbarVisible = phase === "completed";
   const editorToolbarVisible = toolbarVisible && hasRenderedCanvasImage;
   const showCalibratedAxes = kind !== "roi";
   const showGrid =
@@ -263,7 +262,7 @@ export function ImageCanvas({
       onRenderedImageChange(kind, null);
       return;
     }
-    if (phase !== "completed" && phase !== "paused") return;
+    if (phase !== "completed") return;
 
     const handle = window.requestAnimationFrame(() => {
       const canvas = canvasRef.current;

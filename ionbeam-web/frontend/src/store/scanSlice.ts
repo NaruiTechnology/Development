@@ -20,7 +20,6 @@ export type ScanKind = "raster" | "vector" | "roi" | "mag";
 export type ScanPhase =
   | "idle"
   | "running"
-  | "paused"
   | "stopping"
   | "completed"
   | "error";
@@ -520,20 +519,6 @@ const slice = createSlice({
       s.bytesReceived += a.payload.bytes;
       s.chunksReceived += a.payload.chunks;
     },
-    streamPaused(s) {
-      // Pause is dispatched by the WS onclose handler. By that point
-      // streamStopping has already moved phase to "stopping" — the
-      // previous "phase === 'running'" guard rejected this case and left
-      // the UI stuck on "stopping" forever.
-      //
-      // Hardware can't actually pause mid-frame. Pause is a UI concept
-      // meaning "the stream is closed but the partial frame is kept on
-      // the canvas". Accept transitions only from the active states; if
-      // a "done" or "error" already landed we shouldn't downgrade them.
-      if (s.phase === "running" || s.phase === "stopping") {
-        s.phase = "paused";
-      }
-    },
     streamStopping(s) {
       s.phase = "stopping";
     },
@@ -645,7 +630,6 @@ export const {
   setVectorRenderMode,
   streamStarted,
   streamProgress,
-  streamPaused,
   streamStopping,
   streamCompleted,
   streamErrored,
