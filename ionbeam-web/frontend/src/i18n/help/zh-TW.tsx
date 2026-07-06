@@ -523,8 +523,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>實際執行的預先處理時間會單獨回報。</strong>執行報告中的 <code>process_time_s</code>{" "}
-        顯示預先處理耗時；<code>send_time_s</code> 只顯示 USB 傳輸耗時。
+        <strong>實際執行的預先處理時長會單獨回報。</strong><code>process_time_s</code>{" "}
+        記錄這次執行的預先處理時長；<code>send_time_s</code> 只記錄 USB 傳輸時長。
         舊版 UI 曾將兩者混為一談。
       </div>
 

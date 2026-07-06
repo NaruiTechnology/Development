@@ -527,8 +527,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>实际运行的预处理时间会单独报告。</strong>运行报告中的 <code>process_time_s</code>{" "}
-        显示预处理耗时；<code>send_time_s</code> 只显示 USB 传输耗时。
+        <strong>实际运行的预处理时长会单独报告。</strong><code>process_time_s</code>{" "}
+        记录这次运行的预处理时长；<code>send_time_s</code> 只记录 USB 传输时长。
         旧版 UI 曾将两者混为一谈。
       </div>
 

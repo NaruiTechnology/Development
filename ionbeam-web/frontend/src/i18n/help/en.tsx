@@ -543,11 +543,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>The wet-run pre-process time is reported separately.</strong>{" "}
-        <code>process_time_s</code> in the run report shows how long
-        the pre-processing took; <code>send_time_s</code> shows USB
-        transfer time alone. The two used to be conflated in older
-        UIs.
+        <strong>The wet-run pre-process duration is reported separately.</strong>{" "}
+        <code>process_time_s</code> reports the pre-processing duration
+        for the run; <code>send_time_s</code> reports USB transfer time
+        alone. The two used to be conflated in older UIs.
       </div>
 
       <p>When to enable:</p>
