@@ -594,6 +594,11 @@ export function App() {
     dispatch(updateVector({ dwell: 16 }));
   }, [dispatch, vectorDwell, vectorGrayLevelsEnabled]);
 
+  useEffect(() => {
+    if (!vectorGrayLevelsEnabled) return;
+    dispatch(updateVector({ pre_process: true }));
+  }, [dispatch, vectorGrayLevelsEnabled]);
+
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
     const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
     setVectorGrayRange(normalized);

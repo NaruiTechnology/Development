@@ -267,8 +267,8 @@ export function VectorParameters({
       <label className="checkbox">
         <input
           type="checkbox"
-          checked={v.pre_process}
-          disabled={disabled}
+          checked={grayLevelFilterActive ? true : v.pre_process}
+          disabled={disabled || grayLevelFilterActive}
           onChange={(e) => dispatch(updateVector({ pre_process: e.target.checked }))}
         />
         {t("vector.preProcess")}
