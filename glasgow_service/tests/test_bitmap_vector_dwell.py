@@ -111,7 +111,7 @@ class BitmapVectorDwellTest(unittest.TestCase):
         req = VectorRequest(
             pattern=VectorPattern.default,
             points=None,
-            vector_resolution=32,
+            vector_resolution=2048,
             dwell=1,
             latency_bytes=8,
             output_mode="EightBit",
@@ -132,6 +132,32 @@ class BitmapVectorDwellTest(unittest.TestCase):
         self.assertEqual(cmd._adaptive_gray_feedback.gray_min, 640)
         self.assertEqual(cmd._adaptive_gray_feedback.gray_max, 1280)
         self.assertEqual(cmd._adaptive_gray_feedback.pipeline_delay_points, 2)
+
+    def test_adaptive_feedback_forces_dwell_above_probe_floor(self):
+        svc = DeviceService(str(CONFIG_PATH))
+        svc._vector_defaults["PixelFallbackBlank"] = True
+
+        req = VectorRequest(
+            pattern=VectorPattern.default,
+            points=None,
+            vector_resolution=2048,
+            dwell=1,
+            latency_bytes=8,
+            output_mode="EightBit",
+            feedback_mode="adaptive_gray_feedback",
+            gray_level_range=(10, 20),
+            gray_level_skipped=True,
+            cookie=123,
+            pre_process=False,
+            do_validate=True,
+            roi=None,
+            simulation_bitmap=None,
+        )
+
+        cmd = svc._build_vector_cmd(req)
+        first_point = next(cmd._iter_adaptive_points())
+
+        self.assertEqual(first_point[2], 16)
 
     def test_adaptive_feedback_is_gated_by_pixel_fallback_blank(self):
         svc = DeviceService(str(CONFIG_PATH))

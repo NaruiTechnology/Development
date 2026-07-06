@@ -104,6 +104,7 @@ export function App() {
   const imageRevision = useAppSelector((s) => s.image.revision);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
+  const vectorDwell = useAppSelector((s) => s.scan.vector.dwell);
   const roiState = useAppSelector((s) => s.scan.roi);
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
@@ -481,7 +482,10 @@ export function App() {
     if (phase === "running" || phase === "stopping") return;
     if (roiState.imageKind === "file") return;
     if (suppressedROIScanImageUrlRef.current === roiScanImageUrl) return;
-    if (roiState.imageKind === "lastScan" && roiState.imageDataUrl === roiScanImageUrl) return;
+    // ROIEditor may promote the last-scan URL into a data URL for local
+    // annotation/highlight work. Once ROI state is already in last-scan
+    // mode, don't overwrite that promoted image on every render.
+    if (roiState.imageKind === "lastScan") return;
     dispatch(
       updateROI({
         imageName: t("roi.imageName.lastScan"),
@@ -563,7 +567,7 @@ export function App() {
       const nextSkipped = true;
       setVectorGrayRange(defaultRange);
       setVectorGrayScaleSkipped(nextSkipped);
-      dispatch(updateVector({ vector_resolution: 128, output_mode: "SixteenBit" }));
+      dispatch(updateVector({ vector_resolution: 128, output_mode: "SixteenBit", dwell: 16 }));
       return;
     }
     setVectorGrayRange([0, 255]);
@@ -584,6 +588,11 @@ export function App() {
     if (nextEnabled === vectorGrayLevelsEnabled) return;
     applyVectorGrayLevelsToggle(nextEnabled);
   }, [applyVectorGrayLevelsToggle, settingsDraft, vectorGrayLevelsEnabled]);
+
+  useEffect(() => {
+    if (!vectorGrayLevelsEnabled || vectorDwell >= 16) return;
+    dispatch(updateVector({ dwell: 16 }));
+  }, [dispatch, vectorDwell, vectorGrayLevelsEnabled]);
 
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
     const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
@@ -839,7 +848,10 @@ export function App() {
                 scanSubTab === "raster" ? (
                   <RasterParameters disabled={panelDisabled} />
                 ) : scanSubTab === "vector" ? (
-                  <VectorParameters disabled={panelDisabled} />
+                  <VectorParameters
+                    disabled={panelDisabled}
+                    grayLevelFilterActive={vectorGrayLevelsEnabled}
+                  />
                 ) : (
                   <>
                     <ROIEditor

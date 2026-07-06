@@ -38,7 +38,13 @@ function validateCustomVectorResolution(value: number, t: (key: "vector.resoluti
   return null;
 }
 
-export function VectorParameters({ disabled }: { disabled: boolean }) {
+export function VectorParameters({
+  disabled,
+  grayLevelFilterActive = false,
+}: {
+  disabled: boolean;
+  grayLevelFilterActive?: boolean;
+}) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
   const v = useAppSelector((s) => s.scan.vector);
@@ -85,6 +91,8 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
     value,
     label: t(`vector.resolution.option.${value}` as const),
   }));
+  const dwellMin = grayLevelFilterActive ? 16 : 1;
+  const dwellOptions = VECTOR_DWELL_OPTIONS.filter((option) => option.value >= dwellMin);
   const resolutionTitle =
     v.vector_resolution === 2048
       ? t("vector.resolution.title.native")
@@ -143,17 +151,19 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
         />
           <PresetNumberField
             label={
-              <label>
-                {t("vector.dwell")}
-                <DwellHelp />
+            <label>
+              {t("vector.dwell")}
+              <DwellHelp />
               </label>
             }
             value={v.dwell}
-            options={VECTOR_DWELL_OPTIONS}
-            min={1}
+            options={dwellOptions}
+            min={dwellMin}
             max={65535}
             disabled={disabled}
-            onChange={(value) => dispatch(updateVector({ dwell: value }))}
+            onChange={(value) =>
+              dispatch(updateVector({ dwell: Math.max(dwellMin, value) }))
+            }
           />
         </div>
       )}

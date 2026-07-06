@@ -628,13 +628,6 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   vectorGrayLevelFilter: () => (
     <>
       <p>
-        This toggle controls the vector-only gray level fallback path.
-        We tried the same-pixel blanking idea first, but host-side
-        causality makes that impossible in the current stream: the ADC
-        sample arrives after the beam has already moved on.
-      </p>
-
-      <p>
         The current fallback behavior is precomputed blanking: bitmap or
         gray filter data is expanded into points with blank flags, the
         stream is sent, the FPGA executes it, and ADC samples come back
@@ -642,43 +635,33 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
 
       <p>
-        When this toggle is enabled and a gray range is confirmed, the
-        backend switches vector scans into
+        The solution provides a way to handle one logical point at a
+        time: when this toggle is enabled and a gray range is
+        confirmed, the backend switches vector scans into
         <code>adaptive_gray_feedback</code>, forces{" "}
-        <code>SixteenBit</code> output, sends tiny point/window batches,
-        waits for the returned ADC samples, compares them to the
-        selected range, and emits the next <code>BlankCommand</code>
-        from that result.
+        <code>SixteenBit</code> output, sends one unblanked probe at
+        <code>(x, y)</code>, reads that ADC result immediately, then
+        revisits the same coordinate for the remaining dwell with the
+        chosen blank state.
       </p>
 
       <ul className="dwell-help__list">
         <li>Raster stays out of scope. This help applies only to vector scans.</li>
-        <li>The gray range is compared against the confirmed interval from the ROI/gray selection flow.</li>
-        <li>Pipeline-delay compensation is still configurable, because the next physical point may not be the next logical point.</li>
+        <li>The gray range is compared against the confirmed interval from the gray selection flow.</li>
+        <li>Adaptive mode forces <code>dwell = 16</code> or higher so the same-coordinate action pass still has meaningful dwell after the initial probe.</li>
       </ul>
 
-      <div className="dwell-help__rule">
-        <strong>Final behavior:</strong> the host-side loop is a
-        fallback, not a full same-pixel closed loop. It is slower than
-        direct blanking, but keeps the gray-level filter and fallback
-        blanking tied together in the vector scan path.
-      </div>
-
-      <div className="dwell-help__rule">
-        <strong>Proposed fallback mode:</strong> add an
-        <code>adaptive_gray_feedback</code> VECTOR mode, force
-        <code>output_mode = SixteenBit</code> for 14-bit thresholding,
-        send very small command batches, wait for ADC samples, compare
-        them against the gray-level range, emit <code>BlankCommand</code>
-        before the next point/window, and add pipeline-delay
-        compensation because the next logical point may not be the next
-        physical point.
-      </div>
+      <p>
+        The returned scan result still stays one logical sample per
+        requested point by combining the probe/action samples, or
+        zeroing the output when blanked. The final beam shutdown
+        remains explicit at the end of the adaptive transfer.
+      </p>
 
       <p>
         Tradeoff: this is much slower than the current streaming vector
         scan. USB round trips and FPGA buffering will dominate. As a
-        software fallback, though, it is technically reasonable and
+        software path, though, it is technically reasonable and
         better than doing nothing.
       </p>
     </>

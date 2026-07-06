@@ -12,9 +12,9 @@ JSON / API → VectorParams → VectorScanCommand is the new flow; see
 AutomationPy.buildingblocks.scan_params for the dataclass.
 """
 
+import array
 import asyncio
 import struct
-from collections import deque
 from dataclasses import dataclass
 
 # Import path note: must match the prefix used by callers
@@ -240,10 +240,26 @@ class VectorScanCommand(BaseCommand):
         in_range = cfg.gray_min <= sample_value <= cfg.gray_max
         return in_range if cfg.blank_when_inside else not in_range
 
-    def _feedback_default_blank(self) -> bool:
-        cfg = self._adaptive_gray_feedback
-        assert cfg is not None
-        return False if cfg.blank_when_inside else True
+    @staticmethod
+    def _feedback_zero_sample_like(samples):
+        if samples is None:
+            return None
+        return array.array(samples.typecode, [0] * len(samples))
+
+    @staticmethod
+    def _feedback_combine_samples(probe_samples, action_samples, *, probe_dwell: int, action_dwell: int):
+        if probe_samples is None:
+            return action_samples
+        if action_samples is None or len(action_samples) == 0 or action_dwell <= 0:
+            return probe_samples
+
+        total_dwell = max(1, int(probe_dwell) + int(action_dwell))
+        combined = array.array(action_samples.typecode)
+        for idx, action_value in enumerate(action_samples):
+            probe_value = int(probe_samples[idx]) if idx < len(probe_samples) else 0
+            weighted = ((probe_value * probe_dwell) + (int(action_value) * action_dwell)) / total_dwell
+            combined.append(int(round(weighted)))
+        return combined
 
     async def _transfer_adaptive(self, stream):
         cfg = self._adaptive_gray_feedback
@@ -258,44 +274,74 @@ class VectorScanCommand(BaseCommand):
         # Discard the FFFF + cookie reply.
         await stream.read(4)
 
-        pending_decisions = deque()
-        default_blank = self._feedback_default_blank()
-        blank_state = default_blank
         points_iter = self._iter_adaptive_points()
 
+        # Same-coordinate adaptive mode:
+        #   1. Probe each logical point with a single unblanked sample.
+        #   2. Decide blank/unblank from that probe sample.
+        #   3. Revisit the same coordinate for the remaining dwell with the
+        #      chosen blank state.
+        #
+        # This is still not a true in-dwell closed loop, but it keeps the
+        # feedback actuation on the same physical coordinate instead of a
+        # later point in the sweep.
         while True:
-            window = []
-            for _ in range(cfg.window_points):
-                try:
-                    window.append(next(points_iter))
-                except StopIteration:
-                    break
-            if not window:
+            try:
+                x, y, dwell, _blank, pass_index = next(points_iter)
+            except StopIteration:
                 break
 
-            if len(pending_decisions) > cfg.pipeline_delay_points:
-                blank_state = pending_decisions.popleft()
+            if pass_index is not None:
+                self._logger.debug("adaptive vector pass index %s", pass_index)
 
-            commands = bytearray()
-            commands.extend(bytes(BlankCommand(enable=blank_state, inline=True)))
-            commands.extend(bytes(ArrayCommand(
+            logical_dwell = max(1, int(dwell))
+            probe_dwell = 1
+            action_dwell = max(0, logical_dwell - probe_dwell)
+
+            probe_commands = bytearray()
+            probe_commands.extend(bytes(BlankCommand(enable=False, inline=True)))
+            probe_commands.extend(bytes(ArrayCommand(
                 cmdtype=CmdType.VectorPixel,
-                array_length=len(window) - 1,
+                array_length=0,
             )))
-            for x, y, dwell, _blank, pass_index in window:
-                if pass_index is not None:
-                    self._logger.debug("adaptive vector pass index %s", pass_index)
-                commands.extend(struct.pack(">HHH", x, y, dwell))
+            probe_commands.extend(struct.pack(">HHH", x, y, probe_dwell))
             if self.abort.is_set():
-                commands.extend(bytes(BlankCommand(enable=True, inline=False)))
-            await stream.write(commands)
+                probe_commands.extend(bytes(BlankCommand(enable=True, inline=False)))
+            await stream.write(probe_commands)
             await stream.flush()
             await FlushCommand().transfer(stream)
-            samples = await self.recv_res(len(window), stream, OutputMode.SixteenBit)
-            pending_decisions.append(self._feedback_blank_decision(samples))
-            yield samples
+            probe_samples = await self.recv_res(1, stream, OutputMode.SixteenBit)
+            blank_state = self._feedback_blank_decision(probe_samples)
+
             if self.abort.is_set():
+                yield self._feedback_zero_sample_like(probe_samples)
                 break
+
+            action_samples = None
+            if action_dwell > 0:
+                action_commands = bytearray()
+                action_commands.extend(bytes(BlankCommand(enable=blank_state, inline=True)))
+                action_commands.extend(bytes(ArrayCommand(
+                    cmdtype=CmdType.VectorPixel,
+                    array_length=0,
+                )))
+                action_commands.extend(struct.pack(">HHH", x, y, action_dwell))
+                if self.abort.is_set():
+                    action_commands.extend(bytes(BlankCommand(enable=True, inline=False)))
+                await stream.write(action_commands)
+                await stream.flush()
+                await FlushCommand().transfer(stream)
+                action_samples = await self.recv_res(1, stream, OutputMode.SixteenBit)
+
+            if blank_state:
+                yield self._feedback_zero_sample_like(probe_samples if probe_samples is not None else action_samples)
+            else:
+                yield self._feedback_combine_samples(
+                    probe_samples,
+                    action_samples,
+                    probe_dwell=probe_dwell,
+                    action_dwell=action_dwell,
+                )
 
         await BlankCommand(enable=True, inline=False).transfer(stream)
         await FlushCommand().transfer(stream)

@@ -33,6 +33,8 @@ export const store = configureStore({
           "image.vectorImage",
           "image.vectorCustomPoints",
           "image.vectorCustomRenderPoints",
+          "image.vectorCustomBlankMask",
+          "image.vectorCustomSpotMask",
         ],
         ignoredActions: [
           "image/resetRaster",

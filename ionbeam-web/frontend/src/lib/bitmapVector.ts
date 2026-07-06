@@ -341,6 +341,10 @@ export async function vectorRequestWithAdaptiveGrayFeedback(
     points: null,
     roi: roiRequest,
     simulation_bitmap: null,
+    // Adaptive gray feedback now uses a probe sample followed by a
+    // same-coordinate action dwell, so keep a meaningful action dwell
+    // budget after the initial probe.
+    dwell: Math.max(16, req.dwell),
     output_mode: "SixteenBit",
     feedback_mode: "adaptive_gray_feedback",
     gray_level_range: [selection[0], selection[1]],

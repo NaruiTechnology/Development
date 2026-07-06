@@ -128,7 +128,7 @@ class VectorScanTest(unittest.TestCase):
 
     def test_adaptive_transfer_completes_on_mock_connection(self):
         async def run_scan():
-            points = [(0, 0, 1), (1, 1, 1), (2, 2, 1)]
+            points = [(0, 0, 2), (1, 1, 2), (2, 2, 2)]
             cmd = VectorScanCommand(
                 cookie=self.params.cookie,
                 output_mode=OutputMode.SixteenBit,
@@ -159,6 +159,7 @@ class VectorScanTest(unittest.TestCase):
         chunks = asyncio.run(run_scan())
         self.assertEqual(len(chunks), 3)
         self.assertEqual([len(chunk) for chunk in chunks], [1, 1, 1])
+        self.assertTrue(all(chunk[0] == 0 for chunk in chunks))
 
     # ------------------------------------------------------------------ #
     # Wet-run test: real Glasgow hardware.                               #

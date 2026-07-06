@@ -898,6 +898,8 @@ class DeviceService:
         effective params object."""
         params = self._effective_vector_params(req)
         adaptive_feedback = self._adaptive_gray_feedback_config(req)
+        if adaptive_feedback is not None and params.dwell < 16:
+            params = params.override(dwell=16)
 
         if req.pattern is VectorPattern.custom:
             if req.points is None and not (
