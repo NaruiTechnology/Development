@@ -157,7 +157,7 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.roleRequest.failed": "無法開啟郵件草稿：{error}",
   "scan.modeGuide": "光柵與矢量",
   "roi.actionRun": "Action run",
-  "roi.actionRun.title": "以矢量掃描方式執行已確認的 ROI 灰階選擇",
+  "roi.actionRun.title": "以矢量掃描方式執行所選 ROI 區域",
   "roi.actionRun.selectionRequired": "請先確認灰階 Skip 或 Spot 選擇，再執行 ROI 動作。",
   "scan.repeat": "重複",
   "scan.repeat.title": "設定 Action run 循環重複的次數",

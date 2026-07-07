@@ -174,7 +174,7 @@ export const en = {
   "scan.repeat": "Repeat",
   "scan.repeat.title": "Set how many times the Action run loop repeats",
   "roi.actionRun": "Action run",
-  "roi.actionRun.title": "Run the committed ROI gray-level selection as a vector-style scan",
+  "roi.actionRun.title": "Run the selected ROI area as a vector-style scan",
   "roi.actionRun.selectionRequired": "Confirm a gray-level Skip or Spot selection before running the ROI action.",
   "common.custom": "Custom",
   "common.invalidNumber": "Invalid number.",

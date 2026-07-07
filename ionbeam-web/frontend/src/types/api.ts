@@ -93,6 +93,8 @@ export interface SimulationBitmapPixel {
   isHighlighted?: boolean | null;
   /** `true` skips highlighted pixels, `false` spots them, `null` means normal scan. */
   isSkipped?: boolean | null;
+  /** Per-pixel beam blank state, used by custom point expansion and simulation. */
+  blank?: boolean | null;
 }
 
 /**

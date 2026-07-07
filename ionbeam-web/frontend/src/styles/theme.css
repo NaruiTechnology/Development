@@ -389,7 +389,7 @@ body {
 
 .image-panel-card__header-main {
   display: grid;
-  grid-template-columns: max-content max-content max-content minmax(0, 1fr);
+  grid-template-columns: max-content max-content max-content minmax(0, 1fr) max-content;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -411,6 +411,14 @@ body {
 
 .image-panel-card__toolbar-slot:empty {
   display: none;
+}
+
+.image-panel-card__header-action {
+  grid-column: 5;
+  justify-self: end;
+  min-height: 28px;
+  padding: 4px 10px;
+  white-space: nowrap;
 }
 
 .roi-spectrum {

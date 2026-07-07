@@ -1,5 +1,3 @@
-import type { GrayScaleSelection } from "./grayScaleSelection";
-
 export type GrayScaleSourceKind = "raster" | "vector" | "loaded" | null;
 
 export type ROIActionKind = "raster" | "vector";
@@ -25,11 +23,10 @@ export function resolveROIActionKind(
 
 export function shouldShowROIActionControls(options: {
   kind: "roi" | ROIActionKind | "mag";
-  showGraySpectrum: boolean;
-  committedGrayScaleSelection: GrayScaleSelection;
+  hasPartialROI: boolean;
 }): boolean {
   if (options.kind !== "roi") return options.kind !== "mag";
-  return options.showGraySpectrum && options.committedGrayScaleSelection !== null;
+  return options.hasPartialROI;
 }
 
 export function resolveGrayScaleSourceKind(options: {

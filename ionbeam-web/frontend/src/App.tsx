@@ -309,8 +309,7 @@ export function App() {
   const actionScanKind = resolveROIActionKind(kind, lastScanKind) ?? lastScanKind;
   const showROIActionControls = shouldShowROIActionControls({
     kind,
-    showGraySpectrum,
-    committedGrayScaleSelection,
+    hasPartialROI,
   });
   const gridLineToggle =
     kind === "roi" ? (
@@ -389,6 +388,15 @@ export function App() {
     },
     [clearCommittedGrayScaleSelection, dispatch]
   );
+
+  const handleClearROIGrayScaleValues = useCallback(() => {
+    clearCommittedGrayScaleSelection();
+    setPendingGrayScaleSelection(null);
+    setPendingGrayScaleAnchor(null);
+    setPendingGrayScaleSkipped(null);
+    setGrayScaleConfirmOpen(false);
+    setGrayScaleCommitCount(0);
+  }, [clearCommittedGrayScaleSelection]);
 
   useEffect(() => {
     setPendingGrayScaleSelection(committedGrayScaleSelection);
@@ -1030,6 +1038,22 @@ export function App() {
                       />
                     ) : null}
                   </div>
+                  {kind === "roi" && (
+                    <button
+                      type="button"
+                      className="btn btn--ghost image-panel-card__header-action"
+                      disabled={
+                        panelDisabled ||
+                        (pendingGrayScaleSelection === null &&
+                          committedGrayScaleSelection === null &&
+                          pendingGrayScaleAnchor === null)
+                      }
+                      onClick={handleClearROIGrayScaleValues}
+                      title={t("scan.clear")}
+                    >
+                      {t("scan.clear")}
+                    </button>
+                  )}
                 </div>
             </div>
             <div className="card__body">

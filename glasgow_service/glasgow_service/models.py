@@ -117,6 +117,7 @@ class SimulationBitmapPixel(BaseModel):
     value: int = Field(..., ge=0, le=255)
     isHighlighted: Optional[bool] = None
     isSkipped: Optional[bool] = None
+    blank: Optional[bool] = None
 
 
 class VectorRequest(BaseModel):

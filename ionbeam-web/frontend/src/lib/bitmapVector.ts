@@ -303,12 +303,13 @@ export async function vectorRequestWithROIGrayScaleAction(
     points: bitmapToROIActionPoints(
       decoratedBitmap,
       converted.roi,
-      req.dwell,
+      Math.max(16, req.dwell),
       selection,
       options.grayScaleSkipped,
     ),
     roi: converted.roi,
     simulation_bitmap: null,
+    dwell: Math.max(16, req.dwell),
   };
 }
 
@@ -437,7 +438,7 @@ async function bitmapSelectionToVector(
       const alpha = data[i + 3];
       const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       const pixel = alpha === 0 ? 255 : Math.round(luma);
-      pixels.push({ value: pixel, isHighlighted: false });
+      pixels.push({ value: pixel, isHighlighted: false, isSkipped: null, blank: null });
     }
   }
 
@@ -470,6 +471,7 @@ function decorateSimulationBitmap(
         value: pixelValue(pixel),
         isHighlighted: false,
         isSkipped: null,
+        blank: null,
       })),
     };
   }
@@ -483,6 +485,12 @@ function decorateSimulationBitmap(
         value,
         isHighlighted: highlighted,
         isSkipped: highlighted ? normalizedSkipped : null,
+        blank:
+          normalizedSkipped === true
+            ? highlighted
+            : normalizedSkipped === false
+            ? !highlighted
+            : null,
       };
     }),
   };
@@ -580,8 +588,14 @@ function bitmapToROIActionPoints(
     for (let x = 0; x < bitmap.width; x++) {
       const sampleX = x0 + Math.round((x / xDiv) * xSpan);
       const pixel = bitmap.pixels[y * bitmap.width + x];
+      const pixelBlank = typeof pixel === "number" ? null : pixel.blank ?? null;
       const highlighted = grayScaleSelectionContains(selection, pixelValue(pixel));
-      const blank = skipped ? highlighted : !highlighted;
+      const blank =
+        pixelBlank !== null
+          ? pixelBlank
+          : skipped
+          ? highlighted
+          : !highlighted;
       points.push([sampleX, sampleY, dwell, blank, highlighted ? 1 : 2]);
     }
   }

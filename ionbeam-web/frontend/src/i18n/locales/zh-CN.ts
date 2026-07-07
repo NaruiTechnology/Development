@@ -148,7 +148,7 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.roleRequest.failed": "无法打开邮件草稿：{error}",
   "scan.modeGuide": "光栅与矢量",
   "roi.actionRun": "Action run",
-  "roi.actionRun.title": "以矢量扫描方式运行已确认的 ROI 灰度选择",
+  "roi.actionRun.title": "以矢量扫描方式运行所选 ROI 区域",
   "roi.actionRun.selectionRequired": "请先确认灰度级 Skip 或 Spot 选择，再运行 ROI 动作。",
   "scan.repeat": "重复",
   "scan.repeat.title": "设置 Action run 循环重复的次数",

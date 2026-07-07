@@ -265,6 +265,15 @@ def _bitmap_pixel_is_skipped(pixel):
     return bool(value)
 
 
+def _bitmap_pixel_blank(pixel):
+    if isinstance(pixel, int) or pixel is None:
+        return None
+    value = getattr(pixel, "blank", None)
+    if value is None:
+        return None
+    return bool(value)
+
+
 def _infer_bitmap_mode(bitmap) -> Optional[str]:
     for pixel in bitmap.pixels:
         skipped = _bitmap_pixel_is_skipped(pixel)
@@ -278,6 +287,9 @@ def _infer_bitmap_mode(bitmap) -> Optional[str]:
 
 def _bitmap_pixel_sample(pixel, mode: Optional[str]) -> int:
     value = min(_bitmap_pixel_value(pixel) * 64, 0x3FFF)
+    blank = _bitmap_pixel_blank(pixel)
+    if blank is not None:
+        return 0 if blank else value
     skipped = _bitmap_pixel_is_skipped(pixel)
     highlighted = _bitmap_pixel_is_highlighted(pixel)
 

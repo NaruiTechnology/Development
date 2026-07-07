@@ -27,11 +27,16 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
+import { DwellHelp } from "./DwellHelp";
+import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { updateVector } from "../store/scanSlice";
 import type { VectorRequest } from "../types/api";
+
+const ROI_DWELL_OPTIONS: PresetNumberOption[] = [16, 32, 64].map((value) => ({ value }));
 
 interface EquipmentOption {
   id: number | null;
@@ -130,6 +135,10 @@ export function ScanControls({
     kind === "vector" &&
     activeVectorGrayScaleSelection !== null &&
     activeVectorGrayScaleSkipped !== null;
+  const roiGrayFilterActive =
+    roiAction &&
+    roiGrayScaleSelection !== null &&
+    roiGrayScaleSkipped !== null;
 
   const logVectorRequestContext = (source: "stream" | "validated", req: VectorRequest, branch: string) => {
     if (kind !== "vector") return;
@@ -261,18 +270,23 @@ export function ScanControls({
         if (roiEbeamDisabled) {
           return;
         }
-        if (scanGrayScaleSelection === null || scanGrayScaleSkipped === null) {
-          throw new Error(t("roi.actionRun.selectionRequired"));
+        const hasGrayFilter =
+          scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
+        const req = hasGrayFilter
+          ? await vectorRequestWithROIGrayScaleAction(
+              { ...vector, roi },
+              roiState,
+              {
+                grayScaleSelection: scanGrayScaleSelection,
+                grayScaleSkipped: scanGrayScaleSkipped,
+              }
+            )
+          : await buildVectorRequest();
+        if (hasGrayFilter && Math.trunc(repeat) > 1) {
+          startActionLoop(req);
+        } else {
+          clearActionLoopState();
         }
-        const req = await vectorRequestWithROIGrayScaleAction(
-          { ...vector, roi },
-          roiState,
-          {
-            grayScaleSelection: scanGrayScaleSelection,
-            grayScaleSkipped: scanGrayScaleSkipped,
-          }
-        );
-        startActionLoop(req);
         onActionRunStart?.();
         stream.startVector({ ...req, preview });
       } catch (e: any) {
@@ -486,6 +500,7 @@ export function ScanControls({
   }, [clearActionLoopState]);
 
   if (roiAction) {
+    const showRoiGrayControls = roiGrayFilterActive;
     return (
       <div className="button-row">
         <label className="scan-equipment-field">
@@ -552,7 +567,25 @@ export function ScanControls({
               {t("scan.stop")}
             </button>
           </div>
-          {showRepeatControl && (
+          {showRoiGrayControls && (
+            <div className="scan-loop-controls__footer">
+              <PresetNumberField
+                label={
+                  <label>
+                    {t("vector.dwell")}
+                    <DwellHelp />
+                  </label>
+                }
+                value={vector.dwell}
+                options={ROI_DWELL_OPTIONS}
+                min={16}
+                max={65535}
+                disabled={controlsDisabled || roiEbeamDisabled}
+                onChange={(value) => dispatch(updateVector({ dwell: Math.max(16, value) }))}
+              />
+            </div>
+          )}
+          {showRepeatControl && showRoiGrayControls && (
             <div className="scan-loop-controls__footer">
               <RepeatControl
                 repeat={repeat}
