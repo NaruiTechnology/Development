@@ -1169,6 +1169,14 @@ body {
   background-color: color-mix(in srgb, var(--c-accent) 78%, var(--c-text));
 }
 
+.checkbox--disabled,
+.checkbox[aria-disabled="true"] {
+  cursor: not-allowed;
+  color: var(--c-text-muted);
+  opacity: 0.68;
+  pointer-events: none;
+}
+
 /* ---------- buttons --------------------------------------------------- */
 
 .btn {

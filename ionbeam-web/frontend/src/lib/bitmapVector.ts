@@ -310,9 +310,7 @@ export async function vectorRequestWithROIGrayScaleAction(
     roi: converted.roi,
     simulation_bitmap: null,
     dwell: Math.max(16, req.dwell),
-    // Custom ROI action streams explicit per-point blank flags. The Glasgow
-    // pre-process path is for default/adaptive sweeps and can abort this path.
-    pre_process: false,
+    pre_process: true,
   };
 }
 

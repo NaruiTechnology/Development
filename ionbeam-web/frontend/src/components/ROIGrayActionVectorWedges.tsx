@@ -17,7 +17,7 @@ const FORCED_DWELL = 16;
 const FORCED_LATENCY_BYTES = 8196;
 const FORCED_OUTPUT_MODE: "SixteenBit" = "SixteenBit";
 const FORCED_COOKIE = 123;
-const FORCED_PRE_PROCESS = false;
+const FORCED_PRE_PROCESS = true;
 
 const FORCED_DWELL_OPTIONS: PresetNumberOption[] = [16, 32, 64].map((value) => ({ value }));
 const FORCED_RESOLUTION_OPTIONS: PresetNumberOption[] = [128, 256, 512, 1024, 2048].map((value) => ({
@@ -141,8 +141,12 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
           </label>
           <NumberStepperInput value={vector.cookie} min={0} max={0xffff} step={1} inputMode="numeric" disabled={disabled} onValueChange={() => undefined} />
         </div>
-        <label className="checkbox" style={{ alignSelf: "end" }}>
-          <input type="checkbox" checked={FORCED_PRE_PROCESS} disabled={disabled} onChange={() => undefined} />
+        <label
+          className="checkbox checkbox--disabled"
+          aria-disabled="true"
+          style={{ alignSelf: "end" }}
+        >
+          <input type="checkbox" checked={FORCED_PRE_PROCESS} disabled onChange={() => undefined} />
           {t("vector.preProcess")}
           <PreProcessHelp />
         </label>
