@@ -136,6 +136,7 @@ export function App() {
   const [repeat, setRepeat] = useState(1);
   const [roiActionLocked, setROIActionLocked] = useState(false);
   const [roiActionCanvasVisible, setROIActionCanvasVisible] = useState(false);
+  const [roiGraySelectionResetToken, setROIGraySelectionResetToken] = useState(0);
   const [mergedFigureByKind, setMergedFigureByKind] = useState<{
     raster: string | null;
     vector: string | null;
@@ -594,6 +595,19 @@ export function App() {
     if (grayScaleConfirmTarget === "vector") {
       setVectorGrayScaleSkipped(true);
     } else {
+      if (roiState.scanImageDataUrl !== null && roiState.imageKind === "lastScan") {
+        dispatch(
+          updateROI({
+            imageName: "No image selected",
+            imageDataUrl: null,
+            imageKind: "none",
+          })
+        );
+      }
+      dispatch(clearROIScanImage());
+      dispatch(resetVector());
+      setROIActionCanvasVisible(false);
+      setROIGraySelectionResetToken((n) => n + 1);
       dispatch(
         setROIGrayScaleSelection({
           selection: pendingGrayScaleSelection,
@@ -602,7 +616,15 @@ export function App() {
       );
     }
     setGrayScaleConfirmOpen(false);
-  }, [dispatch, grayScaleConfirmTarget, pendingGrayScaleAnchor, pendingGrayScaleSelection, pendingGrayScaleSkipped]);
+  }, [
+    dispatch,
+    grayScaleConfirmTarget,
+    pendingGrayScaleAnchor,
+    pendingGrayScaleSelection,
+    pendingGrayScaleSkipped,
+    roiState.imageKind,
+    roiState.scanImageDataUrl,
+  ]);
 
   const applyVectorGrayLevelsToggle = useCallback((checked: boolean) => {
     setVectorGrayLevelsEnabled(checked);
@@ -1115,6 +1137,7 @@ export function App() {
                       grayScaleSelection={displayedROIGrayScaleSelection}
                       grayScaleSkipped={displayedROIGrayScaleSkipped}
                       liveVectorPreview={roiActionCanvasVisible && roiActionGrayFilterActive}
+                      graySelectionResetToken={roiGraySelectionResetToken}
                     />
                   )
               ) : kind === "mag" ? (
@@ -1526,9 +1549,7 @@ function buildGrayScaleBoxes(levels: number[], stepDelta: number, selectedGraySc
   if (selectedGrayScale !== null) {
     const start = Math.max(0, Math.min(255, Math.min(selectedGrayScale[0], selectedGrayScale[1])));
     const end = Math.max(0, Math.min(255, Math.max(selectedGrayScale[0], selectedGrayScale[1])));
-    for (let value = start; value <= end; value++) {
-      boxes.push(value);
-    }
+    boxes.push(start, end);
   }
   return [...new Set(boxes)].sort((a, b) => a - b);
 }

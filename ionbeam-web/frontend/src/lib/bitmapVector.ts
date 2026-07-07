@@ -310,7 +310,9 @@ export async function vectorRequestWithROIGrayScaleAction(
     roi: converted.roi,
     simulation_bitmap: null,
     dwell: Math.max(16, req.dwell),
-    pre_process: true,
+    // The ROI panel shows pre-process locked on for parity with the vector
+    // controls, but Glasgow's pre-process path aborts explicit custom points.
+    pre_process: false,
   };
 }
 

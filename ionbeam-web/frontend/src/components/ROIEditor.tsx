@@ -48,6 +48,7 @@ export function ROIEditor({
   grayScaleSkipped = null,
   allowClearRegionWhileDisabled = false,
   liveVectorPreview = false,
+  graySelectionResetToken = 0,
   onLoadLastScan,
 }: {
   disabled: boolean;
@@ -58,6 +59,7 @@ export function ROIEditor({
   grayScaleSkipped?: boolean | null;
   allowClearRegionWhileDisabled?: boolean;
   liveVectorPreview?: boolean;
+  graySelectionResetToken?: number;
   onLoadLastScan?: () => void;
 }) {
   const dispatch = useAppDispatch();
@@ -145,6 +147,7 @@ export function ROIEditor({
       if (
         backgroundImageUrl &&
         imageSource === backgroundImageUrl &&
+        roi.scanImageDataUrl === null &&
         promotedBackgroundRef.current !== backgroundImageUrl
       ) {
         const fillStyle = canvasRef.current
@@ -200,6 +203,24 @@ export function ROIEditor({
   useEffect(() => {
     animatedVectorSamplesRef.current = animatedVectorSamples;
   }, [animatedVectorSamples]);
+
+  useEffect(() => {
+    if (graySelectionResetToken <= 0) return;
+    capturedLiveVectorKeyRef.current = null;
+    animatedVectorSamplesRef.current = 0;
+    setAnimatedVectorSamples(0);
+    imageRef.current = null;
+    setCanvasResetToken((n) => n + 1);
+
+    const live = liveCanvasRef.current;
+    const liveCtx = live?.getContext("2d");
+    if (live && liveCtx) {
+      liveCtx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    }
+    drawBaseCanvas();
+    drawHighlightMask();
+    drawAnnotationLayer();
+  }, [graySelectionResetToken]);
 
   useEffect(() => {
     if (
