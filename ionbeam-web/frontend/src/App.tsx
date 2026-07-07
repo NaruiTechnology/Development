@@ -57,6 +57,7 @@ import {
 import {
   beginROICalibration,
   clearROISelection,
+  clearROIScanImage,
   persistGrayScaleStepDelta,
   setKind,
   setROIGrayScaleSelection,
@@ -281,7 +282,10 @@ export function App() {
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
     (lastScanKind === "vector" && vectorCursor > 0) ||
-    lastResult?.kind === lastScanKind;
+    lastResult?.kind === lastScanKind ||
+    roiState.scanImageDataUrl !== null;
+  const roiCachedScanImageUrl =
+    kind === "roi" && hasPartialROI ? roiState.scanImageDataUrl : null;
   const serverScanImageUrl =
     lastScanKind === "vector"
       ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}&view=texture&_=${imageRevision}`
@@ -293,11 +297,13 @@ export function App() {
         : serverScanImageUrl
       : null;
   const activeROIScanImageUrl =
-    roiScanImageUrl && roiScanImageUrl !== suppressedROIScanImageUrl
-      ? roiScanImageUrl
+    roiCachedScanImageUrl && roiCachedScanImageUrl !== suppressedROIScanImageUrl
+      ? roiCachedScanImageUrl
       : null;
   const showGraySpectrum =
-    kind === "roi" && hasPartialROI && Boolean(roiState.imageDataUrl || activeROIScanImageUrl);
+    kind === "roi" &&
+    hasPartialROI &&
+    Boolean(roiState.scanImageDataUrl || roiState.imageDataUrl || activeROIScanImageUrl);
   const grayScaleSourceKind = resolveGrayScaleSourceKind({
     showGraySpectrum: kind === "roi" && showGraySpectrum,
     roiImageDataUrl: roiState.imageDataUrl,
@@ -306,7 +312,16 @@ export function App() {
   });
   const grayScaleSourceLabel = grayScaleSourceLabelForKind(grayScaleSourceKind, t);
   const grayScaleScopeNote = grayScaleScopeNoteForKind(grayScaleSourceKind, isProduction, t);
-  const actionScanKind = resolveROIActionKind(kind, lastScanKind) ?? lastScanKind;
+  const roiActionGrayFilterActive =
+    committedGrayScaleSelection !== null && committedGrayScaleSkipped !== null;
+  const displayedROIGrayScaleSelection = pendingGrayScaleSelection ?? committedGrayScaleSelection;
+  const displayedROIGrayScaleSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped;
+  const actionScanKind =
+    kind === "roi"
+      ? roiActionGrayFilterActive
+        ? "vector"
+        : "raster"
+      : resolveROIActionKind(kind, lastScanKind) ?? lastScanKind;
   const showROIActionControls = shouldShowROIActionControls({
     kind,
     hasPartialROI,
@@ -362,24 +377,30 @@ export function App() {
   }, [phase, roiState.selection]);
 
   useEffect(() => {
+    if (kind !== "roi") return;
     if (!showGraySpectrum) {
       setPendingGrayScaleSelection(null);
       setPendingGrayScaleAnchor(null);
       setGrayScaleLevels([]);
       setGrayScaleCommitCount(0);
     }
-  }, [showGraySpectrum]);
+  }, [kind, showGraySpectrum]);
 
   const resetROIActionContext = useCallback(
-    (options?: { clearSelection?: boolean }) => {
+    (options?: { clearSelection?: boolean; preserveScanImage?: boolean; preserveGraySelection?: boolean }) => {
       clearBitmapSelectionCache();
+      if (!options?.preserveScanImage) {
+        dispatch(clearROIScanImage());
+      }
       if (options?.clearSelection) {
         dispatch(clearROISelection());
       }
-      clearCommittedGrayScaleSelection();
-      setPendingGrayScaleSelection(null);
-      setPendingGrayScaleAnchor(null);
-      setPendingGrayScaleSkipped(null);
+      if (!options?.preserveGraySelection) {
+        clearCommittedGrayScaleSelection();
+        setPendingGrayScaleSelection(null);
+        setPendingGrayScaleAnchor(null);
+        setPendingGrayScaleSkipped(null);
+      }
       setGrayScaleLevels([]);
       setGrayScaleConfirmOpen(false);
       setGrayScaleCommitCount(0);
@@ -396,6 +417,8 @@ export function App() {
     setPendingGrayScaleSkipped(null);
     setGrayScaleConfirmOpen(false);
     setGrayScaleCommitCount(0);
+    setROIActionLocked(false);
+    setROIActionCanvasVisible(false);
   }, [clearCommittedGrayScaleSelection]);
 
   useEffect(() => {
@@ -445,9 +468,6 @@ export function App() {
           ? current
           : levels
       );
-      setPendingGrayScaleSelection((current) =>
-        current !== null && current.every((value) => levels.includes(value)) ? current : null
-      );
     })();
     return () => {
       cancelled = true;
@@ -486,10 +506,11 @@ export function App() {
 
   useEffect(() => {
     if (kind !== "roi") return;
-    if (!roiScanImageUrl) return;
+    if (!activeROIScanImageUrl) return;
     if (phase === "running" || phase === "stopping") return;
     if (roiState.imageKind === "file") return;
-    if (suppressedROIScanImageUrlRef.current === roiScanImageUrl) return;
+    if (roiState.scanImageDataUrl !== null) return;
+    if (suppressedROIScanImageUrlRef.current === activeROIScanImageUrl) return;
     // ROIEditor may promote the last-scan URL into a data URL for local
     // annotation/highlight work. Once ROI state is already in last-scan
     // mode, don't overwrite that promoted image on every render.
@@ -497,20 +518,35 @@ export function App() {
     dispatch(
       updateROI({
         imageName: t("roi.imageName.lastScan"),
-        imageDataUrl: roiScanImageUrl,
+        imageDataUrl: activeROIScanImageUrl,
         imageKind: "lastScan",
       })
     );
-  }, [dispatch, kind, phase, roiScanImageUrl, roiState.imageDataUrl, roiState.imageKind, t]);
+  }, [activeROIScanImageUrl, dispatch, kind, phase, roiState.imageDataUrl, roiState.imageKind, roiState.scanImageDataUrl, t]);
 
   const handleRenderedImageChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
+      if (
+        kind === "roi" &&
+        scanKind === "raster" &&
+        roiActionCanvasVisible &&
+        !roiActionGrayFilterActive
+      ) {
+        if (imageUrl) {
+          dispatch(updateROI({ scanImageDataUrl: imageUrl }));
+          dispatch(resetRaster({ resolution: rasterResolution }));
+          dispatch(resetVector());
+          setLastLiveScanImage(null);
+          setMergedFigureByKind({ raster: null, vector: null });
+        }
+        return;
+      }
       setLastLiveScanImage((current) => {
         if (!imageUrl) return current?.kind === scanKind ? null : current;
         return { kind: scanKind, imageUrl };
       });
     },
-    []
+    [dispatch, kind, rasterResolution, roiActionCanvasVisible, roiActionGrayFilterActive]
   );
 
   const handleMergedFigureChange = useCallback(
@@ -647,7 +683,7 @@ export function App() {
     const nextScanKind = nextKind === "raster" || nextKind === "vector" ? nextKind : null;
     const currentScanKind = kind === "raster" || kind === "vector" ? kind : null;
 
-    resetROIActionContext({ clearSelection: true });
+    resetROIActionContext({ preserveScanImage: true, preserveGraySelection: true });
 
     if (nextScanKind && (currentScanKind === null || currentScanKind !== nextScanKind)) {
       dispatch(streamReset());
@@ -876,13 +912,13 @@ export function App() {
                     />
                     {showROIActionControls && kind === "roi" && (
                       <div className="roi-action-controls">
-                        <ScanControls
+                    <ScanControls
                           kind={actionScanKind}
                           disabled={!isSignedIn}
                           scanActive={scanActive}
                           repeat={repeat}
                           onRepeatChange={setRepeat}
-                          showRepeatControl
+                          showRepeatControl={roiActionGrayFilterActive}
                           vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
                           vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
                           roiAction
@@ -993,10 +1029,14 @@ export function App() {
 
         {/* right column */}
         <section>
-          <div className="card image-panel-card">
+            <div className="card image-panel-card">
               <div className={`card__header image-panel-card__header${kind === "vector" ? " image-panel-card__header--vector" : ""}`}>
                 <div className="image-panel-card__header-main">
-                  <span className="card__title">{t(imagePanelTitleKey)}</span>
+                  <span className="card__title">{t(
+                    kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
+                      ? "card.rasterImage"
+                      : imagePanelTitleKey
+                  )}</span>
                   {gridLineToggle}
                   {kind === "vector" && (
                     <label className="checkbox canvas-grid-toggle vector-gray-level-toggle">
@@ -1025,9 +1065,10 @@ export function App() {
                           onSelect={handleVectorGrayRangeSelect}
                         />
                       )
-                    ) : showGraySpectrum ? (
+                    ) : showGraySpectrum &&
+                      !(kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive) ? (
                       <GrayScaleSpectrum
-                        selectedGrayScale={pendingGrayScaleSelection}
+                        selectedGrayScale={displayedROIGrayScaleSelection}
                         selectionAnchor={pendingGrayScaleAnchor}
                         levels={grayScaleLevels}
                         stepDelta={grayScaleStepDelta}
@@ -1038,7 +1079,7 @@ export function App() {
                       />
                     ) : null}
                   </div>
-                  {kind === "roi" && (
+                  {kind === "roi" && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
                     <button
                       type="button"
                       className="btn btn--ghost image-panel-card__header-action"
@@ -1057,15 +1098,25 @@ export function App() {
                 </div>
             </div>
             <div className="card__body">
-              {kind === "roi" ? (
+                {kind === "roi" ? (
+                  roiActionCanvasVisible &&
+                  !roiActionGrayFilterActive &&
+                  roiState.scanImageDataUrl === null ? (
+                    <ImageCanvas
+                      kind="raster"
+                      onRenderedImageChange={handleRenderedImageChange}
+                      onMergedFigureChange={handleMergedFigureChange}
+                    />
+                  ) : (
                     <ROIEditor
-                    disabled={panelDisabled}
-                    variant="canvas"
-                    backgroundImageUrl={activeROIScanImageUrl}
-                    grayScaleSelection={pendingGrayScaleSelection}
-                    grayScaleSkipped={pendingGrayScaleSkipped}
-                    liveVectorPreview={roiActionCanvasVisible}
-                  />
+                      disabled={panelDisabled}
+                      variant="canvas"
+                      backgroundImageUrl={activeROIScanImageUrl}
+                      grayScaleSelection={displayedROIGrayScaleSelection}
+                      grayScaleSkipped={displayedROIGrayScaleSkipped}
+                      liveVectorPreview={roiActionCanvasVisible && roiActionGrayFilterActive}
+                    />
+                  )
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
               ) : (
@@ -1366,7 +1417,7 @@ function GrayScaleSpectrum({
   onSelect: (grayScale: number) => void;
   onStepDeltaChange: (stepDelta: number) => void;
 }) {
-  const boxes = buildGrayScaleBoxes(levels, stepDelta);
+  const boxes = buildGrayScaleBoxes(levels, stepDelta, selectedGrayScale);
   const hasPendingSelection = selectedGrayScale !== null && selectionAnchor === null;
   const selectedMin = selectedGrayScale ? Math.min(selectedGrayScale[0], selectedGrayScale[1]) : null;
   const selectedMax = selectedGrayScale ? Math.max(selectedGrayScale[0], selectedGrayScale[1]) : null;
@@ -1447,7 +1498,7 @@ function GrayScaleSpectrum({
   );
 }
 
-function buildGrayScaleBoxes(levels: number[], stepDelta: number): number[] {
+function buildGrayScaleBoxes(levels: number[], stepDelta: number, selectedGrayScale: GrayScaleSelection): number[] {
   if (!levels.length) return [];
   const delta = clampGrayScaleStepDelta(stepDelta);
   const boxCount = Math.max(1, Math.min(levels.length, delta));
@@ -1471,6 +1522,13 @@ function buildGrayScaleBoxes(levels: number[], stepDelta: number): number[] {
   }
   if (boxes[boxes.length - 1] !== levels[lastIndex]) {
     boxes.push(levels[lastIndex]);
+  }
+  if (selectedGrayScale !== null) {
+    const start = Math.max(0, Math.min(255, Math.min(selectedGrayScale[0], selectedGrayScale[1])));
+    const end = Math.max(0, Math.min(255, Math.max(selectedGrayScale[0], selectedGrayScale[1])));
+    for (let value = start; value <= end; value++) {
+      boxes.push(value);
+    }
   }
   return [...new Set(boxes)].sort((a, b) => a - b);
 }

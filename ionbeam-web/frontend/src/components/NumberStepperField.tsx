@@ -5,6 +5,7 @@ interface NumberStepperFieldProps {
   value: string | number;
   onValueChange: (value: string) => void;
   disabled?: boolean;
+  readOnly?: boolean;
   step?: number;
   min?: number;
   max?: number;
@@ -20,6 +21,7 @@ export function NumberStepperField({
   value,
   onValueChange,
   disabled = false,
+  readOnly = false,
   step = 1,
   min,
   max,
@@ -53,6 +55,7 @@ export function NumberStepperInput({
   value,
   onValueChange,
   disabled = false,
+  readOnly = false,
   step = 1,
   min,
   max,
@@ -76,7 +79,7 @@ export function NumberStepperInput({
   }
 
   function nudge(direction: 1 | -1) {
-    if (disabled) return;
+    if (disabled || readOnly) return;
     const parsed = Number(local);
     const base = Number.isFinite(parsed) ? parsed : min ?? max ?? 0;
     let next = base + direction * stepSize;
@@ -93,16 +96,20 @@ export function NumberStepperInput({
         inputMode={inputMode}
         value={local}
         disabled={disabled}
+        readOnly={readOnly}
         aria-invalid={invalid ? "true" : "false"}
         aria-label={ariaLabel}
-        onChange={(event) => commit(event.target.value)}
+        onChange={(event) => {
+          if (readOnly) return;
+          commit(event.target.value);
+        }}
       />
       <div className="number-stepper__buttons">
         <button
           type="button"
           className="number-stepper__button number-stepper__button--up"
           onClick={() => nudge(1)}
-          disabled={disabled}
+          disabled={disabled || readOnly}
           aria-label="Increase value"
         >
           ▲
@@ -111,7 +118,7 @@ export function NumberStepperInput({
           type="button"
           className="number-stepper__button number-stepper__button--down"
           onClick={() => nudge(-1)}
-          disabled={disabled}
+          disabled={disabled || readOnly}
           aria-label="Decrease value"
         >
           ▼

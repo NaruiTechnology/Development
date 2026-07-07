@@ -27,16 +27,12 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
-import { DwellHelp } from "./DwellHelp";
-import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import { ROIGrayActionVectorWedges } from "./ROIGrayActionVectorWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
-import { updateVector } from "../store/scanSlice";
 import type { VectorRequest } from "../types/api";
-
-const ROI_DWELL_OPTIONS: PresetNumberOption[] = [16, 32, 64].map((value) => ({ value }));
 
 interface EquipmentOption {
   id: number | null;
@@ -131,14 +127,14 @@ export function ScanControls({
     activeVectorGrayScaleSelection ?? roiGrayScaleSelection;
   const scanGrayScaleSkipped =
     activeVectorGrayScaleSkipped ?? roiGrayScaleSkipped;
+  const roiActionGrayFilterActive =
+    roiAction &&
+    roiGrayScaleSelection !== null &&
+    roiGrayScaleSkipped !== null;
   const vectorGrayFilterActive =
     kind === "vector" &&
     activeVectorGrayScaleSelection !== null &&
     activeVectorGrayScaleSkipped !== null;
-  const roiGrayFilterActive =
-    roiAction &&
-    roiGrayScaleSelection !== null &&
-    roiGrayScaleSkipped !== null;
 
   const logVectorRequestContext = (source: "stream" | "validated", req: VectorRequest, branch: string) => {
     if (kind !== "vector") return;
@@ -272,23 +268,37 @@ export function ScanControls({
         }
         const hasGrayFilter =
           scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
-        const req = hasGrayFilter
-          ? await vectorRequestWithROIGrayScaleAction(
-              { ...vector, roi },
-              roiState,
-              {
-                grayScaleSelection: scanGrayScaleSelection,
-                grayScaleSkipped: scanGrayScaleSkipped,
-              }
-            )
-          : await buildVectorRequest();
-        if (hasGrayFilter && Math.trunc(repeat) > 1) {
-          startActionLoop(req);
+        if (hasGrayFilter) {
+          const req = await vectorRequestWithROIGrayScaleAction(
+            { ...vector, roi },
+            roiState,
+            {
+              grayScaleSelection: scanGrayScaleSelection,
+              grayScaleSkipped: scanGrayScaleSkipped,
+            }
+          );
+          if (Math.trunc(repeat) > 1) {
+            startActionLoop(req);
+          } else {
+            clearActionLoopState();
+          }
+          onActionRunStart?.();
+          stream.startVector({ ...req, preview });
         } else {
+          const req = await rasterRequestWithBitmapSelection(
+            { ...raster, roi },
+            roiState,
+            {
+              isProduction,
+              allowBitmapSimulation,
+              grayScaleSelection: null,
+              grayScaleSkipped: null,
+            }
+          );
           clearActionLoopState();
+          onActionRunStart?.();
+          stream.startRaster({ ...req, preview });
         }
-        onActionRunStart?.();
-        stream.startVector({ ...req, preview });
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -334,7 +344,8 @@ export function ScanControls({
     if (disabled || roiEbeamDisabled) return;
     clearActionLoopState();
     stream.stop();
-    if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
+    if (roiAction && !roiActionGrayFilterActive) dispatch(resetRaster({ resolution: raster.resolution }));
+    else if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }
 
@@ -500,7 +511,7 @@ export function ScanControls({
   }, [clearActionLoopState]);
 
   if (roiAction) {
-    const showRoiGrayControls = roiGrayFilterActive;
+    const showRoiGrayControls = roiActionGrayFilterActive;
     return (
       <div className="button-row">
         <label className="scan-equipment-field">
@@ -519,10 +530,18 @@ export function ScanControls({
                 <option key={row.id ?? row.serial_number} value={String(row.id)}>
                   {row.name}
                 </option>
-              ))
-            )}
+            ))
+          )}
           </select>
         </label>
+        {showRoiGrayControls && (
+          <div className="scan-loop-controls__roi-wedges">
+            <ROIGrayActionVectorWedges
+              active={showRoiGrayControls}
+              disabled={controlsDisabled || roiEbeamDisabled}
+            />
+          </div>
+        )}
         <div className="scan-loop-controls">
           <div className="scan-loop-controls__preview">
             <label
@@ -567,24 +586,6 @@ export function ScanControls({
               {t("scan.stop")}
             </button>
           </div>
-          {showRoiGrayControls && (
-            <div className="scan-loop-controls__footer">
-              <PresetNumberField
-                label={
-                  <label>
-                    {t("vector.dwell")}
-                    <DwellHelp />
-                  </label>
-                }
-                value={vector.dwell}
-                options={ROI_DWELL_OPTIONS}
-                min={16}
-                max={65535}
-                disabled={controlsDisabled || roiEbeamDisabled}
-                onChange={(value) => dispatch(updateVector({ dwell: Math.max(16, value) }))}
-              />
-            </div>
-          )}
           {showRepeatControl && showRoiGrayControls && (
             <div className="scan-loop-controls__footer">
               <RepeatControl
@@ -622,10 +623,10 @@ export function ScanControls({
           )}
         </select>
       </label>
-      <label
-        className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
-        title={t("scan.preview.title")}
-      >
+          <label
+            className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+            title={t("scan.preview.title")}
+          >
         <input
           type="checkbox"
           checked={preview}
@@ -634,10 +635,10 @@ export function ScanControls({
         />
         {preview && <Icon name="alertTriangle" tone="warn" />}
         <span>{t("scan.preview")}</span>
-      </label>
-      {kind === "vector" && (
-        <span
-          className="scan-busy"
+          </label>
+          {kind === "vector" && (
+            <span
+              className="scan-busy"
           data-visible={busy ? "true" : "false"}
           aria-hidden={!busy}
           title={t("scan.busy.title")}

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
-import { clearROIImage, clearROISelection, streamReset, updateROI, type ROIState } from "../store/scanSlice";
+import {
+  clearROIImage,
+  clearROIScanImage,
+  clearROISelection,
+  streamReset,
+  updateROI,
+  type ROIState,
+} from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
@@ -73,6 +80,8 @@ export function ROIEditor({
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
   const [animatedVectorSamples, setAnimatedVectorSamples] = useState(0);
   const [canvasResetToken, setCanvasResetToken] = useState(0);
+  const liveVectorTargetRef = useRef(0);
+  const capturedLiveVectorKeyRef = useRef<string | null>(null);
   const vectorPhase = useAppSelector((s) => s.scan.phase);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
@@ -91,13 +100,18 @@ export function ROIEditor({
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
   const activeSelection = draft ?? roi.selection;
-  const roiModeLabel = roi.imageKind === "lastScan"
-    ? t("roi.canvasMode.scanPreview")
-    : roi.imageKind === "file"
-    ? t("roi.canvasMode.loadedPreview")
-    : t("roi.canvasMode.selection");
+  const roiModeLabel =
+    roi.scanImageDataUrl !== null
+      ? t("roi.canvasMode.scanPreview")
+      : roi.imageKind === "lastScan"
+      ? t("roi.canvasMode.scanPreview")
+      : roi.imageKind === "file"
+      ? t("roi.canvasMode.loadedPreview")
+      : t("roi.canvasMode.selection");
   const imageSourceLabel =
-    roi.imageKind === "lastScan"
+    roi.scanImageDataUrl !== null
+      ? t("roi.imageSource.lastScan")
+      : roi.imageKind === "lastScan"
       ? t("roi.imageSource.lastScan")
       : roi.imageKind === "file"
       ? t("roi.imageSource.loaded")
@@ -107,9 +121,9 @@ export function ROIEditor({
       ? backgroundImageUrl
       : null;
   const imageSource =
-    roi.imageKind === "lastScan"
+    roi.scanImageDataUrl ?? (roi.imageKind === "lastScan"
       ? backgroundSource ?? roi.imageDataUrl
-      : roi.imageDataUrl ?? backgroundSource;
+      : roi.imageDataUrl ?? backgroundSource);
 
   useEffect(() => {
     if (!imageSource) {
@@ -188,15 +202,79 @@ export function ROIEditor({
   }, [animatedVectorSamples]);
 
   useEffect(() => {
-    if (!liveVectorPreview || vectorPattern !== "custom" || vectorCustomCount <= 0) {
-      setAnimatedVectorSamples(0);
-      animatedVectorSamplesRef.current = 0;
+    if (
+      !liveVectorPreview ||
+      vectorPhase !== "completed" ||
+      vectorPattern !== "custom" ||
+      vectorCustomCount <= 0 ||
+      grayScaleSelection === null ||
+      grayScaleSkipped === null
+    ) {
       return;
     }
 
     const target = Math.max(0, Math.min(vectorCustomCount, targetLiveVectorSamples));
-    const start = animatedVectorSamplesRef.current;
-    if (start === target) return;
+    if (animatedVectorSamplesRef.current < target) {
+      animatedVectorSamplesRef.current = target;
+      setAnimatedVectorSamples(target);
+      return;
+    }
+
+    const captureKey = [
+      vectorCursor,
+      vectorCustomCount,
+      bytesReceived,
+      chunksReceived,
+      grayScaleSelection[0],
+      grayScaleSelection[1],
+      String(grayScaleSkipped),
+    ].join(":");
+    if (capturedLiveVectorKeyRef.current === captureKey) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const base = canvasRef.current;
+      const mask = maskCanvasRef.current;
+      const live = liveCanvasRef.current;
+      if (!base || !mask || !live) return;
+
+      const composed = document.createElement("canvas");
+      composed.width = ROI_CANVAS_EDGE;
+      composed.height = ROI_CANVAS_EDGE;
+      const ctx = composed.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(base, 0, 0);
+      ctx.drawImage(mask, 0, 0);
+      ctx.drawImage(live, 0, 0);
+
+      capturedLiveVectorKeyRef.current = captureKey;
+      dispatch(updateROI({ scanImageDataUrl: composed.toDataURL("image/png") }));
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    liveVectorPreview,
+    vectorPhase,
+    vectorPattern,
+    vectorCustomCount,
+    targetLiveVectorSamples,
+    vectorCursor,
+    bytesReceived,
+    chunksReceived,
+    grayScaleSelection,
+    grayScaleSkipped,
+    dispatch,
+  ]);
+
+  useEffect(() => {
+    if (!liveVectorPreview || vectorPattern !== "custom" || vectorCustomCount <= 0) {
+      setAnimatedVectorSamples(0);
+      animatedVectorSamplesRef.current = 0;
+      liveVectorTargetRef.current = 0;
+      capturedLiveVectorKeyRef.current = null;
+      return;
+    }
+
+    liveVectorTargetRef.current = Math.max(0, Math.min(vectorCustomCount, targetLiveVectorSamples));
 
     let frame = 0;
     let cancelled = false;
@@ -205,6 +283,7 @@ export function ROIEditor({
     function tick(now: number) {
       if (cancelled) return;
       const current = animatedVectorSamplesRef.current;
+      const target = liveVectorTargetRef.current;
       const elapsed = Math.max(16, now - last);
       last = now;
       const remaining = target - current;
@@ -213,16 +292,15 @@ export function ROIEditor({
           animatedVectorSamplesRef.current = target;
           setAnimatedVectorSamples(target);
         }
+        frame = window.requestAnimationFrame(tick);
         return;
       }
 
-      const step = Math.max(1, Math.ceil((vectorCustomCount / 48) * (elapsed / 16)));
+      const step = Math.max(1, Math.ceil((vectorCustomCount / 72) * (elapsed / 16)));
       const next = Math.min(target, current + Math.min(step, remaining));
       animatedVectorSamplesRef.current = next;
       setAnimatedVectorSamples(next);
-      if (next < target) {
-        frame = window.requestAnimationFrame(tick);
-      }
+      frame = window.requestAnimationFrame(tick);
     }
 
     frame = window.requestAnimationFrame(tick);
@@ -377,6 +455,7 @@ export function ROIEditor({
       vectorPattern !== "custom" ||
       !vectorCustomPoints ||
       !roi.selection ||
+      roi.scanImageDataUrl !== null ||
       grayScaleSkipped === null ||
       grayScaleSelection === null
     ) {
@@ -454,7 +533,8 @@ export function ROIEditor({
       ctx.restore();
     }
 
-    const selected = roi.calibration_enabled ? null : draft ?? roi.selection;
+    const hideSelectionOverlay = variant === "canvas" && roi.scanImageDataUrl !== null;
+    const selected = roi.calibration_enabled || hideSelectionOverlay ? null : draft ?? roi.selection;
     if (selected) drawSelection(ctx, selected, roi);
   }
 
@@ -542,6 +622,8 @@ export function ROIEditor({
 
   function clearLoadedImage() {
     clearBitmapSelectionCache();
+    stopAllScanActions();
+    setDraft(null);
     imageRef.current = null;
     promotedBackgroundRef.current = null;
     setSuppressedBackgroundUrl(backgroundImageUrl);
@@ -550,12 +632,17 @@ export function ROIEditor({
     }
     setCanvasResetToken((n) => n + 1);
     dispatch(clearROIImage());
+    dispatch(clearROIScanImage());
+    dispatch(clearROISelection());
+    dispatch(streamReset());
   }
 
   function clearPartialRegion() {
     clearBitmapSelectionCache();
     stopAllScanActions();
     setDraft(null);
+    dispatch(clearROIImage());
+    dispatch(clearROIScanImage());
     dispatch(clearROISelection());
     dispatch(streamReset());
   }
@@ -621,7 +708,7 @@ export function ROIEditor({
             <select
               className="select"
               value={roi.scale_unit}
-              disabled={disabled}
+              disabled
               onChange={(e) => dispatch(updateROI({ scale_unit: e.target.value }))}
             >
               {UNITS.map((u) => (
@@ -636,6 +723,7 @@ export function ROIEditor({
                 <Num
                   labelKey="roi.xOrigin"
                   value={roi.x_origin}
+                  readOnly
                   disabled={disabled}
                   validate={(value) =>
                     value < roi.x_end
@@ -650,6 +738,7 @@ export function ROIEditor({
                 <Num
                   labelKey="roi.xEnd"
                   value={roi.x_end}
+                  readOnly
                   disabled={disabled}
                   validate={(value) =>
                     value > roi.x_origin
@@ -666,6 +755,7 @@ export function ROIEditor({
                 <Num
                   labelKey="roi.yOrigin"
                   value={roi.y_origin}
+                  readOnly
                   disabled={disabled}
                   validate={(value) =>
                     value < roi.y_end
@@ -680,6 +770,7 @@ export function ROIEditor({
                 <Num
                   labelKey="roi.yEnd"
                   value={roi.y_end}
+                  readOnly
                   disabled={disabled}
                   validate={(value) =>
                     value > roi.y_origin
@@ -697,7 +788,7 @@ export function ROIEditor({
                 <CoordinateField
                   labelKey="roi.start"
                   value={selectionStart(roi)}
-                  disabled={disabled}
+                  disabled
                   validate={(p) => validateStartPoint(p, roi, tr)}
                   onChange={(p) => {
                     const end = selectionEnd(roi);
@@ -717,7 +808,7 @@ export function ROIEditor({
                 <CoordinateField
                   labelKey="roi.end"
                   value={selectionEnd(roi)}
-                  disabled={disabled}
+                  disabled
                   validate={(p) => validateEndPoint(p, roi, tr)}
                   onChange={(p) => {
                     const start = selectionStart(roi);
@@ -861,7 +952,7 @@ export function ROIEditor({
                   style={{ left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%`, width: `${draftBounds.width / ROI_CANVAS_EDGE * 100}%` }}
                 />
                 <button
-                  className="roi-calibration-handle roi-calibration-handle--top"
+                  className="roi-calibration-handle roi-calibration-handle--top roi-calibration-handle--blink"
                   style={{ left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%` }}
                   disabled={disabled}
                   onPointerDown={(event) => {
@@ -877,7 +968,7 @@ export function ROIEditor({
                   {formatDimensionValue(calibrationXValueAt(roi, draftBounds.left), roi.scale_unit)}
                 </span>
                 <button
-                  className="roi-calibration-handle roi-calibration-handle--top roi-calibration-handle--end"
+                  className="roi-calibration-handle roi-calibration-handle--top roi-calibration-handle--end roi-calibration-handle--blink"
                   style={{ left: `${draftBounds.right / ROI_CANVAS_EDGE * 100}%` }}
                   disabled={disabled}
                   onPointerDown={(event) => {
@@ -899,7 +990,7 @@ export function ROIEditor({
                   style={{ top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%`, height: `${draftBounds.height / ROI_CANVAS_EDGE * 100}%` }}
                 />
                 <button
-                  className="roi-calibration-handle roi-calibration-handle--left"
+                  className="roi-calibration-handle roi-calibration-handle--left roi-calibration-handle--blink"
                   style={{ top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%` }}
                   disabled={disabled}
                   onPointerDown={(event) => {
@@ -915,7 +1006,7 @@ export function ROIEditor({
                   {formatDimensionValue(calibrationYValueAt(roi, draftBounds.top), roi.scale_unit)}
                 </span>
                 <button
-                  className="roi-calibration-handle roi-calibration-handle--left roi-calibration-handle--end"
+                  className="roi-calibration-handle roi-calibration-handle--left roi-calibration-handle--end roi-calibration-handle--blink"
                   style={{ top: `${draftBounds.bottom / ROI_CANVAS_EDGE * 100}%` }}
                   disabled={disabled}
                   onPointerDown={(event) => {
@@ -1083,6 +1174,7 @@ function tintPixel(
 function Num(props: {
   labelKey: TranslationKey;
   value: number;
+  readOnly?: boolean;
   disabled: boolean;
   validate: (value: number) => string | null;
   onChange: (v: number) => void;
@@ -1127,7 +1219,8 @@ function Num(props: {
       <NumberStepperInput
         value={text}
         step={0.1}
-        disabled={props.disabled}
+        disabled={props.disabled || props.readOnly === true}
+        readOnly={props.readOnly}
         invalid={Boolean(warning)}
         inputMode="decimal"
         onValueChange={commit}

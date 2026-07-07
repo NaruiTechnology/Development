@@ -8,7 +8,7 @@ import { ROI_CANVAS_EDGE, viewportBounds, worldToCanvasX, worldToCanvasY } from 
 export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: string | null }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
-  const imageSource = roi.imageDataUrl ?? backgroundImageUrl;
+  const imageSource = roi.scanImageDataUrl ?? roi.imageDataUrl ?? backgroundImageUrl;
 
   useEffect(() => {
     let cancelled = false;

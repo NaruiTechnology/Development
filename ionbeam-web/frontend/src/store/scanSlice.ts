@@ -92,6 +92,7 @@ export interface ROIState {
   imageName: string;
   imageDataUrl: string | null;
   imageKind: "none" | "file" | "lastScan";
+  scanImageDataUrl: string | null;
 }
 
 const defaultRaster: RasterRequest = {
@@ -156,6 +157,7 @@ const initialState: ScanState = {
     imageName: "No image selected",
     imageDataUrl: null,
     imageKind: "none",
+    scanImageDataUrl: null,
   },
   beamEnergyEv: 1000.0,
   roiGrayScaleSelection: null,
@@ -487,12 +489,16 @@ const slice = createSlice({
       s.roi.imageDataUrl = null;
       s.roi.imageKind = "none";
     },
+    clearROIScanImage(s) {
+      s.roi.scanImageDataUrl = null;
+    },
     clearROISelection(s) {
       s.roi.selection = null;
       s.raster.roi = null;
       s.vector.roi = null;
       s.roiGrayScaleSelection = null;
       s.roiGrayScaleSkipped = null;
+      s.roi.scanImageDataUrl = null;
     },
     clearLastResult(s) {
       s.lastResult = null;
@@ -623,6 +629,7 @@ export const {
   beginROICalibration,
   confirmROICalibration,
   clearROIImage,
+  clearROIScanImage,
   clearROISelection,
   setROIGrayScaleSelection,
   clearLastResult,
