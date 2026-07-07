@@ -349,6 +349,16 @@ body {
   overflow: hidden;
 }
 
+.scan-panel-card {
+  transition: border-color 160ms ease, border-width 160ms ease, color 160ms ease;
+}
+
+.scan-panel-card--active {
+  border-color: color-mix(in srgb, var(--scan-panel-active-color) 80%, transparent);
+  border-width: 1px;
+  color: color-mix(in srgb, var(--scan-panel-active-color) 80%, var(--c-text));
+}
+
 .card + .card { margin-top: 16px; }
 
 .card__header {
@@ -2206,6 +2216,35 @@ body {
 
 .segmented__btn:hover:not([aria-pressed="true"]) {
   color: var(--c-text);
+}
+
+.canvas-view-row {
+  align-items: center;
+}
+
+.canvas-view-row__editor-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.canvas-view-row__stride-note {
+  flex: 0 0 auto;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.canvas-view-row__editor-inline .canvas-toolbox {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.canvas-view-row__editor-inline .canvas-toolbox__hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- status pill ---------------------------------------------- */

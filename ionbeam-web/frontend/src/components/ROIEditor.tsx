@@ -554,8 +554,7 @@ export function ROIEditor({
       ctx.restore();
     }
 
-    const hideSelectionOverlay = variant === "canvas" && roi.scanImageDataUrl !== null;
-    const selected = roi.calibration_enabled || hideSelectionOverlay ? null : draft ?? roi.selection;
+    const selected = roi.calibration_enabled ? null : draft ?? roi.selection;
     if (selected) drawSelection(ctx, selected, roi);
   }
 

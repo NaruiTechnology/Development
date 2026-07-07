@@ -19,6 +19,7 @@ import type { ROIRequest, VectorPoint, VectorPointTuple } from "../types/api";
  */
 
 export type VectorPattern = "default" | "custom";
+export type VectorSource = "vector" | "roi";
 
 interface ImageState {
   // ---------- raster -----------------------------------------------------
@@ -28,6 +29,7 @@ interface ImageState {
 
   // ---------- vector -----------------------------------------------------
   vectorPattern: VectorPattern;
+  vectorSource: VectorSource;
   /** Edge length of the square render target. 2048 matches the default
    *  sweep and the FPGA DAC range. */
   vectorEdge: number;
@@ -59,6 +61,7 @@ const initialState: ImageState = {
   frame: new Uint16Array(RES * RES),
 
   vectorPattern: "default",
+  vectorSource: "vector",
   vectorEdge: VEC_EDGE,
   vectorImage: new Uint16Array(VEC_EDGE * VEC_EDGE),
   vectorCustomPoints: null,
@@ -117,6 +120,7 @@ const slice = createSlice({
       const pattern = a.payload.pattern;
       const edge = a.payload.edge ?? VEC_EDGE;
       state.vectorPattern = pattern;
+      state.vectorSource = a.payload.roi ? "roi" : "vector";
       state.vectorEdge = edge;
       state.vectorImage = new Uint16Array(edge * edge);
       state.vectorCursor = 0;

@@ -151,10 +151,9 @@ export function ImageCanvas({
   const vectorCustomSpotMask = useAppSelector((s) => s.image.vectorCustomSpotMask);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
+  const vectorSource = useAppSelector((s) => s.image.vectorSource);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
-  const roiGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
-  const roiGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const roi = useAppSelector((s) => s.scan.roi);
   const theme = useAppSelector((s) => s.theme.theme);
 
@@ -164,9 +163,10 @@ export function ImageCanvas({
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
   const hasPaintedCanvasImage = stats.populated > 0;
-  const showServerFigure = phase === "completed";
+  const showServerFigure = phase === "completed" && (kind !== "vector" || vectorSource === "vector");
   const hasLiveCanvasData =
-    kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
+    kind === "raster" ? cursor > 0 : kind === "vector" ? vectorSource === "vector" && vectorCursor > 0 : false;
+  const visibleVectorCursor = kind === "vector" && vectorSource !== "vector" ? 0 : vectorCursor;
   const hasRenderedCanvasImage =
     hasPaintedCanvasImage || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
   const editorEnabled = phase === "completed" && hasRenderedCanvasImage;
@@ -184,14 +184,10 @@ export function ImageCanvas({
   const vectorGraySpotSelection =
     kind === "vector" && vectorGrayScaleSelection !== null
       ? vectorGrayScaleSelection
-      : kind === "vector" && roiGrayScaleSelection !== null
-      ? roiGrayScaleSelection
       : null;
   const vectorGraySpotSkipped =
     kind === "vector" && vectorGrayScaleSelection !== null
       ? vectorGrayScaleSkipped
-      : kind === "vector" && roiGrayScaleSelection !== null
-      ? roiGrayScaleSkipped
       : null;
   const vectorGraySpotColor =
     kind === "vector" && vectorGrayScaleSelection !== null
@@ -216,6 +212,9 @@ export function ImageCanvas({
     if (kind === "raster") {
       const s = paintGrayscale(canvas, frame, resolution, cursor);
       setStats(s);
+    } else if (kind === "vector" && vectorSource !== "vector") {
+      clearCanvas(canvas);
+      setStats({ min: 0, max: 0, populated: 0 });
     } else if (kind === "vector" && vectorPattern === "default" && renderMode === "native" && vectorEdge < DAC_RANGE) {
       const s = paintVectorDefaultBlockFill(
         canvas,
@@ -402,7 +401,11 @@ export function ImageCanvas({
 
   const totalRasterPx = resolution * resolution;
   const totalVectorSamples =
-    vectorPattern === "default" ? vectorEdge * vectorEdge : vectorCustomCount;
+    kind === "vector" && vectorSource !== "vector"
+      ? 0
+      : vectorPattern === "default"
+      ? vectorEdge * vectorEdge
+      : vectorCustomCount;
   const activeRegion = activeROIRegion(roi);
   const current = currentBeamPosition({
     kind,
@@ -413,7 +416,7 @@ export function ImageCanvas({
     rasterCursor: cursor,
     vectorImage,
     vectorEdge,
-    vectorCursor,
+    vectorCursor: visibleVectorCursor,
     vectorPattern,
     vectorCustomPoints,
     vectorCustomRenderPoints,
@@ -423,7 +426,7 @@ export function ImageCanvas({
     kind === "raster" && totalRasterPx > 0
       ? Math.min(100, (cursor / totalRasterPx) * 100)
       : kind === "vector" && totalVectorSamples > 0
-      ? Math.min(100, (vectorCursor / totalVectorSamples) * 100)
+      ? Math.min(100, (visibleVectorCursor / totalVectorSamples) * 100)
       : phase === "completed"
       ? 100
       : 0;
@@ -821,7 +824,7 @@ export function ImageCanvas({
       )}
 
       {showModeToggle && (
-        <div className="row" style={{ marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
+        <div className="row canvas-view-row" style={{ marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
           <span className="card__title" id="render-mode-label">
             {t("canvas.view")}
             <CanvasViewHelp />
@@ -858,12 +861,14 @@ export function ImageCanvas({
               </button>
             ))}
           </div>
-          {vectorEdge === DAC_RANGE && (
-            <span className="muted" style={{ fontSize: 11 }}>
-              {t("canvas.view.identical")}
-            </span>
-          )}
-          {toolbar}
+          <span className="canvas-view-row__editor-inline">
+            {vectorEdge === DAC_RANGE && (
+              <span className="muted canvas-view-row__stride-note">
+                {t("canvas.view.identical")}
+              </span>
+            )}
+            {toolbar}
+          </span>
         </div>
       )}
 
@@ -1130,7 +1135,7 @@ export function ImageCanvas({
             <span>
               {t("canvas.meta.samples")}{" "}
               <b>
-                {fmt(vectorCursor)}
+                {fmt(visibleVectorCursor)}
                 {totalVectorSamples > 0
                   ? ` / ${fmt(totalVectorSamples)}`
                   : ""}
@@ -1201,6 +1206,12 @@ interface CurrentBeamPosition {
   x: number;
   y: number;
   adc: number;
+}
+
+function clearCanvas(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function activeROIRegion(roi: ROIState): ROIRequest {

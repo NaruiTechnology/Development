@@ -79,6 +79,7 @@ import {
   setDraft,
   writePath,
 } from "./store/settingsSlice";
+import { SCAN_TYPE_COLORS, type ScanType } from "./types/scanType";
 
 const RIGHT_PANEL_STORAGE_KEY = "ionbeam:rightPanelWidth";
 const DEFAULT_RIGHT_PANEL_WIDTH = 400;
@@ -137,6 +138,7 @@ export function App() {
   const [roiActionLocked, setROIActionLocked] = useState(false);
   const [roiActionCanvasVisible, setROIActionCanvasVisible] = useState(false);
   const [roiGraySelectionResetToken, setROIGraySelectionResetToken] = useState(0);
+  const [activeScanType, setActiveScanType] = useState<ScanType | null>(null);
   const [mergedFigureByKind, setMergedFigureByKind] = useState<{
     raster: string | null;
     vector: string | null;
@@ -376,6 +378,11 @@ export function App() {
       setROIActionCanvasVisible(false);
     }
   }, [phase, roiState.selection]);
+
+  useEffect(() => {
+    if (phase === "running" || phase === "stopping") return;
+    setActiveScanType(null);
+  }, [phase]);
 
   useEffect(() => {
     if (kind !== "roi") return;
@@ -709,10 +716,6 @@ export function App() {
 
     if (nextScanKind && (currentScanKind === null || currentScanKind !== nextScanKind)) {
       dispatch(streamReset());
-      dispatch(resetRaster({ resolution: rasterResolution }));
-      dispatch(resetVector());
-      setLastLiveScanImage(null);
-      setMergedFigureByKind({ raster: null, vector: null });
     }
 
     dispatch(setKind(nextKind));
@@ -777,6 +780,12 @@ export function App() {
   const layoutStyle = {
     "--right-panel-width": `${Math.round(rightPanelWidth)}px`,
   } as CSSProperties;
+  const activeScanColor = activeScanType ? SCAN_TYPE_COLORS[activeScanType] : null;
+  const scanPanelStyle = activeScanColor
+    ? ({
+        "--scan-panel-active-color": activeScanColor,
+      } as CSSProperties)
+    : undefined;
 
   // The image-panel title key flips with the active tab. Picking it
   // up front rather than inline below means the JSX stays readable.
@@ -834,7 +843,10 @@ export function App() {
       >
         {/* left column */}
         <section>
-          <div className="card">
+          <div
+            className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
+            style={scanPanelStyle}
+          >
             <div className="tabs tabs--top" role="tablist" aria-label={t("tabs.top.aria")}>
               <button
                 role="tab"
@@ -944,6 +956,7 @@ export function App() {
                           vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
                           vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
                           roiAction
+                          onScanRunStart={setActiveScanType}
                           onActionRunStart={() => {
                             setROIActionLocked(true);
                             setROIActionCanvasVisible(true);
@@ -987,7 +1000,10 @@ export function App() {
 
           {showROIActionControls && kind !== "roi" && (
             <>
-              <div className="card">
+              <div
+                className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
+                style={scanPanelStyle}
+              >
                 <div className="card__header">
                   <span className="card__title">{t("card.controls")}</span>
                 </div>
@@ -1001,6 +1017,7 @@ export function App() {
                     showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
                     vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
                     vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                    onScanRunStart={setActiveScanType}
                   />
                 </div>
               </div>

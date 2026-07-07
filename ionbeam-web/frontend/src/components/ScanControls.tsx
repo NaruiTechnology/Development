@@ -33,6 +33,8 @@ import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import type { VectorRequest } from "../types/api";
+import { ScanType } from "../types/scanType";
+import type { ROIState } from "../store/scanSlice";
 
 interface EquipmentOption {
   id: number | null;
@@ -56,6 +58,13 @@ interface CurrentAccountResponse {
   error?: string;
 }
 
+function withoutPartialROISelection(roiState: ROIState): ROIState {
+  return {
+    ...roiState,
+    selection: null,
+  };
+}
+
 export function ScanControls({
   kind,
   disabled = false,
@@ -67,6 +76,7 @@ export function ScanControls({
   vectorGrayScaleSelection = null,
   vectorGrayScaleSkipped = null,
   onActionRunStart,
+  onScanRunStart,
 }: {
   kind: ScanKind;
   disabled?: boolean;
@@ -78,6 +88,7 @@ export function ScanControls({
   vectorGrayScaleSelection?: [number, number] | null;
   vectorGrayScaleSkipped?: boolean | null;
   onActionRunStart?: () => void;
+  onScanRunStart?: (scanType: ScanType) => void;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -96,7 +107,7 @@ export function ScanControls({
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
   const actionLoopTimerRef = useRef<number | null>(null);
-  const actionLoopRequestRef = useRef<{ req: VectorRequest; preview: boolean } | null>(null);
+  const actionLoopRequestRef = useRef<{ req: VectorRequest; preview: boolean; scanType: ScanType } | null>(null);
   const actionLoopRemainingRef = useRef(0);
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
@@ -123,10 +134,8 @@ export function ScanControls({
     kind === "vector" && vectorGrayScaleSelection !== null ? vectorGrayScaleSelection : null;
   const activeVectorGrayScaleSkipped =
     kind === "vector" && vectorGrayScaleSkipped !== null ? vectorGrayScaleSkipped : null;
-  const scanGrayScaleSelection =
-    activeVectorGrayScaleSelection ?? roiGrayScaleSelection;
-  const scanGrayScaleSkipped =
-    activeVectorGrayScaleSkipped ?? roiGrayScaleSkipped;
+  const scanGrayScaleSelection = roiAction ? roiGrayScaleSelection : activeVectorGrayScaleSelection;
+  const scanGrayScaleSkipped = roiAction ? roiGrayScaleSkipped : activeVectorGrayScaleSkipped;
   const roiActionGrayFilterActive =
     roiAction &&
     roiGrayScaleSelection !== null &&
@@ -160,6 +169,11 @@ export function ScanControls({
     return "bitmap_selection";
   };
 
+  const resolveVectorScanType = (req: VectorRequest): ScanType =>
+    req.feedback_mode === "adaptive_gray_feedback"
+      ? ScanType.VECTOR_ADAPTIVE_GRAN_FEED_BLANK
+      : ScanType.VECTOR;
+
   const buildVectorRequest = useCallback(async () => {
     console.info("[scan/vector] adaptive gate", {
       vectorPixelFallbackBlank,
@@ -170,8 +184,8 @@ export function ScanControls({
     });
     if (vectorPixelFallbackBlank && scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null) {
       return vectorRequestWithAdaptiveGrayFeedback(
-        { ...vector, roi },
-        roiState,
+        { ...vector, roi: null },
+        withoutPartialROISelection(roiState),
         {
           grayScaleSelection: scanGrayScaleSelection,
           grayScaleSkipped: scanGrayScaleSkipped,
@@ -179,8 +193,8 @@ export function ScanControls({
       );
     }
     return vectorRequestWithBitmapSelection(
-      { ...vector, roi },
-      roiState,
+      { ...vector, roi: null },
+      withoutPartialROISelection(roiState),
       {
         isProduction,
         allowBitmapSimulation,
@@ -226,9 +240,9 @@ export function ScanControls({
     setActionLoopActive(false);
   }, [clearActionLoopTimer]);
 
-  const startActionLoop = useCallback((req: VectorRequest) => {
+  const startActionLoop = useCallback((req: VectorRequest, scanType: ScanType) => {
     clearActionLoopState();
-    actionLoopRequestRef.current = { req, preview };
+    actionLoopRequestRef.current = { req, preview, scanType };
     actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
     actionLoopIterationRef.current = actionLoopRemainingRef.current;
     setActionLoopIteration(actionLoopIterationRef.current);
@@ -251,9 +265,10 @@ export function ScanControls({
         return;
       }
       dispatch(bumpRevision());
+      onScanRunStart?.(entry.scanType);
       stream.startVector({ ...entry.req, preview: entry.preview });
     }, actionLoopGapMs);
-  }, [actionLoopGapMs, clearActionLoopTimer, dispatch, stream]);
+  }, [actionLoopGapMs, clearActionLoopTimer, dispatch, onScanRunStart, stream]);
 
   async function onRun() {
     if (disabled || (kind === "roi" && !roiAction)) return;
@@ -278,11 +293,12 @@ export function ScanControls({
             }
           );
           if (Math.trunc(repeat) > 1) {
-            startActionLoop(req);
+            startActionLoop(req, ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
           } else {
             clearActionLoopState();
           }
           onActionRunStart?.();
+          onScanRunStart?.(ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
           stream.startVector({ ...req, preview });
         } else {
           const req = await rasterRequestWithBitmapSelection(
@@ -297,6 +313,7 @@ export function ScanControls({
           );
           clearActionLoopState();
           onActionRunStart?.();
+          onScanRunStart?.(ScanType.CUSTOM_RASTER);
           stream.startRaster({ ...req, preview });
         }
       } catch (e: any) {
@@ -307,8 +324,8 @@ export function ScanControls({
     if (kind === "raster") {
       try {
         const req = await rasterRequestWithBitmapSelection(
-          { ...raster, roi },
-          roiState,
+          { ...raster, roi: null },
+          withoutPartialROISelection(roiState),
           {
             isProduction,
             allowBitmapSimulation,
@@ -316,6 +333,7 @@ export function ScanControls({
             grayScaleSkipped: scanGrayScaleSkipped,
           }
         );
+        onScanRunStart?.(ScanType.RASTER);
         stream.startRaster({ ...req, preview });
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -328,11 +346,13 @@ export function ScanControls({
           req,
           resolveVectorBranch(req),
         );
+        const scanType = resolveVectorScanType(req);
         if (Math.trunc(repeat) > 1) {
-          startActionLoop(req);
+          startActionLoop(req, scanType);
         } else {
           clearActionLoopState();
         }
+        onScanRunStart?.(scanType);
         stream.startVector({ ...req, preview });
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -363,8 +383,8 @@ export function ScanControls({
           {
             isProduction,
             allowBitmapSimulation,
-            grayScaleSelection: roiGrayScaleSelection,
-            grayScaleSkipped: roiGrayScaleSkipped,
+            grayScaleSelection: null,
+            grayScaleSkipped: null,
           }
         );
         const promise = dispatch(runRasterValidated({ ...req, preview }));
