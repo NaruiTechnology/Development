@@ -91,9 +91,7 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
           min={128}
           max={2048}
           disabled={disabled}
-          onChange={() => {
-            /* locked while ROI gray action is active */
-          }}
+          onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
         />
         <PresetNumberField
           label={
@@ -107,9 +105,7 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
           min={16}
           max={65535}
           disabled={disabled}
-          onChange={() => {
-            /* locked while ROI gray action is active */
-          }}
+          onChange={(value) => dispatch(updateVector({ dwell: Math.max(16, value) }))}
         />
       </div>
 
@@ -119,14 +115,21 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
             {t("vector.latencyBytes")}
             <LatencyHelp />
           </label>
-          <NumberStepperInput value={vector.latency_bytes} min={2} step={1} inputMode="numeric" disabled={disabled} onValueChange={() => undefined} />
+          <NumberStepperInput
+            value={vector.latency_bytes}
+            min={FORCED_LATENCY_BYTES}
+            step={1}
+            inputMode="numeric"
+            disabled
+            onValueChange={() => undefined}
+          />
         </div>
         <div className="field">
           <label>
             {t("vector.outputMode")}
             <OutputModeHelp />
           </label>
-          <select className="select" value={vector.output_mode} disabled={disabled} onChange={() => undefined}>
+          <select className="select" value={vector.output_mode} disabled onChange={() => undefined}>
             <option value="SixteenBit">SixteenBit</option>
             <option value="EightBit">EightBit</option>
           </select>
@@ -139,7 +142,7 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
             {t("vector.cookie")}
             <CookieHelp />
           </label>
-          <NumberStepperInput value={vector.cookie} min={0} max={0xffff} step={1} inputMode="numeric" disabled={disabled} onValueChange={() => undefined} />
+          <NumberStepperInput value={vector.cookie} min={0} max={0xffff} step={1} inputMode="numeric" disabled onValueChange={() => undefined} />
         </div>
         <label
           className="checkbox checkbox--disabled"

@@ -92,6 +92,7 @@ export function VectorParameters({
     label: t(`vector.resolution.option.${value}` as const),
   }));
   const dwellMin = grayLevelFilterActive ? 16 : 1;
+  const latencyMin = grayLevelFilterActive ? 8196 : 2;
   const dwellOptions = VECTOR_DWELL_OPTIONS.filter((option) => option.value >= dwellMin);
   const resolutionTitle =
     v.vector_resolution === 2048
@@ -119,7 +120,7 @@ export function VectorParameters({
         <select
           className="select"
           value={v.pattern}
-          disabled={disabled}
+          disabled={disabled || grayLevelFilterActive}
           onChange={(e) =>
             dispatch(
               updateVector({ pattern: e.target.value as "default" | "custom" })
@@ -176,14 +177,14 @@ export function VectorParameters({
           </label>
           <NumberStepperInput
             value={v.latency_bytes}
-            min={2}
+            min={latencyMin}
             step={1}
             inputMode="numeric"
-            disabled={disabled}
+            disabled={disabled || grayLevelFilterActive}
             onValueChange={(next) =>
               dispatch(
                 updateVector({
-                  latency_bytes: clamp(next, 2, 1 << 20, 8196),
+                  latency_bytes: clamp(next, latencyMin, 1 << 20, 8196),
                 })
               )
             }
@@ -197,7 +198,7 @@ export function VectorParameters({
           <select
             className="select"
             value={v.output_mode}
-            disabled={disabled}
+            disabled={disabled || grayLevelFilterActive}
             onChange={(e) =>
               dispatch(
                 updateVector({

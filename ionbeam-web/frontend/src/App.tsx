@@ -107,6 +107,7 @@ export function App() {
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const vectorDwell = useAppSelector((s) => s.scan.vector.dwell);
+  const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
   const roiState = useAppSelector((s) => s.scan.roi);
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
@@ -640,7 +641,17 @@ export function App() {
       const nextSkipped = true;
       setVectorGrayRange(defaultRange);
       setVectorGrayScaleSkipped(nextSkipped);
-      dispatch(updateVector({ vector_resolution: 128, output_mode: "SixteenBit", dwell: 16 }));
+      dispatch(
+        updateVector({
+          pattern: "default",
+          points: null,
+          vector_resolution: 128,
+          output_mode: "SixteenBit",
+          dwell: 16,
+          latency_bytes: 8196,
+          pre_process: true,
+        })
+      );
       return;
     }
     setVectorGrayRange([0, 255]);
@@ -668,8 +679,20 @@ export function App() {
   }, [dispatch, vectorDwell, vectorGrayLevelsEnabled]);
 
   useEffect(() => {
+    if (!vectorGrayLevelsEnabled || vectorLatencyBytes >= 8196) return;
+    dispatch(updateVector({ latency_bytes: 8196 }));
+  }, [dispatch, vectorGrayLevelsEnabled, vectorLatencyBytes]);
+
+  useEffect(() => {
     if (!vectorGrayLevelsEnabled) return;
-    dispatch(updateVector({ pre_process: true }));
+    dispatch(
+      updateVector({
+        pattern: "default",
+        points: null,
+        output_mode: "SixteenBit",
+        pre_process: true,
+      })
+    );
   }, [dispatch, vectorGrayLevelsEnabled]);
 
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
