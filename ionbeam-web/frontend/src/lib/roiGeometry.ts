@@ -73,8 +73,8 @@ export function canvasPointToWorld(
   roi: Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end">,
   bounds: ViewportBounds
 ): { x: number; y: number } {
-  const x = Math.round(lerp(roi.x_origin, roi.x_end, normalize(point.x, bounds.left, bounds.right)));
-  const y = Math.round(lerp(roi.y_origin, roi.y_end, normalize(point.y, bounds.top, bounds.bottom)));
+  const x = lerp(roi.x_origin, roi.x_end, normalize(point.x, bounds.left, bounds.right));
+  const y = lerp(roi.y_origin, roi.y_end, normalize(point.y, bounds.top, bounds.bottom));
   return { x, y };
 }
 

@@ -824,7 +824,7 @@ body {
   top: 11px;
   left: 50%;
   transform: translateX(-50%);
-  color: gray;
+  color: white;
   font-family: var(--font-mono);
   font-size: 10px;
   font-style: normal;
@@ -3031,6 +3031,11 @@ body {
   z-index: 0;
 }
 
+.roi-canvas-layer--base-canvas {
+  z-index: 0;
+  pointer-events: none;
+}
+
 .roi-canvas-layer--mask {
   z-index: 1;
   pointer-events: none;
@@ -3046,12 +3051,72 @@ body {
   pointer-events: none;
 }
 
+.roi-selection-hint {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  background: transparent;
+  color: silver;
+  border: 1px solid dimgray;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+  opacity: 0.85;
+}
+
 .roi-canvas-layer.is-disabled {
   cursor: not-allowed;
 }
 
 .roi-canvas-wrap--calibrating .roi-canvas-layer {
   cursor: default;
+}
+
+.roi-canvas-layer--ctrl-cursor {
+  cursor: none;
+}
+
+.roi-corner-cursor {
+  position: absolute;
+  z-index: 5;
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.roi-corner-cursor[data-captured="true"] {
+  border-color: lawngreen;
+  background: lawngreen;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 0 10px rgba(124, 252, 0, 0.75);
+}
+
+.roi-corner-handle {
+  position: absolute;
+  z-index: 4;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  appearance: none;
+  cursor: crosshair;
+}
+
+.roi-corner-handle[data-captured="true"] {
+  opacity: 0;
 }
 
 .roi-canvas-viewport {

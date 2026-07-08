@@ -29,6 +29,7 @@ import { Icon } from "./Icon";
 import { NumberStepperInput } from "./NumberStepperField";
 
 type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
+type ROISelectionCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 const UNITS = [
   { value: "um", label: "μm" },
@@ -38,6 +39,7 @@ const UNITS = [
 ];
 
 const ROI_DRAG_THRESHOLD = 8;
+const ROI_CORNER_DRAG_THRESHOLD = 18;
 
 export function ROIEditor({
   disabled,
@@ -74,10 +76,18 @@ export function ROIEditor({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const resizeCornerRef = useRef<ROISelectionCorner | null>(null);
+  const resizeSelectionRef = useRef<ROIRequest | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
   const promotedBackgroundRef = useRef<string | null>(null);
   const animatedVectorSamplesRef = useRef(0);
   const [draft, setDraft] = useState<ROIRequest | null>(null);
+  const [resizeTrace, setResizeTrace] = useState<{
+    corner: ROISelectionCorner;
+    point: { x: number; y: number };
+  } | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [ctrlCursor, setCtrlCursor] = useState<{ x: number; y: number; captured: boolean } | null>(null);
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
   const [animatedVectorSamples, setAnimatedVectorSamples] = useState(0);
@@ -179,6 +189,22 @@ export function ROIEditor({
   }, [backgroundImageUrl, canvasResetToken, dispatch, imageSource, t, vectorPhase]);
 
   useEffect(() => {
+    function onKeyUp(event: KeyboardEvent) {
+      if (event.key !== "Control") return;
+      resizeCleanupRef.current?.();
+      resizeCleanupRef.current = null;
+      setResizeTrace(null);
+      setCtrlCursor(null);
+      if (!resizeCornerRef.current) {
+        resizeSelectionRef.current = null;
+      }
+    }
+
+    window.addEventListener("keyup", onKeyUp);
+    return () => window.removeEventListener("keyup", onKeyUp);
+  }, []);
+
+  useEffect(() => {
     drawBaseCanvas();
     drawHighlightMask();
     drawLiveVectorOverlay();
@@ -198,6 +224,7 @@ export function ROIEditor({
     animatedVectorSamples,
     bytesReceived,
     chunksReceived,
+    resizeTrace,
   ]);
 
   useEffect(() => {
@@ -372,14 +399,22 @@ export function ROIEditor({
     reader.readAsDataURL(file);
   }
 
-  function canvasPoint(e: React.PointerEvent<HTMLCanvasElement>) {
+  function canvasPointFromClient(clientX: number, clientY: number, clampToSelection = true) {
     const canvas = canvasRef.current!;
     const r = canvas.getBoundingClientRect();
     const raw = {
-      x: clampViewportCoordinate(((e.clientX - r.left) / r.width) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
-      y: clampViewportCoordinate(((e.clientY - r.top) / r.height) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
+      x: clampViewportCoordinate(((clientX - r.left) / r.width) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
+      y: clampViewportCoordinate(((clientY - r.top) / r.height) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
     };
-    return clampCanvasPointToViewport(raw, viewportBounds(roi));
+    return clampToSelection ? clampCanvasPointToViewport(raw, viewportBounds(roi)) : raw;
+  }
+
+  function canvasPoint(e: React.PointerEvent<HTMLElement>) {
+    return canvasPointFromClient(e.clientX, e.clientY, true);
+  }
+
+  function rawCanvasPoint(e: React.PointerEvent<HTMLElement>) {
+    return canvasPointFromClient(e.clientX, e.clientY, false);
   }
 
   function toDut(point: { x: number; y: number }) {
@@ -394,6 +429,135 @@ export function ROIEditor({
       x_end: Math.max(p0.x, p1.x),
       y_start: Math.min(p0.y, p1.y),
       y_end: Math.max(p0.y, p1.y),
+    };
+  }
+
+  function selectionCornerAt(point: { x: number; y: number }): ROISelectionCorner | null {
+    const selected = roi.selection;
+    if (!selected) return null;
+    const bounds = viewportBounds(roi);
+    const x0 = worldToCanvasX(selected.x_start, roi, bounds);
+    const x1 = worldToCanvasX(selected.x_end, roi, bounds);
+    const y0 = worldToCanvasY(selected.y_start, roi, bounds);
+    const y1 = worldToCanvasY(selected.y_end, roi, bounds);
+    const corners: Array<{ corner: ROISelectionCorner; x: number; y: number }> = [
+      { corner: "top-left", x: x0, y: y0 },
+      { corner: "top-right", x: x1, y: y0 },
+      { corner: "bottom-left", x: x0, y: y1 },
+      { corner: "bottom-right", x: x1, y: y1 },
+    ];
+    let nearest: ROISelectionCorner | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const item of corners) {
+      const distance = Math.hypot(point.x - item.x, point.y - item.y);
+      if (distance < nearestDistance) {
+        nearest = item.corner;
+        nearestDistance = distance;
+      }
+    }
+    return nearestDistance <= ROI_CORNER_DRAG_THRESHOLD ? nearest : null;
+  }
+
+  function cornerCanvasPoint(corner: ROISelectionCorner): { x: number; y: number } | null {
+    const selected = resizeSelectionRef.current ?? roi.selection;
+    if (!selected) return null;
+    const bounds = viewportBounds(roi);
+    const trace = resizeTrace?.corner === corner ? resizeTrace.point : null;
+    switch (corner) {
+      case "top-left":
+        return {
+          x: trace ? trace.x : worldToCanvasX(selected.x_start, roi, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_start, roi, bounds),
+        };
+      case "top-right":
+        return {
+          x: trace ? trace.x : worldToCanvasX(selected.x_end, roi, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_start, roi, bounds),
+        };
+      case "bottom-left":
+        return {
+          x: trace ? trace.x : worldToCanvasX(selected.x_start, roi, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_end, roi, bounds),
+        };
+      case "bottom-right":
+        return {
+          x: trace ? trace.x : worldToCanvasX(selected.x_end, roi, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_end, roi, bounds),
+        };
+    }
+  }
+
+  function rectFromCornerDrag(corner: ROISelectionCorner, point: { x: number; y: number }): ROIRequest | null {
+    const selected = resizeSelectionRef.current ?? roi.selection;
+    if (!selected) return null;
+    const moving = toDut(point);
+    const fixed = {
+      "top-left": { x: selected.x_end, y: selected.y_end },
+      "top-right": { x: selected.x_start, y: selected.y_end },
+      "bottom-left": { x: selected.x_end, y: selected.y_start },
+      "bottom-right": { x: selected.x_start, y: selected.y_start },
+    } satisfies Record<ROISelectionCorner, { x: number; y: number }>;
+    return {
+      x_start: Math.min(fixed[corner].x, moving.x),
+      x_end: Math.max(fixed[corner].x, moving.x),
+      y_start: Math.min(fixed[corner].y, moving.y),
+      y_end: Math.max(fixed[corner].y, moving.y),
+    };
+  }
+
+  function beginCornerResize(
+    corner: ROISelectionCorner,
+    event: React.PointerEvent<HTMLElement>
+  ) {
+    if (disabled || roi.calibration_enabled) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resizeCleanupRef.current?.();
+    resizeCleanupRef.current = null;
+    resizeCornerRef.current = corner;
+    resizeSelectionRef.current = roi.selection;
+    dragStartRef.current = null;
+    const p = canvasPoint(event);
+    setResizeTrace({ corner, point: p });
+    setCtrlCursor({ x: p.x, y: p.y, captured: true });
+    const d = toDut(p);
+    setTip({ x: event.clientX, y: event.clientY, text: formatPointText(d) });
+    const onMove = (moveEvent: PointerEvent) => {
+      if (resizeCornerRef.current !== corner) return;
+      moveEvent.preventDefault();
+      const p = canvasPointFromClient(moveEvent.clientX, moveEvent.clientY, false);
+      setResizeTrace({ corner, point: p });
+      setCtrlCursor({ x: p.x, y: p.y, captured: true });
+      const dMove = toDut(p);
+      setTip({ x: moveEvent.clientX, y: moveEvent.clientY, text: formatPointText(dMove) });
+    };
+
+    const onUp = (upEvent: PointerEvent) => {
+      if (resizeCornerRef.current !== corner) return;
+      upEvent.preventDefault();
+      const p = canvasPointFromClient(upEvent.clientX, upEvent.clientY, false);
+      const next = rectFromCornerDrag(corner, p);
+      resizeCornerRef.current = null;
+      resizeSelectionRef.current = null;
+      dragStartRef.current = null;
+      setResizeTrace(null);
+      setDraft(null);
+      setCtrlCursor(null);
+      resizeCleanupRef.current?.();
+      resizeCleanupRef.current = null;
+      if (next) {
+        clearBitmapSelectionCache();
+        dispatch(updateROI({ selection: next }));
+      }
+      setTip(null);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+    resizeCleanupRef.current = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     };
   }
 
@@ -554,8 +718,16 @@ export function ROIEditor({
       ctx.restore();
     }
 
-    const selected = roi.calibration_enabled ? null : draft ?? roi.selection;
-    if (selected) drawSelection(ctx, selected, roi);
+    const selected = roi.calibration_enabled ? null : roi.selection;
+    if (selected) {
+      if (resizeTrace && resizeSelectionRef.current) {
+        drawSelectionTrace(ctx, resizeSelectionRef.current, resizeTrace, roi);
+      } else if (draft) {
+        drawSelection(ctx, draft, roi);
+      } else {
+        drawSelection(ctx, selected, roi);
+      }
+    }
   }
 
   function drawSelection(ctx: CanvasRenderingContext2D, selected: ROIRequest, nextROI: ROIState) {
@@ -570,6 +742,74 @@ export function ROIEditor({
     ctx.lineWidth = 0.75;
     ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     ctx.restore();
+  }
+
+  function drawSelectionTrace(
+    ctx: CanvasRenderingContext2D,
+    selected: ROIRequest,
+    trace: { corner: ROISelectionCorner; point: { x: number; y: number } },
+    nextROI: ROIState
+  ) {
+    const bounds = viewportBounds(nextROI);
+    const corners = {
+      "top-left": {
+        moved: { x: selected.x_start, y: selected.y_start },
+        adjacent: [
+          { x: selected.x_end, y: selected.y_start },
+          { x: selected.x_start, y: selected.y_end },
+        ],
+      },
+      "top-right": {
+        moved: { x: selected.x_end, y: selected.y_start },
+        adjacent: [
+          { x: selected.x_start, y: selected.y_start },
+          { x: selected.x_end, y: selected.y_end },
+        ],
+      },
+      "bottom-left": {
+        moved: { x: selected.x_start, y: selected.y_end },
+        adjacent: [
+          { x: selected.x_start, y: selected.y_start },
+          { x: selected.x_end, y: selected.y_end },
+        ],
+      },
+      "bottom-right": {
+        moved: { x: selected.x_end, y: selected.y_end },
+        adjacent: [
+          { x: selected.x_end, y: selected.y_start },
+          { x: selected.x_start, y: selected.y_end },
+        ],
+      },
+    }[trace.corner];
+
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = "rgba(124, 255, 107, 0.95)";
+    ctx.fillStyle = "rgba(124, 255, 107, 0.95)";
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(worldToCanvasX(corners.moved.x, nextROI, bounds), worldToCanvasY(corners.moved.y, nextROI, bounds));
+    ctx.lineTo(trace.point.x, trace.point.y);
+    ctx.moveTo(trace.point.x, trace.point.y);
+    ctx.lineTo(worldToCanvasX(corners.adjacent[0].x, nextROI, bounds), worldToCanvasY(corners.adjacent[0].y, nextROI, bounds));
+    ctx.moveTo(trace.point.x, trace.point.y);
+    ctx.lineTo(worldToCanvasX(corners.adjacent[1].x, nextROI, bounds), worldToCanvasY(corners.adjacent[1].y, nextROI, bounds));
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(trace.point.x, trace.point.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function selectionHintPosition(selected: ROIRequest) {
+    const bounds = viewportBounds(roi);
+    const x0 = worldToCanvasX(selected.x_start, roi, bounds);
+    const x1 = worldToCanvasX(selected.x_end, roi, bounds);
+    const y0 = worldToCanvasY(selected.y_start, roi, bounds);
+    return {
+      left: ((Math.min(x0, x1) + Math.max(x0, x1)) / 2 / ROI_CANVAS_EDGE) * 100,
+      top: (Math.max(0, Math.min(y0, worldToCanvasY(selected.y_end, roi, bounds)) - 16) / ROI_CANVAS_EDGE) * 100,
+    };
   }
 
   function drawCalibrationViewport(ctx: CanvasRenderingContext2D, nextROI: ROIState) {
@@ -883,45 +1123,68 @@ export function ROIEditor({
               <span className="roi-source-pill">{imageSourceLabel}</span>
             </div>
           )}
-          <canvas
-            ref={canvasRef}
-            className={`roi-canvas-layer roi-canvas-layer--base${disabled ? " is-disabled" : ""}`}
-            width={ROI_CANVAS_EDGE}
-            height={ROI_CANVAS_EDGE}
+          <div
+            className={`roi-canvas-layer roi-canvas-layer--base${disabled ? " is-disabled" : ""}${ctrlCursor ? " roi-canvas-layer--ctrl-cursor" : ""}`}
             onPointerDown={(e) => {
               if (disabled || roi.calibration_enabled) return;
+              if (e.button !== 0) return;
               e.preventDefault();
-              e.currentTarget.setPointerCapture(e.pointerId);
               const p = canvasPoint(e);
-              dragStartRef.current = p;
               setDraft(null);
+              if (e.ctrlKey) {
+                resizeCornerRef.current = null;
+                resizeSelectionRef.current = null;
+                dragStartRef.current = null;
+                setCtrlCursor({ x: p.x, y: p.y, captured: false });
+                const d = toDut(p);
+                setTip({ x: e.clientX, y: e.clientY, text: formatPointText(d) });
+                return;
+              }
+              e.currentTarget.setPointerCapture(e.pointerId);
+              resizeCornerRef.current = null;
+              resizeSelectionRef.current = null;
+              dragStartRef.current = p;
+              setCtrlCursor(null);
               const d = toDut(p);
-              setTip({ x: e.clientX, y: e.clientY, text: `(${d.x}, ${d.y})` });
+              setTip({ x: e.clientX, y: e.clientY, text: formatPointText(d) });
             }}
             onPointerMove={(e) => {
+              if (resizeCornerRef.current) return;
               if (disabled || roi.calibration_enabled) return;
               e.preventDefault();
               const p = canvasPoint(e);
               const d = toDut(p);
+              const hoverCorner = e.ctrlKey ? selectionCornerAt(p) : null;
+              if (e.ctrlKey) {
+                const snapped = hoverCorner ? cornerCanvasPoint(hoverCorner) ?? p : p;
+                setCtrlCursor({ x: snapped.x, y: snapped.y, captured: Boolean(hoverCorner) });
+              } else {
+                setCtrlCursor(null);
+              }
               if (dragStartRef.current) {
                 const dx = Math.abs(p.x - dragStartRef.current.x);
                 const dy = Math.abs(p.y - dragStartRef.current.y);
-                if (Math.max(dx, dy) >= ROI_DRAG_THRESHOLD / ROI_CANVAS_EDGE) {
+                if (Math.max(dx, dy) >= ROI_DRAG_THRESHOLD) {
                   const next = rectFromPoints(dragStartRef.current, p);
                   setDraft(next);
                 }
-                setTip({ x: e.clientX, y: e.clientY, text: `(${d.x}, ${d.y})` });
+                setTip({ x: e.clientX, y: e.clientY, text: formatPointText(d) });
               }
             }}
             onPointerUp={(e) => {
+              if (resizeCornerRef.current) return;
               if (disabled || roi.calibration_enabled) return;
               e.preventDefault();
-              const start = dragStartRef.current;
-              if (!start) return;
               const nextPoint = canvasPoint(e);
+              const start = dragStartRef.current;
+              if (!start) {
+                setCtrlCursor(e.ctrlKey ? { x: nextPoint.x, y: nextPoint.y, captured: false } : null);
+                setTip(null);
+                return;
+              }
               const dx = Math.abs(nextPoint.x - start.x);
               const dy = Math.abs(nextPoint.y - start.y);
-              const didDrag = Math.max(dx, dy) >= ROI_DRAG_THRESHOLD / ROI_CANVAS_EDGE;
+              const didDrag = Math.max(dx, dy) >= ROI_DRAG_THRESHOLD;
               dragStartRef.current = null;
               setDraft(null);
               if (!didDrag) {
@@ -934,11 +1197,64 @@ export function ROIEditor({
               setTip(null);
             }}
             onPointerLeave={() => {
+              if (resizeCornerRef.current) return;
               dragStartRef.current = null;
+              resizeCornerRef.current = null;
+              resizeSelectionRef.current = null;
+              resizeCleanupRef.current?.();
+              resizeCleanupRef.current = null;
+              setResizeTrace(null);
               setDraft(null);
               setTip(null);
+              setCtrlCursor(null);
             }}
-          />
+          >
+            <canvas
+              ref={canvasRef}
+              className="roi-canvas-layer roi-canvas-layer--base-canvas"
+              width={ROI_CANVAS_EDGE}
+              height={ROI_CANVAS_EDGE}
+              onDragStart={(event) => event.preventDefault()}
+            />
+            {activeSelection && !roi.calibration_enabled && (
+                <>
+                  <span
+                    className="roi-selection-hint"
+                    style={{
+                      left: `${selectionHintPosition(activeSelection).left}%`,
+                      top: `${selectionHintPosition(activeSelection).top}%`,
+                      transform: "translate(-50%, -100%)",
+                      pointerEvents: "none",
+                    }}
+                    aria-hidden="true"
+                  >
+                    Press ctrl to drag a corner
+                  </span>
+                  {(["top-left", "top-right", "bottom-left", "bottom-right"] as ROISelectionCorner[]).map(
+                    (corner) => {
+                      const pos = cornerCanvasPoint(corner);
+                      if (!pos) return null;
+                      return (
+                        <button
+                          key={corner}
+                          type="button"
+                          className="roi-corner-handle"
+                          data-corner={corner}
+                          data-captured={resizeCornerRef.current === corner ? "true" : "false"}
+                          style={{
+                            left: `${(pos.x / ROI_CANVAS_EDGE) * 100}%`,
+                            top: `${(pos.y / ROI_CANVAS_EDGE) * 100}%`,
+                          }}
+                          onPointerDown={(event) => {
+                            beginCornerResize(corner, event);
+                          }}
+                        />
+                      );
+                    }
+                  )}
+                </>
+              )}
+          </div>
           <canvas
             ref={maskCanvasRef}
             className="roi-canvas-layer roi-canvas-layer--mask"
@@ -960,6 +1276,17 @@ export function ROIEditor({
             height={ROI_CANVAS_EDGE}
             aria-hidden="true"
           />
+          {ctrlCursor && !roi.calibration_enabled && (
+              <span
+              className="roi-corner-cursor"
+              data-captured={ctrlCursor.captured ? "true" : "false"}
+              style={{
+                left: `${(ctrlCursor.x / ROI_CANVAS_EDGE) * 100}%`,
+                top: `${(ctrlCursor.y / ROI_CANVAS_EDGE) * 100}%`,
+              }}
+              aria-hidden="true"
+            />
+          )}
           {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} />}
           {roi.calibration_enabled && (
             <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} />
