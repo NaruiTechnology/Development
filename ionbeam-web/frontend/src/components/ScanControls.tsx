@@ -588,6 +588,7 @@ export function ScanControls({
           </div>
           <div className="scan-loop-controls__buttons scan-loop-controls__buttons--roi">
             <button
+              type="button"
               className="btn btn--primary"
               disabled={runDisabled}
               onClick={onRun}
@@ -597,6 +598,7 @@ export function ScanControls({
               {t("roi.actionRun")}
             </button>
             <button
+              type="button"
               className="btn btn--danger"
               disabled={stopDisabled}
               onClick={onStop}
@@ -667,6 +669,7 @@ export function ScanControls({
         </span>
       )}
       <button
+        type="button"
         className="btn btn--primary"
         disabled={runDisabled || kind === "roi"}
         onClick={onRun}
@@ -676,6 +679,7 @@ export function ScanControls({
         {t("scan.run")}
       </button>
       <button
+        type="button"
         className="btn btn--danger"
         disabled={stopDisabled}
         onClick={onStop}
@@ -689,6 +693,7 @@ export function ScanControls({
 
       <span className="scan-action-with-help">
         <button
+          type="button"
           className="btn"
           disabled={runDisabled || kind === "roi" || vectorGrayFilterActive}
           onClick={onRunValidated}
@@ -699,7 +704,7 @@ export function ScanControls({
         </button>
         <RunValidatedHelp />
       </span>
-      <button className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
+      <button type="button" className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
         <Icon name="x" tone="danger" />
         {t("scan.clear")}
       </button>

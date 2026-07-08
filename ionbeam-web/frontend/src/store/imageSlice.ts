@@ -120,7 +120,7 @@ const slice = createSlice({
       const pattern = a.payload.pattern;
       const edge = a.payload.edge ?? VEC_EDGE;
       state.vectorPattern = pattern;
-      state.vectorSource = a.payload.roi ? "roi" : "vector";
+      state.vectorSource = pattern === "custom" && a.payload.roi ? "roi" : "vector";
       state.vectorEdge = edge;
       state.vectorImage = new Uint16Array(edge * edge);
       state.vectorCursor = 0;
