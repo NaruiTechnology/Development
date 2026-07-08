@@ -812,6 +812,18 @@ export function ROIEditor({
     };
   }
 
+  function selectionHintText(selected: ROIRequest) {
+    return (
+      <>
+        <span>Press ctrl to drag a corner</span>
+        <span>
+          {formatPointText({ x: selected.x_start, y: selected.y_start })} -{" "}
+          {formatPointText({ x: selected.x_end, y: selected.y_end })}
+        </span>
+      </>
+    );
+  }
+
   function drawCalibrationViewport(ctx: CanvasRenderingContext2D, nextROI: ROIState) {
     const bounds = viewportBounds(nextROI, "draft");
     ctx.save();
@@ -1228,7 +1240,7 @@ export function ROIEditor({
                     }}
                     aria-hidden="true"
                   >
-                    Press ctrl to drag a corner
+                    {selectionHintText(activeSelection)}
                   </span>
                   {(["top-left", "top-right", "bottom-left", "bottom-right"] as ROISelectionCorner[]).map(
                     (corner) => {
