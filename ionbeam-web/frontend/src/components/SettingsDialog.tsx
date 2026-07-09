@@ -751,7 +751,7 @@ function VectorTab({ draft }: { draft: unknown }) {
   const { t } = useTranslation();
 
   const vectorResolution = numberField(draft, [...VECTOR_PATH, "vectorResolution"], 2048);
-  const dwell = numberField(draft, [...VECTOR_PATH, "dwell"], 1);
+  const dwell = numberField(draft, [...VECTOR_PATH, "dwell"], 16);
   const latency = numberField(draft, [...VECTOR_PATH, "latency"], 0);
   const adcLatency = numberField(draft, [...VECTOR_PATH, "adcLatency"], 0);
   const lineShift = numberField(draft, [...VECTOR_PATH, "lineShiftPerXRow"], 0);

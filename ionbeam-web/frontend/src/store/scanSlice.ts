@@ -109,7 +109,7 @@ const defaultVector: VectorRequest = {
   pattern: "default",
   points: null,
   vector_resolution: 2048,
-  dwell: 1,
+  dwell: 16,
   latency_bytes: 8196,
   output_mode: "SixteenBit",
   cookie: 123,

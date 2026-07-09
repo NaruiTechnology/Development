@@ -519,7 +519,7 @@ export const mockRest = {
       },
       vector: {
         ...vector,
-        dwell: finiteNumber(vector.dwell, 1),
+        dwell: finiteNumber(vector.dwell, 16),
         vectorResolution: finiteNumber(vector.vectorResolution, 2048),
         voltage,
         latency: finiteNumber(vector.latency, 8196),
@@ -535,7 +535,7 @@ export const mockRest = {
       },
       vector_params: {
         vector_resolution: finiteNumber(vector.vectorResolution, 2048),
-        dwell: finiteNumber(vector.dwell, 1),
+        dwell: finiteNumber(vector.dwell, 16),
         latency_bytes: finiteNumber(vector.latency, 8196),
         cookie: finiteNumber(vector.cookie, 123),
         output_mode: vector.outputMode ?? "SixteenBit",

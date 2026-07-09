@@ -305,7 +305,7 @@ function handleMock(
         await streamMockVector(client, {
           pattern: body.pattern === "custom" ? "custom" : "default",
           points: Array.isArray(body.points) ? body.points : undefined,
-          dwell: Number(body.dwell ?? 1),
+          dwell: Number(body.dwell ?? 16),
           latency_bytes: Number(body.latency_bytes ?? 8196),
           roi: body.roi ?? undefined,
           simulation_bitmap: body.simulation_bitmap ?? undefined,
