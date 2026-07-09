@@ -53,6 +53,7 @@ export function ROICalibrationCard({
     roi.calibration_y_origin,
     t,
   ]);
+  const canConfirm = calibrationDirty && !validation;
 
   function confirmCalibration() {
     if (disabled || validation) return;
@@ -131,8 +132,8 @@ export function ROICalibrationCard({
       </div>
       {validation && <div className="field-warning">{validation}</div>}
       <button
-        className={`btn ${calibrationDirty ? "btn--gold" : "btn--primary"}`}
-        disabled={disabled || Boolean(validation)}
+        className={`btn ${canConfirm ? "btn--gold" : "btn--primary"}`}
+        disabled={disabled || !canConfirm}
         onClick={confirmCalibration}
       >
         {t("roi.confirmCalibration")}

@@ -687,7 +687,7 @@ function RasterTab({ draft }: { draft: unknown }) {
   const frameBlank = boolField(draft, [...RASTER_PATH, "frameBlank"], false);
   const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 512);
   const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 8);
-  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 2);
+  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 16);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));

@@ -354,7 +354,7 @@ async function recordScanStart(
     activity_id: activityId,
     start_xy: normalizeDecimal(body.start_xy, 0),
     end_xy: normalizeDecimal(body.end_xy, 0),
-    dwell: normalizeInteger(body.dwell, 0),
+    dwell: normalizeInteger(body.dwell, 16),
     scale_unit: normalizeScaleUnit(body.scale_unit),
     ev: normalizeDecimal(body.ev, 0),
     scan_parameters: body,
