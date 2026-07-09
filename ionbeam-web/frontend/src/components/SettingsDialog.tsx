@@ -1308,6 +1308,14 @@ async function saveStreamConfig(data: unknown): Promise<void> {
   }
 }
 
+function normalizeStreamConfigDwell(config: unknown): unknown {
+  return writePath(
+    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 16),
+    [...ACTION_DATA_PATH, "vectorScan", "dwell"],
+    16,
+  );
+}
+
 async function restoreStreamConfig(): Promise<void> {
   const r = await fetch(apiUrl("/api/admin/config/restore"), {
     method: "POST",
@@ -1755,8 +1763,9 @@ function AdminTab({
     setLocalError(null);
     try {
       const info = await fetchStreamConfig();
-      setFtpSource(info.data);
-      setFtpDraft(info.data);
+      const normalized = normalizeStreamConfigDwell(info.data);
+      setFtpSource(normalized);
+      setFtpDraft(normalized);
       setFtpConfigPath(info.path);
       setFtpHasBackup(info.has_backup);
       if (info.backup_created) {
@@ -1881,8 +1890,10 @@ function AdminTab({
     setLocalError(null);
     setNotice(null);
     try {
-      await saveStreamConfig(ftpDraft);
-      setFtpSource(ftpDraft);
+      const normalized = normalizeStreamConfigDwell(ftpDraft);
+      await saveStreamConfig(normalized);
+      setFtpSource(normalized);
+      setFtpDraft(normalized);
       setNotice(t("settings.ftp.save.ok"));
       await testFtpConnection();
     } catch (err) {

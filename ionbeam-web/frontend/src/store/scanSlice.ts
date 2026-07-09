@@ -192,6 +192,10 @@ function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"
   return fallback ?? "SixteenBit";
 }
 
+function dwellDefault(value: unknown, fallback: number): number {
+  return Math.max(16, numberDefault(value, fallback));
+}
+
 function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
   // Prefer the normalized snake_case `raster_params` / `vector_params`
   // blocks if the server sent them — they map 1:1 to the request shapes
@@ -216,7 +220,7 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
       rasterParams.resolution ?? raster.resolution,
       state.raster.resolution
     ),
-    dwell: numberDefault(
+    dwell: dwellDefault(
       rasterParams.dwell ?? raster.dwell,
       state.raster.dwell
     ),
@@ -247,7 +251,7 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
         vector.vectorResolution,
       state.vector.vector_resolution
     ),
-    dwell: numberDefault(
+    dwell: dwellDefault(
       vectorParams.dwell ?? vector.dwell,
       state.vector.dwell
     ),

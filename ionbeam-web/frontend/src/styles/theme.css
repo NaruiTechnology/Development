@@ -2171,7 +2171,7 @@ body {
 
 .tab[aria-selected="true"] {
   color: var(--c-accent);
-  border-bottom-color: var(--c-accent);
+  border-bottom-color: var(--c-warn);
 }
 
 .tab:disabled {

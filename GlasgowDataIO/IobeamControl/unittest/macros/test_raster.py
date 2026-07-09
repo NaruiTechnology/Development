@@ -13,7 +13,10 @@ from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.scan_params import RasterParams
 
-JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData_unit_test.json'
+JSON_PATH_CANDIDATES = (
+    Path("./Development/GlasgowDataIO/Json/streamData unit_test.json"),
+    Path("./Development/GlasgowDataIO/Json/streamData_unit_test.json"),
+)
 
 
 class RasterScanTest(unittest.TestCase):
@@ -33,8 +36,9 @@ class RasterScanTest(unittest.TestCase):
     PARAM_OVERRIDES: dict = {}
 
     def setUp(self):
-        if Path(JSON_PATH).is_file():
-            self._config = AutomationConfig(JSON_PATH)
+        json_path = next((path for path in JSON_PATH_CANDIDATES if path.is_file()), None)
+        if json_path is not None:
+            self._config = AutomationConfig(str(json_path))
             raster_block = (
                 util.GetStateConfigByName(self._config, 'streamData')
                 [Consts.ACTION_DATA].get('rasterScan')
