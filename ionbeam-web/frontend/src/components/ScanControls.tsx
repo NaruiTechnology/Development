@@ -33,6 +33,7 @@ import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { shouldClearROIFeedbackBeforeRepeat } from "../lib/scanRepeat";
 import type { VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 import type { ROIState } from "../store/scanSlice";
@@ -241,6 +242,15 @@ export function ScanControls({
     setActionLoopActive(false);
   }, [clearActionLoopTimer]);
 
+  const startRepeatActionRun = useCallback(
+    (entry: { req: VectorRequest; preview: boolean; scanType: ScanType }) => {
+      dispatch(bumpRevision());
+      onScanRunStart?.(entry.scanType);
+      stream.startVector({ ...entry.req, preview: entry.preview });
+    },
+    [dispatch, onScanRunStart, stream]
+  );
+
   const startActionLoop = useCallback((req: VectorRequest, scanType: ScanType) => {
     clearActionLoopState();
     actionLoopRequestRef.current = { req, preview, scanType };
@@ -265,14 +275,12 @@ export function ScanControls({
       if (!entry) {
         return;
       }
-      if (entry.scanType === ScanType.CUSTOM_GRAY_FEEDBACK_BLANK) {
+      if (shouldClearROIFeedbackBeforeRepeat(entry.scanType)) {
         dispatch(clearROIScanImage());
       }
-      dispatch(bumpRevision());
-      onScanRunStart?.(entry.scanType);
-      stream.startVector({ ...entry.req, preview: entry.preview });
+      startRepeatActionRun(entry);
     }, actionLoopGapMs);
-  }, [actionLoopGapMs, clearActionLoopTimer, dispatch, onScanRunStart, stream]);
+  }, [actionLoopGapMs, clearActionLoopTimer, startRepeatActionRun]);
 
   async function onRun() {
     if (disabled || (kind === "roi" && !roiAction)) return;

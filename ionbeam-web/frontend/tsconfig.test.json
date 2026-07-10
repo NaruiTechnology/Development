@@ -6,6 +6,7 @@
     "outDir": "./.test-dist"
   },
   "include": [
-    "src/lib/grayScaleUI.ts"
+    "src/lib/grayScaleUI.ts",
+    "src/lib/scanRepeat.ts"
   ]
 }
