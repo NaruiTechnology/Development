@@ -10,6 +10,7 @@ import { apiUrl } from "../lib/backendUrl";
 import {
   runRasterValidated,
   runVectorValidated,
+  clearROIScanImage,
   setPreview,
   streamErrored,
   streamReset,
@@ -263,6 +264,9 @@ export function ScanControls({
       const entry = actionLoopRequestRef.current;
       if (!entry) {
         return;
+      }
+      if (entry.scanType === ScanType.CUSTOM_GRAY_FEEDBACK_BLANK) {
+        dispatch(clearROIScanImage());
       }
       dispatch(bumpRevision());
       onScanRunStart?.(entry.scanType);
