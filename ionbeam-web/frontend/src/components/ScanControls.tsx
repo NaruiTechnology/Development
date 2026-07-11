@@ -106,6 +106,9 @@ export function ScanControls({
   const roiGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const selectedBeam = defaults?.selected_beam;
   const roi = roiState.selection;
+  const roiSelectionKey = roi
+    ? `${roi.x_start}:${roi.x_end}:${roi.y_start}:${roi.y_end}`
+    : "";
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
   const actionLoopTimerRef = useRef<number | null>(null);
@@ -238,8 +241,8 @@ export function ScanControls({
     actionLoopRemainingRef.current = 0;
     actionLoopIterationRef.current = 0;
     actionLoopActiveRef.current = false;
-    setActionLoopIteration(0);
-    setActionLoopActive(false);
+    setActionLoopIteration((current) => current === 0 ? current : 0);
+    setActionLoopActive((current) => current ? false : current);
   }, [clearActionLoopTimer]);
 
   const startRepeatActionRun = useCallback(
@@ -530,11 +533,11 @@ export function ScanControls({
     if (phase === "error" || phase === "idle") {
       clearActionLoopState();
     }
-  }, [clearActionLoopState, phase, roiState.imageDataUrl, roiState.selection, scheduleNextActionRun]);
+  }, [clearActionLoopState, phase, roiState.imageDataUrl, roiSelectionKey, scheduleNextActionRun]);
 
   useEffect(() => {
     clearActionLoopState();
-  }, [clearActionLoopState, roiAction, roiState.selection, kind]);
+  }, [clearActionLoopState, roiAction, roiSelectionKey, kind]);
 
   useEffect(() => {
     return () => {

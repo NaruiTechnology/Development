@@ -91,9 +91,7 @@ export function VectorParameters({
     value,
     label: t(`vector.resolution.option.${value}` as const),
   }));
-  const dwellMin = grayLevelFilterActive ? 16 : 1;
   const latencyMin = grayLevelFilterActive ? 8196 : 2;
-  const dwellOptions = VECTOR_DWELL_OPTIONS.filter((option) => option.value >= dwellMin);
   const resolutionTitle =
     v.vector_resolution === 2048
       ? t("vector.resolution.title.native")
@@ -158,12 +156,12 @@ export function VectorParameters({
               </label>
             }
             value={v.dwell}
-            options={dwellOptions}
-            min={dwellMin}
+            options={VECTOR_DWELL_OPTIONS}
+            min={1}
             max={65535}
             disabled={disabled}
             onChange={(value) =>
-              dispatch(updateVector({ dwell: Math.max(dwellMin, value) }))
+              dispatch(updateVector({ dwell: value }))
             }
           />
         </div>

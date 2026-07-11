@@ -27,7 +27,7 @@
  *   - user closed it (closureKind = stop)
  *   - upstream/server closed unexpectedly  -> we mark phase = error
  */
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import {
   streamCompleted,
@@ -207,7 +207,10 @@ export function useScanStream() {
     return registerScanActionStop(stop);
   }, [stop]);
 
-  return { startRaster, startVector, stop };
+  return useMemo(
+    () => ({ startRaster, startVector, stop }),
+    [startRaster, startVector, stop]
+  );
 }
 
 /* -------- helpers ------------------------------------------------------ */

@@ -96,6 +96,7 @@ export function ROIEditor({
   const capturedLiveVectorKeyRef = useRef<string | null>(null);
   const vectorPhase = useAppSelector((s) => s.scan.phase);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
+  const vectorRevision = useAppSelector((s) => s.image.revision);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
   const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
@@ -111,6 +112,9 @@ export function ROIEditor({
       : 0;
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
+  const roiSelectionKey = roi.selection
+    ? `${roi.selection.x_start}:${roi.selection.x_end}:${roi.selection.y_start}:${roi.selection.y_end}`
+    : "";
   const activeSelection = draft ?? roi.selection;
   const roiModeLabel =
     roi.scanImageDataUrl !== null
@@ -273,6 +277,7 @@ export function ROIEditor({
       vectorCustomCount,
       bytesReceived,
       chunksReceived,
+      vectorRevision,
       grayScaleSelection[0],
       grayScaleSelection[1],
       String(grayScaleSkipped),
@@ -308,6 +313,7 @@ export function ROIEditor({
     vectorCursor,
     bytesReceived,
     chunksReceived,
+    vectorRevision,
     grayScaleSelection,
     grayScaleSkipped,
     dispatch,
@@ -360,9 +366,9 @@ export function ROIEditor({
 
   useEffect(() => {
     if (!dragStartRef.current) {
-      setDraft(null);
+      setDraft((current) => current === null ? current : null);
     }
-  }, [roi.selection]);
+  }, [roiSelectionKey]);
 
   useEffect(() => {
     if (!activeHandle) return;

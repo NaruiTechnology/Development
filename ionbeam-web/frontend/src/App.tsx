@@ -106,9 +106,11 @@ export function App() {
   const imageRevision = useAppSelector((s) => s.image.revision);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
-  const vectorDwell = useAppSelector((s) => s.scan.vector.dwell);
   const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const roiSelectionKey = roiState.selection
+    ? `${roiState.selection.x_start}:${roiState.selection.x_end}:${roiState.selection.y_start}:${roiState.selection.y_end}`
+    : "";
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
@@ -378,7 +380,7 @@ export function App() {
     if (!roiState.selection || phase === "idle" || phase === "error") {
       setROIActionCanvasVisible(false);
     }
-  }, [phase, roiState.selection]);
+  }, [phase, roiSelectionKey]);
 
   useEffect(() => {
     if (phase === "running" || phase === "stopping") return;
@@ -506,12 +508,12 @@ export function App() {
     setGrayScaleStepDelta(10);
   }, [grayScaleStepDelta, showGraySpectrum]);
 
-  const previousROISelectionRef = useRef(roiState.selection);
+  const previousROISelectionKeyRef = useRef(roiSelectionKey);
   useEffect(() => {
-    if (previousROISelectionRef.current === roiState.selection) return;
-    previousROISelectionRef.current = roiState.selection;
+    if (previousROISelectionKeyRef.current === roiSelectionKey) return;
+    previousROISelectionKeyRef.current = roiSelectionKey;
     resetROIActionContext();
-  }, [resetROIActionContext, roiState.selection]);
+  }, [resetROIActionContext, roiSelectionKey]);
 
   useEffect(() => {
     if (kind !== "roi") return;
@@ -647,7 +649,6 @@ export function App() {
           points: null,
           vector_resolution: 128,
           output_mode: "SixteenBit",
-          dwell: 16,
           latency_bytes: 8196,
           pre_process: true,
         })
@@ -672,11 +673,6 @@ export function App() {
     if (nextEnabled === vectorGrayLevelsEnabled) return;
     applyVectorGrayLevelsToggle(nextEnabled);
   }, [applyVectorGrayLevelsToggle, settingsDraft, vectorGrayLevelsEnabled]);
-
-  useEffect(() => {
-    if (!vectorGrayLevelsEnabled || vectorDwell >= 16) return;
-    dispatch(updateVector({ dwell: 16 }));
-  }, [dispatch, vectorDwell, vectorGrayLevelsEnabled]);
 
   useEffect(() => {
     if (!vectorGrayLevelsEnabled || vectorLatencyBytes >= 8196) return;

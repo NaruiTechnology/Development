@@ -323,6 +323,8 @@ export async function vectorRequestWithROIGrayScaleAction(
     roi: converted.roi,
     simulation_bitmap: null,
     dwell: Math.max(16, req.dwell),
+    gray_level_range: [selection[0], selection[1]],
+    gray_level_skipped: options.grayScaleSkipped,
     // The ROI panel shows pre-process locked on for parity with the vector
     // controls, but Glasgow's pre-process path aborts explicit custom points.
     pre_process: false,
@@ -359,10 +361,7 @@ export async function vectorRequestWithAdaptiveGrayFeedback(
     roi: roiRequest,
     simulation_bitmap: null,
     pre_process: true,
-    // Adaptive gray feedback now uses a probe sample followed by a
-    // same-coordinate action dwell, so keep a meaningful action dwell
-    // budget after the initial probe.
-    dwell: Math.max(16, req.dwell),
+    dwell: req.dwell,
     output_mode: "SixteenBit",
     feedback_mode: "adaptive_gray_feedback",
     gray_level_range: [selection[0], selection[1]],

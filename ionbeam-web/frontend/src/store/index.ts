@@ -27,6 +27,12 @@ export const store = configureStore({
   // that touch these buffers.
   middleware: (getDefault) =>
     getDefault({
+      immutableCheck: {
+        // Image reducers intentionally manage multi-megabyte typed arrays.
+        // Avoid deep-walking those buffers after every streamed chunk while
+        // retaining mutation checks for the rest of the application state.
+        ignoredPaths: ["image"],
+      },
       serializableCheck: {
         ignoredPaths: [
           "image.frame",

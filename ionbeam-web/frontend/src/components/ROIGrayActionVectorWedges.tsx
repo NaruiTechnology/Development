@@ -19,7 +19,7 @@ const FORCED_OUTPUT_MODE: "SixteenBit" = "SixteenBit";
 const FORCED_COOKIE = 123;
 const FORCED_PRE_PROCESS = true;
 
-const FORCED_DWELL_OPTIONS: PresetNumberOption[] = [16, 32, 64].map((value) => ({ value }));
+const FORCED_DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
 const FORCED_RESOLUTION_OPTIONS: PresetNumberOption[] = [128, 256, 512, 1024, 2048].map((value) => ({
   value,
 }));
@@ -102,10 +102,10 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
           }
           value={vector.dwell}
           options={FORCED_DWELL_OPTIONS}
-          min={16}
+          min={1}
           max={65535}
           disabled={disabled}
-          onChange={(value) => dispatch(updateVector({ dwell: Math.max(16, value) }))}
+          onChange={(value) => dispatch(updateVector({ dwell: value }))}
         />
       </div>
 
