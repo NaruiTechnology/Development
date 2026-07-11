@@ -80,7 +80,6 @@ export function ROIEditor({
   const resizeSelectionRef = useRef<ROIRequest | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const promotedBackgroundRef = useRef<string | null>(null);
-  const animatedVectorSamplesRef = useRef(0);
   const [draft, setDraft] = useState<ROIRequest | null>(null);
   const [resizeTrace, setResizeTrace] = useState<{
     corner: ROISelectionCorner;
@@ -90,9 +89,7 @@ export function ROIEditor({
   const [ctrlCursor, setCtrlCursor] = useState<{ x: number; y: number; captured: boolean } | null>(null);
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
-  const [animatedVectorSamples, setAnimatedVectorSamples] = useState(0);
   const [canvasResetToken, setCanvasResetToken] = useState(0);
-  const liveVectorTargetRef = useRef(0);
   const capturedLiveVectorKeyRef = useRef<string | null>(null);
   const vectorPhase = useAppSelector((s) => s.scan.phase);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
@@ -105,7 +102,7 @@ export function ROIEditor({
   const targetLiveVectorSamples = vectorPattern === "custom" && vectorCustomCount > 0
     ? Math.min(vectorCursor, vectorCustomCount)
     : vectorCursor;
-  const liveVectorSamples = animatedVectorSamples;
+  const liveVectorSamples = targetLiveVectorSamples;
   const liveVectorProgressPct =
     liveVectorPreview && vectorPattern === "custom" && vectorCustomCount > 0
       ? Math.min(100, (liveVectorSamples / vectorCustomCount) * 100)
@@ -225,21 +222,14 @@ export function ROIEditor({
     vectorPattern,
     vectorCustomPoints,
     vectorCustomCount,
-    animatedVectorSamples,
     bytesReceived,
     chunksReceived,
     resizeTrace,
   ]);
 
   useEffect(() => {
-    animatedVectorSamplesRef.current = animatedVectorSamples;
-  }, [animatedVectorSamples]);
-
-  useEffect(() => {
     if (graySelectionResetToken <= 0) return;
     capturedLiveVectorKeyRef.current = null;
-    animatedVectorSamplesRef.current = 0;
-    setAnimatedVectorSamples(0);
     imageRef.current = null;
     setCanvasResetToken((n) => n + 1);
 
@@ -262,13 +252,6 @@ export function ROIEditor({
       grayScaleSelection === null ||
       grayScaleSkipped === null
     ) {
-      return;
-    }
-
-    const target = Math.max(0, Math.min(vectorCustomCount, targetLiveVectorSamples));
-    if (animatedVectorSamplesRef.current < target) {
-      animatedVectorSamplesRef.current = target;
-      setAnimatedVectorSamples(target);
       return;
     }
 
@@ -321,48 +304,9 @@ export function ROIEditor({
 
   useEffect(() => {
     if (!liveVectorPreview || vectorPattern !== "custom" || vectorCustomCount <= 0) {
-      setAnimatedVectorSamples(0);
-      animatedVectorSamplesRef.current = 0;
-      liveVectorTargetRef.current = 0;
       capturedLiveVectorKeyRef.current = null;
-      return;
     }
-
-    liveVectorTargetRef.current = Math.max(0, Math.min(vectorCustomCount, targetLiveVectorSamples));
-
-    let frame = 0;
-    let cancelled = false;
-    let last = performance.now();
-
-    function tick(now: number) {
-      if (cancelled) return;
-      const current = animatedVectorSamplesRef.current;
-      const target = liveVectorTargetRef.current;
-      const elapsed = Math.max(16, now - last);
-      last = now;
-      const remaining = target - current;
-      if (remaining <= 0) {
-        if (current !== target) {
-          animatedVectorSamplesRef.current = target;
-          setAnimatedVectorSamples(target);
-        }
-        frame = window.requestAnimationFrame(tick);
-        return;
-      }
-
-      const step = Math.max(1, Math.ceil((vectorCustomCount / 72) * (elapsed / 16)));
-      const next = Math.min(target, current + Math.min(step, remaining));
-      animatedVectorSamplesRef.current = next;
-      setAnimatedVectorSamples(next);
-      frame = window.requestAnimationFrame(tick);
-    }
-
-    frame = window.requestAnimationFrame(tick);
-    return () => {
-      cancelled = true;
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, [liveVectorPreview, vectorPattern, vectorCustomCount, targetLiveVectorSamples]);
+  }, [liveVectorPreview, vectorPattern, vectorCustomCount]);
 
   useEffect(() => {
     if (!dragStartRef.current) {
