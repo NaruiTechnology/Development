@@ -12,8 +12,10 @@ JSON / API → VectorParams → VectorScanCommand is the new flow; see
 AutomationPy.buildingblocks.scan_params for the dataclass.
 """
 
+import array
 import asyncio
 import struct
+from dataclasses import dataclass
 
 # Import path note: must match the prefix used by callers
 # (GlasgowDataIO.IobeamControl.*) so isinstance checks line up across
@@ -30,6 +32,23 @@ from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 
 
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
+
+
+@dataclass(frozen=True)
+class AdaptiveGrayFeedbackConfig:
+    gray_min: int
+    gray_max: int
+    blank_when_inside: bool
+    window_points: int = 1
+    pipeline_delay_points: int = 0
+
+    def __post_init__(self):
+        lo = max(0, min(0x3FFF, int(self.gray_min)))
+        hi = max(0, min(0x3FFF, int(self.gray_max)))
+        object.__setattr__(self, "gray_min", min(lo, hi))
+        object.__setattr__(self, "gray_max", max(lo, hi))
+        object.__setattr__(self, "window_points", max(1, int(self.window_points)))
+        object.__setattr__(self, "pipeline_delay_points", max(0, int(self.pipeline_delay_points)))
 
 
 # Module-level defaults. Single source of truth lives in
@@ -79,6 +98,30 @@ def default_iter(resolution=2048):
             yield x, y, 1
 
 
+def _normalize_point(point):
+    if isinstance(point, tuple) or isinstance(point, list):
+        if len(point) < 3:
+            raise ValueError("vector point tuples must have at least 3 entries")
+        blank = None if len(point) < 4 or point[3] is None else bool(point[3])
+        pass_index = None if len(point) < 5 or point[4] is None else int(point[4])
+        return int(point[0]), int(point[1]), int(point[2]), blank, pass_index
+
+    x = getattr(point, "x", None)
+    y = getattr(point, "y", None)
+    dwell = getattr(point, "dwell", None)
+    if x is None or y is None or dwell is None:
+        raise ValueError("vector points must provide x, y, and dwell")
+    blank = getattr(point, "blank", None)
+    pass_index = getattr(point, "passIndex", None)
+    return (
+        int(x),
+        int(y),
+        int(dwell),
+        None if blank is None else bool(blank),
+        None if pass_index is None else int(pass_index),
+    )
+
+
 class VectorScanCommand(BaseCommand):
     def __init__(
         self,
@@ -88,6 +131,7 @@ class VectorScanCommand(BaseCommand):
         external_control: bool = True,
         iter_points=None,
         drain_floor_pixels=None,
+        adaptive_gray_feedback: AdaptiveGrayFeedbackConfig | None = None,
         *,
         # --- pipeline tuning (overridable per-build via VectorParams) -----
         max_pipeline: int               = DEFAULT_MAX_PIPELINE,
@@ -125,10 +169,16 @@ class VectorScanCommand(BaseCommand):
             iter_points = default_iter()
 
         self._iter_points = iter_points
+        self._adaptive_gray_feedback = adaptive_gray_feedback
         self._processed_points = []
+        self._processed_adaptive_points = None
         self._processed = False
         self._cookie = cookie
-        self._output_mode = output_mode
+        self._output_mode = (
+            OutputMode.SixteenBit
+            if self._adaptive_gray_feedback is not None
+            else output_mode
+        )
         self._beam_type = beam_type
         self._external_control = bool(external_control)
 
@@ -152,15 +202,149 @@ class VectorScanCommand(BaseCommand):
                 f"output_mode={self._output_mode}, "
                 f"beam_type={self._beam_type}, "
                 f"external_control={self._external_control}, "
+                f"adaptive_gray_feedback={self._adaptive_gray_feedback}, "
                 f"max_pipeline={self._max_pipeline}, "
                 f"drain_floor_pixels={self._drain_floor_pixels}")
 
     def _pre_process_chunks(self, latency):
         print("Pre-processing commands...")
+        if self._adaptive_gray_feedback is not None:
+            self._processed_adaptive_points = [
+                _normalize_point(point) for point in self._iter_points
+            ]
+            self._processed = True
+            print("Done processing")
+            return
         for commands, pixel_count in self._iter_chunks(latency):
             self._processed_points.append((commands, pixel_count))
         self._processed = True
         print("Done processing")
+
+    def _iter_adaptive_points(self):
+        if self._processed and self._processed_adaptive_points is not None:
+            yield from self._processed_adaptive_points
+            return
+        for point in self._iter_points:
+            yield _normalize_point(point)
+
+    @staticmethod
+    def _feedback_sample_value(samples) -> int:
+        if samples is None or len(samples) == 0:
+            return 0
+        return int(sum(int(sample) for sample in samples) / len(samples))
+
+    def _feedback_blank_decision(self, samples) -> bool:
+        cfg = self._adaptive_gray_feedback
+        assert cfg is not None
+        sample_value = self._feedback_sample_value(samples)
+        in_range = cfg.gray_min <= sample_value <= cfg.gray_max
+        return in_range if cfg.blank_when_inside else not in_range
+
+    @staticmethod
+    def _feedback_zero_sample_like(samples):
+        if samples is None:
+            return None
+        return array.array(samples.typecode, [0] * len(samples))
+
+    @staticmethod
+    def _feedback_combine_samples(probe_samples, action_samples, *, probe_dwell: int, action_dwell: int):
+        if probe_samples is None:
+            return action_samples
+        if action_samples is None or len(action_samples) == 0 or action_dwell <= 0:
+            return probe_samples
+
+        total_dwell = max(1, int(probe_dwell) + int(action_dwell))
+        combined = array.array(action_samples.typecode)
+        for idx, action_value in enumerate(action_samples):
+            probe_value = int(probe_samples[idx]) if idx < len(probe_samples) else 0
+            weighted = ((probe_value * probe_dwell) + (int(action_value) * action_dwell)) / total_dwell
+            combined.append(int(round(weighted)))
+        return combined
+
+    async def _transfer_adaptive(self, stream):
+        cfg = self._adaptive_gray_feedback
+        assert cfg is not None
+
+        await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
+        await ExternalCtrlCommand(enable=self._external_control).transfer(stream)
+        await SynchronizeCommand(
+            cookie=self._cookie, raster=False, output=OutputMode.SixteenBit,
+        ).transfer(stream)
+
+        # Discard the FFFF + cookie reply.
+        await stream.read(4)
+
+        points_iter = self._iter_adaptive_points()
+
+        # Same-coordinate adaptive mode:
+        #   1. Probe each logical point with a single unblanked sample.
+        #   2. Decide blank/unblank from that probe sample.
+        #   3. Revisit the same coordinate for the remaining dwell with the
+        #      chosen blank state.
+        #
+        # This is still not a true in-dwell closed loop, but it keeps the
+        # feedback actuation on the same physical coordinate instead of a
+        # later point in the sweep.
+        while True:
+            try:
+                x, y, dwell, _blank, pass_index = next(points_iter)
+            except StopIteration:
+                break
+
+            if pass_index is not None:
+                self._logger.debug("adaptive vector pass index %s", pass_index)
+
+            logical_dwell = max(1, int(dwell))
+            probe_dwell = 1
+            action_dwell = max(0, logical_dwell - probe_dwell)
+
+            probe_commands = bytearray()
+            probe_commands.extend(bytes(BlankCommand(enable=False, inline=True)))
+            probe_commands.extend(bytes(ArrayCommand(
+                cmdtype=CmdType.VectorPixel,
+                array_length=0,
+            )))
+            probe_commands.extend(struct.pack(">HHH", x, y, probe_dwell))
+            if self.abort.is_set():
+                probe_commands.extend(bytes(BlankCommand(enable=True, inline=False)))
+            await stream.write(probe_commands)
+            await stream.flush()
+            await FlushCommand().transfer(stream)
+            probe_samples = await self.recv_res(1, stream, OutputMode.SixteenBit)
+            blank_state = self._feedback_blank_decision(probe_samples)
+
+            if self.abort.is_set():
+                yield self._feedback_zero_sample_like(probe_samples)
+                break
+
+            action_samples = None
+            if action_dwell > 0:
+                action_commands = bytearray()
+                action_commands.extend(bytes(BlankCommand(enable=blank_state, inline=True)))
+                action_commands.extend(bytes(ArrayCommand(
+                    cmdtype=CmdType.VectorPixel,
+                    array_length=0,
+                )))
+                action_commands.extend(struct.pack(">HHH", x, y, action_dwell))
+                if self.abort.is_set():
+                    action_commands.extend(bytes(BlankCommand(enable=True, inline=False)))
+                await stream.write(action_commands)
+                await stream.flush()
+                await FlushCommand().transfer(stream)
+                action_samples = await self.recv_res(1, stream, OutputMode.SixteenBit)
+
+            if blank_state:
+                yield self._feedback_zero_sample_like(probe_samples if probe_samples is not None else action_samples)
+            else:
+                yield self._feedback_combine_samples(
+                    probe_samples,
+                    action_samples,
+                    probe_dwell=probe_dwell,
+                    action_dwell=action_dwell,
+                )
+
+        await BlankCommand(enable=True, inline=False).transfer(stream)
+        await FlushCommand().transfer(stream)
 
     def _iter_chunks(self, latency):
         if self._processed:
@@ -168,37 +352,68 @@ class VectorScanCommand(BaseCommand):
                 yield commands, pixel_count
         else:
             commands = bytearray()
+            vector_body = bytearray()
+            current_blank = None
+            saw_explicit_blank = False
+            current_pass_index = None
 
             def get_command(pixel_count):
                 cmd = ArrayCommand(cmdtype=CmdType.VectorPixel,
                                    array_length=pixel_count - 1)
                 return bytes(cmd)
 
-            pixel_count = 0
+            def flush_vector_body():
+                nonlocal vector_body, vector_body_count
+                if vector_body_count > 0:
+                    commands.extend(get_command(vector_body_count))
+                    commands.extend(vector_body)
+                    vector_body = bytearray()
+                    vector_body_count = 0
+
+            chunk_pixel_count = 0
+            vector_body_count = 0
             total_dwell = 0
-            for (x, y, dwell) in self._iter_points:
-                pixel_count += 1
+            for point in self._iter_points:
+                x, y, dwell, blank, pass_index = _normalize_point(point)
+                if pass_index is not None and current_pass_index != pass_index:
+                    self._logger.debug("vector pass index %s", pass_index)
+                    current_pass_index = pass_index
+                if blank is not None:
+                    saw_explicit_blank = True
+                    if current_blank is None or current_blank != blank:
+                        flush_vector_body()
+                        commands.extend(bytes(BlankCommand(enable=blank, inline=True)))
+                        current_blank = blank
+                chunk_pixel_count += 1
+                vector_body_count += 1
                 total_dwell += dwell
-                commands.extend(struct.pack(">HHH", x, y, dwell))
+                vector_body.extend(struct.pack(">HHH", x, y, dwell))
                 if total_dwell >= latency:
-                    cmd = get_command(pixel_count)
-                    yield (memoryview(cmd + commands), pixel_count)
+                    flush_vector_body()
+                    yield (memoryview(commands), chunk_pixel_count)
                     commands = bytearray()
-                    pixel_count = 0
+                    chunk_pixel_count = 0
                     total_dwell = 0
-                if pixel_count == 65536:
-                    cmd = get_command(pixel_count)
-                    yield (memoryview(cmd + commands), pixel_count)
+                if chunk_pixel_count == 65536:
+                    flush_vector_body()
+                    yield (memoryview(commands), chunk_pixel_count)
                     commands = bytearray()
-                    pixel_count = 0
+                    chunk_pixel_count = 0
                     total_dwell = 0
 
-            if pixel_count > 0:
-                cmd = get_command(pixel_count)
-                yield (memoryview(cmd + commands), pixel_count)
+            if chunk_pixel_count > 0:
+                flush_vector_body()
+                if saw_explicit_blank and current_blank is False:
+                    commands.extend(bytes(BlankCommand(enable=True)))
+                yield (memoryview(commands), chunk_pixel_count)
 
     @BaseCommand.log_transfer
     async def transfer(self, stream, *, latency: int = 65536 * 65536):
+        if self._adaptive_gray_feedback is not None:
+            async for chunk in self._transfer_adaptive(stream):
+                yield chunk
+            return
+
         self._logger.debug(
             f"transfer - {latency=} max_pipeline={self._max_pipeline} "
             f"drain_floor={self._drain_floor_pixels}"

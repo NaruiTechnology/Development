@@ -5,7 +5,7 @@ import time
 import logging
 from pathlib import Path
 
-from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
+from GlasgowDataIO.IobeamControl.macros.vector import AdaptiveGrayFeedbackConfig, VectorScanCommand
 from GlasgowDataIO.IobeamControl.transfer.mock import MockConnection
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
@@ -17,7 +17,7 @@ from AutomationPy.buildingblocks.scan_params import VectorParams
 
 logger = logging.getLogger()
 
-JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData_unit_test.json'
+JSON_PATH = r'./Development/GlasgowDataIO/Json/streamData unit_test.json'
 
 
 class VectorScanTest(unittest.TestCase):
@@ -126,6 +126,41 @@ class VectorScanTest(unittest.TestCase):
         )
         self.assertEqual(sum(len(chunk) for chunk in lazy_chunks), 10)
 
+    def test_adaptive_transfer_completes_on_mock_connection(self):
+        async def run_scan():
+            points = [(0, 0, 2), (1, 1, 2), (2, 2, 2)]
+            cmd = VectorScanCommand(
+                cookie=self.params.cookie,
+                output_mode=OutputMode.SixteenBit,
+                beam_type=self.beam_type,
+                external_control=self.params.external_control,
+                iter_points=points,
+                drain_floor_pixels=1,
+                adaptive_gray_feedback=AdaptiveGrayFeedbackConfig(
+                    gray_min=0,
+                    gray_max=255,
+                    blank_when_inside=False,
+                    window_points=1,
+                    pipeline_delay_points=0,
+                ),
+                max_pipeline=self.params.max_pipeline,
+                fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
+                drain_safety_factor=self.params.drain_safety_factor,
+                sender_drain_timeout_s=self.params.sender_drain_timeout_s,
+            )
+
+            conn = MockConnection()
+            await conn._connect()
+            chunks = []
+            async for chunk in conn.transfer_multiple(cmd, latency=1):
+                chunks.append(chunk)
+            return chunks
+
+        chunks = asyncio.run(run_scan())
+        self.assertEqual(len(chunks), 3)
+        self.assertEqual([len(chunk) for chunk in chunks], [1, 1, 1])
+        self.assertTrue(all(chunk[0] == 0 for chunk in chunks))
+
     # ------------------------------------------------------------------ #
     # Wet-run test: real Glasgow hardware.                               #
     # ------------------------------------------------------------------ #
@@ -231,6 +266,78 @@ class VectorScanTest(unittest.TestCase):
             any(any(v != 0 for v in chunk) for chunk in self.chunks),
             "every chunk is all zeros — scan returned no real data",
         )
+
+    async def scan_wet_run_adaptive_smoke(self):
+        self.chunks = []
+        self.chunks_received = 0
+
+        if self._config is None:
+            self.skipTest("no config")
+
+        test_cmd = VectorScanCommand(
+            cookie=self.params.cookie,
+            output_mode=OutputMode.SixteenBit,
+            beam_type=self.beam_type,
+            external_control=self.params.external_control,
+            iter_points=[
+                (0, 0, 1),
+                (1, 1, 1),
+                (2, 2, 1),
+            ],
+            drain_floor_pixels=1,
+            adaptive_gray_feedback=AdaptiveGrayFeedbackConfig(
+                gray_min=0,
+                gray_max=255,
+                blank_when_inside=False,
+                window_points=1,
+                pipeline_delay_points=0,
+            ),
+            max_pipeline=1,
+            fpga_pipeline_depth_pixels=self.params.fpga_pipeline_depth_pixels,
+            drain_safety_factor=self.params.drain_safety_factor,
+            sender_drain_timeout_s=self.params.sender_drain_timeout_s,
+        )
+
+        print("[test] === adaptive gray feedback smoke ===", flush=True)
+
+        conn = GlasgowConnection(self._config)
+        await conn._connect()
+        if not conn.connected:
+            print("[test] connection failed")
+            return
+
+        try:
+            async for chunk in conn.transfer_multiple(test_cmd, latency=1):
+                self.chunks.append(chunk)
+                self.chunks_received += 1
+                preview = (dump_hex(bytes(chunk)[:16])
+                           if chunk is not None else "<None>")
+                length = len(chunk) if chunk is not None else 0
+                print(f"[test] adaptive chunk #{self.chunks_received} "
+                      f"len={length}: {preview}", flush=True)
+        except Exception as e:
+            print(f"[test] EXCEPTION during adaptive transfer_multiple after "
+                  f"{self.chunks_received} chunks: {type(e).__name__}: {e}",
+                  flush=True)
+            raise
+
+        print(f"[test] adaptive transfer complete after {self.chunks_received} chunks",
+              flush=True)
+
+    def test_scan_wet_run_adaptive_smoke(self):
+        asyncio.run(asyncio.wait_for(
+            self.scan_wet_run_adaptive_smoke(),
+            timeout=60,
+        ))
+        self.assertEqual(
+            self.chunks_received, 3,
+            f"expected 3 adaptive chunks, got {self.chunks_received}",
+        )
+        for i, chunk in enumerate(self.chunks):
+            self.assertEqual(
+                len(chunk), 1,
+                f"adaptive chunk {i} wrong size: {len(chunk)}",
+            )
 
     def _exportDataToCsvFile(self):
         if not self._config or not getattr(self._config, "DumpData", False):

@@ -67,6 +67,14 @@ export interface SaveResponse {
   backend_restart?: BackendRestartResult;
 }
 
+function normalizeSettingsDwell(config: unknown): unknown {
+  return writePath(
+    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 16),
+    [...ACTION_DATA_PATH, "vectorScan", "dwell"],
+    16,
+  );
+}
+
 interface SettingsState {
   dialogOpen: boolean;
   /** Active tab inside the dialog. */
@@ -140,10 +148,11 @@ export const saveSettingsConfig = createAsyncThunk<
   SaveResponse,
   unknown
 >("settings/save", async (data) => {
+  const normalized = normalizeSettingsDwell(data);
   const r = await fetch(apiUrl("/api/admin/config"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
-    body: JSON.stringify({ data }),
+    body: JSON.stringify({ data: normalized }),
   });
   if (!r.ok) {
     const text = await r.text();
@@ -170,7 +179,10 @@ export const restoreSettingsConfig = createAsyncThunk<SaveResponse>(
 export const restartSettingsServices = createAsyncThunk<SaveResponse>(
   "settings/restartServices",
   async () => {
-    const r = await fetch(apiUrl("/api/admin/restart-services"), { method: "POST" });
+    const r = await fetch(apiUrl("/api/admin/restart-services"), {
+      method: "POST",
+      headers: scanAuthHeaders(),
+    });
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`restart services: HTTP ${r.status} ${text}`);
@@ -242,8 +254,8 @@ const slice = createSlice({
     });
     b.addCase(fetchSettingsConfig.fulfilled, (s, a) => {
       s.loading = false;
-      s.source = a.payload.data;
-      s.draft = a.payload.data;
+      s.source = normalizeSettingsDwell(a.payload.data);
+      s.draft = s.source;
       s.configPath = a.payload.path;
       s.backupPath = a.payload.backup_path;
       s.hasBackup = a.payload.has_backup;
@@ -269,7 +281,8 @@ const slice = createSlice({
       // The save endpoint doesn't echo the saved JSON back (saves a
       // round-trip on a multi-KB blob); promote the draft to source
       // ourselves so the next "discard changes" / dirty check works.
-      s.source = s.draft;
+      s.source = normalizeSettingsDwell(s.draft);
+      s.draft = s.source;
     });
     b.addCase(saveSettingsConfig.rejected, (s, a) => {
       s.saving = false;

@@ -31,7 +31,7 @@ ROM layout
     x_idx     = dac_x_code >> shift   # 0 .. N-1
     y_idx     = dac_y_code >> shift   # 0 .. N-1
     addr      = Cat(x_idx, y_idx)     # = y_idx*N + x_idx  (row-major)
-    rom[addr] = image_data[addr] * 64 # scale 8-bit to 14-bit
+    rom[addr] = image_data[addr]       # native 16-bit grayscale source
 """
 
 from amaranth import *
@@ -46,7 +46,7 @@ class FakeAdcSimulator(wiring.Component):
     Parameters
     ----------
     image_data : list[int]
-        Flat 1-D list of 8-bit pixel values (0-255), row-major:
+        Flat 1-D list of 16-bit pixel values (0-65535), row-major:
         image_data[y * image_resolution + x].
     image_resolution : int
         Side length N of the square image (power of 2, 2 <= N <= 16384).
@@ -55,15 +55,15 @@ class FakeAdcSimulator(wiring.Component):
     -----
     dac_x_code    : In(14)   current X DAC code from supersampler
     dac_y_code    : In(14)   current Y DAC code from supersampler
-    loopback_value : Out(14)  ADC sample value (purely combinatorial)
+    loopback_value : Out(16)  ADC sample value (purely combinatorial)
     """
 
     DAC_BITS: int = 14
-    ADC_BITS: int = 14
+    ADC_BITS: int = 16
 
     dac_x_code:     In(14)   # type: ignore
     dac_y_code:     In(14)   # type: ignore
-    loopback_value: Out(14)  # type: ignore
+    loopback_value: Out(16)  # type: ignore
 
     def __init__(self, *, image_data: list, image_resolution: int):
         N = image_resolution
@@ -81,8 +81,8 @@ class FakeAdcSimulator(wiring.Component):
         self._bits  = (N - 1).bit_length()          # index width (e.g. 6 for N=64)
         self._shift = self.DAC_BITS - self._bits    # e.g. 8 for N=64
 
-        # Scale 8-bit values to 14-bit ADC range (0-255 -> 0-16320)
-        self._rom = [min(int(v) * 64, (1 << self.ADC_BITS) - 1) for v in image_data]
+        # Preserve 16-bit grayscale values end-to-end.
+        self._rom = [min(int(v), (1 << self.ADC_BITS) - 1) for v in image_data]
 
         super().__init__()
 

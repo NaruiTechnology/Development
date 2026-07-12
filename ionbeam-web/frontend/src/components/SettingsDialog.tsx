@@ -57,8 +57,14 @@ import {
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
 import { Icon } from "./Icon";
+import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import { NumberStepperInput } from "./NumberStepperField";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
+
+const RASTER_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
+const VECTOR_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
+const DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
 
 export function SettingsDialog({
   targetAccountId = null,
@@ -679,9 +685,9 @@ function RasterTab({ draft }: { draft: unknown }) {
 
   const pixels = numberField(draft, [...RASTER_PATH, "pixels"], 0);
   const frameBlank = boolField(draft, [...RASTER_PATH, "frameBlank"], false);
-  const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 0);
-  const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 0);
-  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 0);
+  const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 512);
+  const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 8);
+  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 16);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
@@ -698,10 +704,13 @@ function RasterTab({ draft }: { draft: unknown }) {
           value={pixels}
           onChange={(v) => set([...RASTER_PATH, "pixels"], v)}
         />
-        <NumberField
-          label={t("settings.raster.resolution")}
-          help={<SettingsHelp topic="rasterResolution" />}
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.raster.resolution")} help={<SettingsHelp topic="rasterResolution" />} />}
           value={resolution}
+          options={RASTER_RESOLUTION_OPTIONS}
+          min={1}
+          max={2048}
+          disabled={false}
           onChange={(v) => set([...RASTER_PATH, "resolution"], v)}
         />
       </div>
@@ -713,10 +722,13 @@ function RasterTab({ draft }: { draft: unknown }) {
           value={adcLatency}
           onChange={(v) => set([...RASTER_PATH, "adcLatency"], v)}
         />
-        <NumberField
-          label={t("settings.raster.dwell")}
-          help={<SettingsHelp topic="rasterDwell" />}
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.raster.dwell")} help={<SettingsHelp topic="rasterDwell" />} />}
           value={dwell}
+          options={DWELL_OPTIONS}
+          min={1}
+          max={65535}
+          disabled={false}
           onChange={(v) => set([...RASTER_PATH, "dwell"], v)}
         />
       </div>
@@ -738,6 +750,8 @@ function VectorTab({ draft }: { draft: unknown }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
+  const vectorResolution = numberField(draft, [...VECTOR_PATH, "vectorResolution"], 2048);
+  const dwell = numberField(draft, [...VECTOR_PATH, "dwell"], 16);
   const latency = numberField(draft, [...VECTOR_PATH, "latency"], 0);
   const adcLatency = numberField(draft, [...VECTOR_PATH, "adcLatency"], 0);
   const lineShift = numberField(draft, [...VECTOR_PATH, "lineShiftPerXRow"], 0);
@@ -747,9 +761,40 @@ function VectorTab({ draft }: { draft: unknown }) {
     dispatch(setDraft(writePath(draft, p, v)));
   }
 
+  function validateCustomVectorResolution(value: number): string | null {
+    const intValue = Math.trunc(value);
+    if (intValue < 128) return t("vector.resolution.validation.min128");
+    if (!Number.isInteger(intValue) || (intValue & (intValue - 1)) !== 0) {
+      return t("vector.resolution.validation.powerOfTwo");
+    }
+    return null;
+  }
+
   return (
     <div className="settings-form">
       <h4 className="settings-form__group">{t("settings.vector.group.scan")}</h4>
+
+      <div className="field-row">
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.vector.resolution")} help={<SettingsHelp topic="vectorResolution" />} />}
+          value={vectorResolution}
+          options={VECTOR_RESOLUTION_OPTIONS}
+          min={1}
+          max={2048}
+          disabled={false}
+          customValidate={validateCustomVectorResolution}
+          onChange={(v) => set([...VECTOR_PATH, "vectorResolution"], v)}
+        />
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.vector.dwell")} help={<SettingsHelp topic="vectorDwell" />} />}
+          value={dwell}
+          options={DWELL_OPTIONS}
+          min={1}
+          max={65535}
+          disabled={false}
+          onChange={(v) => set([...VECTOR_PATH, "dwell"], v)}
+        />
+      </div>
 
       <div className="field-row">
         <NumberField
@@ -781,6 +826,7 @@ function VectorTab({ draft }: { draft: unknown }) {
           onChange={(v) => set([...VECTOR_PATH, "drainFloorPixels"], v)}
         />
       </div>
+
     </div>
   );
 }
@@ -1262,6 +1308,14 @@ async function saveStreamConfig(data: unknown): Promise<void> {
   }
 }
 
+function normalizeStreamConfigDwell(config: unknown): unknown {
+  return writePath(
+    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 16),
+    [...ACTION_DATA_PATH, "vectorScan", "dwell"],
+    16,
+  );
+}
+
 async function restoreStreamConfig(): Promise<void> {
   const r = await fetch(apiUrl("/api/admin/config/restore"), {
     method: "POST",
@@ -1709,8 +1763,9 @@ function AdminTab({
     setLocalError(null);
     try {
       const info = await fetchStreamConfig();
-      setFtpSource(info.data);
-      setFtpDraft(info.data);
+      const normalized = normalizeStreamConfigDwell(info.data);
+      setFtpSource(normalized);
+      setFtpDraft(normalized);
       setFtpConfigPath(info.path);
       setFtpHasBackup(info.has_backup);
       if (info.backup_created) {
@@ -1835,8 +1890,10 @@ function AdminTab({
     setLocalError(null);
     setNotice(null);
     try {
-      await saveStreamConfig(ftpDraft);
-      setFtpSource(ftpDraft);
+      const normalized = normalizeStreamConfigDwell(ftpDraft);
+      await saveStreamConfig(normalized);
+      setFtpSource(normalized);
+      setFtpDraft(normalized);
       setNotice(t("settings.ftp.save.ok"));
       await testFtpConnection();
     } catch (err) {
@@ -2630,15 +2687,16 @@ function AdminUsersTable({
             key={`${user.id ?? "new"}-${index}`}
             ref={rowRef}
           >
-            <input
-              aria-label={t("settings.admin.user.id")}
-              className="input"
-              type="number"
+            <NumberStepperInput
               value={user.id ?? ""}
               disabled={disabled}
-              onChange={(e) =>
-                onUpdate(index, "id", e.target.value === "" ? null : Number(e.target.value))
+              onValueChange={(value) =>
+                onUpdate(index, "id", value === "" ? null : Number(value))
               }
+              step={1}
+              min={0}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.user.id")}
             />
             <input
               aria-label={t("settings.admin.user.login")}
@@ -2710,21 +2768,20 @@ function AdminUsersTable({
                 </option>
               ))}
             </select>
-            <input
-              aria-label={t("settings.admin.user.sessionLifetimeDays")}
-              className="input"
-              type="number"
-              min={1}
-              step={1}
+            <NumberStepperInput
               value={user.session_lifetime_limit_days}
               disabled={disabled}
-              onChange={(e) =>
+              onValueChange={(value) =>
                 onUpdate(
                   index,
                   "session_lifetime_limit_days",
-                  Math.max(1, Math.trunc(Number(e.target.value) || 1)),
+                  Math.max(1, Math.trunc(Number(value) || 1)),
                 )
               }
+              step={1}
+              min={1}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.user.sessionLifetimeDays")}
             />
             <label className="settings-admin-table__check">
               <input
@@ -2867,15 +2924,16 @@ function EquipmentTable({
 
           return (
           <div className="settings-equipment-table__row" role="row" key={`${row.id ?? "new"}-${index}`}>
-            <input
-              aria-label={t("settings.admin.equipment.id")}
-              className="input"
-              type="number"
+            <NumberStepperInput
               value={row.id ?? ""}
               disabled={disabled}
-              onChange={(e) =>
-                onUpdate(index, "id", e.target.value === "" ? null : Number(e.target.value))
+              onValueChange={(value) =>
+                onUpdate(index, "id", value === "" ? null : Number(value))
               }
+              step={1}
+              min={0}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.equipment.id")}
             />
             <input
               aria-label={t("settings.admin.equipment.name")}
@@ -2989,6 +3047,8 @@ type SettingsHelpTopic =
   | "rasterAdcLatency"
   | "rasterDwell"
   | "rasterFrameBlank"
+  | "vectorResolution"
+  | "vectorDwell"
   | "vectorLatency"
   | "vectorAdcLatency"
   | "vectorLineShift"
@@ -3039,6 +3099,8 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, { title: TranslationKey }> =
   rasterAdcLatency: { title: "settings.help.rasterAdcLatency.title" },
   rasterDwell: { title: "settings.help.rasterDwell.title" },
   rasterFrameBlank: { title: "settings.help.rasterFrameBlank.title" },
+  vectorResolution: { title: "settings.help.vectorResolution.title" },
+  vectorDwell: { title: "settings.help.vectorDwell.title" },
   vectorLatency: { title: "settings.help.vectorLatency.title" },
   vectorAdcLatency: { title: "settings.help.vectorAdcLatency.title" },
   vectorLineShift: { title: "settings.help.vectorLineShift.title" },
@@ -3115,6 +3177,26 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
         When enabled, the macro blanks the beam at frame boundaries and
         during abort cleanup. Leave it off for fastest live preview; enable
         it for beam-sensitive samples.
+      </p>
+    </>
+  ),
+  vectorResolution: (
+    <>
+      <p>
+        Default-vector sweep resolution. The scan still covers the full
+        DAC range, but this value controls how many evenly spaced sample
+        sites are visited on each axis. Presets are common powers of two;
+        custom values allow finer control from <code>1..2048</code>.
+      </p>
+    </>
+  ),
+  vectorDwell: (
+    <>
+      <p>
+        Default-vector dwell in 125 ns sample periods. This only affects
+        the built-in default sweep. Custom point lists already carry a
+        per-point <code>dwell</code> value in each <code>x, y, dwell</code>
+        triple.
       </p>
     </>
   ),
@@ -3325,16 +3407,14 @@ function NumberField({
   return (
     <div className="field">
       <FieldLabel label={label} help={help} />
-      <input
-        type="number"
-        step={step ?? "1"}
-        className="input"
+      <NumberStepperInput
         value={local}
-        onChange={(e) => {
-          setLocal(e.target.value);
-          const n = Number(e.target.value);
+        onValueChange={(next) => {
+          setLocal(next);
+          const n = Number(next);
           if (Number.isFinite(n)) onChange(n);
         }}
+        step={step === "any" ? 1 : Number(step ?? 1)}
       />
     </div>
   );

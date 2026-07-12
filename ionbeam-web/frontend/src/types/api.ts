@@ -24,6 +24,7 @@ export interface RasterRequest {
   latency_bytes: number;  // >= 2
   frame_blank: boolean;
   cookie: number;         // 0..65535
+  preview?: boolean;
   /** Output bit-depth for the SynchronizeCommand. Backend defaults to
    *  "SixteenBit" when omitted, so this field is optional for frontends
    *  that don't expose a control for it. */
@@ -36,16 +37,41 @@ export interface RasterRequest {
 }
 
 export type VectorPattern = "default" | "custom";
+export type VectorFeedbackMode = "standard" | "adaptive_gray_feedback";
+
+export interface VectorPoint {
+  x: number;
+  y: number;
+  dwell: number;
+  /** When true, the beam is explicitly blanked for this point. */
+  blank?: boolean | null;
+  /** Explicit custom-point pass order: 1 = primary, 2 = secondary. */
+  passIndex?: number | null;
+}
+
+export type VectorPointTuple =
+  | [number, number, number]
+  | [number, number, number, boolean | null]
+  | [number, number, number, boolean | null, number | null];
 
 export interface VectorRequest {
   pattern: VectorPattern;
-  points: Array<[number, number, number]> | null;
-  /** Default-pattern density on each axis. Allowed: 256, 512, 1024, 2048.
+  points: Array<VectorPointTuple | VectorPoint> | null;
+  preview?: boolean;
+  /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */
   vector_resolution: number;
+  /** Default-pattern dwell in 125 ns units. Ignored when pattern=custom,
+   *  because custom points already carry per-point dwell values. */
+  dwell: number;
   latency_bytes: number;
   output_mode: "SixteenBit" | "EightBit";
+  feedback_mode?: VectorFeedbackMode;
+  /** Confirmed gray interval in 8-bit UI units (0..255). */
+  gray_level_range?: [number, number] | null;
+  /** True blanks values inside the range; false blanks values outside it. */
+  gray_level_skipped?: boolean | null;
   cookie: number;
   pre_process: boolean;
   do_validate: boolean;
@@ -58,7 +84,17 @@ export interface VectorRequest {
 export interface SimulationBitmap {
   width: number;
   height: number;
-  pixels: number[];
+  pixels: SimulationBitmapPixel[];
+}
+
+export interface SimulationBitmapPixel {
+  value: number;
+  /** When true, the scan sampler treats this pixel as skipped/blanked. */
+  isHighlighted?: boolean | null;
+  /** `true` skips highlighted pixels, `false` spots them, `null` means normal scan. */
+  isSkipped?: boolean | null;
+  /** Per-pixel beam blank state, used by custom point expansion and simulation. */
+  blank?: boolean | null;
 }
 
 /**
@@ -147,6 +183,7 @@ export interface ServerDefaults {
   raster: Record<string, unknown>;
   vector: Record<string, unknown>;
   simulation?: Record<string, unknown>;
+  mag_calibration?: Record<string, unknown>;
   ev?: number;
   raster_params?: Record<string, unknown>;
   vector_params?: Record<string, unknown>;

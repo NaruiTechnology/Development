@@ -5,7 +5,7 @@ from amaranth.build import *
 from . import *
 
 class PipelinedLoopbackAdapter(wiring.Component):
-    loopback_stream: In(unsigned(14)) # type: ignore
+    loopback_stream: In(unsigned(16)) # type: ignore
     bus: Out(BusSignature) # type: ignore
 
     def __init__(self, adc_latency: int):
@@ -20,11 +20,11 @@ class PipelinedLoopbackAdapter(wiring.Component):
         m.d.sync += prev_bus_adc_oe.eq(self.bus.adc_oe)
         m.d.comb += adc_oe_rising.eq(~prev_bus_adc_oe & self.bus.adc_oe)
 
-        shift_register = Signal(14*self.adc_latency)
+        shift_register = Signal(16 * self.adc_latency)
 
         with m.If(adc_oe_rising):
-            m.d.sync += shift_register.eq((shift_register << 14) | self.loopback_stream)
+            m.d.sync += shift_register.eq((shift_register << 16) | self.loopback_stream)
 
-        m.d.comb += self.bus.data_i.eq(shift_register.word_select(self.adc_latency-1, 14))
+        m.d.comb += self.bus.data_i.eq(shift_register.word_select(self.adc_latency - 1, 16))
 
         return m

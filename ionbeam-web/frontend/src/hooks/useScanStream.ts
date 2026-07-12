@@ -1,7 +1,7 @@
 /**
  * useScanStream — opens the WebSocket to /ws/scan/{raster,vector}/stream,
  * sends the request body, and dispatches Redux actions for each frame
- * received. Exposes start / pause / stop callbacks.
+ * received. Exposes start / stop callbacks.
  *
  * Pixel byte format (raster AND vector): the FPGA's ImageSerializer emits
  * HIGH byte then LOW byte for each uint16 ADC sample (see
@@ -17,22 +17,21 @@
  * is 2, not 8, and (x, y) is reconstructed from sample index + pattern
  * by the imageSlice reducer — NOT carried inline with each sample.
  *
- * Pause and Stop both close the WS with code 1000. The FastAPI service
+ * Stop closes the WS with code 1000. The FastAPI service
  * maps that to its WebSocketDisconnect handler which calls gen.aclose() —
  * the same path examples/ws_client.py relies on for clean cancel.
  *
  * Close-handler invariant: after the WS closes, the scan phase MUST have
  * left "running"/"stopping". Three paths get us there:
  *   - "done" event arrived first (server completed the scan)
- *   - user closed it (closureKind = pause | stop)
+ *   - user closed it (closureKind = stop)
  *   - upstream/server closed unexpectedly  -> we mark phase = error
  */
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import {
   streamCompleted,
   streamErrored,
-  streamPaused,
   streamProgress,
   streamReset,
   streamStarted,
@@ -50,9 +49,14 @@ import type { RasterRequest, VectorRequest } from "../types/api";
 import type { RootState } from "../store";
 import { registerScanActionStop } from "./scanActionRegistry";
 import { withScanAuthQuery } from "../lib/authIdentity";
+import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
 import { wsUrl } from "../lib/backendUrl";
 
-type Closure = "pause" | "stop";
+type Closure = "stop";
+type ActiveScan =
+  | { kind: "raster"; req: RasterRequest }
+  | { kind: "vector"; req: VectorRequest };
 
 export function useScanStream() {
   const dispatch = useAppDispatch();
@@ -61,6 +65,9 @@ export function useScanStream() {
   // Captures whether the server delivered a clean "done" event before
   // the socket closed; if so, we don't downgrade to "error" on close.
   const sawDoneRef = useRef<boolean>(false);
+  const activeScanRef = useRef<ActiveScan | null>(null);
+  const autoReconnectAttemptedRef = useRef(false);
+  const reconnectInFlightRef = useRef<Promise<boolean> | null>(null);
 
   // Read current phase reactively so the close handler can decide whether
   // to transition to error. Reading from store at close time avoids a
@@ -91,6 +98,8 @@ export function useScanStream() {
   const startRaster = useCallback(
     (req: RasterRequest) => {
       stopExisting(wsRef);
+      activeScanRef.current = { kind: "raster", req };
+      autoReconnectAttemptedRef.current = false;
       dispatch(resetRaster({ resolution: req.resolution }));
       dispatch(streamStarted());
       const ws = openWs("/ws/scan/raster/stream");
@@ -126,6 +135,8 @@ export function useScanStream() {
   const startVector = useCallback(
     (req: VectorRequest) => {
       stopExisting(wsRef);
+      activeScanRef.current = { kind: "vector", req };
+      autoReconnectAttemptedRef.current = false;
       // Default-pattern scans store an edge x edge dense buffer. Explicit
       // custom bitmap simulations render in compact bitmap space, but a
       // default-pattern request with simulation_bitmap still scans at the
@@ -157,6 +168,15 @@ export function useScanStream() {
 
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
+        console.info("[scan/vector] ws-send", {
+          preview: Boolean(req.preview),
+          pattern: req.pattern,
+          feedback_mode: req.feedback_mode ?? null,
+          gray_level_range: req.gray_level_range ?? null,
+          gray_level_skipped: req.gray_level_skipped ?? null,
+          roi: req.roi != null,
+          simulation_bitmap: req.simulation_bitmap != null,
+        });
         ws.send(JSON.stringify(req));
       };
       ws.onmessage = (ev) =>
@@ -171,13 +191,19 @@ export function useScanStream() {
         /* see startRaster */
       };
       ws.onclose = (ev) => {
-        finalize(
+        void handleClose(
+          ev,
           closureKindRef.current,
           sawDoneRef.current,
           phaseRef.current,
           chunksReceivedRef.current,
-          ev,
           dispatch,
+          wsRef,
+          activeScanRef,
+          autoReconnectAttemptedRef,
+          reconnectInFlightRef,
+          startRaster,
+          startVector,
         );
         wsRef.current = null;
       };
@@ -185,20 +211,13 @@ export function useScanStream() {
     [dispatch, vectorLineShiftPerXRow]
   );
 
-  const pause = useCallback(() => {
-    const ws = wsRef.current;
-    if (!ws) return;
-    closureKindRef.current = "pause";
-    dispatch(streamStopping());
-    ws.close(1000, "pause");
-  }, [dispatch]);
-
   const stop = useCallback(() => {
     const ws = wsRef.current;
     if (!ws) {
       return;
     }
     closureKindRef.current = "stop";
+    activeScanRef.current = null;
     dispatch(streamStopping());
     ws.close(1000, "stop");
   }, [dispatch]);
@@ -207,7 +226,10 @@ export function useScanStream() {
     return registerScanActionStop(stop);
   }, [stop]);
 
-  return { startRaster, startVector, pause, stop };
+  return useMemo(
+    () => ({ startRaster, startVector, stop }),
+    [startRaster, startVector, stop]
+  );
 }
 
 /* -------- helpers ------------------------------------------------------ */
@@ -326,10 +348,6 @@ function finalize(
   ev: CloseEvent,
   dispatch: ReturnType<typeof useAppDispatch>
 ): void {
-  if (closure === "pause") {
-    dispatch(streamPaused());
-    return;
-  }
   if (closure === "stop") {
     dispatch(streamReset());
     return;
@@ -345,5 +363,91 @@ function finalize(
   if (currentPhase === "running" || currentPhase === "stopping") {
     const reason = ev.reason || `WebSocket closed (code ${ev.code})`;
     dispatch(streamErrored(reason));
+  }
+}
+
+function isRecoverableDisconnect(
+  ev: CloseEvent,
+  closure: Closure | null,
+  sawDone: boolean,
+  currentPhase: string
+): boolean {
+  if (closure === "stop" || sawDone) return false;
+  if (currentPhase !== "running" && currentPhase !== "stopping") return false;
+  const reason = `${ev.reason ?? ""} ${ev.code}`.toLowerCase();
+  return (
+    ev.code === 1011 ||
+    ev.code === 1006 ||
+    reason.includes("timeout") ||
+    reason.includes("unreachable") ||
+    reason.includes("upstream_error")
+  );
+}
+
+async function reconnectGlasgow(): Promise<boolean> {
+  const r = await fetch(apiUrl("/api/admin/reconnect"), {
+    method: "POST",
+    headers: scanAuthHeaders(),
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => "");
+    throw new Error(`reconnect: HTTP ${r.status} ${text}`.trim());
+  }
+  return true;
+}
+
+async function handleClose(
+  ev: CloseEvent,
+  closure: Closure | null,
+  sawDone: boolean,
+  currentPhase: string,
+  currentChunks: number,
+  dispatch: ReturnType<typeof useAppDispatch>,
+  wsRef: React.MutableRefObject<WebSocket | null>,
+  activeScanRef: React.MutableRefObject<ActiveScan | null>,
+  autoReconnectAttemptedRef: React.MutableRefObject<boolean>,
+  reconnectInFlightRef: React.MutableRefObject<Promise<boolean> | null>,
+  startRaster: (req: RasterRequest) => void,
+  startVector: (req: VectorRequest) => void,
+): Promise<void> {
+  if (!isRecoverableDisconnect(ev, closure, sawDone, currentPhase)) {
+    finalize(closure, sawDone, currentPhase, currentChunks, ev, dispatch);
+    return;
+  }
+  if (autoReconnectAttemptedRef.current) {
+    finalize(closure, sawDone, currentPhase, currentChunks, ev, dispatch);
+    return;
+  }
+
+  autoReconnectAttemptedRef.current = true;
+  const activeScan = activeScanRef.current;
+  if (!activeScan) {
+    finalize(closure, sawDone, currentPhase, currentChunks, ev, dispatch);
+    return;
+  }
+
+  if (!reconnectInFlightRef.current) {
+    reconnectInFlightRef.current = (async () => {
+      await reconnectGlasgow();
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      return true;
+    })().finally(() => {
+      reconnectInFlightRef.current = null;
+    });
+  }
+
+  try {
+    await reconnectInFlightRef.current;
+    if (wsRef.current !== null || closure === "stop") {
+      return;
+    }
+    if (activeScanRef.current?.kind === "raster" && activeScan.kind === "raster") {
+      startRaster(activeScan.req);
+    } else if (activeScanRef.current?.kind === "vector" && activeScan.kind === "vector") {
+      startVector(activeScan.req);
+    }
+  } catch (err) {
+    activeScanRef.current = null;
+    dispatch(streamErrored(err instanceof Error ? err.message : String(err)));
   }
 }

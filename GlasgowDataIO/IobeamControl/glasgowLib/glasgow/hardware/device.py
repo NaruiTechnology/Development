@@ -95,6 +95,16 @@ class GlasgowDeviceError(Exception):
     """An exception raised on a communication error."""
 
 
+def _safe_ascii_string_descriptor(handle, device, descriptor, fallback_label):
+    try:
+        return handle.getASCIIStringDescriptor(descriptor)
+    except usb1.USBError as exc:
+        fallback = f"{fallback_label}-{device.getBusNumber():03d}-{device.getDeviceAddress():03d}"
+        logger.warning("USB descriptor read failed for %s: %s; using %s",
+                       fallback_label, exc, fallback)
+        return fallback
+
+
 class GlasgowDevice:
     @classmethod
     def firmware_file(cls):
@@ -152,8 +162,8 @@ class GlasgowDevice:
                     # to expose all kinds of issues related to hotplug (especially on Windows,
                     # where libusb does not listen to hotplug events) and the more you do it,
                     # the more likely it is to eventually cause misery.
-                    serial = handle.getASCIIStringDescriptor(
-                        device.getSerialNumberDescriptor())
+                    serial = _safe_ascii_string_descriptor(
+                        handle, device, device.getSerialNumberDescriptor(), "glasgow")
                     logger.warning(f"please run `glasgow flash` to update firmware of device "
                                    f"{serial}")
                 except usb1.USBErrorBusy:
@@ -162,8 +172,8 @@ class GlasgowDevice:
                     handle.close()
                     continue
             else: # api_level == CUR_API_LEVEL
-                serial = handle.getASCIIStringDescriptor(
-                    device.getSerialNumberDescriptor())
+                serial = _safe_ascii_string_descriptor(
+                    handle, device, device.getSerialNumberDescriptor(), "glasgow")
                 if serial not in devices_by_serial:
                     logger.debug("found rev%s device with serial %s", revision, serial)
                     devices_by_serial[serial] = (revision, device)
@@ -250,12 +260,12 @@ class GlasgowDevice:
         except usb1.USBErrorNotSupported:
             pass
 
-        device_manufacturer = self.usb_handle.getASCIIStringDescriptor(
-            usb_device.getManufacturerDescriptor())
-        device_product = self.usb_handle.getASCIIStringDescriptor(
-            usb_device.getProductDescriptor())
-        device_serial = self.usb_handle.getASCIIStringDescriptor(
-            usb_device.getSerialNumberDescriptor())
+        device_manufacturer = _safe_ascii_string_descriptor(
+            self.usb_handle, usb_device, usb_device.getManufacturerDescriptor(), "manufacturer")
+        device_product = _safe_ascii_string_descriptor(
+            self.usb_handle, usb_device, usb_device.getProductDescriptor(), "product")
+        device_serial = _safe_ascii_string_descriptor(
+            self.usb_handle, usb_device, usb_device.getSerialNumberDescriptor(), "serial")
         self._serial = device_serial
         self._modified_design = not device_product.startswith("Glasgow Interface Explorer")
         if (device_manufacturer == "1BitSquared" and

@@ -1,14 +1,17 @@
 import { useEffect, useRef } from "react";
 
 import { useAppSelector } from "../store";
+import type { ROIState } from "../store/scanSlice";
 import type { ROIRequest } from "../types/api";
-
-const EDGE = 640;
+import { ROI_CANVAS_EDGE, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
 
 export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: string | null }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
-  const imageSource = roi.imageDataUrl ?? backgroundImageUrl;
+  const imageSource =
+    roi.scanImageDataUrl ?? (roi.imageKind === "lastScan"
+      ? backgroundImageUrl ?? roi.imageDataUrl
+      : roi.imageDataUrl ?? backgroundImageUrl);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,8 +38,8 @@ export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: str
     <div className="roi-mini-frame">
       <canvas
         ref={canvasRef}
-        width={EDGE}
-        height={EDGE}
+        width={ROI_CANVAS_EDGE}
+        height={ROI_CANVAS_EDGE}
         draggable={false}
         onDragStart={(e) => e.preventDefault()}
       />
@@ -47,33 +50,43 @@ export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: str
 function drawPreview(
   canvas: HTMLCanvasElement | null,
   selection: ROIRequest | null,
-  roi: {
-    x_origin: number;
-    x_end: number;
-    y_origin: number;
-    y_end: number;
-    show_grid: boolean;
-  },
+  roi: Pick<
+    ROIState,
+    | "x_origin"
+    | "x_end"
+    | "y_origin"
+    | "y_end"
+    | "show_grid"
+    | "viewport_x_start"
+    | "viewport_x_end"
+    | "viewport_y_start"
+    | "viewport_y_end"
+    | "calibration_viewport_x_start"
+    | "calibration_viewport_x_end"
+    | "calibration_viewport_y_start"
+    | "calibration_viewport_y_end"
+  >,
   image: HTMLImageElement | null
 ) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  ctx.clearRect(0, 0, EDGE, EDGE);
+  ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
   ctx.fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
-  ctx.fillRect(0, 0, EDGE, EDGE);
+  ctx.fillRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
 
   if (image) {
-    ctx.drawImage(image, 0, 0, EDGE, EDGE);
+    ctx.drawImage(image, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
   }
 
   if (!selection) return;
 
-  const x0 = dutToCanvas(selection.x_start, roi.x_origin, roi.x_end);
-  const x1 = dutToCanvas(selection.x_end, roi.x_origin, roi.x_end);
-  const y0 = dutToCanvas(selection.y_start, roi.y_origin, roi.y_end);
-  const y1 = dutToCanvas(selection.y_end, roi.y_origin, roi.y_end);
+  const bounds = viewportBounds(roi);
+  const x0 = worldToCanvasX(selection.x_start, roi, bounds);
+  const x1 = worldToCanvasX(selection.x_end, roi, bounds);
+  const y0 = worldToCanvasY(selection.y_start, roi, bounds);
+  const y1 = worldToCanvasY(selection.y_end, roi, bounds);
   const left = Math.min(x0, x1);
   const top = Math.min(y0, y1);
   const width = Math.max(1, Math.abs(x1 - x0));
@@ -81,28 +94,20 @@ function drawPreview(
 
   ctx.save();
   ctx.fillStyle = "rgba(0, 0, 0, 0.32)";
-  ctx.fillRect(0, 0, EDGE, top);
-  ctx.fillRect(0, top + height, EDGE, EDGE - top - height);
+  ctx.fillRect(0, 0, ROI_CANVAS_EDGE, top);
+  ctx.fillRect(0, top + height, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE - top - height);
   ctx.fillRect(0, top, left, height);
-  ctx.fillRect(left + width, top, EDGE - left - width, height);
+  ctx.fillRect(left + width, top, ROI_CANVAS_EDGE - left - width, height);
 
   ctx.strokeStyle = "#ff2d2d";
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 0.75;
   ctx.strokeRect(left + 1.5, top + 1.5, Math.max(1, width - 3), Math.max(1, height - 3));
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.82)";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 0.5;
   ctx.setLineDash([8, 6]);
   ctx.strokeRect(left + 8, top + 8, Math.max(1, width - 16), Math.max(1, height - 16));
   ctx.restore();
-}
-
-function dutToCanvas(v: number, start: number, end: number): number {
-  const lo = Math.min(start, end);
-  const hi = Math.max(start, end);
-  const span = Math.max(Number.EPSILON, hi - lo);
-  const t = (v - lo) / span;
-  return Math.max(0, Math.min(EDGE, Math.round(t * EDGE)));
 }
 
 function getCssColor(el: HTMLElement, variableName: string, fallback: string): string {

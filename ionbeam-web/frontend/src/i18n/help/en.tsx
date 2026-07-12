@@ -30,7 +30,11 @@ export type HelpKey =
   | "vectorResolution"
   | "customPoints"
   | "preProcess"
-  | "canvasView";
+  | "canvasView"
+  | "grayScale"
+  | "vectorGrayLevelFilter"
+  | "scanModes"
+  | "magCalibration";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
   dwell: () => (
@@ -45,6 +49,14 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         pixel is 2, 4, 8, 16, 32, 64, ….
       </div>
 
+      <div className="dwell-help__rule">
+        <strong>Gray-level probe/blank minimum: dwell 2.</strong> When a gray
+        range is confirmed for ROI or Vector scanning, the per-pixel workflow
+        needs one dwell period to probe the gray level and at least one more
+        period to apply the beam-on or blank decision. A dwell of 1 cannot
+        perform both stages, so the selected value is normalized to 2.
+      </div>
+
       <p>
         The <code>dwell</code> field is the supersampler control.
         Change it:
@@ -56,6 +68,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><code>"dwell": 4</code> → 4× averaging (2 Mpix/s), 2× SNR gain</li>
         <li><code>"dwell": 8</code> → 8× averaging (1 Mpix/s), ~2.8× SNR gain</li>
         <li><code>"dwell": 16</code> → 16× averaging (500 kpix/s), 4× SNR gain</li>
+        <li><code>"dwell": 32</code> → 32× averaging (250 kpix/s), ~5.7× SNR gain</li>
+        <li><code>"dwell": 64</code> → 64× averaging (125 kpix/s), 8× SNR gain</li>
         <li>… up to <code>dwell = 65535</code> (≈ 8.19 ms per pixel)</li>
       </ul>
 
@@ -75,6 +89,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><td>8</td><td>8</td><td>1.0 MPix/s</td><td>2.83×</td><td>1.05 s</td></tr>
             <tr><td>16</td><td>16</td><td>500 kPix/s</td><td>4.00×</td><td>2.10 s</td></tr>
             <tr><td>32</td><td>32</td><td>250 kPix/s</td><td>5.66×</td><td>4.19 s</td></tr>
+            <tr><td>64</td><td>64</td><td>125 kPix/s</td><td>8.00×</td><td>8.39 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -112,7 +127,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
           <thead>
             <tr>
               <th>Resolution</th><th>DAC stride</th><th>Total pixels</th>
-              <th>Frame time<br /><span className="muted">(dwell = 2)</span></th>
+              <th>Frame time<br /><span className="muted">(dwell = 16)</span></th>
               <th>16-bit output</th>
             </tr>
           </thead>
@@ -427,13 +442,14 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><strong>1024 — stride 2</strong>: every 2nd DAC code. ¼ the points, ¼ the scan time.</li>
         <li><strong>512 — stride 4</strong>: every 4th DAC code. 1/16th the points and time.</li>
         <li><strong>256 — stride 8</strong>: every 8th DAC code. 1/64th the points; useful for fast preview scans.</li>
+        <li><strong>Custom values 1..2048</strong>: still cover the full DAC range, but the sample spacing is distributed as evenly as possible instead of matching an exact integer stride.</li>
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>Allowed values are 256, 512, 1024, 2048.</strong> The
-        backend rejects anything else — the stride must be an
-        integer divisor of 2048, or the sweep wouldn&apos;t close
-        cleanly at the edges of the DAC range.
+        <strong>Allowed values are 1..2048.</strong> The preset powers
+        of two keep the mapping exact on the 2048 x 2048 DAC preview
+        grid, while custom values trade that neat stride relationship
+        for finer control over total point count.
       </div>
 
       <p>
@@ -538,11 +554,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>The wet-run pre-process time is reported separately.</strong>{" "}
-        <code>process_time_s</code> in the run report shows how long
-        the pre-processing took; <code>send_time_s</code> shows USB
-        transfer time alone. The two used to be conflated in older
-        UIs.
+        <strong>The wet-run pre-process duration is reported separately.</strong>{" "}
+        <code>process_time_s</code> reports the pre-processing duration
+        for the run; <code>send_time_s</code> reports USB transfer time
+        alone. The two used to be conflated in older UIs.
       </div>
 
       <p>When to enable:</p>
@@ -588,6 +603,159 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         sample order and image sparsity. Use <strong>Native</strong>
         when you want to inspect the DAC-space footprint of a reduced
         vector grid.
+      </p>
+    </>
+  ),
+
+  grayScale: () => (
+    <>
+      <p>
+        The gray-scale spectrum shows the gray values currently present
+        in the rendered live image or loaded bitmap. Each box is one
+        sampled gray level, and the step spinner controls how many
+        boxes are shown across the available range.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Selecting a box does not change the image by itself.</strong>{" "}
+        It only marks the gray-level interval that the next scan action
+        will use when you confirm the choice.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Skip</strong> sends explicit blanked vector points for the highlighted gray levels inside the selected ROI sub-area, so those pixels are skipped during the next scan.</li>
+        <li><strong>Spot</strong> sends explicit unblanked vector points for the highlighted gray levels and blanks the other pixels inside the selected ROI sub-area.</li>
+        <li>The selection applies only to the defined ROI sub-area; pixels outside that area keep their normal scan handling.</li>
+      </ul>
+
+      <p>
+        Use <strong>Select</strong> to confirm the pending mode and
+        persist it into the scan store for the next scan step.
+      </p>
+    </>
+  ),
+
+  vectorGrayLevelFilter: () => (
+    <>
+      <p>
+        The current fallback behavior is precomputed blanking: bitmap or
+        gray filter data is expanded into points with blank flags, the
+        stream is sent, the FPGA executes it, and ADC samples come back
+        later.
+      </p>
+
+      <p>
+        The solution provides a way to handle one logical point at a
+        time: when this toggle is enabled and a gray range is
+        confirmed, the backend switches vector scans into
+        <code>adaptive_gray_feedback</code>, forces{" "}
+        <code>SixteenBit</code> output, sends one unblanked probe at
+        <code>(x, y)</code>, reads that ADC result immediately, then
+        revisits the same coordinate for the remaining dwell with the
+        chosen blank state.
+      </p>
+
+      <ul className="dwell-help__list">
+        <li>Raster stays out of scope. This help applies only to vector scans.</li>
+        <li>The gray range is compared against the confirmed interval from the gray selection flow.</li>
+        <li>Adaptive mode forces <code>dwell = 16</code> or higher so the same-coordinate action pass still has meaningful dwell after the initial probe.</li>
+      </ul>
+
+      <p>
+        The returned scan result still stays one logical sample per
+        requested point by combining the probe/action samples, or
+        zeroing the output when blanked. The final beam shutdown
+        remains explicit at the end of the adaptive transfer.
+      </p>
+
+      <p>
+        Tradeoff: this is much slower than the current streaming vector
+        scan. USB round trips and FPGA buffering will dominate. As a
+        software path, though, it is technically reasonable and
+        better than doing nothing.
+      </p>
+    </>
+  ),
+
+  scanModes: () => (
+    <>
+      <p>
+        <strong>Raster</strong> scans a fixed rectangular grid in
+        row/column order. The beam follows the full frame or ROI
+        bounds, which makes it the natural choice for regular imaging,
+        full-frame coverage, and simple repeatable acquisition.
+      </p>
+
+      <p>
+        <strong>Vector</strong> scans an explicit list of points. The
+        beam visits only the coordinates you send, so it is better for
+        sparse patterns, irregular shapes, annotation-style work, and
+        selective beam control such as gray-level skip/spot.
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>Use Raster</strong> when you want a conventional image, predictable grid spacing, or a full ROI sweep without custom point scripting.</li>
+        <li><strong>Use Vector</strong> when you need to skip or emphasize selected pixels, draw non-rectangular patterns, or target only a subset of the ROI with finer beam control.</li>
+        <li>Both modes can render the same live image on screen, but the host command they send to the hardware is different.</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>Practical rule of thumb:</strong> Raster is for
+        coverage, vector is for selectivity.
+      </div>
+    </>
+  ),
+
+  magCalibration: () => (
+    <>
+      <p>
+        Magnification calibration maps a microscope magnification value
+        to the full horizontal field of view (HFOV) in meters for the
+        selected beam.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>HFOV formula.</strong>{" "}
+        <code>HFOV_m = measured_length_m × (image_resolution_px / measured_line_px)</code>.
+        The measured length is the real-world distance represented by
+        the line you measured, and measured pixels is that line&apos;s
+        pixel length in the image.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Magnification</strong> is the microscope mag setting for the current point.</li>
+        <li><strong>Image resolution</strong> should match the full image axis used for calibration, usually <code>max(width_px, height_px)</code>.</li>
+        <li><strong>Update curve</strong> stores the computed HFOV at the current magnification.</li>
+        <li><strong>Save</strong> persists the per-beam map under <code>magCalibration.beams[beam].m_per_fov</code>.</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>X/Y relationship.</strong> Magnification calibration
+        stores HFOV only. The ROI X/Y calibration owns the viewport-to-DUT
+        coordinate mapping. If pixels are square, VFOV is derived from
+        HFOV by the image aspect ratio; otherwise X and Y require separate
+        ROI calibration.
+      </div>
+
+      <p>
+        <strong>Import CSV</strong> expects a magnification-calibration
+        CSV exported from this panel: <code>Magnification,FOV (m)</code>.
+        It is not the normal scan output CSV. Scan result CSV files contain
+        sampled image data and are intentionally not parsed as mag-cal
+        curves.
+      </p>
+
+      <p>
+        Saved results are written into the stream configuration and served
+        back through <code>/api/admin/mag-calibration</code>. Other scan
+        logic can consume that per-beam map from defaults/config; the
+        import button itself only replaces the current mag-cal point table.
+      </p>
+
+      <p>
+        The chart is drawn on log-log axes because FOV normally changes
+        approximately inversely with magnification. CSV import/export
+        uses two data columns: magnification and FOV meters.
       </p>
     </>
   ),

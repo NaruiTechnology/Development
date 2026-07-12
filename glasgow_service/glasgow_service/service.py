@@ -38,7 +38,9 @@ from pathlib import Path
 from typing import AsyncIterator, Iterable, List, Optional, Tuple
 
 from GlasgowDataIO.IobeamControl.macros import RasterScanCommand
-from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
+from GlasgowDataIO.IobeamControl.macros.vector import (
+    AdaptiveGrayFeedbackConfig, VectorScanCommand,
+)
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, BeamType
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
@@ -64,17 +66,18 @@ class DeviceBusy(RuntimeError):     ...
 class DeviceNotReady(RuntimeError): ...
 
 
-def _default_vector_iter(edge: int = 2048) -> Iterable[Tuple[int, int, int]]:
+def _default_vector_iter(edge: int = 2048, dwell: int = 1) -> Iterable[Tuple[int, int, int]]:
     """Yield (x, y, dwell) triples for a default sweep at the given edge
     resolution. Coverage is always the full 14-bit DAC range; smaller
-    edge values produce sparser sampling with stride = 16384 // edge.
-    Caller is responsible for passing an edge that divides 2048 evenly
-    (the Pydantic validator on VectorRequest.vector_resolution enforces
-    this for the public API)."""
-    stride = 16384 // edge
-    for x in range(edge):
-        for y in range(edge):
-            yield x * stride, y * stride, 1
+    edge values produce sparser sampling. Custom edge counts are
+    distributed as evenly as possible across the full range."""
+    x_range = DACCodeRange.from_resolution(edge)
+    y_range = DACCodeRange.from_resolution(edge)
+    for x_idx in range(edge):
+        x = x_range.start + ((x_idx * x_range.step) >> 8)
+        for y_idx in range(edge):
+            y = y_range.start + ((y_idx * y_range.step) >> 8)
+            yield x, y, dwell
 
 
 def _roi_bounds(roi) -> Optional[Tuple[int, int, int, int]]:
@@ -91,10 +94,10 @@ def _dac_range_for_bounds(start: int, end: int, count: int) -> DACCodeRange:
     return DACCodeRange(start=lo, count=count, step=max(1, int((span / count) * 256)))
 
 
-def _roi_vector_iter(edge: int, roi) -> Iterable[Tuple[int, int, int]]:
+def _roi_vector_iter(edge: int, roi, dwell: int = 1) -> Iterable[Tuple[int, int, int]]:
     bounds = _roi_bounds(roi)
     if bounds is None:
-        yield from _default_vector_iter(edge)
+        yield from _default_vector_iter(edge, dwell=dwell)
         return
     x0, x1, y0, y1 = bounds
     x_range = _dac_range_for_bounds(x0, x1, edge)
@@ -103,7 +106,64 @@ def _roi_vector_iter(edge: int, roi) -> Iterable[Tuple[int, int, int]]:
         x = x_range.start + ((x_idx * x_range.step) >> 8)
         for y_idx in range(edge):
             y = y_range.start + ((y_idx * y_range.step) >> 8)
-            yield x, y, 1
+            yield x, y, dwell
+
+
+def _normalize_vector_point(
+    point,
+) -> Tuple[int, int, int, Optional[bool], Optional[int]]:
+    if isinstance(point, tuple) or isinstance(point, list):
+        if len(point) < 3:
+            raise ValueError("vector point tuples must have at least 3 entries")
+        blank = None if len(point) < 4 or point[3] is None else bool(point[3])
+        pass_index = None if len(point) < 5 or point[4] is None else int(point[4])
+        return int(point[0]), int(point[1]), int(point[2]), blank, pass_index
+
+    x = getattr(point, "x", None)
+    y = getattr(point, "y", None)
+    dwell = getattr(point, "dwell", None)
+    if x is None or y is None or dwell is None:
+        raise ValueError("vector points must provide x, y, and dwell")
+    blank = getattr(point, "blank", None)
+    pass_index = getattr(point, "passIndex", None)
+    return (
+        int(x),
+        int(y),
+        int(dwell),
+        None if blank is None else bool(blank),
+        None if pass_index is None else int(pass_index),
+    )
+
+
+def _log_vector_point_flags(points) -> None:
+    if not points:
+        return
+    blank_true = 0
+    blank_false = 0
+    blank_none = 0
+    pass_one = 0
+    pass_two = 0
+    other_pass = 0
+    for point in points:
+        _x, _y, _dwell, blank, pass_index = _normalize_vector_point(point)
+        if blank is True:
+            blank_true += 1
+        elif blank is False:
+            blank_false += 1
+        else:
+            blank_none += 1
+        if pass_index == 1:
+            pass_one += 1
+        elif pass_index == 2:
+            pass_two += 1
+        elif pass_index is not None:
+            other_pass += 1
+    logger.debug(
+        "[vector] custom point flags total=%d blank_true=%d blank_false=%d "
+        "blank_none=%d pass1=%d pass2=%d pass_other=%d",
+        len(points), blank_true, blank_false, blank_none,
+        pass_one, pass_two, other_pass,
+    )
 
 
 # Exception types that indicate the USB connection is dead and we should
@@ -112,7 +172,7 @@ def _roi_vector_iter(edge: int, roi) -> Iterable[Tuple[int, int, int]]:
 _FATAL_EXC_NAMES = {
     "GlasgowDeviceError",     # "device disconnected"
     "USBError", "USBErrorBusy", "USBErrorNoDevice", "USBErrorIO",
-    "ConnectionError",
+    "ConnectionError", "TimeoutError",
 }
 
 
@@ -167,7 +227,7 @@ def _bitmap_sample(bitmap, x_norm: float, y_norm: float) -> int:
     y_norm = min(1.0, max(0.0, y_norm if math.isfinite(y_norm) else 0.0))
     x = min(bitmap.width - 1, max(0, round(x_norm * (bitmap.width - 1))))
     y = min(bitmap.height - 1, max(0, round(y_norm * (bitmap.height - 1))))
-    return min(int(bitmap.pixels[y * bitmap.width + x]) * 64, 0x3FFF)
+    return _bitmap_pixel_sample(bitmap.pixels[y * bitmap.width + x], None)
 
 
 def _bitmap_sample_point(bitmap, roi, x: int, y: int) -> int:
@@ -182,10 +242,78 @@ def _bitmap_sample_point(bitmap, roi, x: int, y: int) -> int:
     )
 
 
+def _bitmap_pixel_value(pixel) -> int:
+    if isinstance(pixel, int):
+        return int(pixel)
+    if pixel is None:
+        return 0
+    return int(getattr(pixel, "value", 0))
+
+
+def _bitmap_pixel_is_highlighted(pixel) -> bool:
+    if isinstance(pixel, int) or pixel is None:
+        return False
+    return bool(getattr(pixel, "isHighlighted", False))
+
+
+def _bitmap_pixel_is_skipped(pixel):
+    if isinstance(pixel, int) or pixel is None:
+        return None
+    value = getattr(pixel, "isSkipped", None)
+    if value is None:
+        return None
+    return bool(value)
+
+
+def _bitmap_pixel_blank(pixel):
+    if isinstance(pixel, int) or pixel is None:
+        return None
+    value = getattr(pixel, "blank", None)
+    if value is None:
+        return None
+    return bool(value)
+
+
+def _infer_bitmap_mode(bitmap) -> Optional[str]:
+    for pixel in bitmap.pixels:
+        skipped = _bitmap_pixel_is_skipped(pixel)
+        if skipped is not None:
+            return "splash" if skipped is False else "skip"
+    for pixel in bitmap.pixels:
+        if _bitmap_pixel_is_highlighted(pixel):
+            return "skip"
+    return None
+
+
+def _bitmap_pixel_sample(pixel, mode: Optional[str]) -> int:
+    value = min(_bitmap_pixel_value(pixel) * 64, 0x3FFF)
+    blank = _bitmap_pixel_blank(pixel)
+    if blank is not None:
+        return 0 if blank else value
+    skipped = _bitmap_pixel_is_skipped(pixel)
+    highlighted = _bitmap_pixel_is_highlighted(pixel)
+
+    if mode == "skip":
+        return 0 if skipped is True or (skipped is None and highlighted) else value
+    if mode == "splash":
+        return value if skipped is False else 0
+    return 0 if skipped is True or highlighted else value
+
+
+def _bitmap_pixel_at(bitmap, x_norm: float, y_norm: float):
+    x_norm = min(1.0, max(0.0, x_norm if math.isfinite(x_norm) else 0.0))
+    y_norm = min(1.0, max(0.0, y_norm if math.isfinite(y_norm) else 0.0))
+    x = min(bitmap.width - 1, max(0, round(x_norm * (bitmap.width - 1))))
+    y = min(bitmap.height - 1, max(0, round(y_norm * (bitmap.height - 1))))
+    return bitmap.pixels[y * bitmap.width + x]
+
+
 def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
     bitmap = getattr(req, "simulation_bitmap", None)
     if bitmap is None or not bitmap.pixels:
         return None
+
+    bitmap_mode = _infer_bitmap_mode(bitmap)
 
     pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
     total = req.resolution * req.resolution
@@ -195,11 +323,12 @@ def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
         for idx in range(start, min(start + pixels_per_chunk, total)):
             x = idx % req.resolution
             y = idx // req.resolution
-            samples.append(_bitmap_sample(
+            px = _bitmap_pixel_at(
                 bitmap,
                 0.0 if req.resolution <= 1 else x / (req.resolution - 1),
                 0.0 if req.resolution <= 1 else y / (req.resolution - 1),
-            ))
+            )
+            samples.append(_bitmap_pixel_sample(px, bitmap_mode))
         chunks.append(samples)
     return chunks
 
@@ -209,38 +338,49 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
     if bitmap is None or not bitmap.pixels:
         return None
 
-    values_per_chunk = max(64, req.latency_bytes // 2)
     chunks: List[array.array] = []
-    if req.pattern is VectorPattern.custom and req.points:
-        total = len(req.points)
-        for start in range(0, total, values_per_chunk):
-            samples = array.array("H")
-            for x, y, _dwell in req.points[start:start + values_per_chunk]:
-                samples.append(_bitmap_sample_point(bitmap, req.roi, x, y))
-            chunks.append(samples)
-    elif req.pattern is VectorPattern.custom:
-        total = bitmap.width * bitmap.height
-        for start in range(0, total, values_per_chunk):
-            samples = array.array("H")
-            for idx in range(start, min(start + values_per_chunk, total)):
-                x = idx // bitmap.height
-                y = idx % bitmap.height
-                samples.append(_bitmap_sample(
-                    bitmap,
-                    0.0 if bitmap.width <= 1 else x / (bitmap.width - 1),
-                    0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
-                ))
-            chunks.append(samples)
-    else:
-        samples = array.array("H")
-        for x, y, _dwell in _roi_vector_iter(req.vector_resolution, req.roi):
-            samples.append(_bitmap_sample_point(bitmap, req.roi, x, y))
-            if len(samples) >= values_per_chunk:
-                chunks.append(samples)
-                samples = array.array("H")
+    samples = array.array("H")
+    total_dwell = 0
+
+    def flush() -> None:
+        nonlocal samples, total_dwell
         if samples:
             chunks.append(samples)
+            samples = array.array("H")
+            total_dwell = 0
+
+    if req.pattern is VectorPattern.custom and req.points:
+        iter_points = iter(req.points)
+        sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(bitmap, req.roi, x, y)
+    elif req.pattern is VectorPattern.custom:
+        def generated_points():
+            for idx in range(bitmap.width * bitmap.height):
+                x = idx // bitmap.height
+                y = idx % bitmap.height
+                yield x, y, req.dwell, False
+        iter_points = generated_points()
+        sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample(
+            bitmap,
+            0.0 if bitmap.width <= 1 else x / (bitmap.width - 1),
+            0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
+        )
+    else:
+        iter_points = _roi_vector_iter(req.vector_resolution, req.roi, dwell=req.dwell)
+        sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(bitmap, req.roi, x, y)
+
+    for point in iter_points:
+        x, y, dwell, blank, _pass_index = _normalize_vector_point(point)
+        samples.append(sample_value(x, y, blank))
+        total_dwell += max(1, int(dwell))
+        if total_dwell >= max(1, req.latency_bytes) or len(samples) >= 65536:
+            flush()
+    flush()
     return chunks
+
+
+def _gray_range_to_u14(gray_range: Tuple[int, int]) -> Tuple[int, int]:
+    lo, hi = sorted((int(gray_range[0]), int(gray_range[1])))
+    return min(lo * 64, 0x3FFF), min(hi * 64, 0x3FFF)
 
 
 class DeviceService:
@@ -319,6 +459,7 @@ class DeviceService:
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
             "simulation": dict(self._simulation_defaults),
+            "mag_calibration": dict(self._action_defaults.get("magCalibration", {}) or {}),
             "raster_params": self._raster_params_defaults.to_public_dict(),
             "vector_params": self._vector_params_defaults.to_public_dict(),
             "selected_beam": (
@@ -353,6 +494,7 @@ class DeviceService:
         return self._vector_params_defaults.override(
             pattern           = pattern_str,
             vector_resolution = req.vector_resolution,
+            dwell             = req.dwell,
             latency_bytes     = req.latency_bytes,
             output_mode       = req.output_mode,
             beam_type         = req.beam_type,
@@ -361,6 +503,31 @@ class DeviceService:
             pre_process       = req.pre_process,
             do_validate       = req.do_validate,
             points            = req.points,
+        )
+
+    def _adaptive_gray_feedback_config(
+        self, req: "VectorRequest"
+    ) -> Optional[AdaptiveGrayFeedbackConfig]:
+        if not bool(self._vector_defaults.get("PixelFallbackBlank", False)):
+            return None
+        if getattr(req, "feedback_mode", None) != "adaptive_gray_feedback":
+            mode = getattr(req, "feedback_mode", None)
+            if getattr(mode, "value", None) != "adaptive_gray_feedback":
+                return None
+        if req.gray_level_range is None or req.gray_level_skipped is None:
+            return None
+
+        gray_min, gray_max = _gray_range_to_u14(req.gray_level_range)
+        window_points = int(self._vector_defaults.get("adaptiveFeedbackWindowPoints", 1) or 1)
+        pipeline_delay_points = int(
+            self._vector_defaults.get("adaptiveFeedbackPipelineDelayPoints", 0) or 0
+        )
+        return AdaptiveGrayFeedbackConfig(
+            gray_min=gray_min,
+            gray_max=gray_max,
+            blank_when_inside=bool(req.gray_level_skipped),
+            window_points=window_points,
+            pipeline_delay_points=pipeline_delay_points,
         )
 
     # -------- internal: lazy connect / drop-on-error ----------------------
@@ -459,6 +626,7 @@ class DeviceService:
                     "kind": "vector",
                     "chunks": simulated_chunks,
                     "latency_bytes": req.latency_bytes,
+                    "dwell": req.dwell,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
@@ -607,6 +775,7 @@ class DeviceService:
                     "kind": "vector",
                     "chunks": simulated_chunks,
                     "latency_bytes": req.latency_bytes,
+                    "dwell": req.dwell,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
@@ -619,6 +788,7 @@ class DeviceService:
                     kind="vector",
                     chunks=len(simulated_chunks),
                     bytes=sum(len(c) * 2 for c in simulated_chunks),
+                    dwell=req.dwell,
                     process_time_s=0.0 if req.pre_process else None,
                     send_time_s=0.0,
                     has_data=bool(simulated_chunks),
@@ -631,6 +801,7 @@ class DeviceService:
         async with self._acquire("vector"):
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(req)
+            adaptive_feedback = getattr(cmd, "_adaptive_gray_feedback", None)
 
             if req.pre_process:
                 t0 = time.perf_counter()
@@ -640,11 +811,11 @@ class DeviceService:
 
             eff = self._effective_vector_params(req)
             logger.debug(
-                "[vector] latency=%d pattern=%s vector_resolution=%d "
-                "output_mode=%s pre_process=%s cookie=%d max_pipeline=%d "
-                "drain_floor=%d",
-                eff.latency_bytes, eff.pattern, eff.vector_resolution,
-                eff.output_mode, eff.pre_process, eff.cookie,
+                "[vector] dwell=%d latency=%d pattern=%s vector_resolution=%d "
+                "output_mode=%s feedback_mode=%s adaptive_feedback=%s pre_process=%s cookie=%d "
+                "max_pipeline=%d drain_floor=%d",
+                eff.dwell, eff.latency_bytes, eff.pattern, eff.vector_resolution,
+                cmd._output_mode, req.feedback_mode, adaptive_feedback is not None, eff.pre_process, eff.cookie,
                 eff.max_pipeline, eff.effective_drain_floor_pixels,
             )
             t0 = time.perf_counter()
@@ -667,6 +838,7 @@ class DeviceService:
                 "kind": "vector",
                 "chunks": chunks,
                 "latency_bytes": req.latency_bytes,
+                "dwell": req.dwell,
                 "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                 "points": req.points,
                 "vector_resolution": req.vector_resolution,
@@ -682,6 +854,7 @@ class DeviceService:
             kind="vector",
             chunks=len(chunks),
             bytes=total_bytes,
+            dwell=req.dwell,
             process_time_s=process_time if req.pre_process else None,
             send_time_s=send_time,
             has_data=bool(chunks),
@@ -738,24 +911,28 @@ class DeviceService:
         """Same shape as raster: every macro tunable comes from the
         effective params object."""
         params = self._effective_vector_params(req)
+        adaptive_feedback = self._adaptive_gray_feedback_config(req)
+        if adaptive_feedback is not None and params.dwell < 16:
+            params = params.override(dwell=16)
 
         if req.pattern is VectorPattern.custom:
-            if not req.points and not (
+            if req.points is None and not (
                 req.simulation_bitmap is not None
                 and req.roi is not None
                 and not _simulation_enabled(self._config)
             ):
-                raise ValueError("pattern=custom requires non-empty `points`")
-            if req.points:
-                iter_points: Iterable[Tuple[int, int, int]] = iter(req.points)
+                raise ValueError("pattern=custom requires `points` or a production bitmap fallback")
+            if req.points is not None:
+                _log_vector_point_flags(req.points)
+                iter_points = iter(req.points)
             else:
                 # Production compatibility for browser ROI bitmap scans:
                 # simulation_bitmap is ignored by hardware, so fall back to
                 # the regular ROI vector sweep rather than rejecting the
                 # request as custom-without-points.
-                iter_points = _roi_vector_iter(params.vector_resolution, req.roi)
+                iter_points = _roi_vector_iter(params.vector_resolution, req.roi, dwell=params.dwell)
         else:
-            iter_points = _roi_vector_iter(params.vector_resolution, req.roi)
+            iter_points = _roi_vector_iter(params.vector_resolution, req.roi, dwell=params.dwell)
 
         try:
             output_mode = OutputMode[params.output_mode]
@@ -774,11 +951,12 @@ class DeviceService:
 
         return VectorScanCommand(
             cookie=params.cookie,
-            output_mode=output_mode,
+            output_mode=OutputMode.SixteenBit if adaptive_feedback is not None else output_mode,
             beam_type=beam_type,
             external_control=params.external_control,
             iter_points=iter_points,
             drain_floor_pixels=params.effective_drain_floor_pixels,
+            adaptive_gray_feedback=adaptive_feedback,
             max_pipeline=params.max_pipeline,
             fpga_pipeline_depth_pixels=params.fpga_pipeline_depth_pixels,
             drain_safety_factor=params.drain_safety_factor,
@@ -915,7 +1093,8 @@ class DeviceService:
         last = self._last
         simulation_bitmap = last.get("simulation_bitmap")
         if simulation_bitmap is not None and getattr(simulation_bitmap, "pixels", None):
-            img = np.asarray(simulation_bitmap.pixels, dtype=np.uint16).reshape(
+            flat = np.asarray([_bitmap_pixel_value(px) for px in simulation_bitmap.pixels], dtype=np.uint16)
+            img = flat.reshape(
                 int(simulation_bitmap.height),
                 int(simulation_bitmap.width),
             ) * 64
@@ -997,7 +1176,12 @@ class DeviceService:
             pattern = last.get("pattern", "default")
             points = last.get("points")
             if pattern == "custom" and points:
-                iter_list = list(points)
+                iter_list = [
+                    (x, y, dwell)
+                    for x, y, dwell, _blank, _pass_index in (
+                        _normalize_vector_point(point) for point in points
+                    )
+                ]
             else:
                 iter_list = list(_roi_vector_iter(edge, last.get("roi")))
                 if len(iter_list) < samples.size and edge != DEFAULT_EDGE:

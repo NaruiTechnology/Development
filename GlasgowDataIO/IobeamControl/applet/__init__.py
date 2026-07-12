@@ -133,12 +133,10 @@ def build_iobeam_resources(pin_config):
 # ---------------------------------------------------------------------------- #
 # Bus signature shared by BusController <-> IobeamDataSubtarget.
 #
-# data_i / data_o stay 14 bits. We dropped the OBI 15-bit OVF carry-over
-# because (a) the IobeamTech ADC interface as described doesn't wire OVF,
-# and (b) keeping it at 15 forced an off-by-one between the data bus
-# width and the ADC code width that bit-rotted the busController.py
-# `Cat(adc_code, adc_ovf).eq(self.bus.data_i)` line into a comment.
-# Re-add OVF later by widening to 15 here AND adding a 15th data pin.
+# data_i is 16 bits so simulation and serializer output can carry a
+# full 16-bit grayscale sample. The physical data pins are still 14
+# bits, so the subtarget expands the external port into this internal
+# bus when real hardware is present.
 # ---------------------------------------------------------------------------- #
 BusSignature = wiring.Signature({
     "adc_clk":      Out(1),
@@ -149,7 +147,7 @@ BusSignature = wiring.Signature({
     "dac_x_le_clk": Out(1),
     "dac_y_le_clk": Out(1),
 
-    "data_i":       In(14),
+    "data_i":       In(16),
     "data_o":       Out(14),
     "data_oe":      Out(1),
 })

@@ -202,6 +202,7 @@ interface ActivityDedupeResponse {
 
 interface ScanTelemetryStartRequest {
   kind?: unknown;
+  preview?: unknown;
   start_xy?: unknown;
   end_xy?: unknown;
   dwell?: unknown;
@@ -216,11 +217,29 @@ interface ScanTelemetryStartRequest {
 interface ScanTelemetryOutputRequest {
   activity_id?: unknown;
   kind?: unknown;
+  preview?: unknown;
   resolution?: unknown;
   latency_bytes?: unknown;
   vector_resolution?: unknown;
   chunks?: unknown;
   scan_result?: unknown;
+}
+
+interface MagCalibrationBeam {
+  path: string;
+  m_per_fov: Record<string, number>;
+}
+
+interface MagCalibrationConfig {
+  selected_beam: string;
+  beams: Record<string, MagCalibrationBeam>;
+}
+
+interface MagCalibrationResponse {
+  ok: boolean;
+  selected_beam?: string;
+  beams?: Record<string, MagCalibrationBeam>;
+  error?: string;
 }
 
 const smsChallenges = new Map<string, SmsChallenge>();
@@ -989,7 +1008,7 @@ app.post("/api/admin/iobeam/operation/input-setup", async (req, res) => {
       activity_id: activityId,
       start_xy: normalizeDecimal(body?.start_xy, 0),
       end_xy: normalizeDecimal(body?.end_xy, 0),
-      dwell: normalizeInteger(body?.dwell, 0),
+      dwell: normalizeInteger(body?.dwell, 16),
       scale_unit: normalizeScaleUnit(body?.scale_unit),
       ev: normalizeDecimal(body?.ev, 0),
       scan_parameters: jsonObjectOrSelf(body?.scan_parameters, body),
@@ -1067,6 +1086,35 @@ app.post("/api/admin/restart-services", async (_req, res) => {
   await restartServicesAndRespond(res);
 });
 
+app.get("/api/admin/mag-calibration", async (_req, res: express.Response<MagCalibrationResponse>) => {
+  try {
+    const info = await readWithBackup();
+    const mag = readMagCalibrationConfig(info.data);
+    res.json({ ok: true, selected_beam: mag.selected_beam, beams: mag.beams });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post("/api/admin/mag-calibration", async (req, res: express.Response<MagCalibrationResponse>) => {
+  try {
+    const info = await readWithBackup();
+    const beam = normalizeMagBeam(req.body?.beam);
+    const points = normalizeMagPoints(req.body?.m_per_fov);
+    const pathValue = typeof req.body?.path === "string" ? req.body.path.trim() : "";
+    const next = writeMagCalibrationConfig(info.data, beam, points, pathValue);
+    await writeConfig(next);
+    const restart = await restartService();
+    if (!restart.ok) {
+      console.warn(`[mag-calibration] restart failed: ${restart.error ?? restart.stderr ?? "unknown error"}`);
+    }
+    const mag = readMagCalibrationConfig(next);
+    res.json({ ok: true, selected_beam: mag.selected_beam, beams: mag.beams });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
 app.post("/api/admin/ftp/merged-figure", async (req, res) => {
   try {
     const actor = await currentAdminActor(req);
@@ -1119,7 +1167,6 @@ app.get("/api/admin/ftp/test-connection", async (_req, res) => {
 app.use("/api/scan/raster/run", requireScanPrivilege);
 app.use("/api/scan/vector/run", requireScanPrivilege);
 
-// MOCK responses live BEFORE the proxy mount so they win.
 if (config.mock) {
   app.get("/api/status", (_req, res) => res.json(mockRest.status()));
   app.get("/api/defaults", (_req, res) => res.json(mockRest.defaults()));
@@ -1168,14 +1215,19 @@ if (config.mock) {
       image_filename: latestOutput.image_filename,
     });
   });
-  app.post("/api/scan/raster/run", async (req, res) => {
-    await proxyScanRunWithTelemetry("raster", req, res);
-  });
-  app.post("/api/scan/vector/run", async (req, res) => {
-    await proxyScanRunWithTelemetry("vector", req, res);
-  });
-  app.use("/api", buildRestProxy());
 }
+
+// Real scan POST routes must stay outside the mock branch so normal runs
+// do not fall through to the Express 404 handler.
+app.post("/api/scan/raster/run", async (req, res) => {
+  await proxyScanRunWithTelemetry("raster", req, res);
+});
+app.post("/api/scan/vector/run", async (req, res) => {
+  await proxyScanRunWithTelemetry("vector", req, res);
+});
+
+// Proxy any remaining /api/* traffic to the Glasgow service.
+app.use("/api", buildRestProxy());
 
 // Keep /api/status explicit in the real backend too so the dev server never
 // falls through to the SPA index.html if the proxy router is bypassed or
@@ -1217,6 +1269,46 @@ app.get("/api/status", async (_req, res) => {
       last_error: `glasgow_service unreachable: ${detail}`,
       scans_completed: 0,
       chunks_in_flight: 0,
+    });
+  }
+});
+
+app.get("/api/defaults", async (_req, res) => {
+  try {
+    const upstream = await fetch(`${config.proxyTargetHttp}/defaults`, {
+      headers: config.glasgowToken
+        ? { Authorization: `Bearer ${config.glasgowToken}` }
+        : undefined,
+      signal: AbortSignal.timeout(2_000),
+    });
+    const contentType = (upstream.headers.get("content-type") ?? "").toLowerCase();
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      throw new Error(`upstream defaults returned HTTP ${upstream.status}`);
+    }
+    if (!contentType.includes("application/json")) {
+      res.status(502).json({
+        error: "upstream_invalid_content_type",
+        detail: `upstream /defaults returned ${contentType || "unknown content type"} instead of JSON`,
+        upstream_status: upstream.status,
+      });
+      return;
+    }
+    try {
+      res.status(upstream.status).json(JSON.parse(text));
+    } catch {
+      res.status(502).json({
+        error: "upstream_invalid_json",
+        detail: "upstream /defaults returned invalid JSON",
+        upstream_status: upstream.status,
+      });
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    res.status(502).json({
+      error: "defaults_unreachable",
+      detail: `glasgow_service unreachable: ${detail}`,
+      upstream: config.proxyTargetHttp,
     });
   }
 });
@@ -1698,10 +1790,27 @@ async function proxyScanRunWithTelemetry(
     return;
   }
 
-  const activityId = await recordOperationScanStart(kind, actor, body).catch((err) => {
+  const preview = isPreviewScan(body);
+  if (kind === "vector") {
+    const requestTrace = {
+      at: new Date().toISOString(),
+      preview,
+      pattern: body?.pattern ?? null,
+      feedback_mode: body?.feedback_mode ?? null,
+      gray_level_range: body?.gray_level_range ?? null,
+      gray_level_skipped: body?.gray_level_skipped ?? null,
+      roi: body?.roi != null,
+      simulation_bitmap: body?.simulation_bitmap != null,
+    };
+    console.info("[scan/vector] request", requestTrace);
+    appendVectorTrace("request", requestTrace);
+  }
+  const activityId = preview
+    ? null
+    : await recordOperationScanStart(kind, actor, body).catch((err) => {
     console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
     return null;
-  });
+    });
 
   const upstream = await fetch(`${config.proxyTargetHttp}/scan/${kind}/run`, {
     method: "POST",
@@ -1715,7 +1824,19 @@ async function proxyScanRunWithTelemetry(
   const responseText = await upstream.text();
   const contentType = upstream.headers.get("content-type") ?? "application/json";
 
-  if (!upstream.ok || !activityId) {
+  if (kind === "vector") {
+    const responseTrace = {
+      at: new Date().toISOString(),
+      ok: upstream.ok,
+      status: upstream.status,
+      preview,
+      content_type: contentType,
+    };
+    console.info("[scan/vector] response", responseTrace);
+    appendVectorTrace("response", responseTrace);
+  }
+
+  if (!upstream.ok || (!activityId && !preview)) {
     res.status(upstream.status).type(contentType).send(responseText);
     return;
   }
@@ -1737,21 +1858,40 @@ async function proxyScanRunWithTelemetry(
 
   const chunks = normalizeInteger(parsed.chunks, normalizeInteger(body?.chunks, 0));
   const output = buildScanArtifactInfo(kind, activityId, body, parsed, chunks);
-  await recordOperationScanOutput(kind, activityId, body, parsed, chunks, output).catch((err) => {
-    console.warn(`[operation-data] failed to record ${kind} scan output:`, err);
-  });
-  void uploadScanArtifactsToConfiguredFtp(kind, {
-    csvFilename: output.csvFilename,
-    imageFilename: output.imageFilename,
-  }).catch((err) => {
-    console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
-  });
+  if (!preview && activityId) {
+    await recordOperationScanOutput(kind, activityId, body, parsed, chunks, output).catch((err) => {
+      console.warn(`[operation-data] failed to record ${kind} scan output:`, err);
+    });
+    void uploadScanArtifactsToConfiguredFtp(kind, {
+      csvFilename: output.csvFilename,
+      imageFilename: output.imageFilename,
+    }, preview).catch((err) => {
+      console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+    });
+  }
 
   res.status(upstream.status).json({
     ...parsed,
     csv_filename: output.csvFilename,
     image_filename: output.imageFilename,
   });
+}
+
+const VECTOR_TRACE_LOG_FILE = "/tmp/ionbeam-vector-trace.log";
+
+function appendVectorTrace(
+  kind: "request" | "response",
+  payload: Record<string, unknown>,
+): void {
+  try {
+    fs.appendFileSync(
+      VECTOR_TRACE_LOG_FILE,
+      `${JSON.stringify({ kind, ...payload })}\n`,
+      "utf8",
+    );
+  } catch (err) {
+    console.warn(`[scan/vector] failed to append trace to ${VECTOR_TRACE_LOG_FILE}:`, err);
+  }
 }
 
 async function recordOperationScanStart(
@@ -1773,7 +1913,7 @@ async function recordOperationScanStart(
     activity_id: activityId,
     start_xy: normalizeDecimal(body?.start_xy, 0),
     end_xy: normalizeDecimal(body?.end_xy, 0),
-    dwell: normalizeInteger(body?.dwell, 0),
+    dwell: normalizeInteger(body?.dwell, 16),
     scale_unit: normalizeScaleUnit(body?.scale_unit),
     ev: normalizeDecimal(body?.ev, 0),
     scan_parameters: body ?? {},
@@ -1839,7 +1979,7 @@ function formatScanTimestamp(date: Date): string {
 
 function buildOperationOutputDescription(payload: {
   kind: string;
-  activityId: number;
+  activityId: number | null;
   chunks: number;
   resolution: number;
   latencyBytes: number;
@@ -1867,7 +2007,7 @@ interface ScanArtifactInfo {
 
 function buildScanArtifactInfo(
   kind: "raster" | "vector",
-  activityId: number,
+  activityId: number | null,
   body: Record<string, unknown> | null,
   response: Record<string, unknown>,
   chunks: number,
@@ -1890,6 +2030,17 @@ function buildScanArtifactInfo(
       imageFilename: filenames.imageFilename,
     }),
   };
+}
+
+function isPreviewScan(body: Record<string, unknown> | null): boolean {
+  const value = body?.preview;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["true", "1", "yes", "on"].includes(normalized);
+  }
+  return false;
 }
 
 function buildScanArtifactFilenames(
@@ -2340,6 +2491,127 @@ async function isAdminSessionExpired(user: AdminUser): Promise<boolean> {
 function clientAddress(req: express.Request): string {
   const forwardedFor = req.get("x-forwarded-for")?.split(",")[0]?.trim();
   return forwardedFor || req.ip || req.socket.remoteAddress || "";
+}
+
+function readMagCalibrationConfig(data: unknown): MagCalibrationConfig {
+  const actionData = readStreamActionData(data);
+  const raw = readRecordValue(actionData, "magCalibration");
+  const beamsRaw = readRecordValue(raw, "beams");
+  const selectedBeam = normalizeMagBeam(
+    raw.selected_beam ?? raw.selectedBeam ?? (actionData.enableEbeam ? "ebeam" : "ion")
+  );
+  const beams: Record<string, MagCalibrationBeam> = {};
+
+  for (const [beam, value] of Object.entries(beamsRaw)) {
+    const normalizedBeam = normalizeMagBeam(beam);
+    const record = readRecordValue(value);
+    beams[normalizedBeam] = {
+      path: typeof record.path === "string" ? record.path : "",
+      m_per_fov: normalizeMagPoints(record.m_per_fov ?? record.mPerFov ?? record.points),
+    };
+  }
+
+  if (!beams[selectedBeam]) {
+    beams[selectedBeam] = { path: "", m_per_fov: {} };
+  }
+  return { selected_beam: selectedBeam, beams };
+}
+
+function writeMagCalibrationConfig(
+  data: unknown,
+  beam: string,
+  points: Record<string, number>,
+  pathValue: string
+): unknown {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new ConfigError("stream config must be a JSON object", 500);
+  }
+  const next = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+  const actionData = mutableStreamActionData(next);
+  const existing = readMagCalibrationConfig(next);
+  const selectedBeam = normalizeMagBeam(beam);
+  const beams = {
+    ...existing.beams,
+    [selectedBeam]: {
+      path: pathValue,
+      m_per_fov: points,
+    },
+  };
+  actionData.magCalibration = {
+    selected_beam: selectedBeam,
+    beams,
+  };
+  return next;
+}
+
+function mutableStreamActionData(data: Record<string, unknown>): Record<string, unknown> {
+  const actions = Array.isArray(data.Actions) ? data.Actions : null;
+  const first = actions?.[0];
+  if (!first || typeof first !== "object" || Array.isArray(first)) {
+    throw new ConfigError("stream config is missing Actions[0]", 500);
+  }
+  const firstRecord = first as Record<string, unknown>;
+  const streamData = readMutableRecord(firstRecord, "streamData");
+  return readMutableRecord(streamData, "actionData");
+}
+
+function readStreamActionData(data: unknown): Record<string, unknown> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const record = data as Record<string, unknown>;
+  const actions = Array.isArray(record.Actions) ? record.Actions : [];
+  const first = actions[0];
+  if (!first || typeof first !== "object" || Array.isArray(first)) return {};
+  return readRecordValue(readRecordValue(first, "streamData"), "actionData");
+}
+
+function readMutableRecord(parent: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = parent[key];
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  const next: Record<string, unknown> = {};
+  parent[key] = next;
+  return next;
+}
+
+function readRecordValue(value: unknown, key?: string): Record<string, unknown> {
+  const target = key && value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)[key]
+    : value;
+  return target && typeof target === "object" && !Array.isArray(target)
+    ? (target as Record<string, unknown>)
+    : {};
+}
+
+function normalizeMagBeam(value: unknown): string {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (["ebeam", "electron", "e-beam"].includes(text)) return "ebeam";
+  if (["ion", "ibeam", "i-beam"].includes(text)) return "ion";
+  return text || "ion";
+}
+
+function normalizeMagPoints(value: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (Array.isArray(value)) {
+    for (const row of value) {
+      if (!Array.isArray(row) || row.length < 2) continue;
+      addMagPoint(out, row[0], row[1]);
+    }
+  } else if (value && typeof value === "object") {
+    for (const [mag, fov] of Object.entries(value as Record<string, unknown>)) {
+      addMagPoint(out, mag, fov);
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(out).sort(([a], [b]) => Number(a) - Number(b))
+  );
+}
+
+function addMagPoint(out: Record<string, number>, magValue: unknown, fovValue: unknown): void {
+  const mag = Math.trunc(Number(magValue));
+  const fov = Number(fovValue);
+  if (!Number.isFinite(mag) || mag < 1 || !Number.isFinite(fov) || fov <= 0) return;
+  out[String(mag)] = fov;
 }
 
 function trimForSqlNchar(value: string, maxLength: number): string {

@@ -14,9 +14,9 @@
  */
 import { type ReactNode } from "react";
 
-import { updateRaster } from "../store/scanSlice";
+import { updateRaster, updateROI } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
-import { useTranslation, type TranslationKey } from "../i18n";
+import { useTranslation } from "../i18n";
 import { DwellHelp } from "./DwellHelp";
 import { ResolutionHelp } from "./ResolutionHelp";
 import { LatencyHelp } from "./LatencyHelp";
@@ -24,16 +24,20 @@ import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
 import { FrameBlankHelp } from "./FrameBlankHelp";
 import { ValidationHelp } from "./ValidationHelp";
+import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
+import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import { NumberStepperInput } from "./NumberStepperField";
 
-const RES_PRESETS = [256, 512, 1024, 2048];
-const DWELL_PRESETS = [1, 2, 4, 8, 16, 32];
+const RES_PRESETS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
+const DWELL_PRESETS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
 const LATENCY_PRESETS = [4096, 8192, 16384, 32768];
 
 export function RasterParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const r = useAppSelector((s) => s.scan.raster);
+  const roi = useAppSelector((s) => s.scan.roi);
 
   // The footnote in the original code interpolates two <b> spans into a
   // sentence. Localised text reorders those spans (e.g. zh-CN puts
@@ -50,31 +54,56 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
     <div>
       <BeamEnergyField disabled={disabled} />
 
+      <div className="field">
+        <label>
+          {t("scan.modeGuide")}
+          <ScanModeHelp />
+        </label>
+      </div>
+
       <div className="field-row">
-        <PresetField
-          labelKey="raster.resolution"
-          labelAdornment={<ResolutionHelp />}
+        <PresetNumberField
+          label={
+            <label>
+              {t("raster.resolution")}
+              <ResolutionHelp />
+            </label>
+          }
           value={r.resolution}
-          presets={RES_PRESETS}
+          options={RES_PRESETS}
+          min={1}
+          max={2048}
           disabled={disabled}
           onChange={(v) => dispatch(updateRaster({ resolution: v }))}
         />
-        <PresetField
-          labelKey="raster.dwell"
-          labelAdornment={<DwellHelp />}
+        <PresetNumberField
+          label={
+            <label>
+              {t("raster.dwell")}
+              <DwellHelp />
+            </label>
+          }
           value={r.dwell}
-          presets={DWELL_PRESETS}
+          options={DWELL_PRESETS}
+          min={1}
+          max={65535}
           disabled={disabled}
           onChange={(v) => dispatch(updateRaster({ dwell: v }))}
         />
       </div>
 
       <div className="field-row">
-        <PresetField
-          labelKey="raster.latencyBytes"
-          labelAdornment={<LatencyHelp />}
+        <PresetNumberField
+          label={
+            <label>
+              {t("raster.latencyBytes")}
+              <LatencyHelp />
+            </label>
+          }
           value={r.latency_bytes}
-          presets={LATENCY_PRESETS}
+          options={LATENCY_PRESETS.map((value) => ({ value }))}
+          min={2}
+          max={1 << 20}
           disabled={disabled}
           onChange={(v) => dispatch(updateRaster({ latency_bytes: v }))}
         />
@@ -83,16 +112,16 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
             {t("raster.cookie")}
             <CookieHelp />
           </label>
-          <input
-            className="input"
-            type="number"
-            min={0}
-            max={0xffff}
+          <NumberStepperInput
             value={r.cookie}
             disabled={disabled}
-            onChange={(e) =>
-              dispatch(updateRaster({ cookie: clamp(e.target.value, 0, 0xffff, 123) }))
+            onValueChange={(next) =>
+              dispatch(updateRaster({ cookie: clamp(next, 0, 0xffff, 123) }))
             }
+            min={0}
+            max={0xffff}
+            step={1}
+            inputMode="numeric"
           />
         </div>
       </div>
@@ -152,38 +181,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
       <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
         {footnoteParts}
       </p>
-    </div>
-  );
-}
-
-function PresetField(props: {
-  labelKey: TranslationKey;
-  value: number;
-  presets: number[];
-  disabled: boolean;
-  onChange: (v: number) => void;
-  labelAdornment?: ReactNode;
-}) {
-  const { labelKey, value, presets, disabled, onChange, labelAdornment } = props;
-  const { t } = useTranslation();
-  return (
-    <div className="field">
-      <label>
-        {t(labelKey)}
-        {labelAdornment}
-      </label>
-      <select
-        className="select"
-        value={String(value)}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-      >
-        {presets.map((p) => (
-          <option key={p} value={p}>
-            {p}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

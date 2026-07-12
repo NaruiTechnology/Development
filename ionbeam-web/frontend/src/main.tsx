@@ -5,7 +5,6 @@ import { Provider } from "react-redux";
 import { store } from "./store";
 import { applyLocaleToDocument } from "./i18n";
 import "./styles/theme.css";
-import "./styles/mobile.css";
 
 // Apply <html lang> and document.title before the first render so the
 // page is correctly tagged at first paint (matters for screen readers,
@@ -31,6 +30,7 @@ async function bootstrap() {
   }
 
   if (mobilityOnly || mobilityRoute) {
+    await import("./styles/mobile.css");
     const { MobilityApp } = await import("./mobile/MobilityApp");
     root.render(
       <React.StrictMode>

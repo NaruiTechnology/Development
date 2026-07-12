@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppSelector } from "../store";
 import { updateBeamEnergyEv } from "../store/scanSlice";
 import { useTranslation } from "../i18n";
+import { NumberStepperInput } from "./NumberStepperField";
 
 export function BeamEnergyField({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
@@ -10,14 +11,13 @@ export function BeamEnergyField({ disabled }: { disabled: boolean }) {
   return (
     <div className="field">
       <label>{t("settings.general.ev")}</label>
-      <input
-        className="input"
-        type="number"
-        step="any"
-        min={0}
+      <NumberStepperInput
         value={beamEnergyEv}
+        min={0}
+        step={1}
         disabled={disabled}
-        onChange={(e) => dispatch(updateBeamEnergyEv(parseNumber(e.target.value, beamEnergyEv)))}
+        inputMode="decimal"
+        onValueChange={(next) => dispatch(updateBeamEnergyEv(parseNumber(next, beamEnergyEv)))}
       />
     </div>
   );

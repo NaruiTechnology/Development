@@ -13,8 +13,7 @@ class BusController(wiring.Component):
     dac_stream: In(StreamSignature(SuperDACStream)) # type: ignore
 
     ADC_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
-        "adc_code": 14,
-        "adc_ovf":  1,
+        "adc_code": 16,
         "last":     1,
     }))
     adc_stream: Out(ADC_STREAM_SIGNATURE) # type: ignore
@@ -59,8 +58,6 @@ class BusController(wiring.Component):
 
         adc_stream_data = Signal.like(self.adc_stream.payload) # FIXME: will not be needed after FIFOs have shapes
         m.d.comb += [
-            # Cat(adc_stream_data.adc_code,
-            #     adc_stream_data.adc_ovf).eq(self.bus.i),
             adc_stream_data.last.eq(last_sample[self.adc_latency-1]),
             skid_buffer.i.payload.eq(adc_stream_data),
         ]

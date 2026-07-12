@@ -7,9 +7,9 @@
  */
 import { useState } from "react";
 
-import { updateVector } from "../store/scanSlice";
+import { updateVector, updateROI } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
-import { useTranslation, type TranslationKey } from "../i18n";
+import { useTranslation } from "../i18n";
 import { LatencyHelp } from "./LatencyHelp";
 import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
@@ -18,26 +18,39 @@ import { VectorResolutionHelp } from "./VectorResolutionHelp";
 import { CustomPointsHelp } from "./CustomPointsHelp";
 import { PreProcessHelp } from "./PreProcessHelp";
 import { ValidationHelp } from "./ValidationHelp";
+import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
+import { DwellHelp } from "./DwellHelp";
+import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import { NumberStepperInput } from "./NumberStepperField";
+import type { VectorPoint, VectorPointTuple } from "../types/api";
 
 const MAX_POINTS = 1_000_000;
+const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256, 128] as const;
+const VECTOR_DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
 
-// vector_resolution → translation-key + stride map. Defined here, not
-// in i18n/locales/en.ts, because the canonical schema there only
-// stores the labels — the stride numbers are app logic.
-const VECTOR_RES_OPTIONS: Array<{ value: number; labelKey: TranslationKey }> = [
-  { value: 2048, labelKey: "vector.resolution.option.2048" },
-  { value: 1024, labelKey: "vector.resolution.option.1024" },
-  { value: 512, labelKey: "vector.resolution.option.512" },
-  { value: 256, labelKey: "vector.resolution.option.256" },
-];
+function validateCustomVectorResolution(value: number, t: (key: "vector.resolution.validation.powerOfTwo" | "vector.resolution.validation.min128") => string): string | null {
+  const intValue = Math.trunc(value);
+  if (intValue < 128) return t("vector.resolution.validation.min128");
+  if (!Number.isInteger(intValue) || (intValue & (intValue - 1)) !== 0) {
+    return t("vector.resolution.validation.powerOfTwo");
+  }
+  return null;
+}
 
-export function VectorParameters({ disabled }: { disabled: boolean }) {
+export function VectorParameters({
+  disabled,
+  grayLevelFilterActive = false,
+}: {
+  disabled: boolean;
+  grayLevelFilterActive?: boolean;
+}) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
   const v = useAppSelector((s) => s.scan.vector);
+  const roi = useAppSelector((s) => s.scan.roi);
   const [pointsText, setPointsText] = useState<string>(
-    v.points ? v.points.map((p) => p.join(",")).join("\n") : ""
+    v.points ? v.points.map((p) => formatPoint(p)).join("\n") : ""
   );
   const [pointsErr, setPointsErr] = useState<string | null>(null);
 
@@ -74,16 +87,28 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
     dispatch(updateVector({ points: out }));
   }
 
-  // Build the stride tooltip for the resolution select once per render.
-  const stride = 2048 / v.vector_resolution;
+  const vectorResolutionOptions: PresetNumberOption[] = VECTOR_RES_OPTIONS.map((value) => ({
+    value,
+    label: t(`vector.resolution.option.${value}` as const),
+  }));
+  const latencyMin = grayLevelFilterActive ? 8196 : 2;
   const resolutionTitle =
-    stride === 1
+    v.vector_resolution === 2048
       ? t("vector.resolution.title.native")
-      : t("vector.resolution.title.stride", { stride });
+      : 2048 % v.vector_resolution === 0
+      ? t("vector.resolution.title.stride", { stride: 2048 / v.vector_resolution })
+      : t("vector.resolution.title.custom", { resolution: v.vector_resolution });
 
   return (
     <div>
       <BeamEnergyField disabled={disabled} />
+
+      <div className="field">
+        <label>
+          {t("scan.modeGuide")}
+          <ScanModeHelp />
+        </label>
+      </div>
 
       <div className="field">
         <label>
@@ -93,7 +118,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
         <select
           className="select"
           value={v.pattern}
-          disabled={disabled}
+          disabled={disabled || grayLevelFilterActive}
           onChange={(e) =>
             dispatch(
               updateVector({ pattern: e.target.value as "default" | "custom" })
@@ -106,29 +131,40 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
       </div>
 
       {v.pattern === "default" && (
-        <div className="field">
-          <label>
-            {t("vector.resolution")}
-            <VectorResolutionHelp />
-          </label>
-          <select
-            className="select"
-            value={String(v.vector_resolution)}
-            disabled={disabled}
-            onChange={(e) =>
-              dispatch(
-                updateVector({ vector_resolution: Number(e.target.value) })
-              )
+        <div className="field-row">
+        <PresetNumberField
+          label={
+            <label>
+              {t("vector.resolution")}
+              <VectorResolutionHelp />
+              </label>
             }
-            title={resolutionTitle}
-          >
-            {VECTOR_RES_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {t(o.labelKey)}
-              </option>
-            ))}
-          </select>
-          <small className="muted">{t("vector.resolution.help")}</small>
+            value={v.vector_resolution}
+          options={vectorResolutionOptions}
+          min={1}
+          max={2048}
+          disabled={disabled}
+          title={resolutionTitle}
+          customValidate={(value) => validateCustomVectorResolution(value, t)}
+          onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
+        />
+          <PresetNumberField
+            label={
+            <label>
+              {t("vector.dwell")}
+              <DwellHelp />
+              </label>
+            }
+            value={v.dwell}
+            options={VECTOR_DWELL_OPTIONS}
+            min={1}
+            max={65535}
+            disabled={disabled}
+            normalizeValue={(value) => grayLevelFilterActive ? Math.max(2, value) : value}
+            onChange={(value) =>
+              dispatch(updateVector({ dwell: value }))
+            }
+          />
         </div>
       )}
 
@@ -138,16 +174,16 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
             {t("vector.latencyBytes")}
             <LatencyHelp />
           </label>
-          <input
-            className="input"
-            type="number"
-            min={2}
+          <NumberStepperInput
             value={v.latency_bytes}
-            disabled={disabled}
-            onChange={(e) =>
+            min={latencyMin}
+            step={1}
+            inputMode="numeric"
+            disabled={disabled || grayLevelFilterActive}
+            onValueChange={(next) =>
               dispatch(
                 updateVector({
-                  latency_bytes: clamp(e.target.value, 2, 1 << 20, 8196),
+                  latency_bytes: clamp(next, latencyMin, 1 << 20, 8196),
                 })
               )
             }
@@ -161,7 +197,7 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           <select
             className="select"
             value={v.output_mode}
-            disabled={disabled}
+            disabled={disabled || grayLevelFilterActive}
             onChange={(e) =>
               dispatch(
                 updateVector({
@@ -181,15 +217,15 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
           {t("vector.cookie")}
           <CookieHelp />
         </label>
-        <input
-          className="input"
-          type="number"
+        <NumberStepperInput
+          value={v.cookie}
           min={0}
           max={0xffff}
-          value={v.cookie}
+          step={1}
+          inputMode="numeric"
           disabled={disabled}
-          onChange={(e) =>
-            dispatch(updateVector({ cookie: clamp(e.target.value, 0, 0xffff, 123) }))
+          onValueChange={(next) =>
+            dispatch(updateVector({ cookie: clamp(next, 0, 0xffff, 123) }))
           }
         />
       </div>
@@ -231,8 +267,8 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
       <label className="checkbox">
         <input
           type="checkbox"
-          checked={v.pre_process}
-          disabled={disabled}
+          checked={grayLevelFilterActive ? true : v.pre_process}
+          disabled={disabled || grayLevelFilterActive}
           onChange={(e) => dispatch(updateVector({ pre_process: e.target.checked }))}
         />
         {t("vector.preProcess")}
@@ -251,6 +287,13 @@ export function VectorParameters({ disabled }: { disabled: boolean }) {
       </label>
     </div>
   );
+}
+
+function formatPoint(point: VectorPointTuple | VectorPoint): string {
+  if (Array.isArray(point)) {
+    return point.join(",");
+  }
+  return [point.x, point.y, point.dwell].join(",");
 }
 
 function clamp(s: string, lo: number, hi: number, fallback: number): number {

@@ -73,6 +73,8 @@ export function Header({
   const { t } = useTranslation();
   const [authOpen, setAuthOpen] = useState(false);
   const authAutoOpenedRef = useRef(false);
+  const statusStateRef = useRef(status?.state ?? "disconnected");
+  statusStateRef.current = status?.state ?? "disconnected";
   const headerActionDisabled = scanLocked || !signedInUser;
   useEffect(() => {
     applyThemeToDocument(theme);
@@ -92,13 +94,13 @@ export function Header({
     dispatch(fetchStatus());
     dispatch(fetchDefaultsMetadata());
     const tHandle = setInterval(() => {
-      const s = status?.state;
+      const s = statusStateRef.current;
       if (s === "busy" || s === "connecting") return;
       dispatch(fetchStatus());
       dispatch(fetchDefaultsMetadata());
     }, 4000);
     return () => clearInterval(tHandle);
-  }, [dispatch, status?.state]);
+  }, [dispatch]);
 
   const state = status?.state ?? "disconnected";
   const stateKey = STATE_LABEL_KEYS[state];

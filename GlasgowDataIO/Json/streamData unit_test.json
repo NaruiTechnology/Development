@@ -28,7 +28,7 @@
                         "externalControl": true,
                         "resolution": 1024,
                         "adcLatency": 8,
-                        "dwell": 2,
+                        "dwell": 16,
                         "display": {
                             "_comment": [
                                 "When true, test_raster.py invokes scan_display.display_raster",
@@ -43,6 +43,10 @@
                         "adcLatency": 8,
                         "beamType": "Ion",
                         "externalControl": true,
+                        "dwell": 16,
+                        "PixelFallbackBlank": true,
+                        "adaptiveFeedbackWindowPoints": 1,
+                        "adaptiveFeedbackPipelineDelayPoints": 0,
                         "lineShiftPerXRow": 5.5,
                         "drainFloorPixels": 21000,
                         "display": {
@@ -108,6 +112,6 @@
     "LogName": "StreamDataUnitTest",
     "Verbose": true,
     "DemoWithCLI": true,
-    "IsProduction": false,
+    "IsProduction": true,
     "DumpData": true
 }

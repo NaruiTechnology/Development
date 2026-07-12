@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { useAppDispatch, useAppSelector } from "../store";
 import {
   setVectorRenderMode,
+  updateROI,
   type ScanKind,
   type ROIState,
   type VectorRenderMode,
@@ -25,10 +26,13 @@ import type { ROIRequest } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
+import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { Icon } from "./Icon";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 
 const DAC_RANGE = 2048;
+const ROI_ACTION_BLANK_COLOR = { r: 97, g: 0, b: 0 };
+const ROI_ACTION_HIGHLIGHT_COLOR = { r: 253, g: 224, b: 71 };
 
 interface PaintStats {
   min: number;
@@ -82,7 +86,6 @@ const PHASE_KEYS: Record<string, TranslationKey> = {
   idle: "phase.idle",
   running: "phase.running",
   stopping: "phase.stopping",
-  paused: "phase.paused",
   completed: "phase.completed",
   error: "phase.error",
 };
@@ -98,10 +101,14 @@ export function ImageCanvas({
   kind,
   onRenderedImageChange,
   onMergedFigureChange,
+  vectorGrayScaleSelection = null,
+  vectorGrayScaleSkipped = null,
 }: {
   kind: ScanKind;
   onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
   onMergedFigureChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
+  vectorGrayScaleSelection?: [number, number] | null;
+  vectorGrayScaleSkipped?: boolean | null;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
@@ -127,6 +134,10 @@ export function ImageCanvas({
   const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
+  const lastRenderedImageEmitRef = useRef<{
+    kind: Extract<ScanKind, "raster" | "vector">;
+    imageUrl: string | null;
+  } | null>(null);
 
   const revision = useAppSelector((s) => s.image.revision);
 
@@ -140,8 +151,11 @@ export function ImageCanvas({
   const vectorImage = useAppSelector((s) => s.image.vectorImage);
   const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
   const vectorCustomRenderPoints = useAppSelector((s) => s.image.vectorCustomRenderPoints);
+  const vectorCustomBlankMask = useAppSelector((s) => s.image.vectorCustomBlankMask);
+  const vectorCustomSpotMask = useAppSelector((s) => s.image.vectorCustomSpotMask);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
+  const vectorSource = useAppSelector((s) => s.image.vectorSource);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roi = useAppSelector((s) => s.scan.roi);
@@ -152,20 +166,48 @@ export function ImageCanvas({
   const lastOutput = useAppSelector((s) => s.scan.lastOutput);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
-  const showServerFigure = phase === "completed" || phase === "paused";
+  const hasPaintedCanvasImage = stats.populated > 0;
+  const showServerFigure = phase === "completed" && (kind !== "vector" || vectorSource === "vector");
   const hasLiveCanvasData =
-    kind === "raster" ? cursor > 0 : kind === "vector" ? vectorCursor > 0 : false;
-  const editorEnabled =
-    (phase === "completed" || phase === "paused") &&
-    (hasLiveCanvasData || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl));
-  const toolbarVisible = phase === "completed" || phase === "paused";
+    kind === "raster" ? cursor > 0 : kind === "vector" ? vectorSource === "vector" && vectorCursor > 0 : false;
+  const visibleVectorCursor = kind === "vector" && vectorSource !== "vector" ? 0 : vectorCursor;
+  const hasRenderedCanvasImage =
+    hasPaintedCanvasImage || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
+  const editorEnabled = phase === "completed" && hasRenderedCanvasImage;
+  const toolbarVisible = phase === "completed";
+  const editorToolbarVisible = toolbarVisible && hasRenderedCanvasImage;
+  const showCalibratedAxes = kind !== "roi";
+  const showGrid =
+    kind === "raster"
+      ? roi.raster_show_grid
+      : kind === "vector"
+        ? roi.vector_show_grid
+        : roi.show_grid;
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
+  const vectorGraySpotSelection =
+    kind === "vector" && vectorGrayScaleSelection !== null
+      ? vectorGrayScaleSelection
+      : null;
+  const vectorGraySpotSkipped =
+    kind === "vector" && vectorGrayScaleSelection !== null
+      ? vectorGrayScaleSkipped
+      : null;
+  const vectorGraySpotColor =
+    kind === "vector" && vectorGrayScaleSelection !== null
+      ? ROI_ACTION_BLANK_COLOR
+      : vectorGraySpotSkipped === false
+      ? ROI_ACTION_HIGHLIGHT_COLOR
+      : ROI_ACTION_BLANK_COLOR;
 
   const stride =
     kind === "vector" && vectorPattern === "default" && vectorEdge > 0
       ? Math.max(1, Math.floor(DAC_RANGE / vectorEdge))
       : 1;
+  const hasExactNativeStride =
+    kind === "vector" && vectorPattern === "default" && vectorEdge > 0
+      ? DAC_RANGE % vectorEdge === 0
+      : true;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -174,14 +216,40 @@ export function ImageCanvas({
     if (kind === "raster") {
       const s = paintGrayscale(canvas, frame, resolution, cursor);
       setStats(s);
-    } else if (kind === "vector" && vectorPattern === "default" && renderMode === "native" && stride > 1) {
-      const s = paintVectorDefaultBlockFill(canvas, vectorImage, vectorEdge, vectorCursor, stride);
+    } else if (kind === "vector" && vectorSource !== "vector") {
+      clearCanvas(canvas);
+      setStats({ min: 0, max: 0, populated: 0 });
+    } else if (kind === "vector" && vectorPattern === "default" && renderMode === "native" && vectorEdge < DAC_RANGE) {
+      const s = paintVectorDefaultBlockFill(
+        canvas,
+        vectorImage,
+        vectorEdge,
+        vectorCursor,
+        vectorGraySpotSelection,
+        vectorGraySpotColor,
+      );
       setStats(s);
     } else if (kind === "vector" && vectorPattern === "default") {
-      const s = paintVectorDefault(canvas, vectorImage, vectorEdge, vectorCursor);
+      const s = paintVectorDefault(
+        canvas,
+        vectorImage,
+        vectorEdge,
+        vectorCursor,
+        vectorGraySpotSelection,
+        vectorGraySpotColor,
+      );
       setStats(s);
     } else if (kind === "vector" && vectorCustomRenderPoints) {
-      const s = paintVectorCustom(canvas, vectorImage, vectorEdge, vectorCustomRenderPoints, vectorCursor);
+      const s = paintVectorCustom(
+        canvas,
+        vectorImage,
+        vectorEdge,
+        vectorCustomRenderPoints,
+        vectorCursor,
+        vectorCustomBlankMask,
+        vectorCustomSpotMask,
+        vectorGraySpotColor,
+      );
       setStats(s);
     } else {
       const s = paintGrayscale(canvas, vectorImage, vectorEdge, vectorCursor);
@@ -193,19 +261,26 @@ export function ImageCanvas({
   useEffect(() => {
     if (!onRenderedImageChange || (kind !== "raster" && kind !== "vector")) return;
 
+    const emit = (imageUrl: string | null) => {
+      const previous = lastRenderedImageEmitRef.current;
+      if (previous?.kind === kind && previous.imageUrl === imageUrl) return;
+      lastRenderedImageEmitRef.current = { kind, imageUrl };
+      onRenderedImageChange(kind, imageUrl);
+    };
+
     if (!hasLiveCanvasData) {
-      onRenderedImageChange(kind, null);
+      emit(null);
       return;
     }
-    if (phase !== "completed" && phase !== "paused") return;
+    if (phase !== "completed") return;
 
     const handle = window.requestAnimationFrame(() => {
       const canvas = canvasRef.current;
       if (!canvas || canvas.width <= 0 || canvas.height <= 0) return;
       try {
-        onRenderedImageChange(kind, canvas.toDataURL("image/png"));
+        emit(canvas.toDataURL("image/png"));
       } catch {
-        onRenderedImageChange(kind, null);
+        emit(null);
       }
     });
 
@@ -241,7 +316,15 @@ export function ImageCanvas({
     [kind, onMergedFigureChange]
   );
 
+  const invalidateMergedFigure = useCallback(() => {
+    setMergedFigureUrl(null);
+    if (kind === "raster" || kind === "vector") {
+      onMergedFigureChange?.(kind, null);
+    }
+  }, [kind, onMergedFigureChange]);
+
   useEffect(() => {
+    setStats({ min: 0, max: 0, populated: 0 });
     clearEditorState(true);
   }, [kind, clearEditorState]);
 
@@ -329,7 +412,11 @@ export function ImageCanvas({
 
   const totalRasterPx = resolution * resolution;
   const totalVectorSamples =
-    vectorPattern === "default" ? vectorEdge * vectorEdge : vectorCustomCount;
+    kind === "vector" && vectorSource !== "vector"
+      ? 0
+      : vectorPattern === "default"
+      ? vectorEdge * vectorEdge
+      : vectorCustomCount;
   const activeRegion = activeROIRegion(roi);
   const current = currentBeamPosition({
     kind,
@@ -340,7 +427,7 @@ export function ImageCanvas({
     rasterCursor: cursor,
     vectorImage,
     vectorEdge,
-    vectorCursor,
+    vectorCursor: visibleVectorCursor,
     vectorPattern,
     vectorCustomPoints,
     vectorCustomRenderPoints,
@@ -350,7 +437,7 @@ export function ImageCanvas({
     kind === "raster" && totalRasterPx > 0
       ? Math.min(100, (cursor / totalRasterPx) * 100)
       : kind === "vector" && totalVectorSamples > 0
-      ? Math.min(100, (vectorCursor / totalVectorSamples) * 100)
+      ? Math.min(100, (visibleVectorCursor / totalVectorSamples) * 100)
       : phase === "completed"
       ? 100
       : 0;
@@ -525,6 +612,7 @@ export function ImageCanvas({
       setSelectedAnnotationId(next.length ? next[next.length - 1].id : null);
       return next;
     });
+    invalidateMergedFigure();
     setDraftShape(null);
     setCommentDraft(null);
     setContextMenu(null);
@@ -534,6 +622,7 @@ export function ImageCanvas({
     if (!annotationId) return;
     setAnnotations((current) => current.filter((annotation) => annotation.id !== annotationId));
     setSelectedAnnotationId((current) => (current === annotationId ? null : current));
+    invalidateMergedFigure();
     setDraftShape(null);
     setCommentDraft(null);
     setContextMenu(null);
@@ -580,7 +669,7 @@ export function ImageCanvas({
     }
   }
 
-  const toolbar = toolbarVisible ? (
+  const toolbar = editorToolbarVisible ? (
         <div className="canvas-toolbox" role="toolbar" aria-label={t("canvas.editor.toolbar.aria")}>
           <div className="canvas-toolbox__cluster" role="radiogroup" aria-label={t("canvas.editor.toolbar.tools")}>
             {(
@@ -615,20 +704,20 @@ export function ImageCanvas({
           <div className="canvas-toolbox__cluster">
             <label className="canvas-toolbox__field" title={t("canvas.editor.pen.color")}>
               <span>{t("canvas.editor.pen.color.short")}</span>
-              <input
-                type="color"
-                value={strokeColor}
-                onChange={(event) => setStrokeColor(event.target.value)}
-              />
+                <input
+                  type="color"
+                  value={strokeColor}
+                  onChange={(event) => setStrokeColor(event.target.value)}
+                />
             </label>
 
             <label className="canvas-toolbox__field" title={t("canvas.editor.pen.lineStyle")}>
               <span>{t("canvas.editor.pen.lineStyle.short")}</span>
-              <select
-                className="input canvas-toolbox__select"
-                value={lineStyle}
-                onChange={(event) => setLineStyle(event.target.value as LineStyle)}
-              >
+                <select
+                  className="input canvas-toolbox__select"
+                  value={lineStyle}
+                  onChange={(event) => setLineStyle(event.target.value as LineStyle)}
+                >
                 <option value="solid">{t("canvas.editor.pen.lineStyle.solid")}</option>
                 <option value="dashed">{t("canvas.editor.pen.lineStyle.dashed")}</option>
                 <option value="dotted">{t("canvas.editor.pen.lineStyle.dotted")}</option>
@@ -637,11 +726,11 @@ export function ImageCanvas({
 
             <label className="canvas-toolbox__field" title={t("canvas.editor.pen.width")}>
               <span>{t("canvas.editor.pen.width.short")}</span>
-              <select
-                className="input canvas-toolbox__select"
-                value={String(lineWidth)}
-                onChange={(event) => setLineWidth(Number(event.target.value))}
-              >
+                <select
+                  className="input canvas-toolbox__select"
+                  value={String(lineWidth)}
+                  onChange={(event) => setLineWidth(Number(event.target.value))}
+                >
                 {[0.5, 1, 2, 3, 4, 6, 8].map((width) => (
                   <option key={width} value={width}>
                     {width}px
@@ -652,13 +741,13 @@ export function ImageCanvas({
           </div>
 
           <div className="canvas-toolbox__cluster">
-            <button
-              type="button"
-              className="canvas-toolbox__action"
+              <button
+                type="button"
+                className="canvas-toolbox__action"
               disabled={!annotations.length}
-              title={t("canvas.editor.merge")}
-              onClick={() => setMergeConfirmOpen(true)}
-            >
+                title={t("canvas.editor.merge")}
+                onClick={() => setMergeConfirmOpen(true)}
+              >
               <Icon name="save" tone="success" />
             </button>
           </div>
@@ -681,7 +770,7 @@ export function ImageCanvas({
 
   return (
     <div>
-      {toolbarHost && toolbar ? createPortal(toolbar, toolbarHost) : toolbar}
+      {!showModeToggle && editorToolbarVisible && (toolbarHost && toolbar ? createPortal(<>{toolbar}</>, toolbarHost) : toolbar)}
 
       {mergeConfirmOpen && createPortal(
         <div className="modal-backdrop canvas-merge-confirm__backdrop" role="presentation">
@@ -746,7 +835,7 @@ export function ImageCanvas({
       )}
 
       {showModeToggle && (
-        <div className="row" style={{ marginBottom: 10, gap: 8 }}>
+        <div className="row canvas-view-row" style={{ marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
           <span className="card__title" id="render-mode-label">
             {t("canvas.view")}
             <CanvasViewHelp />
@@ -767,22 +856,30 @@ export function ImageCanvas({
                 title={
                   m === "decimated"
                     ? t("canvas.view.decimated.title", { edge: vectorEdge })
-                    : t("canvas.view.native.title", { edge: DAC_RANGE, stride })
+                    : hasExactNativeStride
+                    ? t("canvas.view.native.title", { edge: DAC_RANGE, stride })
+                    : t("canvas.view.native.title.custom", {
+                        edge: DAC_RANGE,
+                        sourceEdge: vectorEdge,
+                      })
                 }
                 onClick={() => dispatch(setVectorRenderMode(m))}
               >
-                <Icon name={m === "decimated" ? "scan" : "grid"} tone="accent" />
+                <Icon name={m === "decimated" ? "scan" : "gridSvg"} tone="accent" />
                 {m === "decimated"
                   ? t("canvas.view.decimated", { edge: vectorEdge })
                   : t("canvas.view.native", { edge: DAC_RANGE })}
               </button>
             ))}
           </div>
-          {stride === 1 && (
-            <span className="muted" style={{ fontSize: 11 }}>
-              {t("canvas.view.identical")}
-            </span>
-          )}
+          <span className="canvas-view-row__editor-inline">
+            {vectorEdge === DAC_RANGE && (
+              <span className="muted canvas-view-row__stride-note">
+                {t("canvas.view.identical")}
+              </span>
+            )}
+            {toolbar}
+          </span>
         </div>
       )}
 
@@ -793,180 +890,214 @@ export function ImageCanvas({
           if (editorEnabled) openContextMenu(event, null);
         }}
       >
-        <canvas
-          ref={canvasRef}
-          width={nativeEdge}
-          height={nativeEdge}
-          onDragStart={(e) => e.preventDefault()}
-          style={{
-            display: displayedFigureUrl ? "none" : undefined,
-          }}
-        />
-        {displayedFigureUrl && (
-          <img
-            className="server-figure"
-            src={displayedFigureUrl}
-            alt={t("canvas.serverFigure.alt", { kind: kindLabel })}
-            draggable={false}
+          <canvas
+            ref={canvasRef}
+            width={nativeEdge}
+            height={nativeEdge}
             onDragStart={(e) => e.preventDefault()}
+            style={{
+              display: displayedFigureUrl ? "none" : undefined,
+            }}
           />
-        )}
-        {editorEnabled && (
-          <div
-            className="canvas-editor-layer"
-            data-tool={activeTool}
-            onPointerDown={handleEditorPointerDown}
-            onPointerMove={handleEditorPointerMove}
-            onPointerUp={handleEditorPointerUp}
-            onClick={handleEditorSurfaceClick}
-          >
-            {annotations.map((annotation, index) => (
-              annotation.kind === "rectangle" || annotation.kind === "circle" ? (
-                <div
-                  key={annotation.id}
-                  role="button"
-                  tabIndex={0}
-                  className={`canvas-editor__shape canvas-editor__shape--${annotation.kind}`}
-                  data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
-                  style={shapeStyle(annotation)}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelectedAnnotationId(annotation.id);
-                    setContextMenu(null);
-                  }}
-                  onContextMenu={(event) => openContextMenu(event, annotation.id)}
-                  title={t(
-                    annotation.kind === "rectangle"
-                      ? "canvas.editor.tool.rectangle"
-                      : "canvas.editor.tool.circle"
-                  )}
-                />
-              ) : (
-                <button
-                  key={annotation.id}
-                  type="button"
-                  className={`canvas-editor__annotation canvas-editor__annotation--${annotation.kind}`}
-                  data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
-                  style={{
-                    left: `${annotation.x * 100}%`,
-                    top: `${annotation.y * 100}%`,
-                  }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelectedAnnotationId(annotation.id);
-                    setContextMenu(null);
-                  }}
-                  onContextMenu={(event) => openContextMenu(event, annotation.id)}
-                  title={
-                    annotation.kind === "comment"
-                      ? annotation.text
-                      : t("canvas.editor.tool.highlight")
-                  }
-                >
-                  <span
-                    className="canvas-editor__annotation-index"
+          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
+          {displayedFigureUrl && (
+            <img
+              className="server-figure"
+              src={displayedFigureUrl}
+              alt={t("canvas.serverFigure.alt", { kind: kindLabel })}
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+            />
+          )}
+          {editorEnabled && (
+            <div
+              className="canvas-editor-layer"
+              data-tool={activeTool}
+              onPointerDown={handleEditorPointerDown}
+              onPointerMove={handleEditorPointerMove}
+              onPointerUp={handleEditorPointerUp}
+              onClick={handleEditorSurfaceClick}
+            >
+              {annotations.map((annotation, index) => (
+                annotation.kind === "rectangle" || annotation.kind === "circle" ? (
+                  <div
+                    key={annotation.id}
+                    role="button"
+                    tabIndex={0}
+                    className={`canvas-editor__shape canvas-editor__shape--${annotation.kind}`}
+                    data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
+                    style={shapeStyle(annotation)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedAnnotationId(annotation.id);
+                      setContextMenu(null);
+                    }}
+                    onContextMenu={(event) => openContextMenu(event, annotation.id)}
+                    title={t(
+                      annotation.kind === "rectangle"
+                        ? "canvas.editor.tool.rectangle"
+                        : "canvas.editor.tool.circle"
+                    )}
+                  />
+                ) : (
+                  <button
+                    key={annotation.id}
+                    type="button"
+                    className={`canvas-editor__annotation canvas-editor__annotation--${annotation.kind}`}
+                    data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
                     style={{
-                      borderColor: annotation.strokeColor,
-                      background: alphaColor(annotation.strokeColor, annotation.kind === "comment" ? 0.92 : 0.24),
+                      left: `${annotation.x * 100}%`,
+                      top: `${annotation.y * 100}%`,
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedAnnotationId(annotation.id);
+                      setContextMenu(null);
+                    }}
+                    onContextMenu={(event) => openContextMenu(event, annotation.id)}
+                    title={
+                      annotation.kind === "comment"
+                        ? annotation.text
+                        : t("canvas.editor.tool.highlight")
+                    }
+                  >
+                    <span
+                      className="canvas-editor__annotation-index"
+                      style={{
+                        borderColor: annotation.strokeColor,
+                        background: alphaColor(annotation.strokeColor, annotation.kind === "comment" ? 0.92 : 0.24),
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+                    {annotation.kind === "comment" && annotation.text && (
+                      <span className="canvas-editor__label">{annotation.text}</span>
+                    )}
+                  </button>
+                )
+              ))}
+
+              {draftShape && (
+                <div
+                  className={`canvas-editor__shape canvas-editor__shape--${draftShape.kind} canvas-editor__shape--draft`}
+                  style={shapeStyle(draftShape)}
+                />
+              )}
+
+              {commentDraft && (
+                <form
+                  className="canvas-editor__draft"
+                  style={{
+                    left: `${commentDraft.x * 100}%`,
+                    top: `${commentDraft.y * 100}%`,
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    saveCommentDraft();
+                  }}
+                >
+                  <input
+                    autoFocus
+                    className="input"
+                    value={commentDraft.text}
+                    placeholder={t("canvas.editor.comment.placeholder")}
+                    onChange={(event) =>
+                      setCommentDraft((current) =>
+                        current ? { ...current, text: event.target.value } : current
+                      )
+                    }
+                  />
+                  <div className="button-row">
+                    <button type="submit" className="btn btn--ghost">
+                      {t("canvas.editor.comment.save")}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => setCommentDraft(null)}
+                    >
+                      {t("canvas.editor.comment.cancel")}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {contextMenu && (
+                <div
+                  className="canvas-editor__menu"
+                  style={{ left: contextMenu.x, top: contextMenu.y }}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="canvas-editor__menu-item"
+                    disabled={!annotations.length}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      undoLastAnnotation();
                     }}
                   >
-                    {index + 1}
-                  </span>
-                  {annotation.kind === "comment" && annotation.text && (
-                    <span className="canvas-editor__label">{annotation.text}</span>
-                  )}
-                </button>
-              )
-            ))}
-
-            {draftShape && (
-              <div
-                className={`canvas-editor__shape canvas-editor__shape--${draftShape.kind} canvas-editor__shape--draft`}
-                style={shapeStyle(draftShape)}
-              />
-            )}
-
-            {commentDraft && (
-              <form
-                className="canvas-editor__draft"
-                style={{
-                  left: `${commentDraft.x * 100}%`,
-                  top: `${commentDraft.y * 100}%`,
-                }}
-                onClick={(event) => event.stopPropagation()}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  saveCommentDraft();
-                }}
-              >
-                <input
-                  autoFocus
-                  className="input"
-                  value={commentDraft.text}
-                  placeholder={t("canvas.editor.comment.placeholder")}
-                  onChange={(event) =>
-                    setCommentDraft((current) =>
-                      current ? { ...current, text: event.target.value } : current
-                    )
-                  }
-                />
-                <div className="button-row">
-                  <button type="submit" className="btn btn--ghost">
-                    {t("canvas.editor.comment.save")}
+                    {t("canvas.editor.context.undo")}
                   </button>
                   <button
                     type="button"
-                    className="btn btn--ghost"
-                    onClick={() => setCommentDraft(null)}
+                    className="canvas-editor__menu-item"
+                    disabled={!contextTargetId}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeAnnotation(contextTargetId);
+                    }}
                   >
-                    {t("canvas.editor.comment.cancel")}
+                    {t("canvas.editor.context.remove")}
+                  </button>
+                  <button
+                    type="button"
+                    className="canvas-editor__menu-item"
+                    disabled={!annotations.length}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={() => {
+                      setAnnotations([]);
+                      setSelectedAnnotationId(null);
+                      invalidateMergedFigure();
+                      setDraftShape(null);
+                      setCommentDraft(null);
+                      setContextMenu(null);
+                    }}
+                  >
+                    {t("canvas.editor.context.clear")}
                   </button>
                 </div>
-              </form>
-            )}
-
-            {contextMenu && (
-              <div
-                className="canvas-editor__menu"
-                style={{ left: contextMenu.x, top: contextMenu.y }}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  className="canvas-editor__menu-item"
-                  disabled={!annotations.length}
-                  onClick={undoLastAnnotation}
-                >
-                  {t("canvas.editor.context.undo")}
-                </button>
-                <button
-                  type="button"
-                  className="canvas-editor__menu-item"
-                  disabled={!contextTargetId}
-                  onClick={() => removeAnnotation(contextTargetId)}
-                >
-                  {t("canvas.editor.context.remove")}
-                </button>
-                <button
-                  type="button"
-                  className="canvas-editor__menu-item"
-                  disabled={!annotations.length}
-                  onClick={() => {
-                    setAnnotations([]);
-                    setSelectedAnnotationId(null);
-                    setDraftShape(null);
-                    setCommentDraft(null);
-                    setContextMenu(null);
-                  }}
-                >
-                  {t("canvas.editor.context.clear")}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
       </div>
 
       {showServerFigure && !serverFigureUrl && !mergedFigureUrl && (
@@ -1015,7 +1146,7 @@ export function ImageCanvas({
             <span>
               {t("canvas.meta.samples")}{" "}
               <b>
-                {fmt(vectorCursor)}
+                {fmt(visibleVectorCursor)}
                 {totalVectorSamples > 0
                   ? ` / ${fmt(totalVectorSamples)}`
                   : ""}
@@ -1088,6 +1219,12 @@ interface CurrentBeamPosition {
   adc: number;
 }
 
+function clearCanvas(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
 function activeROIRegion(roi: ROIState): ROIRequest {
   return roi.selection ?? {
     x_start: roi.x_origin,
@@ -1134,6 +1271,121 @@ function currentBeamPosition(args: CurrentBeamArgs): CurrentBeamPosition | null 
     ...mapIndexToRegion(col, row, args.vectorEdge, args.region),
     adc: args.vectorImage[row * args.vectorEdge + col] ?? 0,
   };
+}
+
+function unitLabel(value: string) {
+  switch (value) {
+    case "um":
+      return "μm";
+    case "mm":
+    case "cm":
+    case "nm":
+      return value;
+    default:
+      return value;
+  }
+}
+
+function formatOneDecimal(v: number) {
+  return Number.isFinite(v) ? v.toFixed(1) : "0.0";
+}
+
+function LiveAxisOverlay({
+  roi,
+  showGrid,
+  t,
+}: {
+  roi: ROIState;
+  showGrid: boolean;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}) {
+  const minorTicks = 20;
+  const majorEvery = 5;
+  const ticks = Array.from({ length: minorTicks + 1 }, (_, i) => {
+    const ratio = i / minorTicks;
+    return {
+      key: i,
+      ratio,
+      percent: `${ratio * 100}%`,
+      major: i % majorEvery === 0,
+      xLabel: formatOneDecimal(roi.x_origin + (roi.x_end - roi.x_origin) * ratio),
+      yLabel: formatOneDecimal(roi.y_origin + (roi.y_end - roi.y_origin) * ratio),
+    };
+  });
+  const unit = unitLabel(roi.scale_unit);
+
+  return (
+    <div className="canvas-axis-overlay" aria-hidden="true">
+      {showGrid && (
+        <>
+          {ticks.filter((tick) => tick.major).map((tick) => (
+            <div
+              key={`grid-x-${tick.key}`}
+              className="canvas-axis-overlay__grid canvas-axis-overlay__grid--x"
+              style={{ left: tick.percent }}
+            />
+          ))}
+          {ticks.filter((tick) => tick.major).map((tick) => (
+            <div
+              key={`grid-y-${tick.key}`}
+              className="canvas-axis-overlay__grid canvas-axis-overlay__grid--y"
+              style={{ top: tick.percent }}
+            />
+          ))}
+        </>
+      )}
+      <div className="canvas-axis-overlay__axis canvas-axis-overlay__axis--x" />
+      <div className="canvas-axis-overlay__axis canvas-axis-overlay__axis--y" />
+      {ticks.map((tick) => (
+        <div
+          key={`x-${tick.key}`}
+          className={`canvas-axis-overlay__tick canvas-axis-overlay__tick--x${
+            tick.major ? " canvas-axis-overlay__tick--major" : ""
+          }`}
+          style={{ left: tick.percent }}
+        />
+      ))}
+      {ticks.map((tick) => (
+        <div
+          key={`y-${tick.key}`}
+          className={`canvas-axis-overlay__tick canvas-axis-overlay__tick--y${
+            tick.major ? " canvas-axis-overlay__tick--major" : ""
+          }`}
+          style={{ top: tick.percent }}
+        />
+      ))}
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`xl-${tick.key}`}
+          className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
+          style={{ left: tick.percent }}
+        >
+          {tick.xLabel}
+        </span>
+      ))}
+      {ticks.filter((tick) => tick.major).map((tick) => (
+        <span
+          key={`yl-${tick.key}`}
+          className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
+          style={{ top: tick.percent }}
+        >
+          {tick.yLabel}
+        </span>
+      ))}
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--start">
+        {t("roi.canvas.start", {
+          point: `(${formatOneDecimal(roi.x_origin)}, ${formatOneDecimal(roi.y_origin)})`,
+          unit,
+        })}
+      </span>
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end">
+        {t("roi.canvas.end", {
+          point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
+          unit,
+        })}
+      </span>
+    </div>
+  );
 }
 
 function mapIndexToRegion(
@@ -1376,7 +1628,9 @@ function paintVectorDefault(
   canvas: HTMLCanvasElement,
   buf: Uint16Array,
   edge: number,
-  populated: number
+  populated: number,
+  graySpotSelection: GrayScaleSelection = null,
+  graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
     canvas.width = edge;
@@ -1395,11 +1649,16 @@ function paintVectorDefault(
     const row = i % edge;
     if (col >= edge) break;
     const idx = row * edge + col;
-    const g = scaleSample(buf[idx], range.min, range.max);
+    const sample = buf[idx];
+    const g = scaleSample(sample, range.min, range.max);
     const p = idx * 4;
-    data[p + 0] = g;
-    data[p + 1] = g;
-    data[p + 2] = g;
+    if (sampleInGraySpotSelection(sample, graySpotSelection)) {
+      paintSpotPixel(data, p, graySpotColor);
+    } else {
+      data[p + 0] = g;
+      data[p + 1] = g;
+      data[p + 2] = g;
+    }
     data[p + 3] = 255;
   }
 
@@ -1412,7 +1671,10 @@ function paintVectorCustom(
   buf: Uint16Array,
   edge: number,
   points: Float32Array,
-  populated: number
+  populated: number,
+  blankMask: Uint8Array | null,
+  spotMask: Uint8Array | null,
+  graySpotColor: { r: number; g: number; b: number },
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
     canvas.width = edge;
@@ -1424,15 +1686,18 @@ function paintVectorCustom(
   const limit = Math.min(populated, points.length / 2);
   let lo = 65535;
   let hi = 0;
+  let visible = 0;
   for (let i = 0; i < limit; i++) {
+    if (blankMask?.[i] === 1) continue;
     const x = points[2 * i] | 0;
     const y = points[2 * i + 1] | 0;
     if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
     const v = buf[y * edge + x];
     if (v < lo) lo = v;
     if (v > hi) hi = v;
+    visible++;
   }
-  if (limit === 0) {
+  if (visible === 0) {
     lo = 0;
     hi = 0;
   }
@@ -1446,10 +1711,31 @@ function paintVectorCustom(
     const idx = y * edge + x;
     const g = scaleSample(buf[idx], lo, hi);
     const p = idx * 4;
-    data[p + 0] = g;
-    data[p + 1] = g;
-    data[p + 2] = g;
+    if (blankMask?.[i] === 1) {
+      paintSpotPixel(data, p, ROI_ACTION_BLANK_COLOR);
+    } else if (spotMask?.[i] === 1) {
+      paintSpotPixel(data, p, graySpotColor);
+    } else {
+      data[p + 0] = g;
+      data[p + 1] = g;
+      data[p + 2] = g;
+    }
     data[p + 3] = 255;
+  }
+
+  // Spot selections must win even when multiple source points collapse
+  // onto the same rendered pixel. A final overlay pass avoids a later
+  // non-spot point repainting the selected pixel back to grayscale.
+  if (spotMask) {
+    for (let i = 0; i < limit; i++) {
+      if (spotMask[i] !== 1 || blankMask?.[i] === 1) continue;
+      const x = points[2 * i] | 0;
+      const y = points[2 * i + 1] | 0;
+      if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
+      const p = (y * edge + x) * 4;
+      paintSpotPixel(data, p, graySpotColor);
+      data[p + 3] = 255;
+    }
   }
 
   ctx.putImageData(img, 0, 0);
@@ -1461,9 +1747,10 @@ function paintVectorDefaultBlockFill(
   buf: Uint16Array,
   edge: number,
   populated: number,
-  stride: number
+  graySpotSelection: GrayScaleSelection = null,
+  graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
 ): PaintStats {
-  const nativeSize = edge * stride;
+  const nativeSize = DAC_RANGE;
   if (canvas.width !== nativeSize || canvas.height !== nativeSize) {
     canvas.width = nativeSize;
     canvas.height = nativeSize;
@@ -1490,16 +1777,26 @@ function paintVectorDefaultBlockFill(
     const cellRow = i % edge;
     if (cellCol >= edge) break;
     const cellIdx = cellRow * edge + cellCol;
-    const g = scaleSample(buf[cellIdx], range.min, range.max);
-    const baseY = cellRow * stride;
-    const baseX = cellCol * stride;
+    const sample = buf[cellIdx];
+    const g = scaleSample(sample, range.min, range.max);
+    const isSpot = sampleInGraySpotSelection(sample, graySpotSelection);
+    const baseY = Math.floor((cellRow * nativeSize) / edge);
+    const nextY = Math.floor(((cellRow + 1) * nativeSize) / edge);
+    const baseX = Math.floor((cellCol * nativeSize) / edge);
+    const nextX = Math.floor(((cellCol + 1) * nativeSize) / edge);
+    const blockHeight = Math.max(1, nextY - baseY);
+    const blockWidth = Math.max(1, nextX - baseX);
 
-    for (let dy = 0; dy < stride; dy++) {
+    for (let dy = 0; dy < blockHeight; dy++) {
       let p = ((baseY + dy) * nativeSize + baseX) * 4;
-      for (let dx = 0; dx < stride; dx++) {
-        data[p + 0] = g;
-        data[p + 1] = g;
-        data[p + 2] = g;
+      for (let dx = 0; dx < blockWidth; dx++) {
+        if (isSpot) {
+          paintSpotPixel(data, p, graySpotColor);
+        } else {
+          data[p + 0] = g;
+          data[p + 1] = g;
+          data[p + 2] = g;
+        }
         data[p + 3] = 255;
         p += 4;
       }
@@ -1531,6 +1828,21 @@ function vectorDefaultRange(buf: Uint16Array, edge: number, limit: number): Pain
 function scaleSample(value: number, lo: number, hi: number): number {
   if (hi <= lo) return hi > 0 ? 255 : 0;
   return Math.max(0, Math.min(255, Math.round(((value - lo) * 255) / (hi - lo))));
+}
+
+function sampleInGraySpotSelection(sample: number, selection: GrayScaleSelection): boolean {
+  if (!selection) return false;
+  return grayScaleSelectionContains(selection, sample >> 8);
+}
+
+function paintSpotPixel(
+  data: Uint8ClampedArray,
+  offset: number,
+  color: { r: number; g: number; b: number }
+): void {
+  data[offset + 0] = color.r;
+  data[offset + 1] = color.g;
+  data[offset + 2] = color.b;
 }
 
 async function uploadMergedFigure(

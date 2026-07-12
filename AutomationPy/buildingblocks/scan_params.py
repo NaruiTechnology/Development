@@ -63,6 +63,7 @@ DEFAULT_RASTER_SENDER_DRAIN_TIMEOUT_S  = 60.0
 # Vector
 DEFAULT_VECTOR_PATTERN                 = "default"
 DEFAULT_VECTOR_RESOLUTION              = 2048
+DEFAULT_VECTOR_DWELL                   = 1
 DEFAULT_VECTOR_LATENCY_BYTES           = 8196
 DEFAULT_VECTOR_OUTPUT_MODE             = "SixteenBit"
 DEFAULT_VECTOR_BEAM_TYPE               = "Ion"
@@ -248,6 +249,7 @@ class VectorParams:
     # --- exposed to UI / REST ---------------------------------------------
     pattern:           str  = DEFAULT_VECTOR_PATTERN
     vector_resolution: int  = DEFAULT_VECTOR_RESOLUTION
+    dwell:             int  = DEFAULT_VECTOR_DWELL
     latency_bytes:     int  = DEFAULT_VECTOR_LATENCY_BYTES
     output_mode:       str  = DEFAULT_VECTOR_OUTPUT_MODE
     beam_type:         str  = DEFAULT_VECTOR_BEAM_TYPE
@@ -277,6 +279,8 @@ class VectorParams:
             pattern           = str(_pick(cfg, "pattern",                     default=DEFAULT_VECTOR_PATTERN)),
             vector_resolution = _coerce_int(
                 _pick(cfg, "vector_resolution", "vectorResolution"),          DEFAULT_VECTOR_RESOLUTION),
+            dwell             = _coerce_int(
+                _pick(cfg, "dwell"),                                          DEFAULT_VECTOR_DWELL),
             latency_bytes     = _coerce_int(
                 _pick(cfg, "latency_bytes", "latency"),                       DEFAULT_VECTOR_LATENCY_BYTES),
             output_mode       = _coerce_output_mode(

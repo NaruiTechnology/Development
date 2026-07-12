@@ -31,7 +31,13 @@ const FTP_CONFIG_PATH = ["Actions", 0, "streamData", "actionData", "ftp"] as con
 export async function uploadScanArtifactsToConfiguredFtp(
   kind: "raster" | "vector",
   filenames: ScanArtifactUpload,
+  preview = false,
 ): Promise<void> {
+  if (preview) {
+    console.warn(`[ftp-upload] skipping ${kind} scan upload: preview mode`);
+    return;
+  }
+
   const ftp = await loadFtpSettings();
   if (!ftp) return;
 

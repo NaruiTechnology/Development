@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "outDir": "./.test-dist"
+  },
+  "include": [
+    "src/lib/grayScaleUI.ts",
+    "src/lib/scanRepeat.ts"
+  ]
+}

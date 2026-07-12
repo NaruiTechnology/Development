@@ -14,7 +14,7 @@ here closes that gap. Defaulting to "SixteenBit" keeps the wire format
 backward compatible with frontends that don't send the field yet.
 """
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -82,25 +82,58 @@ class VectorPattern(str, Enum):
     custom  = "custom"
 
 
+class VectorFeedbackMode(str, Enum):
+    standard = "standard"
+    adaptive_gray_feedback = "adaptive_gray_feedback"
+
+
+class VectorPoint(BaseModel):
+    x: int = Field(..., ge=0, le=16383)
+    y: int = Field(..., ge=0, le=16383)
+    dwell: int = Field(..., ge=1, le=65535)
+    blank: Optional[bool] = None
+    passIndex: Optional[int] = Field(None, ge=1, le=2)
+
+
 class SimulationBitmap(BaseModel):
     width:  int = Field(..., ge=1, le=4096)
     height: int = Field(..., ge=1, le=4096)
-    pixels: List[int] = Field(..., max_length=1_000_000)
+    pixels: List[Union[int, "SimulationBitmapPixel"]] = Field(..., max_length=1_000_000)
 
     @field_validator("pixels")
     @classmethod
     def _pixels_are_bytes(cls, v: List[int]) -> List[int]:
         for px in v:
-            if px < 0 or px > 255:
+            if isinstance(px, SimulationBitmapPixel):
+                value = px.value
+            else:
+                value = int(px)
+            if value < 0 or value > 255:
                 raise ValueError("simulation_bitmap pixels must be 0..255")
         return v
 
 
+class SimulationBitmapPixel(BaseModel):
+    value: int = Field(..., ge=0, le=255)
+    isHighlighted: Optional[bool] = None
+    isSkipped: Optional[bool] = None
+    blank: Optional[bool] = None
+
+
 class VectorRequest(BaseModel):
     pattern:        VectorPattern = VectorPattern.default
-    points:         Optional[List[Tuple[int, int, int]]] = Field(
+    points:         Optional[List[Union[
+        Tuple[int, int, int],
+        Tuple[int, int, int, Optional[bool]],
+        Tuple[int, int, int, Optional[bool], Optional[int]],
+        VectorPoint,
+    ]]] = Field(
         default=None,
-        description="For `custom`: list of (x, y, dwell) tuples. Capped at 1M points.",
+        description=(
+            "For `custom`: list of (x, y, dwell), (x, y, dwell, blank), "
+            "(x, y, dwell, blank, passIndex) tuples or {x, y, dwell, blank, passIndex} objects. "
+            "Capped at 1M points."
+        ),
         max_length=1_000_000,
     )
     # Density of the default sweep across the 2048-DAC range. Stride is
@@ -109,13 +142,31 @@ class VectorRequest(BaseModel):
     vector_resolution: int = Field(
         2048,
         description=(
-            "Default-pattern sample density on each axis. Allowed: 256, 512, 1024, 2048. "
+            "Default-pattern sample density on each axis. Allowed: 1..2048. "
             "Coverage is always full DAC range; smaller values just sample sparser. "
             "Ignored when pattern=custom."
         ),
     )
+    dwell:          int  = Field(
+        1,
+        ge=1,
+        le=65535,
+        description="Default-pattern dwell time units (125 ns each). Ignored when pattern=custom.",
+    )
     latency_bytes:  int  = Field(8196, ge=2, description="Matches `vectorScan.latency` in streamData.json.")
     output_mode:    str  = Field("SixteenBit", description="SixteenBit or EightBit.")
+    feedback_mode:  VectorFeedbackMode = Field(
+        VectorFeedbackMode.standard,
+        description="Vector blanking mode. adaptive_gray_feedback enables host-side feedback blanking.",
+    )
+    gray_level_range: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Confirmed gray-level interval in 8-bit UI units (0..255).",
+    )
+    gray_level_skipped: Optional[bool] = Field(
+        default=None,
+        description="True blanks values inside the range; false blanks values outside it.",
+    )
     beam_type:      str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
     cookie:         int  = Field(123, ge=0, le=0xFFFF)
@@ -138,20 +189,30 @@ class VectorRequest(BaseModel):
     @field_validator("vector_resolution")
     @classmethod
     def _check_vector_resolution(cls, v: int) -> int:
-        # Whitelist rather than range — anything outside {256,512,1024,2048}
-        # would either produce a non-integer stride or oversample the DAC
-        # range (which we don't support here; that'd be a different feature).
-        if v not in (256, 512, 1024, 2048):
-            raise ValueError(f"vector_resolution must be 256, 512, 1024, or 2048; got {v}")
+        if v < 1 or v > 2048:
+            raise ValueError(f"vector_resolution must be between 1 and 2048; got {v}")
         return v
+
+    @field_validator("gray_level_range")
+    @classmethod
+    def _check_gray_level_range(cls, v: Optional[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+        if v is None:
+            return None
+        if len(v) != 2:
+            raise ValueError("gray_level_range must contain exactly two entries")
+        lo = int(v[0])
+        hi = int(v[1])
+        if lo < 0 or lo > 255 or hi < 0 or hi > 255:
+            raise ValueError("gray_level_range entries must be 0..255")
+        return (min(lo, hi), max(lo, hi))
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {"pattern": "default", "vector_resolution": 2048,
-                 "latency_bytes": 8196, "pre_process": True, "do_validate": True},
+                 "dwell": 1, "latency_bytes": 8196, "pre_process": True, "do_validate": True},
                 {"pattern": "default", "vector_resolution": 512,
-                 "latency_bytes": 8196, "pre_process": True, "do_validate": True},
+                 "dwell": 4, "latency_bytes": 8196, "pre_process": True, "do_validate": True},
                 {"pattern": "custom",
                  "points": [[0, 0, 2], [100, 100, 2], [200, 100, 2], [200, 200, 2]],
                  "latency_bytes": 8196, "do_validate": True},

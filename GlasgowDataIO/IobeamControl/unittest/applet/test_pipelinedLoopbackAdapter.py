@@ -22,16 +22,16 @@ class PipelinedLoopbackAdapterTest(unittest.TestCase):
 
         async def bench(ctx):
             ctx.set(dut.bus.adc_oe, 0)
-            ctx.set(dut.loopback_stream, 11)
+            ctx.set(dut.loopback_stream, 0x1234)
             await ctx.tick()
             observed.append(ctx.get(dut.bus.data_i))
 
-            ctx.set(dut.loopback_stream, 22)
+            ctx.set(dut.loopback_stream, 0xABCD)
             ctx.set(dut.bus.adc_oe, 1)
             await ctx.tick()
             observed.append(ctx.get(dut.bus.data_i))
 
-            ctx.set(dut.loopback_stream, 33)
+            ctx.set(dut.loopback_stream, 0x0FED)
             ctx.set(dut.bus.adc_oe, 0)
             await ctx.tick()
             observed.append(ctx.get(dut.bus.data_i))
@@ -39,4 +39,4 @@ class PipelinedLoopbackAdapterTest(unittest.TestCase):
         sim.add_testbench(bench)
         sim.run()
 
-        self.assertEqual(observed, [0, 22, 22])
+        self.assertEqual(observed, [0, 0xABCD, 0xABCD])

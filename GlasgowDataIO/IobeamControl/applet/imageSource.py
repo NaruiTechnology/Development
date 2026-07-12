@@ -2,16 +2,16 @@
 IobeamControl/applet/imageSource.py
 ===================================
 
-Host-side helper that produces the 8-bit pixel array consumed by
+Host-side helper that produces the 16-bit pixel array consumed by
 FakeAdcSimulator's BRAM init. Three modes:
 
     load_image(path, resolution=64, invert=False) -> list[int]
-        Open a PNG/BMP/JPEG via PIL, convert to 8-bit grayscale,
+        Open a PNG/BMP/JPEG via PIL, convert to grayscale,
         resize to `resolution x resolution`, return as a flat
-        row-major list of N*N ints (each 0..255).
+        row-major list of N*N ints (each 0..65535).
 
     random_image(resolution=64, seed=None) -> list[int]
-        Generate `resolution * resolution` random 0..255 ints. Useful
+        Generate `resolution * resolution` random 0..65535 ints. Useful
         when no test image is available.
 
     pattern_image(resolution=64, kind="ramp") -> list[int]
@@ -42,10 +42,9 @@ the older ``_alt_file`` / ``_alt_random`` overlays:
 
 ``filePath`` is resolved through :func:`_resolve_iobeam_path`: absolute
 paths are used verbatim, while relative paths are joined against
-``IOBEAM_ROOT`` (default: the service working directory, or the checkout
-root found by walking up from this file). This removes machine-specific
-absolute paths from the JSON and lets the same config travel between dev
-boxes.
+``IOBEAM_ROOT`` (default: the systemd unit's WorkingDirectory). This
+removes the hard-coded ``/home/vboxuser/...`` strings that used to leak
+into the JSON and let the same config travel between dev boxes.
 
 Back-compat
 -----------
@@ -69,20 +68,20 @@ logger = logging.getLogger(__name__)
 #
 # Why this exists
 # ---------------
-# streamData.json used to carry machine-specific absolute paths to
-# ``Development/.../SampleImage.bmp``.
+# streamData.json used to carry absolute paths like
+# ``/home/vboxuser/Project/IobeamTech/Development/.../SampleImage.bmp``.
 # That made the file un-shareable between developer boxes, CI, and the
 # production target. The cleanup moves those literals out of the JSON
 # and into a single env-driven root, falling back to:
 #
-#   1. ``IOBEAM_ROOT`` environment variable (preferred; set by the service
-#      launcher when a specific checkout root is required).
+#   1. ``IOBEAM_ROOT`` environment variable (preferred; matches the
+#      systemd unit's WorkingDirectory).
 #   2. The walk-up from this file: ``GlasgowDataIO`` lives at
 #      ``<root>/Development/GlasgowDataIO``, so the parent of
 #      ``Development`` is the root.
-#   3. Current working directory, last resort. This matches the Windows
-#      service wrapper's working directory in deployed runs but is fragile
-#      in ad-hoc dev shells.
+#   3. Current working directory, last resort - matches the systemd
+#      unit's ``WorkingDirectory=`` for production but is fragile in
+#      dev shells.
 # ---------------------------------------------------------------------------- #
 
 def _walk_up_to_iobeam_root() -> Path | None:
@@ -145,13 +144,14 @@ def _validate_resolution(resolution):
 
 def load_image(path, resolution=64, invert=False):
     """
-    Load `path` (PNG/BMP/JPEG/etc.), convert to 8-bit grayscale, resize
+    Load `path` (PNG/BMP/JPEG/etc.), convert to grayscale, resize
     to a `resolution x resolution` square, and return the pixel data as
-    a flat row-major list of ints in [0, 255].
+    a flat row-major list of ints in [0, 65535].
 
     The path is resolved through :func:`_resolve_iobeam_path`, so
     relative paths in streamData.json are interpreted against
-    IOBEAM_ROOT (typically the project root used by the service launcher).
+    IOBEAM_ROOT (typically the project root that systemd uses as its
+    WorkingDirectory).
 
     Falls back to random_image() if PIL is missing or the file can't be
     read - this keeps the build path alive on machines without Pillow.
@@ -173,11 +173,13 @@ def load_image(path, resolution=64, invert=False):
             p, path, get_iobeam_root())
         return random_image(resolution)
 
-    im = Image.open(p).convert("L")
+    im = Image.open(p).convert("I")
     im = im.resize((resolution, resolution), resample=Image.Resampling.NEAREST)
     pixels = list(im.getdata())
     if invert:
-        pixels = [255 - v for v in pixels]
+        pixels = [65535 - int(v) for v in pixels]
+    elif pixels and max(pixels) <= 255:
+        pixels = [int(v) * 257 for v in pixels]
     logger.info(f"loaded {p.name} -> {resolution}x{resolution} grayscale "
                 f"({len(pixels)} pixels, range {min(pixels)}..{max(pixels)})")
     return pixels
@@ -185,12 +187,12 @@ def load_image(path, resolution=64, invert=False):
 
 def random_image(resolution=64, seed=None):
     """
-    Generate `resolution * resolution` random 0..255 ints.
+    Generate `resolution * resolution` random 0..65535 ints.
     Deterministic when seed is not None.
     """
     _validate_resolution(resolution)
     rng = random.Random(seed)
-    return [rng.randint(0, 255) for _ in range(resolution * resolution)]
+    return [rng.randint(0, 65535) for _ in range(resolution * resolution)]
 
 
 def pattern_image(resolution=64, kind="ramp"):
@@ -209,29 +211,23 @@ def pattern_image(resolution=64, kind="ramp"):
     if kind == "ramp":
         for y in range(n):
             for x in range(n):
-                out[y * n + x] = (x * 255) // (n - 1)
+                out[y * n + x] = (x * 65535) // (n - 1)
     elif kind == "checker":
-        # Use dark gray rather than true black for the low squares. Small
-        # ROI scans can fall entirely inside one checker cell; a zero-valued
-        # cell is indistinguishable from a dead ADC path in the live/final
-        # views, while 32 still reads visually as the dark half of a checker.
-        low = 32
-        high = 255
         cell = max(1, n // 8)
         for y in range(n):
             for x in range(n):
-                out[y * n + x] = high if ((x // cell) + (y // cell)) & 1 else low
+                out[y * n + x] = 65535 if ((x // cell) + (y // cell)) & 1 else 0
     elif kind == "bars":
         for y in range(n):
             for x in range(n):
-                out[y * n + x] = ((x * 8) // n) * 32  # 8 bars, 0,32,...,224
+                out[y * n + x] = ((x * 8) // n) * 8192  # 8 bars, 0,8192,...,57344
     elif kind == "bullseye":
         cx = cy = (n - 1) / 2
         max_r = ((cx ** 2) + (cy ** 2)) ** 0.5
         for y in range(n):
             for x in range(n):
                 r = (((x - cx) ** 2) + ((y - cy) ** 2)) ** 0.5
-                out[y * n + x] = int(255 * (1 - r / max_r))
+                out[y * n + x] = int(65535 * (1 - r / max_r))
     else:
         raise ValueError(f"unknown pattern kind: {kind}")
     return out

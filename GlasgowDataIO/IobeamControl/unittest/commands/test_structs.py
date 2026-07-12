@@ -1,5 +1,5 @@
 import unittest
-from IobeamControl.commands.structs import DACCodeRange, u14
+from IobeamControl.commands.structs import DACCodeRange, u14, u16
 
 
 class DACCodeRangeTest(unittest.TestCase):
@@ -22,3 +22,8 @@ class DACCodeRangeTest(unittest.TestCase):
         self.assertEqual(u14(16383),16383)
         self.assertRaises(ValueError, lambda: u14(16384))
         self.assertRaises(ValueError, lambda: u14(-1))
+    def test_u16(self):
+        self.assertEqual(u16(0), 0)
+        self.assertEqual(u16(65535), 65535)
+        self.assertRaises(ValueError, lambda: u16(65536))
+        self.assertRaises(ValueError, lambda: u16(-1))

@@ -17,9 +17,11 @@ interface HelpPopoverProps {
   ariaLabel: string;
   /** Body content for the modal. */
   children: ReactNode;
+  /** Optional trigger icon; defaults to the question mark. */
+  iconName?: "help" | "alertTriangle";
 }
 
-export function HelpPopover({ title, ariaLabel, children }: HelpPopoverProps) {
+export function HelpPopover({ title, ariaLabel, children, iconName = "help" }: HelpPopoverProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const scanPhase = useAppSelector((s) => s.scan.phase);
@@ -55,7 +57,7 @@ export function HelpPopover({ title, ariaLabel, children }: HelpPopoverProps) {
           setOpen(true);
         }}
       >
-        <Icon name="help" />
+        <Icon name={iconName} />
       </button>
       {open && <HelpModal title={title} onClose={close}>{children}</HelpModal>}
     </>
@@ -107,7 +109,7 @@ function HelpModal({
       }}
     >
       <div
-        className="modal"
+        className="modal modal--help"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleIdRef.current}

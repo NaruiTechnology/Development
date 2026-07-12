@@ -22,6 +22,9 @@
  * process instead.
  */
 import type { Server as HttpServer, IncomingMessage } from "node:http";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import { URL } from "node:url";
 import { Buffer } from "node:buffer";
@@ -45,6 +48,7 @@ const STREAM_PATHS: Record<string, ScanKind> = {
   "/ws/scan/raster/stream": "raster",
   "/ws/scan/vector/stream": "vector",
 };
+const VECTOR_TRACE_LOG_FILE = path.join(os.tmpdir(), "ionbeam-vector-trace.log");
 
 export function attachWsProxy(
   server: HttpServer,
@@ -117,6 +121,7 @@ function handleProxy(
   const upstream = new WebSocket(upstreamUrl, { headers });
   const actor = auth.actor ?? null;
   let scanRequest: Record<string, unknown> | null = null;
+  let previewScan = false;
   let activityIdPromise: Promise<number | null> | null = null;
   let completionHandled = false;
 
@@ -131,7 +136,20 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed) {
         scanRequest = parsed;
-        if (actor) {
+        previewScan = isPreviewScan(parsed);
+        if (kind === "vector") {
+          appendVectorTrace("request", {
+            at: new Date().toISOString(),
+            preview: previewScan,
+            pattern: parsed.pattern ?? null,
+            feedback_mode: parsed.feedback_mode ?? null,
+            gray_level_range: parsed.gray_level_range ?? null,
+            gray_level_skipped: parsed.gray_level_skipped ?? null,
+            roi: parsed.roi != null,
+            simulation_bitmap: parsed.simulation_bitmap != null,
+          });
+        }
+        if (actor && !previewScan) {
           activityIdPromise = recordScanStart(kind, actor, parsed).catch((err) => {
             console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
             return null;
@@ -151,7 +169,7 @@ function handleProxy(
       upstream.readyState === WebSocket.OPEN ||
       upstream.readyState === WebSocket.CONNECTING
     ) {
-      upstream.close(closeCodeForPeer(code, 1000), reason);
+      upstream.close(code === 1006 ? 1000 : code, reason);
     }
   });
 
@@ -170,7 +188,7 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed?.event === "done") {
         completionHandled = true;
-        void recordAndUploadScanCompletion(kind, scanRequest, activityIdPromise, parsed)
+        void recordAndMaybePersistScanCompletion(kind, scanRequest, activityIdPromise, parsed, !previewScan)
           .then((output) => {
             if (!output) return;
             if (client.readyState === WebSocket.OPEN) {
@@ -201,7 +219,7 @@ function handleProxy(
       client.readyState === WebSocket.OPEN ||
       client.readyState === WebSocket.CONNECTING
     ) {
-      client.close(closeCodeForPeer(code, 1011), reason);
+      client.close(code === 1006 ? 1011 : code, reason);
     }
   });
 
@@ -229,12 +247,19 @@ function handleProxy(
   );
 }
 
-function closeCodeForPeer(code: number, fallback: number): number {
-  // 1005, 1006, and 1015 are reserved sentinel values from the ws API and
-  // must never be sent in an outbound close frame.
-  if (code === 1005 || code === 1006 || code === 1015) return fallback;
-  if (code < 1000 || code >= 5000) return fallback;
-  return code;
+function appendVectorTrace(
+  kind: "request" | "response",
+  payload: Record<string, unknown>,
+): void {
+  try {
+    fs.appendFileSync(
+      VECTOR_TRACE_LOG_FILE,
+      `${JSON.stringify({ kind, ...payload })}\n`,
+      "utf8",
+    );
+  } catch (err) {
+    console.warn(`[ws][vector] failed to append trace to ${VECTOR_TRACE_LOG_FILE}:`, err);
+  }
 }
 
 /* -------- MOCK=1 path -------------------------------------------------- */
@@ -249,6 +274,7 @@ function handleMock(
   const actor = auth.actor ?? null;
   let activityIdPromise: Promise<number | null> | null = null;
   let scanRequest: Record<string, unknown> | null = null;
+  let previewScan = false;
   client.once("message", async (raw: RawData) => {
     let body: any;
     try {
@@ -261,7 +287,8 @@ function handleMock(
     }
     scanRequest = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
     if (scanRequest) {
-      if (actor) {
+      previewScan = isPreviewScan(scanRequest);
+      if (actor && !previewScan) {
         activityIdPromise = recordScanStart(kind, actor, scanRequest).catch((err) => {
           console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
           return null;
@@ -272,7 +299,7 @@ function handleMock(
       if (kind === "raster") {
         await streamMockRaster(client, {
           resolution: Number(body.resolution ?? 256),
-          dwell: Number(body.dwell ?? 2),
+          dwell: Number(body.dwell ?? 16),
           latency_bytes: Number(body.latency_bytes ?? 16384),
           simulation_bitmap: body.simulation_bitmap ?? undefined,
         });
@@ -280,6 +307,7 @@ function handleMock(
         await streamMockVector(client, {
           pattern: body.pattern === "custom" ? "custom" : "default",
           points: Array.isArray(body.points) ? body.points : undefined,
+          dwell: Number(body.dwell ?? 16),
           latency_bytes: Number(body.latency_bytes ?? 8196),
           roi: body.roi ?? undefined,
           simulation_bitmap: body.simulation_bitmap ?? undefined,
@@ -293,14 +321,15 @@ function handleMock(
         client.send(JSON.stringify({ event: "error", message: String(e) }));
       }
     } finally {
-      if (activityIdPromise && scanRequest) {
-        void recordAndUploadScanCompletion(
+      if (scanRequest) {
+        void recordAndMaybePersistScanCompletion(
           kind,
           scanRequest,
           activityIdPromise,
           { event: "done", chunks: 0 },
+          !previewScan,
         ).catch((err) => {
-          console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+          console.warn(`[ftp-upload] failed to finalize ${kind} scan artifacts:`, err);
         });
       }
       if (client.readyState === WebSocket.OPEN) client.close(1000);
@@ -327,7 +356,7 @@ async function recordScanStart(
     activity_id: activityId,
     start_xy: normalizeDecimal(body.start_xy, 0),
     end_xy: normalizeDecimal(body.end_xy, 0),
-    dwell: normalizeInteger(body.dwell, 0),
+    dwell: normalizeInteger(body.dwell, 16),
     scale_unit: normalizeScaleUnit(body.scale_unit),
     ev: normalizeDecimal(body.ev, 0),
     scan_parameters: body,
@@ -335,32 +364,31 @@ async function recordScanStart(
   return activityId;
 }
 
-async function recordAndUploadScanCompletion(
+async function recordAndMaybePersistScanCompletion(
   kind: ScanKind,
   requestBody: Record<string, unknown> | null,
   activityIdPromise: Promise<number | null> | null,
   response: Record<string, unknown>,
+  persist: boolean,
 ): Promise<{ csvFilename: string; imageFilename: string } | null> {
   const activityId = activityIdPromise ? await activityIdPromise : null;
-  if (!activityId) {
-    return null;
-  }
-
   const chunks = normalizeInteger(response.chunks, 0);
   const output = buildScanArtifactInfo(kind, activityId, requestBody, response, chunks);
-  await recordOutputDataInDb({
-    activity_id: activityId,
-    csv_filename: output.csvFilename,
-    image_filename: output.imageFilename,
-    description: output.description,
-    scan_result: response,
-  });
-  void uploadScanArtifactsToConfiguredFtp(kind, {
-    csvFilename: output.csvFilename,
-    imageFilename: output.imageFilename,
-  }).catch((err) => {
-    console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
-  });
+  if (persist && activityId) {
+    await recordOutputDataInDb({
+      activity_id: activityId,
+      csv_filename: output.csvFilename,
+      image_filename: output.imageFilename,
+      description: output.description,
+      scan_result: response,
+    });
+    void uploadScanArtifactsToConfiguredFtp(kind, {
+      csvFilename: output.csvFilename,
+      imageFilename: output.imageFilename,
+    }, !persist).catch((err) => {
+      console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
+    });
+  }
   return {
     csvFilename: output.csvFilename,
     imageFilename: output.imageFilename,
@@ -369,7 +397,7 @@ async function recordAndUploadScanCompletion(
 
 function buildScanArtifactInfo(
   kind: ScanKind,
-  activityId: number,
+  activityId: number | null,
   body: Record<string, unknown> | null,
   response: Record<string, unknown>,
   chunks: number,
@@ -392,6 +420,17 @@ function buildScanArtifactInfo(
       image_filename: filenames.imageFilename,
     }),
   };
+}
+
+function isPreviewScan(body: Record<string, unknown> | null): boolean {
+  const value = body?.preview;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["true", "1", "yes", "on"].includes(normalized);
+  }
+  return false;
 }
 
 function buildScanArtifactFilenames(

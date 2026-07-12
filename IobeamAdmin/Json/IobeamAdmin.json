@@ -12,7 +12,7 @@
         "Port": 5432,
         "User": "deployworkspace",
         "Password": "DWS_112233",
-        "ConnectionString": "postgresql://postgres:soul2375@124.221.175.89:5432/iobeam_admin",
+        "ConnectionString": "postgresql://deployworkspace@124.221.175.89:5432/ionbeam_admin_db",
         "SslMode": "",
         "CommandTimeoutMs": 30000
     },
@@ -72,7 +72,7 @@
             "phone_number": "(503)4661601",
             "company_name": "Ionbeamtech",
             "site": "Beijing(北京)",
-            "role": 3,
+            "role": 0,
             "is_active": true,
             "session_lifetime_limit_days": 1
         },
@@ -86,6 +86,32 @@
             "company_name": "",
             "site": "Beijing(北京)",
             "role": 3,
+            "is_active": true,
+            "session_lifetime_limit_days": 1
+        },
+        {
+            "id": 5,
+            "login_name": "root",
+            "first_name": "Henry",
+            "last_name": "Li",
+            "email": "lyh3@yahoo.com",
+            "phone_number": "5038079055",
+            "company_name": "Ionbeamtech",
+            "site": "Beijing(北京)",
+            "role": 0,
+            "is_active": true,
+            "session_lifetime_limit_days": 1
+        },
+        {
+            "id": 6,
+            "login_name": "yingh",
+            "first_name": "Ying",
+            "last_name": "Li",
+            "email": "lyh@hotmail.com",
+            "phone_number": "15038079055",
+            "company_name": "Ionbeamtech",
+            "site": "Beijing(北京)",
+            "role": 0,
             "is_active": true,
             "session_lifetime_limit_days": 1
         }

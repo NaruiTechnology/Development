@@ -10,6 +10,9 @@
     "dev:mobility": "npm run sync:allowed-hosts && VITE_MOBILITY_ONLY=1 vite",
     "build": "tsc -b && npm run sync:allowed-hosts && vite build",
     "build:mobility": "tsc -b && npm run sync:allowed-hosts && VITE_MOBILITY_ONLY=1 vite build",
+    "test": "npm run test:roi-gray-scale && npm run test:scan-repeat",
+    "test:roi-gray-scale": "tsc -p tsconfig.test.json && node --test tests/roiGrayScaleUI.test.mjs",
+    "test:scan-repeat": "tsc -p tsconfig.test.json && node --test tests/scanRepeat.test.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit"
   },
