@@ -172,7 +172,7 @@ def _log_vector_point_flags(points) -> None:
 _FATAL_EXC_NAMES = {
     "GlasgowDeviceError",     # "device disconnected"
     "USBError", "USBErrorBusy", "USBErrorNoDevice", "USBErrorIO",
-    "ConnectionError",
+    "ConnectionError", "TimeoutError",
 }
 
 

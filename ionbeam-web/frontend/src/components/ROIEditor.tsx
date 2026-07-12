@@ -91,6 +91,7 @@ export function ROIEditor({
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
   const [canvasResetToken, setCanvasResetToken] = useState(0);
   const capturedLiveVectorKeyRef = useRef<string | null>(null);
+  const capturedCompletedVectorRef = useRef<string | null>(null);
   const vectorPhase = useAppSelector((s) => s.scan.phase);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorRevision = useAppSelector((s) => s.image.revision);
@@ -252,20 +253,19 @@ export function ROIEditor({
       grayScaleSelection === null ||
       grayScaleSkipped === null
     ) {
+      if (vectorPhase !== "completed") {
+        capturedCompletedVectorRef.current = null;
+      }
       return;
     }
 
-    const captureKey = [
-      vectorCursor,
+  const captureKey = [
       vectorCustomCount,
-      bytesReceived,
-      chunksReceived,
-      vectorRevision,
       grayScaleSelection[0],
       grayScaleSelection[1],
       String(grayScaleSkipped),
     ].join(":");
-    if (capturedLiveVectorKeyRef.current === captureKey) return;
+    if (capturedCompletedVectorRef.current === captureKey) return;
 
     const frame = window.requestAnimationFrame(() => {
       const base = canvasRef.current;
@@ -282,7 +282,7 @@ export function ROIEditor({
       ctx.drawImage(mask, 0, 0);
       ctx.drawImage(live, 0, 0);
 
-      capturedLiveVectorKeyRef.current = captureKey;
+      capturedCompletedVectorRef.current = captureKey;
       dispatch(updateROI({ scanImageDataUrl: composed.toDataURL("image/png") }));
     });
 
@@ -305,6 +305,7 @@ export function ROIEditor({
   useEffect(() => {
     if (!liveVectorPreview || vectorPattern !== "custom" || vectorCustomCount <= 0) {
       capturedLiveVectorKeyRef.current = null;
+      capturedCompletedVectorRef.current = null;
     }
   }, [liveVectorPreview, vectorPattern, vectorCustomCount]);
 

@@ -49,6 +49,14 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         pixel is 2, 4, 8, 16, 32, 64, ….
       </div>
 
+      <div className="dwell-help__rule">
+        <strong>Gray-level probe/blank minimum: dwell 2.</strong> When a gray
+        range is confirmed for ROI or Vector scanning, the per-pixel workflow
+        needs one dwell period to probe the gray level and at least one more
+        period to apply the beam-on or blank decision. A dwell of 1 cannot
+        perform both stages, so the selected value is normalized to 2.
+      </div>
+
       <p>
         The <code>dwell</code> field is the supersampler control.
         Change it:
@@ -60,6 +68,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><code>"dwell": 4</code> → 4× averaging (2 Mpix/s), 2× SNR gain</li>
         <li><code>"dwell": 8</code> → 8× averaging (1 Mpix/s), ~2.8× SNR gain</li>
         <li><code>"dwell": 16</code> → 16× averaging (500 kpix/s), 4× SNR gain</li>
+        <li><code>"dwell": 32</code> → 32× averaging (250 kpix/s), ~5.7× SNR gain</li>
+        <li><code>"dwell": 64</code> → 64× averaging (125 kpix/s), 8× SNR gain</li>
         <li>… up to <code>dwell = 65535</code> (≈ 8.19 ms per pixel)</li>
       </ul>
 
@@ -79,6 +89,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><td>8</td><td>8</td><td>1.0 MPix/s</td><td>2.83×</td><td>1.05 s</td></tr>
             <tr><td>16</td><td>16</td><td>500 kPix/s</td><td>4.00×</td><td>2.10 s</td></tr>
             <tr><td>32</td><td>32</td><td>250 kPix/s</td><td>5.66×</td><td>4.19 s</td></tr>
+            <tr><td>64</td><td>64</td><td>125 kPix/s</td><td>8.00×</td><td>8.39 s</td></tr>
           </tbody>
         </table>
       </div>

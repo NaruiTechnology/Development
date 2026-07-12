@@ -21,6 +21,7 @@ export function PresetNumberField({
   helperText,
   title,
   customValidate,
+  normalizeValue,
 }: {
   label: ReactNode;
   value: number;
@@ -32,6 +33,7 @@ export function PresetNumberField({
   helperText?: ReactNode;
   title?: string;
   customValidate?: (value: number) => string | null;
+  normalizeValue?: (value: number) => number;
 }) {
   const { t } = useTranslation();
   const presetValues = useMemo(() => options.map((option) => option.value), [options]);
@@ -56,13 +58,16 @@ export function PresetNumberField({
         disabled={disabled}
         onChange={(e) => {
           const next = e.target.value;
-          setSelected(next);
           if (next === CUSTOM_VALUE) {
+            setSelected(next);
             setCustomText(String(value));
             setCustomWarning(null);
             return;
           }
-          onChange(clampInteger(Number(next), min, max, value));
+          const parsed = clampInteger(Number(next), min, max, value);
+          const normalized = clampInteger(normalizeValue?.(parsed) ?? parsed, min, max, value);
+          setSelected(String(normalized));
+          onChange(normalized);
         }}
       >
         {options.map((option) => (
@@ -93,13 +98,20 @@ export function PresetNumberField({
               return;
             }
             const normalized = clampInteger(parsed, min, max, value);
-            const validationError = customValidate?.(normalized) ?? null;
+            const effective = clampInteger(
+              normalizeValue?.(normalized) ?? normalized,
+              min,
+              max,
+              value
+            );
+            const validationError = customValidate?.(effective) ?? null;
             if (validationError) {
               setCustomWarning(validationError);
               return;
             }
             setCustomWarning(null);
-            onChange(normalized);
+            if (effective !== normalized) setCustomText(String(effective));
+            onChange(effective);
           }}
           warning={customWarning}
         />

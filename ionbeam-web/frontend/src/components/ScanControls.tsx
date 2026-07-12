@@ -10,13 +10,12 @@ import { apiUrl } from "../lib/backendUrl";
 import {
   runRasterValidated,
   runVectorValidated,
-  clearROIScanImage,
   setPreview,
   streamErrored,
   streamReset,
   type ScanKind,
 } from "../store/scanSlice";
-import { bumpRevision, resetRaster, resetVector } from "../store/imageSlice";
+import { resetRaster, resetVector } from "../store/imageSlice";
 import { registerScanActionStop } from "../hooks/scanActionRegistry";
 import { useScanStream } from "../hooks/useScanStream";
 import {
@@ -33,7 +32,6 @@ import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
-import { shouldClearROIFeedbackBeforeRepeat } from "../lib/scanRepeat";
 import type { VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 import type { ROIState } from "../store/scanSlice";
@@ -247,11 +245,10 @@ export function ScanControls({
 
   const startRepeatActionRun = useCallback(
     (entry: { req: VectorRequest; preview: boolean; scanType: ScanType }) => {
-      dispatch(bumpRevision());
       onScanRunStart?.(entry.scanType);
       stream.startVector({ ...entry.req, preview: entry.preview });
     },
-    [dispatch, onScanRunStart, stream]
+    [onScanRunStart, stream]
   );
 
   const startActionLoop = useCallback((req: VectorRequest, scanType: ScanType) => {
@@ -277,9 +274,6 @@ export function ScanControls({
       const entry = actionLoopRequestRef.current;
       if (!entry) {
         return;
-      }
-      if (shouldClearROIFeedbackBeforeRepeat(entry.scanType)) {
-        dispatch(clearROIScanImage());
       }
       startRepeatActionRun(entry);
     }, actionLoopGapMs);
@@ -524,7 +518,6 @@ export function ScanControls({
       }
       if (actionLoopRemainingRef.current > 0) {
         clearBitmapSelectionCache();
-        dispatch(bumpRevision());
         scheduleNextActionRun();
         return;
       }

@@ -13,7 +13,6 @@ import { NumberStepperInput } from "./NumberStepperField";
 import { DwellHelp } from "./DwellHelp";
 
 const FORCED_RESOLUTION = 128;
-const FORCED_DWELL = 16;
 const FORCED_LATENCY_BYTES = 8196;
 const FORCED_OUTPUT_MODE: "SixteenBit" = "SixteenBit";
 const FORCED_COOKIE = 123;
@@ -54,7 +53,7 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
     dispatch(
       updateVector({
         vector_resolution: FORCED_RESOLUTION,
-        dwell: FORCED_DWELL,
+        dwell: Math.max(2, vector.dwell),
         latency_bytes: FORCED_LATENCY_BYTES,
         output_mode: FORCED_OUTPUT_MODE,
         cookie: FORCED_COOKIE,
@@ -105,6 +104,7 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
           min={1}
           max={65535}
           disabled={disabled}
+          normalizeValue={(value) => Math.max(2, value)}
           onChange={(value) => dispatch(updateVector({ dwell: value }))}
         />
       </div>

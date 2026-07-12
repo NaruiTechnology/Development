@@ -160,6 +160,7 @@ export function VectorParameters({
             min={1}
             max={65535}
             disabled={disabled}
+            normalizeValue={(value) => grayLevelFilterActive ? Math.max(2, value) : value}
             onChange={(value) =>
               dispatch(updateVector({ dwell: value }))
             }

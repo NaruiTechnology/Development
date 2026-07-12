@@ -554,6 +554,9 @@ export function App() {
       }
       setLastLiveScanImage((current) => {
         if (!imageUrl) return current?.kind === scanKind ? null : current;
+        if (current?.kind === scanKind && current.imageUrl === imageUrl) {
+          return current;
+        }
         return { kind: scanKind, imageUrl };
       });
     },
@@ -602,6 +605,7 @@ export function App() {
 
   const handleGrayScaleConfirmAccept = useCallback(() => {
     if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
+    dispatch(updateVector({ dwell: 2 }));
     if (grayScaleConfirmTarget === "vector") {
       setVectorGrayScaleSkipped(true);
     } else {

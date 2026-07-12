@@ -316,13 +316,13 @@ export async function vectorRequestWithROIGrayScaleAction(
     points: bitmapToROIActionPoints(
       decoratedBitmap,
       converted.roi,
-      Math.max(16, req.dwell),
+      Math.max(2, req.dwell),
       selection,
       options.grayScaleSkipped,
     ),
     roi: converted.roi,
     simulation_bitmap: null,
-    dwell: Math.max(16, req.dwell),
+    dwell: Math.max(2, req.dwell),
     gray_level_range: [selection[0], selection[1]],
     gray_level_skipped: options.grayScaleSkipped,
     // The ROI panel shows pre-process locked on for parity with the vector

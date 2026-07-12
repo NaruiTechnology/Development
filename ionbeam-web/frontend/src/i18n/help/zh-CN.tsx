@@ -26,6 +26,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <code>dwell_time</code>。
       </div>
 
+      <div className="dwell-help__rule">
+        <strong>灰度探测/消隐的最小 dwell 为 2。</strong>当 ROI 或矢量扫描确认灰度范围后，
+        每像素流程需要一个 dwell 周期探测灰度值，并至少再用一个周期执行束流开启或消隐决定。
+        dwell 为 1 无法完成这两个阶段，因此所选值会自动调整为 2。
+      </div>
+
       <p><code>dwell</code> 字段是超采样控制。各取值含义：</p>
 
       <ul className="dwell-help__list">
@@ -34,6 +40,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><code>"dwell": 4</code> → 4 倍平均（2 Mpix/s），SNR 增益 2 倍</li>
         <li><code>"dwell": 8</code> → 8 倍平均（1 Mpix/s），SNR 增益约 2.8 倍</li>
         <li><code>"dwell": 16</code> → 16 倍平均（500 kpix/s），SNR 增益 4 倍</li>
+        <li><code>"dwell": 32</code> → 32 倍平均（250 kpix/s），SNR 增益约 5.7 倍</li>
+        <li><code>"dwell": 64</code> → 64 倍平均（125 kpix/s），SNR 增益 8 倍</li>
         <li>…… 直至 <code>dwell = 65535</code>（约每像素 8.19 ms）</li>
       </ul>
 
@@ -53,6 +61,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><td>8</td><td>8</td><td>1.0 MPix/s</td><td>2.83×</td><td>1.05 s</td></tr>
             <tr><td>16</td><td>16</td><td>500 kPix/s</td><td>4.00×</td><td>2.10 s</td></tr>
             <tr><td>32</td><td>32</td><td>250 kPix/s</td><td>5.66×</td><td>4.19 s</td></tr>
+            <tr><td>64</td><td>64</td><td>125 kPix/s</td><td>8.00×</td><td>8.39 s</td></tr>
           </tbody>
         </table>
       </div>
