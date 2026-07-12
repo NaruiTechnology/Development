@@ -134,6 +134,10 @@ export function ImageCanvas({
   const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
+  const lastRenderedImageEmitRef = useRef<{
+    kind: Extract<ScanKind, "raster" | "vector">;
+    imageUrl: string | null;
+  } | null>(null);
 
   const revision = useAppSelector((s) => s.image.revision);
 
@@ -257,8 +261,15 @@ export function ImageCanvas({
   useEffect(() => {
     if (!onRenderedImageChange || (kind !== "raster" && kind !== "vector")) return;
 
+    const emit = (imageUrl: string | null) => {
+      const previous = lastRenderedImageEmitRef.current;
+      if (previous?.kind === kind && previous.imageUrl === imageUrl) return;
+      lastRenderedImageEmitRef.current = { kind, imageUrl };
+      onRenderedImageChange(kind, imageUrl);
+    };
+
     if (!hasLiveCanvasData) {
-      onRenderedImageChange(kind, null);
+      emit(null);
       return;
     }
     if (phase !== "completed") return;
@@ -267,9 +278,9 @@ export function ImageCanvas({
       const canvas = canvasRef.current;
       if (!canvas || canvas.width <= 0 || canvas.height <= 0) return;
       try {
-        onRenderedImageChange(kind, canvas.toDataURL("image/png"));
+        emit(canvas.toDataURL("image/png"));
       } catch {
-        onRenderedImageChange(kind, null);
+        emit(null);
       }
     });
 

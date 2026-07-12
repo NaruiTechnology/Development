@@ -292,11 +292,6 @@ export function ROIEditor({
     vectorPhase,
     vectorPattern,
     vectorCustomCount,
-    targetLiveVectorSamples,
-    vectorCursor,
-    bytesReceived,
-    chunksReceived,
-    vectorRevision,
     grayScaleSelection,
     grayScaleSkipped,
     dispatch,
@@ -585,13 +580,15 @@ export function ROIEditor({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    const keepCompletedOverlay = roi.scanImageDataUrl !== null && vectorPhase === "completed";
+    if (!keepCompletedOverlay) {
+      ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    }
     if (
       !liveVectorPreview ||
       vectorPattern !== "custom" ||
       !vectorCustomPoints ||
       !roi.selection ||
-      roi.scanImageDataUrl !== null ||
       grayScaleSkipped === null ||
       grayScaleSelection === null
     ) {
@@ -628,7 +625,10 @@ export function ROIEditor({
       points.push({ x: canvasX, y: canvasY });
     }
 
-    if (points.length === 0) return;
+    if (points.length === 0) {
+      if (!keepCompletedOverlay) ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      return;
+    }
 
     const dotRadius = Math.max(1.4, Math.min(2.4, ROI_CANVAS_EDGE / 1024));
     ctx.save();

@@ -13,6 +13,7 @@ import {
   setPreview,
   streamErrored,
   streamReset,
+  updateROI,
   type ScanKind,
 } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
@@ -35,6 +36,7 @@ import { scanAuthHeaders } from "../lib/authIdentity";
 import type { VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 import type { ROIState } from "../store/scanSlice";
+import { shouldClearROIFeedbackBeforeRepeat } from "../lib/scanRepeat";
 
 interface EquipmentOption {
   id: number | null;
@@ -275,9 +277,13 @@ export function ScanControls({
       if (!entry) {
         return;
       }
+      if (shouldClearROIFeedbackBeforeRepeat(entry.scanType, actionLoopRemainingRef.current)) {
+        dispatch(resetVector());
+        dispatch(updateROI({ scanImageDataUrl: null }));
+      }
       startRepeatActionRun(entry);
     }, actionLoopGapMs);
-  }, [actionLoopGapMs, clearActionLoopTimer, startRepeatActionRun]);
+  }, [actionLoopGapMs, clearActionLoopTimer, dispatch, startRepeatActionRun]);
 
   async function onRun() {
     if (disabled || (kind === "roi" && !roiAction)) return;
@@ -518,6 +524,14 @@ export function ScanControls({
       }
       if (actionLoopRemainingRef.current > 0) {
         clearBitmapSelectionCache();
+        const scanType = actionLoopRequestRef.current?.scanType;
+        if (
+          scanType !== undefined &&
+          shouldClearROIFeedbackBeforeRepeat(scanType, actionLoopRemainingRef.current)
+        ) {
+          dispatch(resetVector());
+          dispatch(updateROI({ scanImageDataUrl: null }));
+        }
         scheduleNextActionRun();
         return;
       }
@@ -526,7 +540,7 @@ export function ScanControls({
     if (phase === "error" || phase === "idle") {
       clearActionLoopState();
     }
-  }, [clearActionLoopState, phase, roiState.imageDataUrl, roiSelectionKey, scheduleNextActionRun]);
+  }, [clearActionLoopState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, scheduleNextActionRun]);
 
   useEffect(() => {
     clearActionLoopState();

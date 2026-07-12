@@ -105,6 +105,7 @@ export function App() {
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const imageRevision = useAppSelector((s) => s.image.revision);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
+  const vector = useAppSelector((s) => s.scan.vector);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
   const roiState = useAppSelector((s) => s.scan.roi);
@@ -685,6 +686,14 @@ export function App() {
 
   useEffect(() => {
     if (!vectorGrayLevelsEnabled) return;
+    if (
+      vector.pattern === "default" &&
+      vector.points === null &&
+      vector.output_mode === "SixteenBit" &&
+      vector.pre_process === true
+    ) {
+      return;
+    }
     dispatch(
       updateVector({
         pattern: "default",
@@ -693,7 +702,7 @@ export function App() {
         pre_process: true,
       })
     );
-  }, [dispatch, vectorGrayLevelsEnabled]);
+  }, [dispatch, vector.pattern, vector.points, vector.output_mode, vector.pre_process, vectorGrayLevelsEnabled]);
 
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
     const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
