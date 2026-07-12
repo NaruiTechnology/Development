@@ -16,7 +16,11 @@ import {
   updateROI,
   type ScanKind,
 } from "../store/scanSlice";
-import { resetRaster, resetVector } from "../store/imageSlice";
+import {
+  resetRaster,
+  resetVector,
+  setRetainVectorFeedbackOnComplete,
+} from "../store/imageSlice";
 import { registerScanActionStop } from "../hooks/scanActionRegistry";
 import { useScanStream } from "../hooks/useScanStream";
 import {
@@ -36,7 +40,10 @@ import { scanAuthHeaders } from "../lib/authIdentity";
 import type { VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 import type { ROIState } from "../store/scanSlice";
-import { shouldClearROIFeedbackBeforeRepeat } from "../lib/scanRepeat";
+import {
+  shouldClearROIFeedbackBeforeRepeat,
+  shouldRetainROIFeedbackOnComplete,
+} from "../lib/scanRepeat";
 
 interface EquipmentOption {
   id: number | null;
@@ -281,6 +288,11 @@ export function ScanControls({
         dispatch(resetVector());
         dispatch(updateROI({ scanImageDataUrl: null }));
       }
+      dispatch(
+        setRetainVectorFeedbackOnComplete(
+          shouldRetainROIFeedbackOnComplete(entry.scanType, actionLoopRemainingRef.current)
+        )
+      );
       startRepeatActionRun(entry);
     }, actionLoopGapMs);
   }, [actionLoopGapMs, clearActionLoopTimer, dispatch, startRepeatActionRun]);
@@ -309,8 +321,10 @@ export function ScanControls({
           );
           if (Math.trunc(repeat) > 1) {
             startActionLoop(req, ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
+            dispatch(setRetainVectorFeedbackOnComplete(false));
           } else {
             clearActionLoopState();
+            dispatch(setRetainVectorFeedbackOnComplete(true));
           }
           onActionRunStart?.();
           onScanRunStart?.(ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);

@@ -98,6 +98,9 @@ export function ROIEditor({
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
   const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
+  const retainVectorFeedbackOnComplete = useAppSelector(
+    (s) => s.image.retainVectorFeedbackOnComplete
+  );
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
   const targetLiveVectorSamples = vectorPattern === "custom" && vectorCustomCount > 0
@@ -250,6 +253,7 @@ export function ROIEditor({
       vectorPhase !== "completed" ||
       vectorPattern !== "custom" ||
       vectorCustomCount <= 0 ||
+      !retainVectorFeedbackOnComplete ||
       grayScaleSelection === null ||
       grayScaleSkipped === null
     ) {
@@ -292,6 +296,7 @@ export function ROIEditor({
     vectorPhase,
     vectorPattern,
     vectorCustomCount,
+    retainVectorFeedbackOnComplete,
     grayScaleSelection,
     grayScaleSkipped,
     dispatch,

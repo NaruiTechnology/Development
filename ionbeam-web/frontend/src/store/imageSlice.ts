@@ -47,6 +47,8 @@ interface ImageState {
   vectorCustomCount: number;
   /** Number of ADC samples received so far. */
   vectorCursor: number;
+  /** Whether ROI gray feedback should be composited after this cycle completes. */
+  retainVectorFeedbackOnComplete: boolean;
 
   // ---------- repaint trigger -------------------------------------------
   revision: number;
@@ -70,6 +72,7 @@ const initialState: ImageState = {
   vectorCustomSpotMask: null,
   vectorCustomCount: 0,
   vectorCursor: 0,
+  retainVectorFeedbackOnComplete: true,
 
   revision: 0,
 };
@@ -91,6 +94,10 @@ const slice = createSlice({
   reducers: {
     bumpRevision(state) {
       state.revision++;
+    },
+
+    setRetainVectorFeedbackOnComplete(state, a: PayloadAction<boolean>) {
+      state.retainVectorFeedbackOnComplete = a.payload;
     },
 
     /* ---------- raster -------------------------------------------------- */
@@ -286,6 +293,7 @@ export const {
   appendVectorSamples,
   correctVectorLineShift,
   resetVector,
+  setRetainVectorFeedbackOnComplete,
 } = slice.actions;
 
 export default slice.reducer;
