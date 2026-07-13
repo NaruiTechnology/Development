@@ -109,15 +109,19 @@ export function useScanStream() {
 
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
+        if (wsRef.current !== ws) return;
         ws.send(JSON.stringify(req));
       };
-      ws.onmessage = (ev) =>
+      ws.onmessage = (ev) => {
+        if (wsRef.current !== ws) return;
         handleRasterMessage(ev, dispatch, sawDoneRef, req.output_mode);
+      };
       ws.onerror = () => {
         // The browser only emits a generic error event; details come via
         // the close handler. Don't transition phase here — onclose will.
       };
       ws.onclose = (ev) => {
+        if (wsRef.current !== ws) return;
         finalize(
           closureKindRef.current,
           sawDoneRef.current,
@@ -168,6 +172,7 @@ export function useScanStream() {
 
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
+        if (wsRef.current !== ws) return;
         console.info("[scan/vector] ws-send", {
           preview: Boolean(req.preview),
           pattern: req.pattern,
@@ -179,7 +184,8 @@ export function useScanStream() {
         });
         ws.send(JSON.stringify(req));
       };
-      ws.onmessage = (ev) =>
+      ws.onmessage = (ev) => {
+        if (wsRef.current !== ws) return;
         handleVectorMessage(
           ev,
           dispatch,
@@ -187,10 +193,12 @@ export function useScanStream() {
           vectorLineShiftPerXRow,
           req.output_mode,
         );
+      };
       ws.onerror = () => {
         /* see startRaster */
       };
       ws.onclose = (ev) => {
+        if (wsRef.current !== ws) return;
         void handleClose(
           ev,
           closureKindRef.current,

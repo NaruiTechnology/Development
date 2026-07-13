@@ -123,6 +123,7 @@ export function ScanControls({
   const actionLoopRemainingRef = useRef(0);
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
+  const actionLoopCompletionPendingRef = useRef(false);
   // Repeated ROI action scans need a longer settle window between runs
   // so blank/spot updates are fully reflected before the next loop starts.
   const actionLoopGapMs = 750;
@@ -248,12 +249,14 @@ export function ScanControls({
     actionLoopRemainingRef.current = 0;
     actionLoopIterationRef.current = 0;
     actionLoopActiveRef.current = false;
+    actionLoopCompletionPendingRef.current = false;
     setActionLoopIteration((current) => current === 0 ? current : 0);
     setActionLoopActive((current) => current ? false : current);
   }, [clearActionLoopTimer]);
 
   const startRepeatActionRun = useCallback(
     (entry: { req: VectorRequest; preview: boolean; scanType: ScanType }) => {
+      actionLoopCompletionPendingRef.current = true;
       onScanRunStart?.(entry.scanType);
       stream.startVector({ ...entry.req, preview: entry.preview });
     },
@@ -265,6 +268,7 @@ export function ScanControls({
     actionLoopRequestRef.current = { req, preview, scanType };
     actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
     actionLoopIterationRef.current = actionLoopRemainingRef.current;
+    actionLoopCompletionPendingRef.current = true;
     setActionLoopIteration(actionLoopIterationRef.current);
     actionLoopActiveRef.current = true;
     setActionLoopActive(true);
@@ -530,7 +534,12 @@ export function ScanControls({
     if (completedNow && roiState.imageDataUrl && roiState.selection) {
       clearBitmapSelectionCache();
     }
-    if (completedNow && actionLoopActiveRef.current) {
+    if (
+      completedNow &&
+      actionLoopActiveRef.current &&
+      actionLoopCompletionPendingRef.current
+    ) {
+      actionLoopCompletionPendingRef.current = false;
       if (actionLoopRemainingRef.current > 0) {
         actionLoopRemainingRef.current -= 1;
         actionLoopIterationRef.current = actionLoopRemainingRef.current;
