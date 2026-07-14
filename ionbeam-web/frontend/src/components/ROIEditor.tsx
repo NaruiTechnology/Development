@@ -18,6 +18,7 @@ import {
   ROI_VIEWPORT_MIN_SPAN,
   ROI_AXIS_FONT,
   canvasPointToWorld,
+  imageWorldBounds,
   clampCanvasPointToViewport,
   clampViewportCoordinate,
   viewportBounds,
@@ -347,7 +348,14 @@ export function ROIEditor({
         setDraft(null);
         setSuppressedBackgroundUrl(null);
         dispatch(clearROISelection());
-        dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result, imageKind: "file" }));
+        dispatch(
+          updateROI({
+            imageName: file.name,
+            imageDataUrl: reader.result,
+            imageKind: "file",
+            imageBounds: null,
+          })
+        );
       }
     };
     reader.readAsDataURL(file);
@@ -372,7 +380,7 @@ export function ROIEditor({
   }
 
   function toDut(point: { x: number; y: number }) {
-    return canvasPointToWorld(point, roi, viewportBounds(roi));
+    return canvasPointToWorld(point, imageWorldBounds(roi), viewportBounds(roi));
   }
 
   function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }): ROIRequest {
@@ -390,10 +398,11 @@ export function ROIEditor({
     const selected = roi.selection;
     if (!selected) return null;
     const bounds = viewportBounds(roi);
-    const x0 = worldToCanvasX(selected.x_start, roi, bounds);
-    const x1 = worldToCanvasX(selected.x_end, roi, bounds);
-    const y0 = worldToCanvasY(selected.y_start, roi, bounds);
-    const y1 = worldToCanvasY(selected.y_end, roi, bounds);
+    const imageBounds = imageWorldBounds(roi);
+    const x0 = worldToCanvasX(selected.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(selected.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(selected.y_start, imageBounds, bounds);
+    const y1 = worldToCanvasY(selected.y_end, imageBounds, bounds);
     const corners: Array<{ corner: ROISelectionCorner; x: number; y: number }> = [
       { corner: "top-left", x: x0, y: y0 },
       { corner: "top-right", x: x1, y: y0 },
@@ -416,27 +425,28 @@ export function ROIEditor({
     const selected = resizeSelectionRef.current ?? roi.selection;
     if (!selected) return null;
     const bounds = viewportBounds(roi);
+    const imageBounds = imageWorldBounds(roi);
     const trace = resizeTrace?.corner === corner ? resizeTrace.point : null;
     switch (corner) {
       case "top-left":
         return {
-          x: trace ? trace.x : worldToCanvasX(selected.x_start, roi, bounds),
-          y: trace ? trace.y : worldToCanvasY(selected.y_start, roi, bounds),
+          x: trace ? trace.x : worldToCanvasX(selected.x_start, imageBounds, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_start, imageBounds, bounds),
         };
       case "top-right":
         return {
-          x: trace ? trace.x : worldToCanvasX(selected.x_end, roi, bounds),
-          y: trace ? trace.y : worldToCanvasY(selected.y_start, roi, bounds),
+          x: trace ? trace.x : worldToCanvasX(selected.x_end, imageBounds, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_start, imageBounds, bounds),
         };
       case "bottom-left":
         return {
-          x: trace ? trace.x : worldToCanvasX(selected.x_start, roi, bounds),
-          y: trace ? trace.y : worldToCanvasY(selected.y_end, roi, bounds),
+          x: trace ? trace.x : worldToCanvasX(selected.x_start, imageBounds, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_end, imageBounds, bounds),
         };
       case "bottom-right":
         return {
-          x: trace ? trace.x : worldToCanvasX(selected.x_end, roi, bounds),
-          y: trace ? trace.y : worldToCanvasY(selected.y_end, roi, bounds),
+          x: trace ? trace.x : worldToCanvasX(selected.x_end, imageBounds, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_end, imageBounds, bounds),
         };
     }
   }
@@ -546,10 +556,11 @@ export function ROIEditor({
     }
 
     const bounds = viewportBounds(roi);
-    const x0 = worldToCanvasX(activeSelection.x_start, roi, bounds);
-    const x1 = worldToCanvasX(activeSelection.x_end, roi, bounds);
-    const y0 = worldToCanvasY(activeSelection.y_start, roi, bounds);
-    const y1 = worldToCanvasY(activeSelection.y_end, roi, bounds);
+    const imageBounds = imageWorldBounds(roi);
+    const x0 = worldToCanvasX(activeSelection.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(activeSelection.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(activeSelection.y_start, imageBounds, bounds);
+    const y1 = worldToCanvasY(activeSelection.y_end, imageBounds, bounds);
     const left = Math.max(0, Math.min(x0, x1));
     const top = Math.max(0, Math.min(y0, y1));
     const width = Math.max(0, Math.abs(x1 - x0));
@@ -622,8 +633,9 @@ export function ROIEditor({
       const y = vectorCustomPoints[2 * i + 1] | 0;
       const worldX = selection.x_start + ((x - pointBounds.x0) / pointXSpan) * worldXSpan;
       const worldY = selection.y_start + ((y - pointBounds.y0) / pointYSpan) * worldYSpan;
-      const canvasX = Math.round(worldToCanvasX(worldX, roi, viewportBounds(roi)));
-      const canvasY = Math.round(worldToCanvasY(worldY, roi, viewportBounds(roi)));
+      const imageBounds = imageWorldBounds(roi);
+      const canvasX = Math.round(worldToCanvasX(worldX, imageBounds, viewportBounds(roi)));
+      const canvasY = Math.round(worldToCanvasY(worldY, imageBounds, viewportBounds(roi)));
       if (canvasX < 0 || canvasX >= ROI_CANVAS_EDGE || canvasY < 0 || canvasY >= ROI_CANVAS_EDGE) continue;
       const srcIdx = (canvasY * ROI_CANVAS_EDGE + canvasX) * 4;
       const value = sourceData[srcIdx] ?? 0;
@@ -691,10 +703,11 @@ export function ROIEditor({
 
   function drawSelection(ctx: CanvasRenderingContext2D, selected: ROIRequest, nextROI: ROIState) {
     const bounds = viewportBounds(nextROI);
-    const x0 = worldToCanvasX(selected.x_start, nextROI, bounds);
-    const x1 = worldToCanvasX(selected.x_end, nextROI, bounds);
-    const y0 = worldToCanvasY(selected.y_start, nextROI, bounds);
-    const y1 = worldToCanvasY(selected.y_end, nextROI, bounds);
+    const imageBounds = imageWorldBounds(nextROI);
+    const x0 = worldToCanvasX(selected.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(selected.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(selected.y_start, imageBounds, bounds);
+    const y1 = worldToCanvasY(selected.y_end, imageBounds, bounds);
     ctx.save();
     ctx.strokeStyle = "#ff2d2d";
     ctx.fillStyle = "#ff2d2d";
@@ -710,6 +723,7 @@ export function ROIEditor({
     nextROI: ROIState
   ) {
     const bounds = viewportBounds(nextROI);
+    const imageBounds = imageWorldBounds(nextROI);
     const corners = {
       "top-left": {
         moved: { x: selected.x_start, y: selected.y_start },
@@ -747,12 +761,12 @@ export function ROIEditor({
     ctx.fillStyle = "rgba(124, 255, 107, 0.95)";
     ctx.lineWidth = 1.25;
     ctx.beginPath();
-    ctx.moveTo(worldToCanvasX(corners.moved.x, nextROI, bounds), worldToCanvasY(corners.moved.y, nextROI, bounds));
+    ctx.moveTo(worldToCanvasX(corners.moved.x, imageBounds, bounds), worldToCanvasY(corners.moved.y, imageBounds, bounds));
     ctx.lineTo(trace.point.x, trace.point.y);
     ctx.moveTo(trace.point.x, trace.point.y);
-    ctx.lineTo(worldToCanvasX(corners.adjacent[0].x, nextROI, bounds), worldToCanvasY(corners.adjacent[0].y, nextROI, bounds));
+    ctx.lineTo(worldToCanvasX(corners.adjacent[0].x, imageBounds, bounds), worldToCanvasY(corners.adjacent[0].y, imageBounds, bounds));
     ctx.moveTo(trace.point.x, trace.point.y);
-    ctx.lineTo(worldToCanvasX(corners.adjacent[1].x, nextROI, bounds), worldToCanvasY(corners.adjacent[1].y, nextROI, bounds));
+    ctx.lineTo(worldToCanvasX(corners.adjacent[1].x, imageBounds, bounds), worldToCanvasY(corners.adjacent[1].y, imageBounds, bounds));
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(trace.point.x, trace.point.y, 3, 0, Math.PI * 2);
@@ -762,12 +776,13 @@ export function ROIEditor({
 
   function selectionHintPosition(selected: ROIRequest) {
     const bounds = viewportBounds(roi);
-    const x0 = worldToCanvasX(selected.x_start, roi, bounds);
-    const x1 = worldToCanvasX(selected.x_end, roi, bounds);
-    const y0 = worldToCanvasY(selected.y_start, roi, bounds);
+    const imageBounds = imageWorldBounds(roi);
+    const x0 = worldToCanvasX(selected.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(selected.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(selected.y_start, imageBounds, bounds);
     return {
       left: ((Math.min(x0, x1) + Math.max(x0, x1)) / 2 / ROI_CANVAS_EDGE) * 100,
-      top: (Math.max(0, Math.min(y0, worldToCanvasY(selected.y_end, roi, bounds)) - 16) / ROI_CANVAS_EDGE) * 100,
+      top: (Math.max(0, Math.min(y0, worldToCanvasY(selected.y_end, imageBounds, bounds)) - 16) / ROI_CANVAS_EDGE) * 100,
     };
   }
 

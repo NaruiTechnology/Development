@@ -138,6 +138,10 @@ export function ImageCanvas({
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string | null;
   } | null>(null);
+  const onRenderedImageChangeRef = useRef(onRenderedImageChange);
+  const onMergedFigureChangeRef = useRef(onMergedFigureChange);
+  onRenderedImageChangeRef.current = onRenderedImageChange;
+  onMergedFigureChangeRef.current = onMergedFigureChange;
 
   const revision = useAppSelector((s) => s.image.revision);
 
@@ -259,13 +263,13 @@ export function ImageCanvas({
   }, [revision, kind, renderMode, theme]);
 
   useEffect(() => {
-    if (!onRenderedImageChange || (kind !== "raster" && kind !== "vector")) return;
+    if (!onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
 
     const emit = (imageUrl: string | null) => {
       const previous = lastRenderedImageEmitRef.current;
       if (previous?.kind === kind && previous.imageUrl === imageUrl) return;
       lastRenderedImageEmitRef.current = { kind, imageUrl };
-      onRenderedImageChange(kind, imageUrl);
+      onRenderedImageChangeRef.current?.(kind, imageUrl);
     };
 
     if (!hasLiveCanvasData) {
@@ -285,7 +289,7 @@ export function ImageCanvas({
     });
 
     return () => window.cancelAnimationFrame(handle);
-  }, [onRenderedImageChange, kind, phase, revision, renderMode, cursor, vectorCursor, hasLiveCanvasData]);
+  }, [kind, phase, revision, renderMode, cursor, vectorCursor, hasLiveCanvasData]);
 
   useEffect(() => {
     const filename =
@@ -310,18 +314,18 @@ export function ImageCanvas({
       setMergeBusy(false);
       setEditorError(null);
       if (notifyMerged && (kind === "raster" || kind === "vector")) {
-        onMergedFigureChange?.(kind, null);
+        onMergedFigureChangeRef.current?.(kind, null);
       }
     },
-    [kind, onMergedFigureChange]
+    [kind]
   );
 
   const invalidateMergedFigure = useCallback(() => {
     setMergedFigureUrl(null);
     if (kind === "raster" || kind === "vector") {
-      onMergedFigureChange?.(kind, null);
+      onMergedFigureChangeRef.current?.(kind, null);
     }
-  }, [kind, onMergedFigureChange]);
+  }, [kind]);
 
   useEffect(() => {
     setStats({ min: 0, max: 0, populated: 0 });
@@ -658,7 +662,7 @@ export function ImageCanvas({
       setContextMenu(null);
       setEditorError(null);
       if (kind === "raster" || kind === "vector") {
-        onMergedFigureChange?.(kind, mergedUrl);
+        onMergedFigureChangeRef.current?.(kind, mergedUrl);
         await uploadMergedFigure(kind, mergedUrl, mergedFigureFilename);
       }
       setMergeConfirmOpen(false);

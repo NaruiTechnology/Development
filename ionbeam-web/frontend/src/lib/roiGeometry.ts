@@ -1,4 +1,5 @@
 import type { ROIState } from "../store/scanSlice";
+import type { ROIRequest } from "../types/api";
 
 export const ROI_CANVAS_EDGE = 640;
 export const ROI_VIEWPORT_MIN_SPAN = 24;
@@ -23,6 +24,21 @@ export interface ViewportBounds {
   bottom: number;
   width: number;
   height: number;
+}
+
+export type WorldBounds = Pick<ROIState, "x_origin" | "x_end" | "y_origin" | "y_end">;
+
+/** Coordinate space occupied by the displayed bitmap, independent of the hardware FOV. */
+export function imageWorldBounds(roi: ROIState): WorldBounds {
+  const bounds: ROIRequest | null = roi.imageDataUrl ? roi.imageBounds : null;
+  return bounds
+    ? {
+        x_origin: bounds.x_start,
+        x_end: bounds.x_end,
+        y_origin: bounds.y_start,
+        y_end: bounds.y_end,
+      }
+    : roi;
 }
 
 type ViewportMode = "confirmed" | "draft";

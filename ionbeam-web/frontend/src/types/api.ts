@@ -105,7 +105,7 @@ export interface SimulationBitmapPixel {
  * the ROI editor's "X origin / X end / Y origin / Y end" inputs)
  * into this DAC range before sending the request.
  *
- * See `worldSelectionToDacROI` in `lib/bitmapVector.ts` for the
+ * See `worldSelectionToDacROI` in `lib/roiDac.ts` for the
  * mapping. The full FOV (`x_origin..x_end`, `y_origin..y_end` in
  * world units) corresponds to the full DAC range 0..16383.
  *

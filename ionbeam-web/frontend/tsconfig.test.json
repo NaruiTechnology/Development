@@ -6,7 +6,11 @@
     "outDir": "./.test-dist"
   },
   "include": [
+    "src/vite-env.d.ts",
     "src/lib/grayScaleUI.ts",
+    "src/lib/roiDac.ts",
+    "src/lib/roiGeometry.ts",
+    "src/lib/roiWorkflow.ts",
     "src/lib/scanRepeat.ts"
   ]
 }

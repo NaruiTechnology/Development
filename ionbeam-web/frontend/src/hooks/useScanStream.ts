@@ -57,6 +57,12 @@ type Closure = "stop";
 type ActiveScan =
   | { kind: "raster"; req: RasterRequest }
   | { kind: "vector"; req: VectorRequest };
+type PendingSamples = {
+  chunks: Uint16Array[];
+  bytes: number;
+  chunkCount: number;
+  animationFrame: number | null;
+};
 
 export function useScanStream() {
   const dispatch = useAppDispatch();
@@ -68,6 +74,8 @@ export function useScanStream() {
   const activeScanRef = useRef<ActiveScan | null>(null);
   const autoReconnectAttemptedRef = useRef(false);
   const reconnectInFlightRef = useRef<Promise<boolean> | null>(null);
+  const pendingRasterRef = useRef<PendingSamples>(createPendingSamples());
+  const pendingVectorRef = useRef<PendingSamples>(createPendingSamples());
 
   // Read current phase reactively so the close handler can decide whether
   // to transition to error. Reading from store at close time avoids a
@@ -89,15 +97,30 @@ export function useScanStream() {
   // don't leak streams across page navigations.
   useEffect(() => {
     return () => {
+      discardPendingSamples(pendingRasterRef.current);
+      discardPendingSamples(pendingVectorRef.current);
       const ws = wsRef.current;
       if (ws && ws.readyState <= WebSocket.OPEN) ws.close(1000);
       wsRef.current = null;
     };
   }, []);
 
+  const flushRasterSamples = useCallback(() => {
+    flushPendingSamples(pendingRasterRef.current, (pixels) => {
+      dispatch(appendRaster({ pixels }));
+    }, dispatch);
+  }, [dispatch]);
+
+  const flushVectorSamples = useCallback(() => {
+    flushPendingSamples(pendingVectorRef.current, (values) => {
+      dispatch(appendVectorSamples({ values }));
+    }, dispatch);
+  }, [dispatch]);
+
   const startRaster = useCallback(
     (req: RasterRequest) => {
       stopExisting(wsRef);
+      discardPendingSamples(pendingRasterRef.current);
       activeScanRef.current = { kind: "raster", req };
       autoReconnectAttemptedRef.current = false;
       dispatch(resetRaster({ resolution: req.resolution }));
@@ -114,7 +137,21 @@ export function useScanStream() {
       };
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;
-        handleRasterMessage(ev, dispatch, sawDoneRef, req.output_mode);
+        if (typeof ev.data !== "string") {
+          const buf = ev.data as ArrayBuffer;
+          queuePendingSamples(
+            pendingRasterRef.current,
+            decodeSamples(buf, req.output_mode),
+            buf.byteLength,
+            flushRasterSamples,
+          );
+          return;
+        }
+        flushRasterSamples();
+        if (!handleRasterControlMessage(ev.data, dispatch, sawDoneRef)) {
+          activeScanRef.current = null;
+          ws.close(1002, "malformed control message");
+        }
       };
       ws.onerror = () => {
         // The browser only emits a generic error event; details come via
@@ -122,6 +159,7 @@ export function useScanStream() {
       };
       ws.onclose = (ev) => {
         if (wsRef.current !== ws) return;
+        flushRasterSamples();
         finalize(
           closureKindRef.current,
           sawDoneRef.current,
@@ -133,12 +171,13 @@ export function useScanStream() {
         wsRef.current = null;
       };
     },
-    [dispatch]
+    [dispatch, flushRasterSamples]
   );
 
   const startVector = useCallback(
     (req: VectorRequest) => {
       stopExisting(wsRef);
+      discardPendingSamples(pendingVectorRef.current);
       activeScanRef.current = { kind: "vector", req };
       autoReconnectAttemptedRef.current = false;
       // Default-pattern scans store an edge x edge dense buffer. Explicit
@@ -186,19 +225,34 @@ export function useScanStream() {
       };
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;
-        handleVectorMessage(
-          ev,
+        if (typeof ev.data !== "string") {
+          const buf = ev.data as ArrayBuffer;
+          queuePendingSamples(
+            pendingVectorRef.current,
+            decodeSamples(buf, req.output_mode),
+            buf.byteLength,
+            flushVectorSamples,
+          );
+          return;
+        }
+        flushVectorSamples();
+        const valid = handleVectorControlMessage(
+          ev.data,
           dispatch,
           sawDoneRef,
           vectorLineShiftPerXRow,
-          req.output_mode,
         );
+        if (!valid) {
+          activeScanRef.current = null;
+          ws.close(1002, "malformed control message");
+        }
       };
       ws.onerror = () => {
         /* see startRaster */
       };
       ws.onclose = (ev) => {
         if (wsRef.current !== ws) return;
+        flushVectorSamples();
         void handleClose(
           ev,
           closureKindRef.current,
@@ -216,19 +270,24 @@ export function useScanStream() {
         wsRef.current = null;
       };
     },
-    [dispatch, vectorLineShiftPerXRow]
+    [dispatch, flushVectorSamples, vectorLineShiftPerXRow]
   );
 
   const stop = useCallback(() => {
+    flushRasterSamples();
+    flushVectorSamples();
     const ws = wsRef.current;
-    if (!ws) {
-      return;
-    }
+    const hadActiveScan = activeScanRef.current !== null;
     closureKindRef.current = "stop";
     activeScanRef.current = null;
+    autoReconnectAttemptedRef.current = true;
+    if (!ws) {
+      if (hadActiveScan) dispatch(streamReset());
+      return;
+    }
     dispatch(streamStopping());
     ws.close(1000, "stop");
-  }, [dispatch]);
+  }, [dispatch, flushRasterSamples, flushVectorSamples]);
 
   useEffect(() => {
     return registerScanActionStop(stop);
@@ -277,75 +336,121 @@ function decodeUint16BE(buf: ArrayBuffer): Uint16Array {
   return out;
 }
 
-function handleRasterMessage(
-  ev: MessageEvent,
+function handleRasterControlMessage(
+  data: string,
   dispatch: ReturnType<typeof useAppDispatch>,
   sawDoneRef: React.MutableRefObject<boolean>,
-  outputMode: string | undefined,
-): void {
-  if (typeof ev.data === "string") {
-    try {
-      const msg = JSON.parse(ev.data);
-      if (msg.event === "done") {
-        sawDoneRef.current = true;
-        dispatch(
-          streamCompleted({
-            chunks: msg.chunks,
-            kind: "raster",
-            csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
-            image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
-          }),
-        );
-      } else if (msg.event === "error") {
-        dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
-      }
-    } catch {
-      /* ignore non-JSON text frames */
+): boolean {
+  try {
+    const msg = JSON.parse(data);
+    if (msg.event === "done") {
+      sawDoneRef.current = true;
+      dispatch(
+        streamCompleted({
+          chunks: msg.chunks,
+          kind: "raster",
+          csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
+          image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
+        }),
+      );
+    } else if (msg.event === "error") {
+      dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
     }
-    return;
+  } catch {
+    dispatch(streamErrored("Malformed raster stream control message"));
+    return false;
   }
-  const buf = ev.data as ArrayBuffer;
-  const px = decodeSamples(buf, outputMode);
-  dispatch(appendRaster({ pixels: px }));
-  dispatch(streamProgress({ bytes: buf.byteLength, chunks: 1 }));
+  return true;
 }
 
-function handleVectorMessage(
-  ev: MessageEvent,
+function handleVectorControlMessage(
+  data: string,
   dispatch: ReturnType<typeof useAppDispatch>,
   sawDoneRef: React.MutableRefObject<boolean>,
   lineShiftPerXRow: number,
-  outputMode: string | undefined,
-): void {
-  if (typeof ev.data === "string") {
-    try {
-      const msg = JSON.parse(ev.data);
-      if (msg.event === "done") {
-        sawDoneRef.current = true;
-        dispatch(correctVectorLineShift({ lineShiftPerXRow }));
-        dispatch(
-          streamCompleted({
-            chunks: msg.chunks,
-            kind: "vector",
-            csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
-            image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
-          }),
-        );
-      } else if (msg.event === "error") {
-        dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
-      }
-    } catch {
-      /* ignore */
+): boolean {
+  try {
+    const msg = JSON.parse(data);
+    if (msg.event === "done") {
+      sawDoneRef.current = true;
+      dispatch(correctVectorLineShift({ lineShiftPerXRow }));
+      dispatch(
+        streamCompleted({
+          chunks: msg.chunks,
+          kind: "vector",
+          csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
+          image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
+        }),
+      );
+    } else if (msg.event === "error") {
+      dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
     }
-    return;
+  } catch {
+    dispatch(streamErrored("Malformed vector stream control message"));
+    return false;
   }
-  // Vector chunks are ADC samples in the same order the host's
-  // point script generated commands — same wire format as raster, just
-  // a different (x, y) → sample-index mapping (handled by the reducer).
-  const buf = ev.data as ArrayBuffer;
-  const values = decodeSamples(buf, outputMode);
-  dispatch(appendVectorSamples({ values }));
-  dispatch(streamProgress({ bytes: buf.byteLength, chunks: 1 }));
+  return true;
+}
+
+function createPendingSamples(): PendingSamples {
+  return { chunks: [], bytes: 0, chunkCount: 0, animationFrame: null };
+}
+
+function queuePendingSamples(
+  pending: PendingSamples,
+  samples: Uint16Array,
+  bytes: number,
+  flush: () => void,
+): void {
+  pending.chunks.push(samples);
+  pending.bytes += bytes;
+  pending.chunkCount += 1;
+  if (pending.animationFrame === null) {
+    pending.animationFrame = window.requestAnimationFrame(flush);
+  }
+}
+
+function flushPendingSamples(
+  pending: PendingSamples,
+  append: (samples: Uint16Array) => void,
+  dispatch: ReturnType<typeof useAppDispatch>,
+): void {
+  if (pending.animationFrame !== null) {
+    window.cancelAnimationFrame(pending.animationFrame);
+    pending.animationFrame = null;
+  }
+  if (pending.chunkCount === 0) return;
+
+  const samples = concatenateSamples(pending.chunks);
+  const bytes = pending.bytes;
+  const chunks = pending.chunkCount;
+  pending.chunks = [];
+  pending.bytes = 0;
+  pending.chunkCount = 0;
+  append(samples);
+  dispatch(streamProgress({ bytes, chunks }));
+}
+
+function discardPendingSamples(pending: PendingSamples): void {
+  if (pending.animationFrame !== null) {
+    window.cancelAnimationFrame(pending.animationFrame);
+  }
+  pending.chunks = [];
+  pending.bytes = 0;
+  pending.chunkCount = 0;
+  pending.animationFrame = null;
+}
+
+function concatenateSamples(chunks: Uint16Array[]): Uint16Array {
+  if (chunks.length === 1) return chunks[0];
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const merged = new Uint16Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged;
 }
 
 function finalize(

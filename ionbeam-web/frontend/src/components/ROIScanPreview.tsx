@@ -3,7 +3,13 @@ import { useEffect, useRef } from "react";
 import { useAppSelector } from "../store";
 import type { ROIState } from "../store/scanSlice";
 import type { ROIRequest } from "../types/api";
-import { ROI_CANVAS_EDGE, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
+import {
+  imageWorldBounds,
+  ROI_CANVAS_EDGE,
+  viewportBounds,
+  worldToCanvasX,
+  worldToCanvasY,
+} from "../lib/roiGeometry";
 
 export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: string | null }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -50,22 +56,7 @@ export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: str
 function drawPreview(
   canvas: HTMLCanvasElement | null,
   selection: ROIRequest | null,
-  roi: Pick<
-    ROIState,
-    | "x_origin"
-    | "x_end"
-    | "y_origin"
-    | "y_end"
-    | "show_grid"
-    | "viewport_x_start"
-    | "viewport_x_end"
-    | "viewport_y_start"
-    | "viewport_y_end"
-    | "calibration_viewport_x_start"
-    | "calibration_viewport_x_end"
-    | "calibration_viewport_y_start"
-    | "calibration_viewport_y_end"
-  >,
+  roi: ROIState,
   image: HTMLImageElement | null
 ) {
   if (!canvas) return;
@@ -83,10 +74,11 @@ function drawPreview(
   if (!selection) return;
 
   const bounds = viewportBounds(roi);
-  const x0 = worldToCanvasX(selection.x_start, roi, bounds);
-  const x1 = worldToCanvasX(selection.x_end, roi, bounds);
-  const y0 = worldToCanvasY(selection.y_start, roi, bounds);
-  const y1 = worldToCanvasY(selection.y_end, roi, bounds);
+  const imageBounds = imageWorldBounds(roi);
+  const x0 = worldToCanvasX(selection.x_start, imageBounds, bounds);
+  const x1 = worldToCanvasX(selection.x_end, imageBounds, bounds);
+  const y0 = worldToCanvasY(selection.y_start, imageBounds, bounds);
+  const y1 = worldToCanvasY(selection.y_end, imageBounds, bounds);
   const left = Math.min(x0, x1);
   const top = Math.min(y0, y1);
   const width = Math.max(1, Math.abs(x1 - x0));

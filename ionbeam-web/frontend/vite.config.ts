@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: "dist",
-      sourcemap: true,
+      sourcemap: env.VITE_BUILD_SOURCEMAP === "1",
     },
   };
 });

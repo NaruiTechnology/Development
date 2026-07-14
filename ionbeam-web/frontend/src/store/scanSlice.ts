@@ -92,6 +92,8 @@ export interface ROIState {
   imageName: string;
   imageDataUrl: string | null;
   imageKind: "none" | "file" | "lastScan";
+  /** Physical world bounds represented by the current image; null means the full hardware FOV. */
+  imageBounds: ROIRequest | null;
   scanImageDataUrl: string | null;
 }
 
@@ -157,6 +159,7 @@ const initialState: ScanState = {
     imageName: "No image selected",
     imageDataUrl: null,
     imageKind: "none",
+    imageBounds: null,
     scanImageDataUrl: null,
   },
   beamEnergyEv: 1000.0,
@@ -492,6 +495,7 @@ const slice = createSlice({
       s.roi.imageName = "No image selected";
       s.roi.imageDataUrl = null;
       s.roi.imageKind = "none";
+      s.roi.imageBounds = null;
     },
     clearROIScanImage(s) {
       s.roi.scanImageDataUrl = null;

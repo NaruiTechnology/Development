@@ -53,6 +53,7 @@ import {
   shouldShowROIActionControls,
   resolveGrayScaleSourceKind,
 } from "./lib/grayScaleUI";
+import { completedROIImagePatch } from "./lib/roiWorkflow";
 
 import {
   beginROICalibration,
@@ -109,6 +110,8 @@ export function App() {
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const roiStateRef = useRef(roiState);
+  roiStateRef.current = roiState;
   const roiSelectionKey = roiState.selection
     ? `${roiState.selection.x_start}:${roiState.selection.x_end}:${roiState.selection.y_start}:${roiState.selection.y_end}`
     : "";
@@ -558,13 +561,13 @@ export function App() {
       ) {
         if (imageUrl) {
           dispatch(
-            updateROI({
-              imageName: t("roi.imageName.lastScan"),
-              imageDataUrl: imageUrl,
-              imageKind: "lastScan",
-              scanImageDataUrl: null,
-              selection: null,
-            })
+            updateROI(
+              completedROIImagePatch(
+                roiStateRef.current,
+                imageUrl,
+                t("roi.imageName.lastScan"),
+              ),
+            )
           );
           dispatch(resetRaster({ resolution: rasterResolution }));
           dispatch(resetVector());
@@ -583,7 +586,14 @@ export function App() {
         return { kind: scanKind, imageUrl };
       });
     },
-    [dispatch, kind, rasterResolution, roiActionCanvasVisible, roiActionGrayFilterActive, t]
+    [
+      dispatch,
+      kind,
+      rasterResolution,
+      roiActionCanvasVisible,
+      roiActionGrayFilterActive,
+      t,
+    ]
   );
 
   const handleMergedFigureChange = useCallback(
@@ -638,6 +648,7 @@ export function App() {
             imageName: "No image selected",
             imageDataUrl: null,
             imageKind: "none",
+            imageBounds: null,
           })
         );
       }
@@ -755,6 +766,7 @@ export function App() {
         imageName: t("roi.imageName.lastScan"),
         imageDataUrl: roiScanImageUrl,
         imageKind: "lastScan",
+        imageBounds: null,
       })
     );
   }, [dispatch, resetROIActionContext, roiScanImageUrl, t]);
