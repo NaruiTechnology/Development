@@ -33,6 +33,7 @@ import {
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 import { ROIGrayActionVectorWedges } from "./ROIGrayActionVectorWedges";
+import { ROIRasterActionWedges } from "./ROIRasterActionWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
@@ -605,6 +606,11 @@ export function ScanControls({
               active={showRoiGrayControls}
               disabled={controlsDisabled || roiEbeamDisabled}
             />
+          </div>
+        )}
+        {!showRoiGrayControls && (
+          <div className="scan-loop-controls__roi-wedges">
+            <ROIRasterActionWedges disabled={controlsDisabled || roiEbeamDisabled} />
           </div>
         )}
         <div className="scan-loop-controls">

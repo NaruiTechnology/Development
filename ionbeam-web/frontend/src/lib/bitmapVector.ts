@@ -164,19 +164,6 @@ export async function rasterRequestWithBitmapSelection(
     };
   }
 
-  // A custom ROI raster scan without a gray-level filter is a normal
-  // rectangular raster over the selected DAC region. Do not extract or
-  // send the browser bitmap here; Firefox is sensitive to the large
-  // object/stringify allocation and the backend does not need per-pixel
-  // bitmap data for this path.
-  if (options.grayScaleSelection == null && options.grayScaleSkipped == null) {
-    return {
-      ...req,
-      roi: worldSelectionToDacROI(roi.selection, roi),
-      simulation_bitmap: null,
-    };
-  }
-
   const converted = await bitmapSelectionToVector(roi);
   if (!converted.simulationBitmap.pixels.length) {
     return withoutBitmapROI(req);

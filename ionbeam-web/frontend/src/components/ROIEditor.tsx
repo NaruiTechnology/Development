@@ -50,6 +50,7 @@ export function ROIEditor({
   grayScaleSkipped = null,
   allowClearRegionWhileDisabled = false,
   liveVectorPreview = false,
+  hideSelectionOverlay = false,
   graySelectionResetToken = 0,
   onLoadLastScan,
 }: {
@@ -61,6 +62,7 @@ export function ROIEditor({
   grayScaleSkipped?: boolean | null;
   allowClearRegionWhileDisabled?: boolean;
   liveVectorPreview?: boolean;
+  hideSelectionOverlay?: boolean;
   graySelectionResetToken?: number;
   onLoadLastScan?: () => void;
 }) {
@@ -221,6 +223,7 @@ export function ROIEditor({
     roi,
     tr.locale,
     liveVectorPreview,
+    hideSelectionOverlay,
     vectorPhase,
     vectorCursor,
     vectorPattern,
@@ -674,7 +677,7 @@ export function ROIEditor({
       ctx.restore();
     }
 
-    const selected = roi.calibration_enabled ? null : roi.selection;
+    const selected = roi.calibration_enabled || hideSelectionOverlay ? null : roi.selection;
     if (selected) {
       if (resizeTrace && resizeSelectionRef.current) {
         drawSelectionTrace(ctx, resizeSelectionRef.current, resizeTrace, roi);

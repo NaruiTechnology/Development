@@ -513,8 +513,20 @@ export function App() {
   useEffect(() => {
     if (previousROISelectionKeyRef.current === roiSelectionKey) return;
     previousROISelectionKeyRef.current = roiSelectionKey;
+    if (roiState.scanImageDataUrl) {
+      dispatch(
+        updateROI({
+          imageName: t("roi.imageName.lastScan"),
+          imageDataUrl: roiState.scanImageDataUrl,
+          imageKind: "lastScan",
+          scanImageDataUrl: null,
+        })
+      );
+      resetROIActionContext({ preserveScanImage: true });
+      return;
+    }
     resetROIActionContext();
-  }, [resetROIActionContext, roiSelectionKey]);
+  }, [dispatch, resetROIActionContext, roiSelectionKey, roiState.scanImageDataUrl, t]);
 
   useEffect(() => {
     if (kind !== "roi") return;
@@ -545,9 +557,19 @@ export function App() {
         !roiActionGrayFilterActive
       ) {
         if (imageUrl) {
-          dispatch(updateROI({ scanImageDataUrl: imageUrl }));
+          dispatch(
+            updateROI({
+              imageName: t("roi.imageName.lastScan"),
+              imageDataUrl: imageUrl,
+              imageKind: "lastScan",
+              scanImageDataUrl: null,
+              selection: null,
+            })
+          );
           dispatch(resetRaster({ resolution: rasterResolution }));
           dispatch(resetVector());
+          setROIActionLocked(false);
+          setROIActionCanvasVisible(false);
           setLastLiveScanImage(null);
           setMergedFigureByKind({ raster: null, vector: null });
         }
@@ -561,7 +583,7 @@ export function App() {
         return { kind: scanKind, imageUrl };
       });
     },
-    [dispatch, kind, rasterResolution, roiActionCanvasVisible, roiActionGrayFilterActive]
+    [dispatch, kind, rasterResolution, roiActionCanvasVisible, roiActionGrayFilterActive, t]
   );
 
   const handleMergedFigureChange = useCallback(
@@ -1186,6 +1208,7 @@ export function App() {
                       grayScaleSelection={displayedROIGrayScaleSelection}
                       grayScaleSkipped={displayedROIGrayScaleSkipped}
                       liveVectorPreview={roiActionCanvasVisible && roiActionGrayFilterActive}
+                      hideSelectionOverlay={roiActionCanvasVisible && !roiActionGrayFilterActive}
                       graySelectionResetToken={roiGraySelectionResetToken}
                     />
                   )
