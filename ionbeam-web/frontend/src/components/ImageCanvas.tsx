@@ -22,13 +22,14 @@ import {
   type ROIState,
   type VectorRenderMode,
 } from "../store/scanSlice";
-import type { ROIRequest } from "../types/api";
+import type { ROIRequest, VectorScanPath } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { Icon } from "./Icon";
 import { CanvasViewHelp } from "./CanvasViewHelp";
+import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 
 const DAC_RANGE = 2048;
 const ROI_ACTION_BLANK_COLOR = { r: 97, g: 0, b: 0 };
@@ -113,6 +114,7 @@ export function ImageCanvas({
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const annotationSeqRef = useRef(0);
   const [stats, setStats] = useState<PaintStats>({ min: 0, max: 0, populated: 0 });
@@ -159,6 +161,7 @@ export function ImageCanvas({
   const vectorCustomSpotMask = useAppSelector((s) => s.image.vectorCustomSpotMask);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
+  const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
   const vectorSource = useAppSelector((s) => s.image.vectorSource);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
@@ -187,6 +190,8 @@ export function ImageCanvas({
       : kind === "vector"
         ? roi.vector_show_grid
         : roi.show_grid;
+  const showScanPath =
+    kind === "vector" && vectorPattern === "default" && roi.vector_show_scan_path;
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
   const vectorGraySpotSelection =
@@ -229,6 +234,7 @@ export function ImageCanvas({
         vectorImage,
         vectorEdge,
         vectorCursor,
+        vectorScanPath,
         vectorGraySpotSelection,
         vectorGraySpotColor,
       );
@@ -239,6 +245,7 @@ export function ImageCanvas({
         vectorImage,
         vectorEdge,
         vectorCursor,
+        vectorScanPath,
         vectorGraySpotSelection,
         vectorGraySpotColor,
       );
@@ -419,7 +426,7 @@ export function ImageCanvas({
     kind === "vector" && vectorSource !== "vector"
       ? 0
       : vectorPattern === "default"
-      ? vectorEdge * vectorEdge
+      ? vectorScanSampleCount(vectorEdge, vectorScanPath)
       : vectorCustomCount;
   const activeRegion = activeROIRegion(roi);
   const current = currentBeamPosition({
@@ -433,6 +440,7 @@ export function ImageCanvas({
     vectorEdge,
     vectorCursor: visibleVectorCursor,
     vectorPattern,
+    vectorScanPath,
     vectorCustomPoints,
     vectorCustomRenderPoints,
   });
@@ -459,6 +467,17 @@ export function ImageCanvas({
   } else {
     nativeEdge = vectorEdge;
   }
+
+  useEffect(() => {
+    const canvas = scanPathCanvasRef.current;
+    if (!canvas || !showScanPath) return;
+    paintVectorScanOrderOverlay(
+      canvas,
+      vectorEdge,
+      visibleVectorCursor,
+      vectorScanPath,
+    );
+  }, [revision, showScanPath, vectorEdge, vectorScanPath, visibleVectorCursor]);
 
   const phaseKey = PHASE_KEYS[phase];
   const kindKey = KIND_KEYS[kind];
@@ -913,6 +932,15 @@ export function ImageCanvas({
               onDragStart={(e) => e.preventDefault()}
             />
           )}
+          {showScanPath && (
+            <canvas
+              ref={scanPathCanvasRef}
+              className="canvas-scan-path-overlay"
+              width={Math.min(256, Math.max(1, vectorEdge))}
+              height={Math.min(256, Math.max(1, vectorEdge))}
+              aria-label={t("vector.displayScanPath")}
+            />
+          )}
           {editorEnabled && (
             <div
               className="canvas-editor-layer"
@@ -1213,6 +1241,7 @@ interface CurrentBeamArgs {
   vectorEdge: number;
   vectorCursor: number;
   vectorPattern: "default" | "custom";
+  vectorScanPath: VectorScanPath;
   vectorCustomPoints: Float32Array | null;
   vectorCustomRenderPoints: Float32Array | null;
 }
@@ -1227,6 +1256,58 @@ function clearCanvas(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function paintVectorScanOrderOverlay(
+  canvas: HTMLCanvasElement,
+  edge: number,
+  cursor: number,
+  scanPath: VectorScanPath,
+) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const size = canvas.width;
+  ctx.clearRect(0, 0, size, size);
+  if (edge <= 0 || cursor <= 0) return;
+
+  const total = vectorScanSampleCount(edge, scanPath);
+  const limit = Math.min(cursor, total);
+  const trailSamples = Math.min(limit, Math.max(24, Math.min(160, edge >> 2)));
+  const first = limit - trailSamples;
+  ctx.save();
+  ctx.strokeStyle = "rgba(111, 190, 211, 0.18)";
+  ctx.lineWidth = 0.55;
+  ctx.beginPath();
+  for (let index = first; index < limit; index++) {
+    const point = vectorScanSamplePixel(index, edge, scanPath);
+    if (!point) continue;
+    const x = (point.x / Math.max(1, edge - 1)) * (size - 1);
+    const y = (point.y / Math.max(1, edge - 1)) * (size - 1);
+    if (index === first) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  const current = vectorScanSamplePixel(limit - 1, edge, scanPath);
+  if (!current) return;
+  const cx = (current.x / Math.max(1, edge - 1)) * (size - 1);
+  const cy = (current.y / Math.max(1, edge - 1)) * (size - 1);
+  ctx.save();
+  ctx.fillStyle = "rgba(151, 210, 224, 0.48)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(151, 210, 224, 0.42)";
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.3, 0, Math.PI * 2);
+  ctx.moveTo(cx - 2.3, cy);
+  ctx.lineTo(cx + 2.3, cy);
+  ctx.moveTo(cx, cy - 2.3);
+  ctx.lineTo(cx, cy + 2.3);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function activeROIRegion(roi: ROIState): ROIRequest {
@@ -1268,12 +1349,11 @@ function currentBeamPosition(args: CurrentBeamArgs): CurrentBeamPosition | null 
     };
   }
 
-  const col = Math.floor(idx / args.vectorEdge);
-  const row = idx % args.vectorEdge;
-  if (col >= args.vectorEdge) return null;
+  const pixel = vectorScanSamplePixel(idx, args.vectorEdge, args.vectorScanPath);
+  if (!pixel) return null;
   return {
-    ...mapIndexToRegion(col, row, args.vectorEdge, args.region),
-    adc: args.vectorImage[row * args.vectorEdge + col] ?? 0,
+    ...mapIndexToRegion(pixel.x, pixel.y, args.vectorEdge, args.region),
+    adc: args.vectorImage[pixel.y * args.vectorEdge + pixel.x] ?? 0,
   };
 }
 
@@ -1633,6 +1713,7 @@ function paintVectorDefault(
   buf: Uint16Array,
   edge: number,
   populated: number,
+  scanPath: VectorScanPath,
   graySpotSelection: GrayScaleSelection = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
 ): PaintStats {
@@ -1644,15 +1725,14 @@ function paintVectorDefault(
   if (!ctx) return { min: 0, max: 0, populated: 0 };
 
   const limit = Math.min(populated, buf.length);
-  const range = vectorDefaultRange(buf, edge, limit);
+  const range = vectorDefaultRange(buf, edge, limit, scanPath);
   const img = ctx.createImageData(edge, edge);
   const data = img.data;
 
   for (let i = 0; i < limit; i++) {
-    const col = (i / edge) | 0;
-    const row = i % edge;
-    if (col >= edge) break;
-    const idx = row * edge + col;
+    const pixel = vectorScanSamplePixel(i, edge, scanPath);
+    if (!pixel) break;
+    const idx = pixel.y * edge + pixel.x;
     const sample = buf[idx];
     const g = scaleSample(sample, range.min, range.max);
     const p = idx * 4;
@@ -1751,6 +1831,7 @@ function paintVectorDefaultBlockFill(
   buf: Uint16Array,
   edge: number,
   populated: number,
+  scanPath: VectorScanPath,
   graySpotSelection: GrayScaleSelection = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
 ): PaintStats {
@@ -1764,7 +1845,7 @@ function paintVectorDefaultBlockFill(
 
   const limit = Math.min(populated, buf.length);
 
-  const range = vectorDefaultRange(buf, edge, limit);
+  const range = vectorDefaultRange(buf, edge, limit, scanPath);
 
   const img = ctx.createImageData(nativeSize, nativeSize);
   const data = img.data;
@@ -1777,9 +1858,10 @@ function paintVectorDefaultBlockFill(
   }
 
   for (let i = 0; i < limit; i++) {
-    const cellCol = (i / edge) | 0;
-    const cellRow = i % edge;
-    if (cellCol >= edge) break;
+    const pixel = vectorScanSamplePixel(i, edge, scanPath);
+    if (!pixel) break;
+    const cellCol = pixel.x;
+    const cellRow = pixel.y;
     const cellIdx = cellRow * edge + cellCol;
     const sample = buf[cellIdx];
     const g = scaleSample(sample, range.min, range.max);
@@ -1811,14 +1893,18 @@ function paintVectorDefaultBlockFill(
   return range;
 }
 
-function vectorDefaultRange(buf: Uint16Array, edge: number, limit: number): PaintStats {
+function vectorDefaultRange(
+  buf: Uint16Array,
+  edge: number,
+  limit: number,
+  scanPath: VectorScanPath,
+): PaintStats {
   let lo = 65535;
   let hi = 0;
   for (let i = 0; i < limit; i++) {
-    const col = (i / edge) | 0;
-    const row = i % edge;
-    if (col >= edge) break;
-    const v = buf[row * edge + col];
+    const pixel = vectorScanSamplePixel(i, edge, scanPath);
+    if (!pixel) break;
+    const v = buf[pixel.y * edge + pixel.x];
     if (v < lo) lo = v;
     if (v > hi) hi = v;
   }

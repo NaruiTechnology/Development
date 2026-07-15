@@ -82,6 +82,13 @@ class VectorPattern(str, Enum):
     custom  = "custom"
 
 
+class VectorScanPath(str, Enum):
+    vertical_raster = "vertical_raster"
+    vertical_serpentine = "vertical_serpentine"
+    horizontal_sawtooth = "horizontal_sawtooth"
+    horizontal_triangle = "horizontal_triangle"
+
+
 class VectorFeedbackMode(str, Enum):
     standard = "standard"
     adaptive_gray_feedback = "adaptive_gray_feedback"
@@ -122,6 +129,7 @@ class SimulationBitmapPixel(BaseModel):
 
 class VectorRequest(BaseModel):
     pattern:        VectorPattern = VectorPattern.default
+    scan_path:      VectorScanPath = VectorScanPath.vertical_raster
     points:         Optional[List[Union[
         Tuple[int, int, int],
         Tuple[int, int, int, Optional[bool]],

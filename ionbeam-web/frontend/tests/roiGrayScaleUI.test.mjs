@@ -6,6 +6,7 @@ import {
   grayScaleSourceLabelForKind,
   resolveROIActionKind,
   resolveGrayScaleSourceKind,
+  shouldShowROIGrayScaleClear,
   shouldShowROIActionControls,
 } from "../.test-dist/lib/grayScaleUI.js";
 
@@ -79,4 +80,19 @@ test("uses vector style for ROI action runs", () => {
   assert.equal(resolveROIActionKind("roi", "vector"), "vector");
   assert.equal(resolveROIActionKind("vector", "raster"), "vector");
   assert.equal(resolveROIActionKind("mag", "raster"), null);
+});
+
+test("shows ROI gray-range Clear only after a range is confirmed", () => {
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "roi", hasConfirmedGrayRange: false }),
+    false,
+  );
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "roi", hasConfirmedGrayRange: true }),
+    true,
+  );
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "vector", hasConfirmedGrayRange: true }),
+    false,
+  );
 });

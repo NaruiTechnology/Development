@@ -24,6 +24,7 @@ import { DwellHelp } from "./DwellHelp";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
 import type { VectorPoint, VectorPointTuple } from "../types/api";
+import { VectorScanPathField } from "./VectorScanPathField";
 
 const MAX_POINTS = 1_000_000;
 const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256, 128] as const;
@@ -131,41 +132,44 @@ export function VectorParameters({
       </div>
 
       {v.pattern === "default" && (
-        <div className="field-row">
-        <PresetNumberField
-          label={
-            <label>
-              {t("vector.resolution")}
-              <VectorResolutionHelp />
-              </label>
-            }
-            value={v.vector_resolution}
-          options={vectorResolutionOptions}
-          min={1}
-          max={2048}
-          disabled={disabled}
-          title={resolutionTitle}
-          customValidate={(value) => validateCustomVectorResolution(value, t)}
-          onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
-        />
-          <PresetNumberField
-            label={
-            <label>
-              {t("vector.dwell")}
-              <DwellHelp />
-              </label>
-            }
-            value={v.dwell}
-            options={VECTOR_DWELL_OPTIONS}
-            min={1}
-            max={65535}
-            disabled={disabled}
-            normalizeValue={(value) => grayLevelFilterActive ? Math.max(2, value) : value}
-            onChange={(value) =>
-              dispatch(updateVector({ dwell: value }))
-            }
-          />
-        </div>
+        <>
+          <VectorScanPathField disabled={disabled || grayLevelFilterActive} />
+          <div className="field-row">
+            <PresetNumberField
+              label={
+                <label>
+                  {t("vector.resolution")}
+                  <VectorResolutionHelp />
+                </label>
+              }
+              value={v.vector_resolution}
+              options={vectorResolutionOptions}
+              min={1}
+              max={2048}
+              disabled={disabled}
+              title={resolutionTitle}
+              customValidate={(value) => validateCustomVectorResolution(value, t)}
+              onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
+            />
+            <PresetNumberField
+              label={
+                <label>
+                  {t("vector.dwell")}
+                  <DwellHelp />
+                </label>
+              }
+              value={v.dwell}
+              options={VECTOR_DWELL_OPTIONS}
+              min={1}
+              max={65535}
+              disabled={disabled}
+              normalizeValue={(value) => grayLevelFilterActive ? Math.max(2, value) : value}
+              onChange={(value) =>
+                dispatch(updateVector({ dwell: value }))
+              }
+            />
+          </div>
+        </>
       )}
 
       <div className="field-row">

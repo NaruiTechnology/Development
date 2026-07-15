@@ -140,6 +140,7 @@ function handleProxy(
             at: new Date().toISOString(),
             preview: previewScan,
             pattern: parsed.pattern ?? null,
+            scan_path: parsed.scan_path ?? "vertical_raster",
             feedback_mode: parsed.feedback_mode ?? null,
             gray_level_range: parsed.gray_level_range ?? null,
             gray_level_skipped: parsed.gray_level_skipped ?? null,
@@ -304,6 +305,7 @@ function handleMock(
       } else {
         await streamMockVector(client, {
           pattern: body.pattern === "custom" ? "custom" : "default",
+          scan_path: normalizeVectorScanPath(body.scan_path),
           points: Array.isArray(body.points) ? body.points : undefined,
           dwell: Number(body.dwell ?? 16),
           latency_bytes: Number(body.latency_bytes ?? 8196),
@@ -472,6 +474,22 @@ function normalizeDecimal(value: unknown, fallback: number): number {
 function normalizeScaleUnit(value: unknown): string {
   const unit = String(value ?? "").trim();
   return unit.slice(0, 10) || "dac";
+}
+
+function normalizeVectorScanPath(value: unknown):
+  | "vertical_raster"
+  | "vertical_serpentine"
+  | "horizontal_sawtooth"
+  | "horizontal_triangle" {
+  const path = String(value ?? "vertical_raster");
+  switch (path) {
+    case "vertical_serpentine":
+    case "horizontal_sawtooth":
+    case "horizontal_triangle":
+      return path;
+    default:
+      return "vertical_raster";
+  }
 }
 
 function parseJsonMessage(data: RawData): Record<string, unknown> | null {

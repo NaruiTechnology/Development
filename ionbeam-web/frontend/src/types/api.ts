@@ -37,6 +37,11 @@ export interface RasterRequest {
 }
 
 export type VectorPattern = "default" | "custom";
+export type VectorScanPath =
+  | "vertical_raster"
+  | "vertical_serpentine"
+  | "horizontal_sawtooth"
+  | "horizontal_triangle";
 export type VectorFeedbackMode = "standard" | "adaptive_gray_feedback";
 
 export interface VectorPoint {
@@ -56,6 +61,7 @@ export type VectorPointTuple =
 
 export interface VectorRequest {
   pattern: VectorPattern;
+  scan_path: VectorScanPath;
   points: Array<VectorPointTuple | VectorPoint> | null;
   preview?: boolean;
   /** Default-pattern density on each axis. Valid range: 1..2048.

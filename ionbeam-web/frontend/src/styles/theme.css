@@ -406,6 +406,10 @@ body {
   width: 100%;
 }
 
+.image-panel-card__header--scan-path .image-panel-card__header-main {
+  grid-template-columns: max-content max-content max-content max-content minmax(0, 1fr) max-content;
+}
+
 .image-panel-card__header-main > .card__title,
 .image-panel-card__header-main > .canvas-grid-toggle {
   min-width: 0;
@@ -419,6 +423,10 @@ body {
   min-width: 0;
 }
 
+.image-panel-card__toolbar-slot--vector {
+  grid-column: 5;
+}
+
 .image-panel-card__toolbar-slot:empty {
   display: none;
 }
@@ -429,6 +437,61 @@ body {
   min-height: 28px;
   padding: 4px 10px;
   white-space: nowrap;
+}
+
+.image-panel-card__header--scan-path .image-panel-card__header-action {
+  grid-column: 6;
+}
+
+.image-panel-card__header--roi.image-panel-card__header--scan-path .image-panel-card__header-main {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-rows: auto auto auto;
+}
+
+.image-panel-card__header--roi.image-panel-card__header--scan-path .card__title {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.image-panel-card__header--roi.image-panel-card__header--scan-path .image-panel-card__header-action {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.image-panel-card__header--roi.image-panel-card__header--scan-path .canvas-grid-toggle--grid {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+}
+
+.image-panel-card__header--roi.image-panel-card__header--scan-path .canvas-scan-path-toggle {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+}
+
+.image-panel-card__header--roi.image-panel-card__header--scan-path .image-panel-card__toolbar-slot {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  gap: 3px;
+  overflow: visible;
+}
+
+.image-panel-card__header--roi.image-panel-card__header--scan-path .image-panel-card__toolbar-slot > .roi-spectrum {
+  flex: 0 1 auto;
+  min-width: 0;
+  width: max-content;
+  margin-left: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.image-panel-card__header--roi.image-panel-card__header--scan-path .image-panel-card__toolbar-slot > .image-panel-card__header-action {
+  flex: 0 0 auto;
+  align-self: center;
 }
 
 .roi-spectrum {
@@ -998,6 +1061,26 @@ body {
 /* ---------- form controls -------------------------------------------- */
 
 .field { display: grid; gap: 4px; margin-bottom: 10px; }
+
+.vector-scan-path-field__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.vector-scan-path-preview {
+  aspect-ratio: 1;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--r-md);
+  background: var(--c-bg-elev);
+  padding: 5px;
+}
+
+.vector-scan-path-preview svg { display: block; width: 100%; height: 100%; }
+.vector-scan-path-preview__frame { fill: none; stroke: var(--c-border); stroke-width: 1; }
+.vector-scan-path-preview__line { fill: none; stroke: var(--c-accent); stroke-width: 2.5; stroke-linejoin: round; }
+.vector-scan-path-preview__start { fill: var(--c-success); }
 
 .field > label {
   font-size: 11px;
@@ -2450,6 +2533,18 @@ body {
   -webkit-user-drag: none;
 }
 
+.canvas-scan-path-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  image-rendering: pixelated;
+  background: transparent !important;
+}
+
 .canvas-axis-overlay {
   position: absolute;
   inset: 0;
@@ -3044,6 +3139,12 @@ body {
 .roi-canvas-layer--live {
   z-index: 1;
   pointer-events: none;
+}
+
+.roi-canvas-layer--scan-path {
+  z-index: 1;
+  pointer-events: none;
+  background: transparent !important;
 }
 
 .roi-canvas-layer--annotation {

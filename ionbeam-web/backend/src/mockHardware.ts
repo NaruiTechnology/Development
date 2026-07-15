@@ -45,6 +45,7 @@ interface RasterParams {
 
 interface VectorParams {
   pattern: "default" | "custom";
+  scan_path?: VectorScanPath;
   points?: Array<VectorPointTuple | VectorPointObject>;
   dwell: number;
   latency_bytes: number;
@@ -55,6 +56,12 @@ interface VectorParams {
   roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
   simulation_bitmap?: SimulationBitmapPayload | null;
 }
+
+type VectorScanPath =
+  | "vertical_raster"
+  | "vertical_serpentine"
+  | "horizontal_sawtooth"
+  | "horizontal_triangle";
 
 interface SimulationBitmapPayload {
   width: number;
@@ -423,15 +430,7 @@ export async function streamMockVector(
       }
     }
   } else {
-    const edge = p.vector_resolution ?? 2048;
-    pts = new Array(edge * edge);
-    for (let x = 0; x < edge; x++) {
-      const xPos = Math.min(ADC_MAX, Math.floor((x * ADC_MAX) / Math.max(1, edge - 1)));
-      for (let y = 0; y < edge; y++) {
-        const yPos = Math.min(ADC_MAX, Math.floor((y * ADC_MAX) / Math.max(1, edge - 1)));
-        pts[x * edge + y] = [xPos, yPos, p.dwell];
-      }
-    }
+    pts = vectorScanPoints(p);
   }
 
   const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
@@ -484,6 +483,36 @@ export async function streamMockVector(
       }),
     );
   }
+}
+
+function vectorScanPoints(p: VectorParams): VectorPointTuple[] {
+  const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 2048));
+  const path = p.scan_path ?? "vertical_raster";
+  const x0 = Math.min(p.roi?.x_start ?? 0, p.roi?.x_end ?? ADC_MAX);
+  const x1 = Math.max(p.roi?.x_start ?? 0, p.roi?.x_end ?? ADC_MAX);
+  const y0 = Math.min(p.roi?.y_start ?? 0, p.roi?.y_end ?? ADC_MAX);
+  const y1 = Math.max(p.roi?.y_start ?? 0, p.roi?.y_end ?? ADC_MAX);
+  const xs = Array.from({ length: edge }, (_, index) =>
+    Math.round(x0 + ((x1 - x0) * index) / Math.max(1, edge - 1)),
+  );
+  const ys = Array.from({ length: edge }, (_, index) =>
+    Math.round(y0 + ((y1 - y0) * index) / Math.max(1, edge - 1)),
+  );
+  const points: VectorPointTuple[] = [];
+
+  if (path === "horizontal_sawtooth" || path === "horizontal_triangle") {
+    ys.forEach((y, row) => {
+      const rowXs = path === "horizontal_triangle" && row % 2 ? [...xs].reverse() : xs;
+      for (const x of rowXs) points.push([x, y, p.dwell]);
+    });
+    return points;
+  }
+
+  xs.forEach((x, column) => {
+    const columnYs = path === "vertical_serpentine" && column % 2 ? [...ys].reverse() : ys;
+    for (const y of columnYs) points.push([x, y, p.dwell]);
+  });
+  return points;
 }
 
 /** Synthetic responses for the REST endpoints, when MOCK=1. */
@@ -594,8 +623,7 @@ export const mockRest = {
     if (req.pattern === "custom" && req.points) {
       totalSamples = req.points.length;
     } else {
-      const edge = req.vector_resolution ?? 2048;
-      totalSamples = edge * edge;
+      totalSamples = vectorScanPoints(req).length;
     }
     const valuesPerChunk = Math.max(64, Math.floor(req.latency_bytes / 2));
     const chunks = Math.max(1, Math.ceil(totalSamples / valuesPerChunk));
@@ -606,6 +634,7 @@ export const mockRest = {
       kind: "vector",
       latency_bytes: req.latency_bytes,
       pattern: req.pattern,
+      scan_path: req.scan_path ?? "vertical_raster",
       vector_resolution: req.vector_resolution,
       source: "validated",
       csv_filename: csvFilename,
@@ -671,6 +700,7 @@ let mockLastScan:
       resolution?: number;
       latency_bytes?: number;
       pattern?: string;
+      scan_path?: VectorScanPath;
       vector_resolution?: number;
       source: "validated" | "stream";
       csv_filename?: string;

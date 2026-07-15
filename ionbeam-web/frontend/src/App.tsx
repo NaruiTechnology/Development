@@ -27,6 +27,7 @@ import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
 import { RasterParameters } from "./components/RasterParameters";
 import { VectorParameters } from "./components/VectorParameters";
+import { VectorScanPathField } from "./components/VectorScanPathField";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
@@ -50,6 +51,7 @@ import {
   grayScaleScopeNoteForKind,
   grayScaleSourceLabelForKind,
   resolveROIActionKind,
+  shouldShowROIGrayScaleClear,
   shouldShowROIActionControls,
   resolveGrayScaleSourceKind,
 } from "./lib/grayScaleUI";
@@ -328,9 +330,7 @@ export function App() {
   const displayedROIGrayScaleSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped;
   const actionScanKind =
     kind === "roi"
-      ? roiActionGrayFilterActive
-        ? "vector"
-        : "raster"
+      ? "vector"
       : resolveROIActionKind(kind, lastScanKind) ?? lastScanKind;
   const showROIActionControls = shouldShowROIActionControls({
     kind,
@@ -338,7 +338,7 @@ export function App() {
   });
   const gridLineToggle =
     kind === "roi" ? (
-      <label className="checkbox canvas-grid-toggle">
+      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.show_grid}
@@ -348,7 +348,7 @@ export function App() {
         {t("roi.showGrid")}
       </label>
     ) : kind === "raster" ? (
-      <label className="checkbox canvas-grid-toggle">
+      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.raster_show_grid}
@@ -358,7 +358,7 @@ export function App() {
         {t("roi.showGrid")}
       </label>
     ) : kind === "vector" ? (
-      <label className="checkbox canvas-grid-toggle">
+      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.vector_show_grid}
@@ -367,6 +367,20 @@ export function App() {
         />
         {t("roi.showGrid")}
       </label>
+    ) : null;
+  const scanPathToggle =
+    kind === "vector" || (kind === "roi" && hasPartialROI) ? (
+    <label className="checkbox canvas-grid-toggle canvas-scan-path-toggle">
+      <input
+        type="checkbox"
+        checked={roiState.vector_show_scan_path}
+        disabled={panelDisabled}
+        onChange={(e) =>
+          dispatch(updateROI({ vector_show_scan_path: e.target.checked }))
+        }
+      />
+      {t("vector.displayScanPath")}
+    </label>
     ) : null;
   const clearCommittedGrayScaleSelection = useCallback(() => {
     dispatch(
@@ -555,7 +569,7 @@ export function App() {
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
       if (
         kind === "roi" &&
-        scanKind === "raster" &&
+        scanKind === "vector" &&
         roiActionCanvasVisible &&
         !roiActionGrayFilterActive
       ) {
@@ -569,7 +583,6 @@ export function App() {
               ),
             )
           );
-          dispatch(resetRaster({ resolution: rasterResolution }));
           dispatch(resetVector());
           setROIActionLocked(false);
           setROIActionCanvasVisible(false);
@@ -589,7 +602,6 @@ export function App() {
     [
       dispatch,
       kind,
-      rasterResolution,
       roiActionCanvasVisible,
       roiActionGrayFilterActive,
       t,
@@ -1010,6 +1022,12 @@ export function App() {
                       lastScanImageUrl={roiScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
                     />
+                    {hasPartialROI && (
+                      <VectorScanPathField
+                        id="roi-vector-scan-path"
+                        disabled={panelDisabled}
+                      />
+                    )}
                     {showROIActionControls && kind === "roi" && (
                       <div className="roi-action-controls">
                     <ScanControls
@@ -1135,14 +1153,15 @@ export function App() {
         {/* right column */}
         <section>
             <div className="card image-panel-card">
-              <div className={`card__header image-panel-card__header${kind === "vector" ? " image-panel-card__header--vector" : ""}`}>
+              <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}`}>
                 <div className="image-panel-card__header-main">
                   <span className="card__title">{t(
                     kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
-                      ? "card.rasterImage"
+                      ? "card.vectorPattern"
                       : imagePanelTitleKey
                   )}</span>
                   {gridLineToggle}
+                  {scanPathToggle}
                   {kind === "vector" && (
                     <label className="checkbox canvas-grid-toggle vector-gray-level-toggle">
                       <input
@@ -1183,23 +1202,21 @@ export function App() {
                         onStepDeltaChange={handleGrayScaleStepDeltaChange}
                       />
                     ) : null}
+                    {shouldShowROIGrayScaleClear({
+                      kind,
+                      hasConfirmedGrayRange: committedGrayScaleSelection !== null,
+                    }) && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost image-panel-card__header-action"
+                        disabled={panelDisabled}
+                        onClick={handleClearROIGrayScaleValues}
+                        title={t("scan.clear")}
+                      >
+                        {t("scan.clear")}
+                      </button>
+                    )}
                   </div>
-                  {kind === "roi" && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
-                    <button
-                      type="button"
-                      className="btn btn--ghost image-panel-card__header-action"
-                      disabled={
-                        panelDisabled ||
-                        (pendingGrayScaleSelection === null &&
-                          committedGrayScaleSelection === null &&
-                          pendingGrayScaleAnchor === null)
-                      }
-                      onClick={handleClearROIGrayScaleValues}
-                      title={t("scan.clear")}
-                    >
-                      {t("scan.clear")}
-                    </button>
-                  )}
                 </div>
             </div>
             <div className="card__body">
@@ -1208,7 +1225,7 @@ export function App() {
                   !roiActionGrayFilterActive &&
                   roiState.scanImageDataUrl === null ? (
                     <ImageCanvas
-                      kind="raster"
+                      kind="vector"
                       onRenderedImageChange={handleRenderedImageChange}
                       onMergedFigureChange={handleMergedFigureChange}
                     />

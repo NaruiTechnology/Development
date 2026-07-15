@@ -335,8 +335,8 @@ export function ScanControls({
           onScanRunStart?.(ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
           stream.startVector({ ...req, preview });
         } else {
-          const req = await rasterRequestWithBitmapSelection(
-            { ...raster, roi },
+          const req = await vectorRequestWithBitmapSelection(
+            { ...vector, roi },
             roiState,
             {
               isProduction,
@@ -347,8 +347,8 @@ export function ScanControls({
           );
           clearActionLoopState();
           onActionRunStart?.();
-          onScanRunStart?.(ScanType.CUSTOM_RASTER);
-          stream.startRaster({ ...req, preview });
+          onScanRunStart?.(ScanType.VECTOR);
+          stream.startVector({ ...req, preview });
         }
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -398,7 +398,7 @@ export function ScanControls({
     if (disabled || roiEbeamDisabled) return;
     clearActionLoopState();
     stream.stop();
-    if (roiAction && !roiActionGrayFilterActive) dispatch(resetRaster({ resolution: raster.resolution }));
+    if (roiAction && !roiActionGrayFilterActive) dispatch(resetVector());
     else if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }

@@ -6,6 +6,7 @@ import type {
   VectorPoint,
   VectorPointTuple,
   VectorRequest,
+  VectorScanPath,
 } from "../types/api";
 import type { ROIState } from "../store/scanSlice";
 import {
@@ -16,6 +17,7 @@ import {
 } from "./grayScaleSelection";
 import { imageWorldBounds, ROI_CANVAS_EDGE, viewportBounds } from "./roiGeometry";
 import { worldSelectionToDacROI } from "./roiDac";
+import { bitmapScanCoordinates } from "./vectorScanPath";
 
 export { worldSelectionToDacROI } from "./roiDac";
 
@@ -125,6 +127,8 @@ export async function vectorRequestWithBitmapSelection(
   if (!roi.imageDataUrl) {
     return {
       ...req,
+      pattern: "default",
+      points: null,
       roi: worldSelectionToDacROI(roi.selection, roi),
       simulation_bitmap: null,
     };
@@ -158,6 +162,7 @@ export async function vectorRequestWithBitmapSelection(
         converted.roi,
         req.dwell,
         options.grayScaleSkipped,
+        req.scan_path,
       ),
       roi: converted.roi,
       simulation_bitmap: null,
@@ -223,6 +228,7 @@ export async function vectorRequestWithROIGrayScaleAction(
       Math.max(2, req.dwell),
       selection,
       options.grayScaleSkipped,
+      req.scan_path,
     ),
     roi: converted.roi,
     simulation_bitmap: null,
@@ -420,6 +426,7 @@ function bitmapToCustomPoints(
   roi: ROIRequest,
   dwell: number,
   skipped: boolean | null | undefined,
+  scanPath: VectorScanPath,
 ): VectorPointTuple[] {
   if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
     return [];
@@ -439,42 +446,38 @@ function bitmapToCustomPoints(
   const primaryPass: VectorPointTuple[] = [];
   const secondaryPass: VectorPointTuple[] = [];
 
-  for (let y = 0; y < bitmap.height; y++) {
+  for (const [x, y] of bitmapScanCoordinates(bitmap.width, bitmap.height, scanPath)) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
-    for (let x = 0; x < bitmap.width; x++) {
-      const pixel = bitmap.pixels[y * bitmap.width + x];
-      const highlighted = Boolean(pixel?.isHighlighted);
-      const sampleX = x0 + Math.round((x / xDiv) * xSpan);
-      const blank = normalizedSkipped === true
-        ? highlighted
-        : normalizedSkipped === false
-        ? !highlighted
-        : false;
-      const point: VectorPointTuple = [
-        sampleX,
-        sampleY,
-        dwell,
-        blank,
-        normalizedSkipped === null
-          ? null
-          : highlighted
-          ? 1
-          : 2,
-      ];
+    const pixel = bitmap.pixels[y * bitmap.width + x];
+    const highlighted = Boolean(pixel?.isHighlighted);
+    const sampleX = x0 + Math.round((x / xDiv) * xSpan);
+    const blank = normalizedSkipped === true
+      ? highlighted
+      : normalizedSkipped === false
+      ? !highlighted
+      : false;
+    const point: VectorPointTuple = [
+      sampleX,
+      sampleY,
+      dwell,
+      blank,
+      normalizedSkipped === null
+        ? null
+        : highlighted
+        ? 1
+        : 2,
+    ];
 
-      // Emit the selected interval as the first pass and the
-      // complement as the second pass. This keeps the blank/unblank
-      // transition boundary explicit instead of interleaving states on
-      // every pixel sample.
-      if (
-        normalizedSkipped === null ||
-        (normalizedSkipped === true && highlighted) ||
-        (normalizedSkipped === false && !highlighted)
-      ) {
-        primaryPass.push(point);
-      } else {
-        secondaryPass.push(point);
-      }
+    // Emit the selected interval as the first pass and the complement
+    // as the second pass while preserving scan-path order in each pass.
+    if (
+      normalizedSkipped === null ||
+      (normalizedSkipped === true && highlighted) ||
+      (normalizedSkipped === false && !highlighted)
+    ) {
+      primaryPass.push(point);
+    } else {
+      secondaryPass.push(point);
     }
   }
 
@@ -487,6 +490,7 @@ function bitmapToROIActionPoints(
   dwell: number,
   selection: [number, number],
   skipped: boolean,
+  scanPath: VectorScanPath,
 ): VectorPointTuple[] {
   if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
     return [];
@@ -502,21 +506,19 @@ function bitmapToROIActionPoints(
   const ySpan = Math.max(1, y1 - y0);
   const points: VectorPointTuple[] = [];
 
-  for (let y = 0; y < bitmap.height; y++) {
+  for (const [x, y] of bitmapScanCoordinates(bitmap.width, bitmap.height, scanPath)) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
-    for (let x = 0; x < bitmap.width; x++) {
-      const sampleX = x0 + Math.round((x / xDiv) * xSpan);
-      const pixel = bitmap.pixels[y * bitmap.width + x];
-      const pixelBlank = typeof pixel === "number" ? null : pixel.blank ?? null;
-      const highlighted = grayScaleSelectionContains(selection, pixelValue(pixel));
-      const blank =
-        pixelBlank !== null
-          ? pixelBlank
-          : skipped
-          ? highlighted
-          : !highlighted;
-      points.push([sampleX, sampleY, dwell, blank, highlighted ? 1 : 2]);
-    }
+    const sampleX = x0 + Math.round((x / xDiv) * xSpan);
+    const pixel = bitmap.pixels[y * bitmap.width + x];
+    const pixelBlank = typeof pixel === "number" ? null : pixel.blank ?? null;
+    const highlighted = grayScaleSelectionContains(selection, pixelValue(pixel));
+    const blank =
+      pixelBlank !== null
+        ? pixelBlank
+        : skipped
+        ? highlighted
+        : !highlighted;
+    points.push([sampleX, sampleY, dwell, blank, highlighted ? 1 : 2]);
   }
 
   return points;

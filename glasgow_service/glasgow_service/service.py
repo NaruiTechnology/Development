@@ -55,7 +55,7 @@ from AutomationPy.buildingblocks.automation_log import AutomationLog
 from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .models import (
-    DeviceState, ServiceStatus, RasterRequest, VectorRequest, VectorPattern,
+    DeviceState, ServiceStatus, RasterRequest, VectorRequest, VectorPattern, VectorScanPath,
     ScanResult, ScanValidation, ValidationCheck,
 )
 
@@ -94,18 +94,32 @@ def _dac_range_for_bounds(start: int, end: int, count: int) -> DACCodeRange:
     return DACCodeRange(start=lo, count=count, step=max(1, int((span / count) * 256)))
 
 
-def _roi_vector_iter(edge: int, roi, dwell: int = 1) -> Iterable[Tuple[int, int, int]]:
+def _roi_vector_iter(
+    edge: int,
+    roi,
+    dwell: int = 1,
+    scan_path: VectorScanPath = VectorScanPath.vertical_raster,
+) -> Iterable[Tuple[int, int, int]]:
     bounds = _roi_bounds(roi)
     if bounds is None:
-        yield from _default_vector_iter(edge, dwell=dwell)
-        return
-    x0, x1, y0, y1 = bounds
+        x0, x1, y0, y1 = 0, 16383, 0, 16383
+    else:
+        x0, x1, y0, y1 = bounds
     x_range = _dac_range_for_bounds(x0, x1, edge)
     y_range = _dac_range_for_bounds(y0, y1, edge)
-    for x_idx in range(edge):
-        x = x_range.start + ((x_idx * x_range.step) >> 8)
-        for y_idx in range(edge):
-            y = y_range.start + ((y_idx * y_range.step) >> 8)
+    xs = [x_range.start + ((idx * x_range.step) >> 8) for idx in range(edge)]
+    ys = [y_range.start + ((idx * y_range.step) >> 8) for idx in range(edge)]
+
+    if scan_path in (VectorScanPath.horizontal_sawtooth, VectorScanPath.horizontal_triangle):
+        for y_idx, y in enumerate(ys):
+            row_xs = reversed(xs) if scan_path is VectorScanPath.horizontal_triangle and y_idx % 2 else xs
+            for x in row_xs:
+                yield x, y, dwell
+        return
+
+    for x_idx, x in enumerate(xs):
+        column_ys = reversed(ys) if scan_path is VectorScanPath.vertical_serpentine and x_idx % 2 else ys
+        for y in column_ys:
             yield x, y, dwell
 
 
@@ -365,7 +379,9 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
             0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
         )
     else:
-        iter_points = _roi_vector_iter(req.vector_resolution, req.roi, dwell=req.dwell)
+        iter_points = _roi_vector_iter(
+            req.vector_resolution, req.roi, dwell=req.dwell, scan_path=req.scan_path
+        )
         sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(bitmap, req.roi, x, y)
 
     for point in iter_points:
@@ -628,6 +644,7 @@ class DeviceService:
                     "latency_bytes": req.latency_bytes,
                     "dwell": req.dwell,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                    "scan_path": req.scan_path.value,
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
                     "roi": req.roi,
@@ -645,9 +662,10 @@ class DeviceService:
             cmd = self._build_vector_cmd(req)
             if req.pre_process:
                 cmd._pre_process_chunks(latency=req.latency_bytes)
+            transfer_iter = conn.transfer_multiple(
+                cmd, latency=req.latency_bytes)
             try:
-                async for chunk in conn.transfer_multiple(
-                        cmd, latency=req.latency_bytes):
+                async for chunk in transfer_iter:
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
                     yield _sample_chunk_to_wire_bytes(chunk)
@@ -655,16 +673,22 @@ class DeviceService:
                 self._drop_conn_on_error(e)
                 raise
             finally:
-                self._set_last_scan({
-                    "kind": "vector",
-                    "chunks": captured,
-                    "latency_bytes": req.latency_bytes,
-                    "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
-                    "points": req.points,
-                    "vector_resolution": req.vector_resolution,
-                    "roi": req.roi,
-                    "source": "stream",
-                })
+                try:
+                    # Ensure Stop/disconnect reaches Connection's cleanup
+                    # before the service releases this scan generator.
+                    await transfer_iter.aclose()
+                finally:
+                    self._set_last_scan({
+                        "kind": "vector",
+                        "chunks": captured,
+                        "latency_bytes": req.latency_bytes,
+                        "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                        "scan_path": req.scan_path.value,
+                        "points": req.points,
+                        "vector_resolution": req.vector_resolution,
+                        "roi": req.roi,
+                        "source": "stream",
+                    })
 
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
@@ -776,6 +800,7 @@ class DeviceService:
                     "latency_bytes": req.latency_bytes,
                     "dwell": req.dwell,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                    "scan_path": req.scan_path.value,
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
                     "roi": req.roi,
@@ -839,6 +864,7 @@ class DeviceService:
                 "latency_bytes": req.latency_bytes,
                 "dwell": req.dwell,
                 "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                "scan_path": req.scan_path.value,
                 "points": req.points,
                 "vector_resolution": req.vector_resolution,
                 "roi": req.roi,
@@ -928,9 +954,13 @@ class DeviceService:
                 # simulation_bitmap is ignored by hardware, so fall back to
                 # the regular ROI vector sweep rather than rejecting the
                 # request as custom-without-points.
-                iter_points = _roi_vector_iter(params.vector_resolution, req.roi, dwell=params.dwell)
+                iter_points = _roi_vector_iter(
+                    params.vector_resolution, req.roi, dwell=params.dwell, scan_path=req.scan_path
+                )
         else:
-            iter_points = _roi_vector_iter(params.vector_resolution, req.roi, dwell=params.dwell)
+            iter_points = _roi_vector_iter(
+                params.vector_resolution, req.roi, dwell=params.dwell, scan_path=req.scan_path
+            )
 
         try:
             output_mode = OutputMode[params.output_mode]
@@ -1172,6 +1202,7 @@ class DeviceService:
                 dtype=np.uint16,
             )
             pattern = last.get("pattern", "default")
+            scan_path = VectorScanPath(last.get("scan_path", VectorScanPath.vertical_raster.value))
             points = last.get("points")
             if pattern == "custom" and points:
                 iter_list = [
@@ -1181,16 +1212,19 @@ class DeviceService:
                     )
                 ]
             else:
-                iter_list = list(_roi_vector_iter(edge, last.get("roi")))
+                iter_list = list(_roi_vector_iter(edge, last.get("roi"), scan_path=scan_path))
                 if len(iter_list) < samples.size and edge != DEFAULT_EDGE:
-                    iter_list = list(_roi_vector_iter(DEFAULT_EDGE, last.get("roi")))
+                    iter_list = list(_roi_vector_iter(DEFAULT_EDGE, last.get("roi"), scan_path=scan_path))
 
             if len(iter_list) < samples.size:
                 samples = samples[:len(iter_list)]
             elif len(iter_list) > samples.size:
                 iter_list = iter_list[:samples.size]
 
-            line_shift = self._vector_defaults.get("lineShiftPerXRow", 0)
+            line_shift = (
+                self._vector_defaults.get("lineShiftPerXRow", 0)
+                if scan_path is VectorScanPath.vertical_raster else 0
+            )
             if line_shift and iter_list:
                 first_x = iter_list[0][0]
                 row_len = 0

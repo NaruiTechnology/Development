@@ -12,6 +12,7 @@ import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
+import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import {
   ROI_CANVAS_EDGE,
@@ -73,6 +74,7 @@ export function ROIEditor({
   const roi = useAppSelector((s) => s.scan.roi);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
@@ -99,6 +101,8 @@ export function ROIEditor({
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorRevision = useAppSelector((s) => s.image.revision);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
+  const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
+  const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
   const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const retainVectorFeedbackOnComplete = useAppSelector(
@@ -111,8 +115,18 @@ export function ROIEditor({
     : vectorCursor;
   const liveVectorSamples = targetLiveVectorSamples;
   const liveVectorProgressPct =
-    liveVectorPreview && vectorPattern === "custom" && vectorCustomCount > 0
-      ? Math.min(100, (liveVectorSamples / vectorCustomCount) * 100)
+    liveVectorPreview
+      ? Math.min(
+          100,
+          (liveVectorSamples /
+            Math.max(
+              1,
+              vectorPattern === "custom"
+                ? vectorCustomCount
+                : vectorScanSampleCount(vectorEdge, vectorScanPath)
+            )) *
+            100
+        )
       : 0;
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
@@ -216,6 +230,7 @@ export function ROIEditor({
     drawBaseCanvas();
     drawHighlightMask();
     drawLiveVectorOverlay();
+    drawLiveScanPathOverlay();
     drawAnnotationLayer();
   }, [
     draft,
@@ -228,6 +243,8 @@ export function ROIEditor({
     vectorPhase,
     vectorCursor,
     vectorPattern,
+    vectorEdge,
+    vectorScanPath,
     vectorCustomPoints,
     vectorCustomCount,
     bytesReceived,
@@ -667,6 +684,91 @@ export function ROIEditor({
     ctx.beginPath();
     ctx.arc(last.x + 0.5, last.y + 0.5, dotRadius + 0.8, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawLiveScanPathOverlay() {
+    const canvas = scanPathCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    if (
+      !liveVectorPreview ||
+      !roi.vector_show_scan_path ||
+      !roi.selection ||
+      liveVectorSamples <= 0
+    ) {
+      return;
+    }
+
+    const selection = roi.selection;
+    const bounds = viewportBounds(roi);
+    const imageBounds = imageWorldBounds(roi);
+    const customBounds = vectorCustomPoints ? pointArrayBounds(vectorCustomPoints) : null;
+    const customXSpan = customBounds ? Math.max(1e-6, customBounds.x1 - customBounds.x0) : 1;
+    const customYSpan = customBounds ? Math.max(1e-6, customBounds.y1 - customBounds.y0) : 1;
+    const worldXSpan = Math.max(1e-6, selection.x_end - selection.x_start);
+    const worldYSpan = Math.max(1e-6, selection.y_end - selection.y_start);
+
+    const pointAt = (index: number): { x: number; y: number } | null => {
+      let worldX: number;
+      let worldY: number;
+      if (vectorPattern === "custom") {
+        if (!vectorCustomPoints || !customBounds || index >= vectorCustomCount) return null;
+        const x = vectorCustomPoints[2 * index];
+        const y = vectorCustomPoints[2 * index + 1];
+        worldX = selection.x_start + ((x - customBounds.x0) / customXSpan) * worldXSpan;
+        worldY = selection.y_start + ((y - customBounds.y0) / customYSpan) * worldYSpan;
+      } else {
+        const point = vectorScanSamplePixel(index, vectorEdge, vectorScanPath);
+        if (!point) return null;
+        worldX = selection.x_start + (point.x / Math.max(1, vectorEdge - 1)) * worldXSpan;
+        worldY = selection.y_start + (point.y / Math.max(1, vectorEdge - 1)) * worldYSpan;
+      }
+      return {
+        x: worldToCanvasX(worldX, imageBounds, bounds),
+        y: worldToCanvasY(worldY, imageBounds, bounds),
+      };
+    };
+
+    const limit = vectorPattern === "custom"
+      ? Math.min(liveVectorSamples, vectorCustomCount)
+      : Math.min(liveVectorSamples, vectorScanSampleCount(vectorEdge, vectorScanPath));
+    const first = Math.max(0, limit - Math.min(160, Math.max(24, vectorEdge >> 2)));
+    ctx.save();
+    ctx.strokeStyle = "rgba(111, 190, 211, 0.18)";
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    let started = false;
+    for (let index = first; index < limit; index++) {
+      const point = pointAt(index);
+      if (!point) continue;
+      if (!started) {
+        ctx.moveTo(point.x, point.y);
+        started = true;
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    }
+    ctx.stroke();
+
+    const current = pointAt(limit - 1);
+    if (current) {
+      ctx.fillStyle = "rgba(151, 210, 224, 0.48)";
+      ctx.beginPath();
+      ctx.arc(current.x, current.y, 1.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(151, 210, 224, 0.42)";
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.arc(current.x, current.y, 1.3, 0, Math.PI * 2);
+      ctx.moveTo(current.x - 2.3, current.y);
+      ctx.lineTo(current.x + 2.3, current.y);
+      ctx.moveTo(current.x, current.y - 2.3);
+      ctx.lineTo(current.x, current.y + 2.3);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1251,6 +1353,13 @@ export function ROIEditor({
           <canvas
             ref={liveCanvasRef}
             className="roi-canvas-layer roi-canvas-layer--live"
+            width={ROI_CANVAS_EDGE}
+            height={ROI_CANVAS_EDGE}
+            aria-hidden="true"
+          />
+          <canvas
+            ref={scanPathCanvasRef}
+            className="roi-canvas-layer roi-canvas-layer--scan-path"
             width={ROI_CANVAS_EDGE}
             height={ROI_CANVAS_EDGE}
             aria-hidden="true"

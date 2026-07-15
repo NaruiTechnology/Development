@@ -116,7 +116,7 @@ async def stream_raster(ws: WebSocket):
     tags=["scan"],
     summary="Run one vector scan (blocking); returns timing and validation report",
     description=(
-        "`pattern=default` generates the built-in sweep at `vector_resolution` with the requested `dwell`.\n\n"
+        "`pattern=default` generates the selected production `scan_path` at `vector_resolution` with the requested `dwell`.\n\n"
         "`pattern=custom` consumes the `points` array (capped at 1M points per request).\n\n"
         "`pre_process=true` calls `_pre_process_chunks` before transfer and times it "
         "separately — matches the timing breakdown in your wet-run test."

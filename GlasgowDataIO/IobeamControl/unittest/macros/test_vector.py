@@ -161,6 +161,27 @@ class VectorScanTest(unittest.TestCase):
         self.assertEqual([len(chunk) for chunk in chunks], [1, 1, 1])
         self.assertTrue(all(chunk[0] == 0 for chunk in chunks))
 
+    def test_closing_partial_transfer_reaps_sender_promptly(self):
+        async def run_scan():
+            cmd = VectorScanCommand(
+                cookie=self.params.cookie,
+                output_mode=OutputMode.SixteenBit,
+                beam_type=self.beam_type,
+                external_control=self.params.external_control,
+                iter_points=((i, i, 1) for i in range(1_000)),
+                drain_floor_pixels=1,
+                max_pipeline=1,
+                sender_drain_timeout_s=15,
+            )
+            conn = MockConnection()
+            await conn._connect()
+            chunks = conn.transfer_multiple(cmd, latency=1)
+
+            await anext(chunks)
+            await asyncio.wait_for(chunks.aclose(), timeout=1)
+
+        asyncio.run(run_scan())
+
     # ------------------------------------------------------------------ #
     # Wet-run test: real Glasgow hardware.                               #
     # ------------------------------------------------------------------ #

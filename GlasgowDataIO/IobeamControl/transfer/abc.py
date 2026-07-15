@@ -278,12 +278,14 @@ class Connection(metaclass=ABCMeta):
         # cheap. If the caller iterates with `async for ch in ...:`
         # the same `ch` object is both yielded and stored.
         captured_chunks = []
+        command_iter = None
 
         try:
             if not self.synchronized:
                 await self._synchronize()
             self._logger.debug(f"synchronize transfer_multiple")
-            async for value in command.transfer(self._stream, **kwargs):
+            command_iter = command.transfer(self._stream, **kwargs)
+            async for value in command_iter:
                 if value is not None:
                     captured_chunks.append(value)
                 yield value
@@ -300,7 +302,15 @@ class Connection(metaclass=ABCMeta):
             except Exception as exc:
                 self._logger.warning(f"auto-save unexpected failure: {exc}")
         finally:
-            await self._post_transfer_cleanup()
+            try:
+                # Async-for does not guarantee that a nested async generator
+                # is closed when this generator is closed at one of its yield
+                # points. Propagate WebSocket Stop/cancellation explicitly so
+                # command-owned sender tasks exit before USB teardown.
+                if command_iter is not None:
+                    await command_iter.aclose()
+            finally:
+                await self._post_transfer_cleanup()
 
     async def transfer_raw(self, command, flush: bool = False, **kwargs):
         self._logger.debug(f"transfer {command!r}")

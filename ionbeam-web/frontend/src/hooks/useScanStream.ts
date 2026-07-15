@@ -192,6 +192,7 @@ export function useScanStream() {
       dispatch(
         setupVector({
           pattern: req.pattern,
+          scanPath: req.scan_path,
           points: req.points,
           edge,
           roi: req.roi,
@@ -215,6 +216,7 @@ export function useScanStream() {
         console.info("[scan/vector] ws-send", {
           preview: Boolean(req.preview),
           pattern: req.pattern,
+          scan_path: req.scan_path,
           feedback_mode: req.feedback_mode ?? null,
           gray_level_range: req.gray_level_range ?? null,
           gray_level_skipped: req.gray_level_skipped ?? null,
