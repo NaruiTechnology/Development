@@ -42,6 +42,7 @@ import type { VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 import type { ROIState } from "../store/scanSlice";
 import {
+  repeatCountdownDisplay,
   shouldClearROIFeedbackBeforeRepeat,
   shouldRetainROIFeedbackOnComplete,
 } from "../lib/scanRepeat";
@@ -465,14 +466,11 @@ export function ScanControls({
     closing ||
     (roiAction && actionLoopActive);
   const stopDisabled = disabled || roiEbeamDisabled || !(streaming || closing || actionLoopActive);
-  const loopDisplayOffset =
-    kind === "vector" && (actionLoopActive || streaming || closing)
-      ? 1
-      : 0;
-  const repeatDisplayCount =
-    actionLoopActive || streaming || closing
-      ? Math.max(0, actionLoopIteration - loopDisplayOffset)
-      : repeat;
+  const repeatDisplayCount = repeatCountdownDisplay(
+    repeat,
+    actionLoopIteration,
+    actionLoopActive,
+  );
 
   useEffect(() => {
     let cancelled = false;

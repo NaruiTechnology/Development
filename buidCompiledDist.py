@@ -40,6 +40,8 @@ SKIP_DIRS = {
 COPY_TREES = [
     os.path.join('Development', 'ionbeam-web'),
     os.path.join('Development', 'IobeamAdmin'),
+    os.path.join(
+        'Development', 'GlasgowDataIO', 'IobeamControl', 'unittest', 'testData'),
 ]
 
 # Patterns excluded while copying a tree from COPY_TREES. Keeps the zip
