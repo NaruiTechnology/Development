@@ -211,6 +211,10 @@ class DataStreamApplet(GlasgowApplet):
         ports = iface.get_port_group()
 
         pin_config, sim_image, sim_res, loopback = self._resolve_simulation()
+        action_data = util.GetStateConfigByName(
+            self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
+        adc_half_period = int(action_data.get("adcHalfPeriod", 4))
+        adc_settle_cycles = int(action_data.get("adcSettleCycles", 2))
 
         subtarget = IobeamDataSubtarget(
             ports                = ports,
@@ -218,6 +222,8 @@ class DataStreamApplet(GlasgowApplet):
             out_fifo             = out_fifo,
             _addr_reset          = self.reset_reg,
             loopback             = loopback,
+            adc_half_period      = adc_half_period,
+            adc_settle_cycles    = adc_settle_cycles,
             pin_config           = pin_config,
             sim_image            = sim_image,
             sim_image_resolution = sim_res,

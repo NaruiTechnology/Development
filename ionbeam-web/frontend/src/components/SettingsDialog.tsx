@@ -51,6 +51,7 @@ import {
   saveSettingsConfig,
   setActiveTab,
   setDraft,
+  setError,
   writePath,
   type SettingsConfigInfo,
   type SettingsTab,
@@ -212,6 +213,7 @@ function SettingsModalShell({
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
 
   const busy = loading || saving || restoring;
+  const adcTimingValid = draft === null || validAdcTiming(draft);
   const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const canEditFtp = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const visibleTabs: SettingsTab[] = mobilityMode
@@ -246,6 +248,11 @@ function SettingsModalShell({
 
   async function onConfirmSave() {
     if (draft === null) return;
+    if (!validAdcTiming(draft)) {
+      setConfirmSave(false);
+      dispatch(setError(t("settings.general.adcTiming.validation")));
+      return;
+    }
     setConfirmSave(false);
     const imageChanged = simulationImageChanged(source, draft);
     const result = await dispatch(saveSettingsConfig(draft));
@@ -446,7 +453,7 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || scanLocked || draft === null || draft === source}
+              disabled={busy || scanLocked || draft === null || draft === source || !adcTimingValid}
               onClick={() => setConfirmSave(true)}
               title={t("settings.btn.saveAs.title")}
             >
@@ -568,6 +575,12 @@ function GeneralTab({ draft }: { draft: unknown }) {
     1000,
   );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
+  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
+  const adcSettleCycles = numberField(draft, [...ACTION_DATA_PATH, "adcSettleCycles"], 2);
+  const adcTimingValid = validAdcTiming(draft);
+  const adcClockMHz = Number.isFinite(adcHalfPeriod) && adcHalfPeriod > 0
+    ? 48 / (2 * adcHalfPeriod)
+    : 0;
   const enableEbeam = boolField(draft, [...ACTION_DATA_PATH, "enableEbeam"], false);
   const enableIbeam = boolField(draft, [...ACTION_DATA_PATH, "enableIbeam"], true);
   const selectedBeam = enableIbeam || !enableEbeam ? "ion" : "ebeam";
@@ -633,6 +646,36 @@ function GeneralTab({ draft }: { draft: unknown }) {
           help={<SettingsHelp topic="generalBuffer" />}
           value={bufferSize}
           onChange={(v) => set([...ACTION_DATA_PATH, "bufferSize"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">
+        {t("settings.general.group.adcTiming")}
+      </h4>
+
+      <p className="settings-form__hint">
+        {t("settings.general.adcClock", { mhz: adcClockMHz.toFixed(2) })}
+      </p>
+
+      <div className="field-row">
+        <NumberField
+          label={t("settings.general.adcHalfPeriod")}
+          help={<SettingsHelp topic="generalAdcHalfPeriod" />}
+          value={adcHalfPeriod}
+          min={1}
+          max={255}
+          invalid={!adcTimingValid}
+          warning={!adcTimingValid ? t("settings.general.adcTiming.validation") : undefined}
+          onChange={(v) => set([...ACTION_DATA_PATH, "adcHalfPeriod"], Math.trunc(v))}
+        />
+        <NumberField
+          label={t("settings.general.adcSettleCycles")}
+          help={<SettingsHelp topic="generalAdcSettleCycles" />}
+          value={adcSettleCycles}
+          min={1}
+          max={255}
+          invalid={!adcTimingValid}
+          onChange={(v) => set([...ACTION_DATA_PATH, "adcSettleCycles"], Math.trunc(v))}
         />
       </div>
 
@@ -3042,6 +3085,8 @@ function EquipmentTable({
 type SettingsHelpTopic =
   | "generalVoltage"
   | "generalBuffer"
+  | "generalAdcHalfPeriod"
+  | "generalAdcSettleCycles"
   | "rasterPixels"
   | "rasterResolution"
   | "rasterAdcLatency"
@@ -3063,12 +3108,13 @@ type SettingsHelpTopic =
 
 function SettingsHelp({ topic }: { topic: SettingsHelpTopic }) {
   const { t } = useTranslation();
+  const meta = SETTINGS_HELP_META[topic];
   return (
     <HelpPopover
-      title={t(SETTINGS_HELP_META[topic].title)}
+      title={t(meta.title)}
       ariaLabel={t("settings.help.aria")}
     >
-      {SETTINGS_HELP_BODY[topic]}
+      {meta.body ? <p>{t(meta.body)}</p> : SETTINGS_HELP_BODY[topic]}
     </HelpPopover>
   );
 }
@@ -3091,9 +3137,20 @@ function configDefaultsPreview(config: unknown): {
   };
 }
 
-const SETTINGS_HELP_META: Record<SettingsHelpTopic, { title: TranslationKey }> = {
+const SETTINGS_HELP_META: Record<SettingsHelpTopic, {
+  title: TranslationKey;
+  body?: TranslationKey;
+}> = {
   generalVoltage: { title: "settings.help.generalVoltage.title" },
   generalBuffer: { title: "settings.help.generalBuffer.title" },
+  generalAdcHalfPeriod: {
+    title: "settings.help.generalAdcHalfPeriod.title",
+    body: "settings.help.generalAdcHalfPeriod.body",
+  },
+  generalAdcSettleCycles: {
+    title: "settings.help.generalAdcSettleCycles.title",
+    body: "settings.help.generalAdcSettleCycles.body",
+  },
   rasterPixels: { title: "settings.help.rasterPixels.title" },
   rasterResolution: { title: "settings.help.rasterResolution.title" },
   rasterAdcLatency: { title: "settings.help.rasterAdcLatency.title" },
@@ -3114,7 +3171,7 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, { title: TranslationKey }> =
   simulationSeed: { title: "settings.help.simulationSeed.title" },
 };
 
-const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
+const SETTINGS_HELP_BODY: Partial<Record<SettingsHelpTopic, JSX.Element>> = {
   generalVoltage: (
     <>
       <p>
@@ -3390,12 +3447,20 @@ function NumberField({
   help,
   value,
   step,
+  min,
+  max,
+  invalid,
+  warning,
   onChange,
 }: {
   label: string;
   help?: JSX.Element;
   value: number;
   step?: string;
+  min?: number;
+  max?: number;
+  invalid?: boolean;
+  warning?: JSX.Element | string;
   onChange: (v: number) => void;
 }) {
   // Mirror the input as a string so the user can briefly hold "-" / "."
@@ -3415,9 +3480,25 @@ function NumberField({
           if (Number.isFinite(n)) onChange(n);
         }}
         step={step === "any" ? 1 : Number(step ?? 1)}
+        min={min}
+        max={max}
+        invalid={invalid}
+        warning={warning}
       />
     </div>
   );
+}
+
+function validAdcTiming(config: unknown): boolean {
+  const halfPeriod = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
+  const settleCycles = numberField(config, [...ACTION_DATA_PATH, "adcSettleCycles"], 2);
+  return Number.isInteger(halfPeriod)
+    && Number.isInteger(settleCycles)
+    && halfPeriod >= 1
+    && halfPeriod <= 255
+    && settleCycles >= 1
+    && settleCycles <= 255
+    && (halfPeriod * 2) >= (settleCycles + 6);
 }
 
 function CheckboxField({

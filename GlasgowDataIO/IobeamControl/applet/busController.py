@@ -22,10 +22,19 @@ class BusController(wiring.Component):
     bus: Out(BusSignature) # type: ignore
     inline_blank: Out(BlankRequest) # type: ignore
 
-    def __init__(self, *, adc_half_period: int, adc_latency: int, transforms: Transforms = Transforms(False,False,False)):
-        assert (adc_half_period * 2) >= 6, "ADC period must be large enough for FSM latency"
+    def __init__(self, *, adc_half_period: int, adc_latency: int,
+                 adc_settle_cycles: int = 2,
+                 transforms: Transforms = Transforms(False,False,False)):
+        assert adc_settle_cycles >= 1, \
+            "ADC bus must settle for at least one cycle"
+        # One enable cycle, adc_settle_cycles - 1 additional settling
+        # cycles, one capture cycle, one stream cycle, and four DAC cycles.
+        required_period = adc_settle_cycles + 6
+        assert (adc_half_period * 2) >= required_period, \
+            "ADC period must contain the settle, capture, read, and DAC states"
         self.adc_half_period = adc_half_period
         self.adc_latency     = adc_latency
+        self.adc_settle_cycles = adc_settle_cycles
         self.transforms = transforms
 
         super().__init__()
@@ -67,7 +76,13 @@ class BusController(wiring.Component):
         x = Signal.like(self.dac_x_code_transformed)
         y = Signal.like(self.dac_y_code_transformed)
 
-        m.d.comb += adc_stream_data.adc_code.eq(self.bus.data_i)
+        # Register the external bus before exposing it to the stream. This
+        # prevents the sample from changing when the ADC-side transceiver is
+        # released and the shared bus turns around for the DAC writes.
+        self.adc_sample = Signal.like(self.bus.data_i)
+        m.d.comb += adc_stream_data.adc_code.eq(self.adc_sample)
+
+        settle_counter = Signal(range(max(2, self.adc_settle_cycles)))
 
         stalled = Signal()
 
@@ -75,11 +90,28 @@ class BusController(wiring.Component):
             with m.State("ADC_Wait"):
                 with m.If(self.bus.adc_clk & (adc_cycles == 0)):
                     m.d.comb += self.bus.adc_le_clk.eq(1)
-                    m.d.comb += self.bus.adc_oe.eq(1) #give bus time to stabilize before sampling
-                    m.next = "ADC_Read"
+                    m.d.comb += self.bus.adc_oe.eq(1)
+                    m.d.sync += settle_counter.eq(self.adc_settle_cycles - 1)
+                    if self.adc_settle_cycles == 1:
+                        m.next = "ADC_Capture"
+                    else:
+                        m.next = "ADC_Settle"
+
+            with m.State("ADC_Settle"):
+                m.d.comb += self.bus.adc_oe.eq(1)
+                with m.If(settle_counter == 1):
+                    m.next = "ADC_Capture"
+                with m.Else():
+                    m.d.sync += settle_counter.eq(settle_counter - 1)
+
+            with m.State("ADC_Capture"):
+                m.d.comb += self.bus.adc_oe.eq(1)
+                m.d.sync += self.adc_sample.eq(self.bus.data_i)
+                m.next = "ADC_Read"
 
             with m.State("ADC_Read"):
-                #m.d.comb += self.bus.adc_le_clk.eq(1)
+                # Keep the ADC-side transceiver enabled while the registered
+                # sample is submitted. It is released on entry to X_DAC_Write.
                 m.d.comb += self.bus.adc_oe.eq(1)
                 # buffers up to self.adc_latency samples if skid_buffer.i.ready
                 m.d.comb += skid_buffer.i.valid.eq(accept_sample[self.adc_latency-1])
