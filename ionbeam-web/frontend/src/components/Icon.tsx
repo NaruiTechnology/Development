@@ -2,6 +2,7 @@ import rulerIcon from "../assets/ruler.png";
 import roiIcon from "../assets/ROI.png";
 import rasterIcon from "../assets/raster.png";
 import vectorIcon from "../assets/vector.png";
+import dashboardIcon from "../assets/UHVacuumPump_1.png";
 
 type IconName =
   | "check"
@@ -10,6 +11,7 @@ type IconName =
   | "commentTool"
   | "crop"
   | "download"
+  | "dashboard"
   | "globe"
   | "grid"
   | "gridSvg"
@@ -99,6 +101,7 @@ export function Icon({
 }
 
 const imageSources: Partial<Record<IconName, string>> = {
+  dashboard: dashboardIcon,
   target: roiIcon,
   grid: rasterIcon,
   route: vectorIcon,

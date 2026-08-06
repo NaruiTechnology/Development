@@ -2,26 +2,26 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="${GLASGOW_PROJECT_ROOT:-$(cd "${SCRIPT_DIR}/../../../../" && pwd)}"
-WORKDIR="${GLASGOW_WORKDIR:-${PROJECT_ROOT}/Development/glasgow_service}"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../" && pwd)"
+WORKDIR="${PROJECT_ROOT}/Development/glasgow_service"
 DEFAULT_GLASGOW_CONFIG="${PROJECT_ROOT}/Development/GlasgowDataIO/Json/streamData.json"
 RUNTIME_DIR="${GLASGOW_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
 APP="${GLASGOW_APP:-glasgow_service.api:app}"
 HOST="${GLASGOW_HOST:-127.0.0.1}"
 PORT="${GLASGOW_PORT:-8765}"
 LOG_FILE="${GLASGOW_RESTART_LOG:-/tmp/glasgow_service.uvicorn.log}"
-PYTHON_BIN="${GLASGOW_PYTHON:-${PROJECT_ROOT}/.venv/bin/python}"
+PYTHON_BIN="${PROJECT_ROOT}/.venv/bin/python"
 
 if [[ ! -x "${PYTHON_BIN}" ]]; then
   PYTHON_BIN="$(command -v python3)"
 fi
 
-export VIRTUAL_ENV="${VIRTUAL_ENV:-${PROJECT_ROOT}/.venv}"
+export VIRTUAL_ENV="${PROJECT_ROOT}/.venv"
 export PATH="${VIRTUAL_ENV}/bin:${PATH}"
 export PYTHONPATH="${WORKDIR}:${PROJECT_ROOT}/Development${PYTHONPATH:+:${PYTHONPATH}}"
-if [[ -z "${GLASGOW_CONFIG:-}" || ! -f "${GLASGOW_CONFIG}" ]]; then
-  export GLASGOW_CONFIG="${DEFAULT_GLASGOW_CONFIG}"
-fi
+# This script belongs to the Operations checkout; never inherit a config from
+# the sibling IobeamTech deployment.
+export GLASGOW_CONFIG="${DEFAULT_GLASGOW_CONFIG}"
 
 port_pids() {
   ss -ltnp "sport = :${PORT}" 2>/dev/null |

@@ -405,6 +405,12 @@ class DeviceService:
     def __init__(self, config_path: str):
         self._config_path = config_path
         self._config = AutomationConfig(config_path)
+        # AutomationConfig keeps top-level JSON keys in its backing mapping,
+        # while the scan implementation intentionally reads IsProduction as
+        # an attribute. Normalize that boundary once; do not add scan-path
+        # conditionals or alter the IobeamTech scan algorithm.
+        if not hasattr(self._config, "IsProduction"):
+            self._config.IsProduction = self._config.__dict__.get("IsProduction", True)
 
         action = util.GetStateConfigByName(self._config, "streamData")[Consts.ACTION_DATA]
         # Raw JSON blocks kept for backward compat with existing
@@ -424,6 +430,7 @@ class DeviceService:
 
         self._conn: Optional[GlasgowConnection] = None
         self._lock = asyncio.Lock()
+        self._exclusive_owner: Optional[str] = None
         self._status = ServiceStatus(state=DeviceState.IDLE)  # IDLE = "ready, not yet connected"
 
         # In-memory cache of the most recent completed scan. Populated by
@@ -455,6 +462,51 @@ class DeviceService:
             self._status.state = DeviceState.IDLE
             self._status.last_error = None
         logger.debug("connection dropped; next scan will reconnect")
+
+    async def acquire_exclusive(self, owner: str) -> None:
+        """Temporarily hand the single Glasgow device to another protocol.
+
+        The scan applet and control-gpio applet cannot own the same USB
+        interface or FPGA image concurrently.  A vacuum dashboard therefore
+        hard-closes any idle scan connection and holds the service lock until
+        the dashboard releases the device.
+        """
+        if self._exclusive_owner is not None:
+            if self._exclusive_owner == owner:
+                return
+            raise DeviceBusy(f"device is reserved by {self._exclusive_owner}")
+        if self._status.state in (DeviceState.BUSY, DeviceState.CONNECTING):
+            raise DeviceBusy("device is busy and cannot be reserved")
+
+        self._status.state = DeviceState.CONNECTING
+        await self._lock.acquire()
+        try:
+            if self._conn is not None:
+                await self._conn._hard_close()
+                self._conn = None
+            self._exclusive_owner = owner
+            self._status.state = DeviceState.BUSY
+            self._status.last_error = None
+            logger.info("Glasgow device reserved by %s", owner)
+        except BaseException as exc:
+            self._conn = None
+            self._status.state = DeviceState.ERROR
+            self._status.last_error = f"{type(exc).__name__}: {exc}"
+            self._lock.release()
+            raise
+
+    async def release_exclusive(self, owner: str) -> None:
+        if self._exclusive_owner is None:
+            return
+        if self._exclusive_owner != owner:
+            raise DeviceBusy(f"device is reserved by {self._exclusive_owner}")
+        self._exclusive_owner = None
+        self._conn = None
+        self._status.state = DeviceState.IDLE
+        self._status.last_error = None
+        if self._lock.locked():
+            self._lock.release()
+        logger.info("Glasgow device released by %s; scan reconnect is lazy", owner)
 
     def status(self) -> ServiceStatus:
         return self._status.model_copy()
@@ -1336,6 +1388,8 @@ class DeviceService:
         svc = self
         class _Ctx:
             async def __aenter__(self):
+                if svc._exclusive_owner is not None:
+                    raise DeviceBusy(f"device is reserved by {svc._exclusive_owner}")
                 if svc._status.state is DeviceState.BUSY:
                     raise DeviceBusy("a scan is already running")
                 # IDLE, ERROR, DISCONNECTED are all OK to start from — the

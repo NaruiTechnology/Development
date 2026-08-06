@@ -12,6 +12,7 @@
     "src/lib/roiGeometry.ts",
     "src/lib/roiWorkflow.ts",
     "src/lib/scanRepeat.ts",
+    "src/lib/vacuumPolicy.ts",
     "src/lib/vectorScanPath.ts"
   ]
 }

@@ -5,13 +5,14 @@ After=network.target
 [Service]
 Type=exec
 User=vboxuser
-WorkingDirectory=/home/vboxuser/Project/IobeamTech
-Environment=GLASGOW_CONFIG=/home/vboxuser/Project/IobeamTech/Development/GlasgowDataIO/Json/streamData.json
+WorkingDirectory=/home/vboxuser/Project/Operations
+Environment=PYTHONPATH=/home/vboxuser/Project/Operations/Development:/home/vboxuser/Project/Operations/Development/glasgow_service
+Environment=GLASGOW_CONFIG=/home/vboxuser/Project/Operations/Development/GlasgowDataIO/Json/streamData.json
 # Uncomment to turn on bearer auth:
 EnvironmentFile=/etc/glasgow-svc.env
 Environment=GLASGOW_TOKEN=376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee
 
-ExecStart=/usr/bin/env uvicorn glasgow_service.api:app \
+ExecStart=/home/vboxuser/Project/Operations/.venv/bin/uvicorn glasgow_service.api:app \
           --host 127.0.0.1 --port 8765
 
 Restart=on-failure

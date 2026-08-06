@@ -5,6 +5,8 @@ import logging
 import asyncio
 import threading
 import importlib.resources
+import sys
+from pathlib import Path
 
 import usb1
 from fx2 import REQ_RAM, REG_CPUCS 
@@ -21,6 +23,7 @@ logger = logging.getLogger(__name__)
 VID_QIHW         = 0x20b7
 PID_GLASGOW      = 0x9db1
 
+# The scan path and deployed revC3 firmware use API level 5.
 CUR_API_LEVEL    = 0x05
 
 REQ_EEPROM       = 0x10
@@ -87,6 +90,12 @@ def _safe_ascii_string_descriptor(handle, device, descriptor, fallback_label):
 class GlasgowDevice:
     @classmethod
     def firmware_file(cls):
+        # Keep the API-5 device code, but use the firmware installed in the
+        # Operations virtualenv exactly as the reference IobeamTech checkout.
+        installed = (Path(sys.prefix) / "lib" / "python3.13" /
+                     "site-packages" / "glasgow" / "hardware" / "firmware.ihex")
+        if installed.is_file():
+            return installed
         return importlib.resources.files(__package__).joinpath("firmware.ihex")
 
     @classmethod
@@ -132,19 +141,14 @@ class GlasgowDevice:
                     if config.getConfigurationValue() == handle.getConfiguration():
                         break
                 try:
-                    # `handle` is getting closed either way, so explicit release isn't necessary.
                     for intf_num in range(config.getNumInterfaces()):
                         handle.claimInterface(intf_num)
                     logger.info("found rev%s device with API level %d (supported API level is %d)",
                                 revision, api_level, CUR_API_LEVEL)
-                    # Updating the firmware is not strictly required. However, re-enumeration tends
-                    # to expose all kinds of issues related to hotplug (especially on Windows,
-                    # where libusb does not listen to hotplug events) and the more you do it,
-                    # the more likely it is to eventually cause misery.
                     serial = _safe_ascii_string_descriptor(
                         handle, device, device.getSerialNumberDescriptor(), "glasgow")
-                    logger.warning(f"please run `glasgow flash` to update firmware of device "
-                                   f"{serial}")
+                    logger.warning("please run `glasgow flash` to update firmware of device %s",
+                                   serial)
                 except usb1.USBErrorBusy:
                     logger.debug("found busy rev%s device with unsupported API level %d",
                                  revision, api_level)

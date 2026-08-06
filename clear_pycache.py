@@ -1,8 +1,11 @@
-import shutil
 import os
+import shutil
+from pathlib import Path
 
-path = '/home/vboxuser/Project/IobeamTech/Development' # os.getcwd()
-for directories, subfolder, files in os.walk(path):
-    if os.path.isdir(directories):
-        if directories[::-1][:11][::-1] == '__pycache__':
-            shutil.rmtree(directories)
+
+root_path = Path(__file__).resolve().parent
+
+for directory, subfolders, _files in os.walk(root_path):
+    if Path(directory).name == "__pycache__":
+        shutil.rmtree(directory)
+        subfolders.clear()

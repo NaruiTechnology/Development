@@ -235,6 +235,9 @@ export function ScanControls({
   const streaming = phase === "running";
   const closing = phase === "stopping";
   const busy = streaming || closing;
+  // The panel is disabled while a scan runs to prevent parameter changes, but
+  // Stop must remain available so an active scan can always be cancelled.
+  const stopAvailable = streaming || closing || actionLoopActive;
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
   const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
 
@@ -396,7 +399,7 @@ export function ScanControls({
   }
 
   function onStop() {
-    if (disabled || roiEbeamDisabled) return;
+    if (roiEbeamDisabled || !stopAvailable) return;
     clearActionLoopState();
     stream.stop();
     if (roiAction && !roiActionGrayFilterActive) dispatch(resetVector());
@@ -465,7 +468,7 @@ export function ScanControls({
     streaming ||
     closing ||
     (roiAction && actionLoopActive);
-  const stopDisabled = disabled || roiEbeamDisabled || !(streaming || closing || actionLoopActive);
+  const stopDisabled = roiEbeamDisabled || !stopAvailable;
   const repeatDisplayCount = repeatCountdownDisplay(
     repeat,
     actionLoopIteration,

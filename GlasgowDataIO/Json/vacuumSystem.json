@@ -1,0 +1,61 @@
+{
+    "Glasgow": {
+        "Device0": {
+            "Id": "C3-20251207T145552Z",
+            "voltage": 3.3
+        }
+    },
+    "VacuumPumps": [
+        {
+            "name": "MechanicalVacuumPump",
+            "power": "off",
+            "value": "1.0*e-1",
+            "write": "A0",
+            "read": "B0"
+        },
+        {
+            "name": "TurboVacuumPump",
+            "power": "off",
+            "value": "2.0*e-3",
+            "write": "A1",
+            "read": "B1"
+        },
+        {
+            "name": "UHVacuumPump_1",
+            "power": "off",
+            "value": "3.0*e-5",
+            "write": "A2",
+            "read": "B2"
+        },
+        {
+            "name": "UHVacuumPump_2",
+            "power": "off",
+            "value": "3.0*e-5",
+            "write": "A3",
+            "read": "B3"
+        }
+    ],
+    "Actions": [
+        {
+            "writeData": {
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}"                    
+                },
+                "timeout": 60.0
+            }
+        },
+        {
+            "readData": {
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}"
+                },
+                "timeout": 60.0
+            }
+        }
+    ],
+    "LogName": "VacummDashboard",
+    "errorRange": "0.01",
+    "Verbose": false,
+    "Simulate": true,
+    "Enable": false
+}

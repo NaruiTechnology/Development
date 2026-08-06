@@ -16,6 +16,38 @@ export interface ServiceStatus {
   last_error: string | null;
   scans_completed: number;
   chunks_in_flight: number;
+  vacuum_enabled: boolean;
+}
+
+export type VacuumBorderState = "off" | "waiting" | "ready" | "error";
+
+export interface VacuumPumpState {
+  name: string;
+  power: boolean;
+  threshold: number;
+  value: number | null;
+  port_a_value: number;
+  port_b_value: number;
+  write: string;
+  read: string;
+  border: VacuumBorderState;
+  ready: boolean;
+  group: string | null;
+  simulation_read: boolean;
+}
+
+export interface VacuumSystemStatus {
+  device_id: string;
+  voltage: number;
+  connected: boolean;
+  simulation: boolean;
+  control_transport: "glasgow-gpio" | "vacuum-control-subtarget";
+  running: boolean;
+  cascade_stopped: boolean;
+  isVacuumSystemReady: boolean;
+  last_error: string | null;
+  updated_at: string | null;
+  pumps: VacuumPumpState[];
 }
 
 export interface RasterRequest {

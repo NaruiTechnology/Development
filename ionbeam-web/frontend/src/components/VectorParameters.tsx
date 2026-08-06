@@ -133,7 +133,7 @@ export function VectorParameters({
 
       {v.pattern === "default" && (
         <>
-          <VectorScanPathField disabled={disabled || grayLevelFilterActive} />
+          <VectorScanPathField disabled={disabled} />
           <div className="field-row">
             <PresetNumberField
               label={
@@ -144,11 +144,12 @@ export function VectorParameters({
               }
               value={v.vector_resolution}
               options={vectorResolutionOptions}
-              min={1}
+              min={grayLevelFilterActive ? 128 : 1}
               max={2048}
               disabled={disabled}
               title={resolutionTitle}
               customValidate={(value) => validateCustomVectorResolution(value, t)}
+              normalizeValue={(value) => grayLevelFilterActive ? Math.max(128, value) : value}
               onChange={(value) => dispatch(updateVector({ vector_resolution: value }))}
             />
             <PresetNumberField
@@ -183,7 +184,7 @@ export function VectorParameters({
             min={latencyMin}
             step={1}
             inputMode="numeric"
-            disabled={disabled || grayLevelFilterActive}
+            disabled={disabled}
             onValueChange={(next) =>
               dispatch(
                 updateVector({
@@ -201,7 +202,7 @@ export function VectorParameters({
           <select
             className="select"
             value={v.output_mode}
-            disabled={disabled || grayLevelFilterActive}
+            disabled={disabled}
             onChange={(e) =>
               dispatch(
                 updateVector({
@@ -271,8 +272,8 @@ export function VectorParameters({
       <label className="checkbox">
         <input
           type="checkbox"
-          checked={grayLevelFilterActive ? true : v.pre_process}
-          disabled={disabled || grayLevelFilterActive}
+          checked={v.pre_process}
+          disabled={disabled}
           onChange={(e) => dispatch(updateVector({ pre_process: e.target.checked }))}
         />
         {t("vector.preProcess")}

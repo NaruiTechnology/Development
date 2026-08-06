@@ -14,7 +14,7 @@ here closes that gap. Defaulting to "SixteenBit" keeps the wire format
 backward compatible with frontends that don't send the field yet.
 """
 from enum import Enum
-from typing import List, Optional, Tuple, Union
+from typing import List, Literal, Optional, Tuple, Union
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -31,6 +31,46 @@ class ServiceStatus(BaseModel):
     last_error: Optional[str] = None
     scans_completed: int = 0
     chunks_in_flight: int = 0
+    vacuum_enabled: bool = False
+
+
+# ---------- vacuum GPIO ---------------------------------------------------
+
+class VacuumPowerRequest(BaseModel):
+    power: bool
+
+
+class VacuumSimulationReadRequest(BaseModel):
+    checked: bool
+
+
+class VacuumPumpState(BaseModel):
+    name: str
+    power: bool
+    threshold: float
+    value: Optional[float] = None
+    port_a_value: float = 0.0
+    port_b_value: float = 0.0
+    write: str
+    read: str
+    border: Literal["off", "waiting", "ready", "error"] = "off"
+    ready: bool = False
+    group: Optional[str] = None
+    simulation_read: bool = False
+
+
+class VacuumSystemStatus(BaseModel):
+    device_id: str
+    voltage: float
+    connected: bool
+    simulation: bool
+    control_transport: Literal["glasgow-gpio", "vacuum-control-subtarget"]
+    running: bool
+    cascade_stopped: bool
+    isVacuumSystemReady: bool = False
+    last_error: Optional[str] = None
+    updated_at: Optional[str] = None
+    pumps: List[VacuumPumpState]
 
 
 # ---------- requests -------------------------------------------------------
