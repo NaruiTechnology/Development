@@ -4320,34 +4320,38 @@ body {
   opacity: 0.42;
 }
 
-.vacuum-card__start {
+.vacuum-card__power {
+  align-items: center;
+  justify-content: center;
+}
+
+.vacuum-card__power--on {
   color: lawngreen;
 }
 
-.vacuum-card__stop {
+.vacuum-card__power--off {
   color: #ef4444;
 }
 
-.vacuum-card__start-symbol {
-  width: 0;
-  height: 0;
-  margin-left: 2px;
-  border-top: 7px solid transparent;
-  border-bottom: 7px solid transparent;
-  border-left: 12px solid currentColor;
+.vacuum-card__power-symbol {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  border: 3px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
 }
 
-.vacuum-card__stop-symbol {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
+.vacuum-card__power-symbol::before {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 3px;
+  height: 10px;
+  border-radius: 999px;
   background: currentColor;
-}
-
-.vacuum-card__stop,
-.vacuum-card__start {
-  align-items: center;
-  justify-content: center;
+  content: "";
+  transform: translateX(-50%);
 }
 
 .vacuum-card__pins code {

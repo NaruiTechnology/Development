@@ -321,7 +321,8 @@ def test_stopping_all_downstream_preserves_mechanical_readiness():
             await controller.set_power("UHVacuumPump_1", False)
             await controller.set_power("UHVacuumPump_2", False)
             await controller.set_power("TurboVacuumPump", False)
-            await controller.poll_once()
+            for _ in range(5):
+                await controller.poll_once()
 
             states = {pump.name: pump for pump in controller.status().pumps}
             mechanical = states[MECHANICAL_PUMP]

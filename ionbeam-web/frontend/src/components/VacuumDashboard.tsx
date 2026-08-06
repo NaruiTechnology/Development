@@ -230,6 +230,15 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
     const mechanical = pump.name === MECHANICAL_PUMP;
     const upstream = manualStartUpstream(pump);
     const upstreamReady = upstream === null || upstream.port_b_value === status?.voltage;
+    const powerOn = mechanical
+      ? pump.port_b_value === status?.voltage
+      : pump.power;
+    const powerBlocked = !powerOn && upstream !== null && !upstreamReady;
+    const powerTitle = powerBlocked
+      ? t("vacuum.startPump.blocked", { equipment: upstream.name, voltage: status?.voltage ?? 3.3 })
+      : mechanical && powerOn
+        ? t("vacuum.mechanicalAlwaysOn")
+        : `${t(powerOn ? "vacuum.stopPump" : "vacuum.startPump")} ${pump.name}`;
     return (
       <article key={pump.name} className="card vacuum-card" data-border={pump.border}>
         <div className="card__header vacuum-card__header">
@@ -257,34 +266,19 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
             <div className="vacuum-card__controls">
               <button
                 type="button"
-                className="vacuum-card__icon-button vacuum-card__start"
+                className={`vacuum-card__icon-button vacuum-card__power${powerOn ? " vacuum-card__power--on" : " vacuum-card__power--off"}`}
                 disabled={
                   mechanical
-                    ? pump.port_b_value === status?.voltage
-                    : !status?.running || pump.power || !upstreamReady || pending !== null
+                    ? powerOn || pending !== null
+                    : !status?.running || powerBlocked || pending !== null
                 }
-                title={
-                  upstream && !upstreamReady
-                    ? t("vacuum.startPump.blocked", { equipment: upstream.name, voltage: status?.voltage ?? 3.3 })
-                    : `${t("vacuum.startPump")} ${pump.name}`
-                }
-                aria-label={`${t("vacuum.startPump")} ${pump.name}`}
-                onClick={() => void updatePower(pump.name, true)}
+                title={powerTitle}
+                aria-label={powerTitle}
+                aria-pressed={powerOn}
+                onClick={() => void updatePower(pump.name, mechanical ? true : !powerOn)}
               >
-                <span className="vacuum-card__start-symbol" aria-hidden />
+                <span className="vacuum-card__power-symbol" aria-hidden />
               </button>
-              {!mechanical && (
-                <button
-                  type="button"
-                  className="vacuum-card__icon-button vacuum-card__stop"
-                  disabled={!status?.running || !pump.power || pending !== null}
-                  title={`${t("vacuum.stopPump")} ${pump.name}`}
-                  aria-label={`${t("vacuum.stopPump")} ${pump.name}`}
-                  onClick={() => void updatePower(pump.name, false)}
-                >
-                  <span className="vacuum-card__stop-symbol" aria-hidden />
-                </button>
-              )}
             </div>
           </div>
         </div>
