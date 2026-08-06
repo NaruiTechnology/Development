@@ -4277,70 +4277,6 @@ body {
   margin-left: auto;
 }
 
-.vacuum-read-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  color: var(--c-text-dim);
-  font-size: 10px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.vacuum-read-check input {
-  display: grid;
-  place-content: center;
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  appearance: none;
-  color: var(--c-bg);
-  border: 1px solid var(--c-border);
-  border-radius: 3px;
-  background: var(--c-bg-input);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-border-soft) 45%, transparent);
-  cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
-}
-
-.vacuum-read-check input::before {
-  width: 7px;
-  height: 4px;
-  content: "";
-  border-bottom: 2px solid currentColor;
-  border-left: 2px solid currentColor;
-  transform: translateY(-1px) rotate(-45deg) scale(0);
-  transform-origin: center;
-  transition: transform 120ms ease;
-}
-
-.vacuum-read-check input:checked {
-  border-color: lawngreen;
-  background: lawngreen;
-  box-shadow: 0 0 0 2px color-mix(in srgb, lawngreen 22%, transparent),
-              0 0 7px color-mix(in srgb, lawngreen 40%, transparent);
-}
-
-.vacuum-read-check input:checked::before {
-  transform: translateY(-1px) rotate(-45deg) scale(1);
-}
-
-.vacuum-read-check input:focus-visible {
-  outline: 2px solid var(--c-accent);
-  outline-offset: 2px;
-}
-
-.vacuum-read-check input:disabled {
-  cursor: not-allowed;
-  filter: saturate(0.45);
-}
-
-.vacuum-read-check:has(input:disabled) {
-  cursor: not-allowed;
-  opacity: 0.68;
-}
-
 .vacuum-card__body strong {
   color: var(--c-text);
   font-family: var(--font-mono);
@@ -4353,18 +4289,65 @@ body {
   text-align: left;
 }
 
-.vacuum-card__stop {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  padding: 4px 8px;
-  white-space: nowrap;
+.vacuum-card__icon-button {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 10%, var(--c-bg-elev-2));
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 28%, transparent);
+  cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease, opacity 140ms ease, transform 140ms ease;
 }
 
-.vacuum-card__stop .icon {
+.vacuum-card__icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 18%, var(--c-bg-elev-2));
+  box-shadow: 0 0 12px color-mix(in srgb, currentColor 45%, transparent);
+  transform: translateY(-1px);
+}
+
+.vacuum-card__icon-button:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+.vacuum-card__icon-button:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.35);
+  opacity: 0.42;
+}
+
+.vacuum-card__start {
+  color: lawngreen;
+}
+
+.vacuum-card__stop {
+  color: #ef4444;
+}
+
+.vacuum-card__start-symbol {
+  width: 0;
+  height: 0;
+  margin-left: 2px;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 12px solid currentColor;
+}
+
+.vacuum-card__stop-symbol {
   width: 12px;
   height: 12px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.vacuum-card__stop,
+.vacuum-card__start {
+  align-items: center;
+  justify-content: center;
 }
 
 .vacuum-card__pins code {

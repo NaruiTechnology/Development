@@ -1177,10 +1177,6 @@ if (config.mock) {
     const status = mockRest.setVacuumPower(req.params.name, Boolean(req.body?.power));
     status ? res.json(status) : res.status(404).json({ detail: `unknown vacuum pump: ${req.params.name}` });
   });
-  app.post("/api/vacuum/pumps/:name/read", (req, res) => {
-    const status = mockRest.setVacuumRead(req.params.name, Boolean(req.body?.checked));
-    status ? res.json(status) : res.status(404).json({ detail: `unknown vacuum pump: ${req.params.name}` });
-  });
   app.post("/api/vacuum/stop", (_req, res) => res.json(mockRest.stopVacuum()));
   app.post("/api/scan/raster/run", (req, res) => res.json(mockRest.runRaster(req.body)));
   app.post("/api/scan/vector/run", (req, res) => res.json(mockRest.runVector(req.body)));

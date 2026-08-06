@@ -213,57 +213,23 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
     }
   }
 
-  async function updateSimulationRead(name: string, checked: boolean) {
-    const previousStatus = status;
-    mutationRef.current = true;
-    statusVersionRef.current += 1;
-    setPending(`read:${name}`);
-    setError(null);
-    setStatus((current) => current ? {
-      ...current,
-      pumps: current.pumps.map((pump) => {
-        if (pump.name !== name) return pump;
-        const power = !checked && name !== MECHANICAL_PUMP ? false : pump.power;
-        const ready = checked && power;
-        return {
-          ...pump,
-          power,
-          simulation_read: checked,
-          value: checked && power ? pump.threshold : power ? pump.value : null,
-          port_b_value: checked ? current.voltage : 0,
-          ready,
-          border: power ? (ready ? "ready" : "waiting") : "off",
-        };
-      }),
-    } : current);
-    try {
-      const response = await fetch(apiUrl(`/api/vacuum/pumps/${encodeURIComponent(name)}/read`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
-        body: JSON.stringify({ checked }),
-      });
-      if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(detail || `${response.status} ${response.statusText}`);
-      }
-      setStatus(await readJsonResponse<VacuumSystemStatus>(response, "vacuum simulated read"));
-    } catch (cause) {
-      setStatus(previousStatus);
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      mutationRef.current = false;
-      setPending(null);
-    }
-  }
-
   if (!open) return null;
 
   const mechanicalPump = status?.pumps.find((pump) => pump.name === MECHANICAL_PUMP);
   const turboPump = status?.pumps.find((pump) => pump.name === "TurboVacuumPump");
   const uhPumps = status?.pumps.filter((pump) => pump.group === "ultra-high-vacuum") ?? [];
 
+  function manualStartUpstream(pump: VacuumPumpState): VacuumPumpState | null {
+    if (pump.name === MECHANICAL_PUMP) return null;
+    if (pump.name === "TurboVacuumPump") return mechanicalPump ?? null;
+    if (pump.group === "ultra-high-vacuum") return turboPump ?? null;
+    return null;
+  }
+
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
+    const upstream = manualStartUpstream(pump);
+    const upstreamReady = upstream === null || upstream.port_b_value === status?.voltage;
     return (
       <article key={pump.name} className="card vacuum-card" data-border={pump.border}>
         <div className="card__header vacuum-card__header">
@@ -289,29 +255,34 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
           <div className="vacuum-card__actions">
             <span className="vacuum-card__pins"><code>{pump.write}</code> → <code>{pump.read}</code></span>
             <div className="vacuum-card__controls">
-              <label
-                className="vacuum-read-check"
-                title={status?.simulation ? t("vacuum.simulationRead.title") : t("vacuum.hardwareRead.title")}
+              <button
+                type="button"
+                className="vacuum-card__icon-button vacuum-card__start"
+                disabled={
+                  mechanical
+                    ? pump.port_b_value === status?.voltage
+                    : !status?.running || pump.power || !upstreamReady || pending !== null
+                }
+                title={
+                  upstream && !upstreamReady
+                    ? t("vacuum.startPump.blocked", { equipment: upstream.name, voltage: status?.voltage ?? 3.3 })
+                    : `${t("vacuum.startPump")} ${pump.name}`
+                }
+                aria-label={`${t("vacuum.startPump")} ${pump.name}`}
+                onClick={() => void updatePower(pump.name, true)}
               >
-                <input
-                  type="checkbox"
-                  checked={pump.port_b_value === status?.voltage}
-                  disabled={!status?.simulation || pending !== null}
-                  aria-readonly={!status?.simulation}
-                  onChange={(event) => void updateSimulationRead(pump.name, event.target.checked)}
-                />
-                <span>{t("vacuum.readCheck")}</span>
-              </label>
+                <span className="vacuum-card__start-symbol" aria-hidden />
+              </button>
               {!mechanical && (
                 <button
                   type="button"
-                  className="btn btn--danger vacuum-card__stop"
+                  className="vacuum-card__icon-button vacuum-card__stop"
                   disabled={!status?.running || !pump.power || pending !== null}
                   title={`${t("vacuum.stopPump")} ${pump.name}`}
+                  aria-label={`${t("vacuum.stopPump")} ${pump.name}`}
                   onClick={() => void updatePower(pump.name, false)}
                 >
-                  <Icon name="square" tone="danger" />
-                  {t("vacuum.stopPump")}
+                  <span className="vacuum-card__stop-symbol" aria-hidden />
                 </button>
               )}
             </div>

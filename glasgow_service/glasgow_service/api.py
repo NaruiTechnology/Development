@@ -17,7 +17,7 @@ from typing import Literal
 from .service import DeviceService, DeviceBusy, DeviceNotReady
 from .models  import (
     RasterRequest, VectorRequest, ScanResult, ServiceStatus,
-    VacuumPowerRequest, VacuumSimulationReadRequest, VacuumSystemStatus,
+    VacuumPowerRequest, VacuumSystemStatus,
 )
 from .auth    import require_token
 from .config  import find_config_path
@@ -180,22 +180,6 @@ async def set_vacuum_power(name: str, req: VacuumPowerRequest):
         raise HTTPException(409, str(exc))
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
-    return controller.status()
-
-
-@app.post("/vacuum/pumps/{name}/read", response_model=VacuumSystemStatus,
-          tags=["vacuum"], summary="Set a simulated vacuum threshold readback",
-          dependencies=[Depends(require_token)])
-async def set_vacuum_simulation_read(name: str, req: VacuumSimulationReadRequest):
-    controller = require_vacuum_controller()
-    if not controller.status().running:
-        raise HTTPException(409, "vacuum dashboard has not acquired the Glasgow device")
-    try:
-        await controller.set_simulated_read(name, req.checked)
-    except KeyError:
-        raise HTTPException(404, f"unknown vacuum pump: {name}")
-    except ValueError as exc:
-        raise HTTPException(409, str(exc))
     return controller.status()
 
 

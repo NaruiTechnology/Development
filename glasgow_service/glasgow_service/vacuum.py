@@ -394,7 +394,6 @@ class VacuumController:
         self._updated_at: Optional[str] = None
         self._cascade_stopped = False
         self._running = False
-        self._simulation_reads = {pump.name: False for pump in config.pumps}
 
     @property
     def requires_device(self) -> bool:
@@ -408,8 +407,6 @@ class VacuumController:
         try:
             self._cascade_stopped = False
             for name, state in self._states.items():
-                self._simulation_reads[name] = False
-                state.simulation_read = False
                 state.value = None
                 state.port_b_value = 0.0
                 state.ready = False
@@ -467,6 +464,13 @@ class VacuumController:
             raise KeyError(name)
         if name == MECHANICAL_PUMP and not power:
             raise ValueError("MechanicalVacuumPump must remain powered on")
+        if power and not automatic:
+            upstream = self._manual_start_upstream(state)
+            if upstream is not None and upstream.port_b_value != self.config.device.voltage:
+                raise ValueError(
+                    f"{name} requires {upstream.name} Port B at "
+                    f"{self.config.device.voltage:g} V before power can be enabled"
+                )
         try:
             async with self._io_lock:
                 await self.gpio.write(state.write, power)
@@ -481,67 +485,28 @@ class VacuumController:
                 state.value = self._simulation_initial_value(state) if power else None
             elif not power:
                 state.value = None
-            if not power:
-                self._simulation_reads[name] = False
-                state.simulation_read = False
             self._last_error = None
             if not automatic:
                 self._cascade_stopped = not power
-            if name != MECHANICAL_PUMP and not power and not automatic:
-                await self._reset_mechanical_if_downstream_stopped()
         except Exception as exc:
             state.border = "error"
             self._last_error = str(exc)
             raise
+
+    def _manual_start_upstream(self, state: VacuumPumpState) -> Optional[VacuumPumpState]:
+        if state.name == MECHANICAL_PUMP:
+            return None
+        if state.name == "TurboVacuumPump":
+            return self._states.get(MECHANICAL_PUMP)
+        if state.group == UH_GROUP:
+            return self._states.get("TurboVacuumPump")
+        return None
 
     async def stop_non_mechanical(self) -> None:
         self._cascade_stopped = True
         for name, state in self._states.items():
             if name != MECHANICAL_PUMP and state.power:
                 await self.set_power(name, False, automatic=True)
-
-    async def set_simulated_read(self, name: str, checked: bool) -> None:
-        if not self.config.simulate:
-            raise ValueError("simulated read controls are read-only on real hardware")
-        state = self._states.get(name)
-        if state is None:
-            raise KeyError(name)
-        self._simulation_reads[name] = checked
-        state.simulation_read = checked
-        if checked and state.power:
-            # The simulation control represents the comparator's measured
-            # input reaching its configured reference; it does not bypass the
-            # comparator and force the digital output high.
-            state.value = abs(state.threshold)
-        elif name == MECHANICAL_PUMP and state.power:
-            state.value = self._simulation_initial_value(state)
-        if name == MECHANICAL_PUMP and checked:
-            self._cascade_stopped = False
-        if name != MECHANICAL_PUMP and not checked:
-            await self.set_power(name, False)
-            return
-        await self.poll_once()
-
-    async def _reset_mechanical_if_downstream_stopped(self) -> None:
-        if not self.config.simulate:
-            return
-        downstream = [
-            state for name, state in self._states.items() if name != MECHANICAL_PUMP
-        ]
-        if not downstream or any(state.power for state in downstream):
-            return
-        mechanical = self._states.get(MECHANICAL_PUMP)
-        if mechanical is None:
-            return
-        self._simulation_reads[MECHANICAL_PUMP] = False
-        async with self._io_lock:
-            await self.gpio.write_comparator(mechanical.read, False)
-        mechanical.simulation_read = False
-        mechanical.value = self._simulation_initial_value(mechanical)
-        mechanical.port_b_value = 0.0
-        mechanical.ready = False
-        mechanical.border = "waiting" if mechanical.power else "off"
-        self._cascade_stopped = True
 
     async def poll_once(self) -> None:
         try:
@@ -574,7 +539,6 @@ class VacuumController:
                 state.port_b_value = (
                     self.config.device.voltage if readings[state.read] else 0.0
                 )
-                state.simulation_read = self._simulation_reads[state.name]
                 if state.power:
                     state.ready = state.port_b_value == self.config.device.voltage
                     state.border = "ready" if state.ready else "waiting"

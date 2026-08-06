@@ -569,12 +569,11 @@ export const en = {
   "vacuum.cascadeRunning": "Sequential vacuum cascade is active",
   "vacuum.cascadeStopped": "Cascade stopped; MechanicalVacuumPump remains on",
   "vacuum.stop": "Stop vacuum equipment",
+  "vacuum.startPump": "Start",
+  "vacuum.startPump.blocked": "Requires {equipment} Port B at {voltage} V",
   "vacuum.stopPump": "Stop",
   "vacuum.alwaysRunning": "Continuous",
   "vacuum.uhGroup": "UH pumps · grouped stage",
-  "vacuum.readCheck": "Read",
-  "vacuum.simulationRead.title": "Set the simulated readback to this pump's configured threshold",
-  "vacuum.hardwareRead.title": "Read-only state reported by the Glasgow GPIO input",
 
   /* ===== settings dialog ============================================ */
   "settings.title": "Configuration",

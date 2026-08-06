@@ -40,10 +40,6 @@ class VacuumPowerRequest(BaseModel):
     power: bool
 
 
-class VacuumSimulationReadRequest(BaseModel):
-    checked: bool
-
-
 class VacuumPumpState(BaseModel):
     name: str
     power: bool
@@ -56,7 +52,6 @@ class VacuumPumpState(BaseModel):
     border: Literal["off", "waiting", "ready", "error"] = "off"
     ready: bool = False
     group: Optional[str] = None
-    simulation_read: bool = False
 
 
 class VacuumSystemStatus(BaseModel):

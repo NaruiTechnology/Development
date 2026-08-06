@@ -528,7 +528,6 @@ const mockVacuumPumps = [
   port_b_value: 0,
   border: "off",
   ready: false,
-  simulation_read: false,
 }));
 let mockVacuumRunning = false;
 
@@ -553,7 +552,7 @@ function setMockVacuumPower(name: string, power: boolean) {
   if (!pump) return false;
   pump.power = power;
   pump.port_a_value = power ? 3.3 : 0;
-  pump.port_b_value = power && pump.simulation_read ? 3.3 : 0;
+  pump.port_b_value = 0;
   pump.ready = pump.port_b_value === 3.3;
   pump.value = power ? pump.threshold * 1.5 : null;
   pump.border = power ? (pump.ready ? "ready" : "waiting") : "off";
@@ -583,25 +582,6 @@ export const mockRest = {
   },
   setVacuumPower(name: string, power: boolean) {
     return setMockVacuumPower(name, power) ? mockVacuumStatus() : null;
-  },
-  setVacuumRead(name: string, checked: boolean) {
-    const pump = mockVacuumPumps.find((candidate) => candidate.name === name);
-    if (!pump) return null;
-    pump.simulation_read = checked;
-    if (checked && pump.power) {
-      pump.value = pump.threshold;
-      pump.port_b_value = 3.3;
-      pump.ready = true;
-      pump.border = "ready";
-      if (name === "MechanicalVacuumPump") setMockVacuumPower("TurboVacuumPump", true);
-      if (name === "TurboVacuumPump") {
-        setMockVacuumPower("UHVacuumPump_1", true);
-        setMockVacuumPower("UHVacuumPump_2", true);
-      }
-    } else {
-      setMockVacuumPower(name, name === "MechanicalVacuumPump");
-    }
-    return mockVacuumStatus();
   },
   stopVacuum() {
     for (const pump of mockVacuumPumps) {
