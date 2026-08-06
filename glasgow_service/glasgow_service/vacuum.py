@@ -24,8 +24,8 @@ from .models import VacuumPumpState, VacuumSystemStatus
 
 
 VACUUM_CONFIG_ENV = "GLASGOW_VACUUM_CONFIG"
-DEFAULT_VACUUM_CONFIG = Path(
-    "/home/vboxuser/Project/Operations/Development/GlasgowDataIO/Json/vacuumSystem.json"
+DEFAULT_VACUUM_CONFIG = (
+    Path(__file__).resolve().parents[2] / "GlasgowDataIO" / "Json" / "vacuumSystem.json"
 )
 GPIO_PIN_RE = re.compile(r"^[AB]([0-7])$")
 GPIO_VALUE_RE = re.compile(r"\b(B[0-7])=([01])\b")
