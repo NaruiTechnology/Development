@@ -221,7 +221,14 @@ def get_argparser():
                             help="test cases to run")
 
                     if mode in ("build", "interact", "repl", "script"):
-                        access_args = GlasgowAppletArguments(applet_name=handle)
+                        if issubclass(applet_cls, GlasgowAppletV2):
+                            access_args = GlasgowAppletV2Arguments(applet_name=handle)
+                        else:
+                            # API-5 (legacy) applets use numeric pins and a
+                            # fixed AB port; API-6/V2 applets use GlasgowPin
+                            # objects and the voltage-spec helper above.
+                            access_args = GlasgowAppletArguments(
+                                applet_name=handle, default_port="AB", pin_count=16)
                         if mode in ("interact", "repl", "script"):
                             g_applet_build = p_applet.add_argument_group("build arguments")
                             applet_cls.add_build_arguments(g_applet_build, access_args)
@@ -756,7 +763,7 @@ async def main():
                         return 1
 
                     applet_cls.add_build_arguments(applet_parser,
-                        GlasgowAppletArguments(applet_name))
+                        GlasgowAppletV2Arguments(applet_name))
                     applet_cls.add_setup_arguments(applet_parser)
                     applet_cls.add_run_arguments(applet_parser)
                     applet_parsed_args = applet_parser.parse_args(applet_args)

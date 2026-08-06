@@ -187,6 +187,10 @@ async function writeJsonConfig(
   data: unknown,
   useStrictMode: boolean
 ): Promise<void> {
+  if (useStrictMode) {
+    validateAdcTiming(data);
+  }
+
   // Reject silly-large payloads up front. The Express body parser is
   // already capped at 16 MB; this is a tighter check on what we'll
   // actually accept for a config write specifically.
@@ -212,6 +216,34 @@ async function writeJsonConfig(
   }
 
   await atomicWrite(configPath, serialized);
+}
+
+function validateAdcTiming(data: unknown): void {
+  const root = asRecord(data);
+  const actions = root && Array.isArray(root.Actions) ? root.Actions : null;
+  const firstAction = actions && actions.length > 0 ? asRecord(actions[0]) : null;
+  const streamData = firstAction ? asRecord(firstAction.streamData) : null;
+  const actionData = streamData ? asRecord(streamData.actionData) : null;
+  if (!actionData) return;
+
+  const halfPeriod = actionData.adcHalfPeriod ?? 4;
+  const settleCycles = actionData.adcSettleCycles ?? 2;
+  if (!Number.isInteger(halfPeriod) || !Number.isInteger(settleCycles)
+      || (halfPeriod as number) < 1 || (halfPeriod as number) > 255
+      || (settleCycles as number) < 1 || (settleCycles as number) > 255
+      || (halfPeriod as number) * 2 < (settleCycles as number) + 6) {
+    throw new ConfigError(
+      "invalid ADC timing: adcHalfPeriod and adcSettleCycles must be whole numbers " +
+      "from 1 to 255, with 2 * adcHalfPeriod >= adcSettleCycles + 6",
+      400
+    );
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 /**

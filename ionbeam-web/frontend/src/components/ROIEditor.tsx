@@ -12,12 +12,14 @@ import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
+import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import {
   ROI_CANVAS_EDGE,
   ROI_VIEWPORT_MIN_SPAN,
   ROI_AXIS_FONT,
   canvasPointToWorld,
+  imageWorldBounds,
   clampCanvasPointToViewport,
   clampViewportCoordinate,
   viewportBounds,
@@ -50,6 +52,7 @@ export function ROIEditor({
   grayScaleSkipped = null,
   allowClearRegionWhileDisabled = false,
   liveVectorPreview = false,
+  hideSelectionOverlay = false,
   graySelectionResetToken = 0,
   onLoadLastScan,
 }: {
@@ -61,6 +64,7 @@ export function ROIEditor({
   grayScaleSkipped?: boolean | null;
   allowClearRegionWhileDisabled?: boolean;
   liveVectorPreview?: boolean;
+  hideSelectionOverlay?: boolean;
   graySelectionResetToken?: number;
   onLoadLastScan?: () => void;
 }) {
@@ -70,6 +74,7 @@ export function ROIEditor({
   const roi = useAppSelector((s) => s.scan.roi);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
@@ -96,6 +101,8 @@ export function ROIEditor({
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorRevision = useAppSelector((s) => s.image.revision);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
+  const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
+  const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
   const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const retainVectorFeedbackOnComplete = useAppSelector(
@@ -108,8 +115,18 @@ export function ROIEditor({
     : vectorCursor;
   const liveVectorSamples = targetLiveVectorSamples;
   const liveVectorProgressPct =
-    liveVectorPreview && vectorPattern === "custom" && vectorCustomCount > 0
-      ? Math.min(100, (liveVectorSamples / vectorCustomCount) * 100)
+    liveVectorPreview
+      ? Math.min(
+          100,
+          (liveVectorSamples /
+            Math.max(
+              1,
+              vectorPattern === "custom"
+                ? vectorCustomCount
+                : vectorScanSampleCount(vectorEdge, vectorScanPath)
+            )) *
+            100
+        )
       : 0;
   const hasLoadedImage = Boolean(roi.imageDataUrl);
   const hasPartialRegion = Boolean(roi.selection);
@@ -213,6 +230,7 @@ export function ROIEditor({
     drawBaseCanvas();
     drawHighlightMask();
     drawLiveVectorOverlay();
+    drawLiveScanPathOverlay();
     drawAnnotationLayer();
   }, [
     draft,
@@ -221,9 +239,12 @@ export function ROIEditor({
     roi,
     tr.locale,
     liveVectorPreview,
+    hideSelectionOverlay,
     vectorPhase,
     vectorCursor,
     vectorPattern,
+    vectorEdge,
+    vectorScanPath,
     vectorCustomPoints,
     vectorCustomCount,
     bytesReceived,
@@ -344,7 +365,14 @@ export function ROIEditor({
         setDraft(null);
         setSuppressedBackgroundUrl(null);
         dispatch(clearROISelection());
-        dispatch(updateROI({ imageName: file.name, imageDataUrl: reader.result, imageKind: "file" }));
+        dispatch(
+          updateROI({
+            imageName: file.name,
+            imageDataUrl: reader.result,
+            imageKind: "file",
+            imageBounds: null,
+          })
+        );
       }
     };
     reader.readAsDataURL(file);
@@ -369,7 +397,7 @@ export function ROIEditor({
   }
 
   function toDut(point: { x: number; y: number }) {
-    return canvasPointToWorld(point, roi, viewportBounds(roi));
+    return canvasPointToWorld(point, imageWorldBounds(roi), viewportBounds(roi));
   }
 
   function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }): ROIRequest {
@@ -387,10 +415,11 @@ export function ROIEditor({
     const selected = roi.selection;
     if (!selected) return null;
     const bounds = viewportBounds(roi);
-    const x0 = worldToCanvasX(selected.x_start, roi, bounds);
-    const x1 = worldToCanvasX(selected.x_end, roi, bounds);
-    const y0 = worldToCanvasY(selected.y_start, roi, bounds);
-    const y1 = worldToCanvasY(selected.y_end, roi, bounds);
+    const imageBounds = imageWorldBounds(roi);
+    const x0 = worldToCanvasX(selected.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(selected.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(selected.y_start, imageBounds, bounds);
+    const y1 = worldToCanvasY(selected.y_end, imageBounds, bounds);
     const corners: Array<{ corner: ROISelectionCorner; x: number; y: number }> = [
       { corner: "top-left", x: x0, y: y0 },
       { corner: "top-right", x: x1, y: y0 },
@@ -413,27 +442,28 @@ export function ROIEditor({
     const selected = resizeSelectionRef.current ?? roi.selection;
     if (!selected) return null;
     const bounds = viewportBounds(roi);
+    const imageBounds = imageWorldBounds(roi);
     const trace = resizeTrace?.corner === corner ? resizeTrace.point : null;
     switch (corner) {
       case "top-left":
         return {
-          x: trace ? trace.x : worldToCanvasX(selected.x_start, roi, bounds),
-          y: trace ? trace.y : worldToCanvasY(selected.y_start, roi, bounds),
+          x: trace ? trace.x : worldToCanvasX(selected.x_start, imageBounds, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_start, imageBounds, bounds),
         };
       case "top-right":
         return {
-          x: trace ? trace.x : worldToCanvasX(selected.x_end, roi, bounds),
-          y: trace ? trace.y : worldToCanvasY(selected.y_start, roi, bounds),
+          x: trace ? trace.x : worldToCanvasX(selected.x_end, imageBounds, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_start, imageBounds, bounds),
         };
       case "bottom-left":
         return {
-          x: trace ? trace.x : worldToCanvasX(selected.x_start, roi, bounds),
-          y: trace ? trace.y : worldToCanvasY(selected.y_end, roi, bounds),
+          x: trace ? trace.x : worldToCanvasX(selected.x_start, imageBounds, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_end, imageBounds, bounds),
         };
       case "bottom-right":
         return {
-          x: trace ? trace.x : worldToCanvasX(selected.x_end, roi, bounds),
-          y: trace ? trace.y : worldToCanvasY(selected.y_end, roi, bounds),
+          x: trace ? trace.x : worldToCanvasX(selected.x_end, imageBounds, bounds),
+          y: trace ? trace.y : worldToCanvasY(selected.y_end, imageBounds, bounds),
         };
     }
   }
@@ -543,10 +573,11 @@ export function ROIEditor({
     }
 
     const bounds = viewportBounds(roi);
-    const x0 = worldToCanvasX(activeSelection.x_start, roi, bounds);
-    const x1 = worldToCanvasX(activeSelection.x_end, roi, bounds);
-    const y0 = worldToCanvasY(activeSelection.y_start, roi, bounds);
-    const y1 = worldToCanvasY(activeSelection.y_end, roi, bounds);
+    const imageBounds = imageWorldBounds(roi);
+    const x0 = worldToCanvasX(activeSelection.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(activeSelection.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(activeSelection.y_start, imageBounds, bounds);
+    const y1 = worldToCanvasY(activeSelection.y_end, imageBounds, bounds);
     const left = Math.max(0, Math.min(x0, x1));
     const top = Math.max(0, Math.min(y0, y1));
     const width = Math.max(0, Math.abs(x1 - x0));
@@ -619,8 +650,9 @@ export function ROIEditor({
       const y = vectorCustomPoints[2 * i + 1] | 0;
       const worldX = selection.x_start + ((x - pointBounds.x0) / pointXSpan) * worldXSpan;
       const worldY = selection.y_start + ((y - pointBounds.y0) / pointYSpan) * worldYSpan;
-      const canvasX = Math.round(worldToCanvasX(worldX, roi, viewportBounds(roi)));
-      const canvasY = Math.round(worldToCanvasY(worldY, roi, viewportBounds(roi)));
+      const imageBounds = imageWorldBounds(roi);
+      const canvasX = Math.round(worldToCanvasX(worldX, imageBounds, viewportBounds(roi)));
+      const canvasY = Math.round(worldToCanvasY(worldY, imageBounds, viewportBounds(roi)));
       if (canvasX < 0 || canvasX >= ROI_CANVAS_EDGE || canvasY < 0 || canvasY >= ROI_CANVAS_EDGE) continue;
       const srcIdx = (canvasY * ROI_CANVAS_EDGE + canvasX) * 4;
       const value = sourceData[srcIdx] ?? 0;
@@ -655,6 +687,91 @@ export function ROIEditor({
     ctx.restore();
   }
 
+  function drawLiveScanPathOverlay() {
+    const canvas = scanPathCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    if (
+      !liveVectorPreview ||
+      !roi.vector_show_scan_path ||
+      !roi.selection ||
+      liveVectorSamples <= 0
+    ) {
+      return;
+    }
+
+    const selection = roi.selection;
+    const bounds = viewportBounds(roi);
+    const imageBounds = imageWorldBounds(roi);
+    const customBounds = vectorCustomPoints ? pointArrayBounds(vectorCustomPoints) : null;
+    const customXSpan = customBounds ? Math.max(1e-6, customBounds.x1 - customBounds.x0) : 1;
+    const customYSpan = customBounds ? Math.max(1e-6, customBounds.y1 - customBounds.y0) : 1;
+    const worldXSpan = Math.max(1e-6, selection.x_end - selection.x_start);
+    const worldYSpan = Math.max(1e-6, selection.y_end - selection.y_start);
+
+    const pointAt = (index: number): { x: number; y: number } | null => {
+      let worldX: number;
+      let worldY: number;
+      if (vectorPattern === "custom") {
+        if (!vectorCustomPoints || !customBounds || index >= vectorCustomCount) return null;
+        const x = vectorCustomPoints[2 * index];
+        const y = vectorCustomPoints[2 * index + 1];
+        worldX = selection.x_start + ((x - customBounds.x0) / customXSpan) * worldXSpan;
+        worldY = selection.y_start + ((y - customBounds.y0) / customYSpan) * worldYSpan;
+      } else {
+        const point = vectorScanSamplePixel(index, vectorEdge, vectorScanPath);
+        if (!point) return null;
+        worldX = selection.x_start + (point.x / Math.max(1, vectorEdge - 1)) * worldXSpan;
+        worldY = selection.y_start + (point.y / Math.max(1, vectorEdge - 1)) * worldYSpan;
+      }
+      return {
+        x: worldToCanvasX(worldX, imageBounds, bounds),
+        y: worldToCanvasY(worldY, imageBounds, bounds),
+      };
+    };
+
+    const limit = vectorPattern === "custom"
+      ? Math.min(liveVectorSamples, vectorCustomCount)
+      : Math.min(liveVectorSamples, vectorScanSampleCount(vectorEdge, vectorScanPath));
+    const first = Math.max(0, limit - Math.min(160, Math.max(24, vectorEdge >> 2)));
+    ctx.save();
+    ctx.strokeStyle = "rgba(111, 190, 211, 0.18)";
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    let started = false;
+    for (let index = first; index < limit; index++) {
+      const point = pointAt(index);
+      if (!point) continue;
+      if (!started) {
+        ctx.moveTo(point.x, point.y);
+        started = true;
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    }
+    ctx.stroke();
+
+    const current = pointAt(limit - 1);
+    if (current) {
+      ctx.fillStyle = "rgba(151, 210, 224, 0.48)";
+      ctx.beginPath();
+      ctx.arc(current.x, current.y, 1.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(151, 210, 224, 0.42)";
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.arc(current.x, current.y, 1.3, 0, Math.PI * 2);
+      ctx.moveTo(current.x - 2.3, current.y);
+      ctx.lineTo(current.x + 2.3, current.y);
+      ctx.moveTo(current.x, current.y - 2.3);
+      ctx.lineTo(current.x, current.y + 2.3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawAnnotationLayer() {
     const canvas = annotationCanvasRef.current;
     if (!canvas) return;
@@ -674,7 +791,7 @@ export function ROIEditor({
       ctx.restore();
     }
 
-    const selected = roi.calibration_enabled ? null : roi.selection;
+    const selected = roi.calibration_enabled || hideSelectionOverlay ? null : roi.selection;
     if (selected) {
       if (resizeTrace && resizeSelectionRef.current) {
         drawSelectionTrace(ctx, resizeSelectionRef.current, resizeTrace, roi);
@@ -688,10 +805,11 @@ export function ROIEditor({
 
   function drawSelection(ctx: CanvasRenderingContext2D, selected: ROIRequest, nextROI: ROIState) {
     const bounds = viewportBounds(nextROI);
-    const x0 = worldToCanvasX(selected.x_start, nextROI, bounds);
-    const x1 = worldToCanvasX(selected.x_end, nextROI, bounds);
-    const y0 = worldToCanvasY(selected.y_start, nextROI, bounds);
-    const y1 = worldToCanvasY(selected.y_end, nextROI, bounds);
+    const imageBounds = imageWorldBounds(nextROI);
+    const x0 = worldToCanvasX(selected.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(selected.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(selected.y_start, imageBounds, bounds);
+    const y1 = worldToCanvasY(selected.y_end, imageBounds, bounds);
     ctx.save();
     ctx.strokeStyle = "#ff2d2d";
     ctx.fillStyle = "#ff2d2d";
@@ -707,6 +825,7 @@ export function ROIEditor({
     nextROI: ROIState
   ) {
     const bounds = viewportBounds(nextROI);
+    const imageBounds = imageWorldBounds(nextROI);
     const corners = {
       "top-left": {
         moved: { x: selected.x_start, y: selected.y_start },
@@ -744,12 +863,12 @@ export function ROIEditor({
     ctx.fillStyle = "rgba(124, 255, 107, 0.95)";
     ctx.lineWidth = 1.25;
     ctx.beginPath();
-    ctx.moveTo(worldToCanvasX(corners.moved.x, nextROI, bounds), worldToCanvasY(corners.moved.y, nextROI, bounds));
+    ctx.moveTo(worldToCanvasX(corners.moved.x, imageBounds, bounds), worldToCanvasY(corners.moved.y, imageBounds, bounds));
     ctx.lineTo(trace.point.x, trace.point.y);
     ctx.moveTo(trace.point.x, trace.point.y);
-    ctx.lineTo(worldToCanvasX(corners.adjacent[0].x, nextROI, bounds), worldToCanvasY(corners.adjacent[0].y, nextROI, bounds));
+    ctx.lineTo(worldToCanvasX(corners.adjacent[0].x, imageBounds, bounds), worldToCanvasY(corners.adjacent[0].y, imageBounds, bounds));
     ctx.moveTo(trace.point.x, trace.point.y);
-    ctx.lineTo(worldToCanvasX(corners.adjacent[1].x, nextROI, bounds), worldToCanvasY(corners.adjacent[1].y, nextROI, bounds));
+    ctx.lineTo(worldToCanvasX(corners.adjacent[1].x, imageBounds, bounds), worldToCanvasY(corners.adjacent[1].y, imageBounds, bounds));
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(trace.point.x, trace.point.y, 3, 0, Math.PI * 2);
@@ -759,12 +878,13 @@ export function ROIEditor({
 
   function selectionHintPosition(selected: ROIRequest) {
     const bounds = viewportBounds(roi);
-    const x0 = worldToCanvasX(selected.x_start, roi, bounds);
-    const x1 = worldToCanvasX(selected.x_end, roi, bounds);
-    const y0 = worldToCanvasY(selected.y_start, roi, bounds);
+    const imageBounds = imageWorldBounds(roi);
+    const x0 = worldToCanvasX(selected.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(selected.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(selected.y_start, imageBounds, bounds);
     return {
       left: ((Math.min(x0, x1) + Math.max(x0, x1)) / 2 / ROI_CANVAS_EDGE) * 100,
-      top: (Math.max(0, Math.min(y0, worldToCanvasY(selected.y_end, roi, bounds)) - 16) / ROI_CANVAS_EDGE) * 100,
+      top: (Math.max(0, Math.min(y0, worldToCanvasY(selected.y_end, imageBounds, bounds)) - 16) / ROI_CANVAS_EDGE) * 100,
     };
   }
 
@@ -1233,6 +1353,13 @@ export function ROIEditor({
           <canvas
             ref={liveCanvasRef}
             className="roi-canvas-layer roi-canvas-layer--live"
+            width={ROI_CANVAS_EDGE}
+            height={ROI_CANVAS_EDGE}
+            aria-hidden="true"
+          />
+          <canvas
+            ref={scanPathCanvasRef}
+            className="roi-canvas-layer roi-canvas-layer--scan-path"
             width={ROI_CANVAS_EDGE}
             height={ROI_CANVAS_EDGE}
             aria-hidden="true"

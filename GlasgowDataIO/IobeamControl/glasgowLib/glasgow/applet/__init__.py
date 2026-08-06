@@ -22,7 +22,7 @@ from ..hardware.device import GlasgowDevice
 
 __all__ = [
     "GlasgowAppletError",
-    "GlasgowAppletMetadata", "GlasgowAppletArguments", "GlasgowAppletV2",
+    "GlasgowAppletMetadata", "GlasgowAppletArguments", "GlasgowAppletV2Arguments", "GlasgowAppletV2",
     "GlasgowAppletToolMetadata", "GlasgowAppletTool",
     "synthesis_test", "async_test",
     "GlasgowAppletV2TestCase", "applet_v2_simulation_test", "applet_v2_hardware_test",
@@ -247,6 +247,11 @@ class GlasgowAppletArguments:
 
     def add_run_arguments(self, parser):
         self.add_voltage_argument(parser)
+
+
+# Keep the V2 argument helper available after the legacy API-5 helper below
+# reuses the historical ``GlasgowAppletArguments`` name.
+GlasgowAppletV2Arguments = GlasgowAppletArguments
 
 
 class GlasgowAppletTool:

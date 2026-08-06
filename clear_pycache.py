@@ -1,8 +1,11 @@
 import os
 import shutil
+from pathlib import Path
 
-path = os.getcwd()
-for directory, subfolders, files in os.walk(path):
-    if os.path.basename(directory) == '__pycache__':
+
+root_path = Path(__file__).resolve().parent
+
+for directory, subfolders, _files in os.walk(root_path):
+    if Path(directory).name == "__pycache__":
         shutil.rmtree(directory, ignore_errors=True)
-        subfolders[:] = []
+        subfolders.clear()

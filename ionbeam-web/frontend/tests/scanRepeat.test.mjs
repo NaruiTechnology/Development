@@ -2,10 +2,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  repeatCountdownDisplay,
   shouldClearROIFeedbackBeforeRepeat,
   shouldRetainROIFeedbackOnComplete,
 } from "../.test-dist/lib/scanRepeat.js";
 import { ScanType } from "../.test-dist/types/scanType.js";
+
+test("repeat countdown displays the active final cycle as one, never zero", () => {
+  assert.deepEqual(
+    [3, 2, 1, 0].map((remaining) => repeatCountdownDisplay(3, remaining, true)),
+    [3, 2, 1, 1],
+  );
+  assert.equal(repeatCountdownDisplay(3, 0, false), 3);
+  assert.equal(repeatCountdownDisplay(1, 0, false), 1);
+});
 
 test("clears ROI gray feedback after every non-final cycle for any repeat count", () => {
   for (const repeat of [1, 2, 3, 8]) {

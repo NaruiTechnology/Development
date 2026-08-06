@@ -14,6 +14,7 @@ import {
 import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation, type TranslationKey } from "../i18n";
+import { shouldShowVacuumController } from "../lib/vacuumPolicy";
 import { Icon } from "./Icon";
 import { LanguagePicker } from "./LanguagePicker";
 import { AuthDialog, type SignedInUser } from "./AuthDialog";
@@ -53,13 +54,17 @@ export function Header({
   activeView,
   onOpenReport,
   onOpenScan,
+  onOpenVacuum,
+  vacuumMinimized,
   scanLocked,
 }: {
   signedInUser: SignedInUser | null;
   onSignedIn: (user: SignedInUser) => void;
-  activeView: "control" | "report";
+  activeView: "control" | "report" | "vacuum";
   onOpenReport: () => void;
   onOpenScan: () => void;
+  onOpenVacuum: () => void;
+  vacuumMinimized: boolean;
   scanLocked: boolean;
 }) {
   const dispatch = useAppDispatch();
@@ -73,9 +78,8 @@ export function Header({
   const { t } = useTranslation();
   const [authOpen, setAuthOpen] = useState(false);
   const authAutoOpenedRef = useRef(false);
-  const statusStateRef = useRef(status?.state ?? "disconnected");
-  statusStateRef.current = status?.state ?? "disconnected";
   const headerActionDisabled = scanLocked || !signedInUser;
+  const vacuumEnabled = status?.vacuum_enabled === true;
   useEffect(() => {
     applyThemeToDocument(theme);
   }, [theme]);
@@ -94,8 +98,6 @@ export function Header({
     dispatch(fetchStatus());
     dispatch(fetchDefaultsMetadata());
     const tHandle = setInterval(() => {
-      const s = statusStateRef.current;
-      if (s === "busy" || s === "connecting") return;
       dispatch(fetchStatus());
       dispatch(fetchDefaultsMetadata());
     }, 4000);
@@ -223,6 +225,18 @@ export function Header({
       >
         <Icon name="cog" tone="accent" />
       </button>
+      {shouldShowVacuumController(vacuumEnabled) && (
+        <button
+          type="button"
+          className="btn btn--ghost app-header__settings app-header__vacuum"
+          onClick={onOpenVacuum}
+          aria-label={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.aria")}
+          title={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.title")}
+          disabled={headerActionDisabled}
+        >
+          <Icon name="dashboard" />
+        </button>
+      )}
       <button
         type="button"
         className="auth-chip"
@@ -241,10 +255,11 @@ export function Header({
       <span
         className="production-pill app-header__production"
         data-production={isProduction ? "true" : "false"}
-        title={isProduction ? t("header.production.true.title") : t("header.production.false.title")}
+        data-tooltip={isProduction ? t("header.production.true.title") : t("header.production.false.title")}
+        aria-label={isProduction ? t("header.production.true") : t("header.production.false")}
+        tabIndex={0}
       >
         <span className="production-pill__led" />
-        {isProduction ? t("header.production.true") : t("header.production.false")}
       </span>
     </header>
     <AuthDialog

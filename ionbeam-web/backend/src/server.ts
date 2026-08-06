@@ -1170,6 +1170,18 @@ app.use("/api/scan/vector/run", requireScanPrivilege);
 if (config.mock) {
   app.get("/api/status", (_req, res) => res.json(mockRest.status()));
   app.get("/api/defaults", (_req, res) => res.json(mockRest.defaults()));
+  app.get("/api/vacuum", (_req, res) => res.json(mockRest.vacuumStatus()));
+  app.post("/api/vacuum/acquire", (_req, res) => res.json(mockRest.acquireVacuum()));
+  app.post("/api/vacuum/release", (_req, res) => res.json(mockRest.releaseVacuum()));
+  app.post("/api/vacuum/pumps/:name/power", (req, res) => {
+    const status = mockRest.setVacuumPower(req.params.name, Boolean(req.body?.power));
+    status ? res.json(status) : res.status(404).json({ detail: `unknown vacuum pump: ${req.params.name}` });
+  });
+  app.post("/api/vacuum/pumps/:name/read", (req, res) => {
+    const status = mockRest.setVacuumRead(req.params.name, Boolean(req.body?.checked));
+    status ? res.json(status) : res.status(404).json({ detail: `unknown vacuum pump: ${req.params.name}` });
+  });
+  app.post("/api/vacuum/stop", (_req, res) => res.json(mockRest.stopVacuum()));
   app.post("/api/scan/raster/run", (req, res) => res.json(mockRest.runRaster(req.body)));
   app.post("/api/scan/vector/run", (req, res) => res.json(mockRest.runVector(req.body)));
 
@@ -1269,6 +1281,7 @@ app.get("/api/status", async (_req, res) => {
       last_error: `glasgow_service unreachable: ${detail}`,
       scans_completed: 0,
       chunks_in_flight: 0,
+      vacuum_enabled: false,
     });
   }
 });

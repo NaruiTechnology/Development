@@ -1,13 +1,28 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAppSelector } from "../store";
+import { useTranslation } from "../i18n";
 import type { ROIState } from "../store/scanSlice";
 import type { ROIRequest } from "../types/api";
-import { ROI_CANVAS_EDGE, viewportBounds, worldToCanvasX, worldToCanvasY } from "../lib/roiGeometry";
+import { Icon } from "./Icon";
+import {
+  imageWorldBounds,
+  ROI_CANVAS_EDGE,
+  viewportBounds,
+  worldToCanvasX,
+  worldToCanvasY,
+} from "../lib/roiGeometry";
+
+const ROI_PREVIEW_ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 15, 20] as const;
+const ROI_PREVIEW_DEFAULT_ZOOM_INDEX = 2;
 
 export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: string | null }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const roi = useAppSelector((s) => s.scan.roi);
+  const { t } = useTranslation();
+  const [zoomIndex, setZoomIndex] = useState(ROI_PREVIEW_DEFAULT_ZOOM_INDEX);
+  const zoom = ROI_PREVIEW_ZOOM_LEVELS[zoomIndex];
   const imageSource =
     roi.scanImageDataUrl ?? (roi.imageKind === "lastScan"
       ? backgroundImageUrl ?? roi.imageDataUrl
@@ -34,15 +49,58 @@ export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: str
     };
   }, [imageSource, roi]);
 
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    if (zoom <= 1) {
+      frame.scrollLeft = 0;
+      frame.scrollTop = 0;
+      return;
+    }
+    const animationFrame = requestAnimationFrame(() => {
+      frame.scrollLeft = (frame.scrollWidth - frame.clientWidth) / 2;
+      frame.scrollTop = (frame.scrollHeight - frame.clientHeight) / 2;
+    });
+    return () => cancelAnimationFrame(animationFrame);
+  }, [zoom]);
+
   return (
-    <div className="roi-mini-frame">
-      <canvas
-        ref={canvasRef}
-        width={ROI_CANVAS_EDGE}
-        height={ROI_CANVAS_EDGE}
-        draggable={false}
-        onDragStart={(e) => e.preventDefault()}
-      />
+    <div className="roi-mini-preview">
+      <div ref={frameRef} className="roi-mini-frame" data-zoomed={zoom > 1 ? "true" : "false"}>
+        <canvas
+          ref={canvasRef}
+          width={ROI_CANVAS_EDGE}
+          height={ROI_CANVAS_EDGE}
+          style={{ width: `${zoom * 100}%` }}
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
+        />
+      </div>
+      <div className="roi-mini-zoom-controls" role="group" aria-label={t("roi.preview.zoomControls")}>
+        <button
+          type="button"
+          className="btn btn--ghost roi-mini-zoom-button"
+          disabled={zoomIndex === 0}
+          onClick={() => setZoomIndex((current) => Math.max(0, current - 1))}
+          aria-label={t("roi.preview.zoomOut")}
+          title={t("roi.preview.zoomOut")}
+        >
+          <Icon name="zoomOut" />
+        </button>
+        <output className="roi-mini-zoom-value" aria-live="polite">
+          {Math.round(zoom * 100)}%
+        </output>
+        <button
+          type="button"
+          className="btn btn--ghost roi-mini-zoom-button"
+          disabled={zoomIndex === ROI_PREVIEW_ZOOM_LEVELS.length - 1}
+          onClick={() => setZoomIndex((current) => Math.min(ROI_PREVIEW_ZOOM_LEVELS.length - 1, current + 1))}
+          aria-label={t("roi.preview.zoomIn")}
+          title={t("roi.preview.zoomIn")}
+        >
+          <Icon name="zoomIn" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -50,23 +108,8 @@ export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: str
 function drawPreview(
   canvas: HTMLCanvasElement | null,
   selection: ROIRequest | null,
-  roi: Pick<
-    ROIState,
-    | "x_origin"
-    | "x_end"
-    | "y_origin"
-    | "y_end"
-    | "show_grid"
-    | "viewport_x_start"
-    | "viewport_x_end"
-    | "viewport_y_start"
-    | "viewport_y_end"
-    | "calibration_viewport_x_start"
-    | "calibration_viewport_x_end"
-    | "calibration_viewport_y_start"
-    | "calibration_viewport_y_end"
-  >,
-  image: HTMLImageElement | null
+  roi: ROIState,
+  image: HTMLImageElement | null,
 ) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -76,23 +119,27 @@ function drawPreview(
   ctx.fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
   ctx.fillRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
 
+  const bounds = viewportBounds(roi);
+  const imageBounds = imageWorldBounds(roi);
+  ctx.imageSmoothingEnabled = false;
+
   if (image) {
     ctx.drawImage(image, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
   }
 
-  if (!selection) return;
+  if (!selection) {
+    return;
+  }
 
-  const bounds = viewportBounds(roi);
-  const x0 = worldToCanvasX(selection.x_start, roi, bounds);
-  const x1 = worldToCanvasX(selection.x_end, roi, bounds);
-  const y0 = worldToCanvasY(selection.y_start, roi, bounds);
-  const y1 = worldToCanvasY(selection.y_end, roi, bounds);
+  const x0 = worldToCanvasX(selection.x_start, imageBounds, bounds);
+  const x1 = worldToCanvasX(selection.x_end, imageBounds, bounds);
+  const y0 = worldToCanvasY(selection.y_start, imageBounds, bounds);
+  const y1 = worldToCanvasY(selection.y_end, imageBounds, bounds);
   const left = Math.min(x0, x1);
   const top = Math.min(y0, y1);
   const width = Math.max(1, Math.abs(x1 - x0));
   const height = Math.max(1, Math.abs(y1 - y0));
 
-  ctx.save();
   ctx.fillStyle = "rgba(0, 0, 0, 0.32)";
   ctx.fillRect(0, 0, ROI_CANVAS_EDGE, top);
   ctx.fillRect(0, top + height, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE - top - height);
@@ -107,7 +154,6 @@ function drawPreview(
   ctx.lineWidth = 0.5;
   ctx.setLineDash([8, 6]);
   ctx.strokeRect(left + 8, top + 8, Math.max(1, width - 16), Math.max(1, height - 16));
-  ctx.restore();
 }
 
 function getCssColor(el: HTMLElement, variableName: string, fallback: string): string {

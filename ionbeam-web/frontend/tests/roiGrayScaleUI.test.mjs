@@ -6,8 +6,9 @@ import {
   grayScaleSourceLabelForKind,
   resolveROIActionKind,
   resolveGrayScaleSourceKind,
+  shouldShowROIGrayScaleClear,
   shouldShowROIActionControls,
-} from "../.test-dist/grayScaleUI.js";
+} from "../.test-dist/lib/grayScaleUI.js";
 
 const t = (key) => key;
 
@@ -20,8 +21,8 @@ test("prefers loaded-image gray-scale copy on the ROI page", () => {
   });
 
   assert.equal(sourceKind, "loaded");
-  assert.equal(grayScaleSourceLabelForKind(sourceKind, t), "roi.grayScale.source.loaded");
-  assert.equal(grayScaleScopeNoteForKind(sourceKind, false, t), "roi.grayScale.context.loaded");
+  assert.equal(grayScaleSourceLabelForKind(sourceKind, t), null);
+  assert.equal(grayScaleScopeNoteForKind(sourceKind, false, t), null);
 });
 
 test("falls back to the live scan source when no loaded image exists", () => {
@@ -50,28 +51,25 @@ test("returns no source copy when the spectrum is hidden", () => {
   assert.equal(grayScaleScopeNoteForKind(sourceKind, false, t), null);
 });
 
-test("shows ROI action controls only after gray-scale selection is committed", () => {
+test("shows ROI action controls for partial ROI selections", () => {
   assert.equal(
     shouldShowROIActionControls({
       kind: "roi",
-      showGraySpectrum: true,
-      committedGrayScaleSelection: [40, 120],
+      hasPartialROI: true,
     }),
     true
   );
   assert.equal(
     shouldShowROIActionControls({
       kind: "roi",
-      showGraySpectrum: false,
-      committedGrayScaleSelection: [40, 120],
+      hasPartialROI: false,
     }),
     false
   );
   assert.equal(
     shouldShowROIActionControls({
       kind: "vector",
-      showGraySpectrum: false,
-      committedGrayScaleSelection: null,
+      hasPartialROI: false,
     }),
     true
   );
@@ -82,4 +80,19 @@ test("uses vector style for ROI action runs", () => {
   assert.equal(resolveROIActionKind("roi", "vector"), "vector");
   assert.equal(resolveROIActionKind("vector", "raster"), "vector");
   assert.equal(resolveROIActionKind("mag", "raster"), null);
+});
+
+test("shows ROI gray-range Clear only after a range is confirmed", () => {
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "roi", hasConfirmedGrayRange: false }),
+    false,
+  );
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "roi", hasConfirmedGrayRange: true }),
+    true,
+  );
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "vector", hasConfirmedGrayRange: true }),
+    false,
+  );
 });

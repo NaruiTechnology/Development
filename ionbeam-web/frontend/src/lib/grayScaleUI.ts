@@ -29,6 +29,13 @@ export function shouldShowROIActionControls(options: {
   return options.hasPartialROI;
 }
 
+export function shouldShowROIGrayScaleClear(options: {
+  kind: "roi" | ROIActionKind | "mag";
+  hasConfirmedGrayRange: boolean;
+}): boolean {
+  return options.kind === "roi" && options.hasConfirmedGrayRange;
+}
+
 export function resolveGrayScaleSourceKind(options: {
   showGraySpectrum: boolean;
   roiImageDataUrl: string | null;

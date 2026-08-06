@@ -23,10 +23,12 @@ import { Header } from "./components/Header";
 import type { SignedInUser } from "./components/AuthDialog";
 import { apiUrl } from "./lib/backendUrl";
 import { readJsonResponse } from "./lib/readJsonResponse";
+import { shouldDisableScanPanel } from "./lib/vacuumPolicy";
 import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
 import { RasterParameters } from "./components/RasterParameters";
 import { VectorParameters } from "./components/VectorParameters";
+import { VectorScanPathField } from "./components/VectorScanPathField";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
@@ -40,6 +42,7 @@ import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
+import { VacuumDashboard } from "./components/VacuumDashboard";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 import {
   formatGrayScaleSelection,
@@ -50,9 +53,11 @@ import {
   grayScaleScopeNoteForKind,
   grayScaleSourceLabelForKind,
   resolveROIActionKind,
+  shouldShowROIGrayScaleClear,
   shouldShowROIActionControls,
   resolveGrayScaleSourceKind,
 } from "./lib/grayScaleUI";
+import { completedROIImagePatch } from "./lib/roiWorkflow";
 
 import {
   beginROICalibration,
@@ -80,6 +85,7 @@ import {
   writePath,
 } from "./store/settingsSlice";
 import { SCAN_TYPE_COLORS, type ScanType } from "./types/scanType";
+import type { VacuumSystemStatus } from "./types/api";
 
 const RIGHT_PANEL_STORAGE_KEY = "ionbeam:rightPanelWidth";
 const DEFAULT_RIGHT_PANEL_WIDTH = 400;
@@ -87,7 +93,7 @@ const MIN_LEFT_PANEL_WIDTH = 320;
 const MIN_RIGHT_PANEL_WIDTH = 380;
 const SPLITTER_SPACE = 32;
 const LAST_ADMIN_LOGIN_STORAGE_KEY = "ionbeam:lastAdminLogin";
-type AppRoute = "control" | "report";
+type AppRoute = "control" | "report" | "vacuum";
 type LeftTopTab = "scan" | "calibrate";
 type ScanSubTab = "roi" | "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
@@ -97,6 +103,11 @@ export function App() {
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
   const route = useAppRoute();
+  const [vacuumMinimized, setVacuumMinimized] = useState(false);
+  const autoOpenedVacuumRef = useRef(false);
+  const serviceStatus = useAppSelector((s) => s.status.service);
+  const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
+  const [isVacuumSystemReady, setIsVacuumSystemReady] = useState(false);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
@@ -109,6 +120,8 @@ export function App() {
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const roiStateRef = useRef(roiState);
+  roiStateRef.current = roiState;
   const roiSelectionKey = roiState.selection
     ? `${roiState.selection.x_start}:${roiState.selection.x_end}:${roiState.selection.y_start}:${roiState.selection.y_end}`
     : "";
@@ -183,6 +196,53 @@ export function App() {
   useEffect(() => {
     dispatch(fetchDefaults());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (route !== "vacuum" || serviceStatus === null || vacuumEnabled) return;
+    navigateTo("control");
+  }, [route, serviceStatus, vacuumEnabled]);
+
+  useEffect(() => {
+    // Open the dashboard once as soon as the enabled vacuum service is
+    // available. VacuumDashboard's mount lifecycle acquires the controller;
+    // the ref prevents closing it from immediately reopening it.
+    if (!vacuumEnabled || autoOpenedVacuumRef.current) return;
+    autoOpenedVacuumRef.current = true;
+    if (route !== "vacuum") navigateTo("vacuum");
+  }, [route, vacuumEnabled]);
+
+  useEffect(() => {
+    if (!vacuumEnabled) {
+      setIsVacuumSystemReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function refreshVacuumReadiness() {
+      try {
+        const response = await fetch(apiUrl("/api/vacuum"), {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`vacuum status: HTTP ${response.status}`);
+        const status = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
+        if (!cancelled) setIsVacuumSystemReady(status.isVacuumSystemReady === true);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        if (!cancelled) setIsVacuumSystemReady(false);
+      }
+    }
+
+    void refreshVacuumReadiness();
+    const timer = window.setInterval(() => void refreshVacuumReadiness(), 1000);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [vacuumEnabled]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -288,7 +348,12 @@ export function App() {
   }, [isResizing, showROIPreviewSideCard]);
 
   const scanActive = phase === "running" || phase === "stopping";
-  const panelDisabled = scanActive || !isSignedIn;
+  const panelDisabled = shouldDisableScanPanel({
+    scanActive,
+    signedIn: isSignedIn,
+    vacuumEnabled,
+    vacuumReady: isVacuumSystemReady,
+  });
   const rasterVectorTabsDisabled = panelDisabled || roiActionLocked;
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
@@ -329,9 +394,7 @@ export function App() {
   const displayedROIGrayScaleSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped;
   const actionScanKind =
     kind === "roi"
-      ? roiActionGrayFilterActive
-        ? "vector"
-        : "raster"
+      ? "vector"
       : resolveROIActionKind(kind, lastScanKind) ?? lastScanKind;
   const showROIActionControls = shouldShowROIActionControls({
     kind,
@@ -339,7 +402,7 @@ export function App() {
   });
   const gridLineToggle =
     kind === "roi" ? (
-      <label className="checkbox canvas-grid-toggle">
+      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.show_grid}
@@ -349,7 +412,7 @@ export function App() {
         {t("roi.showGrid")}
       </label>
     ) : kind === "raster" ? (
-      <label className="checkbox canvas-grid-toggle">
+      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.raster_show_grid}
@@ -359,7 +422,7 @@ export function App() {
         {t("roi.showGrid")}
       </label>
     ) : kind === "vector" ? (
-      <label className="checkbox canvas-grid-toggle">
+      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.vector_show_grid}
@@ -368,6 +431,20 @@ export function App() {
         />
         {t("roi.showGrid")}
       </label>
+    ) : null;
+  const scanPathToggle =
+    kind === "vector" || (kind === "roi" && hasPartialROI) ? (
+    <label className="checkbox canvas-grid-toggle canvas-scan-path-toggle">
+      <input
+        type="checkbox"
+        checked={roiState.vector_show_scan_path}
+        disabled={panelDisabled}
+        onChange={(e) =>
+          dispatch(updateROI({ vector_show_scan_path: e.target.checked }))
+        }
+      />
+      {t("vector.displayScanPath")}
+    </label>
     ) : null;
   const clearCommittedGrayScaleSelection = useCallback(() => {
     dispatch(
@@ -517,8 +594,20 @@ export function App() {
   useEffect(() => {
     if (previousROISelectionKeyRef.current === roiSelectionKey) return;
     previousROISelectionKeyRef.current = roiSelectionKey;
+    if (roiState.scanImageDataUrl) {
+      dispatch(
+        updateROI({
+          imageName: t("roi.imageName.lastScan"),
+          imageDataUrl: roiState.scanImageDataUrl,
+          imageKind: "lastScan",
+          scanImageDataUrl: null,
+        })
+      );
+      resetROIActionContext({ preserveScanImage: true });
+      return;
+    }
     resetROIActionContext();
-  }, [resetROIActionContext, roiSelectionKey]);
+  }, [dispatch, resetROIActionContext, roiSelectionKey, roiState.scanImageDataUrl, t]);
 
   useEffect(() => {
     if (kind !== "roi") return;
@@ -544,14 +633,23 @@ export function App() {
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
       if (
         kind === "roi" &&
-        scanKind === "raster" &&
+        scanKind === "vector" &&
         roiActionCanvasVisible &&
         !roiActionGrayFilterActive
       ) {
         if (imageUrl) {
-          dispatch(updateROI({ scanImageDataUrl: imageUrl }));
-          dispatch(resetRaster({ resolution: rasterResolution }));
+          dispatch(
+            updateROI(
+              completedROIImagePatch(
+                roiStateRef.current,
+                imageUrl,
+                t("roi.imageName.lastScan"),
+              ),
+            )
+          );
           dispatch(resetVector());
+          setROIActionLocked(false);
+          setROIActionCanvasVisible(false);
           setLastLiveScanImage(null);
           setMergedFigureByKind({ raster: null, vector: null });
         }
@@ -565,7 +663,13 @@ export function App() {
         return { kind: scanKind, imageUrl };
       });
     },
-    [dispatch, kind, rasterResolution, roiActionCanvasVisible, roiActionGrayFilterActive]
+    [
+      dispatch,
+      kind,
+      roiActionCanvasVisible,
+      roiActionGrayFilterActive,
+      t,
+    ]
   );
 
   const handleMergedFigureChange = useCallback(
@@ -620,6 +724,7 @@ export function App() {
             imageName: "No image selected",
             imageDataUrl: null,
             imageKind: "none",
+            imageBounds: null,
           })
         );
       }
@@ -652,21 +757,21 @@ export function App() {
       const nextSkipped = true;
       setVectorGrayRange(defaultRange);
       setVectorGrayScaleSkipped(nextSkipped);
-      dispatch(
-        updateVector({
-          pattern: "default",
-          points: null,
-          vector_resolution: 128,
-          output_mode: "SixteenBit",
-          latency_bytes: 8196,
-          pre_process: true,
-        })
-      );
+      // Adaptive feedback visits each coordinate twice (probe + action), so
+      // starting it at the normal 2048 edge can leave the live canvas showing
+      // only its first scan line for a long time. Initialize the filtered
+      // sweep at 128x128 so both dimensions become visible promptly; the
+      // resolution control remains editable after the filter is enabled.
+      dispatch(updateVector({
+        vector_resolution: 128,
+        pattern: "default",
+        points: null,
+      }));
       return;
     }
     setVectorGrayRange([0, 255]);
     setVectorGrayScaleSkipped(null);
-  }, [committedGrayScaleSkipped, dispatch]);
+  }, [dispatch]);
 
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
     if (settingsDraft !== null) {
@@ -687,26 +792,6 @@ export function App() {
     if (!vectorGrayLevelsEnabled || vectorLatencyBytes >= 8196) return;
     dispatch(updateVector({ latency_bytes: 8196 }));
   }, [dispatch, vectorGrayLevelsEnabled, vectorLatencyBytes]);
-
-  useEffect(() => {
-    if (!vectorGrayLevelsEnabled) return;
-    if (
-      vector.pattern === "default" &&
-      vector.points === null &&
-      vector.output_mode === "SixteenBit" &&
-      vector.pre_process === true
-    ) {
-      return;
-    }
-    dispatch(
-      updateVector({
-        pattern: "default",
-        points: null,
-        output_mode: "SixteenBit",
-        pre_process: true,
-      })
-    );
-  }, [dispatch, vector.pattern, vector.points, vector.output_mode, vector.pre_process, vectorGrayLevelsEnabled]);
 
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
     const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
@@ -737,6 +822,7 @@ export function App() {
         imageName: t("roi.imageName.lastScan"),
         imageDataUrl: roiScanImageUrl,
         imageKind: "lastScan",
+        imageBounds: null,
       })
     );
   }, [dispatch, resetROIActionContext, roiScanImageUrl, t]);
@@ -844,6 +930,11 @@ export function App() {
         activeView={route}
         onOpenReport={() => navigateTo("report")}
         onOpenScan={() => navigateTo("control")}
+        onOpenVacuum={() => {
+          setVacuumMinimized(false);
+          navigateTo("vacuum");
+        }}
+        vacuumMinimized={vacuumMinimized}
         scanLocked={scanActive}
       />
 
@@ -980,11 +1071,17 @@ export function App() {
                       lastScanImageUrl={roiScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
                     />
+                    {hasPartialROI && (
+                      <VectorScanPathField
+                        id="roi-vector-scan-path"
+                        disabled={panelDisabled}
+                      />
+                    )}
                     {showROIActionControls && kind === "roi" && (
                       <div className="roi-action-controls">
                     <ScanControls
                           kind={actionScanKind}
-                          disabled={!isSignedIn}
+                          disabled={panelDisabled}
                           scanActive={scanActive}
                           repeat={repeat}
                           onRepeatChange={setRepeat}
@@ -1046,7 +1143,7 @@ export function App() {
                 <div className="card__body">
                   <ScanControls
                     kind={actionScanKind}
-                    disabled={!isSignedIn}
+                    disabled={panelDisabled}
                     scanActive={scanActive}
                     repeat={repeat}
                     onRepeatChange={setRepeat}
@@ -1062,7 +1159,7 @@ export function App() {
                   <span className="card__title">{t("card.runReport")}</span>
                 </div>
                 <ValidationPanel
-                  disabled={!isSignedIn}
+                  disabled={panelDisabled}
                   mergedFigureUrl={
                     actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
                   }
@@ -1105,14 +1202,15 @@ export function App() {
         {/* right column */}
         <section>
             <div className="card image-panel-card">
-              <div className={`card__header image-panel-card__header${kind === "vector" ? " image-panel-card__header--vector" : ""}`}>
+              <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}`}>
                 <div className="image-panel-card__header-main">
                   <span className="card__title">{t(
                     kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
-                      ? "card.rasterImage"
+                      ? "card.vectorPattern"
                       : imagePanelTitleKey
                   )}</span>
                   {gridLineToggle}
+                  {scanPathToggle}
                   {kind === "vector" && (
                     <label className="checkbox canvas-grid-toggle vector-gray-level-toggle">
                       <input
@@ -1153,23 +1251,21 @@ export function App() {
                         onStepDeltaChange={handleGrayScaleStepDeltaChange}
                       />
                     ) : null}
+                    {shouldShowROIGrayScaleClear({
+                      kind,
+                      hasConfirmedGrayRange: committedGrayScaleSelection !== null,
+                    }) && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost image-panel-card__header-action"
+                        disabled={panelDisabled}
+                        onClick={handleClearROIGrayScaleValues}
+                        title={t("scan.clear")}
+                      >
+                        {t("scan.clear")}
+                      </button>
+                    )}
                   </div>
-                  {kind === "roi" && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
-                    <button
-                      type="button"
-                      className="btn btn--ghost image-panel-card__header-action"
-                      disabled={
-                        panelDisabled ||
-                        (pendingGrayScaleSelection === null &&
-                          committedGrayScaleSelection === null &&
-                          pendingGrayScaleAnchor === null)
-                      }
-                      onClick={handleClearROIGrayScaleValues}
-                      title={t("scan.clear")}
-                    >
-                      {t("scan.clear")}
-                    </button>
-                  )}
                 </div>
             </div>
             <div className="card__body">
@@ -1178,7 +1274,7 @@ export function App() {
                   !roiActionGrayFilterActive &&
                   roiState.scanImageDataUrl === null ? (
                     <ImageCanvas
-                      kind="raster"
+                      kind="vector"
                       onRenderedImageChange={handleRenderedImageChange}
                       onMergedFigureChange={handleMergedFigureChange}
                     />
@@ -1190,6 +1286,7 @@ export function App() {
                       grayScaleSelection={displayedROIGrayScaleSelection}
                       grayScaleSkipped={displayedROIGrayScaleSkipped}
                       liveVectorPreview={roiActionCanvasVisible && roiActionGrayFilterActive}
+                      hideSelectionOverlay={roiActionCanvasVisible && !roiActionGrayFilterActive}
                       graySelectionResetToken={roiGraySelectionResetToken}
                     />
                   )
@@ -1224,6 +1321,17 @@ export function App() {
       )}
 
       <SettingsDialog targetAccountId={settingsTarget.accountId} targetLogin={settingsTarget.login} />
+      {vacuumEnabled && (
+        <VacuumDashboard
+          open={route === "vacuum"}
+          minimized={vacuumMinimized}
+          onMinimizedChange={setVacuumMinimized}
+          onClose={() => {
+            setVacuumMinimized(false);
+            navigateTo("control");
+          }}
+        />
+      )}
       <Footer />
     </div>
   );
@@ -1641,7 +1749,9 @@ function useAppRoute(): AppRoute {
 
 function normalizeRoute(pathname: string): AppRoute {
   const path = pathname.replace(/\/+$/, "") || "/";
-  return path === "/report" ? "report" : "control";
+  if (path === "/report") return "report";
+  if (path === "/vacuum") return "vacuum";
+  return "control";
 }
 
 class ReportErrorBoundary extends Component<

@@ -6,6 +6,8 @@ import logging
 import asyncio
 import threading
 import importlib.resources
+import sysconfig
+from pathlib import Path
 
 import usb1
 from fx2 import REQ_RAM, REG_CPUCS 
@@ -108,6 +110,12 @@ def _safe_ascii_string_descriptor(handle, device, descriptor, fallback_label):
 class GlasgowDevice:
     @classmethod
     def firmware_file(cls):
+        # Prefer the active environment's installed firmware while supporting
+        # Windows Lib\site-packages and Unix lib/pythonX.Y/site-packages.
+        installed = (Path(sysconfig.get_path("purelib")) /
+                     "glasgow" / "hardware" / "firmware.ihex")
+        if installed.is_file():
+            return installed
         return importlib.resources.files(__package__).joinpath("firmware.ihex")
 
     @classmethod

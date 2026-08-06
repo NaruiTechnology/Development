@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ROIRequest, VectorPoint, VectorPointTuple } from "../types/api";
+import type { ROIRequest, VectorPoint, VectorPointTuple, VectorScanPath } from "../types/api";
+import { vectorScanSamplePixel } from "../lib/vectorScanPath";
 
 /**
  * Image / pixel buffers, kept here (outside the serialisability check)
@@ -29,6 +30,7 @@ interface ImageState {
 
   // ---------- vector -----------------------------------------------------
   vectorPattern: VectorPattern;
+  vectorScanPath: VectorScanPath;
   vectorSource: VectorSource;
   /** Edge length of the square render target. 2048 matches the default
    *  sweep and the FPGA DAC range. */
@@ -63,6 +65,7 @@ const initialState: ImageState = {
   frame: new Uint16Array(RES * RES),
 
   vectorPattern: "default",
+  vectorScanPath: "vertical_raster",
   vectorSource: "vector",
   vectorEdge: VEC_EDGE,
   vectorImage: new Uint16Array(VEC_EDGE * VEC_EDGE),
@@ -79,6 +82,7 @@ const initialState: ImageState = {
 
 interface SetupVectorPayload {
   pattern: VectorPattern;
+  scanPath?: VectorScanPath;
   /** Custom points copied from VectorRequest.points for custom mode. */
   points?: Array<VectorPointTuple | VectorPoint> | null;
   /** Edge of the render target. Defaults to 2048 (FPGA DAC range). */
@@ -127,6 +131,7 @@ const slice = createSlice({
       const pattern = a.payload.pattern;
       const edge = a.payload.edge ?? VEC_EDGE;
       state.vectorPattern = pattern;
+      state.vectorScanPath = a.payload.scanPath ?? "vertical_raster";
       state.vectorSource = pattern === "custom" && a.payload.roi ? "roi" : "vector";
       state.vectorEdge = edge;
       state.vectorImage = new Uint16Array(edge * edge);
@@ -213,10 +218,9 @@ const slice = createSlice({
       if (state.vectorPattern === "default") {
         for (let k = 0; k < N; k++) {
           const i = cur + k;
-          const col = (i / edge) | 0; // outer loop var (FPGA's x)
-          const row = i % edge; // inner loop var (FPGA's y)
-          if (col < edge) {
-            state.vectorImage[row * edge + col] = values[k];
+          const pixel = vectorScanSamplePixel(i, edge, state.vectorScanPath);
+          if (pixel) {
+            state.vectorImage[pixel.y * edge + pixel.x] = values[k];
           }
         }
       } else {
@@ -254,6 +258,7 @@ const slice = createSlice({
       const edge = state.vectorEdge;
       if (
         state.vectorPattern !== "default" ||
+        state.vectorScanPath !== "vertical_raster" ||
         !Number.isFinite(lineShift) ||
         lineShift === 0 ||
         edge <= 1 ||

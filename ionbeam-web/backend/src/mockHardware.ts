@@ -45,6 +45,7 @@ interface RasterParams {
 
 interface VectorParams {
   pattern: "default" | "custom";
+  scan_path?: VectorScanPath;
   points?: Array<VectorPointTuple | VectorPointObject>;
   dwell: number;
   latency_bytes: number;
@@ -55,6 +56,12 @@ interface VectorParams {
   roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
   simulation_bitmap?: SimulationBitmapPayload | null;
 }
+
+type VectorScanPath =
+  | "vertical_raster"
+  | "vertical_serpentine"
+  | "horizontal_sawtooth"
+  | "horizontal_triangle";
 
 interface SimulationBitmapPayload {
   width: number;
@@ -446,15 +453,7 @@ export async function streamMockVector(
       }
     }
   } else {
-    const edge = p.vector_resolution ?? 2048;
-    pts = new Array(edge * edge);
-    for (let x = 0; x < edge; x++) {
-      const xPos = Math.min(ADC_MAX, Math.floor((x * ADC_MAX) / Math.max(1, edge - 1)));
-      for (let y = 0; y < edge; y++) {
-        const yPos = Math.min(ADC_MAX, Math.floor((y * ADC_MAX) / Math.max(1, edge - 1)));
-        pts[x * edge + y] = [xPos, yPos, p.dwell];
-      }
-    }
+    pts = vectorScanPoints(p);
   }
 
   const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
@@ -509,6 +508,81 @@ export async function streamMockVector(
   }
 }
 
+function vectorScanPoints(p: VectorParams): VectorPointTuple[] {
+  const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 2048));
+  const path = p.scan_path ?? "vertical_raster";
+  const x0 = Math.min(p.roi?.x_start ?? 0, p.roi?.x_end ?? ADC_MAX);
+  const x1 = Math.max(p.roi?.x_start ?? 0, p.roi?.x_end ?? ADC_MAX);
+  const y0 = Math.min(p.roi?.y_start ?? 0, p.roi?.y_end ?? ADC_MAX);
+  const y1 = Math.max(p.roi?.y_start ?? 0, p.roi?.y_end ?? ADC_MAX);
+  const xs = Array.from({ length: edge }, (_, index) =>
+    Math.round(x0 + ((x1 - x0) * index) / Math.max(1, edge - 1)),
+  );
+  const ys = Array.from({ length: edge }, (_, index) =>
+    Math.round(y0 + ((y1 - y0) * index) / Math.max(1, edge - 1)),
+  );
+  const points: VectorPointTuple[] = [];
+
+  if (path === "horizontal_sawtooth" || path === "horizontal_triangle") {
+    ys.forEach((y, row) => {
+      const rowXs = path === "horizontal_triangle" && row % 2 ? [...xs].reverse() : xs;
+      for (const x of rowXs) points.push([x, y, p.dwell]);
+    });
+    return points;
+  }
+
+  xs.forEach((x, column) => {
+    const columnYs = path === "vertical_serpentine" && column % 2 ? [...ys].reverse() : ys;
+    for (const y of columnYs) points.push([x, y, p.dwell]);
+  });
+  return points;
+}
+
+const mockVacuumPumps = [
+  { name: "MechanicalVacuumPump", threshold: 1.0e-1, write: "A0", read: "B0", group: null },
+  { name: "TurboVacuumPump", threshold: 2.0e-3, write: "A1", read: "B1", group: null },
+  { name: "UHVacuumPump_1", threshold: 3.0e-5, write: "A2", read: "B2", group: "ultra-high-vacuum" },
+  { name: "UHVacuumPump_2", threshold: 3.0e-5, write: "A3", read: "B3", group: "ultra-high-vacuum" },
+].map((pump) => ({
+  ...pump,
+  power: false,
+  value: null as number | null,
+  port_a_value: 0,
+  port_b_value: 0,
+  border: "off",
+  ready: false,
+  simulation_read: false,
+}));
+let mockVacuumRunning = false;
+
+function mockVacuumStatus() {
+  return {
+    device_id: "MOCK-GLASGOW-C3",
+    voltage: 3.3,
+    connected: true,
+    simulation: true,
+    control_transport: "glasgow-gpio",
+    running: mockVacuumRunning,
+    cascade_stopped: false,
+    isVacuumSystemReady: mockVacuumPumps.every((pump) => pump.port_b_value === 3.3),
+    last_error: null,
+    updated_at: new Date().toISOString(),
+    pumps: mockVacuumPumps.map((pump) => ({ ...pump })),
+  };
+}
+
+function setMockVacuumPower(name: string, power: boolean) {
+  const pump = mockVacuumPumps.find((candidate) => candidate.name === name);
+  if (!pump) return false;
+  pump.power = power;
+  pump.port_a_value = power ? 3.3 : 0;
+  pump.port_b_value = power && pump.simulation_read ? 3.3 : 0;
+  pump.ready = pump.port_b_value === 3.3;
+  pump.value = power ? pump.threshold * 1.5 : null;
+  pump.border = power ? (pump.ready ? "ready" : "waiting") : "off";
+  return true;
+}
+
 /** Synthetic responses for the REST endpoints, when MOCK=1. */
 export const mockRest = {
   status() {
@@ -517,7 +591,46 @@ export const mockRest = {
       last_error: null,
       scans_completed: 0,
       chunks_in_flight: 0,
+      vacuum_enabled: false,
     };
+  },
+  vacuumStatus: mockVacuumStatus,
+  acquireVacuum() {
+    mockVacuumRunning = true;
+    setMockVacuumPower("MechanicalVacuumPump", true);
+    return mockVacuumStatus();
+  },
+  releaseVacuum() {
+    mockVacuumRunning = false;
+    return mockVacuumStatus();
+  },
+  setVacuumPower(name: string, power: boolean) {
+    return setMockVacuumPower(name, power) ? mockVacuumStatus() : null;
+  },
+  setVacuumRead(name: string, checked: boolean) {
+    const pump = mockVacuumPumps.find((candidate) => candidate.name === name);
+    if (!pump) return null;
+    pump.simulation_read = checked;
+    if (checked && pump.power) {
+      pump.value = pump.threshold;
+      pump.port_b_value = 3.3;
+      pump.ready = true;
+      pump.border = "ready";
+      if (name === "MechanicalVacuumPump") setMockVacuumPower("TurboVacuumPump", true);
+      if (name === "TurboVacuumPump") {
+        setMockVacuumPower("UHVacuumPump_1", true);
+        setMockVacuumPower("UHVacuumPump_2", true);
+      }
+    } else {
+      setMockVacuumPower(name, name === "MechanicalVacuumPump");
+    }
+    return mockVacuumStatus();
+  },
+  stopVacuum() {
+    for (const pump of mockVacuumPumps) {
+      if (pump.name !== "MechanicalVacuumPump") setMockVacuumPower(pump.name, false);
+    }
+    return mockVacuumStatus();
   },
   defaults() {
     const streamDataConfig = loadStreamDataConfig();
@@ -617,8 +730,7 @@ export const mockRest = {
     if (req.pattern === "custom" && req.points) {
       totalSamples = req.points.length;
     } else {
-      const edge = req.vector_resolution ?? 2048;
-      totalSamples = edge * edge;
+      totalSamples = vectorScanPoints(req).length;
     }
     const valuesPerChunk = Math.max(64, Math.floor(req.latency_bytes / 2));
     const chunks = Math.max(1, Math.ceil(totalSamples / valuesPerChunk));
@@ -629,6 +741,7 @@ export const mockRest = {
       kind: "vector",
       latency_bytes: req.latency_bytes,
       pattern: req.pattern,
+      scan_path: req.scan_path ?? "vertical_raster",
       vector_resolution: req.vector_resolution,
       source: "validated",
       csv_filename: csvFilename,
@@ -694,6 +807,7 @@ let mockLastScan:
       resolution?: number;
       latency_bytes?: number;
       pattern?: string;
+      scan_path?: VectorScanPath;
       vector_resolution?: number;
       source: "validated" | "stream";
       csv_filename?: string;

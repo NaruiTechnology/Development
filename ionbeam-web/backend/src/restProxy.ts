@@ -12,6 +12,7 @@ import { config } from "./config";
 
 export function buildRestProxy(): Router {
   const router = Router();
+  let vacuumEnabled: boolean | null = null;
 
   router.get("/status", async (_req, res) => {
     try {
@@ -35,7 +36,9 @@ export function buildRestProxy(): Router {
         return;
       }
       try {
-        res.status(upstream.status).json(JSON.parse(text));
+        const status = JSON.parse(text) as { vacuum_enabled?: unknown };
+        vacuumEnabled = status.vacuum_enabled === true;
+        res.status(upstream.status).json(status);
       } catch {
         res.status(502).json({
           error: "upstream_invalid_json",
@@ -44,14 +47,40 @@ export function buildRestProxy(): Router {
         });
       }
     } catch (err) {
+      vacuumEnabled = false;
       const detail = err instanceof Error ? err.message : String(err);
       res.json({
         state: "disconnected",
         last_error: `glasgow_service unreachable: ${detail}`,
         scans_completed: 0,
         chunks_in_flight: 0,
+        vacuum_enabled: false,
       });
     }
+  });
+
+  router.use("/vacuum", async (_req, res, next) => {
+    if (vacuumEnabled === null) {
+      try {
+        const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
+          headers: config.glasgowToken
+            ? { Authorization: `Bearer ${config.glasgowToken}` }
+            : undefined,
+          signal: AbortSignal.timeout(2_000),
+        });
+        if (upstream.ok) {
+          const status = (await upstream.json()) as { vacuum_enabled?: unknown };
+          vacuumEnabled = status.vacuum_enabled === true;
+        }
+      } catch {
+        // Let the proxy return its normal upstream-unreachable response.
+      }
+    }
+    if (vacuumEnabled !== false) {
+      next();
+      return;
+    }
+    res.status(404).json({ detail: "vacuum controller is disabled" });
   });
 
   const proxy = createProxyMiddleware({

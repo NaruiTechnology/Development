@@ -55,6 +55,16 @@ IONBEAM_WEB_DEST = 'ionbeam-web'
 # (src_relpath, dst_relpath_in_dist) — trees copied verbatim into dist.
 COPY_TREES = [
     (IONBEAM_WEB_SOURCE, IONBEAM_WEB_DEST),
+    (
+        os.path.join('Development', 'IobeamAdmin'),
+        os.path.join('Development', 'IobeamAdmin'),
+    ),
+    (
+        os.path.join(
+            'Development', 'GlasgowDataIO', 'IobeamControl', 'unittest', 'testData'),
+        os.path.join(
+            'Development', 'GlasgowDataIO', 'IobeamControl', 'unittest', 'testData'),
+    ),
 ]
 
 DEPLOY_WORKFLOW_SOURCE = os.path.join('DeployWorkSpace', 'Development', 'DistributionDeploy')

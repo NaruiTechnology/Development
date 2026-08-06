@@ -8,6 +8,7 @@ import type {
   ScanResult,
   ServerDefaults,
   VectorRequest,
+  VectorScanPath,
   ROIRequest,
 } from "../types/api";
 import { normalizeGrayScaleSelection, type GrayScaleSelection } from "../lib/grayScaleSelection";
@@ -88,10 +89,13 @@ export interface ROIState {
   show_grid: boolean;
   raster_show_grid: boolean;
   vector_show_grid: boolean;
+  vector_show_scan_path: boolean;
   selection: ROIRequest | null;
   imageName: string;
   imageDataUrl: string | null;
   imageKind: "none" | "file" | "lastScan";
+  /** Physical world bounds represented by the current image; null means the full hardware FOV. */
+  imageBounds: ROIRequest | null;
   scanImageDataUrl: string | null;
 }
 
@@ -107,6 +111,7 @@ const defaultRaster: RasterRequest = {
 
 const defaultVector: VectorRequest = {
   pattern: "default",
+  scan_path: "vertical_raster",
   points: null,
   vector_resolution: 2048,
   dwell: 16,
@@ -153,10 +158,12 @@ const initialState: ScanState = {
     show_grid: true,
     raster_show_grid: true,
     vector_show_grid: true,
+    vector_show_scan_path: false,
     selection: null,
     imageName: "No image selected",
     imageDataUrl: null,
     imageKind: "none",
+    imageBounds: null,
     scanImageDataUrl: null,
   },
   beamEnergyEv: 1000.0,
@@ -190,6 +197,18 @@ function booleanDefault(value: unknown, fallback: boolean): boolean {
 function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"] | undefined): VectorRequest["output_mode"] {
   if (value === "EightBit" || value === "SixteenBit") return value;
   return fallback ?? "SixteenBit";
+}
+
+function vectorScanPathDefault(value: unknown, fallback: VectorScanPath): VectorScanPath {
+  switch (value) {
+    case "vertical_raster":
+    case "vertical_serpentine":
+    case "horizontal_sawtooth":
+    case "horizontal_triangle":
+      return value;
+    default:
+      return fallback;
+  }
 }
 
 function dwellDefault(value: unknown, fallback: number): number {
@@ -245,6 +264,7 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
 
   state.vector = {
     ...state.vector,
+    scan_path: vectorScanPathDefault(vectorParams.scan_path, state.vector.scan_path),
     vector_resolution: numberDefault(
       vectorParams.vector_resolution ??
         vector.vector_resolution ??
@@ -322,6 +342,14 @@ function normalizeROIPatch(
       : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_grid")
       ? { vector_show_grid: booleanDefault(patch.vector_show_grid, current.vector_show_grid) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_scan_path")
+      ? {
+          vector_show_scan_path: booleanDefault(
+            patch.vector_show_scan_path,
+            current.vector_show_scan_path
+          ),
+        }
       : {}),
   };
 }
@@ -444,6 +472,9 @@ const slice = createSlice({
       if ("selection" in a.payload) {
         s.raster.roi = a.payload.selection ?? null;
         s.vector.roi = a.payload.selection ?? null;
+        if (a.payload.selection) {
+          s.roi.vector_show_scan_path = true;
+        }
       }
     },
     beginROICalibration(s) {
@@ -492,6 +523,7 @@ const slice = createSlice({
       s.roi.imageName = "No image selected";
       s.roi.imageDataUrl = null;
       s.roi.imageKind = "none";
+      s.roi.imageBounds = null;
     },
     clearROIScanImage(s) {
       s.roi.scanImageDataUrl = null;

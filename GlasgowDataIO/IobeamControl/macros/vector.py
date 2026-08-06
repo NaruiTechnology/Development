@@ -513,6 +513,7 @@ class VectorScanCommand(BaseCommand):
             cookie=self._cookie, raster=False, output=self._output_mode,
         ).transfer(stream)
         sender_task = asyncio.create_task(sender())
+        receiver_complete = False
 
         # Discard the FFFF + cookie reply.
         # TODO: assert against synchronization result
@@ -531,6 +532,7 @@ class VectorScanCommand(BaseCommand):
                         break
                 self._logger.debug(f"recver: tokens={tokens}")
                 yield await self.recv_res(pixel_count, stream, self._output_mode)
+            receiver_complete = True
         finally:
             # Wait for the sender to finish its drain padding + final
             # flush before this generator returns.
@@ -550,15 +552,28 @@ class VectorScanCommand(BaseCommand):
             # The timeout bounds the worst case where the FPGA pipeline
             # genuinely stalls (e.g. IN FIFO not draining) — we'd rather
             # log + cancel than hang the test forever.
-            if not sender_task.done():
+            if not receiver_complete:
+                # The consumer stopped before the frame completed (for
+                # example, a WebSocket Stop/close). The sender can be parked
+                # on token_fut waiting for receiver pacing that will never
+                # resume, so cancel and reap it before USB teardown.
+                sender_task.cancel()
+                await asyncio.gather(sender_task, return_exceptions=True)
+            else:
                 try:
                     await asyncio.wait_for(
-                        sender_task, timeout=self._sender_drain_timeout_s)
+                        asyncio.shield(sender_task),
+                        timeout=self._sender_drain_timeout_s,
+                    )
                 except asyncio.TimeoutError:
+                    sender_task.cancel()
+                    await asyncio.gather(sender_task, return_exceptions=True)
                     self._logger.warning(
                         f"sender task did not finish drain in "
                         f"{self._sender_drain_timeout_s:.0f}s; cancelled")
                 except asyncio.CancelledError:
+                    sender_task.cancel()
+                    await asyncio.gather(sender_task, return_exceptions=True)
                     raise
                 except Exception:
                     # Sender raised something else (e.g. a real USB

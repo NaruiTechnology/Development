@@ -2,6 +2,7 @@ import rulerIcon from "../assets/ruler.png";
 import roiIcon from "../assets/ROI.png";
 import rasterIcon from "../assets/raster.png";
 import vectorIcon from "../assets/vector.png";
+import dashboardIcon from "../assets/UHVacuumPump_1.png";
 
 type IconName =
   | "check"
@@ -10,6 +11,7 @@ type IconName =
   | "commentTool"
   | "crop"
   | "download"
+  | "dashboard"
   | "globe"
   | "grid"
   | "gridSvg"
@@ -41,6 +43,8 @@ type IconName =
   | "sheet"
   | "trash"
   | "upload"
+  | "zoomIn"
+  | "zoomOut"
   | "x";
 
 export function Icon({
@@ -97,6 +101,7 @@ export function Icon({
 }
 
 const imageSources: Partial<Record<IconName, string>> = {
+  dashboard: dashboardIcon,
   target: roiIcon,
   grid: rasterIcon,
   route: vectorIcon,
@@ -296,5 +301,17 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
     </>
   ),
   upload: <path d="M12 21V10m0 0l-4 4m4-4l4 4M5 5h14" />,
+  zoomIn: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5L21 21M10.5 7.5v6M7.5 10.5h6" />
+    </>
+  ),
+  zoomOut: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5L21 21M7.5 10.5h6" />
+    </>
+  ),
   x: <path d="M5 5l14 14M19 5L5 19" />,
 };

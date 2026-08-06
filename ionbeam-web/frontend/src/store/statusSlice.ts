@@ -119,6 +119,7 @@ const slice = createSlice({
     });
     b.addCase(fetchStatus.rejected, (s, a) => {
       s.fetching = false;
+      if (s.service) s.service.vacuum_enabled = false;
       s.lastError = a.error.message ?? "status fetch failed";
     });
     b.addCase(fetchDefaults.fulfilled, (s, a) => {

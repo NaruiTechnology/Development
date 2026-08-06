@@ -55,7 +55,7 @@ from AutomationPy.buildingblocks.automation_log import AutomationLog
 from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .models import (
-    DeviceState, ServiceStatus, RasterRequest, VectorRequest, VectorPattern,
+    DeviceState, ServiceStatus, RasterRequest, VectorRequest, VectorPattern, VectorScanPath,
     ScanResult, ScanValidation, ValidationCheck,
 )
 
@@ -94,18 +94,32 @@ def _dac_range_for_bounds(start: int, end: int, count: int) -> DACCodeRange:
     return DACCodeRange(start=lo, count=count, step=max(1, int((span / count) * 256)))
 
 
-def _roi_vector_iter(edge: int, roi, dwell: int = 1) -> Iterable[Tuple[int, int, int]]:
+def _roi_vector_iter(
+    edge: int,
+    roi,
+    dwell: int = 1,
+    scan_path: VectorScanPath = VectorScanPath.vertical_raster,
+) -> Iterable[Tuple[int, int, int]]:
     bounds = _roi_bounds(roi)
     if bounds is None:
-        yield from _default_vector_iter(edge, dwell=dwell)
-        return
-    x0, x1, y0, y1 = bounds
+        x0, x1, y0, y1 = 0, 16383, 0, 16383
+    else:
+        x0, x1, y0, y1 = bounds
     x_range = _dac_range_for_bounds(x0, x1, edge)
     y_range = _dac_range_for_bounds(y0, y1, edge)
-    for x_idx in range(edge):
-        x = x_range.start + ((x_idx * x_range.step) >> 8)
-        for y_idx in range(edge):
-            y = y_range.start + ((y_idx * y_range.step) >> 8)
+    xs = [x_range.start + ((idx * x_range.step) >> 8) for idx in range(edge)]
+    ys = [y_range.start + ((idx * y_range.step) >> 8) for idx in range(edge)]
+
+    if scan_path in (VectorScanPath.horizontal_sawtooth, VectorScanPath.horizontal_triangle):
+        for y_idx, y in enumerate(ys):
+            row_xs = reversed(xs) if scan_path is VectorScanPath.horizontal_triangle and y_idx % 2 else xs
+            for x in row_xs:
+                yield x, y, dwell
+        return
+
+    for x_idx, x in enumerate(xs):
+        column_ys = reversed(ys) if scan_path is VectorScanPath.vertical_serpentine and x_idx % 2 else ys
+        for y in column_ys:
             yield x, y, dwell
 
 
@@ -365,7 +379,9 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
             0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
         )
     else:
-        iter_points = _roi_vector_iter(req.vector_resolution, req.roi, dwell=req.dwell)
+        iter_points = _roi_vector_iter(
+            req.vector_resolution, req.roi, dwell=req.dwell, scan_path=req.scan_path
+        )
         sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(bitmap, req.roi, x, y)
 
     for point in iter_points:
@@ -389,6 +405,12 @@ class DeviceService:
     def __init__(self, config_path: str):
         self._config_path = config_path
         self._config = AutomationConfig(config_path)
+        # AutomationConfig keeps top-level JSON keys in its backing mapping,
+        # while the scan implementation intentionally reads IsProduction as
+        # an attribute. Normalize that boundary once; do not add scan-path
+        # conditionals or alter the IobeamTech scan algorithm.
+        if not hasattr(self._config, "IsProduction"):
+            self._config.IsProduction = self._config.__dict__.get("IsProduction", True)
 
         action = util.GetStateConfigByName(self._config, "streamData")[Consts.ACTION_DATA]
         # Raw JSON blocks kept for backward compat with existing
@@ -408,6 +430,7 @@ class DeviceService:
 
         self._conn: Optional[GlasgowConnection] = None
         self._lock = asyncio.Lock()
+        self._exclusive_owner: Optional[str] = None
         self._status = ServiceStatus(state=DeviceState.IDLE)  # IDLE = "ready, not yet connected"
 
         # In-memory cache of the most recent completed scan. Populated by
@@ -439,6 +462,51 @@ class DeviceService:
             self._status.state = DeviceState.IDLE
             self._status.last_error = None
         logger.debug("connection dropped; next scan will reconnect")
+
+    async def acquire_exclusive(self, owner: str) -> None:
+        """Temporarily hand the single Glasgow device to another protocol.
+
+        The scan applet and control-gpio applet cannot own the same USB
+        interface or FPGA image concurrently.  A vacuum dashboard therefore
+        hard-closes any idle scan connection and holds the service lock until
+        the dashboard releases the device.
+        """
+        if self._exclusive_owner is not None:
+            if self._exclusive_owner == owner:
+                return
+            raise DeviceBusy(f"device is reserved by {self._exclusive_owner}")
+        if self._status.state in (DeviceState.BUSY, DeviceState.CONNECTING):
+            raise DeviceBusy("device is busy and cannot be reserved")
+
+        self._status.state = DeviceState.CONNECTING
+        await self._lock.acquire()
+        try:
+            if self._conn is not None:
+                await self._conn._hard_close()
+                self._conn = None
+            self._exclusive_owner = owner
+            self._status.state = DeviceState.BUSY
+            self._status.last_error = None
+            logger.info("Glasgow device reserved by %s", owner)
+        except BaseException as exc:
+            self._conn = None
+            self._status.state = DeviceState.ERROR
+            self._status.last_error = f"{type(exc).__name__}: {exc}"
+            self._lock.release()
+            raise
+
+    async def release_exclusive(self, owner: str) -> None:
+        if self._exclusive_owner is None:
+            return
+        if self._exclusive_owner != owner:
+            raise DeviceBusy(f"device is reserved by {self._exclusive_owner}")
+        self._exclusive_owner = None
+        self._conn = None
+        self._status.state = DeviceState.IDLE
+        self._status.last_error = None
+        if self._lock.locked():
+            self._lock.release()
+        logger.info("Glasgow device released by %s; scan reconnect is lazy", owner)
 
     def status(self) -> ServiceStatus:
         return self._status.model_copy()
@@ -628,6 +696,7 @@ class DeviceService:
                     "latency_bytes": req.latency_bytes,
                     "dwell": req.dwell,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                    "scan_path": req.scan_path.value,
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
                     "roi": req.roi,
@@ -645,9 +714,10 @@ class DeviceService:
             cmd = self._build_vector_cmd(req)
             if req.pre_process:
                 cmd._pre_process_chunks(latency=req.latency_bytes)
+            transfer_iter = conn.transfer_multiple(
+                cmd, latency=req.latency_bytes)
             try:
-                async for chunk in conn.transfer_multiple(
-                        cmd, latency=req.latency_bytes):
+                async for chunk in transfer_iter:
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
                     yield _sample_chunk_to_wire_bytes(chunk)
@@ -655,16 +725,22 @@ class DeviceService:
                 self._drop_conn_on_error(e)
                 raise
             finally:
-                self._set_last_scan({
-                    "kind": "vector",
-                    "chunks": captured,
-                    "latency_bytes": req.latency_bytes,
-                    "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
-                    "points": req.points,
-                    "vector_resolution": req.vector_resolution,
-                    "roi": req.roi,
-                    "source": "stream",
-                })
+                try:
+                    # Ensure Stop/disconnect reaches Connection's cleanup
+                    # before the service releases this scan generator.
+                    await transfer_iter.aclose()
+                finally:
+                    self._set_last_scan({
+                        "kind": "vector",
+                        "chunks": captured,
+                        "latency_bytes": req.latency_bytes,
+                        "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                        "scan_path": req.scan_path.value,
+                        "points": req.points,
+                        "vector_resolution": req.vector_resolution,
+                        "roi": req.roi,
+                        "source": "stream",
+                    })
 
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
@@ -777,6 +853,7 @@ class DeviceService:
                     "latency_bytes": req.latency_bytes,
                     "dwell": req.dwell,
                     "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                    "scan_path": req.scan_path.value,
                     "points": req.points,
                     "vector_resolution": req.vector_resolution,
                     "roi": req.roi,
@@ -840,6 +917,7 @@ class DeviceService:
                 "latency_bytes": req.latency_bytes,
                 "dwell": req.dwell,
                 "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                "scan_path": req.scan_path.value,
                 "points": req.points,
                 "vector_resolution": req.vector_resolution,
                 "roi": req.roi,
@@ -930,9 +1008,13 @@ class DeviceService:
                 # simulation_bitmap is ignored by hardware, so fall back to
                 # the regular ROI vector sweep rather than rejecting the
                 # request as custom-without-points.
-                iter_points = _roi_vector_iter(params.vector_resolution, req.roi, dwell=params.dwell)
+                iter_points = _roi_vector_iter(
+                    params.vector_resolution, req.roi, dwell=params.dwell, scan_path=req.scan_path
+                )
         else:
-            iter_points = _roi_vector_iter(params.vector_resolution, req.roi, dwell=params.dwell)
+            iter_points = _roi_vector_iter(
+                params.vector_resolution, req.roi, dwell=params.dwell, scan_path=req.scan_path
+            )
 
         try:
             output_mode = OutputMode[params.output_mode]
@@ -1174,6 +1256,7 @@ class DeviceService:
                 dtype=np.uint16,
             )
             pattern = last.get("pattern", "default")
+            scan_path = VectorScanPath(last.get("scan_path", VectorScanPath.vertical_raster.value))
             points = last.get("points")
             if pattern == "custom" and points:
                 iter_list = [
@@ -1183,16 +1266,19 @@ class DeviceService:
                     )
                 ]
             else:
-                iter_list = list(_roi_vector_iter(edge, last.get("roi")))
+                iter_list = list(_roi_vector_iter(edge, last.get("roi"), scan_path=scan_path))
                 if len(iter_list) < samples.size and edge != DEFAULT_EDGE:
-                    iter_list = list(_roi_vector_iter(DEFAULT_EDGE, last.get("roi")))
+                    iter_list = list(_roi_vector_iter(DEFAULT_EDGE, last.get("roi"), scan_path=scan_path))
 
             if len(iter_list) < samples.size:
                 samples = samples[:len(iter_list)]
             elif len(iter_list) > samples.size:
                 iter_list = iter_list[:samples.size]
 
-            line_shift = self._vector_defaults.get("lineShiftPerXRow", 0)
+            line_shift = (
+                self._vector_defaults.get("lineShiftPerXRow", 0)
+                if scan_path is VectorScanPath.vertical_raster else 0
+            )
             if line_shift and iter_list:
                 first_x = iter_list[0][0]
                 row_len = 0
@@ -1304,6 +1390,8 @@ class DeviceService:
         svc = self
         class _Ctx:
             async def __aenter__(self):
+                if svc._exclusive_owner is not None:
+                    raise DeviceBusy(f"device is reserved by {svc._exclusive_owner}")
                 if svc._status.state is DeviceState.BUSY:
                     raise DeviceBusy("a scan is already running")
                 # IDLE, ERROR, DISCONNECTED are all OK to start from — the

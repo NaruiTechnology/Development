@@ -16,6 +16,38 @@ export interface ServiceStatus {
   last_error: string | null;
   scans_completed: number;
   chunks_in_flight: number;
+  vacuum_enabled: boolean;
+}
+
+export type VacuumBorderState = "off" | "waiting" | "ready" | "error";
+
+export interface VacuumPumpState {
+  name: string;
+  power: boolean;
+  threshold: number;
+  value: number | null;
+  port_a_value: number;
+  port_b_value: number;
+  write: string;
+  read: string;
+  border: VacuumBorderState;
+  ready: boolean;
+  group: string | null;
+  simulation_read: boolean;
+}
+
+export interface VacuumSystemStatus {
+  device_id: string;
+  voltage: number;
+  connected: boolean;
+  simulation: boolean;
+  control_transport: "glasgow-gpio" | "vacuum-control-subtarget";
+  running: boolean;
+  cascade_stopped: boolean;
+  isVacuumSystemReady: boolean;
+  last_error: string | null;
+  updated_at: string | null;
+  pumps: VacuumPumpState[];
 }
 
 export interface RasterRequest {
@@ -37,6 +69,11 @@ export interface RasterRequest {
 }
 
 export type VectorPattern = "default" | "custom";
+export type VectorScanPath =
+  | "vertical_raster"
+  | "vertical_serpentine"
+  | "horizontal_sawtooth"
+  | "horizontal_triangle";
 export type VectorFeedbackMode = "standard" | "adaptive_gray_feedback";
 
 export interface VectorPoint {
@@ -56,6 +93,7 @@ export type VectorPointTuple =
 
 export interface VectorRequest {
   pattern: VectorPattern;
+  scan_path: VectorScanPath;
   points: Array<VectorPointTuple | VectorPoint> | null;
   preview?: boolean;
   /** Default-pattern density on each axis. Valid range: 1..2048.
@@ -105,7 +143,7 @@ export interface SimulationBitmapPixel {
  * the ROI editor's "X origin / X end / Y origin / Y end" inputs)
  * into this DAC range before sending the request.
  *
- * See `worldSelectionToDacROI` in `lib/bitmapVector.ts` for the
+ * See `worldSelectionToDacROI` in `lib/roiDac.ts` for the
  * mapping. The full FOV (`x_origin..x_end`, `y_origin..y_end` in
  * world units) corresponds to the full DAC range 0..16383.
  *

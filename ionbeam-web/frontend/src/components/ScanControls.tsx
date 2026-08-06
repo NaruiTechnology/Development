@@ -33,6 +33,7 @@ import {
 import { useTranslation } from "../i18n";
 import { Icon } from "./Icon";
 import { ROIGrayActionVectorWedges } from "./ROIGrayActionVectorWedges";
+import { ROIRasterActionWedges } from "./ROIRasterActionWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
@@ -41,6 +42,7 @@ import type { VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 import type { ROIState } from "../store/scanSlice";
 import {
+  repeatCountdownDisplay,
   shouldClearROIFeedbackBeforeRepeat,
   shouldRetainROIFeedbackOnComplete,
 } from "../lib/scanRepeat";
@@ -123,6 +125,7 @@ export function ScanControls({
   const actionLoopRemainingRef = useRef(0);
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
+  const actionLoopCompletionPendingRef = useRef(false);
   // Repeated ROI action scans need a longer settle window between runs
   // so blank/spot updates are fully reflected before the next loop starts.
   const actionLoopGapMs = 750;
@@ -232,6 +235,9 @@ export function ScanControls({
   const streaming = phase === "running";
   const closing = phase === "stopping";
   const busy = streaming || closing;
+  // The panel is disabled while a scan runs to prevent parameter changes, but
+  // Stop must remain available so an active scan can always be cancelled.
+  const stopAvailable = streaming || closing || actionLoopActive;
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
   const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
 
@@ -248,12 +254,14 @@ export function ScanControls({
     actionLoopRemainingRef.current = 0;
     actionLoopIterationRef.current = 0;
     actionLoopActiveRef.current = false;
+    actionLoopCompletionPendingRef.current = false;
     setActionLoopIteration((current) => current === 0 ? current : 0);
     setActionLoopActive((current) => current ? false : current);
   }, [clearActionLoopTimer]);
 
   const startRepeatActionRun = useCallback(
     (entry: { req: VectorRequest; preview: boolean; scanType: ScanType }) => {
+      actionLoopCompletionPendingRef.current = true;
       onScanRunStart?.(entry.scanType);
       stream.startVector({ ...entry.req, preview: entry.preview });
     },
@@ -265,6 +273,7 @@ export function ScanControls({
     actionLoopRequestRef.current = { req, preview, scanType };
     actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
     actionLoopIterationRef.current = actionLoopRemainingRef.current;
+    actionLoopCompletionPendingRef.current = true;
     setActionLoopIteration(actionLoopIterationRef.current);
     actionLoopActiveRef.current = true;
     setActionLoopActive(true);
@@ -330,8 +339,8 @@ export function ScanControls({
           onScanRunStart?.(ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
           stream.startVector({ ...req, preview });
         } else {
-          const req = await rasterRequestWithBitmapSelection(
-            { ...raster, roi },
+          const req = await vectorRequestWithBitmapSelection(
+            { ...vector, roi },
             roiState,
             {
               isProduction,
@@ -342,8 +351,8 @@ export function ScanControls({
           );
           clearActionLoopState();
           onActionRunStart?.();
-          onScanRunStart?.(ScanType.CUSTOM_RASTER);
-          stream.startRaster({ ...req, preview });
+          onScanRunStart?.(ScanType.VECTOR);
+          stream.startVector({ ...req, preview });
         }
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
@@ -390,10 +399,10 @@ export function ScanControls({
   }
 
   function onStop() {
-    if (disabled || roiEbeamDisabled) return;
+    if (roiEbeamDisabled || !stopAvailable) return;
     clearActionLoopState();
     stream.stop();
-    if (roiAction && !roiActionGrayFilterActive) dispatch(resetRaster({ resolution: raster.resolution }));
+    if (roiAction && !roiActionGrayFilterActive) dispatch(resetVector());
     else if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }
@@ -459,15 +468,12 @@ export function ScanControls({
     streaming ||
     closing ||
     (roiAction && actionLoopActive);
-  const stopDisabled = disabled || roiEbeamDisabled || !(streaming || closing || actionLoopActive);
-  const loopDisplayOffset =
-    kind === "vector" && (actionLoopActive || streaming || closing)
-      ? 1
-      : 0;
-  const repeatDisplayCount =
-    actionLoopActive || streaming || closing
-      ? Math.max(0, actionLoopIteration - loopDisplayOffset)
-      : repeat;
+  const stopDisabled = roiEbeamDisabled || !stopAvailable;
+  const repeatDisplayCount = repeatCountdownDisplay(
+    repeat,
+    actionLoopIteration,
+    actionLoopActive,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -530,7 +536,12 @@ export function ScanControls({
     if (completedNow && roiState.imageDataUrl && roiState.selection) {
       clearBitmapSelectionCache();
     }
-    if (completedNow && actionLoopActiveRef.current) {
+    if (
+      completedNow &&
+      actionLoopActiveRef.current &&
+      actionLoopCompletionPendingRef.current
+    ) {
+      actionLoopCompletionPendingRef.current = false;
       if (actionLoopRemainingRef.current > 0) {
         actionLoopRemainingRef.current -= 1;
         actionLoopIterationRef.current = actionLoopRemainingRef.current;
@@ -596,6 +607,11 @@ export function ScanControls({
               active={showRoiGrayControls}
               disabled={controlsDisabled || roiEbeamDisabled}
             />
+          </div>
+        )}
+        {!showRoiGrayControls && (
+          <div className="scan-loop-controls__roi-wedges">
+            <ROIRasterActionWedges disabled={controlsDisabled || roiEbeamDisabled} />
           </div>
         )}
         <div className="scan-loop-controls">

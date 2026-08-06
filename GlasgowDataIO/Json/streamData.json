@@ -12,6 +12,8 @@
                     "ev": 1000,
                     "voltage": 2.5,
                     "bufferSize": "1024*1024",
+                    "adcHalfPeriod": 4,
+                    "adcSettleCycles": 2,
                     "enableEbeam": false,
                     "enableIbeam": true,
                     "rasterScan": {
@@ -151,6 +153,6 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": false,
+    "IsProduction": true,
     "DumpData": true
 }
