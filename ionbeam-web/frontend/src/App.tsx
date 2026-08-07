@@ -43,6 +43,7 @@ import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
 import { VacuumDashboard } from "./components/VacuumDashboard";
+import { SampleStageDashboard } from "./components/SampleStageDashboard";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 import {
   formatGrayScaleSelection,
@@ -104,6 +105,8 @@ export function App() {
   const mainRef = useRef<HTMLElement | null>(null);
   const route = useAppRoute();
   const [vacuumMinimized, setVacuumMinimized] = useState(false);
+  const [sampleStageOpen, setSampleStageOpen] = useState(false);
+  const [sampleStageMinimized, setSampleStageMinimized] = useState(false);
   const autoOpenedVacuumRef = useRef(false);
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
@@ -931,6 +934,11 @@ export function App() {
           navigateTo("vacuum");
         }}
         vacuumMinimized={vacuumMinimized}
+        onOpenSampleStage={() => {
+          setSampleStageOpen(true);
+          setSampleStageMinimized(false);
+        }}
+        sampleStageMinimized={sampleStageMinimized}
         scanLocked={scanActive}
       />
 
@@ -1328,6 +1336,15 @@ export function App() {
           }}
         />
       )}
+      <SampleStageDashboard
+        open={sampleStageOpen}
+        minimized={sampleStageMinimized}
+        onMinimizedChange={setSampleStageMinimized}
+        onClose={() => {
+          setSampleStageOpen(false);
+          setSampleStageMinimized(false);
+        }}
+      />
       <Footer />
     </div>
   );
