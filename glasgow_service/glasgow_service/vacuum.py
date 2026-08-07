@@ -21,6 +21,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .comparator_subtarget import ComparatorTarget, VacuumComparatorSubtarget
 from .models import VacuumPumpState, VacuumSystemStatus
+from .vacuum_device import (
+    SimulatedVacuumDevice,
+    SimulatedVacuumDeviceControl,
+    VacuumDevice,
+)
 
 
 VACUUM_CONFIG_ENV = "GLASGOW_VACUUM_CONFIG"
@@ -370,13 +375,24 @@ class VacuumController:
     POLL_INTERVAL_SECONDS = 1.0
     SIMULATION_STEP_FRACTION = 0.02
 
-    def __init__(self, config: VacuumConfig):
+    def __init__(self, config: VacuumConfig, device: VacuumDevice | None = None):
         self.config = config
-        self.gpio = (
-            VacuumGPIOInterface(config)
-            if config.simulate
-            else RealComparatorGPIOInterface(config)
-        )
+        if device is not None:
+            self.gpio = device
+        elif config.simulate:
+            self.gpio = SimulatedVacuumDevice(
+                (pump.write for pump in config.pumps),
+                (pump.read for pump in config.pumps),
+                initial_outputs={
+                    pump.write: pump.power.lower() == "on" for pump in config.pumps
+                },
+            )
+        else:
+            self.gpio = RealComparatorGPIOInterface(config)
+        if config.simulate and not isinstance(self.gpio, SimulatedVacuumDeviceControl):
+            raise TypeError(
+                "simulation requires a device implementing write_comparator"
+            )
         self._states = {
             pump.name: VacuumPumpState(
                 name=pump.name,
@@ -406,6 +422,8 @@ class VacuumController:
             return
         self._running = True
         try:
+            if self.config.simulate:
+                self.gpio.reconnect()
             self._cascade_stopped = False
             for name, state in self._states.items():
                 self._simulation_reads[name] = False

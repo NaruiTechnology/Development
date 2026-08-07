@@ -15,6 +15,7 @@ from glasgow_service.vacuum import (
 from glasgow_service.comparator_subtarget import ComparatorTarget, VacuumComparatorSubtarget
 from glasgow_service.models import DeviceState, ServiceStatus
 from glasgow_service.service import DeviceBusy, DeviceService
+from glasgow_service.vacuum_device import SimulatedVacuumDevice, VacuumDevice
 
 
 CONFIG_PATH = Path(__file__).parents[2] / "GlasgowDataIO" / "Json" / "vacuumSystem.json"
@@ -196,7 +197,7 @@ def test_simulated_vacuum_cascade_and_stop():
             assert controller.status().cascade_stopped is True
             assert controller.status().isVacuumSystemReady is False
             assert controller.gpio.output_level("A0") is True
-            assert controller.gpio._comparator_outputs["B0"] is False
+            assert (await controller.gpio.read_port_b())["B0"] == 0
         finally:
             await controller.close()
 
@@ -339,7 +340,7 @@ def test_simulated_comparator_goes_high_when_analog_value_reaches_tolerance():
             assert mechanical.border == "ready"
             assert controller.status().pumps[1].power is True
             assert controller.config.error_range == pytest.approx(0.005)
-            assert controller.gpio._comparator_outputs["B0"] is True
+            assert (await controller.gpio.read_port_b())["B0"] == 1
         finally:
             await controller.close()
 
@@ -398,7 +399,8 @@ def test_simulation_maps_port_a_equipment_values_to_configured_gpio_voltage():
         await controller.gpio.write("A0", True)
         await controller.gpio.write("A1", True)
 
-        assert controller.gpio.comparator_subtarget.targets() == ()
+        assert isinstance(controller.gpio, SimulatedVacuumDevice)
+        assert isinstance(controller.gpio, VacuumDevice)
         assert controller.gpio.output_level("A0") is True
         assert controller.gpio.output_level("A1") is True
 
