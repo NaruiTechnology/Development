@@ -135,6 +135,10 @@ class FailoverExecutor:
         self._lease = None
         self.lifecycle.transition(ExecutorState.STOPPED)
 
+    def fence(self) -> None:
+        """Revoke local execution immediately after a downstream safety fault."""
+        self._fence()
+
     def _activate(self, lease: LeadershipLease) -> None:
         self.lifecycle.transition(
             ExecutorState.ACTIVE, fencing_token=lease.fencing_token
@@ -145,4 +149,3 @@ class FailoverExecutor:
         if self.lifecycle.state is ExecutorState.ACTIVE:
             self.lifecycle.transition(ExecutorState.FENCED)
         self._lease = None
-

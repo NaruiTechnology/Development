@@ -11,6 +11,7 @@ import asyncio
 import os
 import shlex
 import tempfile
+import re
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -40,6 +41,7 @@ class installPipRequirements_state(distributionDeploy_state):
             breakSys = bool(actionData.get("useBreakSystemPackages", False))
             editableInstall = bool(actionData.get("editableInstall", False))
             editableTarget = actionData.get("editableTarget", ".")
+            verifyImports = actionData.get("verifyImports", []) or []
 
             reqFiles = [os.path.join(root, requirementsName)]
             extraReqs = actionData.get("extraRequirements")
@@ -107,6 +109,36 @@ class installPipRequirements_state(distributionDeploy_state):
                                        self._stderr.decode(errors="replace")
                                        if self._stderr else "<no stderr>"))
                     allOk = False
+
+            if allOk and verifyImports:
+                invalidImports = [
+                    name for name in verifyImports
+                    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", str(name))
+                ]
+                if invalidImports:
+                    self.error("[{}] invalid verifyImports entries: {}"
+                               .format(type(self).__name__, invalidImports))
+                    allOk = False
+                else:
+                    imports = ", ".join(str(name) for name in verifyImports)
+                    verifyCode = (
+                        "import {imports}; "
+                        "print('verified runtime imports: {imports}')"
+                    ).format(imports=imports)
+                    cmd = "{} -c {}".format(
+                        pythonExe if os.path.isfile(pythonExe) else "python3",
+                        shlex.quote(verifyCode))
+                    self.info("[{}] >> {}".format(type(self).__name__, cmd))
+                    ok = await self._runWithTimeout(
+                        cmd, self.deployRoot(), timeout)
+                    if not ok:
+                        self.error(
+                            "[{}] runtime dependency verification failed for {}\n{}"
+                            .format(
+                                type(self).__name__, imports,
+                                self._stderr.decode(errors="replace")
+                                if self._stderr else "<no stderr>"))
+                        allOk = False
 
             self._success = allOk
         except Exception as e:

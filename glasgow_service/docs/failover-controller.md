@@ -91,3 +91,24 @@ direct GPIO mutations fail closed when the window expires.
 This is fencing, not leader election. Redis/Sentinel remains responsible for
 issuing one monotonically increasing term to the elected executor. The Glasgow
 service independently enforces that term at the single-device boundary.
+
+## Fifth iteration: Sentinel coordinator and executor client
+
+`RedisSentinelLeaseCoordinator` discovers the writable Redis primary through
+Sentinel and executes atomic Lua scripts for lease acquisition, renewal, and
+owner-verified release. A successful acquisition increments the fencing term
+and requires acknowledgement from at least one replica through Redis `WAIT`.
+The lease deadline returned to the executor is conservative: it is measured
+from before the Redis round trip rather than after it.
+
+`GlasgowVacuumClient` derives all fencing headers from the executor's current
+live lease. `VacuumFailoverRuntime` acquires the Glasgow controller after leader
+promotion, renews the hardware-owner window on every control cycle, releases it
+before a clean coordinator shutdown, and immediately fences the local executor
+when Glasgow rejects its authority or cannot be reached.
+
+Sentinel and Redis replication do not provide consensus-grade durable writes.
+Replica acknowledgement reduces the exposure, while the persistent token at
+the Glasgow hardware owner remains the final split-brain safety mechanism. A
+lost Redis counter may temporarily reduce availability, but cannot authorize an
+older term to control the FPGA.

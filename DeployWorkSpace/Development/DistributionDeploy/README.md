@@ -47,6 +47,14 @@ workflow on the deploy host. The first action of the workflow re-invokes
 end (or you can mark `buildDistribution.skip = true` if you ship the zip
 out of band).
 
+The Python dependency step installs both `Development/requirements.txt` and
+`Development/glasgow_service/requirements.txt` into the deployment virtual
+environment. It then imports `httpx` and `redis` using that exact interpreter;
+deployment fails before service launch if either HA runtime client is missing.
+The archive builder also validates both packages are declared in the Glasgow
+requirements file and package metadata, preventing an incomplete distribution
+from being produced.
+
 ---
 
 ## Project layout

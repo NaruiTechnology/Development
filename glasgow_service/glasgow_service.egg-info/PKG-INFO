@@ -7,6 +7,8 @@ Description-Content-Type: text/markdown
 Requires-Dist: fastapi>=0.110
 Requires-Dist: uvicorn[standard]>=0.27
 Requires-Dist: pydantic>=2.5
+Requires-Dist: redis<8,>=5.0
+Requires-Dist: httpx<1,>=0.27
 Provides-Extra: examples
 Requires-Dist: websockets>=12; extra == "examples"
 Provides-Extra: tests
@@ -149,17 +151,34 @@ curl -s -X POST http://127.0.0.1:8765/scan/vector/run \
 Both return a `ScanResult` whose `validation.passed` field is `true` on
 green, plus per-check breakdown when anything fails.
 
-## Known issue in the standalone test_vector.py
-
-Your current `test_vector.py` has the same shadowing bug we already fixed
-in raster: `setUp()` assigns `LATENCY = self._vectorScanConfig.get('latency')`
-as a bare local, which is discarded. `self.LATENCY` keeps the class-level
-`8196`. Either delete that line or change it to
-`self.LATENCY = self._vectorScanConfig.get('latency', 8196)`. The pytest
-replacement in `tests/test_wet_run.py` reads from `svc.defaults()` so it
-doesn't have this problem.
-
 ## Concurrency
 
 One scan at a time. Concurrent REST or WebSocket requests return **HTTP
 409** (or an `{"event":"error","code":"busy"}` WebSocket frame).
+
+
+#-------launch.json for lauanching server debug --------------------
+
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "uvicorn: glasgow_service",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "glasgow_service.api:app",
+        "--host", "127.0.0.1",
+        "--port", "8765"
+      ],
+      "env": {
+        "GLASGOW_TOKEN": "replace-with-a-secret-from-openssl-rand-hex-32",
+        "GLASGOW_CONFIG": "/path/to/Development/GlasgowDataIO/Json/streamData.json",
+        "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/Development:${env:PYTHONPATH}"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    }
+  ]
+}
+#------------------------------------------

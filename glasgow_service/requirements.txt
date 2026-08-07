@@ -3,6 +3,8 @@
 fastapi>=0.110
 uvicorn[standard]>=0.27
 pydantic>=2.5
+redis>=5.0,<8
+httpx>=0.27,<1
 websockets>=12   # for the example WebSocket client
 pytest>=8       # for tests/test_wet_run.py
 # Last-scan PNG figure rendering (lazy-imported in service.last_figure_png)

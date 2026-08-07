@@ -8,6 +8,14 @@ import argparse
 import json
 from datetime import datetime
 
+try:
+    import tomllib
+except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
+    tomllib = None
+
+
+REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('httpx', 'redis')
+
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = ['*.ihex', '*.toml', 'requirements.txt', 'README.md']
 
@@ -55,6 +63,84 @@ TREE_COPY_IGNORE = (
 
 STREAM_DATA_JSON = os.path.join(
     'Development', 'GlasgowDataIO', 'Json', 'streamData.json')
+
+
+def _development_relative_path(src_dir, *parts):
+    """Resolve files when invoked from workspace root or Development root."""
+    candidates = [
+        os.path.join(src_dir, 'Development', *parts),
+        os.path.join(src_dir, *parts),
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return candidates[0]
+
+
+def _requirement_names(path):
+    names = set()
+    with open(path, 'r', encoding='utf-8') as stream:
+        for raw_line in stream:
+            line = raw_line.split('#', 1)[0].strip()
+            if not line or line.startswith(('-', 'git+')):
+                continue
+            match = re.match(r'([A-Za-z0-9_.-]+)', line)
+            if match:
+                names.add(match.group(1).lower().replace('_', '-'))
+    return names
+
+
+def validate_glasgow_runtime_dependencies(src_dir):
+    """Fail the distribution build when HA runtime clients are omitted."""
+    requirements_path = _development_relative_path(
+        src_dir, 'glasgow_service', 'requirements.txt')
+    pyproject_path = _development_relative_path(
+        src_dir, 'glasgow_service', 'pyproject.toml')
+    missing_files = [
+        path for path in (requirements_path, pyproject_path)
+        if not os.path.isfile(path)
+    ]
+    if missing_files:
+        raise FileNotFoundError(
+            'Missing Glasgow dependency manifest(s): ' + ', '.join(missing_files))
+
+    requirement_names = _requirement_names(requirements_path)
+    missing_requirements = sorted(
+        set(REQUIRED_GLASGOW_RUNTIME_PACKAGES) - requirement_names)
+    if missing_requirements:
+        raise ValueError(
+            'glasgow_service/requirements.txt is missing: ' +
+            ', '.join(missing_requirements))
+
+    if tomllib is not None:
+        with open(pyproject_path, 'rb') as stream:
+            dependencies = tomllib.load(stream).get('project', {}).get(
+                'dependencies', [])
+    else:
+        # The deployed project still supports Python 3.10. Parse only quoted
+        # entries inside the project dependencies array rather than requiring
+        # the third-party ``tomli`` package in the build environment.
+        with open(pyproject_path, 'r', encoding='utf-8') as stream:
+            pyproject_text = stream.read()
+        match = re.search(
+            r'(?ms)^dependencies\s*=\s*\[(.*?)^\]', pyproject_text)
+        dependencies = (
+            re.findall(r'["\']([^"\']+)["\']', match.group(1))
+            if match else []
+        )
+    dependency_names = {
+        re.match(r'([A-Za-z0-9_.-]+)', dependency).group(1).lower().replace('_', '-')
+        for dependency in dependencies
+        if re.match(r'([A-Za-z0-9_.-]+)', dependency)
+    }
+    missing_metadata = sorted(
+        set(REQUIRED_GLASGOW_RUNTIME_PACKAGES) - dependency_names)
+    if missing_metadata:
+        raise ValueError(
+            'glasgow_service/pyproject.toml is missing: ' +
+            ', '.join(missing_metadata))
+    print('Validated Glasgow runtime dependencies: ' +
+          ', '.join(REQUIRED_GLASGOW_RUNTIME_PACKAGES))
 
 
 def copy_source_trees(src_dir, dist_dir, trees):
@@ -142,6 +228,7 @@ def copy_matching_assets(src_dir, dist_dir, patterns):
                 print(f"Copied asset: {os.path.normpath(os.path.join(rel_path, filename))}")
 
 def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
+    validate_glasgow_runtime_dependencies(src_dir)
     # 1. Byte-compile all .py files to __pycache__ (skip in raw mode)
     if not deliver_raw:
         print(f"Compiling source in {src_dir} to .pyc...")

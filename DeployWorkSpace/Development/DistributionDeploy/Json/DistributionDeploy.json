@@ -82,6 +82,7 @@
                     "skipPrivateGitEditable": true,
                     "editableInstall": true,
                     "editableTarget": ".",
+                    "verifyImports": ["httpx", "redis"],
                     "stopOnError": false,
                     "useBreakSystemPackages": true
                 },
