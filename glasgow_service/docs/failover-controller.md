@@ -57,3 +57,17 @@ distributed lock. Redis/Sentinel integration must implement the same contract
 and preserve its atomic ownership and monotonically increasing token behavior.
 Persistence, network listeners, SBC configuration, and physical hardware
 switching remain outside the current scope.
+
+## Third iteration: vacuum execution authority
+
+`FailoverExecutionAuthority` now adapts a live executor lease into an
+`ExecutionPermit` containing the holder identity and fencing token. A
+failover-controlled `VacuumController` validates that authority at startup and
+again immediately before every GPIO output mutation. Standby and fenced nodes
+therefore remain able to observe or simulate comparator input, but cannot start
+the controller, energize a pump, stop a pump, or advance the automatic cascade.
+
+The authority dependency is optional to preserve the current single-node
+Glasgow deployment until the production coordinator is configured. The next
+transport iteration must pass the fencing token through the Glasgow API and
+persist the highest accepted token at the hardware-owner boundary.

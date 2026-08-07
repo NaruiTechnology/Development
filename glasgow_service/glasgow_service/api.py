@@ -22,6 +22,7 @@ from .models  import (
 from .auth    import require_token
 from .config  import find_config_path
 from .service import LOG_NAME
+from .execution_authority import AuthorityDenied
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 from .vacuum import (
     VacuumController,
@@ -142,6 +143,8 @@ async def acquire_vacuum():
             await controller.start()
         except DeviceBusy as exc:
             raise HTTPException(409, str(exc))
+        except AuthorityDenied as exc:
+            raise HTTPException(409, str(exc))
         except Exception as exc:
             await controller.close()
             if controller.requires_device:
@@ -178,6 +181,8 @@ async def set_vacuum_power(name: str, req: VacuumPowerRequest):
         raise HTTPException(404, f"unknown vacuum pump: {name}")
     except ValueError as exc:
         raise HTTPException(409, str(exc))
+    except AuthorityDenied as exc:
+        raise HTTPException(409, str(exc))
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
     return controller.status()
@@ -208,6 +213,8 @@ async def stop_vacuum():
         raise HTTPException(409, "vacuum dashboard has not acquired the Glasgow device")
     try:
         await controller.stop_non_mechanical()
+    except AuthorityDenied as exc:
+        raise HTTPException(409, str(exc))
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
     return controller.status()

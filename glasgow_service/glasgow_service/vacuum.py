@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .comparator_subtarget import ComparatorTarget, VacuumComparatorSubtarget
 from .models import VacuumPumpState, VacuumSystemStatus
+from .execution_authority import ExecutionAuthority, ExecutionPermit
 from .vacuum_device import (
     SimulatedVacuumDevice,
     SimulatedVacuumDeviceControl,
@@ -375,8 +376,15 @@ class VacuumController:
     POLL_INTERVAL_SECONDS = 1.0
     SIMULATION_STEP_FRACTION = 0.02
 
-    def __init__(self, config: VacuumConfig, device: VacuumDevice | None = None):
+    def __init__(
+        self,
+        config: VacuumConfig,
+        device: VacuumDevice | None = None,
+        authority: ExecutionAuthority | None = None,
+    ):
         self.config = config
+        self._authority = authority
+        self._last_permit: ExecutionPermit | None = None
         if device is not None:
             self.gpio = device
         elif config.simulate:
@@ -420,6 +428,7 @@ class VacuumController:
     async def start(self) -> None:
         if self._running:
             return
+        self._require_authority()
         self._running = True
         try:
             if self.config.simulate:
@@ -487,6 +496,10 @@ class VacuumController:
             raise ValueError("MechanicalVacuumPump must remain powered on")
         try:
             async with self._io_lock:
+                # Validate immediately before the side effect. This catches a
+                # lease lost while the caller was waiting for another GPIO
+                # operation to release the lock.
+                self._require_authority()
                 await self.gpio.write(state.write, power)
                 if self.config.simulate and not power:
                     await self.gpio.write_comparator(state.read, False)
@@ -513,6 +526,7 @@ class VacuumController:
             raise
 
     async def stop_non_mechanical(self) -> None:
+        self._require_authority()
         self._cascade_stopped = True
         for name, state in self._states.items():
             if name != MECHANICAL_PUMP and state.power:
@@ -645,3 +659,11 @@ class VacuumController:
         while True:
             await self.poll_once()
             await asyncio.sleep(self.POLL_INTERVAL_SECONDS)
+
+    def _require_authority(self) -> ExecutionPermit | None:
+        """Return the live term permit, or preserve legacy single-node mode."""
+        if self._authority is None:
+            return None
+        permit = self._authority.require()
+        self._last_permit = permit
+        return permit
