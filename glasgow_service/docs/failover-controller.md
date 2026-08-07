@@ -68,6 +68,26 @@ therefore remain able to observe or simulate comparator input, but cannot start
 the controller, energize a pump, stop a pump, or advance the automatic cascade.
 
 The authority dependency is optional to preserve the current single-node
-Glasgow deployment until the production coordinator is configured. The next
-transport iteration must pass the fencing token through the Glasgow API and
-persist the highest accepted token at the hardware-owner boundary.
+Glasgow deployment until the production coordinator is configured. Persistent
+enforcement at the Glasgow API boundary is described in the next section.
+
+## Fourth iteration: persistent hardware-owner fencing
+
+Set `GLASGOW_REQUIRE_FENCING=true` on the Glasgow service to disable automatic
+vacuum startup and require these headers on mutating vacuum requests:
+
+- `X-Executor-ID`: unique active executor identity.
+- `X-Fencing-Token`: positive, monotonically increasing leadership term.
+- `X-Lease-Valid-For-Ms`: short remaining validity window, capped at 30 seconds.
+
+The hardware owner atomically persists the highest accepted term at
+`GLASGOW_FENCING_STATE` (default
+`/var/lib/glasgow-service/fencing-token.json`). Lower terms, and the same term
+presented by a different executor, are rejected even after a process restart.
+The executor renews its local hardware-control window through
+`POST /vacuum/leadership/renew`; if heartbeats stop, automatic cascade and
+direct GPIO mutations fail closed when the window expires.
+
+This is fencing, not leader election. Redis/Sentinel remains responsible for
+issuing one monotonically increasing term to the elected executor. The Glasgow
+service independently enforces that term at the single-device boundary.

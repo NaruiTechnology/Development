@@ -6,7 +6,11 @@ import pytest
 from glasgow_service.coordination import InMemoryLeaseCoordinator, ManualClock
 from glasgow_service.execution_authority import (
     AuthorityDenied,
+    ExecutionPermit,
     FailoverExecutionAuthority,
+    PersistentFencingTokenStore,
+    RemoteExecutionAuthority,
+    StaleFencingToken,
 )
 from glasgow_service.executor_lifecycle import ExecutorState
 from glasgow_service.failover_executor import FailoverExecutor
@@ -131,5 +135,99 @@ def test_new_leader_uses_newer_permit_and_can_start_its_controller():
             assert controller._last_permit.fencing_token > old_token
         finally:
             await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_persistent_hardware_fence_rejects_stale_terms_after_restart(tmp_path):
+    state_path = tmp_path / "fencing-token.json"
+    first_store = PersistentFencingTokenStore(state_path)
+    first_store.accept(ExecutionPermit("node-a", 7))
+
+    restarted_store = PersistentFencingTokenStore(state_path)
+    assert restarted_store.highest_permit == ExecutionPermit("node-a", 7)
+    with pytest.raises(StaleFencingToken, match="older than accepted token 7"):
+        restarted_store.accept(ExecutionPermit("node-a", 6))
+    with pytest.raises(StaleFencingToken, match="belongs to executor node-a"):
+        restarted_store.accept(ExecutionPermit("node-b", 7))
+
+    restarted_store.accept(ExecutionPermit("node-b", 8))
+    assert PersistentFencingTokenStore(state_path).highest_permit == ExecutionPermit(
+        "node-b", 8
+    )
+
+
+def test_remote_authority_expires_without_heartbeat_and_renews_same_term(tmp_path):
+    clock = ManualClock()
+    authority = RemoteExecutionAuthority(
+        PersistentFencingTokenStore(tmp_path / "fencing-token.json"),
+        clock=clock,
+        maximum_validity=10.0,
+    )
+
+    authority.accept("node-a", 11, 5.0)
+    assert authority.require() == ExecutionPermit("node-a", 11)
+    clock.advance(5.0)
+    with pytest.raises(AuthorityDenied, match="missing or expired"):
+        authority.require()
+
+    authority.accept("node-a", 11, 5.0)
+    clock.advance(4.0)
+    assert authority.require() == ExecutionPermit("node-a", 11)
+
+
+def test_expired_remote_authority_blocks_device_write(tmp_path):
+    async def scenario():
+        clock = ManualClock()
+        authority = RemoteExecutionAuthority(
+            PersistentFencingTokenStore(tmp_path / "fencing-token.json"),
+            clock=clock,
+        )
+        authority.accept("node-a", 1, 5.0)
+        config = make_config()
+        device = make_device(config)
+        controller = VacuumController(config, device=device, authority=authority)
+        await controller.start()
+        try:
+            clock.advance(5.0)
+            history_length = len(device.history)
+            with pytest.raises(AuthorityDenied, match="missing or expired"):
+                await controller.set_power("TurboVacuumPump", True)
+            assert len(device.history) == history_length
+        finally:
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_api_fencing_dependency_requires_headers_and_rejects_stale_token(
+    tmp_path, monkeypatch
+):
+    from fastapi import HTTPException
+
+    from glasgow_service import api
+
+    config = make_config()
+    authority = RemoteExecutionAuthority(
+        PersistentFencingTokenStore(tmp_path / "fencing-token.json")
+    )
+    controller = VacuumController(
+        config,
+        device=make_device(config),
+        authority=authority,
+    )
+    monkeypatch.setattr(api, "vacuum", controller)
+
+    async def scenario():
+        with pytest.raises(HTTPException) as missing:
+            await api.require_vacuum_execution_permit(None, None, None)
+        assert missing.value.status_code == 428
+
+        await api.require_vacuum_execution_permit("node-a", 4, 5000)
+        assert authority.require() == ExecutionPermit("node-a", 4)
+
+        with pytest.raises(HTTPException) as stale:
+            await api.require_vacuum_execution_permit("node-b", 3, 5000)
+        assert stale.value.status_code == 409
 
     asyncio.run(scenario())

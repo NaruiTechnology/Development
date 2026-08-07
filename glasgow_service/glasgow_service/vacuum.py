@@ -21,7 +21,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .comparator_subtarget import ComparatorTarget, VacuumComparatorSubtarget
 from .models import VacuumPumpState, VacuumSystemStatus
-from .execution_authority import ExecutionAuthority, ExecutionPermit
+from .execution_authority import (
+    ExecutionAuthority,
+    ExecutionPermit,
+    RemoteExecutionAuthority,
+)
 from .vacuum_device import (
     SimulatedVacuumDevice,
     SimulatedVacuumDeviceControl,
@@ -424,6 +428,17 @@ class VacuumController:
     def requires_device(self) -> bool:
         """Whether this controller owns the shared Glasgow USB device."""
         return not self.config.simulate
+
+    @property
+    def requires_remote_authority(self) -> bool:
+        return isinstance(self._authority, RemoteExecutionAuthority)
+
+    def accept_remote_authority(
+        self, holder_id: str, fencing_token: int, valid_for: float
+    ) -> ExecutionPermit:
+        if not isinstance(self._authority, RemoteExecutionAuthority):
+            raise RuntimeError("remote fencing is not enabled")
+        return self._authority.accept(holder_id, fencing_token, valid_for)
 
     async def start(self) -> None:
         if self._running:

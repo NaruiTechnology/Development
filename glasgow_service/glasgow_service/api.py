@@ -11,7 +11,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, WebSocket, WebSocketDisconnect
 from typing import Literal
 
 from .service import DeviceService, DeviceBusy, DeviceNotReady
@@ -22,7 +22,7 @@ from .models  import (
 from .auth    import require_token
 from .config  import find_config_path
 from .service import LOG_NAME
-from .execution_authority import AuthorityDenied
+from .execution_authority import AuthorityDenied, remote_authority_from_environment
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 from .vacuum import (
     VacuumController,
@@ -48,12 +48,15 @@ async def lifespan(app: FastAPI):
     logger.info("Vacuum config: %s", vacuum_path)
     vacuum_config = load_vacuum_config(vacuum_path) if vacuum_config_enabled(vacuum_path) else None
     if vacuum_config is not None and vacuum_config.enabled:
-        vacuum = VacuumController(vacuum_config)
+        vacuum = VacuumController(
+            vacuum_config,
+            authority=remote_authority_from_environment(),
+        )
         # Enablement is an operational request to run the controller, not
         # merely to expose its REST endpoints. Start it during service
         # startup when it is not already ready; ``start()`` is idempotent,
         # so later dashboard acquire requests remain safe.
-        if not vacuum.status().isVacuumSystemReady:
+        if not vacuum.requires_remote_authority and not vacuum.status().isVacuumSystemReady:
             try:
                 if vacuum.requires_device:
                     await svc.acquire_exclusive("vacuum")
@@ -125,6 +128,34 @@ def require_vacuum_controller() -> VacuumController:
         raise HTTPException(404, "vacuum controller is disabled")
     return vacuum
 
+
+async def require_vacuum_execution_permit(
+    x_executor_id: str | None = Header(None, alias="X-Executor-ID"),
+    x_fencing_token: int | None = Header(None, alias="X-Fencing-Token"),
+    x_lease_valid_for_ms: int | None = Header(None, alias="X-Lease-Valid-For-Ms"),
+) -> None:
+    controller = require_vacuum_controller()
+    if not controller.requires_remote_authority:
+        return
+    if (
+        not x_executor_id
+        or x_fencing_token is None
+        or x_lease_valid_for_ms is None
+    ):
+        raise HTTPException(
+            428,
+            "fenced vacuum mutation requires X-Executor-ID, X-Fencing-Token, "
+            "and X-Lease-Valid-For-Ms",
+        )
+    try:
+        controller.accept_remote_authority(
+            x_executor_id,
+            x_fencing_token,
+            x_lease_valid_for_ms / 1000.0,
+        )
+    except (AuthorityDenied, ValueError) as exc:
+        raise HTTPException(409, str(exc))
+
 @app.get("/vacuum", response_model=VacuumSystemStatus, tags=["vacuum"],
          summary="Current vacuum GPIO state")
 async def get_vacuum():
@@ -133,7 +164,7 @@ async def get_vacuum():
 
 @app.post("/vacuum/acquire", response_model=VacuumSystemStatus, tags=["vacuum"],
           summary="Reserve the shared Glasgow device for the vacuum dashboard",
-          dependencies=[Depends(require_token)])
+          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
 async def acquire_vacuum():
     controller = require_vacuum_controller()
     async with vacuum_lifecycle_lock:
@@ -155,7 +186,7 @@ async def acquire_vacuum():
 
 @app.post("/vacuum/release", response_model=VacuumSystemStatus, tags=["vacuum"],
           summary="Release the Glasgow device back to the scan service",
-          dependencies=[Depends(require_token)])
+          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
 async def release_vacuum():
     controller = require_vacuum_controller()
     async with vacuum_lifecycle_lock:
@@ -170,7 +201,7 @@ async def release_vacuum():
 
 @app.post("/vacuum/pumps/{name}/power", response_model=VacuumSystemStatus,
           tags=["vacuum"], summary="Set one vacuum pump power output",
-          dependencies=[Depends(require_token)])
+          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
 async def set_vacuum_power(name: str, req: VacuumPowerRequest):
     controller = require_vacuum_controller()
     if not controller.status().running:
@@ -201,12 +232,14 @@ async def set_vacuum_simulation_read(name: str, req: VacuumSimulationReadRequest
         raise HTTPException(404, f"unknown vacuum pump: {name}")
     except ValueError as exc:
         raise HTTPException(409, str(exc))
+    except AuthorityDenied as exc:
+        raise HTTPException(409, str(exc))
     return controller.status()
 
 
 @app.post("/vacuum/stop", response_model=VacuumSystemStatus, tags=["vacuum"],
           summary="Stop all vacuum pumps except MechanicalVacuumPump",
-          dependencies=[Depends(require_token)])
+          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
 async def stop_vacuum():
     controller = require_vacuum_controller()
     if not controller.status().running:
@@ -218,6 +251,13 @@ async def stop_vacuum():
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
     return controller.status()
+
+
+@app.post("/vacuum/leadership/renew", response_model=VacuumSystemStatus,
+          tags=["vacuum"], summary="Renew the active executor fencing window",
+          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
+async def renew_vacuum_leadership():
+    return require_vacuum_controller().status()
 
 
 # ---------- raster ---------------------------------------------------------
