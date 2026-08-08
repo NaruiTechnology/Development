@@ -166,3 +166,15 @@ One scan at a time. Concurrent REST or WebSocket requests return **HTTP
   ]
 }
 #------------------------------------------
+### Active/standby executor
+
+The optional `vacuum_executor_app` is an always-running active/standby process,
+not a scheduler. Run it with `python -m glasgow_service.vacuum_executor_app`.
+Production deployment assets are in `deploy/vacuum-executor.service` and
+`examples/vacuum-executor.env.example`; use at least three Redis Sentinel
+endpoints and enable `GLASGOW_REQUIRE_FENCING`.
+
+For a single-VM software smoke test, run `bash deploy/setup-redis-sentinel.sh`.
+It installs Redis and one local Sentinel (quorum 1); this is not a production
+failover configuration. Production needs replicated Redis plus three or more
+Sentinel processes on independent nodes.

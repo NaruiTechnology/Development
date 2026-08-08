@@ -1,0 +1,19 @@
+[Unit]
+Description=Vacuum active/standby failover executor
+After=network-online.target glasgow-svc.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=vboxuser
+WorkingDirectory=/home/vboxuser/Project/Operations
+Environment=PYTHONPATH=/home/vboxuser/Project/Operations/Development:/home/vboxuser/Project/Operations/Development/glasgow_service
+EnvironmentFile=/etc/vacuum-executor.env
+ExecStart=/home/vboxuser/Project/Operations/.venv/bin/python -m glasgow_service.vacuum_executor_app
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

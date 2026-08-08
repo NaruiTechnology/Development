@@ -17,7 +17,9 @@ except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
 REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('httpx', 'redis')
 
 # Files (by name or glob) to copy verbatim into dist
-ASSET_PATTERNS = ['*.ihex', '*.toml', 'requirements.txt', 'README.md']
+ASSET_PATTERNS = [
+    '*.ihex', '*.toml', 'requirements.txt', 'README.md', '*.service', '*.env.example', '*.sh'
+]
 
 # Files to exclude from any copied tree or asset sweep.
 EXCLUDE_PATTERNS = ['*.log']

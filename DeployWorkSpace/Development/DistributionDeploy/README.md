@@ -55,6 +55,38 @@ The archive builder also validates both packages are declared in the Glasgow
 requirements file and package metadata, preventing an incomplete distribution
 from being produced.
 
+### Redis/Sentinel prerequisite
+
+The distribution contains the executor code and the helper
+`glasgow_service/deploy/setup-redis-sentinel.sh`, but it does not silently
+install or reconfigure Redis. Run the helper on a development VM for a local
+smoke test:
+
+```bash
+cd ~/IobeamPlatform/Development/glasgow_service
+bash deploy/setup-redis-sentinel.sh
+```
+
+This creates one local Redis master and one Sentinel with quorum `1`. It is
+appropriate only for software verification. Production requires a replicated
+Redis primary/replica topology and at least three Sentinel processes on
+independent nodes. Set `VACUUM_REDIS_SENTINELS` to the Sentinel addresses and
+use `GLASGOW_REQUIRE_FENCING=true` only after that topology is available.
+
+Verify the deployment before starting the executor:
+
+```bash
+redis-cli -p 26379 ping
+redis-cli -p 26379 SENTINEL get-master-addr-by-name vacuum-primary
+curl -i http://127.0.0.1:8780/health/live
+curl -i http://127.0.0.1:8780/health/ready
+```
+
+Copy `glasgow_service/examples/vacuum-executor.env.example` to
+`/etc/vacuum-executor.env`, assign a unique `VACUUM_EXECUTOR_ID`, then install
+`glasgow_service/deploy/vacuum-executor.service` into
+`/etc/systemd/system/` before enabling the service.
+
 ---
 
 ## Project layout

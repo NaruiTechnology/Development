@@ -112,3 +112,13 @@ Replica acknowledgement reduces the exposure, while the persistent token at
 the Glasgow hardware owner remains the final split-brain safety mechanism. A
 lost Redis counter may temporarily reduce availability, but cannot authorize an
 older term to control the FPGA.
+## Always-on executor process
+
+`python -m glasgow_service.vacuum_executor_app` runs the failover loop continuously;
+it is not a scheduled task. The process exposes `/health/live`, `/health/ready`,
+and `/status` for a supervisor or local monitor. Copy
+`deploy/vacuum-executor.service` and `examples/vacuum-executor.env.example` to
+the target SBC, set three or more Sentinel endpoints, and enable
+`GLASGOW_REQUIRE_FENCING=true` in production. The systemd unit restarts the
+process, while Redis Sentinel elects a lease holder and the Glasgow service
+rejects stale fencing tokens.
