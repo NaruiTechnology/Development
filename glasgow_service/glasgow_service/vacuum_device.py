@@ -113,3 +113,77 @@ class SimulatedVacuumDevice:
         if require_connected and not self._connected:
             raise ConnectionError("simulated vacuum device is disconnected")
 
+
+class RaspberryPiGPIODevice:
+    """Map logical vacuum channels to Raspberry Pi BCM GPIO lines.
+
+    ``gpio_factory`` is injectable for tests. Production uses gpiozero with
+    the lgpio pin factory, the supported character-device path on current
+    Raspberry Pi OS releases.
+    """
+
+    def __init__(
+        self,
+        output_pins: dict[str, int],
+        input_pins: dict[str, int],
+        *,
+        initial_outputs: dict[str, bool] | None = None,
+        active_high: bool = True,
+        input_pull_up: bool | None = None,
+        gpio_factory=None,
+    ) -> None:
+        all_bcm = [*output_pins.values(), *input_pins.values()]
+        if len(set(all_bcm)) != len(all_bcm):
+            raise ValueError("SBC BCM GPIO assignments must be unique")
+        if any(not 0 <= pin <= 27 for pin in all_bcm):
+            raise ValueError("SBC BCM GPIO numbers must be between 0 and 27")
+        if gpio_factory is None:
+            try:
+                from gpiozero import DigitalInputDevice, DigitalOutputDevice
+                from gpiozero.pins.lgpio import LGPIOFactory
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Raspberry Pi GPIO requires gpiozero and python3-lgpio"
+                ) from exc
+            pin_factory = LGPIOFactory()
+
+            def gpio_factory(kind, bcm, **kwargs):
+                cls = DigitalOutputDevice if kind == "output" else DigitalInputDevice
+                return cls(bcm, pin_factory=pin_factory, **kwargs)
+
+        initial_outputs = initial_outputs or {}
+        self._outputs = {
+            name: gpio_factory(
+                "output",
+                bcm,
+                active_high=active_high,
+                initial_value=bool(initial_outputs.get(name, False)),
+            )
+            for name, bcm in output_pins.items()
+        }
+        self._inputs = {
+            name: gpio_factory("input", bcm, pull_up=input_pull_up)
+            for name, bcm in input_pins.items()
+        }
+
+    async def write(self, pin: str, value: bool) -> None:
+        try:
+            self._outputs[pin].value = bool(value)
+        except KeyError as exc:
+            raise ValueError(f"unknown vacuum output pin: {pin}") from exc
+
+    async def read_port_b(self) -> dict[str, int]:
+        return {name: int(device.value) for name, device in self._inputs.items()}
+
+    def output_level(self, pin: str) -> bool:
+        try:
+            # Read the GPIO line through the driver, not controller cache.
+            return bool(self._outputs[pin].value)
+        except KeyError as exc:
+            raise ValueError(f"unknown vacuum output pin: {pin}") from exc
+
+    async def close(self) -> None:
+        # A leadership loss must put outputs in their safe state immediately.
+        # Keep line handles open so a later leadership term can reacquire.
+        for output in self._outputs.values():
+            output.off()

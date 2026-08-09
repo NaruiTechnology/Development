@@ -32,6 +32,7 @@ function currentLogin(): string {
 export interface Config {
   port: number;
   proxyTargetHttp: string;
+  vacuumControllerUrl: string;
   proxyTargetWs: string;
   glasgowToken: string | null;
   mock: boolean;
@@ -262,6 +263,7 @@ const resolvedOperationDbUser = normalizeLocalPeerUser(
 export const config: Config = {
   port: Number(process.env.PORT ?? 4000),
   proxyTargetHttp: process.env.PROXY_TARGET_HTTP ?? "http://127.0.0.1:8765",
+  vacuumControllerUrl: process.env.VACUUM_CONTROLLER_URL ?? process.env.PROXY_TARGET_HTTP ?? "http://127.0.0.1:8765",
   proxyTargetWs: process.env.PROXY_TARGET_WS ?? "ws://127.0.0.1:8765",
   glasgowToken: process.env.GLASGOW_TOKEN?.trim() || null,
   mock: bool(process.env.MOCK, false),

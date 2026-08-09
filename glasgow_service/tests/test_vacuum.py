@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from glasgow_service import api
 from glasgow_service.vacuum import (
     MECHANICAL_PUMP,
+    VacuumConfig,
     VacuumController,
     load_vacuum_config,
     vacuum_config_enabled,
@@ -25,7 +26,7 @@ def test_config(**updates):
     """Stable unit-test fixture derived from, but not controlled by, live settings."""
     config = load_vacuum_config(CONFIG_PATH).model_copy(
         deep=True,
-        update={"enabled": True, "error_range": 0.005}
+        update={"enabled": True, "error_range": 0.005, "transport": "glasgow"}
     )
     for action_group in config.actions:
         for action in action_group.values():
@@ -51,6 +52,32 @@ def test_vacuum_config_parses_thresholds_and_port_directions():
     assert [pump.threshold for pump in config.pumps] == [0.1, 0.002, 0.00003, 0.00003]
     assert all(pump.write.startswith("A") for pump in config.pumps)
     assert all(pump.read.startswith("B") for pump in config.pumps)
+
+
+def test_vacuum_equipment_count_is_configuration_driven_with_minimum_three():
+    payload = json.loads(CONFIG_PATH.read_text())
+
+    three = json.loads(json.dumps(payload))
+    three["VacuumPumps"] = three["VacuumPumps"][:3]
+    parsed_three = VacuumConfig.model_validate(three)
+    assert len(parsed_three.pumps) == 3
+
+    five = json.loads(json.dumps(payload))
+    five["VacuumPumps"].append({
+        "name": "UHVacuumPump_3",
+        "power": "off",
+        "value": "4.0e-5",
+        "write": "A4",
+        "read": "B4",
+    })
+    five["SBC"]["GPIO"].update({"A4": 12, "B4": 13})
+    parsed_five = VacuumConfig.model_validate(five)
+    assert [pump.name for pump in parsed_five.pumps][-1] == "UHVacuumPump_3"
+
+    two = json.loads(json.dumps(payload))
+    two["VacuumPumps"] = two["VacuumPumps"][:2]
+    with pytest.raises(ValueError, match="at least 3"):
+        VacuumConfig.model_validate(two)
 
 
 def test_live_gpio_timeouts_allow_fpga_generation():

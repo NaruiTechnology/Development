@@ -127,9 +127,19 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
 
     void (async () => {
       try {
+        const configuredResponse = await fetch(apiUrl("/api/vacuum"));
+        if (!configuredResponse.ok) {
+          throw new Error(`${configuredResponse.status} ${configuredResponse.statusText}`);
+        }
+        const configured = await readJsonResponse<VacuumSystemStatus>(configuredResponse, "vacuum configuration");
         const response = await fetch(apiUrl("/api/vacuum/acquire"), {
           method: "POST",
-          headers: scanAuthHeaders(),
+          headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+          body: JSON.stringify({
+            expected_channels: Object.fromEntries(
+              configured.pumps.map((pump) => [pump.name, pump.threshold]),
+            ),
+          }),
         });
         if (response.status === 404) {
           if (!cancelled) onCloseRef.current();
@@ -217,6 +227,12 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
   const mechanicalPump = status?.pumps.find((pump) => pump.name === MECHANICAL_PUMP);
   const turboPump = status?.pumps.find((pump) => pump.name === "TurboVacuumPump");
   const uhPumps = status?.pumps.filter((pump) => pump.group === "ultra-high-vacuum") ?? [];
+  const workflowNames = new Set([
+    MECHANICAL_PUMP,
+    "TurboVacuumPump",
+    ...uhPumps.map((pump) => pump.name),
+  ]);
+  const otherPumps = status?.pumps.filter((pump) => !workflowNames.has(pump.name)) ?? [];
 
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
@@ -275,7 +291,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
             <div id="vacuum-title" className="modal__title">{t("vacuum.title")}</div>
             {status && (
               <div className="vacuum-dashboard__device">
-                {status.device_id} · {status.voltage.toFixed(1)} V · {status.simulation ? t("vacuum.simulation") : t("vacuum.hardware")} · {status.control_transport === "vacuum-control-subtarget" ? t("vacuum.subtarget") : t("vacuum.gpioSimulation")}
+                {status.device_id} · {status.voltage.toFixed(1)} V · {status.simulation ? t("vacuum.simulation") : t("vacuum.hardware")} · {status.control_transport === "raspberry-pi-gpio" ? "Raspberry Pi GPIO" : status.control_transport === "vacuum-control-subtarget" ? t("vacuum.subtarget") : t("vacuum.gpioSimulation")} · {formatRuntime(status.runtime_seconds)}
               </div>
             )}
           </div>
@@ -293,7 +309,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
               {pending === "acquire" ? t("vacuum.acquiring") : t("vacuum.loading")}
             </div>
           ) : (
-            mechanicalPump && turboPump ? (
+            mechanicalPump && turboPump && uhPumps.length > 0 && otherPumps.length === 0 ? (
               <div className="vacuum-workflow">
                 <div className="vacuum-workflow__stage">{renderPumpCard(mechanicalPump)}</div>
                 <WorkflowArrow state={mechanicalPump.border} />
@@ -337,4 +353,12 @@ function groupState(pumps: VacuumPumpState[]): VacuumPumpState["border"] {
 function formatVacuumValue(value: number): string {
   if (!Number.isFinite(value)) return "—";
   return value === 0 ? "0" : value.toExponential(2);
+}
+
+function formatRuntime(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainder = total % 60;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${remainder.toString().padStart(2, "0")}`;
 }

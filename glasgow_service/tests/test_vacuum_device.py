@@ -3,7 +3,57 @@ from pathlib import Path
 
 import pytest
 
-from glasgow_service.vacuum_device import SimulatedVacuumDevice, VacuumDevice
+from glasgow_service.vacuum_device import (
+    RaspberryPiGPIODevice,
+    SimulatedVacuumDevice,
+    VacuumDevice,
+)
+
+
+class FakeGpioLine:
+    def __init__(self, value=False):
+        self.value = value
+
+    def off(self):
+        self.value = False
+
+
+def test_raspberry_pi_device_maps_bcm_lines_and_reads_physical_state():
+    created = {}
+
+    def factory(kind, bcm, **kwargs):
+        line = FakeGpioLine(kwargs.get("initial_value", False))
+        created[(kind, bcm)] = line
+        return line
+
+    async def scenario():
+        device = RaspberryPiGPIODevice(
+            {"A0": 17, "A1": 22},
+            {"B0": 27, "B1": 23},
+            initial_outputs={"A0": True},
+            gpio_factory=factory,
+        )
+        assert device.output_level("A0") is True
+        created[("input", 27)].value = True
+        assert await device.read_port_b() == {"B0": 1, "B1": 0}
+        await device.write("A1", True)
+        assert created[("output", 22)].value is True
+        # Mutating the fake driver proves output_level reads hardware state.
+        created[("output", 22)].value = False
+        assert device.output_level("A1") is False
+        await device.close()
+        assert all(not line.value for (kind, _), line in created.items() if kind == "output")
+
+    asyncio.run(scenario())
+
+
+def test_raspberry_pi_device_rejects_duplicate_bcm_assignments():
+    with pytest.raises(ValueError, match="unique"):
+        RaspberryPiGPIODevice(
+            {"A0": 17},
+            {"B0": 17},
+            gpio_factory=lambda *_args, **_kwargs: FakeGpioLine(),
+        )
 
 
 def test_simulated_device_is_deterministic_and_satisfies_protocol():
@@ -75,4 +125,3 @@ def test_controller_accepts_injected_hardware_neutral_device():
             await controller.close()
 
     asyncio.run(scenario())
-

@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
     tomllib = None
 
 
-REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('httpx', 'redis')
+REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis')
 
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = [

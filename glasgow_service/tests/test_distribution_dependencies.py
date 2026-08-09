@@ -26,7 +26,7 @@ def requirement_names(path):
 
 
 def test_distribution_manifests_include_ha_runtime_clients():
-    required = {"httpx", "redis"}
+    required = {"gpiozero", "httpx", "redis"}
     manifests = [
         DEVELOPMENT_ROOT / "requirements.txt",
         DEVELOPMENT_ROOT / "DeployWorkSpace" / "Development" / "requirements.txt",
@@ -59,4 +59,25 @@ def test_distribution_deploy_verifies_installed_client_imports():
         if "installPipRequirements" in action
     )
 
-    assert install_action["actionData"]["verifyImports"] == ["httpx", "redis"]
+    assert install_action["actionData"]["verifyImports"] == ["gpiozero", "httpx", "redis"]
+
+
+def test_distribution_installs_raspberry_pi_gpio_os_runtime_conditionally():
+    config_path = (
+        DEVELOPMENT_ROOT
+        / "DeployWorkSpace"
+        / "Development"
+        / "DistributionDeploy"
+        / "Json"
+        / "DistributionDeploy.json"
+    )
+    config = json.loads(config_path.read_text())
+    action = next(
+        item["installSbcGpioRuntime"]
+        for item in config["Actions"]
+        if "installSbcGpioRuntime" in item
+    )["actionData"]
+
+    assert action["requireRaspberryPi"] is True
+    assert action["aptPackages"] == ["python3-gpiozero", "python3-lgpio"]
+    assert action["verifyImports"] == ["gpiozero", "lgpio"]

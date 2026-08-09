@@ -37,7 +37,19 @@ export function buildRestProxy(): Router {
       }
       try {
         const status = JSON.parse(text) as { vacuum_enabled?: unknown };
-        vacuumEnabled = status.vacuum_enabled === true;
+        if (config.vacuumControllerUrl === config.proxyTargetHttp) {
+          vacuumEnabled = status.vacuum_enabled === true;
+        } else {
+          try {
+            const vacuumResponse = await fetch(`${config.vacuumControllerUrl}/vacuum`, {
+              signal: AbortSignal.timeout(2_000),
+            });
+            vacuumEnabled = vacuumResponse.ok;
+          } catch {
+            vacuumEnabled = false;
+          }
+          status.vacuum_enabled = vacuumEnabled;
+        }
         res.status(upstream.status).json(status);
       } catch {
         res.status(502).json({
@@ -62,15 +74,14 @@ export function buildRestProxy(): Router {
   router.use("/vacuum", async (_req, res, next) => {
     if (vacuumEnabled === null) {
       try {
-        const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
+        const upstream = await fetch(`${config.vacuumControllerUrl}/vacuum`, {
           headers: config.glasgowToken
             ? { Authorization: `Bearer ${config.glasgowToken}` }
             : undefined,
           signal: AbortSignal.timeout(2_000),
         });
         if (upstream.ok) {
-          const status = (await upstream.json()) as { vacuum_enabled?: unknown };
-          vacuumEnabled = status.vacuum_enabled === true;
+          vacuumEnabled = true;
         }
       } catch {
         // Let the proxy return its normal upstream-unreachable response.
@@ -85,6 +96,9 @@ export function buildRestProxy(): Router {
 
   const proxy = createProxyMiddleware({
     target: config.proxyTargetHttp,
+    router: (req) => req.url?.startsWith("/api/vacuum")
+      ? config.vacuumControllerUrl
+      : config.proxyTargetHttp,
     changeOrigin: true,
     pathRewrite: { "^/api": "" },
     selfHandleResponse: true,
@@ -135,7 +149,7 @@ export function buildRestProxy(): Router {
           }
         });
       },
-      error: (err, _req, res) => {
+      error: (err, req, res) => {
         // Surface upstream-down failures as a clean JSON error rather than a
         // 502 with an HTML body.
         if ("writeHead" in res && !res.headersSent) {
@@ -145,7 +159,9 @@ export function buildRestProxy(): Router {
           JSON.stringify({
             error: "upstream_unreachable",
             detail: err.message,
-            target: config.proxyTargetHttp,
+            target: req.url?.startsWith("/api/vacuum")
+              ? config.vacuumControllerUrl
+              : config.proxyTargetHttp,
           })
         );
       },

@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import re
 import shlex
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -29,11 +31,13 @@ from .execution_authority import (
 from .vacuum_device import (
     SimulatedVacuumDevice,
     SimulatedVacuumDeviceControl,
+    RaspberryPiGPIODevice,
     VacuumDevice,
 )
 
 
-VACUUM_CONFIG_ENV = "GLASGOW_VACUUM_CONFIG"
+VACUUM_CONFIG_ENV = "SBC_VACUUM_CONFIG"
+LEGACY_VACUUM_CONFIG_ENV = "GLASGOW_VACUUM_CONFIG"
 DEFAULT_VACUUM_CONFIG = Path(
     "/home/vboxuser/Project/Operations/Development/GlasgowDataIO/Json/vacuumSystem.json"
 )
@@ -60,6 +64,14 @@ def _parse_threshold(value: Any) -> float:
 class GlasgowDeviceConfig(BaseModel):
     id: str = Field(alias="Id")
     voltage: float = 3.3
+
+
+class SbcDeviceConfig(BaseModel):
+    id: str = Field("raspberry-pi", alias="Id")
+    voltage: float = 3.3
+    gpio: dict[str, int] = Field(alias="GPIO")
+    active_high: bool = Field(True, alias="ActiveHigh")
+    input_pull_up: bool | None = Field(None, alias="InputPullUp")
 
 
 class VacuumPumpConfig(BaseModel):
@@ -109,11 +121,13 @@ class VacuumConfig(BaseModel):
     log_name: str = Field("VacuumDashboard", alias="LogName")
     verbose: bool = Field(False, alias="Verbose")
     simulate: bool = Field(False, alias="Simulate")
+    transport: str = Field("glasgow", alias="Transport")
+    sbc: SbcDeviceConfig | None = Field(None, alias="SBC")
 
     @model_validator(mode="after")
     def validate_channel_map(self):
-        if not self.pumps:
-            raise ValueError("vacuum config must define at least one pump")
+        if len(self.pumps) < 3:
+            raise ValueError("vacuum config must define at least 3 pumps")
         if len(self.pumps) > 8:
             raise ValueError("vacuum control sub-target supports at most 8 pumps")
         writes = [pump.write for pump in self.pumps]
@@ -122,6 +136,14 @@ class VacuumConfig(BaseModel):
             raise ValueError("vacuum Port A output pins must be unique")
         if len(set(reads)) != len(reads):
             raise ValueError("vacuum Port B comparator pins must be unique")
+        if self.transport not in {"glasgow", "raspberry-pi"}:
+            raise ValueError("Transport must be 'glasgow' or 'raspberry-pi'")
+        if self.transport == "raspberry-pi":
+            if self.sbc is None:
+                raise ValueError("raspberry-pi transport requires SBC configuration")
+            missing = [pin for pin in writes + reads if pin not in self.sbc.gpio]
+            if missing:
+                raise ValueError(f"SBC.GPIO is missing channels: {', '.join(missing)}")
         return self
 
     def action(self, name: str) -> VacuumAction:
@@ -132,13 +154,15 @@ class VacuumConfig(BaseModel):
 
     @property
     def device(self) -> GlasgowDeviceConfig:
+        if self.transport == "raspberry-pi" and self.sbc is not None:
+            return self.sbc
         if not self.glasgow:
             raise ValueError("vacuum config does not define a Glasgow device")
         return next(iter(self.glasgow.values()))
 
 
 def find_vacuum_config_path() -> Path:
-    configured = os.environ.get(VACUUM_CONFIG_ENV)
+    configured = os.environ.get(VACUUM_CONFIG_ENV) or os.environ.get(LEGACY_VACUUM_CONFIG_ENV)
     path = Path(configured).expanduser() if configured else DEFAULT_VACUUM_CONFIG
     if not path.is_file():
         raise FileNotFoundError(f"vacuum configuration not found: {path}")
@@ -399,6 +423,16 @@ class VacuumController:
                     pump.write: pump.power.lower() == "on" for pump in config.pumps
                 },
             )
+        elif config.transport == "raspberry-pi" and config.sbc is not None:
+            self.gpio = RaspberryPiGPIODevice(
+                {pump.write: config.sbc.gpio[pump.write] for pump in config.pumps},
+                {pump.read: config.sbc.gpio[pump.read] for pump in config.pumps},
+                initial_outputs={
+                    pump.write: pump.power.lower() == "on" for pump in config.pumps
+                },
+                active_high=config.sbc.active_high,
+                input_pull_up=config.sbc.input_pull_up,
+            )
         else:
             self.gpio = RealComparatorGPIOInterface(config)
         if config.simulate and not isinstance(self.gpio, SimulatedVacuumDeviceControl):
@@ -422,12 +456,13 @@ class VacuumController:
         self._updated_at: Optional[str] = None
         self._cascade_stopped = False
         self._running = False
+        self._started_at: float | None = None
         self._simulation_reads = {pump.name: False for pump in config.pumps}
 
     @property
     def requires_device(self) -> bool:
         """Whether this controller owns the shared Glasgow USB device."""
-        return not self.config.simulate
+        return not self.config.simulate and self.config.transport == "glasgow"
 
     @property
     def requires_remote_authority(self) -> bool:
@@ -440,11 +475,26 @@ class VacuumController:
             raise RuntimeError("remote fencing is not enabled")
         return self._authority.accept(holder_id, fencing_token, valid_for)
 
+    def configure_expected_channels(self, expected: dict[str, float]) -> None:
+        unknown = sorted(set(expected) - set(self._states))
+        if unknown:
+            raise ValueError(f"unknown vacuum channels: {', '.join(unknown)}")
+        for name, value in expected.items():
+            numeric = float(value)
+            if not math.isfinite(numeric) or numeric <= 0:
+                raise ValueError(f"expected value for {name} must be positive and finite")
+            self._states[name].threshold = numeric
+            for pump in self.config.pumps:
+                if pump.name == name:
+                    pump.threshold = numeric
+                    break
+
     async def start(self) -> None:
         if self._running:
             return
         self._require_authority()
         self._running = True
+        self._started_at = time.monotonic()
         try:
             if self.config.simulate:
                 self.gpio.reconnect()
@@ -493,9 +543,15 @@ class VacuumController:
             connected=self._last_error is None,
             simulation=self.config.simulate,
             control_transport=(
-                "glasgow-gpio" if self.config.simulate else "vacuum-control-subtarget"
+                "glasgow-gpio" if self.config.simulate else
+                "raspberry-pi-gpio" if self.config.transport == "raspberry-pi" else
+                "vacuum-control-subtarget"
             ),
             running=self._running,
+            runtime_seconds=(
+                max(0.0, time.monotonic() - self._started_at)
+                if self._running and self._started_at is not None else 0.0
+            ),
             cascade_stopped=self._cascade_stopped,
             isVacuumSystemReady=self.isVacuumSystemReady,
             last_error=self._last_error,

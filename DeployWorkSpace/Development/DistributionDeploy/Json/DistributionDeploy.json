@@ -59,12 +59,25 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "commandFormat": "bash -c 'cd {} && python3 -m venv {} && . {}/bin/activate && python -m pip install --upgrade pip'",
+                    "commandFormat": "bash -c 'cd {} && python3 -m venv --system-site-packages {} && . {}/bin/activate && python -m pip install --upgrade pip'",
                     "root": ".",
                     "venv": ".venv",
                     "venvAct": ".venv"
                 },
                 "timeout": 180.0
+            }
+        },
+        {
+            "installSbcGpioRuntime": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "aptPackages": ["python3-gpiozero", "python3-lgpio"],
+                    "venvDir": ".venv",
+                    "verifyImports": ["gpiozero", "lgpio"],
+                    "requireRaspberryPi": true
+                },
+                "timeout": 600.0
             }
         },
         {
@@ -82,7 +95,7 @@
                     "skipPrivateGitEditable": true,
                     "editableInstall": true,
                     "editableTarget": ".",
-                    "verifyImports": ["httpx", "redis"],
+                    "verifyImports": ["gpiozero", "httpx", "redis"],
                     "stopOnError": false,
                     "useBreakSystemPackages": true
                 },

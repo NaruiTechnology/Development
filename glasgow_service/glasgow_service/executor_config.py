@@ -67,7 +67,10 @@ class ExecutorConfig:
             instance_id=instance_id,
             listen_host=os.environ.get("VACUUM_EXECUTOR_HOST", "127.0.0.1"),
             listen_port=port,
-            glasgow_url=os.environ.get("VACUUM_GLASGOW_URL", "http://127.0.0.1:8765").rstrip("/"),
+            glasgow_url=os.environ.get(
+                "VACUUM_SBC_URL",
+                os.environ.get("VACUUM_GLASGOW_URL", "http://127.0.0.1:8765"),
+            ).rstrip("/"),
             glasgow_token=os.environ.get("GLASGOW_TOKEN") or None,
             lease_ttl=ttl,
             poll_interval=poll,

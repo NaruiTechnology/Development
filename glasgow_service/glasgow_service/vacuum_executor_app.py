@@ -5,12 +5,12 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 
 from .executor_config import ExecutorConfig
 from .executor_logging import configure_logging
 from .failover_executor import FailoverExecutor
-from .glasgow_client import GlasgowVacuumClient
+from .glasgow_client import GlasgowClientError, SbcVacuumClient
 from .redis_coordination import RedisSentinelLeaseCoordinator
 from .vacuum_failover_runtime import VacuumFailoverRuntime
 
@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
             lease_ttl=config.lease_ttl,
             poll_interval=config.poll_interval,
         )
-        client = GlasgowVacuumClient(
+        client = SbcVacuumClient(
             config.glasgow_url, executor, bearer_token=config.glasgow_token,
         )
         runtime = VacuumFailoverRuntime(executor, client)
@@ -73,6 +73,56 @@ def create_app() -> FastAPI:
             return {"status": "starting"}
         config = holder["config"]
         return {"executor_id": config.instance_id, **runtime.status()}
+
+    def active_runtime() -> VacuumFailoverRuntime:
+        runtime = holder.get("runtime")
+        if not isinstance(runtime, VacuumFailoverRuntime):
+            raise HTTPException(status_code=503, detail="executor is starting")
+        try:
+            runtime.require_active()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return runtime
+
+    async def forward(operation):
+        try:
+            return await operation
+        except GlasgowClientError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.get("/vacuum")
+    async def vacuum_status() -> dict[str, object]:
+        runtime = holder.get("runtime")
+        if not isinstance(runtime, VacuumFailoverRuntime):
+            raise HTTPException(status_code=503, detail="executor is starting")
+        return await forward(runtime.sbc_status())
+
+    @app.post("/vacuum/acquire")
+    async def vacuum_acquire(
+        payload: dict[str, dict[str, float]] = Body(default_factory=dict),
+    ) -> dict[str, object]:
+        expected = payload.get("expected_channels", {})
+        return await forward(active_runtime().acquire(expected))
+
+    @app.post("/vacuum/pumps/{name}/power")
+    async def vacuum_power(name: str, payload: dict[str, bool]) -> dict[str, object]:
+        return await forward(active_runtime().set_power(name, bool(payload.get("power"))))
+
+    @app.post("/vacuum/pumps/{name}/read")
+    async def vacuum_simulated_read(
+        name: str, payload: dict[str, bool]
+    ) -> dict[str, object]:
+        return await forward(
+            active_runtime().set_simulated_read(name, bool(payload.get("checked")))
+        )
+
+    @app.post("/vacuum/stop")
+    async def vacuum_stop() -> dict[str, object]:
+        return await forward(active_runtime().stop_vacuum())
+
+    @app.post("/vacuum/release")
+    async def vacuum_release() -> dict[str, object]:
+        return await forward(active_runtime().release_vacuum())
 
     return app
 

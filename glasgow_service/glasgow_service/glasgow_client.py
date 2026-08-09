@@ -16,7 +16,7 @@ class GlasgowAuthorityRejected(AuthorityDenied, GlasgowClientError):
     pass
 
 
-class GlasgowVacuumClient:
+class SbcVacuumClient:
     def __init__(
         self,
         base_url: str,
@@ -43,8 +43,17 @@ class GlasgowVacuumClient:
             http_client = httpx.AsyncClient()
         self.http = http_client
 
-    async def acquire(self) -> dict[str, Any]:
-        return await self._request("POST", "/vacuum/acquire")
+    async def status(self) -> dict[str, Any]:
+        return await self._request("GET", "/vacuum", require_authority=False)
+
+    async def acquire(
+        self, expected_channels: dict[str, float] | None = None
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            "/vacuum/acquire",
+            json={"expected_channels": expected_channels or {}},
+        )
 
     async def renew_leadership(self) -> dict[str, Any]:
         return await self._request("POST", "/vacuum/leadership/renew")
@@ -55,6 +64,13 @@ class GlasgowVacuumClient:
     async def set_power(self, pump_name: str, power: bool) -> dict[str, Any]:
         return await self._request(
             "POST", f"/vacuum/pumps/{pump_name}/power", json={"power": power}
+        )
+
+    async def set_simulated_read(
+        self, pump_name: str, checked: bool
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST", f"/vacuum/pumps/{pump_name}/read", json={"checked": checked}
         )
 
     async def stop(self) -> dict[str, Any]:
@@ -83,9 +99,16 @@ class GlasgowVacuumClient:
         return headers
 
     async def _request(
-        self, method: str, path: str, *, json: dict[str, Any] | None = None
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        require_authority: bool = True,
     ) -> dict[str, Any]:
-        headers = self.fencing_headers()
+        headers = self.fencing_headers() if require_authority else {}
+        if self.bearer_token and "Authorization" not in headers:
+            headers["Authorization"] = f"Bearer {self.bearer_token}"
         try:
             response = await self.http.request(
                 method,
@@ -118,3 +141,6 @@ class GlasgowVacuumClient:
             pass
         return str(getattr(response, "text", "request rejected"))
 
+
+# Backward-compatible import for existing deployments and tests.
+GlasgowVacuumClient = SbcVacuumClient

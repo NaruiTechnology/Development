@@ -17,7 +17,7 @@ from typing import Literal
 from .service import DeviceService, DeviceBusy, DeviceNotReady
 from .models  import (
     RasterRequest, VectorRequest, ScanResult, ServiceStatus,
-    VacuumPowerRequest, VacuumSimulationReadRequest, VacuumSystemStatus,
+    VacuumAcquireRequest, VacuumPowerRequest, VacuumSimulationReadRequest, VacuumSystemStatus,
 )
 from .auth    import require_token
 from .config  import find_config_path
@@ -78,7 +78,8 @@ async def lifespan(app: FastAPI):
     finally:
         if vacuum is not None:
             await vacuum.close()
-            await svc.release_exclusive("vacuum")
+            if vacuum.requires_device:
+                await svc.release_exclusive("vacuum")
         await svc.stop()
 
 
@@ -163,12 +164,14 @@ async def get_vacuum():
 
 
 @app.post("/vacuum/acquire", response_model=VacuumSystemStatus, tags=["vacuum"],
-          summary="Reserve the shared Glasgow device for the vacuum dashboard",
+          summary="Acquire vacuum control and apply expected channel values",
           dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
-async def acquire_vacuum():
+async def acquire_vacuum(req: VacuumAcquireRequest | None = None):
     controller = require_vacuum_controller()
     async with vacuum_lifecycle_lock:
         try:
+            if req is not None:
+                controller.configure_expected_channels(req.expected_channels)
             if controller.requires_device:
                 await svc.acquire_exclusive("vacuum")
             await controller.start()
@@ -221,7 +224,7 @@ async def set_vacuum_power(name: str, req: VacuumPowerRequest):
 
 @app.post("/vacuum/pumps/{name}/read", response_model=VacuumSystemStatus,
           tags=["vacuum"], summary="Set a simulated vacuum threshold readback",
-          dependencies=[Depends(require_token)])
+          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
 async def set_vacuum_simulation_read(name: str, req: VacuumSimulationReadRequest):
     controller = require_vacuum_controller()
     if not controller.status().running:

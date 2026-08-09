@@ -6,14 +6,14 @@ import logging
 
 from .executor_lifecycle import ExecutorState
 from .failover_executor import FailoverExecutor
-from .glasgow_client import GlasgowClientError, GlasgowVacuumClient
+from .glasgow_client import GlasgowClientError, SbcVacuumClient
 
 
 class VacuumFailoverRuntime:
     def __init__(
         self,
         executor: FailoverExecutor,
-        glasgow: GlasgowVacuumClient,
+        glasgow: SbcVacuumClient,
     ) -> None:
         if glasgow.executor is not executor:
             raise ValueError("Glasgow client and runtime must use the same executor")
@@ -32,6 +32,39 @@ class VacuumFailoverRuntime:
             "glasgow_acquired": self._acquired_token is not None,
             "last_error": self.last_error,
         }
+
+    def require_active(self) -> None:
+        if not self.executor.may_execute or self._acquired_token is None:
+            raise RuntimeError("this executor is not the active SBC controller")
+
+    async def sbc_status(self) -> dict[str, object]:
+        return await self.glasgow.status()
+
+    async def acquire(
+        self, expected_channels: dict[str, float] | None = None
+    ) -> dict[str, object]:
+        self.require_active()
+        return await self.glasgow.acquire(expected_channels)
+
+    async def set_power(self, pump_name: str, power: bool) -> dict[str, object]:
+        self.require_active()
+        return await self.glasgow.set_power(pump_name, power)
+
+    async def set_simulated_read(
+        self, pump_name: str, checked: bool
+    ) -> dict[str, object]:
+        self.require_active()
+        return await self.glasgow.set_simulated_read(pump_name, checked)
+
+    async def stop_vacuum(self) -> dict[str, object]:
+        self.require_active()
+        return await self.glasgow.stop()
+
+    async def release_vacuum(self) -> dict[str, object]:
+        self.require_active()
+        result = await self.glasgow.release()
+        self._acquired_token = None
+        return result
 
     async def step(self) -> None:
         await self.executor.step()

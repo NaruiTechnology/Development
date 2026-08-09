@@ -40,6 +40,10 @@ class VacuumPowerRequest(BaseModel):
     power: bool
 
 
+class VacuumAcquireRequest(BaseModel):
+    expected_channels: dict[str, float] = Field(default_factory=dict)
+
+
 class VacuumSimulationReadRequest(BaseModel):
     checked: bool
 
@@ -64,8 +68,9 @@ class VacuumSystemStatus(BaseModel):
     voltage: float
     connected: bool
     simulation: bool
-    control_transport: Literal["glasgow-gpio", "vacuum-control-subtarget"]
+    control_transport: Literal["glasgow-gpio", "vacuum-control-subtarget", "raspberry-pi-gpio"]
     running: bool
+    runtime_seconds: float = 0.0
     cascade_stopped: bool
     isVacuumSystemReady: bool = False
     last_error: Optional[str] = None

@@ -1,0 +1,21 @@
+[Unit]
+Description=Raspberry Pi vacuum GPIO controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=vacuum
+Group=gpio
+WorkingDirectory=/opt/ionbeam/Development/glasgow_service
+EnvironmentFile=/etc/sbc-vacuum.env
+ExecStart=/opt/ionbeam/.venv/bin/python -m glasgow_service.sbc_vacuum_app
+Restart=always
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

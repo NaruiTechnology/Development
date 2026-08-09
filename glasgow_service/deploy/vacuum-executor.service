@@ -1,5 +1,5 @@
 [Unit]
-Description=Vacuum active/standby failover executor
+Description=Raspberry Pi vacuum active/standby failover executor
 After=network-online.target glasgow-svc.service
 Wants=network-online.target
 
