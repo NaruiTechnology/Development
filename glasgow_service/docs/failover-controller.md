@@ -1,21 +1,19 @@
-# Continuous vacuum-controller failover contract
+# Continuous SBC vacuum-controller failover contract
 
-This service is an infinitely running active/standby vacuum controller. Failover
-is not a scheduled task. Both executor processes remain alive; coordination
-grants exactly one process permission to initiate vacuum work.
+The vacuum executor is an always-running active/standby service, not a scheduled
+task. Both executor processes remain alive, while Redis Sentinel grants exactly
+one process a renewable lease and monotonically increasing fencing token.
 
 ## Component boundaries
 
-- The **executor lifecycle** owns active/standby/fenced state and the renewable
-  leader lease.
-- `VacuumController` owns the pump cascade and safety interlocks.
-- `VacuumDevice` is the hardware-neutral digital I/O boundary.
-- `SimulatedVacuumDevice` is used for deterministic software and fault testing.
-- The production Glasgow adapter remains the exclusive owner of the one FPGA.
+- `VacuumFailoverRuntime` owns active/standby/fenced lifecycle and lease renewal.
+- `VacuumController` owns pump sequencing and safety interlocks.
+- `SbcVacuumClient` sends fenced commands to the Raspberry Pi vacuum API.
+- `RaspberryPiGPIODevice` is the only production vacuum hardware adapter.
+- `SimulatedVacuumDevice` provides deterministic software and fault testing.
 
-The standby executor must not open the Glasgow device or issue device commands.
-The Glasgow process and physical FPGA remain a documented availability boundary
-until a safe, positively fenced hardware-transfer mechanism is designed.
+The standby executor may read status but must not issue mutations. The SBC is
+the final authority for GPIO writes and independently rejects stale leaders.
 
 ## Executor states
 
@@ -24,101 +22,50 @@ until a safe, positively fenced hardware-transfer mechanism is designed.
 | `starting` | No | Loading configuration and dependencies. |
 | `standby` | No | Healthy and competing for leadership. |
 | `active` | Yes | Holds a valid lease and positive fencing token. |
-| `draining` | No new work | Finishing or classifying an accepted operation. |
+| `draining` | No new work | Finishing or classifying accepted work. |
 | `fenced` | No | Coordination is uncertain or leadership was lost. |
-| `faulted` | No | Local health or safety condition failed. |
+| `faulted` | No | Local health or a safety condition failed. |
 | `stopped` | No | Terminal process shutdown state. |
 
-Only `active` with a valid fencing token permits new work. Losing lease renewal
-must immediately revoke admission. An in-flight hardware operation is then
-drained or classified as outcome-unknown; it is never blindly repeated.
+Only an active executor with a live lease may initiate work. Lease loss revokes
+admission immediately. An operation with an unknown outcome must be reconciled
+against SBC status and must never be blindly repeated.
 
 ## Safety invariants
 
-1. At most one executor may initiate hardware work.
-2. A non-active executor issues no new Glasgow command.
-3. A new leadership term uses a fencing token greater than every prior term.
+1. At most one executor may initiate GPIO mutations.
+2. Every mutation carries executor identity, fencing token, and lease lifetime.
+3. The SBC rejects expired, lower, or conflicting fencing terms.
 4. The mechanical pump cannot be disabled through the normal controller API.
-5. Downstream pumps cannot start until their upstream comparator is ready.
-6. Communication failure clears readiness rather than preserving stale input.
-7. Unknown hardware outcomes require reconciliation before retry.
-8. Simulation uses no physical Glasgow connection.
+5. A downstream pump cannot start before its upstream status input is ready.
+6. Communication failure clears readiness instead of preserving stale input.
+7. Simulation opens no physical GPIO device.
 
-## Implemented simulation scope
+## Persistent SBC fencing
 
-The first iteration established the lifecycle model, device protocol,
-deterministic vacuum simulator, and tests. The second iteration adds a
-transport-neutral lease coordinator, monotonic fencing tokens, deterministic
-lease time, per-executor coordination partitions, and the infinitely running
-executor orchestration loop.
+Set `SBC_REQUIRE_FENCING=true` on the Raspberry Pi. Mutating requests require:
 
-The in-memory coordinator is a simulation authority, not a production
-distributed lock. Redis/Sentinel integration must implement the same contract
-and preserve its atomic ownership and monotonically increasing token behavior.
-Persistence, network listeners, SBC configuration, and physical hardware
-switching remain outside the current scope.
-
-## Third iteration: vacuum execution authority
-
-`FailoverExecutionAuthority` now adapts a live executor lease into an
-`ExecutionPermit` containing the holder identity and fencing token. A
-failover-controlled `VacuumController` validates that authority at startup and
-again immediately before every GPIO output mutation. Standby and fenced nodes
-therefore remain able to observe or simulate comparator input, but cannot start
-the controller, energize a pump, stop a pump, or advance the automatic cascade.
-
-The authority dependency is optional to preserve the current single-node
-Glasgow deployment until the production coordinator is configured. Persistent
-enforcement at the Glasgow API boundary is described in the next section.
-
-## Fourth iteration: persistent hardware-owner fencing
-
-Set `GLASGOW_REQUIRE_FENCING=true` on the Glasgow service to disable automatic
-vacuum startup and require these headers on mutating vacuum requests:
-
-- `X-Executor-ID`: unique active executor identity.
+- `X-Executor-ID`: unique executor identity.
 - `X-Fencing-Token`: positive, monotonically increasing leadership term.
-- `X-Lease-Valid-For-Ms`: short remaining validity window, capped at 30 seconds.
+- `X-Lease-Valid-For-Ms`: remaining validity window, capped at 30 seconds.
 
-The hardware owner atomically persists the highest accepted term at
-`GLASGOW_FENCING_STATE` (default
-`/var/lib/glasgow-service/fencing-token.json`). Lower terms, and the same term
-presented by a different executor, are rejected even after a process restart.
-The executor renews its local hardware-control window through
-`POST /vacuum/leadership/renew`; if heartbeats stop, automatic cascade and
-direct GPIO mutations fail closed when the window expires.
+The SBC atomically persists its highest accepted term at `SBC_FENCING_STATE`
+(default `/var/lib/vacuum-controller/fencing-token.json`). It rejects lower
+terms and a reused term presented by another executor, including after restart.
+The executor renews the control window through
+`POST /vacuum/leadership/renew`; expired authority fails closed for automatic
+cascade work and direct output mutations.
 
-This is fencing, not leader election. Redis/Sentinel remains responsible for
-issuing one monotonically increasing term to the elected executor. The Glasgow
-service independently enforces that term at the single-device boundary.
+Redis/Sentinel performs leader election; SBC fencing is the independent
+single-hardware-owner protection. `RedisSentinelLeaseCoordinator` uses atomic
+Lua operations for acquisition, renewal, and owner-verified release, and asks
+Redis to acknowledge a new fencing term on a replica before it is used.
 
-## Fifth iteration: Sentinel coordinator and executor client
+## Always-on process
 
-`RedisSentinelLeaseCoordinator` discovers the writable Redis primary through
-Sentinel and executes atomic Lua scripts for lease acquisition, renewal, and
-owner-verified release. A successful acquisition increments the fencing term
-and requires acknowledgement from at least one replica through Redis `WAIT`.
-The lease deadline returned to the executor is conservative: it is measured
-from before the Redis round trip rather than after it.
-
-`GlasgowVacuumClient` derives all fencing headers from the executor's current
-live lease. `VacuumFailoverRuntime` acquires the Glasgow controller after leader
-promotion, renews the hardware-owner window on every control cycle, releases it
-before a clean coordinator shutdown, and immediately fences the local executor
-when Glasgow rejects its authority or cannot be reached.
-
-Sentinel and Redis replication do not provide consensus-grade durable writes.
-Replica acknowledgement reduces the exposure, while the persistent token at
-the Glasgow hardware owner remains the final split-brain safety mechanism. A
-lost Redis counter may temporarily reduce availability, but cannot authorize an
-older term to control the FPGA.
-## Always-on executor process
-
-`python -m glasgow_service.vacuum_executor_app` runs the failover loop continuously;
-it is not a scheduled task. The process exposes `/health/live`, `/health/ready`,
-and `/status` for a supervisor or local monitor. Copy
-`deploy/vacuum-executor.service` and `examples/vacuum-executor.env.example` to
-the target SBC, set three or more Sentinel endpoints, and enable
-`GLASGOW_REQUIRE_FENCING=true` in production. The systemd unit restarts the
-process, while Redis Sentinel elects a lease holder and the Glasgow service
-rejects stale fencing tokens.
+`python -m glasgow_service.vacuum_executor_app` runs continuously and exposes
+`/health/live`, `/health/ready`, and `/status`. Configure the executor with
+`examples/vacuum-executor.env.example`, configure the Raspberry Pi with
+`examples/sbc-vacuum.env.example`, and supervise both with their systemd units.
+The scan and sample-stage services are independent and have no vacuum lifecycle
+or hardware-control hooks.

@@ -3,13 +3,11 @@ pyproject.toml
 glasgow_service/__init__.py
 glasgow_service/api.py
 glasgow_service/auth.py
-glasgow_service/comparator_subtarget.py
 glasgow_service/config.py
 glasgow_service/coordination.py
 glasgow_service/execution_authority.py
 glasgow_service/executor_lifecycle.py
 glasgow_service/failover_executor.py
-glasgow_service/glasgow_client.py
 glasgow_service/models.py
 glasgow_service/redis_coordination.py
 glasgow_service/service.py
@@ -26,7 +24,7 @@ tests/test_distribution_dependencies.py
 tests/test_execution_authority.py
 tests/test_executor_lifecycle.py
 tests/test_failover_executor.py
-tests/test_glasgow_client.py
+tests/test_sbc_client.py
 tests/test_redis_coordination.py
 tests/test_vacuum.py
 tests/test_vacuum_device.py

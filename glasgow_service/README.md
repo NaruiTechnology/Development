@@ -172,7 +172,8 @@ The optional `vacuum_executor_app` is an always-running active/standby process,
 not a scheduler. Run it with `python -m glasgow_service.vacuum_executor_app`.
 Production deployment assets are in `deploy/vacuum-executor.service` and
 `examples/vacuum-executor.env.example`; use at least three Redis Sentinel
-endpoints and enable `GLASGOW_REQUIRE_FENCING`.
+endpoints. Configure the separate Raspberry Pi service with
+`examples/sbc-vacuum.env.example` and enable `SBC_REQUIRE_FENCING` there.
 
 For a single-VM software smoke test, run `bash deploy/setup-redis-sentinel.sh`.
 It installs Redis and one local Sentinel (quorum 1); this is not a production

@@ -429,8 +429,9 @@ class DeviceService:
         self._vector_params_defaults = VectorParams.from_json(self._vector_defaults)
 
         self._conn: Optional[GlasgowConnection] = None
+        self._active_command = None
+        self._abort_requested = False
         self._lock = asyncio.Lock()
-        self._exclusive_owner: Optional[str] = None
         self._status = ServiceStatus(state=DeviceState.IDLE)  # IDLE = "ready, not yet connected"
 
         # In-memory cache of the most recent completed scan. Populated by
@@ -463,53 +464,29 @@ class DeviceService:
             self._status.last_error = None
         logger.debug("connection dropped; next scan will reconnect")
 
-    async def acquire_exclusive(self, owner: str) -> None:
-        """Temporarily hand the single Glasgow device to another protocol.
-
-        The scan applet and control-gpio applet cannot own the same USB
-        interface or FPGA image concurrently.  A vacuum dashboard therefore
-        hard-closes any idle scan connection and holds the service lock until
-        the dashboard releases the device.
-        """
-        if self._exclusive_owner is not None:
-            if self._exclusive_owner == owner:
-                return
-            raise DeviceBusy(f"device is reserved by {self._exclusive_owner}")
-        if self._status.state in (DeviceState.BUSY, DeviceState.CONNECTING):
-            raise DeviceBusy("device is busy and cannot be reserved")
-
-        self._status.state = DeviceState.CONNECTING
-        await self._lock.acquire()
-        try:
-            if self._conn is not None:
-                await self._conn._hard_close()
-                self._conn = None
-            self._exclusive_owner = owner
-            self._status.state = DeviceState.BUSY
-            self._status.last_error = None
-            logger.info("Glasgow device reserved by %s", owner)
-        except BaseException as exc:
-            self._conn = None
-            self._status.state = DeviceState.ERROR
-            self._status.last_error = f"{type(exc).__name__}: {exc}"
-            self._lock.release()
-            raise
-
-    async def release_exclusive(self, owner: str) -> None:
-        if self._exclusive_owner is None:
-            return
-        if self._exclusive_owner != owner:
-            raise DeviceBusy(f"device is reserved by {self._exclusive_owner}")
-        self._exclusive_owner = None
-        self._conn = None
-        self._status.state = DeviceState.IDLE
-        self._status.last_error = None
-        if self._lock.locked():
-            self._lock.release()
-        logger.info("Glasgow device released by %s; scan reconnect is lazy", owner)
-
     def status(self) -> ServiceStatus:
         return self._status.model_copy()
+
+    def abort_active_scan(self) -> bool:
+        """Cooperatively stop the active FPGA command without closing USB."""
+        if not self._lock.locked():
+            return False
+        self._abort_requested = True
+        abort = getattr(self._active_command, "abort", None)
+        if abort is not None:
+            abort.set()
+        logger.info("scan abort requested")
+        return True
+
+    def _activate_command(self, command) -> None:
+        self._active_command = command
+        if self._abort_requested:
+            command.abort.set()
+
+    def _deactivate_command(self, command) -> None:
+        if self._active_command is command:
+            self._active_command = None
+        self._abort_requested = False
 
     def defaults(self) -> dict:
         """Return the JSON defaults for the UI.
@@ -662,6 +639,7 @@ class DeviceService:
         async with self._acquire("raster"):
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
+            self._activate_command(cmd)
             try:
                 async for chunk in conn.transfer_multiple(
                         cmd, latency=req.latency_bytes):
@@ -672,6 +650,7 @@ class DeviceService:
                 self._drop_conn_on_error(e)
                 raise
             finally:
+                self._deactivate_command(cmd)
                 # On normal completion AND on cancellation (Pause/Stop),
                 # snapshot whatever we got. Partial captures are still
                 # downloadable — better than nothing for a paused scan.
@@ -712,6 +691,7 @@ class DeviceService:
         async with self._acquire("vector"):
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(req)
+            self._activate_command(cmd)
             if req.pre_process:
                 cmd._pre_process_chunks(latency=req.latency_bytes)
             transfer_iter = conn.transfer_multiple(
@@ -725,6 +705,7 @@ class DeviceService:
                 self._drop_conn_on_error(e)
                 raise
             finally:
+                self._deactivate_command(cmd)
                 try:
                     # Ensure Stop/disconnect reaches Connection's cleanup
                     # before the service releases this scan generator.
@@ -1388,8 +1369,6 @@ class DeviceService:
         svc = self
         class _Ctx:
             async def __aenter__(self):
-                if svc._exclusive_owner is not None:
-                    raise DeviceBusy(f"device is reserved by {svc._exclusive_owner}")
                 if svc._status.state is DeviceState.BUSY:
                     raise DeviceBusy("a scan is already running")
                 # IDLE, ERROR, DISCONNECTED are all OK to start from — the
@@ -1397,6 +1376,7 @@ class DeviceService:
                 if svc._status.state is DeviceState.CONNECTING:
                     raise DeviceNotReady("device is connecting")
                 await svc._lock.acquire()
+                svc._abort_requested = False
                 svc._status.state = DeviceState.BUSY
                 svc._status.chunks_in_flight = 0
                 logger.debug("scan start kind=%s", kind)

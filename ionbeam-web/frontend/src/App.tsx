@@ -104,9 +104,13 @@ export function App() {
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
   const route = useAppRoute();
-  const [vacuumMinimized, setVacuumMinimized] = useState(false);
-  const [sampleStageOpen, setSampleStageOpen] = useState(false);
-  const [sampleStageMinimized, setSampleStageMinimized] = useState(false);
+  // Both hardware controllers start docked. Their header buttons restore the
+  // corresponding popup without requiring an initial open/close cycle.
+  const [vacuumMinimized, setVacuumMinimized] = useState(true);
+  const [vacuumControllerBusy, setVacuumControllerBusy] = useState(false);
+  const [sampleStageOpen, setSampleStageOpen] = useState(true);
+  const [sampleStageMinimized, setSampleStageMinimized] = useState(true);
+  const [sampleStageControllerBusy, setSampleStageControllerBusy] = useState(false);
   const autoOpenedVacuumRef = useRef(false);
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
@@ -934,11 +938,13 @@ export function App() {
           navigateTo("vacuum");
         }}
         vacuumMinimized={vacuumMinimized}
+        vacuumControllerBusy={vacuumControllerBusy}
         onOpenSampleStage={() => {
           setSampleStageOpen(true);
           setSampleStageMinimized(false);
         }}
         sampleStageMinimized={sampleStageMinimized}
+        sampleStageControllerBusy={sampleStageControllerBusy}
         scanLocked={scanActive}
       />
 
@@ -1329,6 +1335,7 @@ export function App() {
         <VacuumDashboard
           open={route === "vacuum"}
           minimized={vacuumMinimized}
+          onActivityChange={setVacuumControllerBusy}
           onMinimizedChange={setVacuumMinimized}
           onClose={() => {
             setVacuumMinimized(false);
@@ -1339,6 +1346,7 @@ export function App() {
       <SampleStageDashboard
         open={sampleStageOpen}
         minimized={sampleStageMinimized}
+        onActivityChange={setSampleStageControllerBusy}
         onMinimizedChange={setSampleStageMinimized}
         onClose={() => {
           setSampleStageOpen(false);

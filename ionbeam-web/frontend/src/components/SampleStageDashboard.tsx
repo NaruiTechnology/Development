@@ -37,10 +37,11 @@ type Props = {
   open: boolean;
   minimized: boolean;
   onMinimizedChange: (minimized: boolean) => void;
+  onActivityChange: (active: boolean) => void;
   onClose: () => void;
 };
 
-export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClose }: Props) {
+export function SampleStageDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: Props) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
@@ -48,6 +49,8 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
   const [targetPosition, setTargetPosition] = useState({ x: 0, y: 0 });
   const [unit, setUnit] = useState<StageUnit>("um");
   const [stageStatus, setStageStatus] = useState<StageStatus | null>(null);
+  const [initializing, setInitializing] = useState(false);
+  const [movePending, setMovePending] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
   const positionEditedRef = useRef(false);
   const animationRef = useRef<number | null>(null);
@@ -64,6 +67,12 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
   } | null>(null);
 
   useEffect(() => {
+    onActivityChange(open && (initializing || movePending || stageStatus?.moving === true));
+  }, [initializing, movePending, onActivityChange, open, stageStatus?.moving]);
+
+  useEffect(() => () => onActivityChange(false), [onActivityChange]);
+
+  useEffect(() => {
     if (!open) return;
     setWindowOffset({ x: 0, y: 0 });
   }, [open]);
@@ -71,6 +80,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    setInitializing(true);
     async function refresh() {
       try {
         const response = await fetch(apiUrl("/api/stage"));
@@ -81,9 +91,13 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
           if (animationRef.current === null) setStagePosition(status.position);
           if (!positionEditedRef.current) setTargetPosition(status.position);
           setStageError(status.last_error);
+          setInitializing(false);
         }
       } catch (error) {
-        if (!cancelled) setStageError(error instanceof Error ? error.message : String(error));
+        if (!cancelled) {
+          setStageError(error instanceof Error ? error.message : String(error));
+          setInitializing(false);
+        }
       }
     }
     void refresh();
@@ -93,6 +107,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
 
   async function moveStage() {
     setStageError(null);
+    setMovePending(true);
     try {
       const response = await fetch(apiUrl("/api/stage/move"), {
         method: "POST",
@@ -109,6 +124,8 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
       positionEditedRef.current = false;
     } catch (error) {
       setStageError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMovePending(false);
     }
   }
 

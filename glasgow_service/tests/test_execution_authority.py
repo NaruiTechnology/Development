@@ -199,35 +199,3 @@ def test_expired_remote_authority_blocks_device_write(tmp_path):
 
     asyncio.run(scenario())
 
-
-def test_api_fencing_dependency_requires_headers_and_rejects_stale_token(
-    tmp_path, monkeypatch
-):
-    from fastapi import HTTPException
-
-    from glasgow_service import api
-
-    config = make_config()
-    authority = RemoteExecutionAuthority(
-        PersistentFencingTokenStore(tmp_path / "fencing-token.json")
-    )
-    controller = VacuumController(
-        config,
-        device=make_device(config),
-        authority=authority,
-    )
-    monkeypatch.setattr(api, "vacuum", controller)
-
-    async def scenario():
-        with pytest.raises(HTTPException) as missing:
-            await api.require_vacuum_execution_permit(None, None, None)
-        assert missing.value.status_code == 428
-
-        await api.require_vacuum_execution_permit("node-a", 4, 5000)
-        assert authority.require() == ExecutionPermit("node-a", 4)
-
-        with pytest.raises(HTTPException) as stale:
-            await api.require_vacuum_execution_permit("node-b", 3, 5000)
-        assert stale.value.status_code == 409
-
-    asyncio.run(scenario())

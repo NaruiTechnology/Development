@@ -56,8 +56,10 @@ export function Header({
   onOpenScan,
   onOpenVacuum,
   vacuumMinimized,
+  vacuumControllerBusy,
   onOpenSampleStage,
   sampleStageMinimized,
+  sampleStageControllerBusy,
   scanLocked,
 }: {
   signedInUser: SignedInUser | null;
@@ -67,8 +69,10 @@ export function Header({
   onOpenScan: () => void;
   onOpenVacuum: () => void;
   vacuumMinimized: boolean;
+  vacuumControllerBusy: boolean;
   onOpenSampleStage: () => void;
   sampleStageMinimized: boolean;
+  sampleStageControllerBusy: boolean;
   scanLocked: boolean;
 }) {
   const dispatch = useAppDispatch();
@@ -229,10 +233,11 @@ export function Header({
       {shouldShowVacuumController(vacuumEnabled) && (
         <button
           type="button"
-          className="btn btn--ghost app-header__settings app-header__vacuum"
+          className={`btn btn--ghost app-header__settings app-header__vacuum${vacuumControllerBusy ? " app-header__controller--busy" : ""}`}
           onClick={onOpenVacuum}
           aria-label={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.aria")}
           title={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.title")}
+          aria-busy={vacuumControllerBusy}
           disabled={headerActionDisabled}
         >
           <Icon name="dashboard" />
@@ -240,10 +245,11 @@ export function Header({
       )}
       <button
         type="button"
-        className="btn btn--ghost app-header__settings app-header__sample-stage"
+        className={`btn btn--ghost app-header__settings app-header__sample-stage${sampleStageControllerBusy ? " app-header__controller--busy" : ""}`}
         onClick={onOpenSampleStage}
         aria-label={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.aria")}
         title={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.title")}
+        aria-busy={sampleStageControllerBusy}
         disabled={headerActionDisabled}
       >
         <img src={sampleStageImage} alt="" aria-hidden />

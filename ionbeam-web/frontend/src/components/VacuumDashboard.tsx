@@ -19,7 +19,7 @@ const PUMP_IMAGES: Record<string, string> = {
   UHVacuumPump_2: uhPump2Image,
 };
 
-export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onClose: () => void }) {
+export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onActivityChange: (active: boolean) => void; onClose: () => void }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<VacuumSystemStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +42,16 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
     minY: number;
     maxY: number;
   } | null>(null);
+
+  useEffect(() => {
+    const initializing = status?.running === true
+      && status.isVacuumSystemReady !== true
+      && status.cascade_stopped !== true
+      && error === null;
+    onActivityChange(open && (pending !== null || initializing));
+  }, [error, onActivityChange, open, pending, status?.cascade_stopped, status?.isVacuumSystemReady, status?.running]);
+
+  useEffect(() => () => onActivityChange(false), [onActivityChange]);
 
   function startDragging(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || (event.target as HTMLElement).closest("button, input, label, a")) return;
@@ -291,7 +301,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
             <div id="vacuum-title" className="modal__title">{t("vacuum.title")}</div>
             {status && (
               <div className="vacuum-dashboard__device">
-                {status.device_id} · {status.voltage.toFixed(1)} V · {status.simulation ? t("vacuum.simulation") : t("vacuum.hardware")} · {status.control_transport === "raspberry-pi-gpio" ? "Raspberry Pi GPIO" : status.control_transport === "vacuum-control-subtarget" ? t("vacuum.subtarget") : t("vacuum.gpioSimulation")} · {formatRuntime(status.runtime_seconds)}
+                {status.device_id} · {status.voltage.toFixed(1)} V · {status.simulation ? t("vacuum.simulation") : t("vacuum.hardware")} · {status.control_transport === "raspberry-pi-gpio" ? "Raspberry Pi GPIO" : t("vacuum.gpioSimulation")} · {formatRuntime(status.runtime_seconds)}
               </div>
             )}
           </div>

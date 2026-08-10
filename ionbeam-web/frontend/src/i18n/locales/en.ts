@@ -536,7 +536,7 @@ export const en = {
   "header.scan.aria": "Open scan console",
   "header.settings.title": "Open settings (stops any active scan and edits streamData.json)",
   "header.settings.aria": "Open settings dialog",
-  "header.vacuum.title": "Open Glasgow vacuum controller dashboard",
+  "header.vacuum.title": "Open SBC vacuum controller dashboard",
   "header.vacuum.aria": "Open vacuum controller dashboard",
   "header.sampleStage.title": "Open sample stage dashboard",
   "header.sampleStage.aria": "Open sample stage dashboard",
@@ -552,16 +552,15 @@ export const en = {
   "header.beam.off": "OFF",
 
   /* ===== vacuum dashboard ========================================== */
-  "vacuum.title": "Glasgow Vacuum Controller",
+  "vacuum.title": "SBC Vacuum Controller",
   "vacuum.close": "Close vacuum controller",
   "vacuum.minimize": "Minimize vacuum controller",
   "vacuum.restore": "Restore vacuum controller",
   "vacuum.loading": "Loading vacuum GPIO status...",
-  "vacuum.acquiring": "Taking exclusive control of the shared Glasgow device...",
+  "vacuum.acquiring": "Connecting to the active SBC vacuum controller...",
   "vacuum.simulation": "simulation",
   "vacuum.hardware": "hardware",
-  "vacuum.subtarget": "vacuum control sub-target",
-  "vacuum.gpioSimulation": "Glasgow GPIO",
+  "vacuum.gpioSimulation": "SBC GPIO",
   "vacuum.power": "power",
   "vacuum.threshold": "Configured threshold",
   "vacuum.realtime": "Real-time value",
@@ -588,7 +587,7 @@ export const en = {
   "vacuum.uhGroup": "UH pumps · grouped stage",
   "vacuum.readCheck": "Read",
   "vacuum.simulationRead.title": "Set the simulated readback to this pump's configured threshold",
-  "vacuum.hardwareRead.title": "Read-only state reported by the Glasgow GPIO input",
+  "vacuum.hardwareRead.title": "Read-only state reported by the Raspberry Pi GPIO input",
 
   /* ===== settings dialog ============================================ */
   "settings.title": "Configuration",

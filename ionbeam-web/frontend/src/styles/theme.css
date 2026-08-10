@@ -3898,6 +3898,29 @@ body {
   opacity: 1;
 }
 
+.app-header__controller--busy {
+  animation: controller-icon-busy-blink 0.8s ease-in-out infinite;
+}
+
+@keyframes controller-icon-busy-blink {
+  0%, 100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.3;
+    filter: brightness(1.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header__controller--busy {
+    animation: none;
+    outline: 2px solid var(--c-accent);
+    outline-offset: 1px;
+  }
+}
+
 .auth-chip {
   display: inline-flex;
   align-items: center;
@@ -4050,7 +4073,7 @@ body {
   width: 100%;
 }
 
-/* ---------- Glasgow vacuum dashboard ------------------------------ */
+/* ---------- SBC vacuum dashboard ---------------------------------- */
 
 .sample-stage-dashboard__backdrop {
   pointer-events: none;

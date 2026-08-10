@@ -1,4 +1,4 @@
-"""Configuration-driven SBC vacuum control with a legacy Glasgow adapter."""
+"""Configuration-driven Raspberry Pi SBC vacuum control."""
 from __future__ import annotations
 
 import asyncio
@@ -6,8 +6,6 @@ import json
 import math
 import os
 import re
-import shlex
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,18 +28,12 @@ from .vacuum_device import (
 
 
 VACUUM_CONFIG_ENV = "SBC_VACUUM_CONFIG"
-LEGACY_VACUUM_CONFIG_ENV = "GLASGOW_VACUUM_CONFIG"
 DEFAULT_VACUUM_CONFIG = Path(
     "/home/vboxuser/Project/Operations/Development/GlasgowDataIO/Json/vacuumSystem.json"
 )
 GPIO_PIN_RE = re.compile(r"^[AB]([0-7])$")
-GPIO_VALUE_RE = re.compile(r"\b(B[0-7])=([01])\b")
 MECHANICAL_PUMP = "MechanicalVacuumPump"
 UH_GROUP = "ultra-high-vacuum"
-VENDORED_GLASGOW_ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "GlasgowDataIO" / "IobeamControl" / "glasgowLib"
-)
 
 
 def _parse_threshold(value: Any) -> float:
@@ -52,11 +44,6 @@ def _parse_threshold(value: Any) -> float:
     # project-specific spelling to standard scientific notation.
     text = text.replace("*e", "e")
     return float(text)
-
-
-class GlasgowDeviceConfig(BaseModel):
-    id: str = Field(alias="Id")
-    voltage: float = 3.3
 
 
 class SbcDeviceConfig(BaseModel):
@@ -94,28 +81,14 @@ class VacuumPumpConfig(BaseModel):
         return value
 
 
-class VacuumActionData(BaseModel):
-    command_format: str = Field(alias="commandFormat")
-
-
-class VacuumAction(BaseModel):
-    action_data: VacuumActionData = Field(alias="actionData")
-    # Loading an FPGA applet and configuring the USB interface routinely
-    # takes tens of seconds, especially when the bitstream is generated.
-    timeout: float = Field(60.0, gt=0, le=120)
-
-
 class VacuumConfig(BaseModel):
     enabled: bool = Field(True, alias="Enable")
-    glasgow: dict[str, GlasgowDeviceConfig] = Field(default_factory=dict, alias="Glasgow")
     pumps: list[VacuumPumpConfig] = Field(alias="VacuumPumps")
-    actions: list[dict[str, VacuumAction]] = Field(default_factory=list, alias="Actions")
     error_range: float = Field(alias="errorRange", ge=0, le=1)
     log_name: str = Field("VacuumDashboard", alias="LogName")
     verbose: bool = Field(False, alias="Verbose")
     simulate: bool = Field(False, alias="Simulate")
-    transport: str = Field("raspberry-pi", alias="Transport")
-    sbc: SbcDeviceConfig | None = Field(None, alias="SBC")
+    sbc: SbcDeviceConfig = Field(alias="SBC")
 
     @model_validator(mode="after")
     def validate_channel_map(self):
@@ -129,35 +102,18 @@ class VacuumConfig(BaseModel):
             raise ValueError("vacuum Port A output pins must be unique")
         if len(set(reads)) != len(reads):
             raise ValueError("vacuum Port B comparator pins must be unique")
-        if self.transport not in {"glasgow", "raspberry-pi"}:
-            raise ValueError("Transport must be 'glasgow' or 'raspberry-pi'")
-        if self.transport == "raspberry-pi":
-            if self.sbc is None:
-                raise ValueError("raspberry-pi transport requires SBC configuration")
-            missing = [pin for pin in writes + reads if pin not in self.sbc.gpio]
-            if missing:
-                raise ValueError(f"SBC.GPIO is missing channels: {', '.join(missing)}")
-        elif not self.glasgow or not self.actions:
-            raise ValueError("legacy Glasgow transport requires Glasgow and Actions")
+        missing = [pin for pin in writes + reads if pin not in self.sbc.gpio]
+        if missing:
+            raise ValueError(f"SBC.GPIO is missing channels: {', '.join(missing)}")
         return self
 
-    def action(self, name: str) -> VacuumAction:
-        for item in self.actions:
-            if name in item:
-                return item[name]
-        raise ValueError(f"vacuum config is missing Actions.{name}")
-
     @property
-    def device(self) -> GlasgowDeviceConfig | SbcDeviceConfig:
-        if self.transport == "raspberry-pi" and self.sbc is not None:
-            return self.sbc
-        if not self.glasgow:
-            raise ValueError("vacuum config does not define a Glasgow device")
-        return next(iter(self.glasgow.values()))
+    def device(self) -> SbcDeviceConfig:
+        return self.sbc
 
 
 def find_vacuum_config_path() -> Path:
-    configured = os.environ.get(VACUUM_CONFIG_ENV) or os.environ.get(LEGACY_VACUUM_CONFIG_ENV)
+    configured = os.environ.get(VACUUM_CONFIG_ENV)
     path = Path(configured).expanduser() if configured else DEFAULT_VACUUM_CONFIG
     if not path.is_file():
         raise FileNotFoundError(f"vacuum configuration not found: {path}")
@@ -175,226 +131,6 @@ def vacuum_config_enabled(path: Path) -> bool:
 
 def load_vacuum_config(path: Path) -> VacuumConfig:
     return VacuumConfig.model_validate(json.loads(path.read_text()))
-
-
-class VacuumGPIOInterface:
-    """Dedicated GPIO protocol adapter for the vacuum controller."""
-
-    def __init__(
-        self,
-        config: VacuumConfig,
-        comparator_subtarget: Optional[VacuumComparatorSubtarget] = None,
-    ):
-        if not config.enabled:
-            raise RuntimeError("vacuum controller is disabled by configuration")
-        self.config = config
-        from .comparator_subtarget import VacuumComparatorSubtarget
-        self.comparator_subtarget = comparator_subtarget or VacuumComparatorSubtarget(
-            config.device.id,
-            config.device.voltage,
-            config.pumps,
-        )
-        self._outputs = {pump.write: pump.power.lower() == "on" for pump in config.pumps}
-        self._comparator_outputs = {pump.read: False for pump in config.pumps}
-        self._read_pins = sorted(self._comparator_outputs)
-        self._pump_by_write = {pump.write: pump for pump in config.pumps}
-
-    async def write(self, pin: str, value: bool) -> None:
-        pump = self._pump_by_write.get(pin)
-        if pump is None:
-            raise ValueError(f"unknown vacuum output pin: {pin}")
-        next_outputs = {**self._outputs, pin: value}
-        if self.config.simulate:
-            self._outputs = next_outputs
-            return
-        if not self.config.simulate:
-            from .comparator_subtarget import ComparatorTarget
-            await self.comparator_subtarget.write_target(
-                ComparatorTarget(
-                    equipment=pump.name,
-                    source_pin=pump.write,
-                    result_pin=pump.read,
-                    configured_value=pump.threshold,
-                    error_range=self.config.error_range,
-                    high_voltage=self.config.device.voltage,
-                    enabled=value,
-                )
-            )
-            self._outputs = next_outputs
-            return
-
-        action = self.config.action("writeData")
-        output_pins = sorted(next_outputs)
-        output_actions = " ".join(
-            f"{output_pin}={int(next_outputs[output_pin])}" for output_pin in output_pins
-        )
-        command = action.action_data.command_format.format(
-            self.config.device.voltage, ",".join(output_pins), output_actions
-        )
-        await self._run(command, action.timeout)
-        self._outputs = next_outputs
-
-    async def write_comparator(self, pin: str, value: bool) -> None:
-        """Drive a simulated comparator result onto its configured Port B pin."""
-        if pin not in self._comparator_outputs:
-            raise ValueError(f"unknown comparator output pin: {pin}")
-        if self._comparator_outputs[pin] == value:
-            return
-
-        next_comparators = {**self._comparator_outputs, pin: value}
-        if self.config.simulate:
-            self._comparator_outputs = next_comparators
-            return
-
-        action = self.config.action("writeData")
-        # A GPIO applet invocation replaces the previous one, so reassert the
-        # pump power outputs together with every configured comparator output.
-        pin_values = {**self._outputs, **next_comparators}
-        pins = sorted(pin_values)
-        output_actions = " ".join(
-            f"{output_pin}={int(pin_values[output_pin])}" for output_pin in pins
-        )
-        command = action.action_data.command_format.format(
-            self.config.device.voltage, ",".join(pins), output_actions
-        )
-        await self._run(command, action.timeout)
-        self._comparator_outputs = next_comparators
-
-    async def read_port_b(self) -> dict[str, int]:
-        """Read every configured Port B comparator result."""
-        if not self.config.simulate:
-            return await self.comparator_subtarget.read_inputs()
-
-        if self.config.simulate:
-            return {pin: int(self._comparator_outputs[pin]) for pin in self._read_pins}
-
-        pins = self._read_pins
-        output_pins = sorted(self._outputs)
-        # In simulation, loading control-gpio replaces the prior applet, so
-        # reassert Port A outputs while reading B.
-        pin_declaration = output_pins + pins
-        actions = [f"{pin}={int(self._outputs[pin])}" for pin in output_pins] + pins
-        action = self.config.action("readData")
-        command = action.action_data.command_format.format(
-            self.config.device.voltage, ",".join(pin_declaration), " ".join(actions)
-        )
-        stdout = await self._run(command, action.timeout)
-        values = {pin: int(value) for pin, value in GPIO_VALUE_RE.findall(stdout)}
-        missing = [pin for pin in pins if pin not in values]
-        if missing:
-            raise RuntimeError(f"Glasgow GPIO response omitted pins: {', '.join(missing)}")
-        return values
-
-    async def close(self) -> None:
-        await self.comparator_subtarget.close()
-
-    def output_level(self, pin: str) -> bool:
-        if self.config.simulate:
-            return self._outputs.get(pin, False)
-        return self.comparator_subtarget.output_level(pin)
-
-    async def _run(self, command: str, timeout: float) -> str:
-        # shlex + create_subprocess_exec preserves the existing JSON command
-        # format without invoking a shell.
-        argv = shlex.split(command)
-        env = None
-        if argv and argv[0] == "glasgow":
-            # The shell's `glasgow` may be the newer API-6 installation.  Use
-            # the same vendored API-5 CLI and firmware as the scan path.
-            env = os.environ.copy()
-            current_pythonpath = env.get("PYTHONPATH")
-            env["PYTHONPATH"] = str(VENDORED_GLASGOW_ROOT) + (
-                os.pathsep + current_pythonpath if current_pythonpath else ""
-            )
-            argv = [sys.executable, "-m", "glasgow.cli", *argv[1:]]
-        process = await asyncio.create_subprocess_exec(
-            *argv,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
-            raise RuntimeError(f"Glasgow GPIO command timed out after {timeout:g}s")
-        if process.returncode != 0:
-            raw_detail = stderr.decode(errors="replace").strip()
-            if raw_detail:
-                # Glasgow's debug logger emits one line for every USB control
-                # transfer. A failed command can therefore fill the UI error
-                # panel with hundreds of redundant lines and hide the final
-                # traceback. Keep the terminal error, summarize transfer
-                # tracing, and retain the last lines where the root cause is.
-                lines = raw_detail.splitlines()
-                transfer_lines = [
-                    line for line in lines
-                    if "glasgow.hardware.device: USB: CONTROL " in line
-                ]
-                kept = [
-                    line for line in lines
-                    if "glasgow.hardware.device: USB: CONTROL " not in line
-                ]
-                if transfer_lines:
-                    kept.insert(0, f"[suppressed {len(transfer_lines)} repetitive USB transfer log lines]")
-                detail = "\n".join(kept[-120:])
-            else:
-                detail = f"exit {process.returncode}"
-            raise RuntimeError(f"Glasgow GPIO command failed: {detail}")
-        return stdout.decode(errors="replace")
-
-
-class RealComparatorGPIOInterface(VacuumGPIOInterface):
-    """Transport for physical IC comparator inputs.
-
-    Port B is the comparator's digital output in this mode.  Use the same
-    short-lived ``glasgow run control-gpio`` invocation as
-    ``glasgowWriteDataApp.py``: drive mapped Port A outputs and sample Port B.
-    This avoids keeping a second custom FPGA applet/demultiplexer alive.
-    """
-
-    async def write(self, pin: str, value: bool) -> None:
-        if pin not in self._pump_by_write:
-            raise ValueError(f"unknown vacuum output pin: {pin}")
-        if self._outputs[pin] == value:
-            return
-        next_outputs = {**self._outputs, pin: value}
-        action = self.config.action("writeData")
-        output_pins = sorted(next_outputs)
-        output_actions = " ".join(
-            f"{output_pin}={int(next_outputs[output_pin])}" for output_pin in output_pins
-        )
-        command = action.action_data.command_format.format(
-            self.config.device.voltage,
-            ",".join(output_pins),
-            output_actions,
-        )
-        await self._run(command, action.timeout)
-        self._outputs[pin] = value
-
-    async def read_port_b(self) -> dict[str, int]:
-        pins = sorted(self._outputs) + self._read_pins
-        actions = [f"{pin}={int(self._outputs[pin])}" for pin in sorted(self._outputs)] + self._read_pins
-        action = self.config.action("readData")
-        command = action.action_data.command_format.format(
-            self.config.device.voltage,
-            ",".join(pins),
-            " ".join(actions),
-        )
-        stdout = await self._run(command, action.timeout)
-        values = {pin: int(value) for pin, value in GPIO_VALUE_RE.findall(stdout)}
-        missing = [pin for pin in self._read_pins if pin not in values]
-        if missing:
-            raise RuntimeError(f"Glasgow GPIO response omitted pins: {', '.join(missing)}")
-        return values
-
-    async def close(self) -> None:
-        # Each control-gpio invocation owns and closes its own Glasgow device.
-        return None
-
-    def output_level(self, pin: str) -> bool:
-        return self._outputs.get(pin, False)
 
 
 class VacuumController:
@@ -420,7 +156,7 @@ class VacuumController:
                     pump.write: pump.power.lower() == "on" for pump in config.pumps
                 },
             )
-        elif config.transport == "raspberry-pi" and config.sbc is not None:
+        else:
             self.gpio = RaspberryPiGPIODevice(
                 {pump.write: config.sbc.gpio[pump.write] for pump in config.pumps},
                 {pump.read: config.sbc.gpio[pump.read] for pump in config.pumps},
@@ -430,8 +166,6 @@ class VacuumController:
                 active_high=config.sbc.active_high,
                 input_pull_up=config.sbc.input_pull_up,
             )
-        else:
-            self.gpio = RealComparatorGPIOInterface(config)
         if config.simulate and not isinstance(self.gpio, SimulatedVacuumDeviceControl):
             raise TypeError(
                 "simulation requires a device implementing write_comparator"
@@ -455,11 +189,6 @@ class VacuumController:
         self._running = False
         self._started_at: float | None = None
         self._simulation_reads = {pump.name: False for pump in config.pumps}
-
-    @property
-    def requires_device(self) -> bool:
-        """Whether the explicitly selected legacy adapter owns Glasgow USB."""
-        return not self.config.simulate and self.config.transport == "glasgow"
 
     @property
     def requires_remote_authority(self) -> bool:
@@ -541,8 +270,7 @@ class VacuumController:
             simulation=self.config.simulate,
             control_transport=(
                 "sbc-simulation" if self.config.simulate else
-                "raspberry-pi-gpio" if self.config.transport == "raspberry-pi" else
-                "vacuum-control-subtarget"
+                "raspberry-pi-gpio"
             ),
             running=self._running,
             runtime_seconds=(
@@ -732,7 +460,7 @@ class VacuumController:
             await asyncio.sleep(self.POLL_INTERVAL_SECONDS)
 
     def _require_authority(self) -> ExecutionPermit | None:
-        """Return the live term permit, or preserve legacy single-node mode."""
+        """Return the live executor permit, if fencing is enabled."""
         if self._authority is None:
             return None
         permit = self._authority.require()

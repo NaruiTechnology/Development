@@ -26,9 +26,9 @@ Run `python -m glasgow_service.sbc_vacuum_app` on the Raspberry Pi. It exposes:
 - `POST /vacuum/pumps/{name}/read` for simulation input
 - `POST /vacuum/stop`, `/vacuum/release`, and `/vacuum/leadership/renew`
 
-`Transport: raspberry-pi` selects BCM GPIO when `Simulate` is false and the
-deterministic in-process plant when it is true. Thus both modes use the same
-network API, failover path, state model, and UI.
+`Simulate: false` selects BCM GPIO and `Simulate: true` selects the deterministic
+in-process plant. Thus both modes use the same network API, failover path, state
+model, and UI. There is no Glasgow vacuum transport selector or fallback.
 
 The committed GPIO numbers are initial BCM assignments and must be checked
 against the final carrier/relay wiring before setting `Simulate` to false.

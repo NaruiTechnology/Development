@@ -7,91 +7,35 @@ Swagger UI:   http://127.0.0.1:8765/docs
 ReDoc:        http://127.0.0.1:8765/redoc
 OpenAPI JSON: http://127.0.0.1:8765/openapi.json
 """
-import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
 from typing import Literal
 
 from .service import DeviceService, DeviceBusy, DeviceNotReady
 from .models  import (
     RasterRequest, VectorRequest, ScanResult, ServiceStatus,
-    VacuumAcquireRequest, VacuumPowerRequest, VacuumSimulationReadRequest, VacuumSystemStatus,
 )
 from .auth    import require_token
 from .config  import find_config_path
 from .service import LOG_NAME
-from .execution_authority import AuthorityDenied, remote_authority_from_environment
 from AutomationPy.buildingblocks.automation_log import AutomationLog
-from .vacuum import (
-    VacuumController,
-    find_vacuum_config_path,
-    load_vacuum_config,
-    vacuum_config_enabled,
-)
 
 svc: "DeviceService | None" = None
-vacuum: "VacuumController | None" = None
-vacuum_lifecycle_lock = asyncio.Lock()
 
 logger      = AutomationLog.GetLogger(LOG_NAME)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global svc, vacuum
+    global svc
     config_path = find_config_path()
     logger.info("Glasgow config: %s", config_path)
     svc = DeviceService(str(config_path))
     await svc.start()
-    legacy_vacuum_enabled = os.environ.get(
-        "ENABLE_LEGACY_GLASGOW_VACUUM_API", "false"
-    ).strip().lower() in {"1", "true", "yes", "on"}
-    vacuum_config = None
-    if legacy_vacuum_enabled:
-        vacuum_path = find_vacuum_config_path()
-        logger.warning("Legacy Glasgow vacuum API enabled with config: %s", vacuum_path)
-        vacuum_config = (
-            load_vacuum_config(vacuum_path)
-            if vacuum_config_enabled(vacuum_path) else None
-        )
-    if vacuum_config is not None and vacuum_config.enabled:
-        vacuum = VacuumController(
-            vacuum_config,
-            authority=remote_authority_from_environment(),
-        )
-        # Enablement is an operational request to run the controller, not
-        # merely to expose its REST endpoints. Start it during service
-        # startup when it is not already ready; ``start()`` is idempotent,
-        # so later dashboard acquire requests remain safe.
-        if not vacuum.requires_remote_authority and not vacuum.status().isVacuumSystemReady:
-            try:
-                if vacuum.requires_device:
-                    await svc.acquire_exclusive("vacuum")
-                await vacuum.start()
-                logger.info("Vacuum controller started automatically at service startup")
-            except Exception as exc:
-                logger.exception("Vacuum controller automatic startup failed: %s", exc)
-                await vacuum.close()
-                if vacuum.requires_device:
-                    try:
-                        await svc.release_exclusive("vacuum")
-                    except Exception:
-                        logger.exception("Failed to release Glasgow after vacuum startup failure")
-    else:
-        vacuum = None
-        logger.info(
-            "Vacuum control is delegated to sbc_vacuum_app; legacy API enabled=%s",
-            legacy_vacuum_enabled,
-        )
     try:
         yield
     finally:
-        if vacuum is not None:
-            await vacuum.close()
-            if vacuum.requires_device:
-                await svc.release_exclusive("vacuum")
         await svc.stop()
 
 
@@ -115,7 +59,6 @@ app = FastAPI(
         {"name": "status", "description": "Service health, configuration defaults."},
         {"name": "scan",   "description": "Raster and vector scan execution, last-scan downloads."},
         {"name": "admin",  "description": "Lifecycle: reconnect the device."},
-        {"name": "vacuum", "description": "Vacuum pump GPIO status and control."},
     ],
 )
 
@@ -125,154 +68,13 @@ app = FastAPI(
 @app.get("/status", response_model=ServiceStatus, tags=["status"],
          summary="Current device state")
 async def get_status():
-    return svc.status().model_copy(update={"vacuum_enabled": vacuum is not None})
+    return svc.status()
 
 
 @app.get("/defaults", tags=["status"],
          summary="Default scan parameters from streamData.json")
 async def get_defaults():
     return svc.defaults()
-
-
-# ---------- vacuum --------------------------------------------------------
-
-def require_vacuum_controller() -> VacuumController:
-    if vacuum is None:
-        raise HTTPException(404, "vacuum controller is disabled")
-    return vacuum
-
-
-async def require_vacuum_execution_permit(
-    x_executor_id: str | None = Header(None, alias="X-Executor-ID"),
-    x_fencing_token: int | None = Header(None, alias="X-Fencing-Token"),
-    x_lease_valid_for_ms: int | None = Header(None, alias="X-Lease-Valid-For-Ms"),
-) -> None:
-    controller = require_vacuum_controller()
-    if not controller.requires_remote_authority:
-        return
-    if (
-        not x_executor_id
-        or x_fencing_token is None
-        or x_lease_valid_for_ms is None
-    ):
-        raise HTTPException(
-            428,
-            "fenced vacuum mutation requires X-Executor-ID, X-Fencing-Token, "
-            "and X-Lease-Valid-For-Ms",
-        )
-    try:
-        controller.accept_remote_authority(
-            x_executor_id,
-            x_fencing_token,
-            x_lease_valid_for_ms / 1000.0,
-        )
-    except (AuthorityDenied, ValueError) as exc:
-        raise HTTPException(409, str(exc))
-
-@app.get("/vacuum", response_model=VacuumSystemStatus, tags=["vacuum"],
-         summary="Current vacuum GPIO state")
-async def get_vacuum():
-    return require_vacuum_controller().status()
-
-
-@app.post("/vacuum/acquire", response_model=VacuumSystemStatus, tags=["vacuum"],
-          summary="Acquire vacuum control and apply expected channel values",
-          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
-async def acquire_vacuum(req: VacuumAcquireRequest | None = None):
-    controller = require_vacuum_controller()
-    async with vacuum_lifecycle_lock:
-        try:
-            if req is not None:
-                controller.configure_expected_channels(req.expected_channels)
-            if controller.requires_device:
-                await svc.acquire_exclusive("vacuum")
-            await controller.start()
-        except DeviceBusy as exc:
-            raise HTTPException(409, str(exc))
-        except AuthorityDenied as exc:
-            raise HTTPException(409, str(exc))
-        except Exception as exc:
-            await controller.close()
-            if controller.requires_device:
-                await svc.release_exclusive("vacuum")
-            raise HTTPException(503, str(exc))
-        return controller.status()
-
-
-@app.post("/vacuum/release", response_model=VacuumSystemStatus, tags=["vacuum"],
-          summary="Release the Glasgow device back to the scan service",
-          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
-async def release_vacuum():
-    controller = require_vacuum_controller()
-    async with vacuum_lifecycle_lock:
-        await controller.close()
-        if controller.requires_device:
-            try:
-                await svc.release_exclusive("vacuum")
-            except DeviceBusy as exc:
-                raise HTTPException(409, str(exc))
-        return controller.status()
-
-
-@app.post("/vacuum/pumps/{name}/power", response_model=VacuumSystemStatus,
-          tags=["vacuum"], summary="Set one vacuum pump power output",
-          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
-async def set_vacuum_power(name: str, req: VacuumPowerRequest):
-    controller = require_vacuum_controller()
-    if not controller.status().running:
-        raise HTTPException(409, "vacuum dashboard has not acquired the Glasgow device")
-    try:
-        await controller.set_power(name, req.power)
-    except KeyError:
-        raise HTTPException(404, f"unknown vacuum pump: {name}")
-    except ValueError as exc:
-        raise HTTPException(409, str(exc))
-    except AuthorityDenied as exc:
-        raise HTTPException(409, str(exc))
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc))
-    return controller.status()
-
-
-@app.post("/vacuum/pumps/{name}/read", response_model=VacuumSystemStatus,
-          tags=["vacuum"], summary="Set a simulated vacuum threshold readback",
-          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
-async def set_vacuum_simulation_read(name: str, req: VacuumSimulationReadRequest):
-    controller = require_vacuum_controller()
-    if not controller.status().running:
-        raise HTTPException(409, "vacuum dashboard has not acquired the Glasgow device")
-    try:
-        await controller.set_simulated_read(name, req.checked)
-    except KeyError:
-        raise HTTPException(404, f"unknown vacuum pump: {name}")
-    except ValueError as exc:
-        raise HTTPException(409, str(exc))
-    except AuthorityDenied as exc:
-        raise HTTPException(409, str(exc))
-    return controller.status()
-
-
-@app.post("/vacuum/stop", response_model=VacuumSystemStatus, tags=["vacuum"],
-          summary="Stop all vacuum pumps except MechanicalVacuumPump",
-          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
-async def stop_vacuum():
-    controller = require_vacuum_controller()
-    if not controller.status().running:
-        raise HTTPException(409, "vacuum dashboard has not acquired the Glasgow device")
-    try:
-        await controller.stop_non_mechanical()
-    except AuthorityDenied as exc:
-        raise HTTPException(409, str(exc))
-    except RuntimeError as exc:
-        raise HTTPException(503, str(exc))
-    return controller.status()
-
-
-@app.post("/vacuum/leadership/renew", response_model=VacuumSystemStatus,
-          tags=["vacuum"], summary="Renew the active executor fencing window",
-          dependencies=[Depends(require_token), Depends(require_vacuum_execution_permit)])
-async def renew_vacuum_leadership():
-    return require_vacuum_controller().status()
 
 
 # ---------- raster ---------------------------------------------------------
@@ -340,6 +142,14 @@ async def run_vector(req: VectorRequest):
 @app.websocket("/scan/vector/stream")
 async def stream_vector(ws: WebSocket):
     await _stream_scan(ws, lambda p: svc.vector_scan(VectorRequest(**p)))
+
+
+@app.post("/scan/abort", tags=["scan"], dependencies=[Depends(require_token)])
+async def abort_scan():
+    """Signal the active FPGA command; the stream closes after safe cleanup."""
+    if not svc.abort_active_scan():
+        raise HTTPException(409, "no active scan")
+    return {"aborted": True}
 
 
 # ---------- admin ----------------------------------------------------------

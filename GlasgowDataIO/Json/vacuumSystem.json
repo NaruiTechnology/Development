@@ -30,7 +30,6 @@
         }
     ],
     "errorRange": "0.01",
-    "Transport": "raspberry-pi",
     "SBC": {
         "Id": "raspberry-pi-vacuum",
         "voltage": 3.3,
@@ -50,7 +49,7 @@
     "Message": [
         "SBC GPIO MAPPING",
         "-------------------",
-        "A0..A7 and B0..B7 are logical compatibility channel names inherited from Glasgow.",
+        "A0..A7 and B0..B7 are logical application channel names.",
         "They are not Raspberry Pi BCM numbers and they are not physical header-pin numbers.",
         "",
         "Logical channel                 Purpose",
