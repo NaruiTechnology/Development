@@ -3,9 +3,11 @@ import logging
 import asyncio
 import gc
 import warnings
+from types import SimpleNamespace
 
 from amaranth.sim import Simulator
-from amaranth import Module, ClockDomain
+from amaranth import Module, ClockDomain, Fragment, Signal
+from amaranth.lib import io
 from amaranth.hdl._ir import UnusedElaboratable
 
 from IobeamControl.sysControl.stepper.stepperChannel import StepperChannel
@@ -36,14 +38,23 @@ class MockLower:
 # ---------------------------------------------------------------------------
 class ControlStepperTest(unittest.TestCase):
     def test_sample_stage_subtarget_tracks_axis(self):
+        ports = SimpleNamespace(
+            step=io.SimulationPort("o", 1, name="stage_x_step"),
+            dir=io.SimulationPort("o", 1, name="stage_x_dir"),
+            en=io.SimulationPort("o", 1, name="stage_x_en"),
+        )
+        out_fifo = SimpleNamespace(
+            r_en=Signal(), r_rdy=Signal(), r_data=Signal(8)
+        )
         target = SampleStageSubtarget(
             "X",
-            type("Ports", (), {})(),
-            type("Fifo", (), {})(),
+            ports,
+            out_fifo,
             pulse_high_us=7,
         )
         self.assertEqual(target.axis, "X")
         self.assertEqual(target.pulse_high_us, 7)
+        Fragment.get(target, platform=None)
         with self.assertRaises(ValueError):
             SampleStageSubtarget("Z", object(), object())
 
@@ -58,16 +69,26 @@ class ControlStepperTest(unittest.TestCase):
             sim = Simulator(m)
 
             async def bench(ctx):
-                # Initialize inputs
                 ctx.set(dut.en, 1)
                 ctx.set(dut.run, 0)
                 ctx.set(dut.dir_in, 1)
                 ctx.set(dut.period, 10)
                 ctx.set(dut.steps_in, 3)
+                ctx.set(dut.start, 1)
+                await ctx.tick()
+                ctx.set(dut.start, 0)
 
-                # Run long enough to cover the 3 pulses
+                rising_edges = 0
+                previous = 0
                 for _ in range(200):
                     await ctx.tick()
+                    current = ctx.get(dut.pulse)
+                    if current and not previous:
+                        rising_edges += 1
+                    previous = current
+                self.assertEqual(rising_edges, 3)
+                self.assertEqual(ctx.get(dut.dir_out), 1)
+                self.assertEqual(ctx.get(dut.en_out), 1)
 
             # Drive the 'sync' clock
             sim.add_clock(1e-6, domain="sync")

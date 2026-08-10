@@ -2,6 +2,9 @@
     "Version": "1.0",
     "Enable": true,
     "Simulate": true,
+    "Safety": {
+        "maximumTravelInches": 15.0
+    },
     "Glasgow": {
         "Device1": {
             "Id": "",
@@ -33,6 +36,7 @@
         "Simulate=true performs no USB or motor operation.",
         "Pin names use Glasgow port notation, not Raspberry Pi BCM numbering.",
         "The committed pin, travel, and timing values are commissioning placeholders.",
+        "Each configured axis travel span must be less than or equal to 15 inches (381 mm).",
         "Before Simulate=false, configure Device1.Id, verify STEP/DIR/EN wiring, driver polarity, travel limits, emergency stop, and safe motor current."
     ]
 }

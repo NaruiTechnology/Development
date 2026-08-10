@@ -30,6 +30,7 @@ class StageConfig:
     simulate: bool
     device_id: str
     voltage: float
+    maximum_travel_mm: float
     axes: dict[str, AxisConfig]
 
 
@@ -40,6 +41,12 @@ def find_stage_config_path() -> Path:
 def load_stage_config(path: Path | None = None) -> StageConfig:
     source = path or find_stage_config_path()
     raw = json.loads(source.read_text())
+    maximum_travel_inches = float(
+        raw.get("Safety", {}).get("maximumTravelInches", 15.0)
+    )
+    if maximum_travel_inches <= 0 or maximum_travel_inches > 15.0:
+        raise ValueError("Safety.maximumTravelInches must be greater than 0 and no more than 15")
+    maximum_travel_mm = maximum_travel_inches * 25.4
     axes = {}
     used_pins = set()
     for name in ("X", "Y"):
@@ -56,6 +63,11 @@ def load_stage_config(path: Path | None = None) -> StageConfig:
         minimum, maximum = float(item["minimum"]), float(item["maximum"])
         if minimum >= maximum:
             raise ValueError(f"Axes.{name} minimum must be below maximum")
+        if maximum - minimum > maximum_travel_mm:
+            raise ValueError(
+                f"Axes.{name} travel span exceeds {maximum_travel_inches:g} in "
+                f"({maximum_travel_mm:g} mm)"
+            )
         axes[name] = AxisConfig(
             name=name,
             pins=dict(pins),
@@ -74,6 +86,7 @@ def load_stage_config(path: Path | None = None) -> StageConfig:
         simulate=raw.get("Simulate") is True,
         device_id=str(device.get("Id", "")).strip(),
         voltage=float(device.get("voltage", 3.3)),
+        maximum_travel_mm=maximum_travel_mm,
         axes=axes,
     )
     if config.enabled and not config.simulate and not config.device_id:
@@ -153,6 +166,7 @@ class SampleStageController:
                 k.lower(): {"minimum": v.minimum, "maximum": v.maximum}
                 for k, v in self.config.axes.items()
             },
+            "maximum_travel_mm": self.config.maximum_travel_mm,
             "moving": self.moving,
             "last_error": self.last_error,
         }
