@@ -41,12 +41,12 @@ def controller():
 
 @app.get("/status")
 async def status():
-    return controller().status()
+    return await controller().refresh_status()
 
 
 @app.get("/stage")
 async def stage_status():
-    return controller().status()
+    return await controller().refresh_status()
 
 
 @app.post("/stage/move")

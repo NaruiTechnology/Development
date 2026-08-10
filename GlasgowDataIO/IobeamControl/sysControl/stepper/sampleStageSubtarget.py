@@ -1,16 +1,13 @@
-"""Stage-specific STEP/DIR/EN FPGA subtarget.
-
-The stage protocol intentionally inherits the proven command encoding from
-ControlStepperSubtarget while retaining the axis identity in the gateware
-object graph and build diagnostics.
-"""
-from .controlStepperSubtarget import ControlStepperSubtarget
+"""Stage-specific Amaranth SPI subtarget for one TMC5160 axis."""
+from ...glasgowLib.glasgow.applet.interface.spi_controller import SPIControllerSubtarget
 
 
-class SampleStageSubtarget(ControlStepperSubtarget):
-    def __init__(self, axis, ports, out_fifo, pulse_high_us=5):
+class SampleStageSubtarget(SPIControllerSubtarget):
+    """A named TMC5160 SPI channel embedded in the combined stage bitstream."""
+
+    def __init__(self, axis, *args, **kwargs):
         axis = str(axis).upper()
         if axis not in {"X", "Y"}:
             raise ValueError("sample-stage axis must be X or Y")
         self.axis = axis
-        super().__init__(ports, out_fifo, pulse_high_us=pulse_high_us)
+        super().__init__(*args, **kwargs)

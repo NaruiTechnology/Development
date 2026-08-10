@@ -14,8 +14,8 @@ def config(tmp_path, *, simulate=True):
         "Safety": {"maximumTravelInches": 15},
         "Glasgow": {"Device1": {"Id": "stage-device", "voltage": 3.3}},
         "Axes": {
-            "X": {"pins": {"step": "A0", "dir": "A1", "en": "A2"}, "minimum": -50, "maximum": 50, "stepsPerUnit": 200, "periodUs": 1000, "pulseHighUs": 5},
-            "Y": {"pins": {"step": "A3", "dir": "A4", "en": "A5"}, "minimum": -50, "maximum": 50, "stepsPerUnit": 200, "periodUs": 1000, "pulseHighUs": 5}
+            "X": {"pins": {"sck": "A0", "cs": "A1", "sdi": "A2", "sdo": "A3"}, "minimum": -50, "maximum": 50, "microstepsPerUnit": 51200, "spi": {"frequencyKHz": 500}, "motion": {}, "registerWrites": {"VMAX": 100000}},
+            "Y": {"pins": {"sck": "A4", "cs": "A5", "sdi": "A6", "sdo": "A7"}, "minimum": -50, "maximum": 50, "microstepsPerUnit": 51200, "spi": {"frequencyKHz": 500}, "motion": {}, "registerWrites": {"VMAX": 100000}}
         }
     }))
     return load_stage_config(path)
@@ -40,7 +40,7 @@ def test_duplicate_pins_are_rejected(tmp_path):
     cfg = config(tmp_path)
     source = tmp_path / "stage.json"
     raw = json.loads(source.read_text())
-    raw["Axes"]["Y"]["pins"]["step"] = "A0"
+    raw["Axes"]["Y"]["pins"]["sck"] = "A0"
     source.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="duplicate"):
         load_stage_config(source)

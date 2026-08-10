@@ -111,6 +111,10 @@ export function App() {
   const [sampleStageOpen, setSampleStageOpen] = useState(true);
   const [sampleStageMinimized, setSampleStageMinimized] = useState(true);
   const [sampleStageControllerBusy, setSampleStageControllerBusy] = useState(false);
+  const handleVacuumActivityChange = useCallback((active: boolean) => {
+    setVacuumControllerBusy(active);
+    setVacuumMinimized(!active);
+  }, []);
   const autoOpenedVacuumRef = useRef(false);
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
@@ -1335,10 +1339,10 @@ export function App() {
         <VacuumDashboard
           open={route === "vacuum"}
           minimized={vacuumMinimized}
-          onActivityChange={setVacuumControllerBusy}
+          onActivityChange={handleVacuumActivityChange}
           onMinimizedChange={setVacuumMinimized}
           onClose={() => {
-            setVacuumMinimized(false);
+            setVacuumMinimized(true);
             navigateTo("control");
           }}
         />

@@ -39,21 +39,29 @@ class MockLower:
 class ControlStepperTest(unittest.TestCase):
     def test_sample_stage_subtarget_tracks_axis(self):
         ports = SimpleNamespace(
-            step=io.SimulationPort("o", 1, name="stage_x_step"),
-            dir=io.SimulationPort("o", 1, name="stage_x_dir"),
-            en=io.SimulationPort("o", 1, name="stage_x_en"),
+            sck=io.SimulationPort("o", 1, name="stage_x_sck"),
+            cs=io.SimulationPort("o", 1, name="stage_x_cs"),
+            copi=io.SimulationPort("o", 1, name="stage_x_sdi"),
+            cipo=io.SimulationPort("i", 1, name="stage_x_sdo"),
         )
         out_fifo = SimpleNamespace(
             r_en=Signal(), r_rdy=Signal(), r_data=Signal(8)
         )
+        in_fifo = SimpleNamespace(
+            w_en=Signal(), w_rdy=Signal(), w_data=Signal(8), flush=Signal()
+        )
         target = SampleStageSubtarget(
             "X",
-            ports,
-            out_fifo,
-            pulse_high_us=7,
+            ports=ports,
+            out_fifo=out_fifo,
+            in_fifo=in_fifo,
+            period_cyc=4,
+            delay_cyc=48,
+            sck_idle=0,
+            sck_edge="rising",
         )
         self.assertEqual(target.axis, "X")
-        self.assertEqual(target.pulse_high_us, 7)
+        self.assertEqual(target.period_cyc, 4)
         Fragment.get(target, platform=None)
         with self.assertRaises(ValueError):
             SampleStageSubtarget("Z", object(), object())

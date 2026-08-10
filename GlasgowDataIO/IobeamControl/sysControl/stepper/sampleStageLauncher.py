@@ -44,9 +44,13 @@ class SampleStageLauncher:
                     port_spec="AB",
                     voltage_map={"A": self.voltage, "B": self.voltage},
                     pins=GlasgowPin.parse(",".join(pins.values())),
-                    pin_step=self._pin(pins["step"]),
-                    pin_dir=self._pin(pins["dir"]),
-                    pin_en=self._pin(pins["en"]),
+                    sck=self._pin(pins["sck"]),
+                    cs=self._pin(pins["cs"]),
+                    copi=self._pin(pins["sdi"]),
+                    cipo=self._pin(pins["sdo"]),
+                    frequency=int(axis["spiFrequencyKHz"]),
+                    sck_idle=int(axis.get("sckIdle", 0)),
+                    sck_edge=str(axis.get("sckEdge", "rising")),
                     buffer_size=4096,
                 )
                 args_by_axis[axis_name] = args

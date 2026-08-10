@@ -1,9 +1,17 @@
 {
-    "Version": "1.0",
+    "Version": "2.0",
     "Enable": true,
     "Simulate": true,
+    "Driver": {
+        "model": "TMC5160",
+        "interface": "SPI",
+        "positionSource": "XACTUAL",
+        "spiDatagramBits": 40
+    },
     "Safety": {
-        "maximumTravelInches": 15.0
+        "maximumTravelInches": 15.0,
+        "emergencyStopRequired": true,
+        "hardwareLimitSwitchesRequired": true
     },
     "Glasgow": {
         "Device1": {
@@ -13,30 +21,77 @@
     },
     "Axes": {
         "X": {
-            "pins": { "step": "A0", "dir": "A1", "en": "A2" },
+            "pins": { "sck": "A0", "cs": "A1", "sdi": "A2", "sdo": "A3" },
             "minimum": -50.0,
             "maximum": 50.0,
-            "stepsPerUnit": 200.0,
-            "periodUs": 1000,
-            "pulseHighUs": 5,
-            "invertDirection": false
+            "microstepsPerUnit": 51200.0,
+            "invertDirection": false,
+            "spi": { "frequencyKHz": 500, "sckIdle": 0, "sckEdge": "rising" },
+            "motion": {
+                "timeoutSeconds": 30.0,
+                "pollIntervalMs": 25.0,
+                "positionToleranceMicrosteps": 2
+            },
+            "registerWrites": {
+                "GCONF": "0x00000004",
+                "GSTAT": "0x00000007",
+                "IHOLD_IRUN": "0x00061008",
+                "VSTART": 10,
+                "A1": 1000,
+                "V1": 50000,
+                "AMAX": 500,
+                "VMAX": 100000,
+                "DMAX": 700,
+                "D1": 1400,
+                "VSTOP": 10,
+                "TZEROWAIT": 0,
+                "SW_MODE": "0x00000000",
+                "CHOPCONF": "0x000100C3",
+                "COOLCONF": "0x00000000",
+                "PWMCONF": "0xC40C001E"
+            }
         },
         "Y": {
-            "pins": { "step": "A3", "dir": "A4", "en": "A5" },
+            "pins": { "sck": "A4", "cs": "A5", "sdi": "A6", "sdo": "A7" },
             "minimum": -50.0,
             "maximum": 50.0,
-            "stepsPerUnit": 200.0,
-            "periodUs": 1000,
-            "pulseHighUs": 5,
-            "invertDirection": false
+            "microstepsPerUnit": 51200.0,
+            "invertDirection": false,
+            "spi": { "frequencyKHz": 500, "sckIdle": 0, "sckEdge": "rising" },
+            "motion": {
+                "timeoutSeconds": 30.0,
+                "pollIntervalMs": 25.0,
+                "positionToleranceMicrosteps": 2
+            },
+            "registerWrites": {
+                "GCONF": "0x00000004",
+                "GSTAT": "0x00000007",
+                "IHOLD_IRUN": "0x00061008",
+                "VSTART": 10,
+                "A1": 1000,
+                "V1": 50000,
+                "AMAX": 500,
+                "VMAX": 100000,
+                "DMAX": 700,
+                "D1": 1400,
+                "VSTOP": 10,
+                "TZEROWAIT": 0,
+                "SW_MODE": "0x00000000",
+                "CHOPCONF": "0x000100C3",
+                "COOLCONF": "0x00000000",
+                "PWMCONF": "0xC40C001E"
+            }
         }
     },
     "Message": [
-        "This controller uses the second Glasgow Interface Explorer USB device (Glasgow.Device1).",
-        "Simulate=true performs no USB or motor operation.",
-        "Pin names use Glasgow port notation, not Raspberry Pi BCM numbering.",
-        "The committed pin, travel, and timing values are commissioning placeholders.",
-        "Each configured axis travel span must be less than or equal to 15 inches (381 mm).",
-        "Before Simulate=false, configure Device1.Id, verify STEP/DIR/EN wiring, driver polarity, travel limits, emergency stop, and safe motor current."
+        "This controller uses a dedicated Glasgow Interface Explorer USB device.",
+        "Each axis uses an independent TMC5160 SPI bus: SCK, CSN, SDI and SDO.",
+        "TMC5160 SPI mode is mode 0: SCK idle low, SDI sampled on the rising edge, MSB first.",
+        "Position is read from signed 32-bit XACTUAL and converted by microstepsPerUnit.",
+        "registerWrites accepts every TMC5160 register name listed by the driver, or a numeric address such as 0x6C.",
+        "All committed current, chopper, ramp, scale and travel values are commissioning placeholders.",
+        "Simulate=true performs no USB, SPI or motor operation.",
+        "Each configured axis span must be no more than 15 inches (381 mm).",
+        "Before Simulate=false, verify motor current, external MOSFET/driver hardware, SPI_MODE/SD_MODE straps, limits, emergency stop, grounding and position scale."
     ]
 }
