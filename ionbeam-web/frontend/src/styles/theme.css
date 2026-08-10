@@ -4277,6 +4277,40 @@ body {
 
 .sample-stage-dashboard__position-readout span { opacity: 0.55; }
 
+.sample-stage-dashboard__header-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.sample-stage-dashboard__header-controls select {
+  height: 28px;
+  font: 11px var(--font-mono);
+}
+
+.sample-stage-dashboard__header-controls select { width: 62px; padding: 0 5px; }
+.sample-stage-dashboard__header-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--c-text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.sample-stage-dashboard__header-controls label .number-stepper { width: 106px; height: 28px; }
+.sample-stage-dashboard__header-controls label .number-stepper__input { height: 28px; padding: 0 6px; font-size: 11px; }
+.sample-stage-dashboard__header-controls .btn { min-height: 28px; padding: 4px 10px; }
+
+.sample-stage-dashboard__error {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 8;
+  color: var(--c-danger);
+  font-size: 11px;
+}
+
 
 .vacuum-dashboard__backdrop {
   pointer-events: none;

@@ -17,11 +17,16 @@ export function buildRestProxy(): Router {
     url?: string;
     originalUrl?: string;
     vacuumProxyTarget?: boolean;
+    sampleStageProxyTarget?: boolean;
   };
   const isVacuumRequest = (req: RoutedRequest): boolean =>
     req.vacuumProxyTarget === true ||
     req.url?.startsWith("/vacuum") === true ||
     req.originalUrl?.startsWith("/api/vacuum") === true;
+  const isSampleStageRequest = (req: RoutedRequest): boolean =>
+    req.sampleStageProxyTarget === true ||
+    req.url?.startsWith("/stage") === true ||
+    req.originalUrl?.startsWith("/api/stage") === true;
   router.get("/status", async (_req, res) => {
     const vacuumEnabled = readVacuumEnabled(config.vacuumConfigPath);
     try {
@@ -76,11 +81,18 @@ export function buildRestProxy(): Router {
     res.status(404).json({ detail: "vacuum controller is disabled" });
   });
 
+  router.use("/stage", (req, _res, next) => {
+    (req as RoutedRequest).sampleStageProxyTarget = true;
+    next();
+  });
+
   const proxy = createProxyMiddleware({
     target: config.proxyTargetHttp,
     router: (req) => isVacuumRequest(req)
       ? config.vacuumControllerUrl
-      : config.proxyTargetHttp,
+      : isSampleStageRequest(req)
+        ? config.sampleStageControllerUrl
+        : config.proxyTargetHttp,
     changeOrigin: true,
     pathRewrite: { "^/api": "" },
     selfHandleResponse: true,
@@ -143,7 +155,9 @@ export function buildRestProxy(): Router {
             detail: err.message,
             target: isVacuumRequest(req)
               ? config.vacuumControllerUrl
-              : config.proxyTargetHttp,
+              : isSampleStageRequest(req)
+                ? config.sampleStageControllerUrl
+                : config.proxyTargetHttp,
           })
         );
       },

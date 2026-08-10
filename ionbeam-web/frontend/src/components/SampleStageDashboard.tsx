@@ -3,6 +3,31 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 
 import sampleStageImage from "../assets/SampleStage-0.3.png";
 import { useTranslation } from "../i18n";
+import { apiUrl } from "../lib/backendUrl";
+import { NumberStepperInput } from "./NumberStepperField";
+
+type StageStatus = {
+  connected: boolean;
+  simulation: boolean;
+  position: { x: number; y: number };
+  moving: boolean;
+  last_error: string | null;
+};
+
+type StageUnit = "um" | "mm" | "cmm";
+const MM_PER_UNIT: Record<StageUnit, number> = { um: 0.001, mm: 1, cmm: 0.01 };
+
+function displayValue(mm: number, unit: StageUnit): number {
+  return Number((mm / MM_PER_UNIT[unit]).toFixed(4));
+}
+
+function canonicalValue(value: number, unit: StageUnit): number {
+  return value * MM_PER_UNIT[unit];
+}
+
+function unitLabel(unit: StageUnit): string {
+  return unit === "um" ? "µm" : unit;
+}
 
 type Props = {
   open: boolean;
@@ -16,6 +41,12 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
+  const [targetPosition, setTargetPosition] = useState({ x: 0, y: 0 });
+  const [unit, setUnit] = useState<StageUnit>("um");
+  const [stageStatus, setStageStatus] = useState<StageStatus | null>(null);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const positionEditedRef = useRef(false);
+  const animationRef = useRef<number | null>(null);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -32,6 +63,72 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
     if (!open) return;
     setWindowOffset({ x: 0, y: 0 });
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function refresh() {
+      try {
+        const response = await fetch(apiUrl("/api/stage"));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const status = await response.json() as StageStatus;
+        if (!cancelled) {
+          setStageStatus(status);
+          if (animationRef.current === null) setStagePosition(status.position);
+          if (!positionEditedRef.current) setTargetPosition(status.position);
+          setStageError(status.last_error);
+        }
+      } catch (error) {
+        if (!cancelled) setStageError(error instanceof Error ? error.message : String(error));
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(refresh, 1000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [open]);
+
+  async function moveStage() {
+    setStageError(null);
+    try {
+      const response = await fetch(apiUrl("/api/stage/move"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(targetPosition),
+      });
+      const body = await response.json() as StageStatus | { detail?: string };
+      if (!response.ok) {
+        throw new Error("detail" in body ? body.detail || `HTTP ${response.status}` : `HTTP ${response.status}`);
+      }
+      setStageStatus(body as StageStatus);
+      animateStage((body as StageStatus).position);
+      setTargetPosition((body as StageStatus).position);
+      positionEditedRef.current = false;
+    } catch (error) {
+      setStageError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function animateStage(target: { x: number; y: number }) {
+    if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
+    const start = { ...stagePosition };
+    const startedAt = performance.now();
+    const duration = 500;
+    function frame(now: number) {
+      const elapsed = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - elapsed, 3);
+      setStagePosition({
+        x: start.x + (target.x - start.x) * eased,
+        y: start.y + (target.y - start.y) * eased,
+      });
+      if (elapsed < 1) animationRef.current = requestAnimationFrame(frame);
+      else animationRef.current = null;
+    }
+    animationRef.current = requestAnimationFrame(frame);
+  }
+
+  useEffect(() => () => {
+    if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
+  }, []);
 
   useEffect(() => {
     if (!open || minimized) return;
@@ -69,7 +166,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
   }, [onClose, open]);
 
   function startDragging(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button, input, select")) return;
     const dialog = event.currentTarget.closest<HTMLElement>(".sample-stage-dashboard");
     if (!dialog) return;
     const bounds = dialog.getBoundingClientRect();
@@ -112,6 +209,28 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
         <section className="modal sample-stage-dashboard" role="dialog" aria-labelledby="sample-stage-title" style={{ transform: `translate3d(${windowOffset.x}px, ${windowOffset.y}px, 0)` }}>
           <div className="modal__header sample-stage-dashboard__drag-handle" onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging}>
             <div id="sample-stage-title" className="modal__title">{t("sampleStage.title")}</div>
+            <div className="sample-stage-dashboard__header-controls">
+              <select className="select" value={unit} onChange={(event) => setUnit(event.target.value as StageUnit)} aria-label={t("sampleStage.unit")}>
+                <option value="um">µm</option>
+                <option value="mm">mm</option>
+                <option value="cmm">cmm</option>
+              </select>
+              <label><span>X</span><NumberStepperInput value={displayValue(targetPosition.x, unit)} min={displayValue(-50, unit)} max={displayValue(50, unit)} onValueChange={(value) => {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed)) return;
+                positionEditedRef.current = true;
+                setTargetPosition((position) => ({ ...position, x: canonicalValue(parsed, unit) }));
+              }} ariaLabel="X target" /></label>
+              <label><span>Y</span><NumberStepperInput value={displayValue(targetPosition.y, unit)} min={displayValue(-50, unit)} max={displayValue(50, unit)} onValueChange={(value) => {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed)) return;
+                positionEditedRef.current = true;
+                setTargetPosition((position) => ({ ...position, y: canonicalValue(parsed, unit) }));
+              }} ariaLabel="Y target" /></label>
+              <button type="button" className="btn btn--primary" onClick={() => void moveStage()} disabled={!stageStatus?.connected || stageStatus.moving}>
+                {stageStatus?.moving ? t("sampleStage.moving") : t("sampleStage.move")}
+              </button>
+            </div>
             <div className="sample-stage-dashboard__window-actions">
               <button type="button" className="modal__close" onClick={() => onMinimizedChange(true)} aria-label={t("sampleStage.minimize")} title={t("sampleStage.minimize")}><span aria-hidden>−</span></button>
             </div>
@@ -150,7 +269,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
                     transform: index === 0 ? "translateX(3px)" : index === 20 ? "translateX(calc(-100% - 3px))" : "translateX(-50%)",
                   }}
                 >
-                  {index * 5 - 50}
+                  {displayValue(index * 5 - 50, unit)}
                 </span>
               ))}
               {Array.from({ length: 21 }, (_, index) => (
@@ -162,7 +281,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
                     transform: index === 0 ? "translateY(3px)" : index === 20 ? "translateY(calc(-100% - 3px))" : "translateY(-50%)",
                   }}
                 >
-                  {50 - index * 5}
+                  {displayValue(50 - index * 5, unit)}
                 </span>
               ))}
             </div>
@@ -179,23 +298,30 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
               min="-50"
               max="50"
               step="1"
-              value={stagePosition.x}
+              value={targetPosition.x}
               aria-label={t("sampleStage.axis.x")}
-              onChange={(event) => setStagePosition((position) => ({ ...position, x: Number(event.target.value) }))}
+              onChange={(event) => {
+                positionEditedRef.current = true;
+                setTargetPosition((position) => ({ ...position, x: Number(event.target.value) }));
+              }}
             />
-            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--x" style={{ left: `${stagePosition.x + 50}%` }}>{stagePosition.x}</output>
+            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--x" style={{ left: `${targetPosition.x + 50}%` }}>{displayValue(targetPosition.x, unit)} {unitLabel(unit)}</output>
             <input
               className="sample-stage-dashboard__axis-picker sample-stage-dashboard__axis-picker--y"
               type="range"
               min="-50"
               max="50"
               step="1"
-              value={stagePosition.y}
+              value={targetPosition.y}
               aria-label={t("sampleStage.axis.y")}
-              onChange={(event) => setStagePosition((position) => ({ ...position, y: Number(event.target.value) }))}
+              onChange={(event) => {
+                positionEditedRef.current = true;
+                setTargetPosition((position) => ({ ...position, y: Number(event.target.value) }));
+              }}
             />
-            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--y" style={{ top: `${50 - stagePosition.y}%` }}>{stagePosition.y}</output>
-            <output className="sample-stage-dashboard__position-readout">X&nbsp;{stagePosition.x} <span>·</span> Y&nbsp;{stagePosition.y}</output>
+            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--y" style={{ top: `${50 - targetPosition.y}%` }}>{displayValue(targetPosition.y, unit)} {unitLabel(unit)}</output>
+            <output className="sample-stage-dashboard__position-readout">X&nbsp;{displayValue(stagePosition.x, unit)} {unitLabel(unit)} <span>·</span> Y&nbsp;{displayValue(stagePosition.y, unit)} {unitLabel(unit)}</output>
+            {stageError && <span className="sample-stage-dashboard__error">{stageError}</span>}
             </div>
           </div>
         </section>

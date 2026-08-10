@@ -33,6 +33,7 @@ export interface Config {
   port: number;
   proxyTargetHttp: string;
   vacuumControllerUrl: string;
+  sampleStageControllerUrl: string;
   proxyTargetWs: string;
   glasgowToken: string | null;
   mock: boolean;
@@ -40,6 +41,7 @@ export interface Config {
   staticDir: string;
   configPath: string;
   vacuumConfigPath: string;
+  sampleStageConfigPath: string;
   adminConfigPath: string;
   restartCmd: string;
   restartBackendAfterGlasgow: boolean;
@@ -85,6 +87,12 @@ const DEFAULT_VACUUM_CONFIG_PATH = path.join(
   "GlasgowDataIO",
   "Json",
   "vacuumSystem.json"
+);
+const DEFAULT_SAMPLE_STAGE_CONFIG_PATH = path.join(
+  DEPLOY_DEVELOPMENT_ROOT,
+  "GlasgowDataIO",
+  "Json",
+  "sampleStageSystem.json"
 );
 const DEFAULT_ADMIN_CONFIG_PATH = path.join(
   DEPLOY_DEVELOPMENT_ROOT,
@@ -271,6 +279,7 @@ export const config: Config = {
   port: Number(process.env.PORT ?? 4000),
   proxyTargetHttp: process.env.PROXY_TARGET_HTTP ?? "http://127.0.0.1:8765",
   vacuumControllerUrl: process.env.VACUUM_CONTROLLER_URL ?? process.env.PROXY_TARGET_HTTP ?? "http://127.0.0.1:8765",
+  sampleStageControllerUrl: process.env.SAMPLE_STAGE_CONTROLLER_URL ?? "http://127.0.0.1:8790",
   proxyTargetWs: process.env.PROXY_TARGET_WS ?? "ws://127.0.0.1:8765",
   glasgowToken: process.env.GLASGOW_TOKEN?.trim() || null,
   mock: bool(process.env.MOCK, false),
@@ -283,6 +292,8 @@ export const config: Config = {
   configPath: process.env.GLASGOW_CONFIG?.trim() || DEFAULT_CONFIG_PATH,
   vacuumConfigPath:
     process.env.SBC_VACUUM_CONFIG?.trim() || DEFAULT_VACUUM_CONFIG_PATH,
+  sampleStageConfigPath:
+    process.env.SAMPLE_STAGE_CONFIG?.trim() || DEFAULT_SAMPLE_STAGE_CONFIG_PATH,
   adminConfigPath:
     process.env.IOBEAM_ADMIN_CONFIG?.trim() || DEFAULT_ADMIN_CONFIG_PATH,
   restartCmd:
