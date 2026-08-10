@@ -24,13 +24,21 @@ CONFIG_PATH = Path(__file__).parents[2] / "GlasgowDataIO" / "Json" / "vacuumSyst
 
 def test_config(**updates):
     """Stable unit-test fixture derived from, but not controlled by, live settings."""
-    config = load_vacuum_config(CONFIG_PATH).model_copy(
-        deep=True,
-        update={"enabled": True, "error_range": 0.005, "transport": "glasgow"}
-    )
-    for action_group in config.actions:
-        for action in action_group.values():
-            action.timeout = 15.0
+    payload = json.loads(CONFIG_PATH.read_text())
+    payload.update({
+        "Transport": "glasgow",
+        "Glasgow": {"Device0": {"Id": "C3-20251207T145552Z", "voltage": 3.3}},
+        "Actions": [
+            {"writeData": {"actionData": {
+                "commandFormat": "glasgow run control-gpio -V {} --pins {} {}"
+            }, "timeout": 60.0}},
+            {"readData": {"actionData": {
+                "commandFormat": "glasgow run control-gpio -V {} --pins {} {}"
+            }, "timeout": 60.0}},
+        ],
+    })
+    config = VacuumConfig.model_validate(payload).model_copy(
+        update={"enabled": True, "error_range": 0.005})
     return config.model_copy(update=updates)
 
 
@@ -47,8 +55,8 @@ def test_vacuum_config_parses_thresholds_and_port_directions():
     assert config.device.id == "C3-20251207T145552Z"
     assert config.device.voltage == 3.3
     assert config.error_range == pytest.approx(0.005)
-    assert config.action("writeData").timeout == pytest.approx(15.0)
-    assert config.action("readData").timeout == pytest.approx(15.0)
+    assert config.action("writeData").timeout == pytest.approx(60.0)
+    assert config.action("readData").timeout == pytest.approx(60.0)
     assert [pump.threshold for pump in config.pumps] == [0.1, 0.002, 0.00003, 0.00003]
     assert all(pump.write.startswith("A") for pump in config.pumps)
     assert all(pump.read.startswith("B") for pump in config.pumps)
@@ -81,7 +89,7 @@ def test_vacuum_equipment_count_is_configuration_driven_with_minimum_three():
 
 
 def test_live_gpio_timeouts_allow_fpga_generation():
-    config = load_vacuum_config(CONFIG_PATH)
+    config = test_config()
 
     assert config.action("writeData").timeout >= 60.0
     assert config.action("readData").timeout >= 60.0
@@ -155,7 +163,7 @@ def test_simulated_vacuum_cascade_and_stop():
         await controller.start()
         try:
             assert controller.status().pumps[0].name == MECHANICAL_PUMP
-            assert controller.status().control_transport == "glasgow-gpio"
+            assert controller.status().control_transport == "sbc-simulation"
             assert controller.status().pumps[0].power is True
             assert controller.status().pumps[0].port_a_value == pytest.approx(3.3)
             assert controller.status().pumps[0].border == "waiting"

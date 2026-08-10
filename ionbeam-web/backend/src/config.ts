@@ -39,6 +39,7 @@ export interface Config {
   mobilityOnly: boolean;
   staticDir: string;
   configPath: string;
+  vacuumConfigPath: string;
   adminConfigPath: string;
   restartCmd: string;
   restartBackendAfterGlasgow: boolean;
@@ -78,6 +79,12 @@ const DEFAULT_CONFIG_PATH = path.join(
   "GlasgowDataIO",
   "Json",
   "streamData.json"
+);
+const DEFAULT_VACUUM_CONFIG_PATH = path.join(
+  DEPLOY_DEVELOPMENT_ROOT,
+  "GlasgowDataIO",
+  "Json",
+  "vacuumSystem.json"
 );
 const DEFAULT_ADMIN_CONFIG_PATH = path.join(
   DEPLOY_DEVELOPMENT_ROOT,
@@ -274,6 +281,8 @@ export const config: Config = {
     process.env.STATIC_DIR ?? "../frontend/dist"
   ),
   configPath: process.env.GLASGOW_CONFIG?.trim() || DEFAULT_CONFIG_PATH,
+  vacuumConfigPath:
+    process.env.SBC_VACUUM_CONFIG?.trim() || DEFAULT_VACUUM_CONFIG_PATH,
   adminConfigPath:
     process.env.IOBEAM_ADMIN_CONFIG?.trim() || DEFAULT_ADMIN_CONFIG_PATH,
   restartCmd:

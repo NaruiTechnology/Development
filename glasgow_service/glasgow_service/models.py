@@ -68,7 +68,7 @@ class VacuumSystemStatus(BaseModel):
     voltage: float
     connected: bool
     simulation: bool
-    control_transport: Literal["glasgow-gpio", "vacuum-control-subtarget", "raspberry-pi-gpio"]
+    control_transport: Literal["sbc-simulation", "vacuum-control-subtarget", "raspberry-pi-gpio"]
     running: bool
     runtime_seconds: float = 0.0
     cascade_stopped: bool

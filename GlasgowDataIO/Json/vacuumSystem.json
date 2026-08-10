@@ -1,10 +1,4 @@
 {
-    "Glasgow": {
-        "Device0": {
-            "Id": "C3-20251207T145552Z",
-            "voltage": 3.3
-        }
-    },
     "VacuumPumps": [
         {
             "name": "MechanicalVacuumPump",
@@ -33,24 +27,6 @@
             "value": "3.0*e-5",
             "write": "A3",
             "read": "B3"
-        }
-    ],
-    "Actions": [
-        {
-            "writeData": {
-                "actionData": {
-                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}"                    
-                },
-                "timeout": 60.0
-            }
-        },
-        {
-            "readData": {
-                "actionData": {
-                    "commandFormat": "glasgow run control-gpio -V {} --pins {} {}"
-                },
-                "timeout": 60.0
-            }
         }
     ],
     "errorRange": "0.01",

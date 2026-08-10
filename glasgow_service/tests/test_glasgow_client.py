@@ -5,9 +5,9 @@ import pytest
 from glasgow_service.coordination import InMemoryLeaseCoordinator, ManualClock
 from glasgow_service.executor_lifecycle import ExecutorState
 from glasgow_service.failover_executor import FailoverExecutor
-from glasgow_service.glasgow_client import (
-    GlasgowAuthorityRejected,
-    GlasgowVacuumClient,
+from glasgow_service.sbc_client import (
+    SbcAuthorityRejected,
+    SbcVacuumClient,
 )
 from glasgow_service.vacuum_failover_runtime import VacuumFailoverRuntime
 
@@ -38,15 +38,15 @@ def make_executor(clock):
     return coordinator, executor
 
 
-def test_glasgow_client_sends_live_fencing_and_bearer_headers():
+def test_sbc_client_sends_live_fencing_and_bearer_headers():
     async def scenario():
         clock = ManualClock()
         _coordinator, executor = make_executor(clock)
         await executor.start()
         await executor.step()
         http = FakeHttpClient()
-        client = GlasgowVacuumClient(
-            "http://glasgow.local:8765/",
+        client = SbcVacuumClient(
+            "http://sbc.local:8765/",
             executor,
             bearer_token="secret",
             http_client=http,
@@ -68,29 +68,29 @@ def test_glasgow_client_sends_live_fencing_and_bearer_headers():
     asyncio.run(scenario())
 
 
-def test_glasgow_client_refuses_requests_without_live_lease():
+def test_sbc_client_refuses_requests_without_live_lease():
     async def scenario():
         clock = ManualClock()
         _coordinator, executor = make_executor(clock)
         http = FakeHttpClient()
-        client = GlasgowVacuumClient(
-            "http://glasgow.local:8765", executor, http_client=http, clock=clock
+        client = SbcVacuumClient(
+            "http://sbc.local:8765", executor, http_client=http, clock=clock
         )
 
-        with pytest.raises(GlasgowAuthorityRejected, match="no live lease"):
+        with pytest.raises(SbcAuthorityRejected, match="no live lease"):
             await client.acquire()
         assert http.requests == []
 
     asyncio.run(scenario())
 
 
-def test_runtime_acquires_renews_and_stops_glasgow_before_releasing_lease():
+def test_runtime_acquires_renews_and_stops_sbc_before_releasing_lease():
     async def scenario():
         clock = ManualClock()
         coordinator, executor = make_executor(clock)
         http = FakeHttpClient()
-        client = GlasgowVacuumClient(
-            "http://glasgow.local:8765", executor, http_client=http, clock=clock
+        client = SbcVacuumClient(
+            "http://sbc.local:8765", executor, http_client=http, clock=clock
         )
         runtime = VacuumFailoverRuntime(executor, client)
 
@@ -109,14 +109,14 @@ def test_runtime_acquires_renews_and_stops_glasgow_before_releasing_lease():
     asyncio.run(scenario())
 
 
-def test_runtime_fences_executor_when_glasgow_rejects_authority():
+def test_runtime_fences_executor_when_sbc_rejects_authority():
     async def scenario():
         clock = ManualClock()
         _coordinator, executor = make_executor(clock)
         http = FakeHttpClient()
         http.next_response = FakeResponse(409, {"detail": "stale fencing token"})
-        client = GlasgowVacuumClient(
-            "http://glasgow.local:8765", executor, http_client=http, clock=clock
+        client = SbcVacuumClient(
+            "http://sbc.local:8765", executor, http_client=http, clock=clock
         )
         runtime = VacuumFailoverRuntime(executor, client)
 

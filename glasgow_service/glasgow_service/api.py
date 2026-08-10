@@ -9,6 +9,7 @@ OpenAPI JSON: http://127.0.0.1:8765/openapi.json
 """
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, WebSocket, WebSocketDisconnect
@@ -44,9 +45,17 @@ async def lifespan(app: FastAPI):
     logger.info("Glasgow config: %s", config_path)
     svc = DeviceService(str(config_path))
     await svc.start()
-    vacuum_path = find_vacuum_config_path()
-    logger.info("Vacuum config: %s", vacuum_path)
-    vacuum_config = load_vacuum_config(vacuum_path) if vacuum_config_enabled(vacuum_path) else None
+    legacy_vacuum_enabled = os.environ.get(
+        "ENABLE_LEGACY_GLASGOW_VACUUM_API", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    vacuum_config = None
+    if legacy_vacuum_enabled:
+        vacuum_path = find_vacuum_config_path()
+        logger.warning("Legacy Glasgow vacuum API enabled with config: %s", vacuum_path)
+        vacuum_config = (
+            load_vacuum_config(vacuum_path)
+            if vacuum_config_enabled(vacuum_path) else None
+        )
     if vacuum_config is not None and vacuum_config.enabled:
         vacuum = VacuumController(
             vacuum_config,
@@ -72,7 +81,10 @@ async def lifespan(app: FastAPI):
                         logger.exception("Failed to release Glasgow after vacuum startup failure")
     else:
         vacuum = None
-        logger.info("Vacuum control path bypassed: Enable is false")
+        logger.info(
+            "Vacuum control is delegated to sbc_vacuum_app; legacy API enabled=%s",
+            legacy_vacuum_enabled,
+        )
     try:
         yield
     finally:

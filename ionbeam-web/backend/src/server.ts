@@ -24,6 +24,7 @@ import tls from "node:tls";
 import type { IncomingMessage } from "node:http";
 
 import { config } from "./config";
+import { readVacuumEnabled } from "./vacuumConfig";
 import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
@@ -1170,14 +1171,7 @@ app.use("/api/scan/vector/run", requireScanPrivilege);
 if (config.mock) {
   app.get("/api/status", async (_req, res) => {
     const status = mockRest.status();
-    try {
-      const vacuumResponse = await fetch(`${config.vacuumControllerUrl}/vacuum`, {
-        signal: AbortSignal.timeout(2_000),
-      });
-      status.vacuum_enabled = vacuumResponse.ok;
-    } catch {
-      status.vacuum_enabled = false;
-    }
+    status.vacuum_enabled = readVacuumEnabled(config.vacuumConfigPath);
     res.json(status);
   });
   app.get("/api/defaults", (_req, res) => res.json(mockRest.defaults()));

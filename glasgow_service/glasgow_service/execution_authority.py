@@ -13,9 +13,9 @@ from .coordination import Clock, SystemMonotonicClock
 from .failover_executor import FailoverExecutor
 
 
-REQUIRE_FENCING_ENV = "GLASGOW_REQUIRE_FENCING"
-FENCING_STATE_ENV = "GLASGOW_FENCING_STATE"
-DEFAULT_FENCING_STATE = Path("/var/lib/glasgow-service/fencing-token.json")
+REQUIRE_FENCING_ENV = "SBC_REQUIRE_FENCING"
+FENCING_STATE_ENV = "SBC_FENCING_STATE"
+DEFAULT_FENCING_STATE = Path("/var/lib/sbc-vacuum/fencing-token.json")
 
 
 @dataclass(frozen=True, slots=True)

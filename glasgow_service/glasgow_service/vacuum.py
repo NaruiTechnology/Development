@@ -1,10 +1,4 @@
-"""Vacuum-system GPIO control backed by ``vacuumSystem.json``.
-
-The controller follows the same ``glasgow run control-gpio`` command path
-used by ``GlasgowDataIO/glasgowWriteDataApp.py``. Reads sample every
-configured Port B pin in one subprocess call, then distribute the returned
-levels to the configured pump models.
-"""
+"""Configuration-driven SBC vacuum control with a legacy Glasgow adapter."""
 from __future__ import annotations
 
 import asyncio
@@ -21,7 +15,6 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .comparator_subtarget import ComparatorTarget, VacuumComparatorSubtarget
 from .models import VacuumPumpState, VacuumSystemStatus
 from .execution_authority import (
     ExecutionAuthority,
@@ -114,14 +107,14 @@ class VacuumAction(BaseModel):
 
 class VacuumConfig(BaseModel):
     enabled: bool = Field(True, alias="Enable")
-    glasgow: dict[str, GlasgowDeviceConfig] = Field(alias="Glasgow")
+    glasgow: dict[str, GlasgowDeviceConfig] = Field(default_factory=dict, alias="Glasgow")
     pumps: list[VacuumPumpConfig] = Field(alias="VacuumPumps")
-    actions: list[dict[str, VacuumAction]] = Field(alias="Actions")
+    actions: list[dict[str, VacuumAction]] = Field(default_factory=list, alias="Actions")
     error_range: float = Field(alias="errorRange", ge=0, le=1)
     log_name: str = Field("VacuumDashboard", alias="LogName")
     verbose: bool = Field(False, alias="Verbose")
     simulate: bool = Field(False, alias="Simulate")
-    transport: str = Field("glasgow", alias="Transport")
+    transport: str = Field("raspberry-pi", alias="Transport")
     sbc: SbcDeviceConfig | None = Field(None, alias="SBC")
 
     @model_validator(mode="after")
@@ -144,6 +137,8 @@ class VacuumConfig(BaseModel):
             missing = [pin for pin in writes + reads if pin not in self.sbc.gpio]
             if missing:
                 raise ValueError(f"SBC.GPIO is missing channels: {', '.join(missing)}")
+        elif not self.glasgow or not self.actions:
+            raise ValueError("legacy Glasgow transport requires Glasgow and Actions")
         return self
 
     def action(self, name: str) -> VacuumAction:
@@ -153,7 +148,7 @@ class VacuumConfig(BaseModel):
         raise ValueError(f"vacuum config is missing Actions.{name}")
 
     @property
-    def device(self) -> GlasgowDeviceConfig:
+    def device(self) -> GlasgowDeviceConfig | SbcDeviceConfig:
         if self.transport == "raspberry-pi" and self.sbc is not None:
             return self.sbc
         if not self.glasgow:
@@ -193,6 +188,7 @@ class VacuumGPIOInterface:
         if not config.enabled:
             raise RuntimeError("vacuum controller is disabled by configuration")
         self.config = config
+        from .comparator_subtarget import VacuumComparatorSubtarget
         self.comparator_subtarget = comparator_subtarget or VacuumComparatorSubtarget(
             config.device.id,
             config.device.voltage,
@@ -212,6 +208,7 @@ class VacuumGPIOInterface:
             self._outputs = next_outputs
             return
         if not self.config.simulate:
+            from .comparator_subtarget import ComparatorTarget
             await self.comparator_subtarget.write_target(
                 ComparatorTarget(
                     equipment=pump.name,
@@ -461,7 +458,7 @@ class VacuumController:
 
     @property
     def requires_device(self) -> bool:
-        """Whether this controller owns the shared Glasgow USB device."""
+        """Whether the explicitly selected legacy adapter owns Glasgow USB."""
         return not self.config.simulate and self.config.transport == "glasgow"
 
     @property
@@ -543,7 +540,7 @@ class VacuumController:
             connected=self._last_error is None,
             simulation=self.config.simulate,
             control_transport=(
-                "glasgow-gpio" if self.config.simulate else
+                "sbc-simulation" if self.config.simulate else
                 "raspberry-pi-gpio" if self.config.transport == "raspberry-pi" else
                 "vacuum-control-subtarget"
             ),

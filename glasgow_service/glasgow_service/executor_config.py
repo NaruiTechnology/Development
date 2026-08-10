@@ -29,8 +29,8 @@ class ExecutorConfig:
     instance_id: str
     listen_host: str
     listen_port: int
-    glasgow_url: str
-    glasgow_token: str | None
+    sbc_url: str
+    sbc_token: str | None
     lease_ttl: float
     poll_interval: float
     redis_namespace: str
@@ -57,7 +57,7 @@ class ExecutorConfig:
         if not 1 <= port <= 65535 or replicas < 0 or wait_timeout < 0:
             raise ValueError("executor port/Redis WAIT settings are out of range")
         redis = RedisSentinelSettings.from_environment()
-        require_fencing = _bool("GLASGOW_REQUIRE_FENCING", False)
+        require_fencing = _bool("SBC_REQUIRE_FENCING", False)
         if require_fencing and len(redis.sentinels) < 3:
             raise ValueError("production fencing requires at least three Redis Sentinel endpoints")
         namespace = os.environ.get("VACUUM_REDIS_NAMESPACE", "vacuum").strip()
@@ -67,11 +67,10 @@ class ExecutorConfig:
             instance_id=instance_id,
             listen_host=os.environ.get("VACUUM_EXECUTOR_HOST", "127.0.0.1"),
             listen_port=port,
-            glasgow_url=os.environ.get(
-                "VACUUM_SBC_URL",
-                os.environ.get("VACUUM_GLASGOW_URL", "http://127.0.0.1:8765"),
+            sbc_url=os.environ.get(
+                "VACUUM_SBC_URL", "http://127.0.0.1:8766"
             ).rstrip("/"),
-            glasgow_token=os.environ.get("GLASGOW_TOKEN") or None,
+            sbc_token=os.environ.get("SBC_VACUUM_TOKEN") or None,
             lease_ttl=ttl,
             poll_interval=poll,
             redis_namespace=namespace,

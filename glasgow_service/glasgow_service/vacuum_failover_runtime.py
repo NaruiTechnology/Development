@@ -1,4 +1,4 @@
-"""Bind leader-election progress to Glasgow fencing-window heartbeats."""
+"""Bind leader-election progress to SBC fencing-window heartbeats."""
 from __future__ import annotations
 
 import asyncio
@@ -6,19 +6,19 @@ import logging
 
 from .executor_lifecycle import ExecutorState
 from .failover_executor import FailoverExecutor
-from .glasgow_client import GlasgowClientError, SbcVacuumClient
+from .sbc_client import SbcClientError, SbcVacuumClient
 
 
 class VacuumFailoverRuntime:
     def __init__(
         self,
         executor: FailoverExecutor,
-        glasgow: SbcVacuumClient,
+        sbc: SbcVacuumClient,
     ) -> None:
-        if glasgow.executor is not executor:
-            raise ValueError("Glasgow client and runtime must use the same executor")
+        if sbc.executor is not executor:
+            raise ValueError("SBC client and runtime must use the same executor")
         self.executor = executor
-        self.glasgow = glasgow
+        self.sbc = sbc
         self._acquired_token: int | None = None
         self.last_error: str | None = None
         self.logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class VacuumFailoverRuntime:
             "state": self.executor.lifecycle.state.value,
             "active": self.executor.may_execute,
             "fencing_token": lease.fencing_token if lease else None,
-            "glasgow_acquired": self._acquired_token is not None,
+            "sbc_acquired": self._acquired_token is not None,
             "last_error": self.last_error,
         }
 
@@ -38,31 +38,31 @@ class VacuumFailoverRuntime:
             raise RuntimeError("this executor is not the active SBC controller")
 
     async def sbc_status(self) -> dict[str, object]:
-        return await self.glasgow.status()
+        return await self.sbc.status()
 
     async def acquire(
         self, expected_channels: dict[str, float] | None = None
     ) -> dict[str, object]:
         self.require_active()
-        return await self.glasgow.acquire(expected_channels)
+        return await self.sbc.acquire(expected_channels)
 
     async def set_power(self, pump_name: str, power: bool) -> dict[str, object]:
         self.require_active()
-        return await self.glasgow.set_power(pump_name, power)
+        return await self.sbc.set_power(pump_name, power)
 
     async def set_simulated_read(
         self, pump_name: str, checked: bool
     ) -> dict[str, object]:
         self.require_active()
-        return await self.glasgow.set_simulated_read(pump_name, checked)
+        return await self.sbc.set_simulated_read(pump_name, checked)
 
     async def stop_vacuum(self) -> dict[str, object]:
         self.require_active()
-        return await self.glasgow.stop()
+        return await self.sbc.stop()
 
     async def release_vacuum(self) -> dict[str, object]:
         self.require_active()
-        result = await self.glasgow.release()
+        result = await self.sbc.release()
         self._acquired_token = None
         return result
 
@@ -74,13 +74,13 @@ class VacuumFailoverRuntime:
         try:
             token = self.executor.lease.fencing_token
             if token != self._acquired_token:
-                await self.glasgow.acquire()
+                await self.sbc.acquire()
                 self._acquired_token = token
             else:
-                await self.glasgow.renew_leadership()
-        except GlasgowClientError:
-            self.last_error = "Glasgow lease or hardware request failed"
-            self.logger.exception("Glasgow downstream safety fault", extra={"event": "fence"})
+                await self.sbc.renew_leadership()
+        except SbcClientError:
+            self.last_error = "SBC lease or hardware request failed"
+            self.logger.exception("SBC downstream safety fault", extra={"event": "fence"})
             self.executor.fence()
             self._acquired_token = None
 
@@ -105,9 +105,9 @@ class VacuumFailoverRuntime:
             and self._acquired_token is not None
         ):
             try:
-                await self.glasgow.release()
-            except GlasgowClientError:
+                await self.sbc.release()
+            except SbcClientError:
                 pass
         await self.executor.stop()
-        await self.glasgow.close()
+        await self.sbc.close()
         self._acquired_token = None

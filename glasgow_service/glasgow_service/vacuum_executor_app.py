@@ -10,7 +10,7 @@ from fastapi import Body, FastAPI, HTTPException
 from .executor_config import ExecutorConfig
 from .executor_logging import configure_logging
 from .failover_executor import FailoverExecutor
-from .glasgow_client import GlasgowClientError, SbcVacuumClient
+from .sbc_client import SbcClientError, SbcVacuumClient
 from .redis_coordination import RedisSentinelLeaseCoordinator
 from .vacuum_failover_runtime import VacuumFailoverRuntime
 
@@ -35,7 +35,7 @@ def create_app() -> FastAPI:
             poll_interval=config.poll_interval,
         )
         client = SbcVacuumClient(
-            config.glasgow_url, executor, bearer_token=config.glasgow_token,
+            config.sbc_url, executor, bearer_token=config.sbc_token,
         )
         runtime = VacuumFailoverRuntime(executor, client)
         stop_event = asyncio.Event()
@@ -87,7 +87,7 @@ def create_app() -> FastAPI:
     async def forward(operation):
         try:
             return await operation
-        except GlasgowClientError as exc:
+        except SbcClientError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @app.get("/vacuum")

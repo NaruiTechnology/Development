@@ -9,12 +9,21 @@
 import { Router } from "express";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import { config } from "./config";
+import { readVacuumEnabled } from "./vacuumConfig";
 
 export function buildRestProxy(): Router {
   const router = Router();
-  let vacuumEnabled: boolean | null = null;
-
+  type RoutedRequest = {
+    url?: string;
+    originalUrl?: string;
+    vacuumProxyTarget?: boolean;
+  };
+  const isVacuumRequest = (req: RoutedRequest): boolean =>
+    req.vacuumProxyTarget === true ||
+    req.url?.startsWith("/vacuum") === true ||
+    req.originalUrl?.startsWith("/api/vacuum") === true;
   router.get("/status", async (_req, res) => {
+    const vacuumEnabled = readVacuumEnabled(config.vacuumConfigPath);
     try {
       const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
         headers: config.glasgowToken
@@ -37,19 +46,7 @@ export function buildRestProxy(): Router {
       }
       try {
         const status = JSON.parse(text) as { vacuum_enabled?: unknown };
-        if (config.vacuumControllerUrl === config.proxyTargetHttp) {
-          vacuumEnabled = status.vacuum_enabled === true;
-        } else {
-          try {
-            const vacuumResponse = await fetch(`${config.vacuumControllerUrl}/vacuum`, {
-              signal: AbortSignal.timeout(2_000),
-            });
-            vacuumEnabled = vacuumResponse.ok;
-          } catch {
-            vacuumEnabled = false;
-          }
-          status.vacuum_enabled = vacuumEnabled;
-        }
+        status.vacuum_enabled = vacuumEnabled;
         res.status(upstream.status).json(status);
       } catch {
         res.status(502).json({
@@ -59,35 +56,20 @@ export function buildRestProxy(): Router {
         });
       }
     } catch (err) {
-      vacuumEnabled = false;
       const detail = err instanceof Error ? err.message : String(err);
       res.json({
         state: "disconnected",
         last_error: `glasgow_service unreachable: ${detail}`,
         scans_completed: 0,
         chunks_in_flight: 0,
-        vacuum_enabled: false,
+        vacuum_enabled: vacuumEnabled,
       });
     }
   });
 
-  router.use("/vacuum", async (_req, res, next) => {
-    if (vacuumEnabled === null) {
-      try {
-        const upstream = await fetch(`${config.vacuumControllerUrl}/vacuum`, {
-          headers: config.glasgowToken
-            ? { Authorization: `Bearer ${config.glasgowToken}` }
-            : undefined,
-          signal: AbortSignal.timeout(2_000),
-        });
-        if (upstream.ok) {
-          vacuumEnabled = true;
-        }
-      } catch {
-        // Let the proxy return its normal upstream-unreachable response.
-      }
-    }
-    if (vacuumEnabled !== false) {
+  router.use("/vacuum", async (req, res, next) => {
+    if (readVacuumEnabled(config.vacuumConfigPath)) {
+      (req as RoutedRequest).vacuumProxyTarget = true;
       next();
       return;
     }
@@ -96,7 +78,7 @@ export function buildRestProxy(): Router {
 
   const proxy = createProxyMiddleware({
     target: config.proxyTargetHttp,
-    router: (req) => req.url?.startsWith("/api/vacuum")
+    router: (req) => isVacuumRequest(req)
       ? config.vacuumControllerUrl
       : config.proxyTargetHttp,
     changeOrigin: true,
@@ -159,7 +141,7 @@ export function buildRestProxy(): Router {
           JSON.stringify({
             error: "upstream_unreachable",
             detail: err.message,
-            target: req.url?.startsWith("/api/vacuum")
+            target: isVacuumRequest(req)
               ? config.vacuumControllerUrl
               : config.proxyTargetHttp,
           })

@@ -26,7 +26,7 @@ remote fencing:
 cd Development/glasgow_service
 export PYTHONPATH="$PWD/..:$PWD"
 export SBC_VACUUM_CONFIG="$PWD/../GlasgowDataIO/Json/vacuumSystem.json"
-export GLASGOW_REQUIRE_FENCING=false
+export SBC_REQUIRE_FENCING=false
 python3 -m uvicorn glasgow_service.sbc_vacuum_app:app --host 127.0.0.1 --port 8765
 ```
 
@@ -43,7 +43,7 @@ curl -fsS -X POST http://127.0.0.1:8765/vacuum/pumps/MechanicalVacuumPump/read \
   -H 'Content-Type: application/json' -d '{"checked":true}'
 ```
 
-Confirm that `control_transport` is `glasgow-gpio`, `simulation` is true,
+Confirm that `control_transport` is `sbc-simulation`, `simulation` is true,
 `runtime_seconds` increases, the expected values round-trip as `threshold`,
 and the simulated mechanical read advances the cascade.
 
@@ -51,7 +51,7 @@ and the simulated mechanical read advances the cascade.
 
 1. Start the Redis primary, replica, and at least three Sentinels using
    `deploy/setup-redis-sentinel.sh` on the intended hosts.
-2. Start the SBC API with `GLASGOW_REQUIRE_FENCING=true`.
+2. Start the SBC API with `SBC_REQUIRE_FENCING=true`.
 3. Start two executor instances with distinct `VACUUM_EXECUTOR_ID` values and
    the same Sentinel settings. Point both `VACUUM_SBC_URL` values at the SBC.
 4. Query both `/status` endpoints. Exactly one must report `active: true`.

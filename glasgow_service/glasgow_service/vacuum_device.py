@@ -1,6 +1,6 @@
 """Hardware-neutral device boundary for the continuous vacuum controller.
 
-The controller depends on :class:`VacuumDevice`, not on USB or Glasgow
+The controller depends on :class:`VacuumDevice`, not on transport-specific
 implementation details.  The deterministic simulator is deliberately small:
 it models digital output and comparator input levels while the controller owns
 the vacuum-pressure/cascade model.

@@ -7,11 +7,12 @@ same fencing headers used by the active/standby executor.
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 
-from .auth import require_token
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .execution_authority import AuthorityDenied, remote_authority_from_environment
 from .models import (
     VacuumAcquireRequest,
@@ -25,6 +26,14 @@ from .vacuum import VacuumController, find_vacuum_config_path, load_vacuum_confi
 def create_app() -> FastAPI:
     holder: dict[str, VacuumController] = {}
     lock = asyncio.Lock()
+    bearer = HTTPBearer(auto_error=False)
+
+    def require_sbc_token(
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    ) -> None:
+        expected = os.environ.get("SBC_VACUUM_TOKEN")
+        if expected and (credentials is None or credentials.credentials != expected):
+            raise HTTPException(401, "invalid or missing SBC bearer token")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -72,11 +81,36 @@ def create_app() -> FastAPI:
         except (AuthorityDenied, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
 
-    mutation_dependencies = [Depends(require_token), Depends(execution_permit)]
+    mutation_dependencies = [Depends(require_sbc_token), Depends(execution_permit)]
 
     @app.get("/status")
     async def service_status() -> dict[str, object]:
-        return {"vacuum_enabled": "controller" in holder, "platform": "raspberry-pi"}
+        target = holder.get("controller")
+        status = target.status() if target is not None else None
+        return {
+            "service": "sbc-vacuum",
+            "vacuum_enabled": target is not None,
+            "platform": "raspberry-pi",
+            "mode": "simulation" if status and status.simulation else "gpio",
+            "equipment_count": len(status.pumps) if status else 0,
+            "running": status.running if status else False,
+        }
+
+    @app.get("/health/live")
+    async def live() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/health/ready")
+    async def ready() -> dict[str, object]:
+        target = holder.get("controller")
+        if target is None:
+            raise HTTPException(503, "SBC vacuum controller is starting")
+        status = target.status()
+        return {
+            "status": "ready",
+            "connected": status.connected,
+            "equipment_count": len(status.pumps),
+        }
 
     @app.get("/vacuum", response_model=VacuumSystemStatus)
     async def vacuum_status():
@@ -149,7 +183,6 @@ app = create_app()
 
 
 def main() -> None:
-    import os
     import uvicorn
 
     uvicorn.run(
