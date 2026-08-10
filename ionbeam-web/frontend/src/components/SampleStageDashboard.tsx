@@ -10,6 +10,10 @@ type StageStatus = {
   connected: boolean;
   simulation: boolean;
   position: { x: number; y: number };
+  limits: {
+    x: { minimum: number; maximum: number };
+    y: { minimum: number; maximum: number };
+  };
   moving: boolean;
   last_error: string | null;
 };
@@ -153,8 +157,27 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onClo
       const x = (bounds.width - width) / 2 + (stagePosition.x / 50) * xTravel;
       const y = (bounds.height - height) / 2 - (stagePosition.y / 50) * yTravel;
       context.drawImage(image, x, y, width, height);
+
+      // Draw the positive Cartesian axes after the image so browser stacking
+      // contexts cannot hide the origin guides behind the canvas.
+      const xLimits = stageStatus?.limits.x ?? { minimum: -50, maximum: 50 };
+      const yLimits = stageStatus?.limits.y ?? { minimum: -50, maximum: 50 };
+      const originX = ((0 - xLimits.minimum) / (xLimits.maximum - xLimits.minimum)) * bounds.width;
+      const originY = ((yLimits.maximum - 0) / (yLimits.maximum - yLimits.minimum)) * bounds.height;
+      context.save();
+      context.beginPath();
+      // X=0 starts at the zero tick on the top X axis and runs downward.
+      context.moveTo(originX, 0);
+      context.lineTo(originX, bounds.height);
+      // Y=0 starts at the zero tick on the left Y axis and runs rightward.
+      context.moveTo(0, originY);
+      context.lineTo(bounds.width, originY);
+      context.strokeStyle = "rgba(255, 0, 0, 1)";
+      context.lineWidth = 0.5;
+      context.stroke();
+      context.restore();
     };
-  }, [minimized, open, stagePosition]);
+  }, [minimized, open, stagePosition, stageStatus?.limits]);
 
   useEffect(() => {
     if (!open) return;

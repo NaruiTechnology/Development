@@ -12,6 +12,7 @@ from IobeamControl.sysControl.stepper.stepperChannel import StepperChannel
 from IobeamControl.sysControl.stepper.controlStepperInterface import ControlStepperInterface
 from IobeamControl.sysControl.stepper.controlStepperSubtarget import ControlStepperSubtarget  
 from IobeamControl.sysControl.stepper.stepperApplet import ControlStepperApplet
+from IobeamControl.sysControl.stepper.sampleStageSubtarget import SampleStageSubtarget
 
 warnings.filterwarnings("ignore", category=UnusedElaboratable)
 
@@ -34,6 +35,18 @@ class MockLower:
 # TestCase for Stepper classes
 # ---------------------------------------------------------------------------
 class ControlStepperTest(unittest.TestCase):
+    def test_sample_stage_subtarget_tracks_axis(self):
+        target = SampleStageSubtarget(
+            "X",
+            type("Ports", (), {})(),
+            type("Fifo", (), {})(),
+            pulse_high_us=7,
+        )
+        self.assertEqual(target.axis, "X")
+        self.assertEqual(target.pulse_high_us, 7)
+        with self.assertRaises(ValueError):
+            SampleStageSubtarget("Z", object(), object())
+
     def test_stepper_channel_generates_pulses(self):
         """Simulate StepperChannel and verify it runs without errors."""
 

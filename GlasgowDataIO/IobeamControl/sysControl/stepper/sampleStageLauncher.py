@@ -8,7 +8,7 @@ from ...glasgowLib.glasgow.hardware.demultiplexer import DirectDemultiplexer
 from ...glasgowLib.glasgow.hardware.device import GlasgowDevice, ST_FPGA_RDY
 from ...glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
 from ...glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
-from .stepperApplet import ControlStepperApplet
+from .sampleStageApplet import SampleStageApplet
 
 
 class SampleStageLauncher:
@@ -34,18 +34,12 @@ class SampleStageLauncher:
             target = GlasgowHardwareTarget(
                 revision=device.revision, multiplexer_cls=DirectMultiplexer
             )
-            applets = {}
             args_by_axis = {}
             all_pins = []
             for axis_name in ("X", "Y"):
                 axis = self.axes[axis_name]
                 pins = axis["pins"]
                 all_pins.extend(pins.values())
-                applet = ControlStepperApplet({
-                    "stepperCarrier": {
-                        "timing": {"pulseHighUs": axis["pulseHighUs"]}
-                    }
-                })
                 args = SimpleNamespace(
                     port_spec="AB",
                     voltage_map={"A": self.voltage, "B": self.voltage},
@@ -55,12 +49,12 @@ class SampleStageLauncher:
                     pin_en=self._pin(pins["en"]),
                     buffer_size=4096,
                 )
-                applet.build(target, args)
-                applets[axis_name] = applet
                 args_by_axis[axis_name] = args
 
             if len(set(all_pins)) != len(all_pins):
                 raise ValueError("sample-stage Glasgow pins must be unique")
+            applet = SampleStageApplet(self.axes)
+            applet.build(target, args_by_axis)
             await device.download_target(target.build_plan(), reload=True)
             device.demultiplexer = DirectDemultiplexer(
                 device, target.multiplexer.pipe_count
@@ -71,10 +65,7 @@ class SampleStageLauncher:
             if not status & ST_FPGA_RDY:
                 raise RuntimeError(f"sample-stage FPGA target is not ready; status={status:#04x}")
             await asyncio.sleep(1.2)
-            interfaces = {
-                name: await applets[name].run(device, args_by_axis[name])
-                for name in ("X", "Y")
-            }
+            interfaces = await applet.run(device, args_by_axis)
             return device, interfaces
         except BaseException:
             device.close()
