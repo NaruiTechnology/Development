@@ -1,0 +1,12 @@
+net_group,source,destination,default_state,isolation_required,notes
+X_COMMAND,Glasgow,J2 COMMAND pair,disabled,yes,Protocol selected with X drive
+Y_COMMAND,Glasgow,J3 COMMAND pair,disabled,yes,Protocol selected with Y drive
+Z_COMMAND,Glasgow,J4 COMMAND pair,disabled,yes,Protocol TBD
+T_COMMAND,Glasgow,J5 COMMAND pair,disabled,yes,Protocol TBD
+R_COMMAND,Glasgow,J6 COMMAND pair,disabled,yes,Protocol TBD
+AXIS_ENABLE,Glasgow plus safety permit,J2-J6 ENABLE pairs,disabled,yes,Hardware gating required
+AXIS_READY,J2-J6 READY pairs,Glasgow,not-ready,yes,Per-axis status
+AXIS_FAULT,J2-J6 FAULT pairs,Glasgow,fault,yes,Fail-safe polarity preferred
+HOME_LIMITS,J2-J6 field inputs,Glasgow,unknown,yes,Per-axis applicability
+SAFETY_MONITOR,J7,Glasgow,no-permit,yes,Monitoring only
+CHASSIS,connector shields,chassis mounting,not-applicable,no,No logic return current

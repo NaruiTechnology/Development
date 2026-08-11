@@ -43,21 +43,21 @@ function normalizeStageStatus(status: StageStatusResponse, fallback: StagePositi
       r: status.position.r ?? fallback.r,
     },
     limits: {
-      x: status.limits.x ?? { minimum: -75, maximum: 75 },
-      y: status.limits.y ?? { minimum: -75, maximum: 75 },
-      z: status.limits.z ?? { minimum: 0, maximum: 10 },
+      x: status.limits.x ?? { minimum: -75000, maximum: 75000 },
+      y: status.limits.y ?? { minimum: -75000, maximum: 75000 },
+      z: status.limits.z ?? { minimum: 0, maximum: 10000 },
       t: status.limits.t ?? { minimum: -10, maximum: 60 },
       r: status.limits.r ?? { minimum: -180, maximum: 180 },
     },
   };
 }
 
-function displayMicrometers(mm: number): number {
-  return Number((mm / 0.001).toFixed(4));
+function displayMicrometers(micrometers: number): number {
+  return Number(micrometers.toFixed(4));
 }
 
 function canonicalMicrometers(value: number): number {
-  return value * 0.001;
+  return value;
 }
 
 function micrometerStep(status: StageStatus | null, axis: "x" | "y" | "z"): number {
@@ -223,13 +223,13 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
       const height = image.height * scale;
       const xTravel = (bounds.width - width) / 2;
       const yTravel = (bounds.height - height) / 2;
-      const xLimits = stageStatus?.limits.x ?? { minimum: -75, maximum: 75 };
-      const yLimits = stageStatus?.limits.y ?? { minimum: -75, maximum: 75 };
+      const xLimits = stageStatus?.limits.x ?? { minimum: -75000, maximum: 75000 };
+      const yLimits = stageStatus?.limits.y ?? { minimum: -75000, maximum: 75000 };
       const xMidpoint = (xLimits.minimum + xLimits.maximum) / 2;
       const yMidpoint = (yLimits.minimum + yLimits.maximum) / 2;
       const x = (bounds.width - width) / 2 + ((stagePosition.x - xMidpoint) / ((xLimits.maximum - xLimits.minimum) / 2)) * xTravel;
       const y = (bounds.height - height) / 2 - ((stagePosition.y - yMidpoint) / ((yLimits.maximum - yLimits.minimum) / 2)) * yTravel;
-      const zLimits = stageStatus?.limits.z ?? { minimum: 0, maximum: 10 };
+      const zLimits = stageStatus?.limits.z ?? { minimum: 0, maximum: 10000 };
       const zProgress = axisPercent(stagePosition.z, zLimits) / 100;
       const imageScale = 1 + zProgress * 0.12;
       const tiltRadians = stagePosition.t * Math.PI / 180;
@@ -319,10 +319,10 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
 
   if (!open) return null;
 
-  const zLimit = stageStatus?.limits.z ?? { minimum: 0, maximum: 10 };
+  const zLimit = stageStatus?.limits.z ?? { minimum: 0, maximum: 10000 };
   const tiltLimit = stageStatus?.limits.t ?? { minimum: -10, maximum: 60 };
-  const xLimit = stageStatus?.limits.x ?? { minimum: -75, maximum: 75 };
-  const yLimit = stageStatus?.limits.y ?? { minimum: -75, maximum: 75 };
+  const xLimit = stageStatus?.limits.x ?? { minimum: -75000, maximum: 75000 };
+  const yLimit = stageStatus?.limits.y ?? { minimum: -75000, maximum: 75000 };
   const rotationContinuous = stageStatus?.axes?.r?.continuous ?? true;
   const zProgress = axisPercent(stagePosition.z, zLimit) / 100;
   return (
@@ -404,7 +404,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                     transform: index === 0 ? "translateX(3px)" : index === 20 ? "translateX(calc(-100% - 3px))" : "translateX(-50%)",
                   }}
                 >
-                  {displayMicrometers((stageStatus?.limits.x.minimum ?? -75) + index * ((stageStatus?.limits.x.maximum ?? 75) - (stageStatus?.limits.x.minimum ?? -75)) / 20)}
+                  {displayMicrometers((stageStatus?.limits.x.minimum ?? -75000) + index * ((stageStatus?.limits.x.maximum ?? 75000) - (stageStatus?.limits.x.minimum ?? -75000)) / 20)}
                 </span>
               ))}
               {Array.from({ length: 21 }, (_, index) => (
@@ -416,7 +416,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                     transform: index === 0 ? "translateY(3px)" : index === 20 ? "translateY(calc(-100% - 3px))" : "translateY(-50%)",
                   }}
                 >
-                  {displayMicrometers((stageStatus?.limits.y.maximum ?? 75) - index * ((stageStatus?.limits.y.maximum ?? 75) - (stageStatus?.limits.y.minimum ?? -75)) / 20)}
+                  {displayMicrometers((stageStatus?.limits.y.maximum ?? 75000) - index * ((stageStatus?.limits.y.maximum ?? 75000) - (stageStatus?.limits.y.minimum ?? -75000)) / 20)}
                 </span>
               ))}
             </div>
@@ -438,14 +438,14 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                 <i style={{ "--motion": `${((stagePosition.r % 360) + 360) % 360 / 3.6}%` } as CSSProperties}>R</i>
               </div>
             </div>
-            <div className="sample-stage-dashboard__position-line sample-stage-dashboard__position-line--x" style={{ left: `${axisPercent(stagePosition.x, stageStatus?.limits.x ?? { minimum: -75, maximum: 75 })}%` }} />
-            <div className="sample-stage-dashboard__position-line sample-stage-dashboard__position-line--y" style={{ top: `${axisPercent(stagePosition.y, stageStatus?.limits.y ?? { minimum: -75, maximum: 75 }, true)}%` }} />
+            <div className="sample-stage-dashboard__position-line sample-stage-dashboard__position-line--x" style={{ left: `${axisPercent(stagePosition.x, stageStatus?.limits.x ?? { minimum: -75000, maximum: 75000 })}%` }} />
+            <div className="sample-stage-dashboard__position-line sample-stage-dashboard__position-line--y" style={{ top: `${axisPercent(stagePosition.y, stageStatus?.limits.y ?? { minimum: -75000, maximum: 75000 }, true)}%` }} />
             <input
               className="sample-stage-dashboard__axis-picker sample-stage-dashboard__axis-picker--x"
               type="range"
-              min={stageStatus?.limits.x.minimum ?? -75}
-              max={stageStatus?.limits.x.maximum ?? 75}
-              step="0.001"
+              min={stageStatus?.limits.x.minimum ?? -75000}
+              max={stageStatus?.limits.x.maximum ?? 75000}
+              step="1"
               value={targetPosition.x}
               aria-label={t("sampleStage.axis.x")}
               onChange={(event) => {
@@ -453,13 +453,13 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                 setTargetPosition((position) => ({ ...position, x: Number(event.target.value) }));
               }}
             />
-            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--x" style={{ left: `${axisPercent(targetPosition.x, stageStatus?.limits.x ?? { minimum: -75, maximum: 75 })}%` }}>{displayMicrometers(targetPosition.x)} µm</output>
+            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--x" style={{ left: `${axisPercent(targetPosition.x, stageStatus?.limits.x ?? { minimum: -75000, maximum: 75000 })}%` }}>{displayMicrometers(targetPosition.x)} µm</output>
             <input
               className="sample-stage-dashboard__axis-picker sample-stage-dashboard__axis-picker--y"
               type="range"
-              min={stageStatus?.limits.y.minimum ?? -75}
-              max={stageStatus?.limits.y.maximum ?? 75}
-              step="0.001"
+              min={stageStatus?.limits.y.minimum ?? -75000}
+              max={stageStatus?.limits.y.maximum ?? 75000}
+              step="1"
               value={targetPosition.y}
               aria-label={t("sampleStage.axis.y")}
               onChange={(event) => {
@@ -467,7 +467,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                 setTargetPosition((position) => ({ ...position, y: Number(event.target.value) }));
               }}
             />
-            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--y" style={{ top: `${axisPercent(targetPosition.y, stageStatus?.limits.y ?? { minimum: -75, maximum: 75 }, true)}%` }}>{displayMicrometers(targetPosition.y)} µm</output>
+            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--y" style={{ top: `${axisPercent(targetPosition.y, stageStatus?.limits.y ?? { minimum: -75000, maximum: 75000 }, true)}%` }}>{displayMicrometers(targetPosition.y)} µm</output>
             <div className="sample-stage-dashboard__motion-cluster">
               <svg className="sample-stage-dashboard__kinematic" viewBox="0 0 178 142" role="img" aria-label={`Z ${displayMicrometers(stagePosition.z)} micrometers, tilt ${stagePosition.t.toFixed(2)} degrees, rotation ${stagePosition.r.toFixed(2)} degrees`}>
                 <defs>

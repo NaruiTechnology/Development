@@ -946,7 +946,6 @@ export function App() {
         onOpenSampleStage={() => {
           setSampleStageOpen(true);
           setSampleStageMinimized(false);
-          if (route === "vacuum") navigateTo("control");
         }}
         sampleStageMinimized={sampleStageMinimized}
         sampleStageControllerBusy={sampleStageControllerBusy}

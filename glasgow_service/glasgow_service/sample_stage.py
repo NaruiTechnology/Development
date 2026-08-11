@@ -41,6 +41,7 @@ class StageConfig:
     device_id: str
     voltage: float
     maximum_travel_mm: float
+    state_path: Path
     axes: dict[str, AxisConfig]
 
 
@@ -82,7 +83,8 @@ def load_stage_config(path: Path | None = None) -> StageConfig:
         if minimum >= maximum:
             raise ValueError(f"Axes.{name} minimum must be below maximum")
         unit = str(item.get("unit", "mm"))
-        if unit == "mm" and maximum - minimum > maximum_travel_mm:
+        travel_mm = (maximum - minimum) / 1000.0 if unit in {"um", "µm"} else maximum - minimum
+        if unit in {"mm", "um", "µm"} and travel_mm > maximum_travel_mm:
             raise ValueError(
                 f"Axes.{name} travel span exceeds {maximum_travel_inches:g} in "
                 f"({maximum_travel_mm:g} mm)"
@@ -142,6 +144,12 @@ def load_stage_config(path: Path | None = None) -> StageConfig:
         device_id=str(device.get("Id", "")).strip(),
         voltage=float(device.get("voltage", 3.3)),
         maximum_travel_mm=maximum_travel_mm,
+        state_path=Path(
+            os.environ.get(
+                "SAMPLE_STAGE_STATE",
+                raw.get("Persistence", {}).get("stateFile", source.with_suffix(".state.json")),
+            )
+        ).expanduser().resolve(),
         axes=axes,
     )
     if config.enabled and not config.simulate and not config.device_id:
@@ -160,6 +168,46 @@ class SampleStageController:
         self._device = None
         self._interfaces = None
         self._lock = asyncio.Lock()
+        if config.simulate:
+            self._restore_position()
+
+    def _restore_position(self):
+        """Restore only valid coordinates; never command motion during restore."""
+        try:
+            saved = json.loads(self.config.state_path.read_text())
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError, TypeError):
+            return
+        values = saved.get("position", saved) if isinstance(saved, dict) else {}
+        saved_units = saved.get("units", {}) if isinstance(saved, dict) else {}
+        legacy_millimeters = isinstance(saved, dict) and saved.get("version", 1) < 2
+        if not isinstance(values, dict):
+            return
+        for name, axis in self.config.axes.items():
+            raw_value = values.get(name.lower(), values.get(name))
+            if raw_value is None:
+                continue
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            saved_unit = saved_units.get(name.lower()) if isinstance(saved_units, dict) else None
+            if axis.unit in {"um", "µm"} and (saved_unit == "mm" or (saved_unit is None and legacy_millimeters)):
+                value *= 1000.0
+            if axis.continuous or axis.minimum <= value <= axis.maximum:
+                self.position[name] = value
+
+    def _persist_position(self):
+        """Atomically save the last verified position for the next process."""
+        self.config.state_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.config.state_path.with_suffix(self.config.state_path.suffix + ".tmp")
+        temporary.write_text(json.dumps({
+            "version": 2,
+            "position": {name.lower(): value for name, value in self.position.items()},
+            "units": {name.lower(): axis.unit for name, axis in self.config.axes.items()},
+        }, indent=2) + "\n")
+        temporary.replace(self.config.state_path)
 
     async def start(self):
         if self.config.simulate:
@@ -188,6 +236,7 @@ class SampleStageController:
             await interface.initialize(self.config.axes[name].register_writes)
             microsteps = await interface.read_position()
             self.position[name] = microsteps / self.config.axes[name].microsteps_per_unit
+        self._persist_position()
         self.connected = True
 
     async def move_absolute(self, targets: dict[str, float]):
@@ -215,6 +264,7 @@ class SampleStageController:
                 else:
                     for name, target, _delta in moves:
                         self.position[name] = target
+                self._persist_position()
                 self.last_error = None
             except Exception as exc:
                 self.last_error = str(exc)
@@ -262,11 +312,16 @@ class SampleStageController:
                     "driver": v.driver,
                     "continuous": v.continuous,
                     "resolution": v.resolution,
-                    "resolution_micrometers": v.resolution * 1000.0 if v.unit == "mm" else None,
+                    "resolution_micrometers": (
+                        v.resolution * 1000.0 if v.unit == "mm"
+                        else v.resolution if v.unit in {"um", "µm"}
+                        else None
+                    ),
                 }
                 for k, v in self.config.axes.items()
             },
             "maximum_travel_mm": self.config.maximum_travel_mm,
+            "position_persisted": self.config.state_path.exists(),
             "moving": self.moving,
             "diagnostics": {k.lower(): v for k, v in self.diagnostics.items()},
             "last_error": self.last_error,

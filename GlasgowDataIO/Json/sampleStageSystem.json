@@ -23,17 +23,20 @@
             "voltage": 3.3
         }
     },
+    "Persistence": {
+        "stateFile": "/home/vboxuser/.local/state/ionbeam/sample-stage-position.json"
+    },
     "RequiredAxes": ["X", "Y", "Z", "T", "R"],
     "Axes": {
         "X": {
-            "unit": "mm",
+            "unit": "um",
             "actuator": "stepper-prototype-replaceable-with-piezo-servo",
             "driver": "TMC5160",
             "pins": { "sck": "A0", "cs": "A1", "sdi": "A2", "sdo": "A3" },
-            "minimum": -75.0,
-            "maximum": 75.0,
-            "resolutionMicrometers": 1.0,
-            "microstepsPerUnit": 51200.0,
+            "minimum": -75000.0,
+            "maximum": 75000.0,
+            "resolution": 1.0,
+            "microstepsPerUnit": 51.2,
             "invertDirection": false,
             "spi": { "frequencyKHz": 500, "sckIdle": 0, "sckEdge": "rising" },
             "motion": {
@@ -61,14 +64,14 @@
             }
         },
         "Y": {
-            "unit": "mm",
+            "unit": "um",
             "actuator": "stepper-prototype-replaceable-with-piezo-servo",
             "driver": "TMC5160",
             "pins": { "sck": "A4", "cs": "A5", "sdi": "A6", "sdo": "A7" },
-            "minimum": -75.0,
-            "maximum": 75.0,
-            "resolutionMicrometers": 1.0,
-            "microstepsPerUnit": 51200.0,
+            "minimum": -75000.0,
+            "maximum": 75000.0,
+            "resolution": 1.0,
+            "microstepsPerUnit": 51.2,
             "invertDirection": false,
             "spi": { "frequencyKHz": 500, "sckIdle": 0, "sckEdge": "rising" },
             "motion": {
@@ -96,13 +99,13 @@
             }
         },
         "Z": {
-            "unit": "mm",
+            "unit": "um",
             "actuator": "closed-loop-motorized-lift",
             "driver": "EXTERNAL_SERVO",
             "minimum": 0.0,
-            "maximum": 10.0,
-            "resolutionMicrometers": 1.0,
-            "microstepsPerUnit": 1000000.0,
+            "maximum": 10000.0,
+            "resolution": 1.0,
+            "microstepsPerUnit": 1000.0,
             "invertDirection": false,
             "motion": { "timeoutSeconds": 30.0, "pollIntervalMs": 10.0, "positionToleranceMicrosteps": 1 }
         },

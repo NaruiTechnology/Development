@@ -33,7 +33,7 @@ from the requested target or a host-side step counter.
 - Glasgow serial ID and I/O voltage
 - per-axis SPI pin assignments, frequency, clock idle level and sample edge
 - physical minimum/maximum and direction polarity
-- microsteps per displayed millimetre
+- microsteps per configured axis unit (µm for X/Y/Z)
 - move timeout, poll interval and position tolerance
 - current, ramp, chopper, PWM and switch register writes
 - global travel and required safety controls
@@ -53,7 +53,7 @@ MOSFETs, supply, mechanics and thermal limits are known.
 - Writes set bit 7 of the register address.
 - Reads are pipelined; the requested value arrives in the following datagram.
 - `XACTUAL` is interpreted as a signed 32-bit two's-complement microstep count.
-- `microstepsPerUnit` converts XACTUAL to the API/UI millimetre value.
+- `microstepsPerUnit` converts XACTUAL to the configured API/UI unit. The five-axis stage uses µm for X/Y/Z and degrees for T/R.
 
 ## Hardware interlocks
 

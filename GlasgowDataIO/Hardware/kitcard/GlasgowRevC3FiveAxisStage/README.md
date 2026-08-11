@@ -2,6 +2,16 @@
 
 Status: **engineering specification / not released for fabrication**
 
+The engineering baseline now also includes:
+
+- `DESIGN_INPUTS.md` — conservative electrical architecture and layout rules;
+- `CONNECTOR_PINOUT_DRAFT.md` — provisional control, axis, and safety contracts;
+- `BOM_DRAFT.csv` — function-level BOM with unresolved selections marked;
+- `NETS_DRAFT.csv` — schematic-ready logical connectivity;
+- `RELEASE_CHECKLIST.md` — requirements for a real manufacturing release.
+
+These files intentionally do not constitute Gerbers or fabrication approval.
+
 This package defines a modular X/Y/Z/tilt/rotation controller for an SEM/FIB
 sample stage. It deliberately separates the Glasgow motion-command board from
 replaceable power/actuator modules. That lets the X/Y TMC5160 prototype remain

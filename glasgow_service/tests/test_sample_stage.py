@@ -91,6 +91,26 @@ def test_axis_specification_is_exposed_from_json(tmp_path):
     assert status["axes"]["x"]["resolution_micrometers"] == 1.0
 
 
+def test_micrometer_axis_limits_and_resolution_are_native(tmp_path):
+    config(tmp_path)
+    source = tmp_path / "stage.json"
+    raw = json.loads(source.read_text())
+    raw["Axes"]["X"].update({
+        "unit": "um",
+        "minimum": -75000,
+        "maximum": 75000,
+        "resolution": 1,
+        "microstepsPerUnit": 51.2,
+    })
+    source.write_text(json.dumps(raw))
+    controller = SampleStageController(load_stage_config(source))
+    status = asyncio.run(controller.move_absolute({"x": 449}))
+    assert status["position"]["x"] == 449.0
+    assert status["limits"]["x"] == {"minimum": -75000.0, "maximum": 75000.0}
+    assert status["axes"]["x"]["unit"] == "um"
+    assert status["axes"]["x"]["resolution_micrometers"] == 1.0
+
+
 def test_external_axis_rejects_unconfigured_hardware_mode(tmp_path):
     cfg = config(tmp_path, simulate=False)
     source = tmp_path / "stage.json"
@@ -100,3 +120,22 @@ def test_external_axis_rejects_unconfigured_hardware_mode(tmp_path):
     controller = SampleStageController(load_stage_config(source))
     with pytest.raises(RuntimeError, match="external stage drivers"):
         asyncio.run(controller.start())
+
+
+def test_simulated_position_persists_across_controller_processes(tmp_path):
+    stage_config = config(tmp_path)
+    first = SampleStageController(stage_config)
+    asyncio.run(first.start())
+    asyncio.run(first.move_absolute({"x": 23.125, "y": -11.75}))
+
+    restored = SampleStageController(load_stage_config(tmp_path / "stage.json"))
+    asyncio.run(restored.start())
+    assert restored.status()["position"] == {"x": 23.125, "y": -11.75}
+    assert restored.status()["position_persisted"] is True
+
+
+def test_out_of_range_persisted_position_is_not_restored(tmp_path):
+    stage_config = config(tmp_path)
+    stage_config.state_path.write_text(json.dumps({"position": {"x": 999, "y": 7}}))
+    restored = SampleStageController(stage_config)
+    assert restored.status()["position"] == {"x": 0.0, "y": 7.0}

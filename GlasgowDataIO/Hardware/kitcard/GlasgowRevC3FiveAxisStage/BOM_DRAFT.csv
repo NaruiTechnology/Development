@@ -1,0 +1,16 @@
+reference,function,preferred_characteristic,manufacturer_part_number,release_status
+J1,Glasgow logic connector,keyed 16-position locking connector,TBD,SELECT
+J2-J6,axis field connectors,keyed shielded 16-position industrial connector,TBD,SELECT
+J7,safety monitor connector,keyed 6-position industrial connector,TBD,SELECT
+U1-U5,command digital isolator,fail-low output reinforced/basic isolation per system analysis,TBD,SELECT
+U6-U10,status digital isolator,Schmitt input reinforced/basic isolation per system analysis,TBD,SELECT
+U11-U15,differential command driver,drive-compatible RS-422 or selected protocol,TBD,SELECT
+U16-U20,differential status receiver,drive-compatible protected receiver,TBD,SELECT
+U21,logic supervisor,3.3 V watchdog and brownout supervisor,TBD,SELECT
+F1-F6,field resettable fuse,current and voltage selected from drive interfaces,TBD,SELECT
+D1-D30,field TVS,working voltage selected from field I/O,TBD,SELECT
+RTERM1-RTERM20,differential termination,120 ohm default with DNP option,TBD,VERIFY
+CDEC1-CDEC20,local decoupling,100 nF X7R rated above rail,TBD,VERIFY
+CBULK1-CBULK6,domain bulk capacitance,10 uF X7R rated above rail,TBD,VERIFY
+TP1-TP30,test points,isolated-domain-safe loop or pad,TBD,SELECT
+MH1-MH4,mounting holes,chassis-compatible plated or isolated per grounding plan,TBD,SELECT
