@@ -3886,6 +3886,22 @@ body {
   justify-content: center;
 }
 
+.app-header__utility-panel,
+.app-header__controller-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: var(--c-bg-elev-2);
+  border: 1px solid var(--c-border-soft);
+  border-radius: 999px;
+}
+
+.app-header__utility-panel .app-header__settings,
+.app-header__controller-panel .app-header__settings {
+  border-radius: 999px;
+}
+
 .app-header__sample-stage img {
   width: 28px;
   height: 28px;

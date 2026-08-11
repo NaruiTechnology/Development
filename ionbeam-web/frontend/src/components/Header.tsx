@@ -193,67 +193,71 @@ export function Header({
           ))}
         </select>
       </div>
-      <button
-        type="button"
-        className="btn btn--ghost app-header__settings"
-        onClick={() => {
-          if (activeView === "report") onOpenScan();
-          else onOpenReport();
-        }}
-        aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
-        title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
-        disabled={headerActionDisabled}
-      >
-        <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
-      </button>
-      <button
-        type="button"
-        className="btn btn--ghost app-header__settings"
-        onClick={() => {
-          dispatch(restartSettingsServices());
-        }}
-        aria-label={t("header.reconnect.aria")}
-        title={t("header.reconnect.title")}
-        disabled={reconnecting || headerActionDisabled}
-      >
-        <Icon name="link" tone="accent" />
-      </button>
-      <button
-        type="button"
-        className="btn btn--ghost app-header__settings"
-        onClick={() => {
-          dispatch(openSettingsDialog());
-        }}
-        aria-label={t("header.settings.aria")}
-        title={t("header.settings.title")}
-        disabled={headerActionDisabled}
-      >
-        <Icon name="cog" tone="accent" />
-      </button>
-      {shouldShowVacuumController(vacuumEnabled) && (
+      <div className="app-header__utility-panel">
         <button
           type="button"
-          className={`btn btn--ghost app-header__settings app-header__vacuum${vacuumControllerBusy ? " app-header__controller--busy" : ""}`}
-          onClick={onOpenVacuum}
-          aria-label={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.aria")}
-          title={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.title")}
-          aria-busy={vacuumControllerBusy}
+          className="btn btn--ghost app-header__settings"
+          onClick={() => {
+            if (activeView === "report") onOpenScan();
+            else onOpenReport();
+          }}
+          aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
+          title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
           disabled={headerActionDisabled}
         >
-          <Icon name="dashboard" />
+          <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
         </button>
-      )}
-      <button
-        type="button"
-        className={`btn btn--ghost app-header__settings app-header__sample-stage${sampleStageControllerBusy ? " app-header__controller--busy" : ""}`}
-        onClick={onOpenSampleStage}
-        aria-label={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.aria")}
-        title={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.title")}
-        aria-busy={sampleStageControllerBusy}
-        disabled={headerActionDisabled}
-      >
-        <img src={sampleStageImage} alt="" aria-hidden />
-      </button>
+        <button
+          type="button"
+          className="btn btn--ghost app-header__settings"
+          onClick={() => {
+            dispatch(restartSettingsServices());
+          }}
+          aria-label={t("header.reconnect.aria")}
+          title={t("header.reconnect.title")}
+          disabled={reconnecting || headerActionDisabled}
+        >
+          <Icon name="link" tone="accent" />
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost app-header__settings"
+          onClick={() => {
+            dispatch(openSettingsDialog());
+          }}
+          aria-label={t("header.settings.aria")}
+          title={t("header.settings.title")}
+          disabled={headerActionDisabled}
+        >
+          <Icon name="cog" tone="accent" />
+        </button>
+      </div>
+      <div className="app-header__controller-panel">
+        {shouldShowVacuumController(vacuumEnabled) && (
+          <button
+            type="button"
+            className={`btn btn--ghost app-header__settings app-header__vacuum${vacuumControllerBusy ? " app-header__controller--busy" : ""}`}
+            onClick={onOpenVacuum}
+            aria-label={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.aria")}
+            title={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.title")}
+            aria-busy={vacuumControllerBusy}
+            disabled={headerActionDisabled}
+          >
+            <Icon name="dashboard" />
+          </button>
+        )}
+        <button
+          type="button"
+          className={`btn btn--ghost app-header__settings app-header__sample-stage${sampleStageControllerBusy ? " app-header__controller--busy" : ""}`}
+          onClick={onOpenSampleStage}
+          aria-label={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.aria")}
+          title={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.title")}
+          aria-busy={sampleStageControllerBusy}
+          disabled={headerActionDisabled}
+        >
+          <img src={sampleStageImage} alt="" aria-hidden />
+        </button>
+      </div>
       <button
         type="button"
         className="auth-chip"
