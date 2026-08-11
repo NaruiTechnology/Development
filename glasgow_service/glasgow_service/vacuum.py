@@ -331,6 +331,14 @@ class VacuumController:
             if name != MECHANICAL_PUMP and state.power:
                 await self.set_power(name, False, automatic=True)
 
+    async def resume_cascade(self) -> None:
+        """Resume automatic progression from the current measured state."""
+        self._require_authority()
+        if not self._running:
+            raise RuntimeError("vacuum controller is not running")
+        self._cascade_stopped = False
+        await self.poll_once()
+
     async def set_simulated_read(self, name: str, checked: bool) -> None:
         if not self.config.simulate:
             raise ValueError("simulated read controls are read-only on real hardware")

@@ -569,7 +569,6 @@ export const en = {
   "vacuum.mechanicalAlwaysOn": "MechanicalVacuumPump runs continuously and cannot be stopped",
   "vacuum.cascadeRunning": "Sequential vacuum cascade is active",
   "vacuum.cascadeStopped": "Cascade stopped; MechanicalVacuumPump remains on",
-  "vacuum.stop": "Stop vacuum equipment",
   "vacuum.stopPump": "Stop",
   "sampleStage.title": "Sample Stage",
   "sampleStage.close": "Close sample stage",
@@ -585,8 +584,6 @@ export const en = {
   "sampleStage.mode.hardware": "Second Glasgow",
   "vacuum.alwaysRunning": "Continuous",
   "vacuum.uhGroup": "UH pumps · grouped stage",
-  "vacuum.readCheck": "Read",
-  "vacuum.simulationRead.title": "Set the simulated readback to this pump's configured threshold",
   "vacuum.hardwareRead.title": "Read-only state reported by the Raspberry Pi GPIO input",
 
   /* ===== settings dialog ============================================ */

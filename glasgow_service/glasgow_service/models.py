@@ -43,10 +43,6 @@ class VacuumAcquireRequest(BaseModel):
     expected_channels: dict[str, float] = Field(default_factory=dict)
 
 
-class VacuumSimulationReadRequest(BaseModel):
-    checked: bool
-
-
 class VacuumPumpState(BaseModel):
     name: str
     power: bool

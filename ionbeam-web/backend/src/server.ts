@@ -1235,6 +1235,7 @@ app.post("/api/scan/vector/run", async (req, res) => {
 });
 
 // Proxy any remaining /api/* traffic to the Glasgow service.
+app.use("/api/vacuum", requireVacuumPrivilege);
 app.use("/api", buildRestProxy());
 
 // Keep /api/status explicit in the real backend too so the dev server never
@@ -1727,6 +1728,28 @@ async function requireScanPrivilege(
         ok: false,
         error: "RASTER/VECTOR scan requires SuperUser or higher privilege. Please use the send request button to send emails.",
       });
+      return;
+    }
+    next();
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+}
+
+async function requireVacuumPrivilege(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): Promise<void> {
+  const session = verifyAdminSessionToken(readScanAuthToken(req));
+  if (!session) {
+    res.status(401).json({ ok: false, error: "vacuum control requires a valid user token" });
+    return;
+  }
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active) {
+      res.status(403).json({ ok: false, error: "current account is not authorized for vacuum control" });
       return;
     }
     next();

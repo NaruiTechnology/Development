@@ -65,6 +65,10 @@ def test_sbc_client_sends_live_fencing_and_bearer_headers():
             "Authorization": "Bearer secret",
         }
 
+        await client.resume()
+        assert http.requests[-1][0] == "POST"
+        assert http.requests[-1][1].endswith("/vacuum/resume")
+
     asyncio.run(scenario())
 
 

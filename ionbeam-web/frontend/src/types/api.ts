@@ -33,7 +33,6 @@ export interface VacuumPumpState {
   border: VacuumBorderState;
   ready: boolean;
   group: string | null;
-  simulation_read: boolean;
 }
 
 export interface VacuumSystemStatus {

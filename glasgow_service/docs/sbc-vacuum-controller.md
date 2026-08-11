@@ -1,5 +1,8 @@
 # Raspberry Pi vacuum controller
 
+For a complete simulated end-to-end verification procedure, see
+[`vacuum-integration-test.md`](vacuum-integration-test.md).
+
 ## Runtime topology
 
 ```text
@@ -12,9 +15,9 @@ Browser UI
 
 Scan traffic continues to use `PROXY_TARGET_HTTP`. Every vacuum route uses
 `VACUUM_CONTROLLER_URL`, including simulation readback. The UI sends the
-configured expected value for every named channel in `POST /vacuum/acquire`
-and polls `GET /vacuum` for GPIO state, comparator state, and controller
-runtime.
+requests through the backend and polls `GET /vacuum` for GPIO state,
+comparator state, and controller runtime. The elected executor—not the
+browser lifecycle—owns `POST /vacuum/acquire` and `/vacuum/release`.
 
 ## SBC interface
 
@@ -23,7 +26,6 @@ Run `python -m glasgow_service.sbc_vacuum_app` on the Raspberry Pi. It exposes:
 - `GET /status` and `GET /vacuum`
 - `POST /vacuum/acquire` with `expected_channels`
 - `POST /vacuum/pumps/{name}/power`
-- `POST /vacuum/pumps/{name}/read` for simulation input
 - `POST /vacuum/stop`, `/vacuum/release`, and `/vacuum/leadership/renew`
 
 `Simulate: false` selects BCM GPIO and `Simulate: true` selects the deterministic
@@ -50,6 +52,9 @@ Configure the SBC with `examples/sbc-vacuum.env.example`, the executor with
 PROXY_TARGET_HTTP=http://glasgow-host:8765
 VACUUM_CONTROLLER_URL=http://active-executor-or-local-proxy:8780
 ```
+
+The executor-to-SBC bearer token is independent of browser authentication.
+Install the same `SBC_VACUUM_TOKEN` on each executor and its SBC vacuum service.
 
 For real hardware install the `sbc` optional dependency and the Raspberry Pi
 OS `python3-lgpio` package. The systemd unit runs as a dedicated `vacuum` user

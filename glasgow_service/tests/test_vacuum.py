@@ -201,6 +201,28 @@ def test_simulated_read_control_is_read_only_for_hardware():
     asyncio.run(scenario())
 
 
+def test_resume_cascade_advances_from_current_ready_state():
+    async def scenario():
+        controller, _commands = simulated_controller()
+        await controller.start()
+        try:
+            await controller.set_simulated_read(MECHANICAL_PUMP, True)
+            await controller.stop_non_mechanical()
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert controller.status().cascade_stopped is True
+            assert states[MECHANICAL_PUMP].ready is True
+            assert states["TurboVacuumPump"].power is False
+
+            await controller.resume_cascade()
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert controller.status().cascade_stopped is False
+            assert states["TurboVacuumPump"].power is True
+        finally:
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
 def test_mechanical_pump_cannot_be_turned_off():
     async def scenario():
         controller, _commands = simulated_controller()

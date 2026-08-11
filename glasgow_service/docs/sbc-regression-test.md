@@ -39,13 +39,13 @@ printf '%s\n' "$status"
 curl -fsS -X POST http://127.0.0.1:8765/vacuum/acquire \
   -H 'Content-Type: application/json' \
   -d "$(printf '%s' "$status" | jq '{expected_channels: (.pumps | map({key: .name, value: .threshold}) | from_entries)}')"
-curl -fsS -X POST http://127.0.0.1:8765/vacuum/pumps/MechanicalVacuumPump/read \
-  -H 'Content-Type: application/json' -d '{"checked":true}'
+sleep 5
+curl -fsS http://127.0.0.1:8765/vacuum
 ```
 
 Confirm that `control_transport` is `sbc-simulation`, `simulation` is true,
 `runtime_seconds` increases, the expected values round-trip as `threshold`,
-and the simulated mechanical read advances the cascade.
+and the deterministic simulator advances the cascade without manual readback controls.
 
 ## 3. Failover regression
 
@@ -77,11 +77,11 @@ VACUUM_CONTROLLER_URL=http://active-executor:8780
 Test once with `MOCK=0` and once with `MOCK=1`. In both cases:
 
 1. Open the vacuum dashboard.
-2. Confirm the UI sends one expected value for every configured equipment item during acquisition.
+2. Confirm opening, minimizing, and closing the UI does not acquire, release, or restart the controller.
 3. Confirm the displayed runtime increments once per second.
 4. Toggle each permitted pump and verify UI state follows the SBC response.
 5. In simulation, operate each readback control and verify cascade behavior.
-6. Close/reopen the dashboard and confirm status is re-read from the SBC.
+6. Close/reopen the dashboard and confirm status is re-read without resetting the SBC.
 7. Stop the executor and confirm the UI reports an upstream error instead of
    falling back to Node's old in-process vacuum mock.
 

@@ -13,11 +13,11 @@ from .failover_executor import FailoverExecutor
 from .sbc_client import SbcClientError, SbcVacuumClient
 from .redis_coordination import RedisSentinelLeaseCoordinator
 from .vacuum_failover_runtime import VacuumFailoverRuntime
+from .vacuum_health import executor_state_is_ready
 
 
 def create_app() -> FastAPI:
     holder: dict[str, object] = {}
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         config = ExecutorConfig.from_environment()
@@ -62,7 +62,7 @@ def create_app() -> FastAPI:
         status = runtime.status()
         # A fenced executor is alive but cannot safely participate in failover;
         # report it unready so systemd/load monitors surface the dependency fault.
-        if status["state"] in {"FAULTED", "STOPPED", "FENCED"}:
+        if not executor_state_is_ready(str(status["state"])):
             raise HTTPException(status_code=503, detail=status)
         return {"status": "ready", **status}
 
@@ -108,17 +108,13 @@ def create_app() -> FastAPI:
     async def vacuum_power(name: str, payload: dict[str, bool]) -> dict[str, object]:
         return await forward(active_runtime().set_power(name, bool(payload.get("power"))))
 
-    @app.post("/vacuum/pumps/{name}/read")
-    async def vacuum_simulated_read(
-        name: str, payload: dict[str, bool]
-    ) -> dict[str, object]:
-        return await forward(
-            active_runtime().set_simulated_read(name, bool(payload.get("checked")))
-        )
-
     @app.post("/vacuum/stop")
     async def vacuum_stop() -> dict[str, object]:
         return await forward(active_runtime().stop_vacuum())
+
+    @app.post("/vacuum/resume")
+    async def vacuum_resume() -> dict[str, object]:
+        return await forward(active_runtime().resume_vacuum())
 
     @app.post("/vacuum/release")
     async def vacuum_release() -> dict[str, object]:

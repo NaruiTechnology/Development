@@ -50,15 +50,13 @@ class VacuumFailoverRuntime:
         self.require_active()
         return await self.sbc.set_power(pump_name, power)
 
-    async def set_simulated_read(
-        self, pump_name: str, checked: bool
-    ) -> dict[str, object]:
-        self.require_active()
-        return await self.sbc.set_simulated_read(pump_name, checked)
-
     async def stop_vacuum(self) -> dict[str, object]:
         self.require_active()
         return await self.sbc.stop()
+
+    async def resume_vacuum(self) -> dict[str, object]:
+        self.require_active()
+        return await self.sbc.resume()
 
     async def release_vacuum(self) -> dict[str, object]:
         self.require_active()

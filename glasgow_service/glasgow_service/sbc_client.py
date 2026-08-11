@@ -53,12 +53,11 @@ class SbcVacuumClient:
         return await self._request("POST", f"/vacuum/pumps/{equipment_name}/power",
                                    json={"power": power})
 
-    async def set_simulated_read(self, equipment_name: str, checked: bool) -> dict[str, Any]:
-        return await self._request("POST", f"/vacuum/pumps/{equipment_name}/read",
-                                   json={"checked": checked})
-
     async def stop(self) -> dict[str, Any]:
         return await self._request("POST", "/vacuum/stop")
+
+    async def resume(self) -> dict[str, Any]:
+        return await self._request("POST", "/vacuum/resume")
 
     async def close(self) -> None:
         if self._owns_client:

@@ -235,6 +235,7 @@ export function App() {
       try {
         const response = await fetch(apiUrl("/api/vacuum"), {
           cache: "no-store",
+          headers: scanAuthHeaders(),
           signal: controller.signal,
         });
         if (!response.ok) throw new Error(`vacuum status: HTTP ${response.status}`);
