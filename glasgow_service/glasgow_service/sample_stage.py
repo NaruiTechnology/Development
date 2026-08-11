@@ -1,4 +1,4 @@
-"""Configuration-driven two-axis stage controller for a dedicated Glasgow."""
+"""Configuration-driven multi-axis microscope stage controller."""
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +15,11 @@ DEFAULT_CONFIG = (
 @dataclass(frozen=True)
 class AxisConfig:
     name: str
+    unit: str
+    actuator: str
+    driver: str
+    continuous: bool
+    resolution: float
     pins: dict[str, str]
     minimum: float
     maximum: float
@@ -54,39 +59,58 @@ def load_stage_config(path: Path | None = None) -> StageConfig:
     maximum_travel_mm = maximum_travel_inches * 25.4
     axes = {}
     used_pins = set()
-    for name in ("X", "Y"):
-        item = raw.get("Axes", {}).get(name)
+    raw_axes = raw.get("Axes", {})
+    required_axes = tuple(raw.get("RequiredAxes", ("X", "Y")))
+    for required in required_axes:
+        if required not in raw_axes:
+            raise ValueError(f"sample stage requires Axes.{required}")
+    for name, item in raw_axes.items():
         if not isinstance(item, dict):
             raise ValueError(f"sample stage requires Axes.{name}")
+        driver = str(item.get("driver", "TMC5160")).upper()
         pins = item.get("pins", {})
-        if set(pins) != {"sck", "cs", "sdi", "sdo"}:
-            raise ValueError(f"Axes.{name}.pins requires sck, cs, sdi, and sdo")
-        for pin in pins.values():
-            if pin in used_pins:
-                raise ValueError(f"duplicate sample-stage pin: {pin}")
-            used_pins.add(pin)
+        if driver == "TMC5160":
+            if set(pins) != {"sck", "cs", "sdi", "sdo"}:
+                raise ValueError(f"Axes.{name}.pins requires sck, cs, sdi, and sdo")
+            for pin in pins.values():
+                if pin in used_pins:
+                    raise ValueError(f"duplicate sample-stage pin: {pin}")
+                used_pins.add(pin)
+        elif pins:
+            raise ValueError(f"Axes.{name}.pins is only valid for a local TMC5160 driver")
         minimum, maximum = float(item["minimum"]), float(item["maximum"])
         if minimum >= maximum:
             raise ValueError(f"Axes.{name} minimum must be below maximum")
-        if maximum - minimum > maximum_travel_mm:
+        unit = str(item.get("unit", "mm"))
+        if unit == "mm" and maximum - minimum > maximum_travel_mm:
             raise ValueError(
                 f"Axes.{name} travel span exceeds {maximum_travel_inches:g} in "
                 f"({maximum_travel_mm:g} mm)"
             )
         spi = item.get("spi", {})
         motion = item.get("motion", {})
-        raw_registers = item.get("registerWrites", {})
+        raw_registers = item.get("registerWrites", {}) if driver == "TMC5160" else {}
         if not isinstance(raw_registers, dict):
             raise ValueError(f"Axes.{name}.registerWrites must be an object")
-        from GlasgowDataIO.IobeamControl.sysControl.stepper.tmc5160Interface import REGISTER_NAMES
         register_writes = []
-        for register, value in raw_registers.items():
-            address = REGISTER_NAMES.get(str(register).upper())
-            if address is None:
-                address = int(str(register), 0)
-            register_writes.append((address, int(str(value), 0) if isinstance(value, str) else int(value)))
+        if raw_registers:
+            from GlasgowDataIO.IobeamControl.sysControl.stepper.tmc5160Interface import REGISTER_NAMES
+            for register, value in raw_registers.items():
+                address = REGISTER_NAMES.get(str(register).upper())
+                if address is None:
+                    address = int(str(register), 0)
+                register_writes.append((address, int(str(value), 0) if isinstance(value, str) else int(value)))
         axes[name] = AxisConfig(
             name=name,
+            unit=unit,
+            actuator=str(item.get("actuator", "stepper")),
+            driver=driver,
+            continuous=bool(item.get("continuous", False)),
+            resolution=(
+                float(item["resolutionMicrometers"]) / 1000.0
+                if unit == "mm" and "resolutionMicrometers" in item
+                else float(item.get("resolution", 1.0 / float(item["microstepsPerUnit"])))
+            ),
             pins=dict(pins),
             minimum=minimum,
             maximum=maximum,
@@ -101,9 +125,13 @@ def load_stage_config(path: Path | None = None) -> StageConfig:
             register_writes=tuple(register_writes),
         )
         axis = axes[name]
-        if axis.microsteps_per_unit <= 0 or axis.spi_frequency_khz < 1:
-            raise ValueError(f"Axes.{name} SPI frequency and scale must be positive")
-        if axis.sck_idle != 0 or axis.sck_edge not in {"r", "rising"}:
+        if axis.microsteps_per_unit <= 0:
+            raise ValueError(f"Axes.{name} scale must be positive")
+        if axis.resolution <= 0:
+            raise ValueError(f"Axes.{name} resolution must be positive")
+        if axis.driver == "TMC5160" and axis.spi_frequency_khz < 1:
+            raise ValueError(f"Axes.{name} SPI frequency must be positive")
+        if axis.driver == "TMC5160" and (axis.sck_idle != 0 or axis.sck_edge not in {"r", "rising"}):
             raise ValueError(f"Axes.{name} TMC5160 SPI requires sckIdle=0 and sckEdge=rising")
         if axis.move_timeout_seconds <= 0 or axis.poll_interval_seconds <= 0:
             raise ValueError(f"Axes.{name} motion polling values must be positive")
@@ -124,11 +152,11 @@ def load_stage_config(path: Path | None = None) -> StageConfig:
 class SampleStageController:
     def __init__(self, config: StageConfig):
         self.config = config
-        self.position = {"X": 0.0, "Y": 0.0}
+        self.position = {name: 0.0 for name in config.axes}
         self.connected = config.simulate
         self.moving = False
         self.last_error = None
-        self.diagnostics = {"X": None, "Y": None}
+        self.diagnostics = {name: None for name in config.axes}
         self._device = None
         self._interfaces = None
         self._lock = asyncio.Lock()
@@ -146,7 +174,13 @@ class SampleStageController:
                 "sckEdge": axis.sck_edge,
             }
             for name, axis in self.config.axes.items()
+            if axis.driver == "TMC5160"
         }
+        unsupported = [name for name, axis in self.config.axes.items() if axis.driver != "TMC5160"]
+        if unsupported:
+            raise RuntimeError(
+                "non-simulated external stage drivers are not configured: " + ", ".join(unsupported)
+            )
         self._device, self._interfaces = await SampleStageLauncher(
             self.config.device_id, self.config.voltage, axes
         ).start()
@@ -159,10 +193,10 @@ class SampleStageController:
     async def move_absolute(self, targets: dict[str, float]):
         async with self._lock:
             moves = []
-            for name in ("X", "Y"):
+            for name in self.config.axes:
                 target = float(targets.get(name.lower(), targets.get(name, self.position[name])))
                 axis = self.config.axes[name]
-                if not axis.minimum <= target <= axis.maximum:
+                if not axis.continuous and not axis.minimum <= target <= axis.maximum:
                     raise ValueError(f"{name} target {target} outside [{axis.minimum}, {axis.maximum}]")
                 moves.append((name, target, target - self.position[name]))
             self.moving = True
@@ -219,6 +253,17 @@ class SampleStageController:
             "position": {k.lower(): v for k, v in self.position.items()},
             "limits": {
                 k.lower(): {"minimum": v.minimum, "maximum": v.maximum}
+                for k, v in self.config.axes.items()
+            },
+            "axes": {
+                k.lower(): {
+                    "unit": v.unit,
+                    "actuator": v.actuator,
+                    "driver": v.driver,
+                    "continuous": v.continuous,
+                    "resolution": v.resolution,
+                    "resolution_micrometers": v.resolution * 1000.0 if v.unit == "mm" else None,
+                }
                 for k, v in self.config.axes.items()
             },
             "maximum_travel_mm": self.config.maximum_travel_mm,

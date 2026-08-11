@@ -55,3 +55,48 @@ def test_axis_span_cannot_exceed_fifteen_inches(tmp_path):
     source.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="exceeds 15 in"):
         load_stage_config(source)
+
+
+def test_simulated_five_axis_move_supports_linear_and_angular_axes(tmp_path):
+    config(tmp_path)
+    source = tmp_path / "stage.json"
+    raw = json.loads(source.read_text())
+    raw["RequiredAxes"] = ["X", "Y", "Z", "T", "R"]
+    raw["Axes"].update({
+        "Z": {"unit": "mm", "driver": "EXTERNAL_SERVO", "minimum": 0, "maximum": 10, "microstepsPerUnit": 1, "motion": {}},
+        "T": {"unit": "deg", "driver": "EXTERNAL_SERVO", "minimum": -10, "maximum": 60, "microstepsPerUnit": 1, "motion": {}},
+        "R": {"unit": "deg", "driver": "EXTERNAL_SERVO", "minimum": -180, "maximum": 180, "continuous": True, "microstepsPerUnit": 1, "motion": {}},
+    })
+    source.write_text(json.dumps(raw))
+    controller = SampleStageController(load_stage_config(source))
+    asyncio.run(controller.start())
+    status = asyncio.run(controller.move_absolute({"x": 12, "y": -8, "z": 4, "t": 52, "r": 90}))
+    assert status["position"] == {"x": 12.0, "y": -8.0, "z": 4.0, "t": 52.0, "r": 90.0}
+    assert status["axes"]["t"]["unit"] == "deg"
+    status = asyncio.run(controller.move_absolute({"r": 540}))
+    assert status["position"]["r"] == 540.0
+    assert status["axes"]["r"]["continuous"] is True
+
+
+def test_axis_specification_is_exposed_from_json(tmp_path):
+    config(tmp_path)
+    source = tmp_path / "stage.json"
+    raw = json.loads(source.read_text())
+    raw["Axes"]["X"]["minimum"] = -75
+    raw["Axes"]["X"]["maximum"] = 75
+    raw["Axes"]["X"]["resolutionMicrometers"] = 1
+    source.write_text(json.dumps(raw))
+    status = SampleStageController(load_stage_config(source)).status()
+    assert status["limits"]["x"] == {"minimum": -75.0, "maximum": 75.0}
+    assert status["axes"]["x"]["resolution_micrometers"] == 1.0
+
+
+def test_external_axis_rejects_unconfigured_hardware_mode(tmp_path):
+    cfg = config(tmp_path, simulate=False)
+    source = tmp_path / "stage.json"
+    raw = json.loads(source.read_text())
+    raw["Axes"]["Z"] = {"unit": "mm", "driver": "EXTERNAL_SERVO", "minimum": 0, "maximum": 10, "microstepsPerUnit": 1, "motion": {}}
+    source.write_text(json.dumps(raw))
+    controller = SampleStageController(load_stage_config(source))
+    with pytest.raises(RuntimeError, match="external stage drivers"):
+        asyncio.run(controller.start())

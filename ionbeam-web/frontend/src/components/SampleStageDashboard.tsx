@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import sampleStageImage from "../assets/SampleStage-0.3.png";
@@ -6,31 +7,66 @@ import { useTranslation } from "../i18n";
 import { apiUrl } from "../lib/backendUrl";
 import { NumberStepperInput } from "./NumberStepperField";
 
+type StagePosition = { x: number; y: number; z: number; t: number; r: number };
+type AxisLimit = { minimum: number; maximum: number };
+
 type StageStatus = {
   connected: boolean;
   simulation: boolean;
-  position: { x: number; y: number };
-  limits: {
-    x: { minimum: number; maximum: number };
-    y: { minimum: number; maximum: number };
-  };
+  position: StagePosition;
+  limits: Record<keyof StagePosition, AxisLimit>;
+  axes?: Partial<Record<keyof StagePosition, {
+    unit?: string;
+    continuous?: boolean;
+    resolution?: number;
+    resolution_micrometers?: number | null;
+  }>>;
   moving: boolean;
   last_error: string | null;
 };
 
-type StageUnit = "um" | "mm" | "cmm";
-const MM_PER_UNIT: Record<StageUnit, number> = { um: 0.001, mm: 1, cmm: 0.01 };
+type StageStatusResponse = Omit<StageStatus, "position" | "limits"> & {
+  position: Partial<StagePosition>;
+  limits: Partial<Record<keyof StagePosition, AxisLimit>>;
+};
 
-function displayValue(mm: number, unit: StageUnit): number {
-  return Number((mm / MM_PER_UNIT[unit]).toFixed(4));
+const ZERO_POSITION: StagePosition = { x: 0, y: 0, z: 0, t: 0, r: 0 };
+
+function normalizeStageStatus(status: StageStatusResponse, fallback: StagePosition = ZERO_POSITION): StageStatus {
+  return {
+    ...status,
+    position: {
+      x: status.position.x ?? fallback.x,
+      y: status.position.y ?? fallback.y,
+      z: status.position.z ?? fallback.z,
+      t: status.position.t ?? fallback.t,
+      r: status.position.r ?? fallback.r,
+    },
+    limits: {
+      x: status.limits.x ?? { minimum: -75, maximum: 75 },
+      y: status.limits.y ?? { minimum: -75, maximum: 75 },
+      z: status.limits.z ?? { minimum: 0, maximum: 10 },
+      t: status.limits.t ?? { minimum: -10, maximum: 60 },
+      r: status.limits.r ?? { minimum: -180, maximum: 180 },
+    },
+  };
 }
 
-function canonicalValue(value: number, unit: StageUnit): number {
-  return value * MM_PER_UNIT[unit];
+function displayMicrometers(mm: number): number {
+  return Number((mm / 0.001).toFixed(4));
 }
 
-function unitLabel(unit: StageUnit): string {
-  return unit === "um" ? "µm" : unit;
+function canonicalMicrometers(value: number): number {
+  return value * 0.001;
+}
+
+function micrometerStep(status: StageStatus | null, axis: "x" | "y" | "z"): number {
+  return status?.axes?.[axis]?.resolution_micrometers ?? 1;
+}
+
+function axisPercent(value: number, limit: AxisLimit, invert = false): number {
+  const percent = Math.max(0, Math.min(100, ((value - limit.minimum) / (limit.maximum - limit.minimum)) * 100));
+  return invert ? 100 - percent : percent;
 }
 
 type Props = {
@@ -44,16 +80,17 @@ type Props = {
 export function SampleStageDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: Props) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const stageImageRef = useRef<HTMLImageElement | null>(null);
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
-  const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
-  const [targetPosition, setTargetPosition] = useState({ x: 0, y: 0 });
-  const [unit, setUnit] = useState<StageUnit>("um");
+  const [stagePosition, setStagePosition] = useState<StagePosition>({ x: 0, y: 0, z: 0, t: 0, r: 0 });
+  const [targetPosition, setTargetPosition] = useState<StagePosition>({ x: 0, y: 0, z: 0, t: 0, r: 0 });
   const [stageStatus, setStageStatus] = useState<StageStatus | null>(null);
   const [initializing, setInitializing] = useState(false);
   const [movePending, setMovePending] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
   const positionEditedRef = useRef(false);
   const animationRef = useRef<number | null>(null);
+  const stagePositionRef = useRef<StagePosition>(ZERO_POSITION);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -85,10 +122,13 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
       try {
         const response = await fetch(apiUrl("/api/stage"));
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const status = await response.json() as StageStatus;
+        const status = normalizeStageStatus(await response.json() as StageStatusResponse, stagePositionRef.current);
         if (!cancelled) {
           setStageStatus(status);
-          if (animationRef.current === null) setStagePosition(status.position);
+          if (animationRef.current === null) {
+            stagePositionRef.current = status.position;
+            setStagePosition(status.position);
+          }
           if (!positionEditedRef.current) setTargetPosition(status.position);
           setStageError(status.last_error);
           setInitializing(false);
@@ -108,39 +148,51 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
   async function moveStage() {
     setStageError(null);
     setMovePending(true);
+    const requestedPosition = { ...targetPosition };
+    const previousPosition = { ...stagePositionRef.current };
+    animateStage(requestedPosition);
     try {
       const response = await fetch(apiUrl("/api/stage/move"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(targetPosition),
+        body: JSON.stringify(requestedPosition),
       });
-      const body = await response.json() as StageStatus | { detail?: string };
+      const body = await response.json() as StageStatusResponse | { detail?: string };
       if (!response.ok) {
         throw new Error("detail" in body ? body.detail || `HTTP ${response.status}` : `HTTP ${response.status}`);
       }
-      setStageStatus(body as StageStatus);
-      animateStage((body as StageStatus).position);
-      setTargetPosition((body as StageStatus).position);
+      const status = normalizeStageStatus(body as StageStatusResponse, requestedPosition);
+      setStageStatus(status);
+      if (Object.values(status.position).some((value, index) => value !== Object.values(requestedPosition)[index])) {
+        animateStage(status.position);
+      }
+      setTargetPosition(status.position);
       positionEditedRef.current = false;
     } catch (error) {
+      animateStage(previousPosition);
       setStageError(error instanceof Error ? error.message : String(error));
     } finally {
       setMovePending(false);
     }
   }
 
-  function animateStage(target: { x: number; y: number }) {
+  function animateStage(target: StagePosition) {
     if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
-    const start = { ...stagePosition };
+    const start = { ...stagePositionRef.current };
     const startedAt = performance.now();
     const duration = 500;
     function frame(now: number) {
       const elapsed = Math.min(1, (now - startedAt) / duration);
       const eased = 1 - Math.pow(1 - elapsed, 3);
-      setStagePosition({
+      const nextPosition = {
         x: start.x + (target.x - start.x) * eased,
         y: start.y + (target.y - start.y) * eased,
-      });
+        z: start.z + (target.z - start.z) * eased,
+        t: start.t + (target.t - start.t) * eased,
+        r: start.r + (target.r - start.r) * eased,
+      };
+      stagePositionRef.current = nextPosition;
+      setStagePosition(nextPosition);
       if (elapsed < 1) animationRef.current = requestAnimationFrame(frame);
       else animationRef.current = null;
     }
@@ -155,9 +207,9 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
     if (!open || minimized) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const image = new Image();
-    image.src = sampleStageImage;
-    image.onload = () => {
+    const image = stageImageRef.current ?? new Image();
+    stageImageRef.current = image;
+    const draw = () => {
       const context = canvas.getContext("2d");
       if (!context) return;
       const pixelRatio = window.devicePixelRatio || 1;
@@ -171,14 +223,33 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
       const height = image.height * scale;
       const xTravel = (bounds.width - width) / 2;
       const yTravel = (bounds.height - height) / 2;
-      const x = (bounds.width - width) / 2 + (stagePosition.x / 50) * xTravel;
-      const y = (bounds.height - height) / 2 - (stagePosition.y / 50) * yTravel;
-      context.drawImage(image, x, y, width, height);
+      const xLimits = stageStatus?.limits.x ?? { minimum: -75, maximum: 75 };
+      const yLimits = stageStatus?.limits.y ?? { minimum: -75, maximum: 75 };
+      const xMidpoint = (xLimits.minimum + xLimits.maximum) / 2;
+      const yMidpoint = (yLimits.minimum + yLimits.maximum) / 2;
+      const x = (bounds.width - width) / 2 + ((stagePosition.x - xMidpoint) / ((xLimits.maximum - xLimits.minimum) / 2)) * xTravel;
+      const y = (bounds.height - height) / 2 - ((stagePosition.y - yMidpoint) / ((yLimits.maximum - yLimits.minimum) / 2)) * yTravel;
+      const zLimits = stageStatus?.limits.z ?? { minimum: 0, maximum: 10 };
+      const zProgress = axisPercent(stagePosition.z, zLimits) / 100;
+      const imageScale = 1 + zProgress * 0.12;
+      const tiltRadians = stagePosition.t * Math.PI / 180;
+      const rotationRadians = stagePosition.r * Math.PI / 180;
+      const projectedHeight = Math.max(0.42, Math.cos(tiltRadians));
+      const tiltShear = Math.sin(tiltRadians) * 0.16;
+
+      // Transform the stage image itself while leaving the XY grid and origin
+      // guides fixed. Every requestAnimationFrame redraw therefore presents
+      // visible Z lift, T pitch, and continuous R rotation.
+      context.save();
+      context.translate(x + width / 2, y + height / 2 - zProgress * 64);
+      context.rotate(rotationRadians);
+      context.scale(imageScale, imageScale);
+      context.transform(1, tiltShear, 0, projectedHeight, 0, 0);
+      context.drawImage(image, -width / 2, -height / 2, width, height);
+      context.restore();
 
       // Draw the positive Cartesian axes after the image so browser stacking
       // contexts cannot hide the origin guides behind the canvas.
-      const xLimits = stageStatus?.limits.x ?? { minimum: -50, maximum: 50 };
-      const yLimits = stageStatus?.limits.y ?? { minimum: -50, maximum: 50 };
       const originX = ((0 - xLimits.minimum) / (xLimits.maximum - xLimits.minimum)) * bounds.width;
       const originY = ((yLimits.maximum - 0) / (yLimits.maximum - yLimits.minimum)) * bounds.height;
       context.save();
@@ -194,6 +265,11 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
       context.stroke();
       context.restore();
     };
+    if (!image.src) image.src = sampleStageImage;
+    if (image.complete && image.naturalWidth > 0) draw();
+    else {
+      image.onload = draw;
+    }
   }, [minimized, open, stagePosition, stageStatus?.limits]);
 
   useEffect(() => {
@@ -243,6 +319,18 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
 
   if (!open) return null;
 
+  const zLimit = stageStatus?.limits.z ?? { minimum: 0, maximum: 10 };
+  const tiltLimit = stageStatus?.limits.t ?? { minimum: -10, maximum: 60 };
+  const xLimit = stageStatus?.limits.x ?? { minimum: -75, maximum: 75 };
+  const yLimit = stageStatus?.limits.y ?? { minimum: -75, maximum: 75 };
+  const rotationContinuous = stageStatus?.axes?.r?.continuous ?? true;
+  const zProgress = axisPercent(stagePosition.z, zLimit) / 100;
+  const stagePresentationStyle = {
+    "--stage-z": `${-zProgress * 64}px`,
+    "--stage-tilt": `${stagePosition.t}deg`,
+    "--stage-rotation": `${stagePosition.r}deg`,
+  } as CSSProperties;
+
   return (
     <div className="modal-backdrop sample-stage-dashboard__backdrop" role="presentation">
       {!minimized && (
@@ -250,23 +338,36 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
           <div className="modal__header sample-stage-dashboard__drag-handle" onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging}>
             <div id="sample-stage-title" className="modal__title">{t("sampleStage.title")}</div>
             <div className="sample-stage-dashboard__header-controls">
-              <select className="select" value={unit} onChange={(event) => setUnit(event.target.value as StageUnit)} aria-label={t("sampleStage.unit")}>
-                <option value="um">µm</option>
-                <option value="mm">mm</option>
-                <option value="cmm">cmm</option>
-              </select>
-              <label><span>X</span><NumberStepperInput value={displayValue(targetPosition.x, unit)} min={displayValue(-50, unit)} max={displayValue(50, unit)} onValueChange={(value) => {
+              <label><span>X µm</span><NumberStepperInput value={displayMicrometers(targetPosition.x)} step={micrometerStep(stageStatus, "x")} min={displayMicrometers(xLimit.minimum)} max={displayMicrometers(xLimit.maximum)} onValueChange={(value) => {
                 const parsed = Number(value);
                 if (!Number.isFinite(parsed)) return;
                 positionEditedRef.current = true;
-                setTargetPosition((position) => ({ ...position, x: canonicalValue(parsed, unit) }));
+                setTargetPosition((position) => ({ ...position, x: canonicalMicrometers(parsed) }));
               }} ariaLabel="X target" /></label>
-              <label><span>Y</span><NumberStepperInput value={displayValue(targetPosition.y, unit)} min={displayValue(-50, unit)} max={displayValue(50, unit)} onValueChange={(value) => {
+              <label><span>Y µm</span><NumberStepperInput value={displayMicrometers(targetPosition.y)} step={micrometerStep(stageStatus, "y")} min={displayMicrometers(yLimit.minimum)} max={displayMicrometers(yLimit.maximum)} onValueChange={(value) => {
                 const parsed = Number(value);
                 if (!Number.isFinite(parsed)) return;
                 positionEditedRef.current = true;
-                setTargetPosition((position) => ({ ...position, y: canonicalValue(parsed, unit) }));
+                setTargetPosition((position) => ({ ...position, y: canonicalMicrometers(parsed) }));
               }} ariaLabel="Y target" /></label>
+              <label><span>Z µm</span><NumberStepperInput value={displayMicrometers(targetPosition.z)} step={micrometerStep(stageStatus, "z")} min={displayMicrometers(zLimit.minimum)} max={displayMicrometers(zLimit.maximum)} onValueChange={(value) => {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed)) return;
+                positionEditedRef.current = true;
+                setTargetPosition((position) => ({ ...position, z: canonicalMicrometers(parsed) }));
+              }} ariaLabel="Z target" /></label>
+              <label><span>T°</span><NumberStepperInput value={targetPosition.t} step={stageStatus?.axes?.t?.resolution ?? 0.1} min={tiltLimit.minimum} max={tiltLimit.maximum} onValueChange={(value) => {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed)) return;
+                positionEditedRef.current = true;
+                setTargetPosition((position) => ({ ...position, t: parsed }));
+              }} ariaLabel="Tilt target" /></label>
+              <label><span>R°</span><NumberStepperInput value={targetPosition.r} step={stageStatus?.axes?.r?.resolution ?? 0.1} min={rotationContinuous ? undefined : stageStatus?.limits.r.minimum} max={rotationContinuous ? undefined : stageStatus?.limits.r.maximum} onValueChange={(value) => {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed)) return;
+                positionEditedRef.current = true;
+                setTargetPosition((position) => ({ ...position, r: parsed }));
+              }} ariaLabel="Rotation target" /></label>
               <button type="button" className="btn btn--primary" onClick={() => void moveStage()} disabled={!stageStatus?.connected || stageStatus.moving}>
                 {stageStatus?.moving ? t("sampleStage.moving") : t("sampleStage.move")}
               </button>
@@ -309,7 +410,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                     transform: index === 0 ? "translateX(3px)" : index === 20 ? "translateX(calc(-100% - 3px))" : "translateX(-50%)",
                   }}
                 >
-                  {displayValue(index * 5 - 50, unit)}
+                  {displayMicrometers((stageStatus?.limits.x.minimum ?? -75) + index * ((stageStatus?.limits.x.maximum ?? 75) - (stageStatus?.limits.x.minimum ?? -75)) / 20)}
                 </span>
               ))}
               {Array.from({ length: 21 }, (_, index) => (
@@ -321,23 +422,36 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                     transform: index === 0 ? "translateY(3px)" : index === 20 ? "translateY(calc(-100% - 3px))" : "translateY(-50%)",
                   }}
                 >
-                  {displayValue(50 - index * 5, unit)}
+                  {displayMicrometers((stageStatus?.limits.y.maximum ?? 75) - index * ((stageStatus?.limits.y.maximum ?? 75) - (stageStatus?.limits.y.minimum ?? -75)) / 20)}
                 </span>
               ))}
             </div>
             <div className="sample-stage-dashboard__content">
-              <div className="canvas-frame sample-stage-dashboard__canvas-frame">
+              <div className="canvas-frame sample-stage-dashboard__canvas-frame" style={stagePresentationStyle}>
                 <canvas ref={canvasRef} className="sample-stage-dashboard__canvas" aria-label={t("sampleStage.canvas.aria")} />
               </div>
             </div>
-            <div className="sample-stage-dashboard__position-line sample-stage-dashboard__position-line--x" style={{ left: `${stagePosition.x + 50}%` }} />
-            <div className="sample-stage-dashboard__position-line sample-stage-dashboard__position-line--y" style={{ top: `${50 - stagePosition.y}%` }} />
+            <div className="sample-stage-dashboard__motion-presentation" aria-label="Sample stage five-axis motion presentation">
+              <strong>Sample stage · 5 AXIS</strong>
+              <span>X {displayMicrometers(xLimit.minimum)}…{displayMicrometers(xLimit.maximum)} µm · {micrometerStep(stageStatus, "x")} µm</span>
+              <span>Y {displayMicrometers(yLimit.minimum)}…{displayMicrometers(yLimit.maximum)} µm · {micrometerStep(stageStatus, "y")} µm</span>
+              <span>Z {displayMicrometers(zLimit.minimum)}…{displayMicrometers(zLimit.maximum)} µm</span>
+              <span>T {tiltLimit.minimum}°…{tiltLimit.maximum}°</span>
+              <span>R {rotationContinuous ? "continuous" : `${stageStatus?.limits.r.minimum}°…${stageStatus?.limits.r.maximum}°`}</span>
+              <div className="sample-stage-dashboard__motion-bars" aria-hidden="true">
+                <i style={{ "--motion": `${axisPercent(stagePosition.z, zLimit)}%` } as CSSProperties}>Z</i>
+                <i style={{ "--motion": `${axisPercent(stagePosition.t, tiltLimit)}%` } as CSSProperties}>T</i>
+                <i style={{ "--motion": `${((stagePosition.r % 360) + 360) % 360 / 3.6}%` } as CSSProperties}>R</i>
+              </div>
+            </div>
+            <div className="sample-stage-dashboard__position-line sample-stage-dashboard__position-line--x" style={{ left: `${axisPercent(stagePosition.x, stageStatus?.limits.x ?? { minimum: -75, maximum: 75 })}%` }} />
+            <div className="sample-stage-dashboard__position-line sample-stage-dashboard__position-line--y" style={{ top: `${axisPercent(stagePosition.y, stageStatus?.limits.y ?? { minimum: -75, maximum: 75 }, true)}%` }} />
             <input
               className="sample-stage-dashboard__axis-picker sample-stage-dashboard__axis-picker--x"
               type="range"
-              min="-50"
-              max="50"
-              step="1"
+              min={stageStatus?.limits.x.minimum ?? -75}
+              max={stageStatus?.limits.x.maximum ?? 75}
+              step="0.001"
               value={targetPosition.x}
               aria-label={t("sampleStage.axis.x")}
               onChange={(event) => {
@@ -345,13 +459,13 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                 setTargetPosition((position) => ({ ...position, x: Number(event.target.value) }));
               }}
             />
-            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--x" style={{ left: `${targetPosition.x + 50}%` }}>{displayValue(targetPosition.x, unit)} {unitLabel(unit)}</output>
+            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--x" style={{ left: `${axisPercent(targetPosition.x, stageStatus?.limits.x ?? { minimum: -75, maximum: 75 })}%` }}>{displayMicrometers(targetPosition.x)} µm</output>
             <input
               className="sample-stage-dashboard__axis-picker sample-stage-dashboard__axis-picker--y"
               type="range"
-              min="-50"
-              max="50"
-              step="1"
+              min={stageStatus?.limits.y.minimum ?? -75}
+              max={stageStatus?.limits.y.maximum ?? 75}
+              step="0.001"
               value={targetPosition.y}
               aria-label={t("sampleStage.axis.y")}
               onChange={(event) => {
@@ -359,8 +473,30 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                 setTargetPosition((position) => ({ ...position, y: Number(event.target.value) }));
               }}
             />
-            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--y" style={{ top: `${50 - targetPosition.y}%` }}>{displayValue(targetPosition.y, unit)} {unitLabel(unit)}</output>
-            <output className="sample-stage-dashboard__position-readout">X&nbsp;{displayValue(stagePosition.x, unit)} {unitLabel(unit)} <span>·</span> Y&nbsp;{displayValue(stagePosition.y, unit)} {unitLabel(unit)}</output>
+            <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--y" style={{ top: `${axisPercent(targetPosition.y, stageStatus?.limits.y ?? { minimum: -75, maximum: 75 }, true)}%` }}>{displayMicrometers(targetPosition.y)} µm</output>
+            <div className="sample-stage-dashboard__motion-cluster">
+              <div className="sample-stage-dashboard__kinematic" style={stagePresentationStyle} aria-hidden="true">
+                <div className="sample-stage-dashboard__z-guide">
+                  <span>Z</span>
+                  <i style={{ height: `${zProgress * 100}%` }} />
+                </div>
+                <div className="sample-stage-dashboard__z-position-marker" style={{ bottom: `${27 + zProgress * 64}px` }}>
+                  <span>{displayMicrometers(stagePosition.z)} µm</span>
+                </div>
+                <div className="sample-stage-dashboard__lift">
+                  <div className="sample-stage-dashboard__gimbal">
+                    <div className="sample-stage-dashboard__platter">
+                      <span className="sample-stage-dashboard__platter-rim" />
+                      <span className="sample-stage-dashboard__rotation-mark">R</span>
+                      <span className="sample-stage-dashboard__crosshair" />
+                    </div>
+                    <span className="sample-stage-dashboard__tilt-mark">T {stagePosition.t.toFixed(1)}°</span>
+                  </div>
+                </div>
+                <div className="sample-stage-dashboard__pedestal" />
+              </div>
+              <output className="sample-stage-dashboard__position-readout">X&nbsp;{displayMicrometers(stagePosition.x)} µm <span>·</span> Y&nbsp;{displayMicrometers(stagePosition.y)} µm <span>·</span> Z&nbsp;{displayMicrometers(stagePosition.z)} µm <span>·</span> T&nbsp;{stagePosition.t.toFixed(2)}° <span>·</span> R&nbsp;{stagePosition.r.toFixed(2)}°</output>
+            </div>
             {stageError && <span className="sample-stage-dashboard__error">{stageError}</span>}
             </div>
           </div>

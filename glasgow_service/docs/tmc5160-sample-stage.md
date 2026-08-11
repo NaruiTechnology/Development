@@ -1,6 +1,19 @@
 # TMC5160 sample-stage controller
 
-## Delivered boundary
+## Five-axis architecture
+
+The stage model now exposes X, Y, Z, tilt (`T`), and rotation (`R`). The two
+TMC5160 channels below are the X/Y prototype implementation, not a claim that
+all five production axes use stepper motors. Z, tilt, and rotation are modeled
+as external closed-loop drive contracts until their motors, encoders, and drive
+interfaces are selected. Hardware mode rejects those placeholder channels;
+simulation mode permits five-axis UI and API development without energizing
+unknown hardware.
+
+The sourced performance benchmark and electrical partition are documented in
+`GlasgowDataIO/Hardware/kitcard/GlasgowRevC3FiveAxisStage/README.md`.
+
+## Delivered X/Y boundary
 
 The dedicated sample-stage Glasgow builds one Amaranth SPI controller for X
 and one for Y. Each controls one TMC5160 using an independent four-wire bus

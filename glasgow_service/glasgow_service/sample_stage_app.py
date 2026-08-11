@@ -9,6 +9,9 @@ from .sample_stage import SampleStageController, load_stage_config
 class MoveRequest(BaseModel):
     x: float
     y: float
+    z: float | None = None
+    t: float | None = None
+    r: float | None = None
 
 
 holder = {}
@@ -52,7 +55,7 @@ async def stage_status():
 @app.post("/stage/move")
 async def move(req: MoveRequest):
     try:
-        return await controller().move_absolute(req.model_dump())
+        return await controller().move_absolute(req.model_dump(exclude_none=True))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except RuntimeError as exc:
