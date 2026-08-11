@@ -4293,13 +4293,71 @@ body {
   flex: 0 0 178px;
   width: 178px;
   height: 142px;
-  perspective: 700px;
-  perspective-origin: 50% 38%;
-  transform-style: preserve-3d;
-  isolation: isolate;
-  contain: layout;
+  overflow: visible;
   pointer-events: none;
 }
+
+.sample-stage-dashboard__svg-z-scale line {
+  stroke: rgba(127, 232, 255, 0.68);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.sample-stage-dashboard__svg-z-scale text,
+.sample-stage-dashboard__svg-axis-label {
+  fill: #b9f3ff;
+  font: 8px var(--font-mono);
+}
+
+.sample-stage-dashboard__svg-z-scale .sample-stage-dashboard__svg-z-marker {
+  stroke: #63ddff;
+  stroke-width: 2;
+}
+
+.sample-stage-dashboard__svg-pedestal {
+  fill: url(#stage-pedestal);
+  stroke: rgba(112, 213, 255, 0.75);
+}
+
+.sample-stage-dashboard__svg-column {
+  fill: #315b70;
+  stroke: #70d5ff;
+}
+
+.sample-stage-dashboard__svg-gimbal {
+  fill: none;
+  stroke: #58bbdd;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.sample-stage-dashboard__svg-platter-edge {
+  fill: #071824;
+  stroke: #2e8caf;
+  stroke-width: 2;
+}
+
+.sample-stage-dashboard__svg-platter {
+  fill: url(#stage-platter);
+  stroke: #74e1ff;
+  stroke-width: 2;
+}
+
+.sample-stage-dashboard__svg-rim {
+  fill: none;
+  stroke: rgba(190, 244, 255, 0.82);
+  stroke-width: 2;
+  stroke-dasharray: 7 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.sample-stage-dashboard__svg-crosshair {
+  stroke: rgba(205, 248, 255, 0.72);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.sample-stage-dashboard__svg-r-arrow { fill: #fff; }
 
 .sample-stage-dashboard__pedestal {
   position: absolute;

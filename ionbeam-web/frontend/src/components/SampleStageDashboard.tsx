@@ -325,12 +325,6 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
   const yLimit = stageStatus?.limits.y ?? { minimum: -75, maximum: 75 };
   const rotationContinuous = stageStatus?.axes?.r?.continuous ?? true;
   const zProgress = axisPercent(stagePosition.z, zLimit) / 100;
-  const stagePresentationStyle = {
-    "--stage-z": `${-zProgress * 64}px`,
-    "--stage-tilt": `${stagePosition.t}deg`,
-    "--stage-rotation": `${stagePosition.r}deg`,
-  } as CSSProperties;
-
   return (
     <div className="modal-backdrop sample-stage-dashboard__backdrop" role="presentation">
       {!minimized && (
@@ -427,7 +421,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
               ))}
             </div>
             <div className="sample-stage-dashboard__content">
-              <div className="canvas-frame sample-stage-dashboard__canvas-frame" style={stagePresentationStyle}>
+              <div className="canvas-frame sample-stage-dashboard__canvas-frame">
                 <canvas ref={canvasRef} className="sample-stage-dashboard__canvas" aria-label={t("sampleStage.canvas.aria")} />
               </div>
             </div>
@@ -475,26 +469,47 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
             />
             <output className="sample-stage-dashboard__axis-value sample-stage-dashboard__axis-value--y" style={{ top: `${axisPercent(targetPosition.y, stageStatus?.limits.y ?? { minimum: -75, maximum: 75 }, true)}%` }}>{displayMicrometers(targetPosition.y)} µm</output>
             <div className="sample-stage-dashboard__motion-cluster">
-              <div className="sample-stage-dashboard__kinematic" style={stagePresentationStyle} aria-hidden="true">
-                <div className="sample-stage-dashboard__z-guide">
-                  <span>Z</span>
-                  <i style={{ height: `${zProgress * 100}%` }} />
-                </div>
-                <div className="sample-stage-dashboard__z-position-marker" style={{ bottom: `${27 + zProgress * 64}px` }}>
-                  <span>{displayMicrometers(stagePosition.z)} µm</span>
-                </div>
-                <div className="sample-stage-dashboard__lift">
-                  <div className="sample-stage-dashboard__gimbal">
-                    <div className="sample-stage-dashboard__platter">
-                      <span className="sample-stage-dashboard__platter-rim" />
-                      <span className="sample-stage-dashboard__rotation-mark">R</span>
-                      <span className="sample-stage-dashboard__crosshair" />
-                    </div>
-                    <span className="sample-stage-dashboard__tilt-mark">T {stagePosition.t.toFixed(1)}°</span>
-                  </div>
-                </div>
-                <div className="sample-stage-dashboard__pedestal" />
-              </div>
+              <svg className="sample-stage-dashboard__kinematic" viewBox="0 0 178 142" role="img" aria-label={`Z ${displayMicrometers(stagePosition.z)} micrometers, tilt ${stagePosition.t.toFixed(2)} degrees, rotation ${stagePosition.r.toFixed(2)} degrees`}>
+                <defs>
+                  <linearGradient id="stage-pedestal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#558aa3" />
+                    <stop offset="1" stopColor="#0a1e2c" />
+                  </linearGradient>
+                  <radialGradient id="stage-platter">
+                    <stop offset="0" stopColor="#66c9e7" />
+                    <stop offset="0.7" stopColor="#17475e" />
+                    <stop offset="1" stopColor="#071824" />
+                  </radialGradient>
+                </defs>
+
+                <g className="sample-stage-dashboard__svg-z-scale">
+                  <text x="8" y="13">Z</text>
+                  <line x1="14" y1="22" x2="14" y2="111" />
+                  {[0, 0.25, 0.5, 0.75, 1].map((fraction) => (
+                    <line key={fraction} x1="10" y1={111 - fraction * 89} x2="20" y2={111 - fraction * 89} />
+                  ))}
+                  <line className="sample-stage-dashboard__svg-z-marker" x1="8" y1={88 - zProgress * 64} x2="62" y2={88 - zProgress * 64} />
+                  <text x="21" y={83 - zProgress * 64}>{displayMicrometers(stagePosition.z)} µm</text>
+                </g>
+
+                <path className="sample-stage-dashboard__svg-pedestal" d="M62 111 H151 L143 135 H70 Z" />
+                <g transform={`translate(0 ${-zProgress * 64})`}>
+                  <rect className="sample-stage-dashboard__svg-column" x="94" y="87" width="25" height="31" rx="3" />
+                  <g transform={`rotate(${-stagePosition.t * 0.65} 107 88)`}>
+                    <path className="sample-stage-dashboard__svg-gimbal" d="M48 83 Q48 55 68 48 M166 83 Q166 55 146 48" />
+                    <ellipse className="sample-stage-dashboard__svg-platter-edge" cx="107" cy="78" rx="58" ry="27" />
+                    <ellipse className="sample-stage-dashboard__svg-platter" cx="107" cy="72" rx="58" ry="27" />
+                    <g transform={`translate(107 72) rotate(${stagePosition.r}) scale(1 0.465)`}>
+                      <circle className="sample-stage-dashboard__svg-rim" r="49" />
+                      <line className="sample-stage-dashboard__svg-crosshair" x1="-45" y1="0" x2="45" y2="0" />
+                      <line className="sample-stage-dashboard__svg-crosshair" x1="0" y1="-23" x2="0" y2="23" />
+                      <path className="sample-stage-dashboard__svg-r-arrow" d="M0 -24 L-5 -15 H5 Z" />
+                    </g>
+                  </g>
+                </g>
+                <text className="sample-stage-dashboard__svg-axis-label" x="145" y="20">T {stagePosition.t.toFixed(1)}°</text>
+                <text className="sample-stage-dashboard__svg-axis-label" x="145" y="32">R {stagePosition.r.toFixed(1)}°</text>
+              </svg>
               <output className="sample-stage-dashboard__position-readout">X&nbsp;{displayMicrometers(stagePosition.x)} µm <span>·</span> Y&nbsp;{displayMicrometers(stagePosition.y)} µm <span>·</span> Z&nbsp;{displayMicrometers(stagePosition.z)} µm <span>·</span> T&nbsp;{stagePosition.t.toFixed(2)}° <span>·</span> R&nbsp;{stagePosition.r.toFixed(2)}°</output>
             </div>
             {stageError && <span className="sample-stage-dashboard__error">{stageError}</span>}
