@@ -31,13 +31,16 @@ class ServiceStatus(BaseModel):
     last_error: Optional[str] = None
     scans_completed: int = 0
     chunks_in_flight: int = 0
-    vacuum_enabled: bool = False
 
 
 # ---------- vacuum GPIO ---------------------------------------------------
 
 class VacuumPowerRequest(BaseModel):
     power: bool
+
+
+class VacuumAcquireRequest(BaseModel):
+    expected_channels: dict[str, float] = Field(default_factory=dict)
 
 
 class VacuumSimulationReadRequest(BaseModel):
@@ -64,8 +67,9 @@ class VacuumSystemStatus(BaseModel):
     voltage: float
     connected: bool
     simulation: bool
-    control_transport: Literal["glasgow-gpio", "vacuum-control-subtarget"]
+    control_transport: Literal["sbc-simulation", "raspberry-pi-gpio"]
     running: bool
+    runtime_seconds: float = 0.0
     cascade_stopped: bool
     isVacuumSystemReady: bool = False
     last_error: Optional[str] = None

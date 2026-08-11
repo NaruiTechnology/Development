@@ -10,7 +10,6 @@ import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 import type { VacuumPumpState, VacuumSystemStatus } from "../types/api";
-import { Icon } from "./Icon";
 
 const MECHANICAL_PUMP = "MechanicalVacuumPump";
 const PUMP_IMAGES: Record<string, string> = {
@@ -20,7 +19,7 @@ const PUMP_IMAGES: Record<string, string> = {
   UHVacuumPump_2: uhPump2Image,
 };
 
-export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onClose: () => void }) {
+export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onActivityChange: (active: boolean) => void; onClose: () => void }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<VacuumSystemStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +42,16 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
     minY: number;
     maxY: number;
   } | null>(null);
+
+  useEffect(() => {
+    const initializing = status?.running === true
+      && status.isVacuumSystemReady !== true
+      && status.cascade_stopped !== true
+      && error === null;
+    onActivityChange(open && (pending !== null || initializing));
+  }, [error, onActivityChange, open, pending, status?.cascade_stopped, status?.isVacuumSystemReady, status?.running]);
+
+  useEffect(() => () => onActivityChange(false), [onActivityChange]);
 
   function startDragging(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || (event.target as HTMLElement).closest("button, input, label, a")) return;
@@ -128,9 +137,19 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
 
     void (async () => {
       try {
+        const configuredResponse = await fetch(apiUrl("/api/vacuum"));
+        if (!configuredResponse.ok) {
+          throw new Error(`${configuredResponse.status} ${configuredResponse.statusText}`);
+        }
+        const configured = await readJsonResponse<VacuumSystemStatus>(configuredResponse, "vacuum configuration");
         const response = await fetch(apiUrl("/api/vacuum/acquire"), {
           method: "POST",
-          headers: scanAuthHeaders(),
+          headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+          body: JSON.stringify({
+            expected_channels: Object.fromEntries(
+              configured.pumps.map((pump) => [pump.name, pump.threshold]),
+            ),
+          }),
         });
         if (response.status === 404) {
           if (!cancelled) onCloseRef.current();
@@ -213,54 +232,17 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
     }
   }
 
-  async function updateSimulationRead(name: string, checked: boolean) {
-    const previousStatus = status;
-    mutationRef.current = true;
-    statusVersionRef.current += 1;
-    setPending(`read:${name}`);
-    setError(null);
-    setStatus((current) => current ? {
-      ...current,
-      pumps: current.pumps.map((pump) => {
-        if (pump.name !== name) return pump;
-        const power = !checked && name !== MECHANICAL_PUMP ? false : pump.power;
-        const ready = checked && power;
-        return {
-          ...pump,
-          power,
-          simulation_read: checked,
-          value: checked && power ? pump.threshold : power ? pump.value : null,
-          port_b_value: checked ? current.voltage : 0,
-          ready,
-          border: power ? (ready ? "ready" : "waiting") : "off",
-        };
-      }),
-    } : current);
-    try {
-      const response = await fetch(apiUrl(`/api/vacuum/pumps/${encodeURIComponent(name)}/read`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
-        body: JSON.stringify({ checked }),
-      });
-      if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(detail || `${response.status} ${response.statusText}`);
-      }
-      setStatus(await readJsonResponse<VacuumSystemStatus>(response, "vacuum simulated read"));
-    } catch (cause) {
-      setStatus(previousStatus);
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      mutationRef.current = false;
-      setPending(null);
-    }
-  }
-
   if (!open) return null;
 
   const mechanicalPump = status?.pumps.find((pump) => pump.name === MECHANICAL_PUMP);
   const turboPump = status?.pumps.find((pump) => pump.name === "TurboVacuumPump");
   const uhPumps = status?.pumps.filter((pump) => pump.group === "ultra-high-vacuum") ?? [];
+  const workflowNames = new Set([
+    MECHANICAL_PUMP,
+    "TurboVacuumPump",
+    ...uhPumps.map((pump) => pump.name),
+  ]);
+  const otherPumps = status?.pumps.filter((pump) => !workflowNames.has(pump.name)) ?? [];
 
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
@@ -289,31 +271,21 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
           <div className="vacuum-card__actions">
             <span className="vacuum-card__pins"><code>{pump.write}</code> → <code>{pump.read}</code></span>
             <div className="vacuum-card__controls">
-              <label
-                className="vacuum-read-check"
-                title={status?.simulation ? t("vacuum.simulationRead.title") : t("vacuum.hardwareRead.title")}
+              <button
+                type="button"
+                className="vacuum-power-button"
+                data-state={pump.power ? "on" : "off"}
+                disabled={!status?.running || pending !== null}
+                aria-pressed={pump.power}
+                aria-label={`${pump.name} ${t("vacuum.power")}`}
+                title={`${t("vacuum.power")} ${pump.power ? "off" : "on"}`}
+                onClick={() => void updatePower(pump.name, !pump.power)}
               >
-                <input
-                  type="checkbox"
-                  checked={pump.port_b_value === status?.voltage}
-                  disabled={!status?.simulation || pending !== null}
-                  aria-readonly={!status?.simulation}
-                  onChange={(event) => void updateSimulationRead(pump.name, event.target.checked)}
-                />
-                <span>{t("vacuum.readCheck")}</span>
-              </label>
-              {!mechanical && (
-                <button
-                  type="button"
-                  className="btn btn--danger vacuum-card__stop"
-                  disabled={!status?.running || !pump.power || pending !== null}
-                  title={`${t("vacuum.stopPump")} ${pump.name}`}
-                  onClick={() => void updatePower(pump.name, false)}
-                >
-                  <Icon name="square" tone="danger" />
-                  {t("vacuum.stopPump")}
-                </button>
-              )}
+                <svg className="vacuum-power-button__icon" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M12 3v8" />
+                  <path d="M7.05 5.93a9 9 0 1 0 9.9 0" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -329,7 +301,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
             <div id="vacuum-title" className="modal__title">{t("vacuum.title")}</div>
             {status && (
               <div className="vacuum-dashboard__device">
-                {status.device_id} · {status.voltage.toFixed(1)} V · {status.simulation ? t("vacuum.simulation") : t("vacuum.hardware")} · {status.control_transport === "vacuum-control-subtarget" ? t("vacuum.subtarget") : t("vacuum.gpioSimulation")}
+                {status.device_id} · {status.voltage.toFixed(1)} V · {status.simulation ? t("vacuum.simulation") : t("vacuum.hardware")} · {status.control_transport === "raspberry-pi-gpio" ? "Raspberry Pi GPIO" : t("vacuum.gpioSimulation")} · {formatRuntime(status.runtime_seconds)}
               </div>
             )}
           </div>
@@ -347,7 +319,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onClose }:
               {pending === "acquire" ? t("vacuum.acquiring") : t("vacuum.loading")}
             </div>
           ) : (
-            mechanicalPump && turboPump ? (
+            mechanicalPump && turboPump && uhPumps.length > 0 && otherPumps.length === 0 ? (
               <div className="vacuum-workflow">
                 <div className="vacuum-workflow__stage">{renderPumpCard(mechanicalPump)}</div>
                 <WorkflowArrow state={mechanicalPump.border} />
@@ -391,4 +363,12 @@ function groupState(pumps: VacuumPumpState[]): VacuumPumpState["border"] {
 function formatVacuumValue(value: number): string {
   if (!Number.isFinite(value)) return "—";
   return value === 0 ? "0" : value.toExponential(2);
+}
+
+function formatRuntime(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainder = total % 60;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${remainder.toString().padStart(2, "0")}`;
 }

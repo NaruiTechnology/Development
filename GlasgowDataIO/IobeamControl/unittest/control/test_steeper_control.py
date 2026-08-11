@@ -3,15 +3,18 @@ import logging
 import asyncio
 import gc
 import warnings
+from types import SimpleNamespace
 
 from amaranth.sim import Simulator
-from amaranth import Module, ClockDomain
+from amaranth import Module, ClockDomain, Fragment, Signal
+from amaranth.lib import io
 from amaranth.hdl._ir import UnusedElaboratable
 
 from IobeamControl.sysControl.stepper.stepperChannel import StepperChannel
 from IobeamControl.sysControl.stepper.controlStepperInterface import ControlStepperInterface
 from IobeamControl.sysControl.stepper.controlStepperSubtarget import ControlStepperSubtarget  
 from IobeamControl.sysControl.stepper.stepperApplet import ControlStepperApplet
+from IobeamControl.sysControl.stepper.sampleStageSubtarget import SampleStageSubtarget
 
 warnings.filterwarnings("ignore", category=UnusedElaboratable)
 
@@ -34,6 +37,35 @@ class MockLower:
 # TestCase for Stepper classes
 # ---------------------------------------------------------------------------
 class ControlStepperTest(unittest.TestCase):
+    def test_sample_stage_subtarget_tracks_axis(self):
+        ports = SimpleNamespace(
+            sck=io.SimulationPort("o", 1, name="stage_x_sck"),
+            cs=io.SimulationPort("o", 1, name="stage_x_cs"),
+            copi=io.SimulationPort("o", 1, name="stage_x_sdi"),
+            cipo=io.SimulationPort("i", 1, name="stage_x_sdo"),
+        )
+        out_fifo = SimpleNamespace(
+            r_en=Signal(), r_rdy=Signal(), r_data=Signal(8)
+        )
+        in_fifo = SimpleNamespace(
+            w_en=Signal(), w_rdy=Signal(), w_data=Signal(8), flush=Signal()
+        )
+        target = SampleStageSubtarget(
+            "X",
+            ports=ports,
+            out_fifo=out_fifo,
+            in_fifo=in_fifo,
+            period_cyc=4,
+            delay_cyc=48,
+            sck_idle=0,
+            sck_edge="rising",
+        )
+        self.assertEqual(target.axis, "X")
+        self.assertEqual(target.period_cyc, 4)
+        Fragment.get(target, platform=None)
+        with self.assertRaises(ValueError):
+            SampleStageSubtarget("Z", object(), object())
+
     def test_stepper_channel_generates_pulses(self):
         """Simulate StepperChannel and verify it runs without errors."""
 
@@ -45,16 +77,26 @@ class ControlStepperTest(unittest.TestCase):
             sim = Simulator(m)
 
             async def bench(ctx):
-                # Initialize inputs
                 ctx.set(dut.en, 1)
                 ctx.set(dut.run, 0)
                 ctx.set(dut.dir_in, 1)
                 ctx.set(dut.period, 10)
                 ctx.set(dut.steps_in, 3)
+                ctx.set(dut.start, 1)
+                await ctx.tick()
+                ctx.set(dut.start, 0)
 
-                # Run long enough to cover the 3 pulses
+                rising_edges = 0
+                previous = 0
                 for _ in range(200):
                     await ctx.tick()
+                    current = ctx.get(dut.pulse)
+                    if current and not previous:
+                        rising_edges += 1
+                    previous = current
+                self.assertEqual(rising_edges, 3)
+                self.assertEqual(ctx.get(dut.dir_out), 1)
+                self.assertEqual(ctx.get(dut.en_out), 1)
 
             # Drive the 'sync' clock
             sim.add_clock(1e-6, domain="sync")

@@ -43,6 +43,7 @@ import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
 import { VacuumDashboard } from "./components/VacuumDashboard";
+import { SampleStageDashboard } from "./components/SampleStageDashboard";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 import {
   formatGrayScaleSelection,
@@ -103,7 +104,17 @@ export function App() {
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement | null>(null);
   const route = useAppRoute();
-  const [vacuumMinimized, setVacuumMinimized] = useState(false);
+  // Both hardware controllers start docked. Their header buttons restore the
+  // corresponding popup without requiring an initial open/close cycle.
+  const [vacuumMinimized, setVacuumMinimized] = useState(true);
+  const [vacuumControllerBusy, setVacuumControllerBusy] = useState(false);
+  const [sampleStageOpen, setSampleStageOpen] = useState(true);
+  const [sampleStageMinimized, setSampleStageMinimized] = useState(true);
+  const [sampleStageControllerBusy, setSampleStageControllerBusy] = useState(false);
+  const handleVacuumActivityChange = useCallback((active: boolean) => {
+    setVacuumControllerBusy(active);
+    setVacuumMinimized(!active);
+  }, []);
   const autoOpenedVacuumRef = useRef(false);
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
@@ -935,6 +946,13 @@ export function App() {
           navigateTo("vacuum");
         }}
         vacuumMinimized={vacuumMinimized}
+        vacuumControllerBusy={vacuumControllerBusy}
+        onOpenSampleStage={() => {
+          setSampleStageOpen(true);
+          setSampleStageMinimized(false);
+        }}
+        sampleStageMinimized={sampleStageMinimized}
+        sampleStageControllerBusy={sampleStageControllerBusy}
         scanLocked={scanActive}
       />
 
@@ -1325,13 +1343,24 @@ export function App() {
         <VacuumDashboard
           open={route === "vacuum"}
           minimized={vacuumMinimized}
+          onActivityChange={handleVacuumActivityChange}
           onMinimizedChange={setVacuumMinimized}
           onClose={() => {
-            setVacuumMinimized(false);
+            setVacuumMinimized(true);
             navigateTo("control");
           }}
         />
       )}
+      <SampleStageDashboard
+        open={sampleStageOpen}
+        minimized={sampleStageMinimized}
+        onActivityChange={setSampleStageControllerBusy}
+        onMinimizedChange={setSampleStageMinimized}
+        onClose={() => {
+          setSampleStageOpen(false);
+          setSampleStageMinimized(false);
+        }}
+      />
       <Footer />
     </div>
   );

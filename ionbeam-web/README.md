@@ -107,7 +107,7 @@ the FastAPI process. Put it behind nginx/Caddy for TLS.
 ### Deployment workflow
 
 The existing JSON-driven deploy workflow lives in
-[DeployWorkSpace/Development/DistributionDeploy](/home/vboxuser/Project/IobeamTech/Development/DeployWorkSpace/Development/DistributionDeploy).
+[DeployWorkSpace/Development/DistributionDeploy](C:/Project/IobeamTech/Development/DeployWorkSpace/Development/DistributionDeploy).
 Ionbeam-web exposes convenience npm scripts that delegate to that workflow for
 both local and production runs:
 
@@ -170,7 +170,7 @@ The browser can now mount the mobility shell on any `/mobility*` path without
 redirecting back to `/control`.
 
 For the remote VM, see the concrete nginx/systemd guide in
-[deploy/remote-vm.md](/home/vboxuser/Project/IobeamTech/Development/ionbeam-web/deploy/remote-vm.md).
+[deploy/remote-vm.md](C:/Project/IobeamTech/Development/ionbeam-web/deploy/remote-vm.md).
 
 Production mode is controlled by the workflow JSON's `Deployment.IsProduction`
 flag and the `--production` CLI switch on `distributionDeployApp.py`.

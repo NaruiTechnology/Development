@@ -27,9 +27,9 @@ class ControlStepperSubtarget(Elaboratable):
         m.submodules.en_buf   = en_buf   = io.Buffer("o", self.ports.en)
 
         m.d.comb += [
-            step_buf.o.eq(chan.step),
-            dir_buf.o.eq(chan.dir),
-            en_buf.o.eq(chan.en_o),
+            step_buf.o.eq(chan.pulse),
+            dir_buf.o.eq(chan.dir_out),
+            en_buf.o.eq(chan.en_out),
         ]
 
         command = Signal(self.Command)
@@ -41,6 +41,7 @@ class ControlStepperSubtarget(Elaboratable):
         # Local registers for channel control (latched into StepperChannel internally)
         en       = Signal(reset=0)
         run      = Signal(reset=0)
+        start    = Signal(reset=0)
         direction= Signal(reset=0)
         period   = Signal(range(1_000_000), reset=1000) # default 1000 µs (1 kHz stepping)
         steps    = Signal(32, reset=0)
@@ -49,6 +50,7 @@ class ControlStepperSubtarget(Elaboratable):
         m.d.comb += [
             chan.en.eq(en),
             chan.run.eq(run),
+            chan.start.eq(start),
             chan.dir_in.eq(direction),
             chan.period.eq(period),
             chan.steps_in.eq(steps),
@@ -59,6 +61,10 @@ class ControlStepperSubtarget(Elaboratable):
             with m.If(self.out_fifo.r_rdy):
                 m.d.sync += byte0.eq(self.out_fifo.r_data)
                 m.next = next_state
+
+        # RunSteps asserts start for exactly one clock after the final payload
+        # byte is consumed from the host-to-FPGA USB OUT FIFO.
+        m.d.sync += start.eq(0)
 
         with m.FSM(name="stepper"):
             with m.State("ReadCommand"):
@@ -128,7 +134,8 @@ class ControlStepperSubtarget(Elaboratable):
                     m.d.sync += [
                         byte3.eq(self.out_fifo.r_data),
                         steps.eq(Cat(byte0, byte1, byte2, self.out_fifo.r_data)),
-                        run.eq(0),        # finite move
+                        run.eq(0),        # finite move, not continuous mode
+                        start.eq(1),      # one-cycle finite-move trigger
                         en.eq(1),         # ensure enabled
                     ]
                     m.next = "ReadCommand"

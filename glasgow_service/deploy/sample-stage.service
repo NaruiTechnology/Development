@@ -1,0 +1,19 @@
+[Unit]
+Description=Second Glasgow sample-stage controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=vboxuser
+WorkingDirectory=/home/vboxuser/Project/Operations/Development/glasgow_service
+Environment=PYTHONPATH=/home/vboxuser/Project/Operations/Development:/home/vboxuser/Project/Operations/Development/glasgow_service
+EnvironmentFile=/etc/sample-stage.env
+ExecStart=/home/vboxuser/Project/Operations/.venv/bin/python -m uvicorn glasgow_service.sample_stage_app:app --host 127.0.0.1 --port 8790
+Restart=always
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

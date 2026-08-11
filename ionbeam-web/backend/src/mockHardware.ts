@@ -538,51 +538,6 @@ function vectorScanPoints(p: VectorParams): VectorPointTuple[] {
   return points;
 }
 
-const mockVacuumPumps = [
-  { name: "MechanicalVacuumPump", threshold: 1.0e-1, write: "A0", read: "B0", group: null },
-  { name: "TurboVacuumPump", threshold: 2.0e-3, write: "A1", read: "B1", group: null },
-  { name: "UHVacuumPump_1", threshold: 3.0e-5, write: "A2", read: "B2", group: "ultra-high-vacuum" },
-  { name: "UHVacuumPump_2", threshold: 3.0e-5, write: "A3", read: "B3", group: "ultra-high-vacuum" },
-].map((pump) => ({
-  ...pump,
-  power: false,
-  value: null as number | null,
-  port_a_value: 0,
-  port_b_value: 0,
-  border: "off",
-  ready: false,
-  simulation_read: false,
-}));
-let mockVacuumRunning = false;
-
-function mockVacuumStatus() {
-  return {
-    device_id: "MOCK-GLASGOW-C3",
-    voltage: 3.3,
-    connected: true,
-    simulation: true,
-    control_transport: "glasgow-gpio",
-    running: mockVacuumRunning,
-    cascade_stopped: false,
-    isVacuumSystemReady: mockVacuumPumps.every((pump) => pump.port_b_value === 3.3),
-    last_error: null,
-    updated_at: new Date().toISOString(),
-    pumps: mockVacuumPumps.map((pump) => ({ ...pump })),
-  };
-}
-
-function setMockVacuumPower(name: string, power: boolean) {
-  const pump = mockVacuumPumps.find((candidate) => candidate.name === name);
-  if (!pump) return false;
-  pump.power = power;
-  pump.port_a_value = power ? 3.3 : 0;
-  pump.port_b_value = power && pump.simulation_read ? 3.3 : 0;
-  pump.ready = pump.port_b_value === 3.3;
-  pump.value = power ? pump.threshold * 1.5 : null;
-  pump.border = power ? (pump.ready ? "ready" : "waiting") : "off";
-  return true;
-}
-
 /** Synthetic responses for the REST endpoints, when MOCK=1. */
 export const mockRest = {
   status() {
@@ -593,44 +548,6 @@ export const mockRest = {
       chunks_in_flight: 0,
       vacuum_enabled: false,
     };
-  },
-  vacuumStatus: mockVacuumStatus,
-  acquireVacuum() {
-    mockVacuumRunning = true;
-    setMockVacuumPower("MechanicalVacuumPump", true);
-    return mockVacuumStatus();
-  },
-  releaseVacuum() {
-    mockVacuumRunning = false;
-    return mockVacuumStatus();
-  },
-  setVacuumPower(name: string, power: boolean) {
-    return setMockVacuumPower(name, power) ? mockVacuumStatus() : null;
-  },
-  setVacuumRead(name: string, checked: boolean) {
-    const pump = mockVacuumPumps.find((candidate) => candidate.name === name);
-    if (!pump) return null;
-    pump.simulation_read = checked;
-    if (checked && pump.power) {
-      pump.value = pump.threshold;
-      pump.port_b_value = 3.3;
-      pump.ready = true;
-      pump.border = "ready";
-      if (name === "MechanicalVacuumPump") setMockVacuumPower("TurboVacuumPump", true);
-      if (name === "TurboVacuumPump") {
-        setMockVacuumPower("UHVacuumPump_1", true);
-        setMockVacuumPower("UHVacuumPump_2", true);
-      }
-    } else {
-      setMockVacuumPower(name, name === "MechanicalVacuumPump");
-    }
-    return mockVacuumStatus();
-  },
-  stopVacuum() {
-    for (const pump of mockVacuumPumps) {
-      if (pump.name !== "MechanicalVacuumPump") setMockVacuumPower(pump.name, false);
-    }
-    return mockVacuumStatus();
   },
   defaults() {
     const streamDataConfig = loadStreamDataConfig();

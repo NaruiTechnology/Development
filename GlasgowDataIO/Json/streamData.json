@@ -153,6 +153,6 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": true,
+    "IsProduction": false,
     "DumpData": true
 }

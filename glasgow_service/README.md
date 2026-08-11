@@ -85,6 +85,7 @@ for the current PowerShell session before starting:
 
 ```powershell
 Remove-Item Env:\GLASGOW_CONFIG -ErrorAction SilentlyContinue
+
 ```
 
 ## Run the pytest wet-run suite
@@ -169,6 +170,7 @@ One scan at a time. Concurrent REST or WebSocket requests return **HTTP
       "env": {
         "GLASGOW_TOKEN": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
         "GLASGOW_CONFIG": "C:\\Project\\IobeamTech\\Development\\GlasgowDataIO\\Json\\streamData.json",
+
         "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/Development:${env:PYTHONPATH}"
       },
       "justMyCode": false,
@@ -177,3 +179,17 @@ One scan at a time. Concurrent REST or WebSocket requests return **HTTP
   ]
 }
 #------------------------------------------
+### Active/standby executor
+
+The optional `vacuum_executor_app` is an always-running active/standby process,
+not a scheduler. Run it with `python -m glasgow_service.vacuum_executor_app`.
+Production deployment assets are in `deploy/vacuum-executor.service` and
+`examples/vacuum-executor.env.example`; use at least three Redis Sentinel
+endpoints. Configure the separate Raspberry Pi service with
+`examples/sbc-vacuum.env.example` and enable `SBC_REQUIRE_FENCING` there.
+
+The bundled deploy/setup-redis-sentinel.sh helper is for Linux SBC hosts only.
+For a Windows POC, run Redis/Sentinel in WSL or a container and set
+VACUUM_REDIS_SENTINELS to those reachable endpoints. A single Sentinel with
+quorum 1 is suitable only for a smoke test; production needs replicated Redis
+plus three or more Sentinel processes on independent nodes.

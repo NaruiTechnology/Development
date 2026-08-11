@@ -1,6 +1,8 @@
 fastapi>=0.110
 uvicorn[standard]>=0.27
 pydantic>=2.5
+redis<8,>=5.0
+httpx<1,>=0.27
 
 [examples]
 websockets>=12

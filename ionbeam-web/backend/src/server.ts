@@ -24,6 +24,7 @@ import tls from "node:tls";
 import type { IncomingMessage } from "node:http";
 
 import { config } from "./config";
+import { readVacuumEnabled } from "./vacuumConfig";
 import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
@@ -1168,22 +1169,17 @@ app.use("/api/scan/raster/run", requireScanPrivilege);
 app.use("/api/scan/vector/run", requireScanPrivilege);
 
 if (config.mock) {
-  app.get("/api/status", (_req, res) => res.json(mockRest.status()));
+  app.get("/api/status", async (_req, res) => {
+    const status = mockRest.status();
+    status.vacuum_enabled = readVacuumEnabled(config.vacuumConfigPath);
+    res.json(status);
+  });
   app.get("/api/defaults", (_req, res) => res.json(mockRest.defaults()));
-  app.get("/api/vacuum", (_req, res) => res.json(mockRest.vacuumStatus()));
-  app.post("/api/vacuum/acquire", (_req, res) => res.json(mockRest.acquireVacuum()));
-  app.post("/api/vacuum/release", (_req, res) => res.json(mockRest.releaseVacuum()));
-  app.post("/api/vacuum/pumps/:name/power", (req, res) => {
-    const status = mockRest.setVacuumPower(req.params.name, Boolean(req.body?.power));
-    status ? res.json(status) : res.status(404).json({ detail: `unknown vacuum pump: ${req.params.name}` });
-  });
-  app.post("/api/vacuum/pumps/:name/read", (req, res) => {
-    const status = mockRest.setVacuumRead(req.params.name, Boolean(req.body?.checked));
-    status ? res.json(status) : res.status(404).json({ detail: `unknown vacuum pump: ${req.params.name}` });
-  });
-  app.post("/api/vacuum/stop", (_req, res) => res.json(mockRest.stopVacuum()));
   app.post("/api/scan/raster/run", (req, res) => res.json(mockRest.runRaster(req.body)));
   app.post("/api/scan/vector/run", (req, res) => res.json(mockRest.runVector(req.body)));
+  app.post("/api/scan/abort", (_req, res) => {
+    res.status(501).json({ detail: "mock stream uses direct WebSocket stop" });
+  });
 
   // Last-scan downloads. The CSV is generated synthetically in-process;
   // the figure endpoint returns 501 because matplotlib only runs on the
@@ -1890,7 +1886,7 @@ async function proxyScanRunWithTelemetry(
   });
 }
 
-const VECTOR_TRACE_LOG_FILE = "/tmp/ionbeam-vector-trace.log";
+const VECTOR_TRACE_LOG_FILE = path.join(os.tmpdir(), "ionbeam-vector-trace.log");
 
 function appendVectorTrace(
   kind: "request" | "response",
@@ -2656,7 +2652,18 @@ function scheduleBackendRestartAfterResponse(
 function restartBackend(restart: BackendRestartResult): void {
   const spawnReplacement = () => {
     if (restart.mode === "command" && restart.command) {
-      const child = spawn("bash", ["-lc", `sleep 1; exec ${restart.command}`], {
+      const shell = process.platform === "win32" ? "powershell.exe" : "bash";
+      const shellArgs =
+        process.platform === "win32"
+          ? [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-Command",
+              "Start-Sleep -Seconds 1; " + restart.command,
+            ]
+          : ["-lc", "sleep 1; exec " + restart.command];
+      const child = spawn(shell, shellArgs, {
         detached: true,
         stdio: "ignore",
         cwd: path.resolve(__dirname, ".."),

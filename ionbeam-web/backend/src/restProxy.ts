@@ -9,12 +9,26 @@
 import { Router } from "express";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import { config } from "./config";
+import { readVacuumEnabled } from "./vacuumConfig";
 
 export function buildRestProxy(): Router {
   const router = Router();
-  let vacuumEnabled: boolean | null = null;
-
+  type RoutedRequest = {
+    url?: string;
+    originalUrl?: string;
+    vacuumProxyTarget?: boolean;
+    sampleStageProxyTarget?: boolean;
+  };
+  const isVacuumRequest = (req: RoutedRequest): boolean =>
+    req.vacuumProxyTarget === true ||
+    req.url?.startsWith("/vacuum") === true ||
+    req.originalUrl?.startsWith("/api/vacuum") === true;
+  const isSampleStageRequest = (req: RoutedRequest): boolean =>
+    req.sampleStageProxyTarget === true ||
+    req.url?.startsWith("/stage") === true ||
+    req.originalUrl?.startsWith("/api/stage") === true;
   router.get("/status", async (_req, res) => {
+    const vacuumEnabled = readVacuumEnabled(config.vacuumConfigPath);
     try {
       const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
         headers: config.glasgowToken
@@ -37,7 +51,7 @@ export function buildRestProxy(): Router {
       }
       try {
         const status = JSON.parse(text) as { vacuum_enabled?: unknown };
-        vacuumEnabled = status.vacuum_enabled === true;
+        status.vacuum_enabled = vacuumEnabled;
         res.status(upstream.status).json(status);
       } catch {
         res.status(502).json({
@@ -47,44 +61,38 @@ export function buildRestProxy(): Router {
         });
       }
     } catch (err) {
-      vacuumEnabled = false;
       const detail = err instanceof Error ? err.message : String(err);
       res.json({
         state: "disconnected",
         last_error: `glasgow_service unreachable: ${detail}`,
         scans_completed: 0,
         chunks_in_flight: 0,
-        vacuum_enabled: false,
+        vacuum_enabled: vacuumEnabled,
       });
     }
   });
 
-  router.use("/vacuum", async (_req, res, next) => {
-    if (vacuumEnabled === null) {
-      try {
-        const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
-          headers: config.glasgowToken
-            ? { Authorization: `Bearer ${config.glasgowToken}` }
-            : undefined,
-          signal: AbortSignal.timeout(2_000),
-        });
-        if (upstream.ok) {
-          const status = (await upstream.json()) as { vacuum_enabled?: unknown };
-          vacuumEnabled = status.vacuum_enabled === true;
-        }
-      } catch {
-        // Let the proxy return its normal upstream-unreachable response.
-      }
-    }
-    if (vacuumEnabled !== false) {
+  router.use("/vacuum", async (req, res, next) => {
+    if (readVacuumEnabled(config.vacuumConfigPath)) {
+      (req as RoutedRequest).vacuumProxyTarget = true;
       next();
       return;
     }
     res.status(404).json({ detail: "vacuum controller is disabled" });
   });
 
+  router.use("/stage", (req, _res, next) => {
+    (req as RoutedRequest).sampleStageProxyTarget = true;
+    next();
+  });
+
   const proxy = createProxyMiddleware({
     target: config.proxyTargetHttp,
+    router: (req) => isVacuumRequest(req)
+      ? config.vacuumControllerUrl
+      : isSampleStageRequest(req)
+        ? config.sampleStageControllerUrl
+        : config.proxyTargetHttp,
     changeOrigin: true,
     pathRewrite: { "^/api": "" },
     selfHandleResponse: true,
@@ -135,7 +143,7 @@ export function buildRestProxy(): Router {
           }
         });
       },
-      error: (err, _req, res) => {
+      error: (err, req, res) => {
         // Surface upstream-down failures as a clean JSON error rather than a
         // 502 with an HTML body.
         if ("writeHead" in res && !res.headersSent) {
@@ -145,7 +153,11 @@ export function buildRestProxy(): Router {
           JSON.stringify({
             error: "upstream_unreachable",
             detail: err.message,
-            target: config.proxyTargetHttp,
+            target: isVacuumRequest(req)
+              ? config.vacuumControllerUrl
+              : isSampleStageRequest(req)
+                ? config.sampleStageControllerUrl
+                : config.proxyTargetHttp,
           })
         );
       },

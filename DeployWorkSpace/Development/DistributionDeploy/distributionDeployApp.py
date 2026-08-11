@@ -6,8 +6,8 @@
 # WorkThread, start the thread, and join.
 #
 # Run from the project root (so 'workstates' and 'workthreads' are importable):
-#   python3 distributionDeployApp.py
-#   python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json
+#   py -3 distributionDeployApp.py
+#   py -3 distributionDeployApp.py -j ./Json/DistributionDeploy.json
 #-------------------------------------------------------------------------------
 import gc
 import os

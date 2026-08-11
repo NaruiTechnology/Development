@@ -288,7 +288,22 @@ export function useScanStream() {
       return;
     }
     dispatch(streamStopping());
-    ws.close(1000, "stop");
+    void fetch(apiUrl("/api/scan/abort"), {
+      method: "POST",
+      headers: scanAuthHeaders(),
+    }).then(async (response) => {
+      if (response.ok) return;
+      // MOCK has no physical command to signal; closing its synthetic stream
+      // remains safe. Real hardware must never be cancelled through libusb.
+      if (response.status === 501) {
+        ws.close(1000, "mock-stop");
+        return;
+      }
+      const detail = await response.text().catch(() => "");
+      throw new Error(detail || `abort: HTTP ${response.status}`);
+    }).catch((error) => {
+      dispatch(streamErrored(error instanceof Error ? error.message : String(error)));
+    });
   }, [dispatch, flushRasterSamples, flushVectorSamples]);
 
   useEffect(() => {

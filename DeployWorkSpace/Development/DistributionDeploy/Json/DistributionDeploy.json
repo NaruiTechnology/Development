@@ -92,10 +92,34 @@
 					"extraRequirements":[
 						"glasgow_service/requirements.txt"
 					],
+					"verifyImports":[
+						"gpiozero",
+						"httpx",
+						"redis"
+					],
 					"venvDir":"C:\\Project\\Iobeam\\Deploy\\.venv",
 					"skipPrivateGitEditable":true,
 					"stopOnError":false,
 					"useBreakSystemPackages":false
+				},
+				"timeout":600.0
+			}
+		},
+		{
+			"installSbcGpioRuntime":{
+				"skip":false,
+				"transactionComplete":false,
+				"actionData":{
+					"aptPackages":[
+						"python3-gpiozero",
+						"python3-lgpio"
+					],
+					"venvDir":".venv",
+					"verifyImports":[
+						"gpiozero",
+						"lgpio"
+					],
+					"requireRaspberryPi":true
 				},
 				"timeout":600.0
 			}

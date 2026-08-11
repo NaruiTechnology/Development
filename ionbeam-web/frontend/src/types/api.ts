@@ -41,8 +41,9 @@ export interface VacuumSystemStatus {
   voltage: number;
   connected: boolean;
   simulation: boolean;
-  control_transport: "glasgow-gpio" | "vacuum-control-subtarget";
+  control_transport: "sbc-simulation" | "raspberry-pi-gpio";
   running: boolean;
+  runtime_seconds: number;
   cascade_stopped: boolean;
   isVacuumSystemReady: boolean;
   last_error: string | null;

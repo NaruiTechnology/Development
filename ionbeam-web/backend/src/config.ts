@@ -37,12 +37,16 @@ function currentLogin(): string {
 export interface Config {
   port: number;
   proxyTargetHttp: string;
+  vacuumControllerUrl: string;
+  sampleStageControllerUrl: string;
   proxyTargetWs: string;
   glasgowToken: string | null;
   mock: boolean;
   mobilityOnly: boolean;
   staticDir: string;
   configPath: string;
+  vacuumConfigPath: string;
+  sampleStageConfigPath: string;
   adminConfigPath: string;
   restartCmd: string;
   restartBackendAfterGlasgow: boolean;
@@ -89,6 +93,18 @@ const DEPLOYMENT_CONFIG_PATH = path.join(
   "GlasgowDataIO",
   "Json",
   "streamData.json"
+);
+const DEFAULT_VACUUM_CONFIG_PATH = path.join(
+  REPO_ROOT,
+  "GlasgowDataIO",
+  "Json",
+  "vacuumSystem.json"
+);
+const DEFAULT_SAMPLE_STAGE_CONFIG_PATH = path.join(
+  REPO_ROOT,
+  "GlasgowDataIO",
+  "Json",
+  "sampleStageSystem.json"
 );
 const DEFAULT_ADMIN_CONFIG_PATH = path.join(
   REPO_ROOT,
@@ -371,6 +387,8 @@ const resolvedOperationDbUser = normalizeLocalPeerUser(
 export const config: Config = {
   port: Number(process.env.PORT ?? 4000),
   proxyTargetHttp: process.env.PROXY_TARGET_HTTP ?? "http://127.0.0.1:8765",
+  vacuumControllerUrl: process.env.VACUUM_CONTROLLER_URL ?? "http://127.0.0.1:8780",
+  sampleStageControllerUrl: process.env.SAMPLE_STAGE_CONTROLLER_URL ?? "http://127.0.0.1:8790",
   proxyTargetWs: process.env.PROXY_TARGET_WS ?? "ws://127.0.0.1:8765",
   glasgowToken: process.env.GLASGOW_TOKEN?.trim() || null,
   mock: bool(process.env.MOCK, false),
@@ -381,6 +399,12 @@ export const config: Config = {
     process.env.STATIC_DIR ?? "../frontend/dist"
   ),
   configPath: resolveConfigPath(process.env.GLASGOW_CONFIG),
+  vacuumConfigPath: path.resolve(
+    process.env.SBC_VACUUM_CONFIG?.trim() || DEFAULT_VACUUM_CONFIG_PATH
+  ),
+  sampleStageConfigPath: path.resolve(
+    process.env.SAMPLE_STAGE_CONFIG?.trim() || DEFAULT_SAMPLE_STAGE_CONFIG_PATH
+  ),
   adminConfigPath: resolveAdminConfigPath(process.env.IOBEAM_ADMIN_CONFIG),
   restartCmd:
     process.env.GLASGOW_RESTART_CMD?.trim() ||
