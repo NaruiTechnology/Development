@@ -98,6 +98,12 @@ class VacuumConfig(BaseModel):
             raise ValueError("vacuum control sub-target supports at most 8 pumps")
         writes = [pump.write for pump in self.pumps]
         reads = [pump.read for pump in self.pumps]
+        names = [pump.name for pump in self.pumps]
+        if len(set(names)) != len(names):
+            raise ValueError("vacuum equipment names must be unique")
+        for required in (MECHANICAL_PUMP, "TurboVacuumPump"):
+            if required not in names:
+                raise ValueError(f"vacuum config requires {required}")
         if len(set(writes)) != len(writes):
             raise ValueError("vacuum Port A output pins must be unique")
         if len(set(reads)) != len(reads):
@@ -160,9 +166,10 @@ class VacuumController:
             self.gpio = RaspberryPiGPIODevice(
                 {pump.write: config.sbc.gpio[pump.write] for pump in config.pumps},
                 {pump.read: config.sbc.gpio[pump.read] for pump in config.pumps},
-                initial_outputs={
-                    pump.write: pump.power.lower() == "on" for pump in config.pumps
-                },
+                # Process construction must always be electrically safe. The
+                # controller explicitly energizes the mechanical pump only
+                # after configuration and optional authority checks succeed.
+                initial_outputs={pump.write: False for pump in config.pumps},
                 active_high=config.sbc.active_high,
                 input_pull_up=config.sbc.input_pull_up,
             )
@@ -358,6 +365,7 @@ class VacuumController:
             self._cascade_stopped = False
         if name != MECHANICAL_PUMP and not checked:
             await self.set_power(name, False)
+            await self.poll_once()
             return
         await self.poll_once()
 
@@ -422,10 +430,29 @@ class VacuumController:
                     state.border = "off"
             self._updated_at = datetime.now(timezone.utc).isoformat()
             self._last_error = None
+            await self._enforce_interlocks()
             if not self._cascade_stopped:
                 await self._advance_cascade()
         except Exception as exc:
-            self._last_error = str(exc)
+            errors = [str(exc)]
+            # Input state is unknown. Attempt the safe downstream state even
+            # when the read path failed; keep the backing pump untouched.
+            for name, state in self._states.items():
+                if name == MECHANICAL_PUMP or not state.power:
+                    continue
+                try:
+                    async with self._io_lock:
+                        self._require_authority()
+                        await self.gpio.write(state.write, False)
+                    state.power = False
+                    state.port_a_value = 0.0
+                    state.value = None
+                    state.border = "off"
+                except Exception as shutdown_exc:
+                    errors.append(f"failed to de-energize {name}: {shutdown_exc}")
+                    state.border = "error"
+            self._cascade_stopped = True
+            self._last_error = "; ".join(errors)
             for state in self._states.values():
                 state.port_b_value = 0.0
                 state.ready = False
@@ -461,6 +488,21 @@ class VacuumController:
             for state in uh:
                 if not state.power:
                     await self.set_power(state.name, True, automatic=True)
+
+    async def _enforce_interlocks(self) -> None:
+        mechanical = self._states.get(MECHANICAL_PUMP)
+        turbo = self._states.get("TurboVacuumPump")
+        uh = [state for state in self._states.values() if state.group == UH_GROUP]
+        # Reconcile from downstream to upstream before advancing. A dropped
+        # comparator is an interlock event, not merely a dashboard update.
+        # Keep the backing/mechanical pump running so the chamber can recover.
+        if turbo and not turbo.ready:
+            for state in uh:
+                if state.power:
+                    await self.set_power(state.name, False, automatic=True)
+        if mechanical and not mechanical.ready:
+            if turbo and turbo.power:
+                await self.set_power(turbo.name, False, automatic=True)
 
     async def _poll_worker(self) -> None:
         while True:

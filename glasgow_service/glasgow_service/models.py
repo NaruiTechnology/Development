@@ -39,6 +39,10 @@ class VacuumPowerRequest(BaseModel):
     power: bool
 
 
+class VacuumSimulationRequest(BaseModel):
+    ready: bool
+
+
 class VacuumAcquireRequest(BaseModel):
     expected_channels: dict[str, float] = Field(default_factory=dict)
 

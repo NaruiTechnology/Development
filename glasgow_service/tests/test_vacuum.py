@@ -68,6 +68,18 @@ def test_vacuum_equipment_count_is_configuration_driven_with_minimum_three():
         VacuumConfig.model_validate(two)
 
 
+def test_vacuum_config_requires_unique_names_and_core_sequence_stages():
+    payload = json.loads(CONFIG_PATH.read_text())
+    payload["VacuumPumps"][1]["name"] = MECHANICAL_PUMP
+    with pytest.raises(ValueError, match="names must be unique"):
+        VacuumConfig.model_validate(payload)
+
+    payload = json.loads(CONFIG_PATH.read_text())
+    payload["VacuumPumps"][0]["name"] = "OtherBackingPump"
+    with pytest.raises(ValueError, match="requires MechanicalVacuumPump"):
+        VacuumConfig.model_validate(payload)
+
+
 def test_disabled_vacuum_bypasses_controller_config_validation(tmp_path):
     disabled_config = tmp_path / "vacuum-disabled.json"
     disabled_config.write_text(json.dumps({"Enable": False}))
@@ -157,18 +169,9 @@ def test_simulated_vacuum_cascade_and_stop():
             assert controller.status().isVacuumSystemReady is True
 
             await controller.set_simulated_read("TurboVacuumPump", False)
-            assert controller.status().pumps[1].power is False
-            assert controller.status().pumps[0].ready is True
-            await controller.set_simulated_read("UHVacuumPump_1", False)
-            assert controller.status().pumps[2].power is False
-            assert controller.status().pumps[0].ready is True
-            await controller.set_simulated_read("UHVacuumPump_2", False)
             states = {pump.name: pump for pump in controller.status().pumps}
             assert states["MechanicalVacuumPump"].power is True
-            assert states["MechanicalVacuumPump"].border == "waiting"
-            assert states["MechanicalVacuumPump"].simulation_read is False
-            assert states["MechanicalVacuumPump"].value == pytest.approx(0.15)
-            assert states["MechanicalVacuumPump"].port_b_value == 0
+            assert states["MechanicalVacuumPump"].ready is True
             assert all(
                 state.power is False
                 and state.border == "off"
@@ -180,7 +183,7 @@ def test_simulated_vacuum_cascade_and_stop():
             assert controller.status().cascade_stopped is True
             assert controller.status().isVacuumSystemReady is False
             assert controller.gpio.output_level("A0") is True
-            assert (await controller.gpio.read_port_b())["B0"] == 0
+            assert (await controller.gpio.read_port_b())["B0"] == 1
         finally:
             await controller.close()
 
@@ -217,6 +220,35 @@ def test_resume_cascade_advances_from_current_ready_state():
             states = {pump.name: pump for pump in controller.status().pumps}
             assert controller.status().cascade_stopped is False
             assert states["TurboVacuumPump"].power is True
+        finally:
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_upstream_interlock_loss_deenergizes_downstream_stages():
+    async def scenario():
+        controller, _commands = simulated_controller()
+        await controller.start()
+        try:
+            await controller.set_simulated_read(MECHANICAL_PUMP, True)
+            await controller.set_simulated_read("TurboVacuumPump", True)
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert states["TurboVacuumPump"].power is True
+            assert states["UHVacuumPump_1"].power is True
+            assert states["UHVacuumPump_2"].power is True
+
+            await controller.set_simulated_read("TurboVacuumPump", False)
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert states["TurboVacuumPump"].power is False
+            assert states["UHVacuumPump_1"].power is False
+            assert states["UHVacuumPump_2"].power is False
+
+            await controller.resume_cascade()
+            await controller.set_simulated_read(MECHANICAL_PUMP, False)
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert states[MECHANICAL_PUMP].power is True
+            assert states["TurboVacuumPump"].power is False
         finally:
             await controller.close()
 
@@ -365,6 +397,7 @@ def test_port_b_read_failure_clears_stale_voltage_and_readiness():
             state.power = True
             state.port_b_value = config.device.voltage
             state.ready = True
+            await device.write(state.write, True)
 
         async def failed_read_port_b() -> dict[str, int]:
             raise RuntimeError("GPIO read failed")
@@ -375,5 +408,8 @@ def test_port_b_read_failure_clears_stale_voltage_and_readiness():
         assert controller.status().isVacuumSystemReady is False
         assert all(state.port_b_value == 0.0 for state in controller.status().pumps)
         assert all(state.ready is False for state in controller.status().pumps)
+        assert controller.status().cascade_stopped is True
+        assert device.output_level("A0") is True
+        assert all(device.output_level(pin) is False for pin in ("A1", "A2", "A3"))
 
     asyncio.run(scenario())

@@ -179,3 +179,24 @@ For a single-VM software smoke test, run `bash deploy/setup-redis-sentinel.sh`.
 It installs Redis and one local Sentinel (quorum 1); this is not a production
 failover configuration. Production needs replicated Redis plus three or more
 Sentinel processes on independent nodes.
+
+### Start the complete local stack
+
+The repository-relative admin script installs location-aware systemd units and
+controls the system Glasgow/executor services together with the current user's
+SBC vacuum, Node backend, and Vite frontend services:
+
+```bash
+cd /path/to/Operations
+./Scripts/manage-local-system.sh restart
+./Scripts/manage-local-system.sh status
+./Scripts/manage-local-system.sh logs
+```
+
+Run it from the normal desktop/service account; it invokes `sudo` only for the
+system unit installation and system services. The first install creates local
+executor defaults in `/etc/vacuum-executor.env` without overwriting an existing
+file. A local executor still requires Redis Sentinel; initialize the single-VM
+development instance with `deploy/setup-redis-sentinel.sh` before starting it.
+After `start` or `restart`, open `http://127.0.0.1:5173`; do not run a second
+`npm run dev`, because the backend and frontend are already supervised.

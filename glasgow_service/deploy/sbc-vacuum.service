@@ -9,6 +9,7 @@ User=vacuum
 Group=gpio
 WorkingDirectory=/opt/ionbeam/Development/glasgow_service
 EnvironmentFile=/etc/sbc-vacuum.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/ionbeam/.venv/bin/python -m glasgow_service.sbc_vacuum_app
 Restart=always
 RestartSec=2
@@ -16,6 +17,10 @@ KillSignal=SIGINT
 TimeoutStopSec=15
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StateDirectory=sbc-vacuum
+ReadWritePaths=/var/lib/sbc-vacuum
 
 [Install]
 WantedBy=multi-user.target

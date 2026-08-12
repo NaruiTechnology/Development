@@ -1741,6 +1741,13 @@ async function requireVacuumPrivilege(
   res: express.Response,
   next: express.NextFunction,
 ): Promise<void> {
+  // Vacuum status is read-only telemetry and is polled as soon as the local
+  // dashboard opens. Keep control operations authenticated, but do not make
+  // service health/status depend on an interactive SMS session.
+  if (req.method === "GET") {
+    next();
+    return;
+  }
   const session = verifyAdminSessionToken(readScanAuthToken(req));
   if (!session) {
     res.status(401).json({ ok: false, error: "vacuum control requires a valid user token" });

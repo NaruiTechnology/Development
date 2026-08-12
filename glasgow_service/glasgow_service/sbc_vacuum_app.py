@@ -17,6 +17,7 @@ from .execution_authority import AuthorityDenied, remote_authority_from_environm
 from .models import (
     VacuumAcquireRequest,
     VacuumPowerRequest,
+    VacuumSimulationRequest,
     VacuumSystemStatus,
 )
 from .vacuum import VacuumController, find_vacuum_config_path, load_vacuum_config
@@ -171,6 +172,19 @@ def create_app() -> FastAPI:
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
         return controller().status()
+
+    @app.post("/vacuum/simulation/{name}/ready", response_model=VacuumSystemStatus,
+              dependencies=mutation_dependencies)
+    async def simulation_ready(name: str, req: VacuumSimulationRequest):
+        """Set one simulated comparator; unavailable in GPIO mode."""
+        target = controller()
+        try:
+            await target.set_simulated_read(name, req.ready)
+        except KeyError as exc:
+            raise HTTPException(404, f"unknown vacuum pump: {name}") from exc
+        except (AuthorityDenied, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return target.status()
 
     @app.post("/vacuum/leadership/renew", response_model=VacuumSystemStatus,
               dependencies=mutation_dependencies)

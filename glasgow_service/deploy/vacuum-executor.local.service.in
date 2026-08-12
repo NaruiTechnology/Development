@@ -1,0 +1,19 @@
+[Unit]
+Description=Local vacuum executor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=@ADMIN_USER@
+WorkingDirectory=@SERVICE_ROOT@
+Environment=PYTHONPATH=@OPERATIONS_ROOT@/Development:@SERVICE_ROOT@
+EnvironmentFile=/etc/vacuum-executor.env
+ExecStart=@PYTHON_BIN@ -m glasgow_service.vacuum_executor_app
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

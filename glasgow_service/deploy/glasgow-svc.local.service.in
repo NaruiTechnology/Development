@@ -1,0 +1,19 @@
+[Unit]
+Description=Local Glasgow device service
+After=network.target
+
+[Service]
+Type=exec
+User=@ADMIN_USER@
+WorkingDirectory=@SERVICE_ROOT@
+Environment=PYTHONPATH=@OPERATIONS_ROOT@/Development:@SERVICE_ROOT@
+Environment=GLASGOW_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/streamData.json
+EnvironmentFile=-/etc/glasgow-svc.env
+ExecStart=@UVICORN_BIN@ glasgow_service.api:app --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
