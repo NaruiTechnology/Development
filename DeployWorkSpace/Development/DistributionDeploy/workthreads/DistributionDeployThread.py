@@ -39,6 +39,8 @@ class DistributionDeployThread(WorkThread):
             deployment.get("GlasgowConfig", ""))
         self._glasgowLog = deployment.get("GlasgowLog", "/tmp/glasgow.log")
         self._isProduction = self._truthy(deployment.get("IsProduction", False))
+        self._workflowSucceeded = False
+        self._workflowError = None
 
     # -- properties exposed to states ---------------------------------------
     @property
@@ -121,12 +123,15 @@ class DistributionDeployThread(WorkThread):
             else:
                 self._logger.info(
                     Consts.COMPLETED_MSG_FORMAT.format(type(self).__name__))
+                self._workflowSucceeded = True
         else:
             # Previous state failed -> abort. We could surface a richer
             # error; mirroring LoadFPGAThread we just halt the queue.
             self._logger.error(
                 "State '{}' did not succeed; aborting workflow.".format(
                     type(workState).__name__.replace(Consts.STATE_OBJ_SUFFIX, '')))
+            self._workflowError = "state failed: {}".format(
+                type(workState).__name__.replace(Consts.STATE_OBJ_SUFFIX, ''))
             state = None
 
             self._logger.info('Calling {}'.format(
@@ -144,15 +149,8 @@ class DistributionDeployThread(WorkThread):
                 # Honor both control flags
                 skip = bool(actionConfig.get(Consts.SKIP, False))
                 done = bool(actionConfig.get(TRANSACTION_COMPLETE, False))
-                effectiveSkip = skip and not self._isProduction
                 if skip:
-                    if effectiveSkip:
-                        self._logger.info("[skip=true] '{}' skipped.".format(key))
-                    else:
-                        self._logger.info(
-                            "[skip=true] '{}' enabled because IsProduction is true.".format(key)
-                        )
-                if effectiveSkip:
+                    self._logger.info("[skip=true] '{}' skipped.".format(key))
                     continue
                 if done:
                     self._logger.info(
@@ -166,13 +164,17 @@ class DistributionDeployThread(WorkThread):
                         "'{0}'. Make sure 'workstates/{0}_state.py' exists "
                         "and is importable from the current working dir."
                         .format(key))
-                    continue
+                    self._workflowError = "missing workstate: {}".format(key)
+                    self._queue = queue.Queue()
+                    return None
                 instance.Config = self._config
                 instance.Logger = self._logger
                 self._queue.put(instance)
 
         if self._queue.qsize() > 0:
             state = self._queue.get_nowait()
+        elif self._workflowError is None:
+            self._workflowSucceeded = True
         return state
 
     # -- helpers ------------------------------------------------------------

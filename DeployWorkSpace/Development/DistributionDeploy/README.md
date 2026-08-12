@@ -1,5 +1,9 @@
 # DistributionDeploy
 
+For the supported internal localhost procedure, follow
+[`DEPLOYMENT_RUNBOOK.md`](DEPLOYMENT_RUNBOOK.md). It is the authoritative
+step-by-step build, deployment, verification, and administration guide.
+
 A project distribution and deploy workflow built on the **AutomationPy**
 framework. Mirrors the shape of `LoadFPGAImage` exactly:
 
@@ -38,14 +42,12 @@ The target environment is **Ubuntu 24.04 or newer**.
                                           └──────────────────────────┘
 ```
 
-Stage 1 — `buidCompiledDist.py` — runs on the developer host and produces
-`dist_app.zip` (compiled `.pyc` files + JSON configs + assets + `.venv`).
+Stage 1 — `Development/buidCompiledDist.py` — runs from the Operations root on
+the developer host and produces the application and versioned handoff archives.
 
 Stage 2 — `python3 distributionDeployApp.py` — drives the rest of the
-workflow on the deploy host. The first action of the workflow re-invokes
-`buidCompiledDist.py` so the same JSON-driven workflow can be used end to
-end (or you can mark `buildDistribution.skip = true` if you ship the zip
-out of band).
+workflow on the deploy host. Building is a separate source-host step; the
+target workflow consumes the bundled `dist_app*.zip` and never rebuilds it.
 
 The Python dependency step installs both `Development/requirements.txt` and
 `Development/glasgow_service/requirements.txt` into the deployment virtual
@@ -57,10 +59,9 @@ from being produced.
 
 ### Redis/Sentinel prerequisite
 
-The distribution contains the executor code and the helper
-`glasgow_service/deploy/setup-redis-sentinel.sh`, but it does not silently
-install or reconfigure Redis. Run the helper on a development VM for a local
-smoke test:
+The local workflow runs `glasgow_service/deploy/setup-redis-sentinel.sh` before
+starting services. It creates a single-host development topology. To run it
+again manually:
 
 ```bash
 cd ~/IobeamPlatform/Development/glasgow_service
@@ -164,33 +165,15 @@ sequences that share state across stages (nvm install).
 ### Build only:
 
 ```bash
-python3 buidCompiledDist.py                      # default: Cython -> .so, dist_app/ + dist_app.zip
-python3 buidCompiledDist.py --use-pyc            # legacy: bytecode .pyc instead
-python3 buidCompiledDist.py --no-zip             # folder only
-python3 buidCompiledDist.py --no-venv            # skip copying .venv
-python3 buidCompiledDist.py --verbose            # log every file as it compiles
-python3 buidCompiledDist.py --keep-py 'tests/*'  # extra patterns to leave as .py
-python3 buidCompiledDist.py --source . \
-                            --dist  ./dist_app \
-                            --output ./dist_app.zip
+cd /path/to/Operations
+python3 Development/buidCompiledDist.py
+python3 Development/buidCompiledDist.py --raw
 ```
 
 #### Compile modes
 
-* **`--use-cython` (default)** runs each `.py` through `cython -3` to produce
-  C, then compiles that C with `cc` to a native `.so`. Result: ELF shared
-  objects whose source is **not** recoverable. Bytecode decompilers like
-  `decompyle3` / `uncompyle6` don't apply (wrong file format), and
-  `inspect.getsource` returns "source not available".
-  Build-host needs: `cython` (`pip install Cython`), a C compiler
-  (`apt install build-essential`), and Python headers
-  (`apt install python3-dev`).
-  **Deploy-host constraint**: the target's Python major.minor must match
-  the build host's. A `.cpython-312-x86_64-linux-gnu.so` will only load
-  under Python 3.12 on x86_64 Linux.
-
-* **`--use-pyc`** is the legacy bytecode mode kept as a fast iteration
-  fallback. Trivially decompiled, so don't ship it externally.
+The default produces bytecode; `--raw` produces source for internal diagnosis.
+Keep build and target Python major/minor versions aligned.
 
 #### What's kept as `.py`
 
@@ -229,12 +212,10 @@ deployment is stable and the service environment has been made explicit.
 `Deployment.IsProduction` is the workflow-wide switch. When it is `false`,
 the deploy path stays on the localhost defaults.
 
-For Ionbeam web, production mode is used to:
-
-* restart the Node backend through `systemd`
-* skip the Vite frontend launcher
-* open the browser at `https://ionbeamtech.com/control`
-* keep the mobility host allowlist in sync with `iobeam_admin.hosts` before the Vite build starts
+Production mode does not invoke the local five-service manager or install the
+single-host Redis topology. The target's externally managed production
+services must already be installed; the workflow applies production endpoint
+overrides and verifies those endpoints.
 
 The remote VM layout and nginx setup live in:
 

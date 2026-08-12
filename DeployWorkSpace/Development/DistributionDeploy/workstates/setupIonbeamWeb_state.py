@@ -256,6 +256,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         ])
         with open(envFile, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
+        os.chmod(envFile, 0o600)
         self.info("[{}] wrote deployment backend env: {}"
                   .format(type(self).__name__, envFile))
 

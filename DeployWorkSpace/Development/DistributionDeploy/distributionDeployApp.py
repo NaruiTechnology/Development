@@ -11,6 +11,7 @@
 #-------------------------------------------------------------------------------
 import gc
 import os
+import sys
 
 from buildingblocks.automation_config import AutomationConfig
 from workthreads.DistributionDeployThread import DistributionDeployThread
@@ -61,7 +62,12 @@ def main():
     thread.join()
 
     gc.collect()
+    if not thread._workflowSucceeded:
+        print("Deployment failed: {}".format(
+            thread._workflowError or "workflow did not complete"), file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

@@ -18,7 +18,8 @@ REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis')
 
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = [
-    '*.ihex', '*.toml', 'requirements.txt', 'README.md', '*.service', '*.env.example', '*.sh'
+    '*.ihex', '*.toml', 'requirements.txt', 'README.md', '*.service',
+    '*.service.in', '*.env.example', '*.env.in', '*.sh'
 ]
 
 # Files to exclude from any copied tree or asset sweep.
@@ -48,6 +49,7 @@ SKIP_DIRS = {
 # extension (package.json, package-lock.json, tsconfig.json, vite.config.*,
 # .env.example, index.html, src/, public/, etc.).
 COPY_TREES = [
+    'Scripts',
     os.path.join('Development', 'ionbeam-web'),
     os.path.join('Development', 'IobeamAdmin'),
     os.path.join(

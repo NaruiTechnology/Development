@@ -37,7 +37,7 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "commandFormat": "sudo rm -rf '$1' && mkdir -p '$1' && sudo chmod -R u+rwX,go+rX '$1'"
+                    "commandFormat": "internal-guarded"
                 },
                 "timeout": 30.0
             }
@@ -96,7 +96,7 @@
                     "editableInstall": true,
                     "editableTarget": ".",
                     "verifyImports": ["gpiozero", "httpx", "redis"],
-                    "stopOnError": false,
+                    "stopOnError": true,
                     "useBreakSystemPackages": true
                 },
                 "timeout": 600.0
@@ -154,7 +154,7 @@
                     ],
                     "useVenv": true,
                     "venvActivate": ".venv/bin/activate",
-                    "stopOnError": false
+                    "stopOnError": true
                 },
                 "timeout": 1800.0
             }
@@ -238,7 +238,7 @@
         },
         {
             "launchGlasgowService": {
-                "skip": false,
+                "skip": true,
                 "transactionComplete": false,
                 "actionData": {
                     "root": "Development/GlasgowDataIO",
@@ -273,7 +273,7 @@
         },
         {
             "verifyGlasgowService": {
-                "skip": false,
+                "skip": true,
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "bash -c 'sleep {} && grep -E \"{}\" {} || true'",
@@ -309,7 +309,7 @@
         },
         {
             "launchIonbeamWebBackend": {
-                "skip": false,
+                "skip": true,
                 "transactionComplete": false,
                 "actionData": {
                     "dir": "Development/ionbeam-web/backend",
@@ -345,7 +345,7 @@
         },
         {
             "launchIonbeamWebFrontend": {
-                "skip": false,
+                "skip": true,
                 "transactionComplete": false,
                 "actionData": {
                     "dir": "Development/ionbeam-web/frontend",
@@ -378,6 +378,27 @@
             }
         },
         {
+            "setupLocalRedis": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "script": "Development/glasgow_service/deploy/setup-redis-sentinel.sh"
+                },
+                "timeout": 600.0
+            }
+        },
+        {
+            "manageLocalSystem": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "script": "Scripts/manage-local-system.sh",
+                    "operation": "restart"
+                },
+                "timeout": 300.0
+            }
+        },
+        {
             "verifyIonbeamWeb": {
                 "skip": false,
                 "transactionComplete": false,
@@ -385,6 +406,24 @@
                     "initialDelay": 3.0,
                     "pollInterval": 1.0,
                     "checks": [
+                        {
+                            "url": "http://127.0.0.1:8765/status",
+                            "expectedStatus": 200
+                        },
+                        {
+                            "url": "http://127.0.0.1:8766/health/ready",
+                            "expectedStatus": 200,
+                            "jsonContains": {
+                                "status": "ready"
+                            }
+                        },
+                        {
+                            "url": "http://127.0.0.1:8780/health/live",
+                            "expectedStatus": 200,
+                            "jsonContains": {
+                                "status": "ok"
+                            }
+                        },
                         {
                             "url": "http://127.0.0.1:4000/healthz",
                             "expectedStatus": 200,
