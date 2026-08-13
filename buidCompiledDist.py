@@ -15,6 +15,8 @@ except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
 
 
 REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis')
+REQUIRED_LOCAL_REDIS_APT_PACKAGES = (
+    'redis-server', 'redis-sentinel', 'redis-tools')
 
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = [
@@ -55,6 +57,13 @@ COPY_TREES = [
     os.path.join(
         'Development', 'GlasgowDataIO', 'IobeamControl', 'unittest', 'testData'),
 ]
+
+# Selected source trees have a different required location in the deployed
+# topology. manage-local-system.sh walks ../.. from Development/Scripts to
+# derive DeployRoot, so moving it to archive-root Scripts breaks path discovery.
+COPY_TREE_DESTINATIONS = {
+    'Scripts': os.path.join('Development', 'Scripts'),
+}
 
 # Patterns excluded while copying a tree from COPY_TREES. Keeps the zip
 # small by dropping dependency installs and build output -- the deploy
@@ -147,6 +156,51 @@ def validate_glasgow_runtime_dependencies(src_dir):
           ', '.join(REQUIRED_GLASGOW_RUNTIME_PACKAGES))
 
 
+def validate_local_redis_distribution_workflow(src_dir):
+    """Require Redis/Sentinel installation to be integrated in the workflow."""
+    workflow_root = _development_relative_path(
+        src_dir, 'DeployWorkSpace', 'Development', 'DistributionDeploy')
+    config_path = os.path.join(workflow_root, 'Json', 'DistributionDeploy.json')
+    state_path = os.path.join(
+        workflow_root, 'workstates', 'installRedisSentinel_state.py')
+    helper_path = _development_relative_path(
+        src_dir, 'glasgow_service', 'deploy', 'setup-redis-sentinel.sh')
+    missing = [
+        path for path in (config_path, state_path, helper_path)
+        if not os.path.isfile(path)
+    ]
+    if missing:
+        raise FileNotFoundError(
+            'Missing local Redis distribution workflow file(s): ' +
+            ', '.join(missing))
+
+    with open(config_path, 'r', encoding='utf-8') as stream:
+        config = json.load(stream)
+    actions = config.get('Actions', [])
+    action_names = [next(iter(action), None) for action in actions]
+    try:
+        install_index = action_names.index('installRedisSentinel')
+        setup_index = action_names.index('setupLocalRedis')
+    except ValueError as exc:
+        raise ValueError(
+            'DistributionDeploy.json must include installRedisSentinel and '
+            'setupLocalRedis actions') from exc
+    if install_index >= setup_index:
+        raise ValueError(
+            'installRedisSentinel must run before setupLocalRedis')
+
+    install_action = actions[install_index]['installRedisSentinel']
+    packages = install_action.get('actionData', {}).get('aptPackages', [])
+    missing_packages = sorted(
+        set(REQUIRED_LOCAL_REDIS_APT_PACKAGES) - set(packages))
+    if missing_packages:
+        raise ValueError(
+            'installRedisSentinel is missing apt packages: ' +
+            ', '.join(missing_packages))
+    print('Validated local Redis/Sentinel distribution workflow: ' +
+          ', '.join(REQUIRED_LOCAL_REDIS_APT_PACKAGES))
+
+
 def copy_source_trees(src_dir, dist_dir, trees):
     """Copy listed source trees verbatim from src_dir into dist_dir.
 
@@ -157,17 +211,40 @@ def copy_source_trees(src_dir, dist_dir, trees):
     """
     for rel_tree in trees:
         src_tree = os.path.join(src_dir, rel_tree)
+        # The builder is supported from either the repository root
+        # (Development/) or its parent workspace. In the latter layout the
+        # operational Scripts source is Development/Scripts, but it must
+        # always be emitted as Development/Scripts because the deployed
+        # workflow and the script's ../.. root discovery require that depth.
+        if (not os.path.isdir(src_tree) and
+                os.path.normpath(rel_tree) == 'Scripts'):
+            parent_layout = os.path.join(src_dir, 'Development', 'Scripts')
+            if os.path.isdir(parent_layout):
+                src_tree = parent_layout
         if not os.path.isdir(src_tree):
             print(f"Source tree [{rel_tree}] not found (skipping).")
             continue
-        dst_tree = os.path.join(dist_dir, rel_tree)
+        target_tree = COPY_TREE_DESTINATIONS.get(
+            os.path.normpath(rel_tree), rel_tree)
+        dst_tree = os.path.join(dist_dir, target_tree)
         shutil.copytree(
             src_tree,
             dst_tree,
             ignore=_tree_copy_ignore_for(rel_tree),
             dirs_exist_ok=True,
         )
-        print(f"Copied source tree: {rel_tree}")
+        print(f"Copied source tree: {rel_tree} -> {target_tree}")
+
+
+def validate_packaged_local_system_manager(dist_dir):
+    """Fail before archiving if the deployed local-system entrypoint is absent."""
+    manager = os.path.join(
+        dist_dir, 'Development', 'Scripts', 'manage-local-system.sh')
+    if not os.path.isfile(manager):
+        raise FileNotFoundError(
+            'Distribution is missing required local system manager: ' + manager)
+    print('Validated packaged local system manager: '
+          'Development/Scripts/manage-local-system.sh')
 
 
 def _tree_copy_ignore_for(rel_tree):
@@ -233,6 +310,7 @@ def copy_matching_assets(src_dir, dist_dir, patterns):
 
 def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
     validate_glasgow_runtime_dependencies(src_dir)
+    validate_local_redis_distribution_workflow(src_dir)
     # 1. Byte-compile all .py files to __pycache__ (skip in raw mode)
     if not deliver_raw:
         print(f"Compiling source in {src_dir} to .pyc...")
@@ -330,6 +408,10 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
 
     # 5. Copy assets (includes README.md)
     copy_matching_assets(src_dir, dist_dir, ASSET_PATTERNS)
+
+    # The script must retain Development/Scripts depth so its ../.. root
+    # discovery resolves to DeployRoot.
+    validate_packaged_local_system_manager(dist_dir)
 
     # 6. Zip the output content (distinct names so raw/compiled don't overwrite)
     zip_name = "dist_app_raw" if deliver_raw else "dist_app"

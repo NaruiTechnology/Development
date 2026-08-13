@@ -27,11 +27,19 @@ class setupLocalRedis_state(distributionDeploy_state):
                 "script", "Development/glasgow_service/deploy/setup-redis-sentinel.sh"))
             if not os.path.isfile(script):
                 raise FileNotFoundError("Redis setup script not found: {}".format(script))
-            cmd = "bash {}".format(shlex.quote(script))
+            cmd = "SKIP_REDIS_PACKAGE_INSTALL=1 bash {}".format(shlex.quote(script))
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 600.0) or 600.0)
             try:
                 self._success = await asyncio.wait_for(
                     self.commandAsyncio(cmd, self.deployRoot(), verbose=True), timeout=timeout)
+                if not self._success:
+                    stderr = (self._stderr.decode(errors="replace")
+                              if self._stderr else "<no stderr>")
+                    stdout = (self._stdout.decode(errors="replace")
+                              if self._stdout else "<no stdout>")
+                    self.error(
+                        "[{}] Redis/Sentinel setup failed\nstdout:\n{}\nstderr:\n{}"
+                        .format(type(self).__name__, stdout, stderr))
             except asyncio.TimeoutError:
                 self.error("[{}] timed out after {}s".format(type(self).__name__, timeout))
                 self._success = False

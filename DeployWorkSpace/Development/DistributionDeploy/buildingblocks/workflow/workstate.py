@@ -21,7 +21,7 @@ from abc import abstractmethod
 from ..event_handler import EventHandler
 from ..definitions import Consts
 from ..utils import *
-import inspect, subprocess, asyncio
+import inspect, subprocess, asyncio, signal
 
 
 class WorkstateMetaClass(type):
@@ -139,6 +139,8 @@ class WorkState(object):# abstract base class
 
     async def commandAsyncio(self, cmd, dirFrom = None, verbose=False): #*args):
         success = True
+        stdout = b""
+        stderr = b""
         cwd = os.getcwd()
         runfrom = cwd
         if dirFrom is not None and os.path.isdir(dirFrom):
@@ -152,6 +154,11 @@ class WorkState(object):# abstract base class
                         cwd=runfrom,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
+                        # Keep the parent's controlling terminal so sudo can
+                        # reuse the credential established by the entrypoint,
+                        # while isolating the command in its own process group
+                        # for timeout/cancellation cleanup.
+                        process_group=0,
                         env=os.environ.copy() # Ensures toolchain paths are inherited
                     )
             stdout, stderr = await proc.communicate()
@@ -161,6 +168,19 @@ class WorkState(object):# abstract base class
                 if verbose:
                     print(stdout.decode())
             success = proc.returncode == 0
+        except asyncio.CancelledError:
+            if 'proc' in locals() and proc.returncode is None:
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                    await asyncio.wait_for(proc.communicate(), timeout=10.0)
+                except (ProcessLookupError, asyncio.TimeoutError):
+                    if proc.returncode is None:
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        await proc.communicate()
+            raise
         except Exception as e:
             self._last_output = str(e)
             print("Error running command: {}, error:{}".format(cmd, e))

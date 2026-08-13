@@ -24,6 +24,8 @@
 #-------------------------------------------------------------------------------
 import asyncio
 import os
+import re
+import shlex
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -43,9 +45,9 @@ class installToolchain_state(distributionDeploy_state):
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
             aptOptions   = actionData.get("aptOptions", "-y --no-install-recommends")
-            aptPackages  = list(actionData.get("aptPackages", []) or [])
+            aptPackages  = list(dict.fromkeys(actionData.get("aptPackages", []) or []))
             pipxBoot     = list(actionData.get("pipxBootstrap", []) or [])
-            pipPackages  = list(actionData.get("pipPackages", []) or [])
+            pipPackages  = list(dict.fromkeys(actionData.get("pipPackages", []) or []))
             useVenv      = bool(actionData.get("useVenv", True))
             venvActivate = actionData.get("venvActivate", "")
             if venvActivate:
@@ -63,9 +65,29 @@ class installToolchain_state(distributionDeploy_state):
             # ---- assemble command list -----------------------------------
             commands = []
 
-            for pkg in aptPackages:
-                commands.append(("apt", "sudo apt install {} {}"
-                                 .format(aptOptions, pkg)))
+            invalidApt = [
+                package for package in aptPackages
+                if not re.fullmatch(r"[A-Za-z0-9.+-]+", str(package))
+            ]
+            if invalidApt:
+                raise ValueError("invalid apt package names: {}".format(invalidApt))
+            if aptPackages:
+                packageArgs = " ".join(
+                    shlex.quote(str(package)) for package in aptPackages)
+                commands.append(("apt", (
+                    "missing=''; "
+                    "for package in {packages}; do "
+                    "dpkg-query -W -f='${{Status}}' \"$package\" 2>/dev/null | "
+                    "grep -qx 'install ok installed' || missing=\"$missing $package\"; "
+                    "done; "
+                    "if [ -n \"$missing\" ]; then "
+                    "sudo -n true || {{ "
+                    "echo 'sudo credentials are required; run sudo -v in the launching terminal, then retry' >&2; "
+                    "exit 1; }}; "
+                    "sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 update && "
+                    "sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install {options} $missing; "
+                    "else echo 'all apt toolchain packages already installed'; fi"
+                ).format(packages=packageArgs, options=aptOptions)))
 
             for raw in pipxBoot:
                 commands.append(("pipx", raw))
@@ -86,18 +108,22 @@ class installToolchain_state(distributionDeploy_state):
                 return
 
             self.info("[{}] running {} install commands "
-                      "(apt={}, pipx={}, pip={})..."
+                      "(apt batches={}, pipx={}, pip={})..."
                       .format(type(self).__name__, len(commands),
-                              len(aptPackages), len(pipxBoot), len(pipPackages)))
+                              1 if aptPackages else 0, len(pipxBoot), len(pipPackages)))
 
             allOk = True
             for kind, cmd in commands:
                 self.info("[{}][{}] >> {}".format(type(self).__name__, kind, cmd))
                 ok = await self._runWithTimeout(cmd, self.deployRoot(), timeout)
                 if not ok:
-                    self.error("[{}][{}] FAILED: {}\n{}".format(
+                    stdout = (self._stdout.decode(errors="replace")
+                              if self._stdout else "<no stdout>")
+                    stderr = (self._stderr.decode(errors="replace")
+                              if self._stderr else "<no stderr>")
+                    self.error("[{}][{}] FAILED: {}\nstdout:\n{}\nstderr:\n{}".format(
                         type(self).__name__, kind, cmd,
-                        self._stderr.decode(errors="replace") if self._stderr else "<no stderr>"))
+                        stdout, stderr))
                     allOk = False
                     if stopOnError:
                         break

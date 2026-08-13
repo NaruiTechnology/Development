@@ -36,7 +36,9 @@ class installSbcGpioRuntime_state(distributionDeploy_state):
 
             self.info("[{}] Raspberry Pi detected: {}"
                       .format(type(self).__name__, model or "forced install"))
-            command = "sudo apt-get update && sudo apt-get install -y --no-install-recommends {}".format(
+            command = ("sudo apt-get -o DPkg::Lock::Timeout=600 update && "
+                       "sudo DEBIAN_FRONTEND=noninteractive apt-get "
+                       "-o DPkg::Lock::Timeout=600 install -y --no-install-recommends {}").format(
                 " ".join(shlex.quote(str(p)) for p in packages))
             if not await self._run(command, timeout):
                 self._success = False

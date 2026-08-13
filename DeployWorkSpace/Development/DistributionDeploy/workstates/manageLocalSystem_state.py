@@ -27,7 +27,7 @@ class manageLocalSystem_state(distributionDeploy_state):
             if command not in {"install", "start", "restart", "stop", "status"}:
                 raise ValueError("unsupported local-system operation: {}".format(command))
             script = self.resolveDeployPath(
-                actionData.get("script", "Scripts/manage-local-system.sh"))
+                actionData.get("script", "Development/Scripts/manage-local-system.sh"))
             if not os.path.isfile(script):
                 raise FileNotFoundError("local system manager not found: {}".format(script))
             os.chmod(script, os.stat(script).st_mode | 0o100)
@@ -38,6 +38,14 @@ class manageLocalSystem_state(distributionDeploy_state):
                 self._success = await asyncio.wait_for(
                     self.commandAsyncio(cmd, self.deployRoot(), verbose=True),
                     timeout=timeout)
+                if not self._success:
+                    stdout = (self._stdout.decode(errors="replace")
+                              if self._stdout else "<no stdout>")
+                    stderr = (self._stderr.decode(errors="replace")
+                              if self._stderr else "<no stderr>")
+                    self.error(
+                        "[{}] local system manager failed\nstdout:\n{}\nstderr:\n{}"
+                        .format(type(self).__name__, stdout, stderr))
             except asyncio.TimeoutError:
                 self.error("[{}] timed out after {}s".format(type(self).__name__, timeout))
                 self._success = False

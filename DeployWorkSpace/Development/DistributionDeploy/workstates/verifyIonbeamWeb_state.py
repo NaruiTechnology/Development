@@ -83,19 +83,21 @@ class verifyIonbeamWeb_state(distributionDeploy_state):
                 "expectedStatuses": {int(s) for s in statuses},
                 "contains": str(contains) if contains is not None else None,
                 "jsonContains": jsonContains if isinstance(jsonContains, dict) else None,
+                "requestTimeout": float(check.get("requestTimeout", 3.0)),
             }
         return {
             "url": str(check).strip(),
             "expectedStatuses": {200},
             "contains": None,
             "jsonContains": None,
+            "requestTimeout": 3.0,
         }
 
     def _checkUrl(self, check):
         url = check["url"]
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "DistributionDeploy"})
-            with urllib.request.urlopen(req, timeout=3.0) as response:
+            with urllib.request.urlopen(req, timeout=check["requestTimeout"]) as response:
                 status = getattr(response, "status", response.getcode())
                 body = response.read().decode("utf-8", errors="replace")
                 return self._checkResponse(check, status, body)

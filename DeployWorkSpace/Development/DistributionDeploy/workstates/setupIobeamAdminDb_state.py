@@ -204,7 +204,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
 
         installCmd = actionData.get(
             "installCommand",
-            "sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo apt-get install -y postgresql postgresql-contrib postgresql-client"
+            "sudo apt-get -o DPkg::Lock::Timeout=600 update && sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client"
         )
         cmd = ["bash", "-lc", installCmd]
         self.info("[{}][install-db] >> {}".format(type(self).__name__, installCmd))

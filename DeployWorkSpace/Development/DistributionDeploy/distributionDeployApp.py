@@ -11,10 +11,43 @@
 #-------------------------------------------------------------------------------
 import gc
 import os
+import subprocess
 import sys
+import threading
 
 from buildingblocks.automation_config import AutomationConfig
 from workthreads.DistributionDeployThread import DistributionDeployThread
+
+
+class SudoCredentialKeepalive:
+    """Authenticate once in the parent terminal and refresh sudo while deploying."""
+    def __init__(self, interval=60.0):
+        self.interval = interval
+        self._stop = threading.Event()
+        self._thread = None
+
+    def start(self):
+        print("Deployment requires administrative access; authenticating sudo...")
+        result = subprocess.run(["sudo", "-v"])
+        if result.returncode != 0:
+            raise RuntimeError("sudo authentication failed")
+        self._thread = threading.Thread(
+            target=self._refresh, name="sudo-credential-keepalive", daemon=True)
+        self._thread.start()
+
+    def _refresh(self):
+        while not self._stop.wait(self.interval):
+            result = subprocess.run(
+                ["sudo", "-n", "-v"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+            if result.returncode != 0:
+                break
+
+    def stop(self):
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
 
 
 def main():
@@ -57,9 +90,19 @@ def main():
     if args.mobility:
         config.Deployment["MobilityOnly"] = True
 
-    thread = DistributionDeployThread(config)
-    thread.Start()
-    thread.join()
+    sudo = SudoCredentialKeepalive()
+    try:
+        sudo.start()
+    except (OSError, RuntimeError) as exc:
+        print("Deployment cannot start: {}".format(exc), file=sys.stderr)
+        return 1
+
+    try:
+        thread = DistributionDeployThread(config)
+        thread.Start()
+        thread.join()
+    finally:
+        sudo.stop()
 
     gc.collect()
     if not thread._workflowSucceeded:

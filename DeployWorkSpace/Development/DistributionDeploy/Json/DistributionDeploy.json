@@ -95,7 +95,10 @@
                     "skipPrivateGitEditable": true,
                     "editableInstall": true,
                     "editableTarget": ".",
-                    "verifyImports": ["gpiozero", "httpx", "redis"],
+                    "verifyImports": ["amaranth", "gpiozero", "httpx", "redis", "uvicorn"],
+                    "requiredExecutables": {
+                        "uvicorn": "uvicorn[standard]>=0.27"
+                    },
                     "stopOnError": true,
                     "useBreakSystemPackages": true
                 },
@@ -120,10 +123,9 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "commandFormat": "sudo apt install -y {}",
                     "package": "uuid-runtime"
                 },
-                "timeout": 180.0
+                "timeout": 600.0
             }
         },
         {
@@ -134,7 +136,7 @@
                     "commandFormat": "iterative",
                     "aptOptions": "-y --no-install-recommends",
                     "aptPackages": ["git", "pipx", "yosys", "uuid-runtime", "build-essential", "python3-dev"],
-                    "pipxBootstrap": ["pipx ensurepath"],
+                    "pipxBootstrap": [],
                     "pipPackages": [
                         "Cython",
                         "debugpy",
@@ -163,9 +165,7 @@
             "installPostgreSQL": {
                 "skip": false,
                 "transactionComplete": false,
-                "actionData": {
-                    "commandFormat": "sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib postgresql-client && sudo systemctl enable --now postgresql"
-                },
+                "actionData": {},
                 "timeout": 900.0
             }
         },
@@ -190,7 +190,7 @@
                         "adminDbPort": "",
                         "adminDbSslMode": ""
                     },
-                    "installCommand": "sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo apt-get install -y postgresql postgresql-contrib postgresql-client"
+                    "installCommand": "sudo apt-get -o DPkg::Lock::Timeout=600 update && sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client"
                 },
                 "timeout": 900.0
             }
@@ -378,6 +378,20 @@
             }
         },
         {
+            "installRedisSentinel": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "aptPackages": [
+                        "redis-server",
+                        "redis-sentinel",
+                        "redis-tools"
+                    ]
+                },
+                "timeout": 600.0
+            }
+        },
+        {
             "setupLocalRedis": {
                 "skip": false,
                 "transactionComplete": false,
@@ -392,7 +406,7 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "script": "Scripts/manage-local-system.sh",
+                    "script": "Development/Scripts/manage-local-system.sh",
                     "operation": "restart"
                 },
                 "timeout": 300.0
@@ -441,6 +455,7 @@
                         {
                             "url": "http://127.0.0.1:4000/api/admin/iobeam/reports/activity?days=90",
                             "expectedStatus": 200,
+                            "requestTimeout": 15.0,
                             "jsonContains": {
                                 "ok": true
                             }

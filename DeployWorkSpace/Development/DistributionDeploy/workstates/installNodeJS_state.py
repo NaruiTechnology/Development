@@ -72,8 +72,8 @@ class installNodeJS_state(distributionDeploy_state):
                 # curl may not be present on a fresh/minimal system -- install it
                 # before attempting to fetch the nvm installer.
                 "command -v curl >/dev/null 2>&1 || { "
-                    "sudo apt-get update -qq && "
-                    "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl; "
+                    "sudo apt-get -o DPkg::Lock::Timeout=600 update -qq && "
+                    "sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y -qq curl; "
                 "}",
                 "curl -fsSL -o- {url} | bash".format(url=nvmUrl),
                 'export NVM_DIR="$HOME/.nvm"',
