@@ -3902,7 +3902,8 @@ body {
   border-radius: 999px;
 }
 
-.app-header__sample-stage img {
+.app-header__sample-stage img,
+.app-header__high-voltage img {
   width: 28px;
   height: 28px;
   object-fit: contain;
@@ -3912,6 +3913,20 @@ body {
 .app-header__sample-stage,
 .app-header__sample-stage:disabled {
   opacity: 1;
+}
+
+.app-header__high-voltage img {
+  filter: grayscale(1) brightness(0.7);
+  transition: filter 160ms ease, opacity 160ms ease;
+}
+
+.app-header__high-voltage--on img {
+  filter: saturate(1.25) brightness(1.25) drop-shadow(0 0 5px #ffc928);
+}
+
+.app-header__high-voltage:disabled img {
+  opacity: 0.35;
+  filter: grayscale(1) brightness(0.55);
 }
 
 .app-header__controller--busy {

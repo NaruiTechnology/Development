@@ -108,6 +108,12 @@ def create_app() -> FastAPI:
     async def vacuum_power(name: str, payload: dict[str, bool]) -> dict[str, object]:
         return await forward(active_runtime().set_power(name, bool(payload.get("power"))))
 
+    @app.post("/vacuum/high-voltage/power")
+    async def high_voltage_power(payload: dict[str, bool]) -> dict[str, object]:
+        return await forward(
+            active_runtime().set_high_voltage_power(bool(payload.get("power")))
+        )
+
     @app.post("/vacuum/stop")
     async def vacuum_stop() -> dict[str, object]:
         return await forward(active_runtime().stop_vacuum())

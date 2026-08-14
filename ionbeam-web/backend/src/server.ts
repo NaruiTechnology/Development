@@ -509,7 +509,9 @@ app.post(
 
 app.get("/api/admin/iobeam/auth/current-account", async (req, res) => {
   res.set("Cache-Control", "no-store");
-  const session = verifyAdminSessionToken(readScanAuthToken(req));
+  const presentedToken = readScanAuthToken(req);
+  const session = verifyAdminSessionToken(presentedToken);
+  const invalidPresentedSession = Boolean(presentedToken) && session === null;
   const login = session?.login || currentLoginName();
   try {
     const info = await readAdminWithBackup();
@@ -524,7 +526,10 @@ app.get("/api/admin/iobeam/auth/current-account", async (req, res) => {
           ? findAdminUserById(info.data, session.userId)
           : findAdminUser(info.data, login);
     const user = dbUser ?? configUser;
-    const sessionExpired = user ? await isAdminSessionExpired(user) : false;
+    // Do not silently fall back to the OS account when the browser actually
+    // presented an invalid token. The frontend must discard that stale
+    // identity and ask the operator to authenticate again.
+    const sessionExpired = invalidPresentedSession || (user ? await isAdminSessionExpired(user) : false);
     res.json({
       ok: true,
       login,

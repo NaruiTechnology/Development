@@ -50,6 +50,10 @@ class VacuumFailoverRuntime:
         self.require_active()
         return await self.sbc.set_power(pump_name, power)
 
+    async def set_high_voltage_power(self, power: bool) -> dict[str, object]:
+        self.require_active()
+        return await self.sbc.set_high_voltage_power(power)
+
     async def stop_vacuum(self) -> dict[str, object]:
         self.require_active()
         return await self.sbc.stop()

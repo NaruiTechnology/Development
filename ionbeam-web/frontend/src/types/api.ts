@@ -45,6 +45,7 @@ export interface VacuumSystemStatus {
   runtime_seconds: number;
   cascade_stopped: boolean;
   isVacuumSystemReady: boolean;
+  high_voltage_power: boolean;
   last_error: string | null;
   updated_at: string | null;
   pumps: VacuumPumpState[];

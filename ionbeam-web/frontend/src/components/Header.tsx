@@ -18,6 +18,7 @@ import { Icon } from "./Icon";
 import { LanguagePicker } from "./LanguagePicker";
 import { AuthDialog, type SignedInUser } from "./AuthDialog";
 import sampleStageImage from "../assets/SampleStage.png";
+import highVoltageImage from "../assets/HighVoltageTransformer.png";
 
 const BRAND_LOGO_DATA_URI =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAFEUlEQVR4nO1YWYhcVRAtq16rccUN3JW4I4LLh5JoIm6gMSQiiF9+atQPv1xAzct0Vc9MkChRIgRCkBBRoqAY45JEXPBHcIG4gMYNzaJGZvpWz6iQmJZz3+tJT3fPZCaZns7IFNyPfvf2u+fUreW8S9RGc5MqBk1Fq1bpsGkCnbRpAp22aQKdtmkCnbZpAp22aQJThYAX6RKaqgTK3XS+m9xJU5FAdTkdEYzf257SUTQVCbjKcjd5ekI3LffQzGAyr7qOZDz/C5rMGg+BUJTbgsm/oUgX0UTbQEqnusmzocgPjfV4K8oPAtRYCAymdGYw2RWUN0809obN+V5X+SmoLAnddNJo6zEfVP6oFAuXjkagmhIj7vPn7U9elDhX/iyo/OMma0I3XTgiCeVXXeUHT+nkkQgEky78Dio7qiup0HYCEUhKSTwFlT2IWzdeHyy5pomAybwIzvjDakqHNxJwTebgHdka6Wq1166ldGwwvqdcLFw14URck2vd5McaKIRCMLkVQOuI7sgBPt9IIJj8ms/tRh4MI9+VXB1MVgXjLf3FwhXULoseUllZA5aP75Dw1ZSODCZL8xDZ20RAZW9O/DX8/jOl45BnwfjzbB1vKKd0Ik2GeVEWImnricDD8GL8rfxOUwgZv5uTW+ImL7jJYP57jys/UTvJSbNYbpXfbDgNgF8cinRBMHl5iJzKS5ANOfh60rvKJbmZOmXRy8r3ucpALQwieJVtwfjhAaPTMFz5EZxQpn347ZzoJ38pnTWpgHc+RUdHEKVkNsIoNjB4VXkjQFVUbgjGrwB843/d+FGcCjyeV7RVbpy68v1ZSCazykrnYY9xgaouoxmDKZ2O0hVM5qOMYbNcq6wJxpuCytdu0t8ULg0DSYiwQHg17oNnyBus2d97gsnfWUXjT1G2Iw6VXhQL4Kuo3ISmCdwEuRA1kCaz3GSBGy+CZ4LKClSMoPyxq2zdFyYjj99TOsZVHGHTSACbuUo5qz6jv8exl8pW7J1hkBXxtCI2WRBPq4dmjlvJDiNblIXx+EEWNVxlT0XlemyIE2wKIeXH0K0RZnkObGwKoQMBdbDW10tnIyFzUG9AYQaTnQA8aHQGRgZediDBkehDXjZeNOnls97KKrcg5oeHAD+eK851CBkMJG9OZHFzyPCGVjnTVoOqdOMnM20UgaAprd5X53lDpSQ39vXS8RhIOld+K0/QVTVZ4XX9wE3umBTwWRXJwiAof+HGDwAk5oLy63XNa6hT10logF0KsYdqEoy3NJzIaiR528BDaAXjrxAe8Gr9HJrSkNpU2RaTvAaslMzOKkmc+w3Cb7hI5PU1reQmP3spmTvh4AescDm8BkHXaj6oFPdpm2ROn9I5NQJI9KhWjTflpzCvyTlWuBKSA2o1NjqVXpwUTYbh4ySYbM/jP43PImDZjVHzeLmHTnCVb1FOR3pXfw+dC/Ax+ZW/hOPaTqBS4ruGPmbqLgSCyS8IiRYXB9u9RKeM9k7kAjqvm3yPvoLC0TYCwfh9V+lDqAx7jk6q/FHjeoQYegCNwWoJ7yrPtUX8eYkujlckJvObgcqLbrJ2rFcx+y3dpWRuo5MO2qLoU3mm1Vww6Qkq3XSoWnUZzQjKH+BzstU8egS0Dh2qVinx3aPdroWi3N6qZB4y5vu5Gq8UC5dh0FS1vlwLdRrH/9M8q+UpSmX22cmbg8k38XoxG173heW151iTrY2yYm18Rym57kCB/AchbrGJAhYTGgAAAABJRU5ErkJggg==";
@@ -60,6 +61,11 @@ export function Header({
   onOpenSampleStage,
   sampleStageMinimized,
   sampleStageControllerBusy,
+  highVoltagePower,
+  highVoltageReady,
+  highVoltagePending,
+  highVoltageError,
+  onToggleHighVoltage,
   scanLocked,
 }: {
   signedInUser: SignedInUser | null;
@@ -73,6 +79,11 @@ export function Header({
   onOpenSampleStage: () => void;
   sampleStageMinimized: boolean;
   sampleStageControllerBusy: boolean;
+  highVoltagePower: boolean;
+  highVoltageReady: boolean;
+  highVoltagePending: boolean;
+  highVoltageError: string | null;
+  onToggleHighVoltage: () => void;
   scanLocked: boolean;
 }) {
   const dispatch = useAppDispatch();
@@ -257,6 +268,20 @@ export function Header({
         >
           <img src={sampleStageImage} alt="" aria-hidden />
         </button>
+        {shouldShowVacuumController(vacuumEnabled) && (
+          <button
+            type="button"
+            className={`btn btn--ghost app-header__settings app-header__high-voltage${highVoltagePower ? " app-header__high-voltage--on" : ""}${highVoltagePending ? " app-header__controller--busy" : ""}`}
+            onClick={onToggleHighVoltage}
+            aria-label={t(highVoltagePower ? "header.highVoltage.turnOff" : "header.highVoltage.turnOn")}
+            aria-pressed={highVoltagePower}
+            aria-busy={highVoltagePending}
+            title={highVoltageError ?? t(highVoltageReady ? (highVoltagePower ? "header.highVoltage.turnOff" : "header.highVoltage.turnOn") : "header.highVoltage.notReady")}
+            disabled={headerActionDisabled || !highVoltageReady || highVoltagePending}
+          >
+            <img src={highVoltageImage} alt="" aria-hidden />
+          </button>
+        )}
       </div>
       <button
         type="button"

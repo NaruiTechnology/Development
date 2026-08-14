@@ -40,6 +40,7 @@ def test_vacuum_config_parses_thresholds_and_port_directions():
     assert [pump.threshold for pump in config.pumps] == [0.1, 0.002, 0.00003, 0.00003]
     assert all(pump.write.startswith("A") for pump in config.pumps)
     assert all(pump.read.startswith("B") for pump in config.pumps)
+    assert config.high_voltage_transformer.write == "A4"
 
 
 def test_vacuum_equipment_count_is_configuration_driven_with_minimum_three():
@@ -55,10 +56,10 @@ def test_vacuum_equipment_count_is_configuration_driven_with_minimum_three():
         "name": "UHVacuumPump_3",
         "power": "off",
         "value": "4.0e-5",
-        "write": "A4",
+        "write": "A5",
         "read": "B4",
     })
-    five["SBC"]["GPIO"].update({"A4": 12, "B4": 13})
+    five["SBC"]["GPIO"].update({"A5": 16, "B4": 13})
     parsed_five = VacuumConfig.model_validate(five)
     assert [pump.name for pump in parsed_five.pumps][-1] == "UHVacuumPump_3"
 
@@ -130,6 +131,8 @@ def test_simulated_vacuum_cascade_and_stop():
             assert controller.status().pumps[0].value == pytest.approx(0.15)
             assert controller.status().pumps[0].port_b_value == 0
             assert controller.gpio.output_level("A0") is True
+            with pytest.raises(ValueError, match="requires the vacuum system to be ready"):
+                await controller.set_high_voltage_power(True)
             await controller.poll_once()
             assert controller.status().pumps[0].value == pytest.approx(0.148)
             assert all(pump.value is None for pump in controller.status().pumps[1:])
@@ -167,6 +170,9 @@ def test_simulated_vacuum_cascade_and_stop():
             assert states["UHVacuumPump_1"].ready is True
             assert states["UHVacuumPump_2"].ready is True
             assert controller.status().isVacuumSystemReady is True
+            await controller.set_high_voltage_power(True)
+            assert controller.status().high_voltage_power is True
+            assert controller.gpio.output_level("A4") is True
 
             await controller.set_simulated_read("TurboVacuumPump", False)
             states = {pump.name: pump for pump in controller.status().pumps}
@@ -182,6 +188,8 @@ def test_simulated_vacuum_cascade_and_stop():
             )
             assert controller.status().cascade_stopped is True
             assert controller.status().isVacuumSystemReady is False
+            assert controller.status().high_voltage_power is False
+            assert controller.gpio.output_level("A4") is False
             assert controller.gpio.output_level("A0") is True
             assert (await controller.gpio.read_port_b())["B0"] == 1
         finally:

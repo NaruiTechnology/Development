@@ -153,6 +153,20 @@ def create_app() -> FastAPI:
             raise HTTPException(409, str(exc)) from exc
         return target.status()
 
+    @app.post("/vacuum/high-voltage/power", response_model=VacuumSystemStatus,
+              dependencies=mutation_dependencies)
+    async def high_voltage_power(req: VacuumPowerRequest):
+        target = controller()
+        try:
+            await target.set_high_voltage_power(req.power)
+        except AuthorityDenied as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from exc
+        return target.status()
+
     @app.post("/vacuum/stop", response_model=VacuumSystemStatus,
               dependencies=mutation_dependencies)
     async def stop():

@@ -43,6 +43,7 @@ Run `python -m glasgow_service.sbc_vacuum_app`. It exposes:
 - `GET /status`, `/health/live`, `/health/ready`, and `/vacuum`
 - `POST /vacuum/acquire` with optional `expected_channels`
 - `POST /vacuum/pumps/{name}/power`
+- `POST /vacuum/high-voltage/power` (vacuum-ready interlocked)
 - `POST /vacuum/stop`, `/vacuum/resume`, and `/vacuum/release`
 - `POST /vacuum/simulation/{name}/ready` with `{"ready": true|false}`
 

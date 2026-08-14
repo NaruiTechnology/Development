@@ -30,6 +30,10 @@
         }
     ],
     "errorRange": "0.01",
+    "HighVoltageTransformer": {
+        "power": "off",
+        "write": "A4"
+    },
     "SBC": {
         "Id": "raspberry-pi-vacuum",
         "voltage": 3.3,
@@ -41,7 +45,8 @@
             "A2": 24,
             "B2": 25,
             "A3": 5,
-            "B3": 6
+            "B3": 6,
+            "A4": 12
         },
         "ActiveHigh": true,
         "InputPullUp": null
@@ -53,7 +58,7 @@
         "They are not Raspberry Pi BCM numbers and they are not physical header-pin numbers.",
         "",
         "Logical channel                 Purpose",
-        "A0..A7                         Pump-power output",
+        "A0..A7                         Pump or high-voltage transformer output",
         "B0..B7                         Comparator/status input",
         "SBC.GPIO.<logical channel>     Raspberry Pi BCM GPIO number",
         "",

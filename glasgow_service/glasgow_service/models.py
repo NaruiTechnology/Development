@@ -72,6 +72,7 @@ class VacuumSystemStatus(BaseModel):
     runtime_seconds: float = 0.0
     cascade_stopped: bool
     isVacuumSystemReady: bool = False
+    high_voltage_power: bool = False
     last_error: Optional[str] = None
     updated_at: Optional[str] = None
     pumps: List[VacuumPumpState]

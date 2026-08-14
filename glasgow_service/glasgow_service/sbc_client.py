@@ -53,6 +53,11 @@ class SbcVacuumClient:
         return await self._request("POST", f"/vacuum/pumps/{equipment_name}/power",
                                    json={"power": power})
 
+    async def set_high_voltage_power(self, power: bool) -> dict[str, Any]:
+        return await self._request(
+            "POST", "/vacuum/high-voltage/power", json={"power": power}
+        )
+
     async def stop(self) -> dict[str, Any]:
         return await self._request("POST", "/vacuum/stop")
 
