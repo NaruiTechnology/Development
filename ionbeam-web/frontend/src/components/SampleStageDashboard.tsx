@@ -362,7 +362,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                 positionEditedRef.current = true;
                 setTargetPosition((position) => ({ ...position, r: parsed }));
               }} ariaLabel="Rotation target" /></label>
-              <button type="button" className="btn btn--primary" onClick={() => void moveStage()} disabled={!stageStatus?.connected || stageStatus.moving}>
+              <button type="button" className="btn btn--primary sample-stage-dashboard__move-button" onClick={() => void moveStage()} disabled={!stageStatus?.connected || stageStatus.moving}>
                 {stageStatus?.moving ? t("sampleStage.moving") : t("sampleStage.move")}
               </button>
             </div>

@@ -4701,11 +4701,14 @@ body {
 
 .sample-stage-dashboard__header-controls {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: 7px;
   margin-left: auto;
 }
+
+.sample-stage-dashboard__move-button { margin-left: auto; }
 
 .sample-stage-dashboard__header-controls label {
   display: inline-flex;
