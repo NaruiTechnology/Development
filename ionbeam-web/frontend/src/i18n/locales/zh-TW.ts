@@ -327,6 +327,7 @@ export const zhTW: Partial<TranslationTable> = {
   "phase.paused": "已暫停",
   "phase.completed": "已完成",
   "phase.error": "錯誤",
+  "scan.error.deviceNotFound": "Glasgow 裝置未連接。請檢查 USB 連接後重試。",
 
   /* ===== validation panel ========================================= */
   "validation.empty": "尚未完成任何掃描。請按下<執行>開始即時串流，或按下<驗證執行>取得耗時 + 檢查報告。任一方式完成後，皆可在此下載 CSV 與 PNG 影像。",

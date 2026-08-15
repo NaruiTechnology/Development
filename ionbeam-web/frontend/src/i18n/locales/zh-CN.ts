@@ -318,6 +318,7 @@ export const zhCN: Partial<TranslationTable> = {
   "phase.paused": "已暂停",
   "phase.completed": "已完成",
   "phase.error": "错误",
+  "scan.error.deviceNotFound": "Glasgow 设备未连接。请检查 USB 连接后重试。",
 
   /* ===== validation panel ========================================= */
   "validation.empty": "尚无已完成的扫描。点击<运行>开始实时流，或点击<验证运行>获取耗时 + 检查报告。任一方式完成后，即可在此下载 CSV 与 PNG 图像。",

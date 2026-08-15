@@ -1461,6 +1461,27 @@ body {
   flex: 0 0 auto;
 }
 
+.scan-inline-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex: 1 1 100%;
+  grid-row: 4;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--c-danger) 58%, var(--c-border));
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--c-danger) 12%, var(--c-bg));
+  color: var(--c-danger);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.scan-inline-error .icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
 .scan-loop-counter-wrap {
   display: inline-flex;
   align-items: center;
@@ -2607,7 +2628,7 @@ body {
 .canvas-axis-overlay {
   position: absolute;
   inset: 0;
-  z-index: 6;
+  z-index: 10;
   pointer-events: none;
   color: rgba(230, 238, 249, 0.95);
   font: 12px ui-monospace, monospace;
@@ -3925,8 +3946,12 @@ body {
 }
 
 .app-header__high-voltage:disabled img {
-  opacity: 0.35;
-  filter: grayscale(1) brightness(0.55);
+  opacity: 1;
+  filter: grayscale(1) brightness(0.7);
+}
+
+.app-header__high-voltage--on:disabled img {
+  filter: saturate(1.25) brightness(1.25) drop-shadow(0 0 5px #ffc928);
 }
 
 .app-header__controller--busy {

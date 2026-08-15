@@ -373,6 +373,7 @@ export const en = {
   "phase.paused": "paused",
   "phase.completed": "completed",
   "phase.error": "error",
+  "scan.error.deviceNotFound": "Glasgow device is not connected. Check the USB connection and try again.",
 
   /* ===== validation panel ========================================= */
   "validation.empty": "No completed scan yet. Press <Run> for a live stream, or <Run validated> for timing + checks. After either, you'll be able to download CSV and PNG figure here.",
