@@ -9,6 +9,11 @@ export interface ScanTimingEstimate {
   frameSeconds: number;
 }
 
+export interface DwellPresetOption {
+  value: number;
+  label: string;
+}
+
 /**
  * The current revC3 gateware toggles adc_clk every adcHalfPeriod sync
  * clocks, so one complete ADC/DAC sample period is twice that value.
@@ -35,6 +40,31 @@ export function estimateRevC3ScanTiming(
     pixelCount,
     frameSeconds: (pixelCount * pixelDwellNs) / 1e9,
   };
+}
+
+/** Human-readable choices for the dwell combobox.
+ *
+ * “MS/s” is deliberately kept separate from “MPix/s”: the converter keeps
+ * sampling at 6 MS/s while averaging reduces the number of completed output
+ * pixels per second.
+ */
+export function revC3DwellPresetOptions(
+  values: readonly number[] = [1, 2, 4, 8, 16, 32, 64],
+): DwellPresetOption[] {
+  return values.map((value) => {
+    const timing = estimateRevC3ScanTiming(1, value);
+    return {
+      value,
+      label: `${value} sample${value === 1 ? "" : "s"}/pixel — ${formatNanoseconds(timing.pixelDwellNs)} — ${formatPixelRate(timing.pixelRate)}`,
+    };
+  });
+}
+
+export function formatPixelRate(pixelsPerSecond: number): string {
+  if (pixelsPerSecond >= 1e6) {
+    return `${(pixelsPerSecond / 1e6).toFixed(pixelsPerSecond % 1e6 === 0 ? 1 : 2)} MPix/s`;
+  }
+  return `${(pixelsPerSecond / 1e3).toFixed(pixelsPerSecond % 1e3 === 0 ? 0 : 2)} kPix/s`;
 }
 
 export function formatDuration(seconds: number): string {

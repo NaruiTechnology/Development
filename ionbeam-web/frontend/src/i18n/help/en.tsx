@@ -47,6 +47,15 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </div>
 
       <div className="dwell-help__rule">
+        <strong>Sample rate and output-pixel rate are different.</strong> The
+        ADC conversion rate remains 6.0 MSamples/s. Dwell 2 combines two ADC
+        samples into one output pixel, so the output ceiling is 3.0 MPixels/s;
+        dwell 4 combines four, so it is 1.5 MPixels/s. In general: output
+        pixel rate = 6.0 MSamples/s ÷ samples per pixel. These are theoretical
+        acquisition ceilings; transport and host overhead can only add time.
+      </div>
+
+      <div className="dwell-help__rule">
         <strong>Pick powers of two.</strong> If your effective sample
         count per pixel isn&apos;t a power of two, the gateware only
         averages the last power of two samples and the remaining ones
@@ -84,19 +93,19 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <table className="dwell-help__table">
           <thead>
             <tr>
-              <th>dwell</th><th>Samples / pixel</th><th>Pixel rate</th>
+              <th>dwell</th><th>Samples / output pixel</th><th>ADC sample rate</th><th>Output pixel ceiling</th>
               <th>SNR gain<br /><span className="muted">(vs dwell=1)</span></th>
               <th>1024² frame time</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>1</td><td>1</td><td>6.0 MPix/s</td><td>1.00×</td><td>175 ms</td></tr>
-            <tr><td>2</td><td>2</td><td>3.0 MPix/s</td><td>1.41×</td><td>350 ms</td></tr>
-            <tr><td>4</td><td>4</td><td>1.5 MPix/s</td><td>2.00×</td><td>699 ms</td></tr>
-            <tr><td>8</td><td>8</td><td>750 kPix/s</td><td>2.83×</td><td>1.40 s</td></tr>
-            <tr><td>16</td><td>16</td><td>375 kPix/s</td><td>4.00×</td><td>2.80 s</td></tr>
-            <tr><td>32</td><td>32</td><td>187.5 kPix/s</td><td>5.66×</td><td>5.59 s</td></tr>
-            <tr><td>64</td><td>64</td><td>93.75 kPix/s</td><td>8.00×</td><td>11.18 s</td></tr>
+            <tr><td>1</td><td>1</td><td>6.0 MS/s</td><td>6.0 MPix/s</td><td>1.00×</td><td>175 ms</td></tr>
+            <tr><td>2</td><td>2</td><td>6.0 MS/s</td><td>3.0 MPix/s</td><td>1.41×</td><td>350 ms</td></tr>
+            <tr><td>4</td><td>4</td><td>6.0 MS/s</td><td>1.5 MPix/s</td><td>2.00×</td><td>699 ms</td></tr>
+            <tr><td>8</td><td>8</td><td>6.0 MS/s</td><td>750 kPix/s</td><td>2.83×</td><td>1.40 s</td></tr>
+            <tr><td>16</td><td>16</td><td>6.0 MS/s</td><td>375 kPix/s</td><td>4.00×</td><td>2.80 s</td></tr>
+            <tr><td>32</td><td>32</td><td>6.0 MS/s</td><td>187.5 kPix/s</td><td>5.66×</td><td>5.59 s</td></tr>
+            <tr><td>64</td><td>64</td><td>6.0 MS/s</td><td>93.75 kPix/s</td><td>8.00×</td><td>11.18 s</td></tr>
           </tbody>
         </table>
       </div>

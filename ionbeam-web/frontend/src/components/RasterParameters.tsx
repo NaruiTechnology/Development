@@ -28,10 +28,10 @@ import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
-import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds } from "../lib/scanTiming";
+import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds, revC3DwellPresetOptions } from "../lib/scanTiming";
 
-const RES_PRESETS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
-const DWELL_PRESETS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
+const RES_PRESETS: PresetNumberOption[] = [128, 256, 512, 1024, 2048].map((value) => ({ value }));
+const DWELL_PRESETS: PresetNumberOption[] = revC3DwellPresetOptions();
 const LATENCY_PRESETS = [4096, 8192, 16384, 32768];
 
 export function RasterParameters({ disabled }: { disabled: boolean }) {

@@ -25,11 +25,11 @@ import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField"
 import { NumberStepperInput } from "./NumberStepperField";
 import type { VectorPoint, VectorPointTuple } from "../types/api";
 import { VectorScanPathField } from "./VectorScanPathField";
-import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds } from "../lib/scanTiming";
+import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds, revC3DwellPresetOptions } from "../lib/scanTiming";
 
 const MAX_POINTS = 1_000_000;
 const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256, 128] as const;
-const VECTOR_DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
+const VECTOR_DWELL_OPTIONS: PresetNumberOption[] = revC3DwellPresetOptions();
 
 function validateCustomVectorResolution(value: number, t: (key: "vector.resolution.validation.powerOfTwo" | "vector.resolution.validation.min128") => string): string | null {
   const intValue = Math.trunc(value);
