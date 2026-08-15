@@ -25,6 +25,7 @@ import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField"
 import { NumberStepperInput } from "./NumberStepperField";
 import type { VectorPoint, VectorPointTuple } from "../types/api";
 import { VectorScanPathField } from "./VectorScanPathField";
+import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds } from "../lib/scanTiming";
 
 const MAX_POINTS = 1_000_000;
 const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256, 128] as const;
@@ -54,6 +55,7 @@ export function VectorParameters({
     v.points ? v.points.map((p) => formatPoint(p)).join("\n") : ""
   );
   const [pointsErr, setPointsErr] = useState<string | null>(null);
+  const timing = estimateRevC3ScanTiming(v.vector_resolution, v.dwell);
 
   function commitPoints(text: string) {
     setPointsText(text);
@@ -155,7 +157,13 @@ export function VectorParameters({
             <PresetNumberField
               label={
                 <label>
-                  {t("vector.dwell")}
+                  {t("scan.dwell.dynamic", {
+                    dwell: v.dwell,
+                    period: formatNanoseconds(timing.samplePeriodNs),
+                    pixel: formatNanoseconds(timing.pixelDwellNs),
+                    resolution: v.vector_resolution,
+                    frame: formatDuration(timing.frameSeconds),
+                  })}
                   <DwellHelp />
                 </label>
               }

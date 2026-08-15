@@ -28,6 +28,7 @@ import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
+import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds } from "../lib/scanTiming";
 
 const RES_PRESETS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
 const DWELL_PRESETS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
@@ -38,6 +39,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
   const { t } = useTranslation();
   const r = useAppSelector((s) => s.scan.raster);
   const roi = useAppSelector((s) => s.scan.roi);
+  const timing = estimateRevC3ScanTiming(r.resolution, r.dwell);
 
   // The footnote in the original code interpolates two <b> spans into a
   // sentence. Localised text reorders those spans (e.g. zh-CN puts
@@ -79,7 +81,13 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         <PresetNumberField
           label={
             <label>
-              {t("raster.dwell")}
+              {t("scan.dwell.dynamic", {
+                dwell: r.dwell,
+                period: formatNanoseconds(timing.samplePeriodNs),
+                pixel: formatNanoseconds(timing.pixelDwellNs),
+                resolution: r.resolution,
+                frame: formatDuration(timing.frameSeconds),
+              })}
               <DwellHelp />
             </label>
           }
