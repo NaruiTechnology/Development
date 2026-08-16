@@ -11,7 +11,7 @@
 #   4. Install the udev rules: cp config/70-glasgow.rules into /etc/udev/rules.d
 #      then `udevadm control --reload && udevadm trigger ...` for the
 #      configured idVendor/idProduct.
-#   5. pipx install -e 'glasgow/software[builtin-toolchain]'
+#   5. pipx install --force -e 'glasgow/software[builtin-toolchain]'
 #
 # Each step is its own subprocess so a clean stop-on-error point exists at
 # every boundary. Step 1 and step 3 require sudo; step 2 and step 4 don't.
@@ -124,13 +124,16 @@ class setupGlasgow_state(distributionDeploy_state):
                     v=idVendor, p=idProduct)
             ))
 
-            # 5. pipx install of the glasgow software
+            # 5. Force-refresh the pipx environment. The Glasgow checkout is
+            # editable and may gain dependencies after its first install;
+            # plain ``pipx install`` treats an existing environment as done
+            # and leaves stale package metadata/dependencies behind.
             steps.append((
                 "pipx-install",
                 "bash -c 'cd \"{root}\" && "
                 "if command -v {py} >/dev/null 2>&1; then "
-                "pipx install --python {py} -e \"{tgt}\"; "
-                "else pipx install -e \"{tgt}\"; fi'".format(
+                "pipx install --force --python {py} -e \"{tgt}\"; "
+                "else pipx install --force -e \"{tgt}\"; fi'".format(
                     root=deployRoot, py=pipxPython, tgt=pipxTarget)
             ))
 
