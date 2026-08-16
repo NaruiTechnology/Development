@@ -25,8 +25,6 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
-  const acquiredRef = useRef(false);
-  const acquisitionIdRef = useRef(0);
   const mutationRef = useRef(false);
   const statusVersionRef = useRef(0);
   const onCloseRef = useRef(onClose);
@@ -93,7 +91,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     if (mutationRef.current) return;
     const statusVersion = statusVersionRef.current;
     try {
-      const response = await fetch(apiUrl("/api/vacuum"), { signal });
+      const response = await fetch(apiUrl("/api/vacuum"), { headers: scanAuthHeaders(), signal });
       if (response.status === 404) {
         onCloseRef.current();
         return;
@@ -110,102 +108,28 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     }
   }, []);
 
-  const releaseDevice = useCallback(async (keepalive = false) => {
-    acquiredRef.current = false;
-    const response = await fetch(apiUrl("/api/vacuum/release"), {
-      method: "POST",
-      headers: scanAuthHeaders(),
-      keepalive,
-    });
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(detail || `${response.status} ${response.statusText}`);
-    }
-    return readJsonResponse<VacuumSystemStatus>(response, "vacuum release");
-  }, []);
-
   useEffect(() => {
     if (!open) return;
     setWindowOffset({ x: 0, y: 0 });
-    const acquisitionId = ++acquisitionIdRef.current;
-    let cancelled = false;
-    let timer: number | null = null;
     const pollController = new AbortController();
     setStatus(null);
     setError(null);
-    setPending("acquire");
-
-    void (async () => {
-      try {
-        const configuredResponse = await fetch(apiUrl("/api/vacuum"));
-        if (!configuredResponse.ok) {
-          throw new Error(`${configuredResponse.status} ${configuredResponse.statusText}`);
-        }
-        const configured = await readJsonResponse<VacuumSystemStatus>(configuredResponse, "vacuum configuration");
-        const response = await fetch(apiUrl("/api/vacuum/acquire"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
-          body: JSON.stringify({
-            expected_channels: Object.fromEntries(
-              configured.pumps.map((pump) => [pump.name, pump.threshold]),
-            ),
-          }),
-        });
-        if (response.status === 404) {
-          if (!cancelled) onCloseRef.current();
-          return;
-        }
-        if (!response.ok) {
-          const detail = await response.text();
-          throw new Error(detail || `${response.status} ${response.statusText}`);
-        }
-        const acquired = await readJsonResponse<VacuumSystemStatus>(response, "vacuum acquire");
-        if (cancelled) {
-          if (acquisitionId === acquisitionIdRef.current) await releaseDevice(true);
-          return;
-        }
-        if (acquisitionId !== acquisitionIdRef.current) return;
-        acquiredRef.current = true;
-        setStatus(acquired);
-        setPending(null);
-        timer = window.setInterval(() => void refresh(pollController.signal), 1000);
-      } catch (cause) {
-        if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : String(cause));
-          setPending(null);
-        }
-      }
-    })();
+    setPending(null);
+    void refresh(pollController.signal);
+    const timer = window.setInterval(() => void refresh(pollController.signal), 1000);
 
     return () => {
-      cancelled = true;
       pollController.abort();
-      if (timer !== null) window.clearInterval(timer);
-      if (acquisitionId === acquisitionIdRef.current && acquiredRef.current) {
-        void releaseDevice(true).catch(() => undefined);
-      }
+      window.clearInterval(timer);
     };
-  }, [open, refresh, releaseDevice]);
+  }, [open, refresh]);
 
-  const closeDashboard = useCallback(async () => {
-    if (!acquiredRef.current) {
-      onClose();
-      return;
-    }
-    setPending("release");
-    try {
-      setStatus(await releaseDevice());
-      onClose();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      setPending(null);
-    }
-  }, [onClose, releaseDevice]);
+  const closeDashboard = useCallback(() => onClose(), [onClose]);
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") void closeDashboard();
+      if (event.key === "Escape") closeDashboard();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -275,7 +199,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
                 type="button"
                 className="vacuum-power-button"
                 data-state={pump.power ? "on" : "off"}
-                disabled={!status?.running || pending !== null}
+                disabled={mechanical || !status?.running || pending !== null}
                 aria-pressed={pump.power}
                 aria-label={`${pump.name} ${t("vacuum.power")}`}
                 title={`${t("vacuum.power")} ${pump.power ? "off" : "on"}`}

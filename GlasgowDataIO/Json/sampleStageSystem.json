@@ -1,17 +1,21 @@
 {
-    "Version": "2.0",
+    "Version": "3.0-draft",
     "Enable": true,
     "Simulate": true,
     "Driver": {
-        "model": "TMC5160",
-        "interface": "SPI",
+        "architecture": "modular-five-axis",
+        "localStepperModel": "TMC5160",
+        "interface": "SPI-and-isolated-external-axis",
         "positionSource": "XACTUAL",
         "spiDatagramBits": 40
     },
     "Safety": {
         "maximumTravelInches": 15.0,
         "emergencyStopRequired": true,
-        "hardwareLimitSwitchesRequired": true
+        "hardwareLimitSwitchesRequired": true,
+        "safeTorqueOffRequired": true,
+        "zTiltCollisionInterlockRequired": true,
+        "vacuumMotionPermitRequired": true
     },
     "Glasgow": {
         "Device1": {
@@ -19,12 +23,20 @@
             "voltage": 3.3
         }
     },
+    "Persistence": {
+        "stateFile": "/home/vboxuser/.local/state/ionbeam/sample-stage-position.json"
+    },
+    "RequiredAxes": ["X", "Y", "Z", "T", "R"],
     "Axes": {
         "X": {
+            "unit": "um",
+            "actuator": "stepper-prototype-replaceable-with-piezo-servo",
+            "driver": "TMC5160",
             "pins": { "sck": "A0", "cs": "A1", "sdi": "A2", "sdo": "A3" },
-            "minimum": -50.0,
-            "maximum": 50.0,
-            "microstepsPerUnit": 51200.0,
+            "minimum": -75000.0,
+            "maximum": 75000.0,
+            "resolution": 1.0,
+            "microstepsPerUnit": 51.2,
             "invertDirection": false,
             "spi": { "frequencyKHz": 500, "sckIdle": 0, "sckEdge": "rising" },
             "motion": {
@@ -52,10 +64,14 @@
             }
         },
         "Y": {
+            "unit": "um",
+            "actuator": "stepper-prototype-replaceable-with-piezo-servo",
+            "driver": "TMC5160",
             "pins": { "sck": "A4", "cs": "A5", "sdi": "A6", "sdo": "A7" },
-            "minimum": -50.0,
-            "maximum": 50.0,
-            "microstepsPerUnit": 51200.0,
+            "minimum": -75000.0,
+            "maximum": 75000.0,
+            "resolution": 1.0,
+            "microstepsPerUnit": 51.2,
             "invertDirection": false,
             "spi": { "frequencyKHz": 500, "sckIdle": 0, "sckEdge": "rising" },
             "motion": {
@@ -81,17 +97,54 @@
                 "COOLCONF": "0x00000000",
                 "PWMCONF": "0xC40C001E"
             }
+        },
+        "Z": {
+            "unit": "um",
+            "actuator": "closed-loop-motorized-lift",
+            "driver": "EXTERNAL_SERVO",
+            "minimum": 0.0,
+            "maximum": 10000.0,
+            "resolution": 1.0,
+            "microstepsPerUnit": 1000.0,
+            "invertDirection": false,
+            "motion": { "timeoutSeconds": 30.0, "pollIntervalMs": 10.0, "positionToleranceMicrosteps": 1 }
+        },
+        "T": {
+            "unit": "deg",
+            "actuator": "closed-loop-tilt",
+            "driver": "EXTERNAL_SERVO",
+            "minimum": -10.0,
+            "maximum": 60.0,
+            "resolution": 0.001,
+            "microstepsPerUnit": 1000000.0,
+            "invertDirection": false,
+            "motion": { "timeoutSeconds": 45.0, "pollIntervalMs": 10.0, "positionToleranceMicrosteps": 1 }
+        },
+        "R": {
+            "unit": "deg",
+            "actuator": "closed-loop-continuous-rotation",
+            "driver": "EXTERNAL_SERVO",
+            "minimum": -180.0,
+            "maximum": 180.0,
+            "continuous": true,
+            "resolution": 0.001,
+            "microstepsPerUnit": 1000000.0,
+            "invertDirection": false,
+            "motion": { "timeoutSeconds": 45.0, "pollIntervalMs": 10.0, "positionToleranceMicrosteps": 1 }
         }
     },
     "Message": [
         "This controller uses a dedicated Glasgow Interface Explorer USB device.",
-        "Each axis uses an independent TMC5160 SPI bus: SCK, CSN, SDI and SDO.",
+        "Revision 3 models a five-axis X/Y/Z/tilt/rotation stage.",
+        "X and Y retain independent TMC5160 SPI buses for prototype stepper mechanics.",
+        "Z, tilt and rotation are external closed-loop driver contracts until actuators are selected.",
         "TMC5160 SPI mode is mode 0: SCK idle low, SDI sampled on the rising edge, MSB first.",
         "Position is read from signed 32-bit XACTUAL and converted by microstepsPerUnit.",
         "registerWrites accepts every TMC5160 register name listed by the driver, or a numeric address such as 0x6C.",
         "All committed current, chopper, ramp, scale and travel values are commissioning placeholders.",
         "Simulate=true performs no USB, SPI or motor operation.",
         "Each configured axis span must be no more than 15 inches (381 mm).",
-        "Before Simulate=false, verify motor current, external MOSFET/driver hardware, SPI_MODE/SD_MODE straps, limits, emergency stop, grounding and position scale."
+        "Before Simulate=false, verify motor current, external MOSFET/driver hardware, SPI_MODE/SD_MODE straps, limits, emergency stop, grounding and position scale.",
+        "The published Helios performance envelope is a benchmark, not evidence of Thermo Fisher's proprietary electrical implementation."
     ]
 }

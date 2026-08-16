@@ -164,6 +164,9 @@ export function ImageCanvas({
   const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
   const vectorSource = useAppSelector((s) => s.image.vectorSource);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
+  const configuredVectorResolution = useAppSelector(
+    (s) => s.scan.vector.vector_resolution
+  );
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roi = useAppSelector((s) => s.scan.roi);
   const theme = useAppSelector((s) => s.theme.theme);
@@ -209,13 +212,17 @@ export function ImageCanvas({
       ? ROI_ACTION_HIGHLIGHT_COLOR
       : ROI_ACTION_BLANK_COLOR;
 
+  const viewVectorEdge =
+    kind === "vector" && vectorPattern === "default"
+      ? configuredVectorResolution
+      : vectorEdge;
   const stride =
-    kind === "vector" && vectorPattern === "default" && vectorEdge > 0
-      ? Math.max(1, Math.floor(DAC_RANGE / vectorEdge))
+    kind === "vector" && vectorPattern === "default" && viewVectorEdge > 0
+      ? Math.max(1, Math.floor(DAC_RANGE / viewVectorEdge))
       : 1;
   const hasExactNativeStride =
-    kind === "vector" && vectorPattern === "default" && vectorEdge > 0
-      ? DAC_RANGE % vectorEdge === 0
+    kind === "vector" && vectorPattern === "default" && viewVectorEdge > 0
+      ? DAC_RANGE % viewVectorEdge === 0
       : true;
 
   useEffect(() => {
@@ -878,25 +885,25 @@ export function ImageCanvas({
                 className="segmented__btn"
                 title={
                   m === "decimated"
-                    ? t("canvas.view.decimated.title", { edge: vectorEdge })
+                    ? t("canvas.view.decimated.title", { edge: viewVectorEdge })
                     : hasExactNativeStride
                     ? t("canvas.view.native.title", { edge: DAC_RANGE, stride })
                     : t("canvas.view.native.title.custom", {
                         edge: DAC_RANGE,
-                        sourceEdge: vectorEdge,
+                        sourceEdge: viewVectorEdge,
                       })
                 }
                 onClick={() => dispatch(setVectorRenderMode(m))}
               >
                 <Icon name={m === "decimated" ? "scan" : "gridSvg"} tone="accent" />
                 {m === "decimated"
-                  ? t("canvas.view.decimated", { edge: vectorEdge })
+                  ? t("canvas.view.decimated", { edge: viewVectorEdge })
                   : t("canvas.view.native", { edge: DAC_RANGE })}
               </button>
             ))}
           </div>
           <span className="canvas-view-row__editor-inline">
-            {vectorEdge === DAC_RANGE && (
+            {viewVectorEdge === DAC_RANGE && (
               <span className="muted canvas-view-row__stride-note">
                 {t("canvas.view.identical")}
               </span>

@@ -27,8 +27,10 @@ must not restart, release, or reconfigure SBC GPIO.
 
 ## Network contracts
 
-The web backend sends `/api/vacuum/*` to `VACUUM_CONTROLLER_URL`. The executor
-sends fenced requests to `VACUUM_SBC_URL`. The SBC authenticates mutations with
+The standalone baseline sends `/api/vacuum/*` directly to the SBC through
+`VACUUM_CONTROLLER_URL`; it does not require an executor. In an optional
+failover deployment, the executor sends fenced requests to `VACUUM_SBC_URL`.
+The SBC authenticates mutations with
 `SBC_VACUUM_TOKEN` and persists fencing state at `SBC_FENCING_STATE` when
 `SBC_REQUIRE_FENCING=true`.
 

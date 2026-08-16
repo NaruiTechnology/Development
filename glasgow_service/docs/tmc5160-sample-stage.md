@@ -1,6 +1,19 @@
 # TMC5160 sample-stage controller
 
-## Delivered boundary
+## Five-axis architecture
+
+The stage model now exposes X, Y, Z, tilt (`T`), and rotation (`R`). The two
+TMC5160 channels below are the X/Y prototype implementation, not a claim that
+all five production axes use stepper motors. Z, tilt, and rotation are modeled
+as external closed-loop drive contracts until their motors, encoders, and drive
+interfaces are selected. Hardware mode rejects those placeholder channels;
+simulation mode permits five-axis UI and API development without energizing
+unknown hardware.
+
+The sourced performance benchmark and electrical partition are documented in
+`GlasgowDataIO/Hardware/kitcard/GlasgowRevC3FiveAxisStage/README.md`.
+
+## Delivered X/Y boundary
 
 The dedicated sample-stage Glasgow builds one Amaranth SPI controller for X
 and one for Y. Each controls one TMC5160 using an independent four-wire bus
@@ -20,7 +33,7 @@ from the requested target or a host-side step counter.
 - Glasgow serial ID and I/O voltage
 - per-axis SPI pin assignments, frequency, clock idle level and sample edge
 - physical minimum/maximum and direction polarity
-- microsteps per displayed millimetre
+- microsteps per configured axis unit (µm for X/Y/Z)
 - move timeout, poll interval and position tolerance
 - current, ramp, chopper, PWM and switch register writes
 - global travel and required safety controls
@@ -40,7 +53,7 @@ MOSFETs, supply, mechanics and thermal limits are known.
 - Writes set bit 7 of the register address.
 - Reads are pipelined; the requested value arrives in the following datagram.
 - `XACTUAL` is interpreted as a signed 32-bit two's-complement microstep count.
-- `microstepsPerUnit` converts XACTUAL to the API/UI millimetre value.
+- `microstepsPerUnit` converts XACTUAL to the configured API/UI unit. The five-axis stage uses µm for X/Y/Z and degrees for T/R.
 
 ## Hardware interlocks
 

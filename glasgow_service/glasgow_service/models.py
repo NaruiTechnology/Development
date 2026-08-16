@@ -39,12 +39,12 @@ class VacuumPowerRequest(BaseModel):
     power: bool
 
 
+class VacuumSimulationRequest(BaseModel):
+    ready: bool
+
+
 class VacuumAcquireRequest(BaseModel):
     expected_channels: dict[str, float] = Field(default_factory=dict)
-
-
-class VacuumSimulationReadRequest(BaseModel):
-    checked: bool
 
 
 class VacuumPumpState(BaseModel):
@@ -72,6 +72,7 @@ class VacuumSystemStatus(BaseModel):
     runtime_seconds: float = 0.0
     cascade_stopped: bool
     isVacuumSystemReady: bool = False
+    high_voltage_power: bool = False
     last_error: Optional[str] = None
     updated_at: Optional[str] = None
     pumps: List[VacuumPumpState]
@@ -81,7 +82,7 @@ class VacuumSystemStatus(BaseModel):
 
 class RasterRequest(BaseModel):
     resolution:    int  = Field(512,   ge=1, le=2048, description="DAC range (NxN).")
-    dwell:         int  = Field(2,     ge=1, le=65535, description="Dwell time units (125 ns each).")
+    dwell:         int  = Field(2,     ge=1, le=65535, description="ADC sample periods (166.667 ns each with the current revC3 timing).")
     latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
     frame_blank:   bool = False
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
@@ -203,7 +204,7 @@ class VectorRequest(BaseModel):
         1,
         ge=1,
         le=65535,
-        description="Default-pattern dwell time units (125 ns each). Ignored when pattern=custom.",
+        description="Default-pattern ADC sample periods (166.667 ns each with the current revC3 timing). Ignored when pattern=custom.",
     )
     latency_bytes:  int  = Field(8196, ge=2, description="Matches `vectorScan.latency` in streamData.json.")
     output_mode:    str  = Field("SixteenBit", description="SixteenBit or EightBit.")

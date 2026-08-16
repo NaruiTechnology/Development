@@ -31,6 +31,7 @@ import {
   vectorRequestWithROIGrayScaleAction,
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
+import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
 import { ROIGrayActionVectorWedges } from "./ROIGrayActionVectorWedges";
 import { ROIRasterActionWedges } from "./ROIRasterActionWedges";
@@ -104,6 +105,7 @@ export function ScanControls({
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const phase = useAppSelector((s) => s.scan.phase);
+  const errorMessage = useAppSelector((s) => s.scan.errorMessage);
   const raster = useAppSelector((s) => s.scan.raster);
   const vector = useAppSelector((s) => s.scan.vector);
   const preview = useAppSelector((s) => s.scan.preview);
@@ -145,6 +147,10 @@ export function ScanControls({
     return (vectorDefaults as Record<string, unknown>).PixelFallbackBlank === true;
   })();
   const allowBitmapSimulation = !isProduction && Boolean(roiState.imageDataUrl);
+  const visibleError = displayScanError(
+    errorMessage,
+    t("scan.error.deviceNotFound"),
+  );
   const activeVectorGrayScaleSelection =
     kind === "vector" && vectorGrayScaleSelection !== null ? vectorGrayScaleSelection : null;
   const activeVectorGrayScaleSkipped =
@@ -335,6 +341,7 @@ export function ScanControls({
             clearActionLoopState();
             dispatch(setRetainVectorFeedbackOnComplete(true));
           }
+          dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
           onScanRunStart?.(ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
           stream.startVector({ ...req, preview });
@@ -350,6 +357,7 @@ export function ScanControls({
             }
           );
           clearActionLoopState();
+          dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
           onScanRunStart?.(ScanType.VECTOR);
           stream.startVector({ ...req, preview });
@@ -670,6 +678,12 @@ export function ScanControls({
               />
             </div>
           )}
+          {visibleError && (
+            <div className="scan-inline-error" role="alert" aria-live="assertive">
+              <Icon name="alertTriangle" tone="danger" />
+              <span>{visibleError}</span>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -768,6 +782,12 @@ export function ScanControls({
             disabled={controlsDisabled}
             onRepeatChange={onRepeatChange}
           />
+        </div>
+      )}
+      {visibleError && (
+        <div className="scan-inline-error" role="alert" aria-live="assertive">
+          <Icon name="alertTriangle" tone="danger" />
+          <span>{visibleError}</span>
         </div>
       )}
     </div>

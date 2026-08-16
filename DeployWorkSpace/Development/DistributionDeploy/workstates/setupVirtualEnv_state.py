@@ -1,39 +1,56 @@
-#-------------------------------------------------------------------------------
-# setupVirtualEnv_state.py
-#
-# Create the project virtualenv at <DeployRoot>/.venv and bootstrap pip.
-# Pure template state.
-#-------------------------------------------------------------------------------
+"""Create and upgrade the Windows deployment virtual environment."""
+import asyncio
+import os
+import shutil
+import sys
+
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
 
-from .executeShellCommand_state import executeShellCommand_state
+from .distributionDeploy_state import distributionDeploy_state
 
-class setupVirtualEnv_state(executeShellCommand_state):
+
+class setupVirtualEnv_state(distributionDeploy_state):
     def __init__(self, parent):
         super(setupVirtualEnv_state, self).__init__(parent)
 
-    @overrides(executeShellCommand_state)
+    @overrides(distributionDeploy_state)
     async def DoWork(self):
-        stateConfig = self.ParentWorkThread.GetStateConfig(self)
-        actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
+        try:
+            stateConfig = self.ParentWorkThread.GetStateConfig(self)
+            actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
+            timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 300.0) or 300.0)
+            root = self.resolveDeployPath(actionData.get("root") or ".")
+            venvDir = self.resolveDeployPath(actionData.get("venv", ".venv"))
+            launcher = shutil.which("py.exe") or shutil.which("python.exe") or sys.executable
+            launcherArgs = ["-3"] if os.path.basename(launcher).lower() == "py.exe" else []
+            create = [launcher] + launcherArgs + ["-m", "venv", venvDir]
+            if not await self._run(create, root, timeout):
+                self._success = False
+                return
+            pythonExe = os.path.join(venvDir, "Scripts", "python.exe")
+            self._success = await self._run(
+                [pythonExe, "-m", "pip", "install", "--upgrade", "pip"],
+                root, timeout)
+            if self._success:
+                self.ParentWorkThread._venvPath = venvDir
+                self.info("[{}] virtual environment ready: {}"
+                          .format(type(self).__name__, venvDir))
+        except Exception as exc:
+            self.error("[{}] error: {}".format(type(self).__name__, exc))
+            self._success = False
 
-        root = self.resolveDeployPath(actionData.get("root") or ".")
-        venv = actionData.get("venv", ".venv")
-        venvAct = actionData.get("venvAct", venv)
-        commandFormat = actionData.get(
-            Consts.COMMAND_FORMAT,
-            "bash -c 'cd {} && python3 -m venv {} && . {}/bin/activate && python -m pip install --upgrade pip'")
-        cmd = commandFormat.format(root, venv, venvAct)
-
-        self.info("[{}] >> {}".format(type(self).__name__, cmd))
-        timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
-        self._success = await self._run(cmd, timeout)
-        if self._success:
-            self.ParentWorkThread._venvPath = self.resolveDeployPath(venv)
-            self.info("[{}] OK".format(type(self).__name__))
-        else:
-            self.error("[{}] FAILED. stderr:\n{}"
-                       .format(type(self).__name__,
-                               self._stderr.decode(errors='replace')
-                               if self._stderr else "<none>"))
+    async def _run(self, argv, cwd, timeout):
+        self.info("[{}] >> {}".format(type(self).__name__, " ".join(argv)))
+        proc = await asyncio.create_subprocess_exec(
+            *argv, cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE)
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            return False
+        self._stdout, self._stderr = stdout, stderr
+        return proc.returncode == 0

@@ -9,7 +9,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -81,6 +81,18 @@ class VacuumPumpConfig(BaseModel):
         return value
 
 
+class HighVoltageTransformerConfig(BaseModel):
+    power: Literal["off"] = "off"
+    write: str
+
+    @field_validator("write")
+    @classmethod
+    def validate_write_pin(cls, value: str) -> str:
+        if not GPIO_PIN_RE.fullmatch(value) or not value.startswith("A"):
+            raise ValueError("high-voltage output pin must use Port A (A0..A7)")
+        return value
+
+
 class VacuumConfig(BaseModel):
     enabled: bool = Field(True, alias="Enable")
     pumps: list[VacuumPumpConfig] = Field(alias="VacuumPumps")
@@ -89,6 +101,9 @@ class VacuumConfig(BaseModel):
     verbose: bool = Field(False, alias="Verbose")
     simulate: bool = Field(False, alias="Simulate")
     sbc: SbcDeviceConfig = Field(alias="SBC")
+    high_voltage_transformer: HighVoltageTransformerConfig = Field(
+        alias="HighVoltageTransformer"
+    )
 
     @model_validator(mode="after")
     def validate_channel_map(self):
@@ -98,11 +113,22 @@ class VacuumConfig(BaseModel):
             raise ValueError("vacuum control sub-target supports at most 8 pumps")
         writes = [pump.write for pump in self.pumps]
         reads = [pump.read for pump in self.pumps]
+        names = [pump.name for pump in self.pumps]
+        if len(set(names)) != len(names):
+            raise ValueError("vacuum equipment names must be unique")
+        for required in (MECHANICAL_PUMP, "TurboVacuumPump"):
+            if required not in names:
+                raise ValueError(f"vacuum config requires {required}")
         if len(set(writes)) != len(writes):
             raise ValueError("vacuum Port A output pins must be unique")
+        if self.high_voltage_transformer.write in writes:
+            raise ValueError("high-voltage output must not share a pump output pin")
         if len(set(reads)) != len(reads):
             raise ValueError("vacuum Port B comparator pins must be unique")
-        missing = [pin for pin in writes + reads if pin not in self.sbc.gpio]
+        missing = [
+            pin for pin in writes + reads + [self.high_voltage_transformer.write]
+            if pin not in self.sbc.gpio
+        ]
         if missing:
             raise ValueError(f"SBC.GPIO is missing channels: {', '.join(missing)}")
         return self
@@ -150,18 +176,27 @@ class VacuumController:
             self.gpio = device
         elif config.simulate:
             self.gpio = SimulatedVacuumDevice(
-                (pump.write for pump in config.pumps),
+                [*(pump.write for pump in config.pumps), config.high_voltage_transformer.write],
                 (pump.read for pump in config.pumps),
                 initial_outputs={
-                    pump.write: pump.power.lower() == "on" for pump in config.pumps
+                    **{pump.write: pump.power.lower() == "on" for pump in config.pumps},
+                    config.high_voltage_transformer.write: False,
                 },
             )
         else:
             self.gpio = RaspberryPiGPIODevice(
-                {pump.write: config.sbc.gpio[pump.write] for pump in config.pumps},
+                {
+                    **{pump.write: config.sbc.gpio[pump.write] for pump in config.pumps},
+                    config.high_voltage_transformer.write:
+                        config.sbc.gpio[config.high_voltage_transformer.write],
+                },
                 {pump.read: config.sbc.gpio[pump.read] for pump in config.pumps},
+                # Process construction must always be electrically safe. The
+                # controller explicitly energizes the mechanical pump only
+                # after configuration and optional authority checks succeed.
                 initial_outputs={
-                    pump.write: pump.power.lower() == "on" for pump in config.pumps
+                    **{pump.write: False for pump in config.pumps},
+                    config.high_voltage_transformer.write: False,
                 },
                 active_high=config.sbc.active_high,
                 input_pull_up=config.sbc.input_pull_up,
@@ -189,6 +224,7 @@ class VacuumController:
         self._running = False
         self._started_at: float | None = None
         self._simulation_reads = {pump.name: False for pump in config.pumps}
+        self._high_voltage_power = False
 
     @property
     def requires_remote_authority(self) -> bool:
@@ -225,6 +261,7 @@ class VacuumController:
             if self.config.simulate:
                 self.gpio.reconnect()
             self._cascade_stopped = False
+            await self._set_high_voltage_output(False)
             for name, state in self._states.items():
                 self._simulation_reads[name] = False
                 state.simulation_read = False
@@ -252,6 +289,8 @@ class VacuumController:
             except asyncio.CancelledError:
                 pass
             self._task = None
+        if self._high_voltage_power:
+            await self._set_high_voltage_output(False)
         await self.gpio.close()
 
     @property
@@ -279,10 +318,31 @@ class VacuumController:
             ),
             cascade_stopped=self._cascade_stopped,
             isVacuumSystemReady=self.isVacuumSystemReady,
+            high_voltage_power=self._high_voltage_power,
             last_error=self._last_error,
             updated_at=self._updated_at,
             pumps=[state.model_copy() for state in self._states.values()],
         )
+
+    async def set_high_voltage_power(self, power: bool) -> None:
+        """Control the transformer with vacuum readiness as a hard interlock."""
+        async with self._io_lock:
+            if power:
+                self._require_authority()
+                if not self._running:
+                    raise RuntimeError("vacuum controller is not running")
+                # Check while holding the same lock used for GPIO reads and
+                # writes so a poll cannot invalidate the interlock between
+                # validation and energizing the transformer.
+                if not self.isVacuumSystemReady:
+                    raise ValueError("high voltage requires the vacuum system to be ready")
+            await self.gpio.write(self.config.high_voltage_transformer.write, power)
+            self._high_voltage_power = power
+
+    async def _set_high_voltage_output(self, power: bool) -> None:
+        async with self._io_lock:
+            await self.gpio.write(self.config.high_voltage_transformer.write, power)
+        self._high_voltage_power = power
 
     async def set_power(self, name: str, power: bool, *, automatic: bool = False) -> None:
         state = self._states.get(name)
@@ -331,6 +391,14 @@ class VacuumController:
             if name != MECHANICAL_PUMP and state.power:
                 await self.set_power(name, False, automatic=True)
 
+    async def resume_cascade(self) -> None:
+        """Resume automatic progression from the current measured state."""
+        self._require_authority()
+        if not self._running:
+            raise RuntimeError("vacuum controller is not running")
+        self._cascade_stopped = False
+        await self.poll_once()
+
     async def set_simulated_read(self, name: str, checked: bool) -> None:
         if not self.config.simulate:
             raise ValueError("simulated read controls are read-only on real hardware")
@@ -350,6 +418,7 @@ class VacuumController:
             self._cascade_stopped = False
         if name != MECHANICAL_PUMP and not checked:
             await self.set_power(name, False)
+            await self.poll_once()
             return
         await self.poll_once()
 
@@ -414,10 +483,36 @@ class VacuumController:
                     state.border = "off"
             self._updated_at = datetime.now(timezone.utc).isoformat()
             self._last_error = None
+            await self._enforce_interlocks()
+            if self._high_voltage_power and not self.isVacuumSystemReady:
+                await self._set_high_voltage_output(False)
             if not self._cascade_stopped:
                 await self._advance_cascade()
         except Exception as exc:
-            self._last_error = str(exc)
+            errors = [str(exc)]
+            if self._high_voltage_power:
+                try:
+                    await self._set_high_voltage_output(False)
+                except Exception as shutdown_exc:
+                    errors.append(f"failed to de-energize high voltage: {shutdown_exc}")
+            # Input state is unknown. Attempt the safe downstream state even
+            # when the read path failed; keep the backing pump untouched.
+            for name, state in self._states.items():
+                if name == MECHANICAL_PUMP or not state.power:
+                    continue
+                try:
+                    async with self._io_lock:
+                        self._require_authority()
+                        await self.gpio.write(state.write, False)
+                    state.power = False
+                    state.port_a_value = 0.0
+                    state.value = None
+                    state.border = "off"
+                except Exception as shutdown_exc:
+                    errors.append(f"failed to de-energize {name}: {shutdown_exc}")
+                    state.border = "error"
+            self._cascade_stopped = True
+            self._last_error = "; ".join(errors)
             for state in self._states.values():
                 state.port_b_value = 0.0
                 state.ready = False
@@ -453,6 +548,21 @@ class VacuumController:
             for state in uh:
                 if not state.power:
                     await self.set_power(state.name, True, automatic=True)
+
+    async def _enforce_interlocks(self) -> None:
+        mechanical = self._states.get(MECHANICAL_PUMP)
+        turbo = self._states.get("TurboVacuumPump")
+        uh = [state for state in self._states.values() if state.group == UH_GROUP]
+        # Reconcile from downstream to upstream before advancing. A dropped
+        # comparator is an interlock event, not merely a dashboard update.
+        # Keep the backing/mechanical pump running so the chamber can recover.
+        if turbo and not turbo.ready:
+            for state in uh:
+                if state.power:
+                    await self.set_power(state.name, False, automatic=True)
+        if mechanical and not mechanical.ready:
+            if turbo and turbo.power:
+                await self.set_power(turbo.name, False, automatic=True)
 
     async def _poll_worker(self) -> None:
         while True:

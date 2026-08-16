@@ -1,160 +1,170 @@
 {
-	"Header":{
-		"Application":"Project Distribution Deploy",
-		"TargetEnv":"Windows 11",
-		"Version":"1.0.0",
-		"Description":"Builds dist_app.zip from local sources and bootstraps a Windows 11 host with the Python environment and ionbeam-web app."
+	"Header": {
+		"Application": "Project Distribution Deploy",
+		"TargetEnv": "Windows 11",
+		"Version": "1.0.0",
+		"Description": "Builds dist_app.zip from local sources and bootstraps a Windows 11 host with the Python environment and ionbeam-web app."
 	},
-	"Deployment":{
-		"SourceRoot":"C:\\Project\\IobeamTech\\Development",
-		"BuildScript":"C:\\Project\\IobeamTech\\Development\\buidCompiledDist.py",
-		"DistDir":"C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app",
-		"DistZip":"C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app.zip",
-		"DeployRoot":"C:\\Project\\Iobeam\\Deploy",
-		"VenvDir":".venv",
-		"GlasgowConfig":"C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
-		"GlasgowLog":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
-		"GlasgowServiceLog":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
-		"GlasgowRepoUrl":"https://github.com/GlasgowEmbedded/glasgow",
-		"GlasgowRepoDir":"glasgow",
-		"IonbeamWebDir":"ionbeam-web",
-		"NodeInstaller":"winget:OpenJS.NodeJS.LTS"
+	"Deployment": {
+		"SourceRoot": "C:\\Project\\IobeamTech\\Development",
+		"BuildScript": "C:\\Project\\IobeamTech\\Development\\buidCompiledDist.py",
+		"DistDir": "C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app",
+		"DistZip": "C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app.zip",
+		"DeployRoot": "C:\\Project\\Iobeam\\Deploy",
+		"VenvDir": ".venv",
+		"GlasgowConfig": "C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
+		"GlasgowLog": "C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
+		"GlasgowServiceLog": "C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
+		"GlasgowRepoUrl": "https://github.com/GlasgowEmbedded/glasgow",
+		"GlasgowRepoDir": "glasgow",
+		"IonbeamWebDir": "ionbeam-web",
+		"NodeInstaller": "winget:OpenJS.NodeJS.LTS",
+		"IsProduction": false,
+		"BackendHost": "127.0.0.1",
+		"GlasgowHost": "127.0.0.1",
+		"GlasgowPort": 8765,
+		"ProxyTargetHttp": "http://127.0.0.1:8765",
+		"ProxyTargetWs": "ws://127.0.0.1:8765",
+		"DatabaseHost": "127.0.0.1",
+		"DatabasePort": 5432,
+		"DatabaseName": "iobeam_admin",
+		"DatabaseUser": "iobeam_admin_app"
 	},
-	"Actions":[
+	"Actions": [
 		{
-			"buildDistribution":{
-				"skip":true,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$s=\u0027{}\u0027; $src=\u0027{}\u0027; $dist=\u0027{}\u0027; $out=\u0027{}\u0027; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) {{ \u0026 py -3 $s --source $src --dist $dist --output $out }} else {{ \u0026 python $s --source $src --dist $dist --output $out }}\"",
-					"script":"C:\\Project\\IobeamTech\\Development\\buidCompiledDist.py",
-					"source":"C:\\Project\\IobeamTech\\Development",
-					"dist":"C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app",
-					"output":"C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app.zip"
+			"buildDistribution": {
+				"skip": true,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$s='{}'; $src='{}'; $dist='{}'; $out='{}'; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) {{ & py -3 $s --source $src --dist $dist --output $out }} else {{ & python $s --source $src --dist $dist --output $out }}\"",
+					"script": "C:\\Project\\IobeamTech\\Development\\buidCompiledDist.py",
+					"source": "C:\\Project\\IobeamTech\\Development",
+					"dist": "C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app",
+					"output": "C:\\Project\\IobeamTech\\Development\\DeployWorkSpace\\Development\\DistributionDeploy\\dist_app.zip"
 				},
-				"timeout":300.0,
-				"args":{
-					"outputFiles":[
+				"timeout": 300,
+				"args": {
+					"outputFiles": [
 						"dist_app.zip"
 					]
 				}
 			}
 		},
 		{
-			"createDeployFolder":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root=\u0027$1\u0027; if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }; New-Item -ItemType Directory -Path $root -Force | Out-Null\"",
-					"deployRoot":"C:\\Project\\Iobeam\\Deploy"
+			"createDeployFolder": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root='$1'; if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }; New-Item -ItemType Directory -Path $root -Force | Out-Null\"",
+					"deployRoot": "C:\\Project\\Iobeam\\Deploy"
 				},
-				"timeout":30.0
+				"timeout": 30
 			}
 		},
 		{
-			"unzipDistribution":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath \u0027{}\u0027 -DestinationPath \u0027{}\u0027 -Force\"",
-					"zip":".\\Development\\DistributionDeploy\\dist_app.zip",
-					"acceptedNames":[
+			"unzipDistribution": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath '{}' -DestinationPath '{}' -Force\"",
+					"zip": ".\\Development\\DistributionDeploy\\dist_app.zip",
+					"acceptedNames": [
 						"dist_app.zip",
 						"dist_app_raw.zip",
 						"dist_app*.zip"
 					],
-					"dest":"C:\\Project\\Iobeam\\Deploy"
+					"dest": "C:\\Project\\Iobeam\\Deploy"
 				},
-				"timeout":120.0
+				"timeout": 120
 			}
 		},
 		{
-			"setupVirtualEnv":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root=\u0027{}\u0027; $venv=\u0027{}\u0027; $venvAct=\u0027{}\u0027; Set-Location -LiteralPath $root; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) {{ \u0026 py -3 -m venv $venv }} else {{ \u0026 python -m venv $venv }}; \u0026 (Join-Path $root (Join-Path $venvAct \u0027Scripts\\python.exe\u0027)) -m pip install --upgrade pip\"",
-					"root":"C:\\Project\\Iobeam\\Deploy",
-					"venv":".venv",
-					"venvAct":".venv"
+			"setupVirtualEnv": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root='{}'; $venv='{}'; $venvAct='{}'; Set-Location -LiteralPath $root; $py=(Get-Command py -ErrorAction SilentlyContinue); if ($py) {{ & py -3 -m venv $venv }} else {{ & python -m venv $venv }}; & (Join-Path $root (Join-Path $venvAct 'Scripts\\python.exe')) -m pip install --upgrade pip\"",
+					"root": "C:\\Project\\Iobeam\\Deploy",
+					"venv": ".venv",
+					"venvAct": ".venv"
 				},
-				"timeout":180.0
+				"timeout": 180
 			}
 		},
 		{
-			"installPipRequirements":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"py -3 -m pip install -r {}\\{}",
-					"root":"C:\\Project\\Iobeam\\Deploy",
-					"requirementsName":".\\Development\\requirements.txt",
-					"extraRequirements":[
+			"installPipRequirements": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "py -3 -m pip install -r {}\\{}",
+					"root": "C:\\Project\\Iobeam\\Deploy",
+					"requirementsName": ".\\Development\\requirements.txt",
+					"extraRequirements": [
 						"glasgow_service/requirements.txt"
 					],
-					"verifyImports":[
+					"verifyImports": [
 						"gpiozero",
 						"httpx",
 						"redis"
 					],
-					"venvDir":"C:\\Project\\Iobeam\\Deploy\\.venv",
-					"skipPrivateGitEditable":true,
-					"stopOnError":false,
-					"useBreakSystemPackages":false
+					"venvDir": "C:\\Project\\Iobeam\\Deploy\\.venv",
+					"skipPrivateGitEditable": true,
+					"stopOnError": false,
+					"useBreakSystemPackages": false
 				},
-				"timeout":600.0
+				"timeout": 600
 			}
 		},
 		{
-			"installSbcGpioRuntime":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"aptPackages":[
+			"installSbcGpioRuntime": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"aptPackages": [
 						"python3-gpiozero",
 						"python3-lgpio"
 					],
-					"venvDir":".venv",
-					"verifyImports":[
+					"venvDir": ".venv",
+					"verifyImports": [
 						"gpiozero",
 						"lgpio"
 					],
-					"requireRaspberryPi":true
+					"requireRaspberryPi": true
 				},
-				"timeout":600.0
+				"timeout": 600
 			}
 		},
 		{
-			"installNodeJS":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"internal",
-					"nodeVersion":"--lts",
-					"windowsPackage":"OpenJS.NodeJS.LTS",
-					"installOnWindows":true
+			"installNodeJS": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "internal",
+					"nodeVersion": "--lts",
+					"windowsPackage": "OpenJS.NodeJS.LTS",
+					"installOnWindows": true
 				},
-				"timeout":600.0
+				"timeout": 600
 			}
 		},
 		{
-			"installUuidRuntime":{
-				"skip":true,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"internal",
-					"package":""
+			"installUuidRuntime": {
+				"skip": true,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "internal",
+					"package": ""
 				},
-				"timeout":180.0
+				"timeout": 180
 			}
 		},
 		{
-			"installToolchain":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"iterative",
-					"pipPackages":[
+			"installToolchain": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "iterative",
+					"pipPackages": [
 						"Cython",
 						"debugpy",
 						"fx2",
@@ -173,10 +183,10 @@
 						"yowasp-yosys",
 						"yowasp-nextpnr-ice40"
 					],
-					"useVenv":true,
-					"venvDir":"C:\\Project\\Iobeam\\Deploy\\.venv",
-					"venvActivate":"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\activate",
-					"verifyCommands":[
+					"useVenv": true,
+					"venvDir": "C:\\Project\\Iobeam\\Deploy\\.venv",
+					"venvActivate": "C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\activate",
+					"verifyCommands": [
 						[
 							"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\yowasp-yosys.exe",
 							"--version"
@@ -189,57 +199,79 @@
 							"powershell",
 							"-NoProfile",
 							"-Command",
-							"if (Test-Path -LiteralPath \u0027C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\yowasp-icepack.exe\u0027) { exit 0 } else { exit 1 }"
+							"if (Test-Path -LiteralPath 'C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
 						]
 					],
-					"stopOnError":false
+					"stopOnError": false
 				},
-				"timeout":1800.0
+				"timeout": 1800
 			}
 		},
 		{
-			"installPostgreSQL":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Get-Command psql -ErrorAction SilentlyContinue) {{ exit 0 }}; $bin = Get-ChildItem -LiteralPath 'C:\\Program Files\\PostgreSQL' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1; if ($bin -and (Test-Path -LiteralPath (Join-Path $bin.FullName 'bin\\psql.exe'))) {{ exit 0 }}; winget install --id PostgreSQL.PostgreSQL.17 --source winget --accept-source-agreements --accept-package-agreements --silent; exit $LASTEXITCODE\""
+			"installPostgreSQL": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Get-Command psql -ErrorAction SilentlyContinue) {{ exit 0 }}; $bin = Get-ChildItem -LiteralPath 'C:\\Program Files\\PostgreSQL' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1; if ($bin -and (Test-Path -LiteralPath (Join-Path $bin.FullName 'bin\\psql.exe'))) {{ exit 0 }}; winget install --id PostgreSQL.PostgreSQL.17 --source winget --accept-source-agreements --accept-package-agreements --silent; exit $LASTEXITCODE\""
 				},
-				"timeout":900.0
+				"timeout": 900
 			}
 		},
 		{
-			"setupIobeamAdminDb":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"databaseName":"iobeam_admin",
-					"schemaFile":"IobeamAdmin\\Sql\\001_schema.sql",
-					"seedFile":"IobeamAdmin\\Sql\\002_seed_root_user.sql",
-					"dbHost":"localhost",
-					"dbPort":5432,
-					"dbUser":"postgres",
-					"dbPassword":""
+			"installRedisSentinel": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"installer": "winget",
+					"packageId": "Docker.DockerDesktop",
+					"requiredExecutable": "docker.exe"
 				},
-				"timeout":900.0
+				"timeout": 900
 			}
 		},
 		{
-			"setupGlasgow":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"iterative",
-					"deployRoot":"C:\\Project\\Iobeam\\Deploy",
-					"repoUrl":"https://github.com/GlasgowEmbedded/glasgow",
-					"repoDir":"glasgow",
-					"rulesSrc":"",
-					"rulesDst":"",
-					"idVendor":"20b7",
-					"idProduct":"9db1",
-					"pipxTarget":"glasgow/software[builtin-toolchain]",
-					"toolchain":"builtin",
-					"venvDir":"C:\\Project\\Iobeam\\Deploy\\.venv",
-					"verifyCommands":[
+			"setupLocalRedis": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"script": "glasgow_service\\deploy\\setup-redis-sentinel.ps1"
+				},
+				"timeout": 600
+			}
+		},
+		{
+			"setupIobeamAdminDb": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"databaseName": "iobeam_admin",
+					"schemaFile": "IobeamAdmin\\Sql\\001_schema.sql",
+					"seedFile": "IobeamAdmin\\Sql\\002_seed_root_user.sql",
+					"dbHost": "localhost",
+					"dbPort": 5432,
+					"dbUser": "postgres",
+					"dbPassword": ""
+				},
+				"timeout": 900
+			}
+		},
+		{
+			"setupGlasgow": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "iterative",
+					"deployRoot": "C:\\Project\\Iobeam\\Deploy",
+					"repoUrl": "https://github.com/GlasgowEmbedded/glasgow",
+					"repoDir": "glasgow",
+					"rulesSrc": "",
+					"rulesDst": "",
+					"idVendor": "20b7",
+					"idProduct": "9db1",
+					"pipxTarget": "glasgow/software[builtin-toolchain]",
+					"toolchain": "builtin",
+					"venvDir": "C:\\Project\\Iobeam\\Deploy\\.venv",
+					"verifyCommands": [
 						[
 							"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\python.exe",
 							"-c",
@@ -257,48 +289,48 @@
 							"powershell",
 							"-NoProfile",
 							"-Command",
-							"if (Test-Path -LiteralPath \u0027C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\yowasp-icepack.exe\u0027) { exit 0 } else { exit 1 }"
+							"if (Test-Path -LiteralPath 'C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\yowasp-icepack.exe') { exit 0 } else { exit 1 }"
 						]
 					],
-					"stopOnError":true
+					"stopOnError": true
 				},
-				"timeout":900.0
+				"timeout": 900
 			}
 		},
 		{
-			"exportEnv":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"internal",
-					"exports":{
-						"GLASGOW_CONFIG":"C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
-						"IOBEAM_ADMIN_CONFIG":"C:\\Project\\Iobeam\\Deploy\\IobeamAdmin\\Json\\IobeamAdmin.json",
-						"IOBEAM_ADMIN_DB_HOST":"localhost",
-						"IOBEAM_ADMIN_DB_PORT":"5432",
-						"IOBEAM_ADMIN_DB_NAME":"iobeam_admin",
-						"IOBEAM_ADMIN_DB_USER":"postgres"
+			"exportEnv": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "internal",
+					"exports": {
+						"GLASGOW_CONFIG": "C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
+						"IOBEAM_ADMIN_CONFIG": "C:\\Project\\Iobeam\\Deploy\\IobeamAdmin\\Json\\IobeamAdmin.json",
+						"IOBEAM_ADMIN_DB_HOST": "localhost",
+						"IOBEAM_ADMIN_DB_PORT": "5432",
+						"IOBEAM_ADMIN_DB_NAME": "iobeam_admin",
+						"IOBEAM_ADMIN_DB_USER": "postgres"
 					}
 				},
-				"timeout":5.0
+				"timeout": 5
 			}
 		},
 		{
-			"setupUvicorn":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"iterative",
-					"pipPackages":[
+			"setupUvicorn": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "iterative",
+					"pipPackages": [
 						"fastapi>=0.110",
 						"uvicorn[standard]>=0.27",
 						"pydantic>=2.5",
 						"websockets>=12"
 					],
-					"useVenv":true,
-					"venvDir":"C:\\Project\\Iobeam\\Deploy\\.venv",
-					"venvActivate":"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\activate",
-					"verifyCommands":[
+					"useVenv": true,
+					"venvDir": "C:\\Project\\Iobeam\\Deploy\\.venv",
+					"venvActivate": "C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\activate",
+					"verifyCommands": [
 						[
 							"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\python.exe",
 							"-c",
@@ -311,137 +343,148 @@
 							"--version"
 						]
 					],
-					"stopOnError":true
+					"stopOnError": true
 				},
-				"timeout":300.0
+				"timeout": 300
 			}
 		},
 		{
-			"launchGlasgowService":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"root":"C:\\Project\\Iobeam\\Deploy",
-					"venvActivate":"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\activate",
-					"exports":{
-						"GLASGOW_CONFIG":"C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
-						"GLASGOW_TOOLCHAIN":"builtin",
-						"GLASGOW_USB_TRANSFER_TIMEOUT_S":"60",
-						"IOBEAM_ROOT":"C:\\Project\\Iobeam\\Deploy",
-						"PYTHONPATH":"C:\\Project\\Iobeam\\Deploy;C:\\Project\\Iobeam\\Deploy\\glasgow_service"
+			"launchGlasgowService": {
+				"skip": true,
+				"transactionComplete": false,
+				"actionData": {
+					"root": "C:\\Project\\Iobeam\\Deploy",
+					"venvActivate": "C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\activate",
+					"exports": {
+						"GLASGOW_CONFIG": "C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
+						"GLASGOW_TOOLCHAIN": "builtin",
+						"GLASGOW_USB_TRANSFER_TIMEOUT_S": "60",
+						"IOBEAM_ROOT": "C:\\Project\\Iobeam\\Deploy",
+						"PYTHONPATH": "C:\\Project\\Iobeam\\Deploy;C:\\Project\\Iobeam\\Deploy\\glasgow_service"
 					},
-					"command":"C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\python.exe -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --ws websockets --log-level debug",
-					"log":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
-					"pid":"C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.pid",
-					"title":"Glasgow Service",
-					"spawnTerminal":true
+					"command": "C:\\Project\\Iobeam\\Deploy\\.venv\\Scripts\\python.exe -m uvicorn glasgow_service.api:app --host 127.0.0.1 --port 8765 --ws websockets --log-level debug",
+					"log": "C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.log",
+					"pid": "C:\\Project\\Iobeam\\Deploy\\Logs\\glasgow.pid",
+					"title": "Glasgow Service",
+					"spawnTerminal": true
 				},
-				"timeout":30.0,
-				"args":{
-					"readinessDelay":4.0
+				"timeout": 30,
+				"args": {
+					"readinessDelay": 4
 				}
 			}
 		},
 		{
-			"setupIonbeamWeb":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"webRoot":"C:\\Project\\Iobeam\\Deploy\\ionbeam-web",
-					"backendDir":"C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\backend",
-					"frontendDir":"C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\frontend",
-					"createBackendEnv":true,
-					"npmInstall":true,
-					"useNvm":false
+			"setupIonbeamWeb": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"webRoot": "C:\\Project\\Iobeam\\Deploy\\ionbeam-web",
+					"backendDir": "C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\backend",
+					"frontendDir": "C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\frontend",
+					"createBackendEnv": true,
+					"npmInstall": true,
+					"useNvm": false
 				},
-				"timeout":600.0
+				"timeout": 600
 			}
 		},
 		{
-			"launchIonbeamWebBackend":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"dir":"C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\backend",
-					"command":"npm.cmd start",
-					"useNvm":false,
-					"exports":{
-						"GLASGOW_CONFIG":"C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
-						"IOBEAM_ADMIN_CONFIG":"C:\\Project\\Iobeam\\Deploy\\IobeamAdmin\\Json\\IobeamAdmin.json",
-						"IOBEAM_ADMIN_DB_HOST":"localhost",
-						"IOBEAM_ADMIN_DB_PORT":"5432",
-						"IOBEAM_ADMIN_DB_NAME":"iobeam_admin",
-						"IOBEAM_ADMIN_DB_USER":"postgres"
+			"launchIonbeamWebBackend": {
+				"skip": true,
+				"transactionComplete": false,
+				"actionData": {
+					"dir": "C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\backend",
+					"command": "npm.cmd start",
+					"useNvm": false,
+					"exports": {
+						"GLASGOW_CONFIG": "C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
+						"IOBEAM_ADMIN_CONFIG": "C:\\Project\\Iobeam\\Deploy\\IobeamAdmin\\Json\\IobeamAdmin.json",
+						"IOBEAM_ADMIN_DB_HOST": "localhost",
+						"IOBEAM_ADMIN_DB_PORT": "5432",
+						"IOBEAM_ADMIN_DB_NAME": "iobeam_admin",
+						"IOBEAM_ADMIN_DB_USER": "postgres"
 					},
-					"log":"C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-backend.log",
-					"pid":"C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-backend.pid",
-					"title":"Ionbeam Web Backend",
-					"spawnTerminal":true
+					"log": "C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-backend.log",
+					"pid": "C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-backend.pid",
+					"title": "Ionbeam Web Backend",
+					"spawnTerminal": true
 				},
-				"timeout":60.0
+				"timeout": 60
 			}
 		},
 		{
-			"launchIonbeamWebFrontend":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"dir":"C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\frontend",
-					"command":"npm.cmd run dev -- --host 127.0.0.1",
-					"useNvm":false,
-					"log":"C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-frontend.log",
-					"pid":"C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-frontend.pid",
-					"title":"Ionbeam Web Frontend",
-					"spawnTerminal":true
+			"launchIonbeamWebFrontend": {
+				"skip": true,
+				"transactionComplete": false,
+				"actionData": {
+					"dir": "C:\\Project\\Iobeam\\Deploy\\ionbeam-web\\frontend",
+					"command": "npm.cmd run dev -- --host 127.0.0.1",
+					"useNvm": false,
+					"log": "C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-frontend.log",
+					"pid": "C:\\Project\\Iobeam\\Deploy\\Logs\\ionbeam-frontend.pid",
+					"title": "Ionbeam Web Frontend",
+					"spawnTerminal": true
 				},
-				"timeout":60.0
+				"timeout": 60
 			}
 		},
 		{
-			"verifyIonbeamWeb":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"initialDelay":3.0,
-					"pollInterval":1.0,
-					"checks":[
+			"manageLocalSystem": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"script": "Development\\Scripts\\manage-local-system.ps1",
+					"operation": "restart"
+				},
+				"timeout": 300
+			}
+		},
+		{
+			"verifyIonbeamWeb": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"initialDelay": 3,
+					"pollInterval": 1,
+					"checks": [
 						{
-							"url":"http://127.0.0.1:4000/healthz",
-							"expectedStatus":200,
-							"jsonContains":{
-								"ok":true
+							"url": "http://127.0.0.1:4000/healthz",
+							"expectedStatus": 200,
+							"jsonContains": {
+								"ok": true
 							}
 						},
 						{
-							"url":"http://127.0.0.1:4000/api/admin/iobeam/auth/current-account",
-							"expectedStatus":200,
-							"jsonContains":{
-								"ok":true
+							"url": "http://127.0.0.1:4000/api/admin/iobeam/auth/current-account",
+							"expectedStatus": 200,
+							"jsonContains": {
+								"ok": true
 							}
 						},
 						{
-							"url":"http://127.0.0.1:5173/control",
-							"expectedStatus":200
+							"url": "http://127.0.0.1:5173/control",
+							"expectedStatus": 200
 						}
 					]
 				},
-				"timeout":45.0
+				"timeout": 45
 			}
 		},
 		{
-			"launchUI":{
-				"skip":false,
-				"transactionComplete":false,
-				"actionData":{
-					"commandFormat":"internal",
-					"url":"http://127.0.0.1:5173/control",
-					"readinessTimeout":30.0,
-					"pollInterval":0.5,
-					"failOnNotReady":false
+			"launchUI": {
+				"skip": false,
+				"transactionComplete": false,
+				"actionData": {
+					"commandFormat": "internal",
+					"url": "http://127.0.0.1:5173/control",
+					"readinessTimeout": 30,
+					"pollInterval": 0.5,
+					"failOnNotReady": false
 				},
-				"timeout":60.0
+				"timeout": 60
 			}
 		}
 	],
-	"LogName":"DistributionDeploy"
+	"LogName": "DistributionDeploy"
 }

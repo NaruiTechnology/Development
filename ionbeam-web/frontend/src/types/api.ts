@@ -33,7 +33,6 @@ export interface VacuumPumpState {
   border: VacuumBorderState;
   ready: boolean;
   group: string | null;
-  simulation_read: boolean;
 }
 
 export interface VacuumSystemStatus {
@@ -46,6 +45,7 @@ export interface VacuumSystemStatus {
   runtime_seconds: number;
   cascade_stopped: boolean;
   isVacuumSystemReady: boolean;
+  high_voltage_power: boolean;
   last_error: string | null;
   updated_at: string | null;
   pumps: VacuumPumpState[];

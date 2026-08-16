@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0-draft",
+  "releaseState": "engineering-specification",
+  "axes": [
+    {"name": "X", "command": "tmc5160-spi-prototype", "feedback": "abn-encoder", "home": true, "limits": ["negative", "positive"]},
+    {"name": "Y", "command": "tmc5160-spi-prototype", "feedback": "abn-encoder", "home": true, "limits": ["negative", "positive"]},
+    {"name": "Z", "command": "isolated-external-drive", "feedback": "absolute-or-incremental-encoder", "home": true, "limits": ["negative", "positive"]},
+    {"name": "T", "command": "isolated-external-drive", "feedback": "absolute-encoder", "home": true, "limits": ["negative", "positive"]},
+    {"name": "R", "command": "isolated-external-drive", "feedback": "absolute-encoder", "home": true, "limits": []}
+  ],
+  "externalAxisConnector": {
+    "status": "pinout-tbd-after-driver-selection",
+    "requiredSignals": ["COMMAND_POS", "COMMAND_NEG", "ENABLE_POS", "ENABLE_NEG", "READY_POS", "READY_NEG", "FAULT_POS", "FAULT_NEG", "ENCODER", "SHIELD", "CHASSIS"]
+  },
+  "safety": {
+    "independentOfSoftware": true,
+    "dualChannelEmergencyStop": true,
+    "safeTorqueOffOrContactor": true,
+    "requiredPermits": ["CHAMBER_CLOSED", "VACUUM_OK", "WORKING_DISTANCE_OK", "Z_TILT_CLEARANCE_OK"],
+    "resetPolicy": "manual-reset-no-automatic-restart"
+  },
+  "unresolvedSelections": [
+    "motor-and-actuator-part-numbers",
+    "encoder-types-and-signal-levels",
+    "external-drive-command-protocol",
+    "dc-bus-voltage-and-current",
+    "safety-category-and-regulatory-target",
+    "mechanical-envelope-and-mounting",
+    "vacuum-feedthrough-and-grounding"
+  ]
+}

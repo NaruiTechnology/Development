@@ -1,0 +1,153 @@
+
+[CmdletBinding()]
+param(
+    [ValidateSet("install", "start", "restart", "stop", "status", "logs")]
+    [string]$Operation = "restart"
+)
+
+$ErrorActionPreference = "Stop"
+$operationsRoot = if ($env:IOBEAM_OPERATIONS_ROOT) {
+    [IO.Path]::GetFullPath($env:IOBEAM_OPERATIONS_ROOT)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
+}
+$developmentRoot = Join-Path $operationsRoot "Development"
+$serviceRoot = Join-Path $developmentRoot "glasgow_service"
+if (-not (Test-Path -LiteralPath $serviceRoot)) { $serviceRoot = Join-Path $operationsRoot "glasgow_service" }
+$dataRoot = Join-Path $developmentRoot "GlasgowDataIO"
+if (-not (Test-Path -LiteralPath $dataRoot)) { $dataRoot = Join-Path $operationsRoot "GlasgowDataIO" }
+$backendRoot = Join-Path $developmentRoot "ionbeam-web\backend"
+$frontendRoot = Join-Path $developmentRoot "ionbeam-web\frontend"
+if (-not (Test-Path -LiteralPath $backendRoot)) { $backendRoot = Join-Path $operationsRoot "ionbeam-web\backend" }
+if (-not (Test-Path -LiteralPath $frontendRoot)) { $frontendRoot = Join-Path $operationsRoot "ionbeam-web\frontend" }
+$venvRoot = if ($env:IOBEAM_VENV) { [IO.Path]::GetFullPath($env:IOBEAM_VENV) } else { Join-Path $operationsRoot ".venv" }
+$python = Join-Path $venvRoot "Scripts\python.exe"
+$npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+$runtimeRoot = Join-Path $operationsRoot "Runtime"
+$logRoot = Join-Path $operationsRoot "Logs"
+New-Item -ItemType Directory -Path $runtimeRoot, $logRoot -Force | Out-Null
+
+function Assert-Prerequisites {
+    if (-not (Test-Path -LiteralPath $python)) { throw "Virtual-environment Python was not found at $python." }
+    if (-not $npmCommand) { throw "npm.cmd was not found. Install Node.js LTS or add it to PATH." }
+    foreach ($path in @($serviceRoot, $backendRoot, $frontendRoot)) {
+        if (-not (Test-Path -LiteralPath $path)) { throw "Required application directory was not found: $path" }
+    }
+}
+
+function Get-PidPath {
+    param([string]$Name)
+    Join-Path $runtimeRoot "$Name.pid"
+}
+
+function Get-ManagedProcess {
+    param([string]$Name)
+    $pidPath = Get-PidPath $Name
+    if (-not (Test-Path -LiteralPath $pidPath)) { return $null }
+    $storedPid = (Get-Content -LiteralPath $pidPath -Raw).Trim()
+    if ($storedPid -notmatch "^\d+$") {
+        Remove-Item -LiteralPath $pidPath -Force
+        return $null
+    }
+    $process = Get-Process -Id ([int]$storedPid) -ErrorAction SilentlyContinue
+    if (-not $process) { Remove-Item -LiteralPath $pidPath -Force }
+    return $process
+}
+
+function Start-Managed {
+    param([string]$Name, [string]$FilePath, [string[]]$Arguments, [string]$WorkingDirectory)
+    $existing = Get-ManagedProcess $Name
+    if ($existing) {
+        Write-Host "$Name already running (PID $($existing.Id))."
+        return
+    }
+    $startArgs = @{
+        FilePath = $FilePath
+        ArgumentList = $Arguments
+        WorkingDirectory = $WorkingDirectory
+        RedirectStandardOutput = (Join-Path $logRoot "$Name.out.log")
+        RedirectStandardError = (Join-Path $logRoot "$Name.err.log")
+        WindowStyle = "Hidden"
+        PassThru = $true
+    }
+    $process = Start-Process @startArgs
+    Set-Content -LiteralPath (Get-PidPath $Name) -Value $process.Id -Encoding ascii
+    Write-Host "Started $Name (PID $($process.Id))."
+}
+
+function Stop-Managed {
+    param([string]$Name)
+    $process = Get-ManagedProcess $Name
+    if (-not $process) {
+        Write-Host "$Name is not running."
+        return
+    }
+    & taskkill.exe /PID $process.Id /T /F *> $null
+    if ($LASTEXITCODE -ne 0) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath (Get-PidPath $Name) -Force -ErrorAction SilentlyContinue
+    Write-Host "Stopped $Name."
+}
+
+function Wait-Http {
+    param([string]$Name, [string]$Url)
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 2 | Out-Null
+            Write-Host "$Name is ready at $Url."
+            return
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    throw "$Name did not become ready at $Url."
+}
+
+function Show-Status {
+    foreach ($name in @("glasgow", "vacuum-executor", "sbc-vacuum", "ionbeam-backend", "ionbeam-frontend")) {
+        $process = Get-ManagedProcess $name
+        if ($process) { Write-Host ("{0,-20} running PID {1}" -f $name, $process.Id) }
+        else { Write-Host ("{0,-20} stopped" -f $name) }
+    }
+}
+
+function Start-Stack {
+    Assert-Prerequisites
+    $env:PYTHONPATH = "$developmentRoot;$serviceRoot"
+    $env:GLASGOW_CONFIG = Join-Path $dataRoot "Json\streamData.json"
+    $env:SBC_VACUUM_CONFIG = Join-Path $dataRoot "Json\vacuumSystem.json"
+    if (-not $env:VACUUM_REDIS_SENTINELS) { $env:VACUUM_REDIS_SENTINELS = "127.0.0.1:26379" }
+
+    Start-Managed "sbc-vacuum" $python @("-m", "glasgow_service.sbc_vacuum_app") $serviceRoot
+    Wait-Http "SBC vacuum" "http://127.0.0.1:8766/health/ready"
+    Start-Managed "glasgow" $python @("-m", "uvicorn", "glasgow_service.api:app", "--host", "127.0.0.1", "--port", "8765") $serviceRoot
+    Wait-Http "Glasgow" "http://127.0.0.1:8765/status"
+    Start-Managed "vacuum-executor" $python @("-m", "glasgow_service.vacuum_executor_app") $serviceRoot
+    Wait-Http "vacuum executor" "http://127.0.0.1:8780/health/live"
+    Start-Managed "ionbeam-backend" $npmCommand.Source @("run", "dev") $backendRoot
+    Wait-Http "web backend" "http://127.0.0.1:4000/api/status"
+    Start-Managed "ionbeam-frontend" $npmCommand.Source @("run", "dev", "--", "--host", "127.0.0.1") $frontendRoot
+    Wait-Http "web frontend" "http://127.0.0.1:5173/"
+}
+
+function Stop-Stack {
+    foreach ($name in @("ionbeam-frontend", "ionbeam-backend", "vacuum-executor", "glasgow", "sbc-vacuum")) {
+        Stop-Managed $name
+    }
+}
+
+switch ($Operation) {
+    "install" { Assert-Prerequisites; Write-Host "Windows local stack prerequisites are available." }
+    "start" { Start-Stack; Show-Status }
+    "restart" { Stop-Stack; Start-Stack; Show-Status }
+    "stop" { Stop-Stack }
+    "status" { Show-Status }
+    "logs" {
+        Get-ChildItem -LiteralPath $logRoot -Filter "*.log" -ErrorAction SilentlyContinue |
+            Sort-Object Name |
+            ForEach-Object {
+                Write-Host ""
+                Write-Host "===== $($_.Name) ====="
+                Get-Content -LiteralPath $_.FullName -Tail 40
+            }
+    }
+}

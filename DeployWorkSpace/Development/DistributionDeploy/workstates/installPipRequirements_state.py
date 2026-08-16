@@ -43,6 +43,7 @@ class installPipRequirements_state(distributionDeploy_state):
             editableInstall = bool(actionData.get("editableInstall", False))
             editableTarget = actionData.get("editableTarget", ".")
             verifyImports = actionData.get("verifyImports", []) or []
+            requiredExecutables = actionData.get("requiredExecutables", {}) or {}
 
             reqFiles = [os.path.join(root, requirementsName)]
             extraReqs = actionData.get("extraRequirements")
@@ -110,6 +111,36 @@ class installPipRequirements_state(distributionDeploy_state):
                                        self._stderr.decode(errors="replace")
                                        if self._stderr else "<no stderr>"))
                     allOk = False
+
+            if allOk and requiredExecutables:
+                if not isinstance(requiredExecutables, dict):
+                    self.error("[{}] requiredExecutables must be an object"
+                               .format(type(self).__name__))
+                    allOk = False
+                else:
+                    for executable, packageSpec in requiredExecutables.items():
+                        if not re.fullmatch(r"[A-Za-z0-9_.+-]+", str(executable)):
+                            self.error("[{}] invalid required executable: {}"
+                                       .format(type(self).__name__, executable))
+                            allOk = False
+                            break
+                        executablePath = os.path.join(venvDir, "bin", str(executable))
+                        if os.path.isfile(executablePath) and os.access(executablePath, os.X_OK):
+                            self.info("[{}] verified venv executable: {}"
+                                      .format(type(self).__name__, executablePath))
+                            continue
+                        cmd = "{} install --ignore-installed {}".format(
+                            pipPrefix, shlex.quote(str(packageSpec)))
+                        self.info("[{}] materializing venv executable {} >> {}"
+                                  .format(type(self).__name__, executable, cmd))
+                        ok = await self._runWithTimeout(cmd, self.deployRoot(), timeout)
+                        if not ok or not (os.path.isfile(executablePath) and
+                                          os.access(executablePath, os.X_OK)):
+                            self.error("[{}] required venv executable missing after install: {}"
+                                       .format(type(self).__name__, executablePath))
+                            allOk = False
+                            if stopOnError:
+                                break
 
             if allOk and verifyImports:
                 invalidImports = [

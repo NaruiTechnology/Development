@@ -119,6 +119,9 @@ export function App() {
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
   const [isVacuumSystemReady, setIsVacuumSystemReady] = useState(false);
+  const [highVoltagePower, setHighVoltagePower] = useState(false);
+  const [highVoltagePending, setHighVoltagePending] = useState(false);
+  const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
@@ -225,6 +228,7 @@ export function App() {
   useEffect(() => {
     if (!vacuumEnabled) {
       setIsVacuumSystemReady(false);
+      setHighVoltagePower(false);
       return;
     }
 
@@ -235,11 +239,15 @@ export function App() {
       try {
         const response = await fetch(apiUrl("/api/vacuum"), {
           cache: "no-store",
+          headers: scanAuthHeaders(),
           signal: controller.signal,
         });
         if (!response.ok) throw new Error(`vacuum status: HTTP ${response.status}`);
         const status = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
-        if (!cancelled) setIsVacuumSystemReady(status.isVacuumSystemReady === true);
+        if (!cancelled) {
+          setIsVacuumSystemReady(status.isVacuumSystemReady === true);
+          setHighVoltagePower(status.high_voltage_power === true);
+        }
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
         if (!cancelled) setIsVacuumSystemReady(false);
@@ -254,6 +262,40 @@ export function App() {
       window.clearInterval(timer);
     };
   }, [vacuumEnabled]);
+
+  const toggleHighVoltage = useCallback(async () => {
+    if (!isVacuumSystemReady || highVoltagePending) return;
+    setHighVoltagePending(true);
+    setHighVoltageError(null);
+    try {
+      const response = await fetch(apiUrl("/api/vacuum/high-voltage/power"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+        body: JSON.stringify({ power: !highVoltagePower }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as {
+          detail?: unknown;
+          error?: unknown;
+        } | null;
+        if (response.status === 401) {
+          window.localStorage.setItem(LAST_ADMIN_LOGIN_STORAGE_KEY, signedInUser?.login_name ?? "");
+          window.localStorage.removeItem("ionbeam:adminUser");
+          setSignedInUser(null);
+          throw new Error(t("auth.sessionExpired"));
+        }
+        const detail = String(payload?.error ?? payload?.detail ?? "").trim();
+        throw new Error(detail || `${response.status} ${response.statusText}`);
+      }
+      const status = await readJsonResponse<VacuumSystemStatus>(response, "high-voltage power");
+      setIsVacuumSystemReady(status.isVacuumSystemReady === true);
+      setHighVoltagePower(status.high_voltage_power === true);
+    } catch (cause) {
+      setHighVoltageError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setHighVoltagePending(false);
+    }
+  }, [highVoltagePending, highVoltagePower, isVacuumSystemReady, signedInUser?.login_name, t]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -953,6 +995,11 @@ export function App() {
         }}
         sampleStageMinimized={sampleStageMinimized}
         sampleStageControllerBusy={sampleStageControllerBusy}
+        highVoltagePower={highVoltagePower}
+        highVoltageReady={vacuumEnabled && isVacuumSystemReady}
+        highVoltagePending={highVoltagePending}
+        highVoltageError={highVoltageError}
+        onToggleHighVoltage={() => void toggleHighVoltage()}
         scanLocked={scanActive}
       />
 

@@ -1,3 +1,4 @@
+
 import asyncio
 from pathlib import Path
 
@@ -30,7 +31,8 @@ def make_config():
 
 def make_device(config):
     return SimulatedVacuumDevice(
-        [pump.write for pump in config.pumps],
+        [*(pump.write for pump in config.pumps),
+         config.high_voltage_transformer.write],
         [pump.read for pump in config.pumps],
     )
 

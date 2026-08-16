@@ -1,11 +1,8 @@
 #-------------------------------------------------------------------------------
 # verifyGlasgowService_state.py
 #
-# Sanity-check the glasgow service log for liveness markers.
-# Driven by `bash -c 'sleep {} && grep -E "{}" {} || true'`.
-#
-# We append `|| true` in the template so a missing marker doesn't fail the
-# step -- this is an informational sanity check, not a hard gate.
+# Template-driven Windows service-log verification state. Configure a
+# PowerShell commandFormat when this optional action is enabled.
 #-------------------------------------------------------------------------------
 from .executeShellCommand_state import executeShellCommand_state
 

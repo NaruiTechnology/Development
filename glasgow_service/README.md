@@ -1,3 +1,4 @@
+
 # Glasgow Device Service
 
 A long-lived HTTP/WebSocket interface that keeps one Glasgow device connected
@@ -193,3 +194,20 @@ For a Windows POC, run Redis/Sentinel in WSL or a container and set
 VACUUM_REDIS_SENTINELS to those reachable endpoints. A single Sentinel with
 quorum 1 is suitable only for a smoke test; production needs replicated Redis
 plus three or more Sentinel processes on independent nodes.
+
+
+### Start the complete local stack on Windows
+
+Use the repository-relative PowerShell manager to control Glasgow, the vacuum
+services, the Node backend, and the Vite frontend:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File `..\Scripts\manage-local-system.ps1 restart`
+powershell -NoProfile -ExecutionPolicy Bypass -File `..\Scripts\manage-local-system.ps1 status`
+powershell -NoProfile -ExecutionPolicy Bypass -File `..\Scripts\manage-local-system.ps1 logs`
+```
+
+Initialize the local Redis/Sentinel containers first with
+`deploy\setup-redis-sentinel.ps1`. Docker Desktop is used for this development
+configuration; production still requires replicated Redis and at least three
+independent Sentinel endpoints.

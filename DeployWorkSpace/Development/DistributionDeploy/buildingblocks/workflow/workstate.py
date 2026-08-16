@@ -1,3 +1,5 @@
+
+
 #-------------------------------------------------------------------------------
 # This file contains 'Framework Code' and is licensed as such
 # under the terms of your license agreement with  your
@@ -72,7 +74,7 @@ class WorkState(object):# abstract base class
 
     @property
     def Success(self):
-        self._success
+        return self._success
 
     @Success.setter
     def Success(self, val):
@@ -149,13 +151,16 @@ class WorkState(object):# abstract base class
 
         try:
             os.chdir(runfrom)
-            
+            process_kwargs = {
+                "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP
+            }
             proc = await asyncio.create_subprocess_shell(
                         cmd,
                         cwd=runfrom,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
-                        env=os.environ.copy() # Ensures toolchain paths are inherited
+                        env=os.environ.copy(),
+                        **process_kwargs
                     )
             stdout, stderr = await proc.communicate()
             if proc.returncode != 0:
@@ -164,6 +169,16 @@ class WorkState(object):# abstract base class
                 if verbose:
                     print(stdout.decode())
             success = proc.returncode == 0
+        except asyncio.CancelledError:
+            if proc is not None and proc.returncode is None:
+                try:
+                    proc.terminate()
+                    await asyncio.wait_for(proc.communicate(), timeout=10.0)
+                except (ProcessLookupError, asyncio.TimeoutError, OSError):
+                    if proc.returncode is None:
+                        proc.kill()
+                        await proc.communicate()
+            raise
         except Exception as e:
             self._last_output = str(e)
             print("Error running command: {}, error:{}".format(cmd, e))

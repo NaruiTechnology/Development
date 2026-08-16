@@ -1,3 +1,5 @@
+
+
 #-------------------------------------------------------------------------------
 # setupIonbeamWeb_state.py
 #
@@ -220,10 +222,10 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             lines.append("IOBEAM_OPERATION_DB_SSLMODE={}".format(opDbSslMode))
         lines.append("IOBEAM_OPERATION_DB_COMMAND_TIMEOUT_MS={}".format(opDbTimeout))
         lines.extend([
-            "GLASGOW_RESTART_CMD={}".format(
-                os.path.join(backendDir, "scripts", "restart-glasgow-service.sh")),
-            "IONBEAM_BACKEND_RESTART_CMD={}".format(
-                os.path.join(backendDir, "scripts", "restart-ionbeam-backend.sh")),
+            "GLASGOW_RESTART_CMD=powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{}\"" .format(
+                os.path.join(backendDir, "scripts", "restart-glasgow-service.ps1")),
+            "IONBEAM_BACKEND_RESTART_CMD=powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{}\"" .format(
+                os.path.join(backendDir, "scripts", "restart-ionbeam-backend.ps1")),
             "IONBEAM_MOBILITY_ONLY={}".format(
                 "1" if self.deploymentValue("MobilityOnly", False) else "0"),
             "GLASGOW_PROJECT_ROOT={}".format(deployRoot),
@@ -252,13 +254,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             return {}
 
     def _wrapNodeCommand(self, cmd, useNvm):
-        if not useNvm:
-            return cmd
-        return (
-            "bash -lc 'export NVM_DIR=\"$HOME/.nvm\" && "
-            "if [ -s \"$NVM_DIR/nvm.sh\" ]; then . \"$NVM_DIR/nvm.sh\"; fi; {}'"
-            .format(cmd)
-        )
+        return cmd
 
     def _resolveWebRoot(self, configuredRoot):
         candidates = [

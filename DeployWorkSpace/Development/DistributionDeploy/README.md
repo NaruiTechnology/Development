@@ -1,6 +1,11 @@
+
 # DistributionDeploy
 
 Windows 11 deployment workflow for the IobeamTech application stack.
+
+For the supported localhost procedure, follow
+[`DEPLOYMENT_RUNBOOK.md`](DEPLOYMENT_RUNBOOK.md). It covers build, deployment,
+verification, and administration using PowerShell.
 
 The deployment config in `Json/DistributionDeploy.json` builds `dist_app.zip` from:
 
@@ -26,7 +31,9 @@ and deploys it to:
    - `yowasp-nextpnr-ice40`
 7. Verify or install PostgreSQL and initialize the `iobeam_admin` database from `IobeamAdmin\Sql`.
 8. Set `GLASGOW_TOOLCHAIN=builtin` so Yosys, nextpnr-ice40, and icepack resolve through YosysHQ WASM Python packages on Windows.
-9. Launch `glasgow_service`, the Ionbeam web backend, and the Vite frontend.
+9. Verify Docker Desktop and create the local Redis/Sentinel development topology.
+10. Launch the Glasgow, vacuum, backend, and frontend processes with the
+    PowerShell local-system manager.
 
 ## Run
 
@@ -40,6 +47,22 @@ If your machine uses the Windows Python launcher:
 
 ```powershell
 py -3 .\distributionDeployApp.py -j .\Json\DistributionDeploy.json
+```
+
+## Local Redis/Sentinel
+
+The Windows workflow uses Docker Desktop and
+`glasgow_service\deploy\setup-redis-sentinel.ps1`. Run it manually with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File `..\..\..\glasgow_service\deploy\setup-redis-sentinel.ps1`
+```
+
+The complete local stack is controlled with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File `..\..\..\Scripts\manage-local-system.ps1 restart`
+powershell -NoProfile -ExecutionPolicy Bypass -File `..\..\..\Scripts\manage-local-system.ps1 status`
 ```
 
 ## Important Windows Notes

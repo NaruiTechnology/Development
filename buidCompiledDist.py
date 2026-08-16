@@ -1,3 +1,5 @@
+
+
 import argparse
 import compileall
 import fnmatch
@@ -16,11 +18,10 @@ except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
 
 
 REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis')
-
 # Files (by name or glob) to copy verbatim into dist.
 ASSET_PATTERNS = [
     '*.ihex', '*.toml', 'requirements.txt', 'README.md',
-    '*.service', '*.env.example', '*.sh',
+    '*.env.example', '*.env.in', '*.ps1', '*.cmd', '*.bat',
 ]
 
 # Directories to skip when walking the source tree.
@@ -63,8 +64,9 @@ STREAM_DATA_JSON = os.path.join(
 IONBEAM_WEB_SOURCE = os.path.join('Development', 'ionbeam-web')
 IONBEAM_WEB_DEST = 'ionbeam-web'
 
-# (src_relpath, dst_relpath_in_dist) — trees copied verbatim into dist.
+# (src_relpath, dst_relpath_in_dist) - trees copied verbatim into dist.
 COPY_TREES = [
+    ('Scripts', os.path.join('Development', 'Scripts')),
     (IONBEAM_WEB_SOURCE, IONBEAM_WEB_DEST),
     (
         os.path.join('Development', 'IobeamAdmin'),
@@ -167,6 +169,55 @@ def _is_inside(path, parent):
 
 def _target_folder(dist_dir, rel_path):
     return dist_dir if rel_path == os.curdir else os.path.join(dist_dir, rel_path)
+
+
+def validate_local_redis_distribution_workflow(src_dir):
+    """Require the Windows Redis/Sentinel setup to be packaged and ordered."""
+    workflow_root = _development_relative_path(
+        src_dir, 'DeployWorkSpace', 'Development', 'DistributionDeploy')
+    config_path = os.path.join(workflow_root, 'Json', 'DistributionDeploy.json')
+    state_path = os.path.join(
+        workflow_root, 'workstates', 'installRedisSentinel_state.py')
+    helper_path = _development_relative_path(
+        src_dir, 'glasgow_service', 'deploy', 'setup-redis-sentinel.ps1')
+    missing = [path for path in (config_path, state_path, helper_path)
+               if not os.path.isfile(path)]
+    if missing:
+        raise FileNotFoundError(
+            'Missing Windows Redis distribution workflow file(s): ' +
+            ', '.join(missing))
+
+    with open(config_path, 'r', encoding='utf-8') as stream:
+        config = json.load(stream)
+    actions = config.get('Actions', [])
+    action_names = [next(iter(action), None) for action in actions]
+    try:
+        install_index = action_names.index('installRedisSentinel')
+        setup_index = action_names.index('setupLocalRedis')
+    except ValueError as exc:
+        raise ValueError(
+            'DistributionDeploy.json must include installRedisSentinel and '
+            'setupLocalRedis actions') from exc
+    if install_index >= setup_index:
+        raise ValueError('installRedisSentinel must run before setupLocalRedis')
+    setup_script = actions[setup_index]['setupLocalRedis'].get(
+        'actionData', {}).get('script', '')
+    if not str(setup_script).lower().endswith('setup-redis-sentinel.ps1'):
+        raise ValueError('setupLocalRedis must use setup-redis-sentinel.ps1')
+    print('Validated Windows Redis/Sentinel distribution workflow')
+
+
+def validate_packaged_local_system_manager(dist_dir):
+    """Fail before archiving if the Windows stack manager is absent."""
+    manager = os.path.join(
+        dist_dir, 'Development', 'Scripts', 'manage-local-system.ps1')
+    if not os.path.isfile(manager):
+        raise FileNotFoundError(
+            'Distribution is missing required Windows local system manager: ' + manager)
+    print('Validated packaged local system manager: '
+          'Development\\Scripts\\manage-local-system.ps1')
+
+
 
 
 def _remove_tree(path):
@@ -426,7 +477,7 @@ def _resolve_unzip_distribution_relpath(workspace_dir):
 
     Reads DistributionDeploy.json, walks the Actions[] list, finds the entry
     whose key is 'unzipDistribution', and pulls the path from
-    actionData.zip — e.g. ".\\Development\\DistributionDeploy\\dist_app.zip".
+    actionData.zip - e.g. ".\\Development\\DistributionDeploy\\dist_app.zip".
 
     Returns the folder portion only (without the filename), forward-slashed
     and relative to the workspace root, e.g. 'Development/DistributionDeploy'.
@@ -470,7 +521,7 @@ def _resolve_unzip_distribution_relpath(workspace_dir):
 
     # Normalise separators, drop leading './' and any leading workspace-folder
     # prefix so the path is relative to workspace_dir regardless of how the
-    # JSON spells it. Then drop the filename component — the caller already
+    # JSON spells it. Then drop the filename component - the caller already
     # uses os.path.basename(dist_zip) for the leaf name.
     normalised = zip_value.replace('\\', '/').strip()
     parts = [p for p in normalised.split('/') if p and p != '.']
@@ -530,7 +581,7 @@ def package_deploy_workspace(src_dir, dist_zip, workspace_dir, workspace_zip):
 
     # Task 2: after DeployWorkSpace.zip is built, remove the staged
     # dist_app.zip from inside the workspace folder. It already lives inside
-    # the final zip — leaving it on disk just clutters the source tree.
+    # the final zip - leaving it on disk just clutters the source tree.
     if os.path.isfile(embedded_zip):
         os.remove(embedded_zip)
         print(f"Removed staged dist archive after zipping: {embedded_zip}")
@@ -571,6 +622,8 @@ def build_compiled_dist(src_dir, dist_dir, output_zip='dist_app.zip',
 
     if output_zip and _is_inside(output_zip, dist_dir):
         raise ValueError("output zip must be outside the dist directory")
+
+    validate_local_redis_distribution_workflow(src_dir)
 
     # 1. Byte-compile all .py files to __pycache__ (skip in raw mode).
     if not deliver_raw:
@@ -636,6 +689,10 @@ def build_compiled_dist(src_dir, dist_dir, output_zip='dist_app.zip',
 
     # 8. Copy assets (includes README.md).
     copy_matching_assets(src_dir, dist_dir, ASSET_PATTERNS)
+
+    # The Windows manager must retain Development\\Scripts depth so its
+    # repository-relative path discovery resolves to DeployRoot.
+    validate_packaged_local_system_manager(dist_dir)
 
     # 9. Zip the output content.
     if output_zip:

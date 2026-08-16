@@ -1,3 +1,5 @@
+
+
 import asyncio
 from pathlib import Path
 
@@ -112,7 +114,8 @@ def test_controller_accepts_injected_hardware_neutral_device():
             update={"enabled": True, "simulate": True, "error_range": 0.005},
         )
         device = SimulatedVacuumDevice(
-            [pump.write for pump in config.pumps],
+            [*(pump.write for pump in config.pumps),
+             config.high_voltage_transformer.write],
             [pump.read for pump in config.pumps],
         )
         controller = VacuumController(config, device=device)

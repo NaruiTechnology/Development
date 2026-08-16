@@ -17,10 +17,11 @@ from .execution_authority import AuthorityDenied, remote_authority_from_environm
 from .models import (
     VacuumAcquireRequest,
     VacuumPowerRequest,
-    VacuumSimulationReadRequest,
+    VacuumSimulationRequest,
     VacuumSystemStatus,
 )
 from .vacuum import VacuumController, find_vacuum_config_path, load_vacuum_config
+from .vacuum_health import sbc_controller_is_ready
 
 
 def create_app() -> FastAPI:
@@ -106,6 +107,8 @@ def create_app() -> FastAPI:
         if target is None:
             raise HTTPException(503, "SBC vacuum controller is starting")
         status = target.status()
+        if not sbc_controller_is_ready(connected=status.connected, running=status.running):
+            raise HTTPException(503, "vacuum GPIO controller is disconnected or stopped")
         return {
             "status": "ready",
             "connected": status.connected,
@@ -150,16 +153,18 @@ def create_app() -> FastAPI:
             raise HTTPException(409, str(exc)) from exc
         return target.status()
 
-    @app.post("/vacuum/pumps/{name}/read", response_model=VacuumSystemStatus,
+    @app.post("/vacuum/high-voltage/power", response_model=VacuumSystemStatus,
               dependencies=mutation_dependencies)
-    async def simulated_read(name: str, req: VacuumSimulationReadRequest):
+    async def high_voltage_power(req: VacuumPowerRequest):
         target = controller()
         try:
-            await target.set_simulated_read(name, req.checked)
-        except KeyError as exc:
-            raise HTTPException(404, f"unknown vacuum pump: {name}") from exc
-        except (AuthorityDenied, ValueError) as exc:
+            await target.set_high_voltage_power(req.power)
+        except AuthorityDenied as exc:
             raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from exc
         return target.status()
 
     @app.post("/vacuum/stop", response_model=VacuumSystemStatus,
@@ -170,6 +175,30 @@ def create_app() -> FastAPI:
         except AuthorityDenied as exc:
             raise HTTPException(409, str(exc)) from exc
         return controller().status()
+
+    @app.post("/vacuum/resume", response_model=VacuumSystemStatus,
+              dependencies=mutation_dependencies)
+    async def resume():
+        try:
+            await controller().resume_cascade()
+        except AuthorityDenied as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from exc
+        return controller().status()
+
+    @app.post("/vacuum/simulation/{name}/ready", response_model=VacuumSystemStatus,
+              dependencies=mutation_dependencies)
+    async def simulation_ready(name: str, req: VacuumSimulationRequest):
+        """Set one simulated comparator; unavailable in GPIO mode."""
+        target = controller()
+        try:
+            await target.set_simulated_read(name, req.ready)
+        except KeyError as exc:
+            raise HTTPException(404, f"unknown vacuum pump: {name}") from exc
+        except (AuthorityDenied, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return target.status()
 
     @app.post("/vacuum/leadership/renew", response_model=VacuumSystemStatus,
               dependencies=mutation_dependencies)
