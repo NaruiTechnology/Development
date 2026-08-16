@@ -1,6 +1,8 @@
+
+
 import { useEffect, useRef, useState } from "react";
 
-import { fetchDefaultsMetadata, fetchStatus, reconnectDevice } from "../store/statusSlice";
+import { fetchDefaultsMetadata, fetchStatus } from "../store/statusSlice";
 import {
   ALL_THEMES,
   applyThemeToDocument,
@@ -9,13 +11,20 @@ import {
 } from "../store/themeSlice";
 import {
   openDialog as openSettingsDialog,
+  restartSettingsServices,
 } from "../store/settingsSlice";
 import { stopAllScanActions } from "../hooks/scanActionRegistry";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation, type TranslationKey } from "../i18n";
+import { shouldShowVacuumController } from "../lib/vacuumPolicy";
 import { Icon } from "./Icon";
 import { LanguagePicker } from "./LanguagePicker";
 import { AuthDialog, type SignedInUser } from "./AuthDialog";
+import sampleStageImage from "../assets/SampleStage.png";
+import highVoltageImage from "../assets/HighVoltageTransformer.png";
+
+const BRAND_LOGO_DATA_URI =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAFEUlEQVR4nO1YWYhcVRAtq16rccUN3JW4I4LLh5JoIm6gMSQiiF9+atQPv1xAzct0Vc9MkChRIgRCkBBRoqAY45JEXPBHcIG4gMYNzaJGZvpWz6iQmJZz3+tJT3fPZCaZns7IFNyPfvf2u+fUreW8S9RGc5MqBk1Fq1bpsGkCnbRpAp22aQKdtmkCnbZpAp22aQJThYAX6RKaqgTK3XS+m9xJU5FAdTkdEYzf257SUTQVCbjKcjd5ekI3LffQzGAyr7qOZDz/C5rMGg+BUJTbgsm/oUgX0UTbQEqnusmzocgPjfV4K8oPAtRYCAymdGYw2RWUN0809obN+V5X+SmoLAnddNJo6zEfVP6oFAuXjkagmhIj7vPn7U9elDhX/iyo/OMma0I3XTgiCeVXXeUHT+nkkQgEky78Dio7qiup0HYCEUhKSTwFlT2IWzdeHyy5pomAybwIzvjDakqHNxJwTebgHdka6Wq1166ldGwwvqdcLFw14URck2vd5McaKIRCMLkVQOuI7sgBPt9IIJj8ms/tRh4MI9+VXB1MVgXjLf3FwhXULoseUllZA5aP75Dw1ZSODCZL8xDZ20RAZW9O/DX8/jOl45BnwfjzbB1vKKd0Ik2GeVEWImnricDD8GL8rfxOUwgZv5uTW+ImL7jJYP57jys/UTvJSbNYbpXfbDgNgF8cinRBMHl5iJzKS5ANOfh60rvKJbmZOmXRy8r3ucpALQwieJVtwfjhAaPTMFz5EZxQpn347ZzoJ38pnTWpgHc+RUdHEKVkNsIoNjB4VXkjQFVUbgjGrwB843/d+FGcCjyeV7RVbpy68v1ZSCazykrnYY9xgaouoxmDKZ2O0hVM5qOMYbNcq6wJxpuCytdu0t8ULg0DSYiwQHg17oNnyBus2d97gsnfWUXjT1G2Iw6VXhQL4Kuo3ISmCdwEuRA1kCaz3GSBGy+CZ4LKClSMoPyxq2zdFyYjj99TOsZVHGHTSACbuUo5qz6jv8exl8pW7J1hkBXxtCI2WRBPq4dmjlvJDiNblIXx+EEWNVxlT0XlemyIE2wKIeXH0K0RZnkObGwKoQMBdbDW10tnIyFzUG9AYQaTnQA8aHQGRgZediDBkehDXjZeNOnls97KKrcg5oeHAD+eK851CBkMJG9OZHFzyPCGVjnTVoOqdOMnM20UgaAprd5X53lDpSQ39vXS8RhIOld+K0/QVTVZ4XX9wE3umBTwWRXJwiAof+HGDwAk5oLy63XNa6hT10logF0KsYdqEoy3NJzIaiR528BDaAXjrxAe8Gr9HJrSkNpU2RaTvAaslMzOKkmc+w3Cb7hI5PU1reQmP3spmTvh4AescDm8BkHXaj6oFPdpm2ROn9I5NQJI9KhWjTflpzCvyTlWuBKSA2o1NjqVXpwUTYbh4ySYbM/jP43PImDZjVHzeLmHTnCVb1FOR3pXfw+dC/Ax+ZW/hOPaTqBS4ruGPmbqLgSCyS8IiRYXB9u9RKeM9k7kAjqvm3yPvoLC0TYCwfh9V+lDqAx7jk6q/FHjeoQYegCNwWoJ7yrPtUX8eYkujlckJvObgcqLbrJ2rFcx+y3dpWRuo5MO2qLoU3mm1Vww6Qkq3XSoWnUZzQjKH+BzstU8egS0Dh2qVinx3aPdroWi3N6qZB4y5vu5Gq8UC5dh0FS1vlwLdRrH/9M8q+UpSmX22cmbg8k38XoxG173heW151iTrY2yYm18Rym57kCB/AchbrGJAhYTGgAAAABJRU5ErkJggg==";
 
 // Per-theme labels and tooltips are now translation KEYS, not the
 // literal strings. The keys resolve through t() inside the component
@@ -49,48 +58,76 @@ export function Header({
   activeView,
   onOpenReport,
   onOpenScan,
+  onOpenVacuum,
+  vacuumMinimized,
+  vacuumControllerBusy,
+  onOpenSampleStage,
+  sampleStageMinimized,
+  sampleStageControllerBusy,
+  highVoltagePower,
+  highVoltageReady,
+  highVoltagePending,
+  highVoltageError,
+  onToggleHighVoltage,
+  scanLocked,
 }: {
   signedInUser: SignedInUser | null;
   onSignedIn: (user: SignedInUser) => void;
-  activeView: "control" | "report";
+  activeView: "control" | "report" | "vacuum";
   onOpenReport: () => void;
   onOpenScan: () => void;
+  onOpenVacuum: () => void;
+  vacuumMinimized: boolean;
+  vacuumControllerBusy: boolean;
+  onOpenSampleStage: () => void;
+  sampleStageMinimized: boolean;
+  sampleStageControllerBusy: boolean;
+  highVoltagePower: boolean;
+  highVoltageReady: boolean;
+  highVoltagePending: boolean;
+  highVoltageError: string | null;
+  onToggleHighVoltage: () => void;
+  scanLocked: boolean;
 }) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
-  const fetchingStatus = useAppSelector((s) => s.status.fetching);
   const selectedBeam = useAppSelector((s) => s.status.defaults?.selected_beam);
+  const scanPhase = useAppSelector((s) => s.scan.phase);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const version = useAppSelector((s) => s.status.defaults?.version);
+  const reconnecting = useAppSelector((s) => s.settings.saving);
   const theme = useAppSelector((s) => s.theme.theme);
   const { t } = useTranslation();
   const [authOpen, setAuthOpen] = useState(false);
   const authAutoOpenedRef = useRef(false);
+  const headerActionDisabled = scanLocked || !signedInUser;
+  const vacuumEnabled = status?.vacuum_enabled === true;
   useEffect(() => {
     applyThemeToDocument(theme);
   }, [theme]);
 
   useEffect(() => {
+    if (scanLocked) {
+      setAuthOpen(false);
+      return;
+    }
     if (activeView === "report" || signedInUser || authAutoOpenedRef.current) return;
     authAutoOpenedRef.current = true;
     setAuthOpen(true);
-  }, [activeView, signedInUser]);
+  }, [activeView, scanLocked, signedInUser]);
 
   useEffect(() => {
     dispatch(fetchStatus());
     dispatch(fetchDefaultsMetadata());
     const tHandle = setInterval(() => {
-      const s = status?.state;
-      if (s === "busy" || s === "connecting") return;
       dispatch(fetchStatus());
       dispatch(fetchDefaultsMetadata());
     }, 4000);
     return () => clearInterval(tHandle);
-  }, [dispatch, status?.state]);
+  }, [dispatch]);
 
   const state = status?.state ?? "disconnected";
   const stateKey = STATE_LABEL_KEYS[state];
-  const reconnectDisabled = fetchingStatus || state === "busy" || state === "connecting";
   const beamLabelKey =
     selectedBeam === "ebeam"
       ? "header.beam.ebeam"
@@ -103,27 +140,18 @@ export function Header({
       : selectedBeam === "ion"
       ? "header.beam.ion.title"
       : null;
+  const beamActive = scanPhase === "running";
+  const beamStateLabelKey = beamActive ? "header.beam.on" : "header.beam.off";
   const isSignedIn = Boolean(signedInUser);
 
   return (
     <>
     <header className="app-header">
       <div className="app-header__logo">
-        <svg viewBox="0 0 64 64" aria-hidden>
-          <defs>
-            <radialGradient id="hg" cx="50%" cy="40%" r="60%">
-              <stop offset="0%" stopColor="var(--c-logo-stop-0)" />
-              <stop offset="60%" stopColor="var(--c-logo-stop-1)" />
-              <stop offset="100%" stopColor="var(--c-logo-stop-2)" />
-            </radialGradient>
-          </defs>
-          <circle cx="32" cy="28" r="14" fill="url(#hg)" />
-          <path d="M32 14 L32 50" stroke="var(--c-logo-stroke)" strokeWidth="2.4" strokeLinecap="round" />
-          <path d="M22 50 L42 50" stroke="var(--c-logo-stroke)" strokeWidth="2.4" strokeLinecap="round" />
-        </svg>
+        <img className="app-header__logo-image" src={BRAND_LOGO_DATA_URI} alt="laser-beam" />
         <div className="app-header__title">
           <div className="app-header__title-row">
-            {/* Brand name stays unlocalised — it's a trademark. The
+            {/* Brand name stays unlocalised - it's a trademark. The
                 tagline below is the localised descriptor. */}
             <b>{t("app.brand.name")}</b>
             {version && <span className="version-pill app-header__version">v{version}</span>}
@@ -143,12 +171,14 @@ export function Header({
         <span
           className="beam-pill"
           data-beam={selectedBeam}
-          title={t(beamTitleKey)}
+          data-active={beamActive ? "true" : "false"}
+          title={`${t(beamTitleKey)} - ${t(beamStateLabelKey)}`}
         >
           <span className="beam-pill__icon" aria-hidden>
             <Icon name="atom" />
           </span>
           {t(beamLabelKey)}
+          <span className="beam-pill__state">{t(beamStateLabelKey)}</span>
         </span>
       )}
 
@@ -177,59 +207,92 @@ export function Header({
           ))}
         </select>
       </div>
-      <button
-        type="button"
-        className="btn btn--ghost app-header__icon-button"
-        onClick={() => {
-          stopAllScanActions();
-          if (activeView === "report") onOpenScan();
-          else onOpenReport();
-        }}
-        aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
-        title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
-        disabled={!isSignedIn}
-      >
-        <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
-      </button>
-      <button
-        type="button"
-        className="btn btn--ghost app-header__settings"
-        onClick={() => {
-          stopAllScanActions();
-          dispatch(reconnectDevice())
-            .unwrap()
-            .then(() => {
-              dispatch(fetchStatus());
-              dispatch(fetchDefaultsMetadata());
-            })
-            .catch(() => {
-              dispatch(fetchStatus());
-            });
-        }}
-        aria-label={t("header.reconnect.aria")}
-        title={t("header.reconnect.title")}
-        disabled={reconnectDisabled || !isSignedIn}
-      >
-        <Icon name="link" tone="accent" />
-      </button>
-      <button
-        type="button"
-        className="btn btn--ghost app-header__settings"
-        onClick={() => {
-          stopAllScanActions();
-          dispatch(openSettingsDialog());
-        }}
-        aria-label={t("header.settings.aria")}
-        title={t("header.settings.title")}
-        disabled={!isSignedIn}
-      >
-        <Icon name="cog" tone="accent" />
-      </button>
+      <div className="app-header__utility-panel">
+        <button
+          type="button"
+          className="btn btn--ghost app-header__settings"
+          onClick={() => {
+            if (activeView === "report") onOpenScan();
+            else onOpenReport();
+          }}
+          aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
+          title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
+          disabled={headerActionDisabled}
+        >
+          <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost app-header__settings"
+          onClick={() => {
+            dispatch(restartSettingsServices());
+          }}
+          aria-label={t("header.reconnect.aria")}
+          title={t("header.reconnect.title")}
+          disabled={reconnecting || headerActionDisabled}
+        >
+          <Icon name="link" tone="accent" />
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost app-header__settings"
+          onClick={() => {
+            dispatch(openSettingsDialog());
+          }}
+          aria-label={t("header.settings.aria")}
+          title={t("header.settings.title")}
+          disabled={headerActionDisabled}
+        >
+          <Icon name="cog" tone="accent" />
+        </button>
+      </div>
+      <div className="app-header__controller-panel">
+        {shouldShowVacuumController(vacuumEnabled) && (
+          <button
+            type="button"
+            className={`btn btn--ghost app-header__settings app-header__vacuum${vacuumControllerBusy ? " app-header__controller--busy" : ""}`}
+            onClick={onOpenVacuum}
+            aria-label={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.aria")}
+            title={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.title")}
+            aria-busy={vacuumControllerBusy}
+            disabled={headerActionDisabled}
+          >
+            <Icon name="dashboard" />
+          </button>
+        )}
+        <button
+          type="button"
+          className={`btn btn--ghost app-header__settings app-header__sample-stage${sampleStageControllerBusy ? " app-header__controller--busy" : ""}`}
+          onClick={onOpenSampleStage}
+          aria-label={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.aria")}
+          title={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.title")}
+          aria-busy={sampleStageControllerBusy}
+          disabled={headerActionDisabled}
+        >
+          <img src={sampleStageImage} alt="" aria-hidden />
+        </button>
+        {shouldShowVacuumController(vacuumEnabled) && (
+          <button
+            type="button"
+            className={`btn btn--ghost app-header__settings app-header__high-voltage${highVoltagePower ? " app-header__high-voltage--on" : ""}${highVoltagePending ? " app-header__controller--busy" : ""}`}
+            onClick={onToggleHighVoltage}
+            aria-label={t(highVoltagePower ? "header.highVoltage.turnOff" : "header.highVoltage.turnOn")}
+            aria-pressed={highVoltagePower}
+            aria-busy={highVoltagePending}
+            title={highVoltageError ?? t(highVoltageReady ? (highVoltagePower ? "header.highVoltage.turnOff" : "header.highVoltage.turnOn") : "header.highVoltage.notReady")}
+            disabled={headerActionDisabled || !highVoltageReady || highVoltagePending}
+          >
+            <img src={highVoltageImage} alt="" aria-hidden />
+          </button>
+        )}
+      </div>
       <button
         type="button"
         className="auth-chip"
         onClick={() => setAuthOpen(true)}
         title={signedInUser ? t("auth.signedIn.title") : t("auth.signIn.title")}
+        disabled={scanLocked}
+        aria-disabled={scanLocked}
       >
         <span className="auth-chip__avatar">
           {signedInUser?.initials || "?"}
@@ -241,10 +304,11 @@ export function Header({
       <span
         className="production-pill app-header__production"
         data-production={isProduction ? "true" : "false"}
-        title={isProduction ? t("header.production.true.title") : t("header.production.false.title")}
+        data-tooltip={isProduction ? t("header.production.true.title") : t("header.production.false.title")}
+        aria-label={isProduction ? t("header.production.true") : t("header.production.false")}
+        tabIndex={0}
       >
         <span className="production-pill__led" />
-        {isProduction ? t("header.production.true") : t("header.production.false")}
       </span>
     </header>
     <AuthDialog

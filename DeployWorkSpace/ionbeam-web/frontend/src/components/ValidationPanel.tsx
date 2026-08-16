@@ -22,6 +22,8 @@ import {
   downloadBlob,
 } from "../lib/csvExport";
 import { useTranslation } from "../i18n";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
@@ -43,13 +45,21 @@ type DirectoryHandle = {
 const OUTPUT_PREFIX_STORAGE_KEY = "ionbeam:downloadOutputPrefix";
 const DEFAULT_DOWNLOAD_PATH_LABEL = defaultDownloadPathLabel();
 
-export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
+export function ValidationPanel({
+  disabled = false,
+  mergedFigureUrl = null,
+  kindOverride = null,
+}: {
+  disabled?: boolean;
+  mergedFigureUrl?: string | null;
+  kindOverride?: "raster" | "vector" | null;
+}) {
   const { t, fmt } = useTranslation();
   const result = useAppSelector((s) => s.scan.lastResult);
   const error = useAppSelector((s) => s.scan.errorMessage);
   const phase = useAppSelector((s) => s.scan.phase);
   const kind = useAppSelector((s) => s.scan.kind);
-  const scanKind = kind === "vector" ? "vector" : "raster";
+  const scanKind = kindOverride ?? (kind === "vector" ? "vector" : "raster");
 
   const rasterFrame = useAppSelector((s) => s.image.frame);
   const rasterRes = useAppSelector((s) => s.image.resolution);
@@ -85,8 +95,8 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
   const haveValidatedData = result?.has_data === true;
   const haveAnyData =
     haveValidatedData ||
-    (haveStreamData && (phase === "completed" || phase === "paused"));
-  const dbFlowReadyPhase = phase === "completed" || phase === "paused";
+    (haveStreamData && phase === "completed");
+  const dbFlowReadyPhase = phase === "completed";
 
   async function selectDownloadFolder() {
     if (disabled) return;
@@ -123,8 +133,11 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
       setDbFlowState("checking");
       setDbFlowErr(null);
       try {
-        const r = await fetch("/api/admin/iobeam/db/status");
-        const data = (await r.json()) as { ok?: boolean; enabled?: boolean; error?: string };
+        const r = await fetch(apiUrl("/api/admin/iobeam/db/status"));
+        const data = await readJsonResponse<{ ok?: boolean; enabled?: boolean; error?: string }>(
+          r,
+          "db status"
+        );
         if (cancelled) return;
         if (r.ok && data.enabled) {
           setDbFlowState("ready");
@@ -211,7 +224,7 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
 
   async function csvDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
     if (haveValidatedData) {
-      const r = await fetch("/api/scan/last/csv");
+      const r = await fetch(apiUrl("/api/scan/last/csv"));
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
       const blob = await r.blob();
       return {
@@ -236,11 +249,25 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
   }
 
   async function figureDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
+    if (mergedFigureUrl) {
+      const merged = await fetch(mergedFigureUrl);
+      if (!merged.ok) {
+        throw new Error(`HTTP ${merged.status}: merged figure export failed`);
+      }
+      return {
+        blob: await merged.blob(),
+        filename: defaultDownloadFilename(scanKind, "png", {
+          resolution: result?.resolution ?? rasterRes,
+          latency_bytes: vectorLatency,
+        }, outputPrefix),
+      };
+    }
+
     const url =
       kind === "vector"
         ? `/api/scan/last/figure?render=${encodeURIComponent(vectorRenderMode)}`
         : "/api/scan/last/figure";
-    const r = await fetch(url);
+    const r = await fetch(apiUrl(url));
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
       throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);
@@ -268,18 +295,11 @@ export function ValidationPanel({ disabled = false }: { disabled?: boolean }) {
 
   async function saveResultToDb() {
     if (disabled) return;
-    const signedUser = readSignedInUser();
-    const r = await fetch("/api/admin/iobeam/activity", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: signedUser?.id ?? 1,
-        activity_type: scanKind === "raster" ? "RASTER run" : "VECTOR run",
-      }),
-    });
-    if (!r.ok) {
-      throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-    }
+    // Activity rows are already written by the scan completion paths
+    // (`useScanStream` for live scans and the validated run thunk for
+    // POST /scan/{kind}/run). This hook now only gates the UI state for
+    // the DB flow indicator so we don't double-count a single scan.
+    return;
   }
 
   async function downloadCsv() {

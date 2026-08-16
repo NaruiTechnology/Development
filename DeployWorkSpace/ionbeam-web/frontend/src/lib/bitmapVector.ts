@@ -2,98 +2,26 @@ import type {
   RasterRequest,
   ROIRequest,
   SimulationBitmap,
+  SimulationBitmapPixel,
+  VectorPoint,
+  VectorPointTuple,
   VectorRequest,
+  VectorScanPath,
 } from "../types/api";
 import type { ROIState } from "../store/scanSlice";
+import {
+  clampGrayScale,
+  grayScaleSelectionContains,
+  normalizeGrayScaleSelection,
+  type GrayScaleSelection,
+} from "./grayScaleSelection";
+import { imageWorldBounds, ROI_CANVAS_EDGE, viewportBounds } from "./roiGeometry";
+import { worldSelectionToDacROI } from "./roiDac";
+import { bitmapScanCoordinates } from "./vectorScanPath";
+
+export { worldSelectionToDacROI } from "./roiDac";
 
 const MAX_POINTS = 250_000;
-const DAC_MAX = 16383;
-
-/**
- * Convert a world-unit ROI selection to a DAC-coded ROIRequest.
- *
- * The ROI editor's four "X origin / X end / Y origin / Y end" inputs
- * define the field-of-view (FOV) in arbitrary user units (µm, mm, cm,
- * nm). The full FOV always maps onto the full DAC range 0..16383 —
- * so `x_origin` ↔ DAC 0 and `x_end` ↔ DAC 16383. Selections inside
- * the FOV map onto a sub-range of DAC codes proportionally.
- *
- * Mapping equation (per axis):
- *
- *     fraction = (v - origin) / (end - origin)
- *     dac      = clamp(round(fraction * DAC_MAX), 0, DAC_MAX)
- *
- * Worked example: FOV is `x_origin=0, x_end=100` (µm) and the user
- * selects `x_start=25, x_end=75`. The DAC mapping is:
- *
- *     dac_start = round(25/100 * 16383) =  4096
- *     dac_end   = round(75/100 * 16383) = 12287
- *
- * — i.e. the scan covers the middle 50% of the DAC range.
- *
- * Edge handling:
- *   - Selection clamped to FOV (defensive; the UI validators already
- *     keep it inside, but the store could be initialised oddly).
- *   - `x_origin > x_end` (reversed FOV) sorted to min/max first.
- *   - `x_end == x_origin` (zero-width FOV) avoided via Math.max guard;
- *     produces dac_start=0, dac_end=DAC_MAX so the scan covers
- *     everything rather than collapsing to a point.
- *   - Resulting `x_end > x_start` guaranteed (Math.max(dx0+1, dx1));
- *     a zero-width DAC ROI would trip the Pydantic non-empty
- *     validator on the backend.
- *
- * The bitmap path (`bitmapSelectionToVector`) does the equivalent
- * mapping via bitmap pixel coordinates and produces consistent DAC
- * codes — see `cropToDacROI` below. The two paths agree to within
- * single-pixel rounding error.
- */
-export function worldSelectionToDacROI(
-  selection: ROIRequest,
-  fov: { x_origin: number; x_end: number; y_origin: number; y_end: number }
-): ROIRequest {
-  // FOV bounds, sorted. Users can technically enter x_origin > x_end
-  // by editing the store directly; the UI's Num validators normally
-  // keep them ordered.
-  const fovX0 = Math.min(fov.x_origin, fov.x_end);
-  const fovX1 = Math.max(fov.x_origin, fov.x_end);
-  const fovY0 = Math.min(fov.y_origin, fov.y_end);
-  const fovY1 = Math.max(fov.y_origin, fov.y_end);
-
-  // Selection corners, sorted and clamped to FOV.
-  const sx0 = clampToRange(Math.min(selection.x_start, selection.x_end), fovX0, fovX1);
-  const sx1 = clampToRange(Math.max(selection.x_start, selection.x_end), fovX0, fovX1);
-  const sy0 = clampToRange(Math.min(selection.y_start, selection.y_end), fovY0, fovY1);
-  const sy1 = clampToRange(Math.max(selection.y_start, selection.y_end), fovY0, fovY1);
-
-  // Span = 0 means the user's FOV has no extent on this axis. In that
-  // case, defaulting to the full DAC range is safer than dividing by
-  // zero (which would NaN the request and 422 the backend).
-  const spanX = Math.max(Number.EPSILON, fovX1 - fovX0);
-  const spanY = Math.max(Number.EPSILON, fovY1 - fovY0);
-
-  const toDac = (v: number, lo: number, span: number): number =>
-    Math.max(0, Math.min(DAC_MAX, Math.round(((v - lo) / span) * DAC_MAX)));
-
-  const dx0 = toDac(sx0, fovX0, spanX);
-  const dx1 = toDac(sx1, fovX0, spanX);
-  const dy0 = toDac(sy0, fovY0, spanY);
-  const dy1 = toDac(sy1, fovY0, spanY);
-
-  return {
-    // Math.max(dx0 + 1, dx1) guarantees a positive-extent ROI even
-    // after rounding collapses a thin selection — the Pydantic
-    // ROIRequest validators reject x_start == x_end as empty.
-    x_start: dx0,
-    x_end:   Math.min(DAC_MAX, Math.max(dx0 + 1, dx1)),
-    y_start: dy0,
-    y_end:   Math.min(DAC_MAX, Math.max(dy0 + 1, dy1)),
-  };
-}
-
-function clampToRange(v: number, lo: number, hi: number): number {
-  if (!Number.isFinite(v)) return lo;
-  return Math.max(lo, Math.min(hi, v));
-}
 
 let cachedExtraction:
   | {
@@ -112,7 +40,12 @@ export function clearBitmapSelectionCache(): void {
 export async function rasterRequestWithBitmapSelection(
   req: RasterRequest,
   roi: ROIState,
-  options: { isProduction?: boolean; allowBitmapSimulation?: boolean } = {}
+  options: {
+    isProduction?: boolean;
+    allowBitmapSimulation?: boolean;
+    grayScaleSelection?: GrayScaleSelection;
+    grayScaleSkipped?: boolean | null;
+  } = {}
 ): Promise<RasterRequest> {
   // No selection at all → no ROI restriction, scan the full DAC range.
   if (!roi.selection) {
@@ -158,14 +91,25 @@ export async function rasterRequestWithBitmapSelection(
   return {
     ...req,
     roi: converted.roi,
-    simulation_bitmap: options.isProduction ? null : converted.simulationBitmap,
+    simulation_bitmap: options.isProduction
+      ? null
+      : decorateSimulationBitmap(
+          converted.simulationBitmap,
+          options.grayScaleSelection ?? null,
+          options.grayScaleSkipped,
+        ),
   };
 }
 
 export async function vectorRequestWithBitmapSelection(
   req: VectorRequest,
   roi: ROIState,
-  options: { isProduction?: boolean; allowBitmapSimulation?: boolean } = {}
+  options: {
+    isProduction?: boolean;
+    allowBitmapSimulation?: boolean;
+    grayScaleSelection?: GrayScaleSelection;
+    grayScaleSkipped?: boolean | null;
+  } = {}
 ): Promise<VectorRequest> {
   // No selection → no ROI; the macro sweeps the full DAC range.
   if (!roi.selection) {
@@ -183,7 +127,44 @@ export async function vectorRequestWithBitmapSelection(
   if (!roi.imageDataUrl) {
     return {
       ...req,
+      pattern: "default",
+      points: null,
       roi: worldSelectionToDacROI(roi.selection, roi),
+      simulation_bitmap: null,
+    };
+  }
+
+  const converted = await bitmapSelectionToVector(roi);
+  if (!converted.simulationBitmap.pixels.length) {
+    return withoutBitmapROI(req);
+  }
+
+  const decoratedBitmap = decorateSimulationBitmap(
+    converted.simulationBitmap,
+    options.grayScaleSelection ?? null,
+    options.grayScaleSkipped,
+  );
+
+  // Production vector scans can honor the gray-level selection by
+  // sending the cropped bitmap as an explicit point list with a per-
+  // point blank flag. That lets the FPGA blank or unblank the beam at
+  // each vector point instead of the host just omitting pixels.
+  if (
+    options.isProduction &&
+    options.grayScaleSelection !== null &&
+    options.grayScaleSkipped !== null
+  ) {
+    return {
+      ...req,
+      pattern: "custom",
+      points: bitmapToCustomPoints(
+        decoratedBitmap,
+        converted.roi,
+        req.dwell,
+        options.grayScaleSkipped,
+        req.scan_path,
+      ),
+      roi: converted.roi,
       simulation_bitmap: null,
     };
   }
@@ -202,18 +183,116 @@ export async function vectorRequestWithBitmapSelection(
     };
   }
 
-  const converted = await bitmapSelectionToVector(roi);
-  if (!converted.simulationBitmap.pixels.length) {
-    return withoutBitmapROI(req);
-  }
-
   return {
     ...req,
     pattern: "default",
     points: null,
     roi: converted.roi,
-    simulation_bitmap: options.isProduction ? null : converted.simulationBitmap,
+    simulation_bitmap: options.isProduction ? null : decoratedBitmap,
   };
+}
+
+export async function vectorRequestWithROIGrayScaleAction(
+  req: VectorRequest,
+  roi: ROIState,
+  options: {
+    grayScaleSelection: GrayScaleSelection;
+    grayScaleSkipped: boolean | null;
+  }
+): Promise<VectorRequest> {
+  const selection = normalizeGrayScaleSelection(options.grayScaleSelection);
+  if (selection === null || options.grayScaleSkipped === null) {
+    return vectorRequestWithBitmapSelection(req, roi, {
+      isProduction: true,
+      grayScaleSelection: selection,
+      grayScaleSkipped: options.grayScaleSkipped,
+    });
+  }
+
+  const converted = await bitmapSelectionToVector(roiWithFullSelection(roi));
+  if (!converted.simulationBitmap.pixels.length) {
+    return withoutBitmapROI(req);
+  }
+
+  const decoratedBitmap = decorateSimulationBitmap(
+    converted.simulationBitmap,
+    selection,
+    options.grayScaleSkipped,
+  );
+  return {
+    ...req,
+    pattern: "custom",
+    points: bitmapToROIActionPoints(
+      decoratedBitmap,
+      converted.roi,
+      Math.max(2, req.dwell),
+      selection,
+      options.grayScaleSkipped,
+      req.scan_path,
+    ),
+    roi: converted.roi,
+    simulation_bitmap: null,
+    dwell: Math.max(2, req.dwell),
+    gray_level_range: [selection[0], selection[1]],
+    gray_level_skipped: options.grayScaleSkipped,
+    // The ROI panel shows pre-process locked on for parity with the vector
+    // controls, but Glasgow's pre-process path aborts explicit custom points.
+    pre_process: false,
+  };
+}
+
+export async function vectorRequestWithAdaptiveGrayFeedback(
+  req: VectorRequest,
+  roi: ROIState,
+  options: {
+    grayScaleSelection: GrayScaleSelection;
+    grayScaleSkipped: boolean | null;
+  }
+): Promise<VectorRequest> {
+  const selection = normalizeGrayScaleSelection(options.grayScaleSelection);
+  if (selection === null || options.grayScaleSkipped === null) {
+    return withoutBitmapROI(req);
+  }
+
+  const activeROI = roiWithFullSelection(roi);
+  const roiSelection = activeROI.selection;
+  if (!roiSelection) {
+    return withoutBitmapROI(req);
+  }
+
+  const roiRequest = activeROI.imageDataUrl
+    ? (await bitmapSelectionToVector(activeROI)).roi
+    : worldSelectionToDacROI(roiSelection, activeROI);
+
+  return {
+    ...req,
+    pattern: "default",
+    points: null,
+    roi: roiRequest,
+    simulation_bitmap: null,
+    pre_process: true,
+    dwell: req.dwell,
+    output_mode: "SixteenBit",
+    feedback_mode: "adaptive_gray_feedback",
+    gray_level_range: [selection[0], selection[1]],
+    gray_level_skipped: options.grayScaleSkipped,
+  };
+}
+
+export async function grayScaleSpectrumLevelsForSelection(
+  roi: ROIState
+): Promise<number[]> {
+  const converted = await bitmapSelectionToVector(roi);
+  if (!converted.simulationBitmap.pixels.length) {
+    return [];
+  }
+
+  const unique = new Set<number>();
+  for (const pixel of converted.simulationBitmap.pixels) {
+    unique.add(pixelValue(pixel));
+  }
+
+  return [...unique].sort((a, b) => a - b);
 }
 
 function withoutBitmapROI<T extends RasterRequest | VectorRequest>(req: T): T {
@@ -221,6 +300,13 @@ function withoutBitmapROI<T extends RasterRequest | VectorRequest>(req: T): T {
     ...req,
     roi: null,
     simulation_bitmap: null,
+    ...(Object.prototype.hasOwnProperty.call(req, "feedback_mode")
+      ? {
+          feedback_mode: "standard",
+          gray_level_range: null,
+          gray_level_skipped: null,
+        }
+      : {}),
   };
 }
 
@@ -270,21 +356,19 @@ async function bitmapSelectionToVector(
   );
 
   const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
-  const pixels: number[] = [];
-  const dacRoi = cropToDacROI(crop, sourceW, sourceH);
-
+  const pixels: SimulationBitmapPixel[] = [];
   for (let y = 0; y < sampleH; y++) {
     for (let x = 0; x < sampleW; x++) {
       const i = (y * sampleW + x) * 4;
       const alpha = data[i + 3];
       const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       const pixel = alpha === 0 ? 255 : Math.round(luma);
-      pixels.push(pixel);
+      pixels.push({ value: pixel, isHighlighted: false, isSkipped: null, blank: null });
     }
   }
 
   const value = {
-    roi: dacRoi,
+    roi: worldSelectionToDacROI(roi.selection, roi),
     simulationBitmap: {
       width: sampleW,
       height: sampleH,
@@ -295,49 +379,216 @@ async function bitmapSelectionToVector(
   return value;
 }
 
+function decorateSimulationBitmap(
+  bitmap: SimulationBitmap,
+  selection: GrayScaleSelection,
+  skipped: boolean | null | undefined,
+): SimulationBitmap {
+  const normalizedSelection = normalizeGrayScaleSelection(selection);
+  const normalizedSkipped = skipped === null || skipped === undefined
+    ? null
+    : Boolean(skipped);
+
+  if (normalizedSelection === null) {
+    return {
+      ...bitmap,
+      pixels: bitmap.pixels.map((pixel) => ({
+        value: pixelValue(pixel),
+        isHighlighted: false,
+        isSkipped: null,
+        blank: null,
+      })),
+    };
+  }
+
+  return {
+    ...bitmap,
+    pixels: bitmap.pixels.map((pixel) => {
+      const value = pixelValue(pixel);
+      const highlighted = grayScaleSelectionContains(normalizedSelection, value);
+      return {
+        value,
+        isHighlighted: highlighted,
+        isSkipped: highlighted ? normalizedSkipped : null,
+        blank:
+          normalizedSkipped === true
+            ? highlighted
+            : normalizedSkipped === false
+            ? !highlighted
+            : null,
+      };
+    }),
+  };
+}
+
+function bitmapToCustomPoints(
+  bitmap: SimulationBitmap,
+  roi: ROIRequest,
+  dwell: number,
+  skipped: boolean | null | undefined,
+  scanPath: VectorScanPath,
+): VectorPointTuple[] {
+  if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
+    return [];
+  }
+
+  const x0 = Math.min(roi.x_start, roi.x_end);
+  const x1 = Math.max(roi.x_start, roi.x_end);
+  const y0 = Math.min(roi.y_start, roi.y_end);
+  const y1 = Math.max(roi.y_start, roi.y_end);
+  const xSpan = Math.max(1, x1 - x0);
+  const ySpan = Math.max(1, y1 - y0);
+  const xDiv = Math.max(1, bitmap.width - 1);
+  const yDiv = Math.max(1, bitmap.height - 1);
+  const normalizedSkipped = skipped === null || skipped === undefined
+    ? null
+    : Boolean(skipped);
+  const primaryPass: VectorPointTuple[] = [];
+  const secondaryPass: VectorPointTuple[] = [];
+
+  for (const [x, y] of bitmapScanCoordinates(bitmap.width, bitmap.height, scanPath)) {
+    const sampleY = y0 + Math.round((y / yDiv) * ySpan);
+    const pixel = bitmap.pixels[y * bitmap.width + x];
+    const highlighted = Boolean(pixel?.isHighlighted);
+    const sampleX = x0 + Math.round((x / xDiv) * xSpan);
+    const blank = normalizedSkipped === true
+      ? highlighted
+      : normalizedSkipped === false
+      ? !highlighted
+      : false;
+    const point: VectorPointTuple = [
+      sampleX,
+      sampleY,
+      dwell,
+      blank,
+      normalizedSkipped === null
+        ? null
+        : highlighted
+        ? 1
+        : 2,
+    ];
+
+    // Emit the selected interval as the first pass and the complement
+    // as the second pass while preserving scan-path order in each pass.
+    if (
+      normalizedSkipped === null ||
+      (normalizedSkipped === true && highlighted) ||
+      (normalizedSkipped === false && !highlighted)
+    ) {
+      primaryPass.push(point);
+    } else {
+      secondaryPass.push(point);
+    }
+  }
+
+  return primaryPass.concat(secondaryPass);
+}
+
+function bitmapToROIActionPoints(
+  bitmap: SimulationBitmap,
+  fullRoi: ROIRequest,
+  dwell: number,
+  selection: [number, number],
+  skipped: boolean,
+  scanPath: VectorScanPath,
+): VectorPointTuple[] {
+  if (!bitmap.pixels.length || bitmap.width <= 0 || bitmap.height <= 0) {
+    return [];
+  }
+
+  const x0 = Math.min(fullRoi.x_start, fullRoi.x_end);
+  const x1 = Math.max(fullRoi.x_start, fullRoi.x_end);
+  const y0 = Math.min(fullRoi.y_start, fullRoi.y_end);
+  const y1 = Math.max(fullRoi.y_start, fullRoi.y_end);
+  const xDiv = Math.max(1, bitmap.width - 1);
+  const yDiv = Math.max(1, bitmap.height - 1);
+  const xSpan = Math.max(1, x1 - x0);
+  const ySpan = Math.max(1, y1 - y0);
+  const points: VectorPointTuple[] = [];
+
+  for (const [x, y] of bitmapScanCoordinates(bitmap.width, bitmap.height, scanPath)) {
+    const sampleY = y0 + Math.round((y / yDiv) * ySpan);
+    const sampleX = x0 + Math.round((x / xDiv) * xSpan);
+    const pixel = bitmap.pixels[y * bitmap.width + x];
+    const pixelBlank = typeof pixel === "number" ? null : pixel.blank ?? null;
+    const highlighted = grayScaleSelectionContains(selection, pixelValue(pixel));
+    const blank =
+      pixelBlank !== null
+        ? pixelBlank
+        : skipped
+        ? highlighted
+        : !highlighted;
+    points.push([sampleX, sampleY, dwell, blank, highlighted ? 1 : 2]);
+  }
+
+  return points;
+}
+
 function selectionCrop(
   roi: ROIState,
   sourceW: number,
   sourceH: number
 ): { x: number; y: number; w: number; h: number } {
   const sel = roi.selection!;
-  const x0 = Math.min(roi.x_origin, roi.x_end);
-  const x1 = Math.max(roi.x_origin, roi.x_end);
-  const y0 = Math.min(roi.y_origin, roi.y_end);
-  const y1 = Math.max(roi.y_origin, roi.y_end);
+  const imageBounds = imageWorldBounds(roi);
+  const x0 = Math.min(imageBounds.x_origin, imageBounds.x_end);
+  const x1 = Math.max(imageBounds.x_origin, imageBounds.x_end);
+  const y0 = Math.min(imageBounds.y_origin, imageBounds.y_end);
+  const y1 = Math.max(imageBounds.y_origin, imageBounds.y_end);
   const sx0 = Math.min(sel.x_start, sel.x_end);
   const sx1 = Math.max(sel.x_start, sel.x_end);
   const sy0 = Math.min(sel.y_start, sel.y_end);
   const sy1 = Math.max(sel.y_start, sel.y_end);
+  const bounds = viewportBounds(roi);
 
   const left = clamp01((sx0 - x0) / Math.max(1, x1 - x0));
   const right = clamp01((sx1 - x0) / Math.max(1, x1 - x0));
   const top = clamp01((sy0 - y0) / Math.max(1, y1 - y0));
   const bottom = clamp01((sy1 - y0) / Math.max(1, y1 - y0));
 
-  const px0 = Math.max(0, Math.min(sourceW - 1, Math.floor(left * sourceW)));
-  const px1 = Math.max(px0 + 1, Math.min(sourceW, Math.ceil(right * sourceW)));
-  const py0 = Math.max(0, Math.min(sourceH - 1, Math.floor(top * sourceH)));
-  const py1 = Math.max(py0 + 1, Math.min(sourceH, Math.ceil(bottom * sourceH)));
+  const px0 = Math.max(
+    0,
+    Math.min(
+      sourceW - 1,
+      Math.floor(((bounds.left + left * bounds.width) / ROI_CANVAS_EDGE) * sourceW)
+    )
+  );
+  const px1 = Math.max(
+    px0 + 1,
+    Math.min(
+      sourceW,
+      Math.ceil(((bounds.left + right * bounds.width) / ROI_CANVAS_EDGE) * sourceW)
+    )
+  );
+  const py0 = Math.max(
+    0,
+    Math.min(
+      sourceH - 1,
+      Math.floor(((bounds.top + top * bounds.height) / ROI_CANVAS_EDGE) * sourceH)
+    )
+  );
+  const py1 = Math.max(
+    py0 + 1,
+    Math.min(
+      sourceH,
+      Math.ceil(((bounds.top + bottom * bounds.height) / ROI_CANVAS_EDGE) * sourceH)
+    )
+  );
 
   return { x: px0, y: py0, w: px1 - px0, h: py1 - py0 };
 }
 
-function cropToDacROI(
-  crop: { x: number; y: number; w: number; h: number },
-  sourceW: number,
-  sourceH: number
-): ROIRequest {
-  const x0 = Math.round((crop.x / Math.max(1, sourceW - 1)) * DAC_MAX);
-  const x1 = Math.round(((crop.x + crop.w - 1) / Math.max(1, sourceW - 1)) * DAC_MAX);
-  const y0 = Math.round((crop.y / Math.max(1, sourceH - 1)) * DAC_MAX);
-  const y1 = Math.round(((crop.y + crop.h - 1) / Math.max(1, sourceH - 1)) * DAC_MAX);
-
+function roiWithFullSelection(roi: ROIState): ROIState {
+  if (roi.selection) return roi;
+  const bounds = imageWorldBounds(roi);
   return {
-    x_start: Math.max(0, Math.min(DAC_MAX, x0)),
-    x_end: Math.max(0, Math.min(DAC_MAX, Math.max(x0 + 1, x1))),
-    y_start: Math.max(0, Math.min(DAC_MAX, y0)),
-    y_end: Math.max(0, Math.min(DAC_MAX, Math.max(y0 + 1, y1))),
+    ...roi,
+    selection: {
+      x_start: Math.min(bounds.x_origin, bounds.x_end),
+      x_end: Math.max(bounds.x_origin, bounds.x_end),
+      y_start: Math.min(bounds.y_origin, bounds.y_end),
+      y_end: Math.max(bounds.y_origin, bounds.y_end),
+    },
   };
 }
 
@@ -359,12 +610,22 @@ function isPartialSelection(roi: ROIState): boolean {
 
 function extractionKey(roi: ROIState): string {
   const r = roi.selection;
+  const imageDataUrl = roi.imageDataUrl ?? "";
   return JSON.stringify({
-    imageDataUrl: roi.imageDataUrl,
+    imageName: roi.imageName,
+    imageKind: roi.imageKind,
+    imageDataUrlLength: imageDataUrl.length,
+    imageDataUrlHead: imageDataUrl.slice(0, 96),
+    imageDataUrlTail: imageDataUrl.slice(-96),
     x_origin: roi.x_origin,
     x_end: roi.x_end,
     y_origin: roi.y_origin,
     y_end: roi.y_end,
+    imageBounds: roi.imageBounds,
+    viewport_x_start: roi.viewport_x_start,
+    viewport_x_end: roi.viewport_x_end,
+    viewport_y_start: roi.viewport_y_start,
+    viewport_y_end: roi.viewport_y_end,
     selection: r
       ? {
           x_start: r.x_start,
@@ -385,10 +646,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
 }
@@ -401,4 +658,8 @@ function emptyConversion(): {
     roi: { x_start: 0, x_end: 1, y_start: 0, y_end: 1 },
     simulationBitmap: { width: 0, height: 0, pixels: [] },
   };
+}
+
+function pixelValue(pixel: number | SimulationBitmapPixel): number {
+  return typeof pixel === "number" ? pixel : pixel.value;
 }

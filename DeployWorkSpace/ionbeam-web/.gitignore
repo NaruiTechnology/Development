@@ -1,6 +1,8 @@
 node_modules/
 dist/
+.test-dist/
 *.log
 .env
+!backend/.env
 .DS_Store
 package-lock.json

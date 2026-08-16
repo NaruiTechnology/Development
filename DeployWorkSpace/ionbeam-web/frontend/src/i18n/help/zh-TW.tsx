@@ -15,6 +15,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   dwell: () => (
     <>
       <div className="dwell-help__rule">
+        <strong>revC3 硬體下限：166.667 ns。</strong>48 MHz FPGA 時脈和目前設定的
+        8 時脈 ADC/DAC 交易將 dwell 1 限制為理論 6 MPix/s。目前閘級電路無法實現
+        10 ns 駐留；單一 FPGA 時脈週期也需要 20.833 ns。
+      </div>
+
+      <div className="dwell-help__rule">
         <strong>請選擇 2 的冪次。</strong>如果每像素的有效取樣數不是 2 的冪次，
         閘級電路只會對最後 2 的冪次個取樣取平均，多餘的取樣會被捨棄。
         例如 7 個取樣的像素只會平均其中 4 個；9 個取樣只會平均其中 8 個。
@@ -22,15 +28,23 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <code>dwell_time</code>。
       </div>
 
+      <div className="dwell-help__rule">
+        <strong>灰階探測/消隱的最小 dwell 為 2。</strong>當 ROI 或向量掃描確認灰階範圍後，
+        每像素流程需要一個 dwell 週期探測灰階值，並至少再用一個週期執行束流開啟或消隱決定。
+        dwell 為 1 無法完成這兩個階段，因此所選值會自動調整為 2。
+      </div>
+
       <p><code>dwell</code> 欄位是超取樣控制。各取值含義：</p>
 
       <ul className="dwell-help__list">
-        <li><code>"dwell": 1</code> → 超取樣器不工作，掃描最快，像素率為完整的 8 MSPS</li>
-        <li><code>"dwell": 2</code> → 2 倍平均，像素率減半（4 Mpix/s），SNR 增益 √2</li>
-        <li><code>"dwell": 4</code> → 4 倍平均（2 Mpix/s），SNR 增益 2 倍</li>
-        <li><code>"dwell": 8</code> → 8 倍平均（1 Mpix/s），SNR 增益約 2.8 倍</li>
-        <li><code>"dwell": 16</code> → 16 倍平均（500 kpix/s），SNR 增益 4 倍</li>
-        <li>…… 直至 <code>dwell = 65535</code>（約每像素 8.19 ms）</li>
+        <li><code>"dwell": 1</code> → 超取樣器不工作，理論像素率 6 MPix/s</li>
+        <li><code>"dwell": 2</code> → 2 倍平均（3 MPix/s），SNR 增益 √2</li>
+        <li><code>"dwell": 4</code> → 4 倍平均（1.5 MPix/s），SNR 增益 2 倍</li>
+        <li><code>"dwell": 8</code> → 8 倍平均（750 kPix/s），SNR 增益約 2.8 倍</li>
+        <li><code>"dwell": 16</code> → 16 倍平均（375 kPix/s），SNR 增益 4 倍</li>
+        <li><code>"dwell": 32</code> → 32 倍平均（187.5 kPix/s），SNR 增益約 5.7 倍</li>
+        <li><code>"dwell": 64</code> → 64 倍平均（93.75 kPix/s），SNR 增益 8 倍</li>
+        <li>…… 直至 <code>dwell = 65535</code>（約每像素 10.92 ms）</li>
       </ul>
 
       <div className="dwell-help__table-wrap">
@@ -43,12 +57,13 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>1</td><td>1</td><td>8.0 MPix/s</td><td>1.00×</td><td>131 ms</td></tr>
-            <tr><td>2</td><td>2</td><td>4.0 MPix/s</td><td>1.41×</td><td>262 ms</td></tr>
-            <tr><td>4</td><td>4</td><td>2.0 MPix/s</td><td>2.00×</td><td>524 ms</td></tr>
-            <tr><td>8</td><td>8</td><td>1.0 MPix/s</td><td>2.83×</td><td>1.05 s</td></tr>
-            <tr><td>16</td><td>16</td><td>500 kPix/s</td><td>4.00×</td><td>2.10 s</td></tr>
-            <tr><td>32</td><td>32</td><td>250 kPix/s</td><td>5.66×</td><td>4.19 s</td></tr>
+            <tr><td>1</td><td>1</td><td>6.0 MPix/s</td><td>1.00×</td><td>175 ms</td></tr>
+            <tr><td>2</td><td>2</td><td>3.0 MPix/s</td><td>1.41×</td><td>350 ms</td></tr>
+            <tr><td>4</td><td>4</td><td>1.5 MPix/s</td><td>2.00×</td><td>699 ms</td></tr>
+            <tr><td>8</td><td>8</td><td>750 kPix/s</td><td>2.83×</td><td>1.40 s</td></tr>
+            <tr><td>16</td><td>16</td><td>375 kPix/s</td><td>4.00×</td><td>2.80 s</td></tr>
+            <tr><td>32</td><td>32</td><td>187.5 kPix/s</td><td>5.66×</td><td>5.59 s</td></tr>
+            <tr><td>64</td><td>64</td><td>93.75 kPix/s</td><td>8.00×</td><td>11.18 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -73,7 +88,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>解析度會影響通常關心的三個量：</p>
 
       <ul className="dwell-help__list">
-        <li><strong>畫面時長</strong> — 按 <code>N² × dwell × 125 ns</code> 縮放。解析度加倍，時間變為四倍。</li>
+        <li><strong>畫面時長</strong> — 目前 revC3 按 <code>N² × dwell × 166.667 ns</code> 縮放。解析度加倍，時間變為四倍。</li>
         <li><strong>CSV / 影像的像素數</strong> — <code>N²</code> 個值。2048² 的 16 位元光柵在傳輸線上為 8 MB，展開為 CSV 後約為 32 MB。</li>
         <li><strong>空間取樣率</strong> — 網格越細可解析越小的特徵，但在總駐留預算相同的情況下，解析度越高代表每像素時間越短，除非同時增大 dwell。</li>
       </ul>
@@ -83,23 +98,102 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
           <thead>
             <tr>
               <th>解析度</th><th>DAC 步長</th><th>總像素數</th>
-              <th>畫面時長<br /><span className="muted">（dwell = 2）</span></th>
+              <th>畫面時長<br /><span className="muted">（dwell = 16）</span></th>
               <th>16 位元輸出</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>64</td><td>65 536</td><td>16 ms</td><td>128 KB</td></tr>
-            <tr><td>512</td><td>32</td><td>262 144</td><td>66 ms</td><td>512 KB</td></tr>
-            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>262 ms</td><td>2 MB</td></tr>
-            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>1.05 s</td><td>8 MB</td></tr>
+            <tr><td>256</td><td>64</td><td>65 536</td><td>175 ms</td><td>128 KB</td></tr>
+            <tr><td>512</td><td>32</td><td>262 144</td><td>699 ms</td><td>512 KB</td></tr>
+            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.80 s</td><td>2 MB</td></tr>
+            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>11.18 s</td><td>8 MB</td></tr>
           </tbody>
         </table>
       </div>
 
       <p>
-        上述畫面時長假設以超取樣器的 8 MSPS 取樣率連續串流。實際數值會略長，
+        上述畫面時長假設以 revC3 閘級電路的理論 6 MSPS 取樣率連續串流。實際數值會略長，
         因為每個資料區塊都有 USB 額外開銷，並且每次掃描末尾還有用於排空流水線的填充。
       </p>
+    </>
+  ),
+
+  grayScale: () => (
+    <>
+      <p>
+        灰階光譜條會顯示目前即時影像或已載入點陣圖中存在的灰階值。
+        每個方框代表一個採樣到的灰階值，步進旋鈕用來控制在可用範圍內顯示多少個方框。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>選取某個方框本身不會改變影像。</strong>它只會標記下一次掃描動作在確認後要使用的灰階區間。
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Skip</strong> 會在選定 ROI 子區域內，對高亮灰階對應的像素送出顯式消隱向量點，因此這些像素會在下一次掃描中被略過。</li>
+        <li><strong>Spot</strong> 會在選定 ROI 子區域內，對高亮灰階對應的像素送出顯式取消消隱向量點，並對同一 ROI 子區域內的其他像素進行消隱。</li>
+        <li>此選擇僅作用於已定義的 ROI 子區域；區域外像素仍依正常掃描方式處理。</li>
+      </ul>
+
+      <p>
+        使用 <strong>Select</strong> 確認目前模式，並將其保存到掃描 store 中，供下一步掃描使用。
+      </p>
+    </>
+  ),
+
+  vectorGrayLevelFilter: () => (
+    <>
+      <p>
+        目前的預計算消隱行為是把點陣圖或灰階濾波資料展開為帶消隱標誌的點，
+        然後送出整段串流，FPGA 執行，ADC 取樣稍後回傳。
+      </p>
+
+      <p>
+        此方案提供一種逐一處理單一邏輯點的方法：啟用後且灰階範圍已確認時，
+        後端會把矢量掃描切換為 <code>adaptive_gray_feedback</code>，強制使用
+        <code>SixteenBit</code> 輸出，先在 <code>(x, y)</code> 送出 1 個未消隱的探測取樣，
+        立即讀取該 ADC 結果，然後回到同一個座標，用剩餘駐留時間執行選定的消隱狀態。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li>光柵不在此範圍內。這份說明只針對矢量掃描。</li>
+        <li>灰階範圍會與灰階選取流程中確認的區間比較。</li>
+        <li>自適應模式會強制 <code>dwell = 16</code> 或更高，這樣在初始探測之後，同一座標上的後續動作階段仍然有足夠的駐留時間。</li>
+      </ul>
+
+      <p>
+        返回的掃描結果仍會透過合併探測/動作取樣，或在消隱時將輸出歸零，
+        讓每個請求點仍對應一個邏輯取樣。最終束流關閉仍會在自適應傳輸結束時明確執行。
+      </p>
+
+      <p>
+        這個方案的代價是速度會明顯慢於目前的串流式矢量掃描。USB 往返與 FPGA 緩衝會成為主要開銷。
+        作為軟體路徑，它在技術上是合理的，但不會快。
+      </p>
+    </>
+  ),
+
+  scanModes: () => (
+    <>
+      <p>
+        <strong>光柵</strong>會依照列/欄順序掃描固定的矩形網格。束流沿著完整畫面或 ROI 邊界移動，
+        因此最適合規則成像、整塊 ROI 覆蓋，以及簡單且可重複的採集。
+      </p>
+
+      <p>
+        <strong>矢量</strong>掃描的是明確的點列表。束流只會走訪你送出的座標，
+        因此更適合稀疏圖樣、不規則形狀、標註式工作，以及像灰階 skip/spot 這類選擇性束流控制。
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>使用光柵</strong>：當你需要一般影像、可預測的網格間距，或不想撰寫自訂點腳本但仍要掃完整個 ROI 時。</li>
+        <li><strong>使用矢量</strong>：當你需要跳過或強調某些像素、繪製非矩形圖樣，或只針對 ROI 的部分區域做更精細的束流控制時。</li>
+        <li>兩種模式在畫面上都可以顯示相同的即時影像，但送往硬體的主機命令不同。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>經驗法則：</strong>光柵重視覆蓋，矢量重視選擇性。
+      </div>
     </>
   ),
 
@@ -288,6 +382,26 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  runValidated: () => (
+    <>
+      <p>
+        當您需要的是<strong>阻塞式掃描結果</strong>而不是即時串流時，請使用
+        <strong>驗證執行</strong>。它在光柵與矢量兩種模式下都可用，會等待掃描完成，
+        然後一次性回傳耗時資料與驗證報告。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>需要報告時用這個。</strong>一般的 <code>Run</code> 只負責即時送出資料區塊，
+        不會等待驗證結果。<code>驗證執行</code> 才是產生 Run report 面板中那些掃描後檢查的路徑。
+      </div>
+
+      <p>
+        光柵或矢量參數表中的驗證核取方塊，仍然決定結果裡是否包含逐項的通過 / 失敗清單。
+        這個按鈕只是選擇回傳掃描結果物件的阻塞端點。
+      </p>
+    </>
+  ),
+
   pattern: () => (
     <>
       <p>
@@ -326,11 +440,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><strong>1024 — 步長 2</strong>：每隔 2 個 DAC 碼值造訪一次。點數為 ¼，掃描時間亦為 ¼。</li>
         <li><strong>512 — 步長 4</strong>：每隔 4 個 DAC 碼值。點數與時間為 1/16。</li>
         <li><strong>256 — 步長 8</strong>：每隔 8 個 DAC 碼值。點數為 1/64；適用於快速預覽掃描。</li>
+        <li><strong>自訂值 1..2048</strong>：仍涵蓋完整 DAC 範圍，但取樣間距會盡量平均分布，而不是嚴格的整數步長。</li>
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>允許值為 256、512、1024、2048。</strong>後端會拒絕其他取值 —
-        步長必須是 2048 的整數因子，否則掃描在 DAC 範圍兩端無法整齊閉合。
+        <strong>允許範圍為 1..2048。</strong> 2 的冪預設能在 2048 x 2048 DAC 預覽網格上保持整齊映射；
+        自訂值則用來更細地控制總點數。
       </div>
 
       <p>
@@ -344,10 +459,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><th>解析度</th><th>步長</th><th>總點數</th><th>大致掃描時間<br /><span className="muted">（dwell=1）</span></th></tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>8</td><td>65 536</td><td>~8 ms</td></tr>
-            <tr><td>512</td><td>4</td><td>262 144</td><td>~33 ms</td></tr>
-            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~131 ms</td></tr>
-            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~524 ms</td></tr>
+            <tr><td>256</td><td>8</td><td>65 536</td><td>~11 ms</td></tr>
+            <tr><td>512</td><td>4</td><td>262 144</td><td>~44 ms</td></tr>
+            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~175 ms</td></tr>
+            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~699 ms</td></tr>
           </tbody>
         </table>
       </div>
@@ -386,7 +501,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <ul className="dwell-help__list">
         <li><strong><code>x</code>、<code>y</code></strong> — DAC 碼值，閉區間 0..16383。超出範圍的值會在裝置上被截斷，但無法產生有用輸出。</li>
-        <li><strong><code>dwell</code></strong> — 單位與光柵 dwell 一致：125 ns 取樣週期的個數。1 最快（無超取樣）；2/4/8/16/…… 是 SNR 平均的實用值。最大可至 65535（約每像素 8.19 ms）。</li>
+        <li><strong><code>dwell</code></strong> — 單位與光柵 dwell 一致：目前 revC3 的 166.667 ns 取樣週期個數。1 最快（無超取樣）；2/4/8/16/…… 是 SNR 平均的實用值。最大可至 65535（約每像素 10.92 ms）。</li>
       </ul>
 
       <div className="dwell-help__rule">
@@ -423,8 +538,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>實際執行的預先處理時間會單獨回報。</strong>執行報告中的 <code>process_time_s</code>{" "}
-        顯示預先處理耗時；<code>send_time_s</code> 只顯示 USB 傳輸耗時。
+        <strong>實際執行的預先處理時長會單獨回報。</strong><code>process_time_s</code>{" "}
+        記錄這次執行的預先處理時長；<code>send_time_s</code> 只記錄 USB 傳輸時長。
         舊版 UI 曾將兩者混為一談。
       </div>
 
@@ -461,6 +576,48 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>
         當您想分析取樣順序與影像稀疏度時，使用<strong>抽稀</strong>。
         當您想檢查較低矢量網格在 DAC 空間中的佔用範圍時，使用<strong>原生</strong>。
+      </p>
+    </>
+  ),
+
+  magCalibration: () => (
+    <>
+      <p>
+        放大倍率校準用於把顯微鏡放大倍率映射到所選束流的完整水平視野（HFOV，單位米）。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>HFOV 公式。</strong>{" "}
+        <code>HFOV_m = measured_length_m × (image_resolution_px / measured_line_px)</code>。
+        measured length 是測量線對應的真實物理長度；measured pixels 是該測量線在影像中的像素長度。
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Magnification</strong> 是目前校準點的顯微鏡放大倍率。</li>
+        <li><strong>Image resolution</strong> 應匹配校準所用完整影像軸，通常為 <code>max(width_px, height_px)</code>。</li>
+        <li><strong>Update curve</strong> 會把目前放大倍率下計算得到的 HFOV 寫入曲線。</li>
+        <li><strong>Save</strong> 會按束流保存到 <code>magCalibration.beams[beam].m_per_fov</code>。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>X/Y 關係。</strong>放大倍率校準只保存 HFOV。ROI 的 X/Y 校準負責視口到 DUT
+        座標的映射。如果像素為正方形，VFOV 可由 HFOV 按影像寬高比推導；否則 X 和 Y
+        需要分別透過 ROI 校準。
+      </div>
+
+      <p>
+        <strong>匯入 CSV</strong> 需要的是從本面板匯出的放大倍率校準 CSV：
+        <code>Magnification,FOV (m)</code>。它不是一般掃描輸出 CSV。掃描結果 CSV
+        包含取樣影像資料，不會被解析為放大倍率校準曲線。
+      </p>
+
+      <p>
+        保存結果會寫入 stream 設定，並透過 <code>/api/admin/mag-calibration</code> 返回。
+        其他掃描邏輯可從 defaults/config 讀取該按束流保存的映射；匯入按鈕本身只替換目前的校準點表。
+      </p>
+
+      <p>
+        曲線使用 log-log 座標，因為 FOV 通常近似與放大倍率成反比。CSV 匯入/匯出使用兩欄資料：magnification 與 FOV meters。
       </p>
     </>
   ),

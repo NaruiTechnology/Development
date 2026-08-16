@@ -7,6 +7,7 @@ import imageReducer from "./imageSlice";
 import themeReducer from "./themeSlice";
 import localeReducer from "./localeSlice";
 import settingsReducer from "./settingsSlice";
+import magCalibrationReducer from "./magCalibrationSlice";
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
     theme: themeReducer,
     locale: localeReducer,
     settings: settingsReducer,
+    magCalibration: magCalibrationReducer,
   },
   // The image slice carries large typed arrays (Uint16Array up to 8 MB for
   // the 2048x2048 vector render target) plus an ArrayBuffer of points for
@@ -25,12 +27,20 @@ export const store = configureStore({
   // that touch these buffers.
   middleware: (getDefault) =>
     getDefault({
+      immutableCheck: {
+        // Image reducers intentionally manage multi-megabyte typed arrays.
+        // Avoid deep-walking those buffers after every streamed chunk while
+        // retaining mutation checks for the rest of the application state.
+        ignoredPaths: ["image"],
+      },
       serializableCheck: {
         ignoredPaths: [
           "image.frame",
           "image.vectorImage",
           "image.vectorCustomPoints",
           "image.vectorCustomRenderPoints",
+          "image.vectorCustomBlankMask",
+          "image.vectorCustomSpotMask",
         ],
         ignoredActions: [
           "image/resetRaster",

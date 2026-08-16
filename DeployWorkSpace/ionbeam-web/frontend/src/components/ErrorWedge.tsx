@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
+import { apiUrl } from "../lib/backendUrl";
 import { Icon } from "./Icon";
 import type { SignedInUser } from "./AuthDialog";
 
@@ -14,6 +16,7 @@ interface AdminConfigResponse {
 
 export function ErrorWedge({ signedInUser }: { signedInUser: SignedInUser | null }) {
   const { t } = useTranslation();
+  const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const scanError = useAppSelector((s) => s.scan.errorMessage);
   const service = useAppSelector((s) => s.status.service);
   const statusError = useAppSelector((s) => s.status.lastError);
@@ -30,22 +33,27 @@ export function ErrorWedge({ signedInUser }: { signedInUser: SignedInUser | null
   const canRequestScanRole = message === t("scan.permission.required");
 
   async function requestScanRole() {
-    const recipients = await fetchAuditorEmails();
-    if (recipients.length === 0) {
+    setRequestMessage(null);
+    try {
+      const recipients = await fetchAuditorEmails();
+      if (recipients.length === 0) {
+        throw new Error(t("scan.roleRequest.noRecipients"));
+      }
       window.location.href = composeRoleRequestMailto(
-        [],
+        recipients,
         signedInUser,
         t("scan.roleRequest.subject"),
         t("scan.roleRequest.body"),
       );
-      return;
+      setRequestMessage(t("scan.roleRequest.opened"));
+    } catch (err) {
+      setRequestMessage(
+        t("scan.roleRequest.failed").replace(
+          "{error}",
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
     }
-    window.location.href = composeRoleRequestMailto(
-      recipients,
-      signedInUser,
-      t("scan.roleRequest.subject"),
-      t("scan.roleRequest.body"),
-    );
   }
 
   return (
@@ -58,6 +66,7 @@ export function ErrorWedge({ signedInUser }: { signedInUser: SignedInUser | null
       <div className="error-wedge__label">{t("error.label")}</div>
       <div className="error-wedge__content">
         <div className="error-wedge__message">{message}</div>
+        {requestMessage && <div className="error-wedge__message">{requestMessage}</div>}
         {canRequestScanRole && (
           <button
             type="button"
@@ -75,7 +84,7 @@ export function ErrorWedge({ signedInUser }: { signedInUser: SignedInUser | null
 }
 
 async function fetchAuditorEmails(): Promise<string[]> {
-  const r = await fetch("/api/admin/iobeam/config");
+  const r = await fetch(apiUrl("/api/admin/iobeam/config"), { cache: "no-store" });
   if (!r.ok) return [];
   const data = (await r.json().catch(() => null)) as AdminConfigResponse | null;
   const root = data?.data;

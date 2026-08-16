@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useTranslation, type LocaleCode, type TranslationKey } from "../i18n";
+import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
 import { siteLabelKey } from "../lib/sites";
 import { Icon } from "./Icon";
 
@@ -83,10 +85,12 @@ interface RecentActivity {
   equipment_id?: number | null;
   equipment_name?: string;
   date: string;
+  update_date?: string;
 }
 
 interface ActivityReportResponse {
   ok: boolean;
+  data_source?: string;
   generated_at: string;
   days: number;
   selected_account_id: number | null;
@@ -101,6 +105,7 @@ interface ActivityReportResponse {
   geography?: SiteUsage[];
   recent: RecentActivity[];
   error?: string;
+  report_error?: string | null;
 }
 
 type PeriodMode = "weekly" | "daily" | "monthly" | "yearly";
@@ -163,9 +168,19 @@ function normalizeReport(data: ActivityReportResponse): ActivityReportResponse {
   };
 }
 
-export function ManagementReport({ onBack }: { onBack: () => void }) {
+export function ManagementReport({
+  onBack,
+  defaultAccountId,
+}: {
+  onBack: () => void;
+  defaultAccountId?: number | null;
+}) {
   const { locale, t, fmt } = useTranslation();
-  const [accountId, setAccountId] = useState("all");
+  const [accountId, setAccountId] = useState(() =>
+    Number.isInteger(defaultAccountId) && (defaultAccountId ?? 0) > 0
+      ? String(defaultAccountId)
+      : "all",
+  );
   const [equipmentId, setEquipmentId] = useState("all");
   const [groupMode, setGroupMode] = useState<GroupMode>("account");
   const [rankingSortMode, setRankingSortMode] = useState<RankingSortMode>("total");
@@ -174,10 +189,12 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
   const [report, setReport] = useState<ActivityReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cleanupState, setCleanupState] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/iobeam/equipment")
+    fetch(apiUrl("/api/admin/iobeam/equipment"))
       .then(async (r) => {
         const data = (await r.json().catch(() => null)) as EquipmentResponse | null;
         if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
@@ -203,11 +220,14 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
 
     setLoading(true);
     setError(null);
-    fetch(`/api/admin/iobeam/reports/activity?${params}`)
+    fetch(apiUrl(`/api/admin/iobeam/reports/activity?${params}`))
       .then(async (r) => {
         const data = (await r.json().catch(() => null)) as ActivityReportResponse | null;
         if (!r.ok || !data?.ok) {
           throw new Error(data?.error || `HTTP ${r.status}`);
+        }
+        if (data.report_error) {
+          throw new Error(data.report_error);
         }
         return data;
       })
@@ -258,6 +278,12 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
     const equipment = equipmentOptions.find((row) => String(row.id) === equipmentId);
     return equipmentLabel(equipment) || t("report.equipment.unknown");
   }, [equipmentId, equipmentOptions, t]);
+  const reportSourceLabel =
+    report?.data_source === "remote_db"
+      ? t("report.source.remoteDb")
+      : report?.data_source === "local_db"
+        ? t("report.source.localDb")
+        : report?.data_source || t("report.source.unknown");
   const siteRows = report?.site_groups ?? [];
   const equipmentRows = report?.equipment_groups ?? [];
   const periodRows = aggregatePeriodRows(
@@ -312,6 +338,27 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
     );
   }
 
+  async function onCleanupDuplicates() {
+    if (cleanupState === "running") return;
+    setCleanupState("running");
+    setCleanupMessage(null);
+    try {
+      const r = await fetch(apiUrl("/api/admin/iobeam/activity/dedupe"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+      });
+      const data = (await r.json().catch(() => null)) as { ok?: boolean; deleted?: number; error?: string } | null;
+      if (!r.ok || !data?.ok) {
+        throw new Error(data?.error || `HTTP ${r.status}`);
+      }
+      setCleanupState("done");
+      setCleanupMessage(t("report.cleanup.done", { count: data.deleted ?? 0 }));
+    } catch (err) {
+      setCleanupState("error");
+      setCleanupMessage(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <main className="management-report">
       <section className="report-hero">
@@ -319,6 +366,29 @@ export function ManagementReport({ onBack }: { onBack: () => void }) {
           <div className="report-eyebrow">{t("report.eyebrow")}</div>
           <h1>{t("report.title")}</h1>
           <p>{t("report.subtitle", { account: selectedName, equipment: selectedEquipmentName })}</p>
+          <div className="report-source-row">
+            <div className="report-source" aria-label={t("report.source.label")}>
+              <span>{t("report.source.label")}</span>
+              <strong>{reportSourceLabel}</strong>
+            </div>
+            <button
+              type="button"
+              className="btn btn--ghost report-cleanup-btn"
+              onClick={onCleanupDuplicates}
+              disabled={cleanupState === "running"}
+              title={t("report.cleanup.title")}
+            >
+              {t("report.cleanup.action")}
+            </button>
+          </div>
+          {cleanupMessage && (
+            <div
+              className={`report-cleanup-status report-cleanup-status--${cleanupState}`}
+              role={cleanupState === "error" ? "alert" : "status"}
+            >
+              {cleanupMessage}
+            </div>
+          )}
         </div>
         <div className="report-actions">
           <label className="report-select-field">

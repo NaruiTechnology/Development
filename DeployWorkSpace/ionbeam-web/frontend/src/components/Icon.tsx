@@ -1,20 +1,36 @@
+import rulerIcon from "../assets/ruler.png";
+import roiIcon from "../assets/ROI.png";
+import rasterIcon from "../assets/raster.png";
+import vectorIcon from "../assets/vector.png";
+import dashboardIcon from "../assets/UHVacuumPump_1.png";
+
 type IconName =
   | "check"
+  | "circleTool"
   | "cog"
+  | "commentTool"
   | "crop"
   | "download"
+  | "dashboard"
   | "globe"
   | "grid"
+  | "gridSvg"
   | "help"
+  | "alertTriangle"
+  | "highlightTool"
   | "image"
+  | "home"
   | "layers"
   | "link"
   | "mail"
   | "moon"
   | "pause"
   | "play"
+  | "plus"
   | "refresh"
+  | "rectangleTool"
   | "route"
+  | "ruler"
   | "scan"
   | "save"
   | "square"
@@ -23,9 +39,12 @@ type IconName =
   | "atom"
   | "tools"
   | "fileText"
+  | "eye"
   | "sheet"
   | "trash"
   | "upload"
+  | "zoomIn"
+  | "zoomOut"
   | "x";
 
 export function Icon({
@@ -35,15 +54,78 @@ export function Icon({
   name: IconName;
   tone?: "accent" | "danger" | "success" | "tab" | "warn";
 }) {
+  if (name === "ruler") {
+    return (
+      <span
+        className="icon icon--ruler"
+        aria-hidden
+        style={{
+          WebkitMaskImage: `url(${rulerIcon})`,
+          WebkitMaskPosition: "center",
+          WebkitMaskRepeat: "no-repeat",
+          WebkitMaskSize: "contain",
+          backgroundColor: "currentColor",
+          maskImage: `url(${rulerIcon})`,
+          maskPosition: "center",
+          maskRepeat: "no-repeat",
+          maskSize: "contain",
+        }}
+      />
+    );
+  }
+
+  const imageSource = imageSources[name];
+  const className = `${tone ? `icon icon--${tone}` : "icon"} icon--${name}`;
+  if (imageSource) {
+    const intrinsicClass =
+      name === "target"
+        ? " icon--intrinsic icon--intrinsic-roi"
+        : name === "grid" || name === "route"
+        ? " icon--intrinsic"
+        : "";
+    return (
+      <img
+        className={`${className}${intrinsicClass}`}
+        src={imageSource}
+        alt=""
+        aria-hidden
+      />
+    );
+  }
+
   return (
-    <svg className={tone ? `icon icon--${tone}` : "icon"} viewBox="0 0 24 24" aria-hidden>
-      {paths[name]}
+    <svg className={className} viewBox="0 0 24 24" aria-hidden>
+      {paths[name] ?? null}
     </svg>
   );
 }
 
-const paths: Record<IconName, JSX.Element> = {
+const imageSources: Partial<Record<IconName, string>> = {
+  dashboard: dashboardIcon,
+  target: roiIcon,
+  grid: rasterIcon,
+  route: vectorIcon,
+  fileText: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAB/klEQVR4nO3ZWUsbURgG4Pk1WrEXtuDSulBFXKkGV7DkppBWqiIi4kItYqWgiBuKN60o9EaT09te9Fac/A4VjjGJcYmJRssr5xsdpBYXMnNmlPPCC5MzE/gecmYSiKapqKg8/YAFa8GC22BBpNu9+vfr8gEBfcuK4UV5Rp58BCwa/gpACI9Pf9QAqQjYBOCyEHYCuAyE3QBuN0IGgNuJkAXgdiGsBOzmVtyJiDW1r7sWcPJtST4CFgIeUk0BLqMATAHSy5MFRGu8iJQ2UqO1XiS/LNB6YmjWXI+UtyLW8gknY9/N9+2/60a4uN7sce+EM4DQizLsvqpBvHMU4aI68Mx8pGZWEe/6Ss/y/bYuHHh76Drx+rh/yoBXe7GTXYjDj5+pp+MrzgHEMOI4ObJoDNk3aQLO5hmdO//xGzvPixAufGsCQjmlzm8hAYi8aaBvV7GdeGYBUnP+GwAaurIN/FkB4NeNTyDrNWINPmpqbs05gBhUDCP2cnJ4ntb/BwiXeOh6cwsR4APVUcDVFrrefwGJwWnj901zu/u2UPQWgLixQy/LjeMSD/4u/3EX4KhjBImB6Rvrp5M/cegbosa7x+gegX/DPJ8YnKUnF5wG2F1NAS6jAEwB0osCMAVILwrAFMA9fzHduwF90zrAL71aKiKgb4JtVFkGUFFR0VybCyA7+nk5Yx4EAAAAAElFTkSuQmCC",
+  sheet: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC2klEQVR4nGNgGAWjYBSMgmEJODtdpHjbPXy5210bOFtcNnM0OT1jGJSg3p5FcEqwttAkvzjBCb4TBfp9dvP3eL3h7fb8z9Pp8Z+73e0/V6vLf85m5/8D7VQG4TlJvJILI20k54anic0Jmyg2M+SIyPSg78JTA/8LTQ74LzjR779Av+9//l7v/wPuAbmlmYKyqxJtZJcn5MssjVskvST2qtSiqL+SCyL/S8yL+C8+J+y/2KzQ/6Izgv8PSg8orEn+L78q6b/cioT/ssvi/sssif0vtSj6PyUeMDziThY2OOJ2eEh7wPCIO+mxN+qB7lEP/B90HkAGMIfhA6MekEfyQO3pRSiGZ+2fhOIB1dlx/z/+/AqXrzkwd3B5QH5p/P/r7x/BDb/1/sl/idlhcA9MO78RLnf9zcP/Qr2+gy8PhO5qRQmhuJ1dYA8YLEr7/+PPL7i4z6rKwZuJtz44BXfouVe3wR5YcWM/XGzl9f2DMw/IQD1gviYPJbRTdvf+//PvL5gNygNqs+IGfynUf2Ed3JL3P77A2RUHZg3eUkgGyQNKi+L/P/vyBsWyy6/v/xeZFDA0KjLVxYn/n319i+KBR59e/ZeaGjo0PLDoxh64w198fQdnd59aOfiTUMD2xv///v8DW/D998//sTs64BaCMrfpgozB6wGFpfH/b75/Ardg4vn14GJ078PzcLEjjy//F+j1GZwe6L+4Hm74h59f/qstTAR7wG5l4f+//yCxAgJJWzoHXx5w2FT2/ydS+d94cglKW2j97SNwuRdf3v2XmRQyeDwgvzz+/6lXt+AOfP713X+FBbEoHjBZnPn/998/cDUzzm4cfElIaig3p2VGPeA8eCoyiVEPuI96YEh5wOCw2yGGETe4i3N4fUGUscTcsLhBP7xOzgSHwAS/Dv4+n82DdoKDaPCfgZGv102Fp8sjlLvdrY2z1WUbR7Pzc+INGAWjYBSMAoYhAgBEtnuV0kUiSgAAAABJRU5ErkJggg==",
+};
+
+const paths: Partial<Record<IconName, JSX.Element>> = {
   check: <path d="M5 12.5l4 4L19 6.5" />,
+  highlightTool: (
+    <>
+      <path d="M5 15h6.5l4.5-4.5-3.5-3.5L8 11v4z" />
+      <path d="M10.2 6.8l3 3" />
+      <path d="M6 16h8" />
+    </>
+  ),
+  commentTool: (
+    <>
+      <path d="M4 5h16v10H9l-5 4v-4H4z" />
+      <path d="M8 9h8M8 12h4" />
+    </>
+  ),
+  rectangleTool: <rect x="5" y="5" width="14" height="12" rx="1.5" />,
+  circleTool: <circle cx="12" cy="12" r="6.5" />,
   cog: (
     <path
       fill="currentColor"
@@ -69,10 +151,23 @@ const paths: Record<IconName, JSX.Element> = {
       <path d="M9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16" />
     </>
   ),
+  gridSvg: (
+    <>
+      <path d="M4 4h16v16H4z" />
+      <path d="M9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16" />
+    </>
+  ),
   help: (
     <>
       <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" />
       <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </>
+  ),
+  alertTriangle: (
+    <>
+      <path d="M10.3 4.2a2 2 0 0 1 3.4 0l8.1 13.8A2 2 0 0 1 20.1 21H3.9a2 2 0 0 1-1.7-3L10.3 4.2z" />
+      <path d="M12 9v5" />
       <path d="M12 17h.01" />
     </>
   ),
@@ -81,6 +176,13 @@ const paths: Record<IconName, JSX.Element> = {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="9" cy="9" r="2" />
       <path d="M21 15l-5-5L5 21" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="M4 11.5L12 4l8 7.5" />
+      <path d="M6.5 10.5V20h11V10.5" />
+      <path d="M10 20v-5h4v5" />
     </>
   ),
   layers: (
@@ -109,6 +211,7 @@ const paths: Record<IconName, JSX.Element> = {
     </>
   ),
   play: <path d="M6 4l14 8-14 8V4z" />,
+  plus: <path d="M12 5v14M5 12h14" />,
   refresh: (
     <>
       <path d="M20 4v6h-6" />
@@ -168,6 +271,12 @@ const paths: Record<IconName, JSX.Element> = {
       <path fill="#ffffff" stroke="none" d="M12 8l3.2 10h-1.9l-.8-2.6h-3l-.8 2.6H8.8L12 8zm.9 5.9-.9-3.1-.9 3.1h1.8z" />
     </>
   ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
   sheet: (
     <>
       <path fill="#1d6f42" stroke="none" d="M6 3h8l4 4v14H6z" />
@@ -192,5 +301,17 @@ const paths: Record<IconName, JSX.Element> = {
     </>
   ),
   upload: <path d="M12 21V10m0 0l-4 4m4-4l4 4M5 5h14" />,
+  zoomIn: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5L21 21M10.5 7.5v6M7.5 10.5h6" />
+    </>
+  ),
+  zoomOut: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5L21 21M7.5 10.5h6" />
+    </>
+  ),
   x: <path d="M5 5l14 14M19 5L5 19" />,
 };

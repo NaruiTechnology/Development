@@ -25,15 +25,36 @@ export type HelpKey =
   | "outputMode"
   | "frameBlank"
   | "validation"
+  | "runValidated"
   | "pattern"
   | "vectorResolution"
   | "customPoints"
   | "preProcess"
-  | "canvasView";
+  | "canvasView"
+  | "grayScale"
+  | "vectorGrayLevelFilter"
+  | "scanModes"
+  | "magCalibration";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
   dwell: () => (
     <>
+      <div className="dwell-help__rule">
+        <strong>revC3 hardware floor: 166.667 ns.</strong> The 48 MHz FPGA
+        clock and the configured eight-clock ADC/DAC transaction limit dwell 1
+        to 6 MPix/s. A 10 ns dwell is not achievable with the current gateware;
+        even one FPGA clock is 20.833 ns.
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>Sample rate and output-pixel rate are different.</strong> The
+        ADC conversion rate remains 6.0 MSamples/s. Dwell 2 combines two ADC
+        samples into one output pixel, so the output ceiling is 3.0 MPixels/s;
+        dwell 4 combines four, so it is 1.5 MPixels/s. In general: output
+        pixel rate = 6.0 MSamples/s ÷ samples per pixel. These are theoretical
+        acquisition ceilings; transport and host overhead can only add time.
+      </div>
+
       <div className="dwell-help__rule">
         <strong>Pick powers of two.</strong> If your effective sample
         count per pixel isn&apos;t a power of two, the gateware only
@@ -44,36 +65,47 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         pixel is 2, 4, 8, 16, 32, 64, ….
       </div>
 
+      <div className="dwell-help__rule">
+        <strong>Gray-level probe/blank minimum: dwell 2.</strong> When a gray
+        range is confirmed for ROI or Vector scanning, the per-pixel workflow
+        needs one dwell period to probe the gray level and at least one more
+        period to apply the beam-on or blank decision. A dwell of 1 cannot
+        perform both stages, so the selected value is normalized to 2.
+      </div>
+
       <p>
         The <code>dwell</code> field is the supersampler control.
         Change it:
       </p>
 
       <ul className="dwell-help__list">
-        <li><code>"dwell": 1</code> → supersampler does nothing, fastest scan, full 8 MSPS pixel rate</li>
-        <li><code>"dwell": 2</code> → 2× averaging, half the pixel rate (4 Mpix/s), √2 SNR gain</li>
-        <li><code>"dwell": 4</code> → 4× averaging (2 Mpix/s), 2× SNR gain</li>
-        <li><code>"dwell": 8</code> → 8× averaging (1 Mpix/s), ~2.8× SNR gain</li>
-        <li><code>"dwell": 16</code> → 16× averaging (500 kpix/s), 4× SNR gain</li>
-        <li>… up to <code>dwell = 65535</code> (≈ 8.19 ms per pixel)</li>
+        <li><code>"dwell": 1</code> → supersampler does nothing, fastest scan, 6 MPix/s theoretical rate</li>
+        <li><code>"dwell": 2</code> → 2× averaging (3 MPix/s), √2 SNR gain</li>
+        <li><code>"dwell": 4</code> → 4× averaging (1.5 MPix/s), 2× SNR gain</li>
+        <li><code>"dwell": 8</code> → 8× averaging (750 kPix/s), ~2.8× SNR gain</li>
+        <li><code>"dwell": 16</code> → 16× averaging (375 kPix/s), 4× SNR gain</li>
+        <li><code>"dwell": 32</code> → 32× averaging (187.5 kPix/s), ~5.7× SNR gain</li>
+        <li><code>"dwell": 64</code> → 64× averaging (93.75 kPix/s), 8× SNR gain</li>
+        <li>… up to <code>dwell = 65535</code> (≈ 10.92 ms per pixel)</li>
       </ul>
 
       <div className="dwell-help__table-wrap">
         <table className="dwell-help__table">
           <thead>
             <tr>
-              <th>dwell</th><th>Samples / pixel</th><th>Pixel rate</th>
+              <th>dwell</th><th>Samples / output pixel</th><th>ADC sample rate</th><th>Output pixel ceiling</th>
               <th>SNR gain<br /><span className="muted">(vs dwell=1)</span></th>
               <th>1024² frame time</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>1</td><td>1</td><td>8.0 MPix/s</td><td>1.00×</td><td>131 ms</td></tr>
-            <tr><td>2</td><td>2</td><td>4.0 MPix/s</td><td>1.41×</td><td>262 ms</td></tr>
-            <tr><td>4</td><td>4</td><td>2.0 MPix/s</td><td>2.00×</td><td>524 ms</td></tr>
-            <tr><td>8</td><td>8</td><td>1.0 MPix/s</td><td>2.83×</td><td>1.05 s</td></tr>
-            <tr><td>16</td><td>16</td><td>500 kPix/s</td><td>4.00×</td><td>2.10 s</td></tr>
-            <tr><td>32</td><td>32</td><td>250 kPix/s</td><td>5.66×</td><td>4.19 s</td></tr>
+            <tr><td>1</td><td>1</td><td>6.0 MS/s</td><td>6.0 MPix/s</td><td>1.00×</td><td>175 ms</td></tr>
+            <tr><td>2</td><td>2</td><td>6.0 MS/s</td><td>3.0 MPix/s</td><td>1.41×</td><td>350 ms</td></tr>
+            <tr><td>4</td><td>4</td><td>6.0 MS/s</td><td>1.5 MPix/s</td><td>2.00×</td><td>699 ms</td></tr>
+            <tr><td>8</td><td>8</td><td>6.0 MS/s</td><td>750 kPix/s</td><td>2.83×</td><td>1.40 s</td></tr>
+            <tr><td>16</td><td>16</td><td>6.0 MS/s</td><td>375 kPix/s</td><td>4.00×</td><td>2.80 s</td></tr>
+            <tr><td>32</td><td>32</td><td>6.0 MS/s</td><td>187.5 kPix/s</td><td>5.66×</td><td>5.59 s</td></tr>
+            <tr><td>64</td><td>64</td><td>6.0 MS/s</td><td>93.75 kPix/s</td><td>8.00×</td><td>11.18 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -101,7 +133,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>Resolution drives three quantities you usually care about:</p>
 
       <ul className="dwell-help__list">
-        <li><strong>Frame time</strong> — scales as <code>N² × dwell × 125 ns</code>. Doubling the resolution quadruples the time.</li>
+        <li><strong>Frame time</strong> — scales as <code>N² × dwell × 166.667 ns</code> with the current revC3 timing. Doubling the resolution quadruples the time.</li>
         <li><strong>Pixel count for the CSV / figure</strong> — <code>N²</code> values. A 2048² 16-bit raster is 8 MB on the wire and ~32 MB once expanded to a CSV.</li>
         <li><strong>Spatial sampling rate</strong> — finer grid resolves smaller features but with the same total dwell budget, higher resolution means proportionally less time per pixel unless you also raise dwell.</li>
       </ul>
@@ -111,22 +143,22 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
           <thead>
             <tr>
               <th>Resolution</th><th>DAC stride</th><th>Total pixels</th>
-              <th>Frame time<br /><span className="muted">(dwell = 2)</span></th>
+              <th>Frame time<br /><span className="muted">(dwell = 16)</span></th>
               <th>16-bit output</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>64</td><td>65 536</td><td>16 ms</td><td>128 KB</td></tr>
-            <tr><td>512</td><td>32</td><td>262 144</td><td>66 ms</td><td>512 KB</td></tr>
-            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>262 ms</td><td>2 MB</td></tr>
-            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>1.05 s</td><td>8 MB</td></tr>
+            <tr><td>256</td><td>64</td><td>65 536</td><td>175 ms</td><td>128 KB</td></tr>
+            <tr><td>512</td><td>32</td><td>262 144</td><td>699 ms</td><td>512 KB</td></tr>
+            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.80 s</td><td>2 MB</td></tr>
+            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>11.18 s</td><td>8 MB</td></tr>
           </tbody>
         </table>
       </div>
 
       <p>
         Frame times above assume continuous streaming at the
-        supersampler&apos;s 8 MSPS sample rate. Real-world numbers
+        revC3 gateware&apos;s 6 MSPS theoretical sample rate. Real-world numbers
         are slightly longer due to per-chunk USB overhead and the
         pipeline-drain padding at the tail of each scan.
       </p>
@@ -350,6 +382,33 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
     </>
   ),
 
+  runValidated: () => (
+    <>
+      <p>
+        Use <strong>Run validated</strong> when you want the blocking
+        scan endpoint instead of the live stream. It works in both
+        raster and vector mode, waits for the scan to finish, and
+        returns the timing data plus the validation report in one
+        response.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Use this when you need the report.</strong> The
+        regular <code>Run</code> button streams chunks live and does
+        not wait for the validation payload. <code>Run validated</code>{" "}
+        is the path that produces the post-scan checks shown in the
+        Run report panel.
+      </div>
+
+      <p>
+        The validation checkbox in the raster or vector parameter form
+        still controls whether the per-check pass/fail list is included
+        in the result. This button just chooses the blocking endpoint
+        that returns the scan result object.
+      </p>
+    </>
+  ),
+
   pattern: () => (
     <>
       <p>
@@ -399,13 +458,14 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         <li><strong>1024 — stride 2</strong>: every 2nd DAC code. ¼ the points, ¼ the scan time.</li>
         <li><strong>512 — stride 4</strong>: every 4th DAC code. 1/16th the points and time.</li>
         <li><strong>256 — stride 8</strong>: every 8th DAC code. 1/64th the points; useful for fast preview scans.</li>
+        <li><strong>Custom values 1..2048</strong>: still cover the full DAC range, but the sample spacing is distributed as evenly as possible instead of matching an exact integer stride.</li>
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>Allowed values are 256, 512, 1024, 2048.</strong> The
-        backend rejects anything else — the stride must be an
-        integer divisor of 2048, or the sweep wouldn&apos;t close
-        cleanly at the edges of the DAC range.
+        <strong>Allowed values are 1..2048.</strong> The preset powers
+        of two keep the mapping exact on the 2048 x 2048 DAC preview
+        grid, while custom values trade that neat stride relationship
+        for finer control over total point count.
       </div>
 
       <p>
@@ -421,10 +481,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><th>Resolution</th><th>Stride</th><th>Total points</th><th>Approx scan time<br /><span className="muted">(dwell=1)</span></th></tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>8</td><td>65 536</td><td>~8 ms</td></tr>
-            <tr><td>512</td><td>4</td><td>262 144</td><td>~33 ms</td></tr>
-            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~131 ms</td></tr>
-            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~524 ms</td></tr>
+            <tr><td>256</td><td>8</td><td>65 536</td><td>~11 ms</td></tr>
+            <tr><td>512</td><td>4</td><td>262 144</td><td>~44 ms</td></tr>
+            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~175 ms</td></tr>
+            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~699 ms</td></tr>
           </tbody>
         </table>
       </div>
@@ -467,7 +527,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <ul className="dwell-help__list">
         <li><strong><code>x</code>, <code>y</code></strong> — DAC code, inclusive 0..16383. Values outside the range get clamped on the device but won&apos;t produce useful output.</li>
-        <li><strong><code>dwell</code></strong> — same units as raster dwell: number of 125 ns sample periods. 1 is the fastest (no supersampling), 2/4/8/16/… are the practical values for SNR averaging. Up to 65535 (≈ 8.19 ms per pixel).</li>
+        <li><strong><code>dwell</code></strong> — same units as raster dwell: number of 166.667 ns revC3 sample periods. 1 is the fastest (no supersampling), 2/4/8/16/… are the practical values for SNR averaging. Up to 65535 (≈ 10.92 ms per pixel).</li>
       </ul>
 
       <div className="dwell-help__rule">
@@ -510,11 +570,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>The wet-run pre-process time is reported separately.</strong>{" "}
-        <code>process_time_s</code> in the run report shows how long
-        the pre-processing took; <code>send_time_s</code> shows USB
-        transfer time alone. The two used to be conflated in older
-        UIs.
+        <strong>The wet-run pre-process duration is reported separately.</strong>{" "}
+        <code>process_time_s</code> reports the pre-processing duration
+        for the run; <code>send_time_s</code> reports USB transfer time
+        alone. The two used to be conflated in older UIs.
       </div>
 
       <p>When to enable:</p>
@@ -560,6 +619,159 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         sample order and image sparsity. Use <strong>Native</strong>
         when you want to inspect the DAC-space footprint of a reduced
         vector grid.
+      </p>
+    </>
+  ),
+
+  grayScale: () => (
+    <>
+      <p>
+        The gray-scale spectrum shows the gray values currently present
+        in the rendered live image or loaded bitmap. Each box is one
+        sampled gray level, and the step spinner controls how many
+        boxes are shown across the available range.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Selecting a box does not change the image by itself.</strong>{" "}
+        It only marks the gray-level interval that the next scan action
+        will use when you confirm the choice.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Skip</strong> sends explicit blanked vector points for the highlighted gray levels inside the selected ROI sub-area, so those pixels are skipped during the next scan.</li>
+        <li><strong>Spot</strong> sends explicit unblanked vector points for the highlighted gray levels and blanks the other pixels inside the selected ROI sub-area.</li>
+        <li>The selection applies only to the defined ROI sub-area; pixels outside that area keep their normal scan handling.</li>
+      </ul>
+
+      <p>
+        Use <strong>Select</strong> to confirm the pending mode and
+        persist it into the scan store for the next scan step.
+      </p>
+    </>
+  ),
+
+  vectorGrayLevelFilter: () => (
+    <>
+      <p>
+        The current fallback behavior is precomputed blanking: bitmap or
+        gray filter data is expanded into points with blank flags, the
+        stream is sent, the FPGA executes it, and ADC samples come back
+        later.
+      </p>
+
+      <p>
+        The solution provides a way to handle one logical point at a
+        time: when this toggle is enabled and a gray range is
+        confirmed, the backend switches vector scans into
+        <code>adaptive_gray_feedback</code>, forces{" "}
+        <code>SixteenBit</code> output, sends one unblanked probe at
+        <code>(x, y)</code>, reads that ADC result immediately, then
+        revisits the same coordinate for the remaining dwell with the
+        chosen blank state.
+      </p>
+
+      <ul className="dwell-help__list">
+        <li>Raster stays out of scope. This help applies only to vector scans.</li>
+        <li>The gray range is compared against the confirmed interval from the gray selection flow.</li>
+        <li>Adaptive mode forces <code>dwell = 16</code> or higher so the same-coordinate action pass still has meaningful dwell after the initial probe.</li>
+      </ul>
+
+      <p>
+        The returned scan result still stays one logical sample per
+        requested point by combining the probe/action samples, or
+        zeroing the output when blanked. The final beam shutdown
+        remains explicit at the end of the adaptive transfer.
+      </p>
+
+      <p>
+        Tradeoff: this is much slower than the current streaming vector
+        scan. USB round trips and FPGA buffering will dominate. As a
+        software path, though, it is technically reasonable and
+        better than doing nothing.
+      </p>
+    </>
+  ),
+
+  scanModes: () => (
+    <>
+      <p>
+        <strong>Raster</strong> scans a fixed rectangular grid in
+        row/column order. The beam follows the full frame or ROI
+        bounds, which makes it the natural choice for regular imaging,
+        full-frame coverage, and simple repeatable acquisition.
+      </p>
+
+      <p>
+        <strong>Vector</strong> scans an explicit list of points. The
+        beam visits only the coordinates you send, so it is better for
+        sparse patterns, irregular shapes, annotation-style work, and
+        selective beam control such as gray-level skip/spot.
+      </p>
+
+      <ul className="dwell-help__list">
+        <li><strong>Use Raster</strong> when you want a conventional image, predictable grid spacing, or a full ROI sweep without custom point scripting.</li>
+        <li><strong>Use Vector</strong> when you need to skip or emphasize selected pixels, draw non-rectangular patterns, or target only a subset of the ROI with finer beam control.</li>
+        <li>Both modes can render the same live image on screen, but the host command they send to the hardware is different.</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>Practical rule of thumb:</strong> Raster is for
+        coverage, vector is for selectivity.
+      </div>
+    </>
+  ),
+
+  magCalibration: () => (
+    <>
+      <p>
+        Magnification calibration maps a microscope magnification value
+        to the full horizontal field of view (HFOV) in meters for the
+        selected beam.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>HFOV formula.</strong>{" "}
+        <code>HFOV_m = measured_length_m × (image_resolution_px / measured_line_px)</code>.
+        The measured length is the real-world distance represented by
+        the line you measured, and measured pixels is that line&apos;s
+        pixel length in the image.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Magnification</strong> is the microscope mag setting for the current point.</li>
+        <li><strong>Image resolution</strong> should match the full image axis used for calibration, usually <code>max(width_px, height_px)</code>.</li>
+        <li><strong>Update curve</strong> stores the computed HFOV at the current magnification.</li>
+        <li><strong>Save</strong> persists the per-beam map under <code>magCalibration.beams[beam].m_per_fov</code>.</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>X/Y relationship.</strong> Magnification calibration
+        stores HFOV only. The ROI X/Y calibration owns the viewport-to-DUT
+        coordinate mapping. If pixels are square, VFOV is derived from
+        HFOV by the image aspect ratio; otherwise X and Y require separate
+        ROI calibration.
+      </div>
+
+      <p>
+        <strong>Import CSV</strong> expects a magnification-calibration
+        CSV exported from this panel: <code>Magnification,FOV (m)</code>.
+        It is not the normal scan output CSV. Scan result CSV files contain
+        sampled image data and are intentionally not parsed as mag-cal
+        curves.
+      </p>
+
+      <p>
+        Saved results are written into the stream configuration and served
+        back through <code>/api/admin/mag-calibration</code>. Other scan
+        logic can consume that per-beam map from defaults/config; the
+        import button itself only replaces the current mag-cal point table.
+      </p>
+
+      <p>
+        The chart is drawn on log-log axes because FOV normally changes
+        approximately inversely with magnification. CSV import/export
+        uses two data columns: magnification and FOV meters.
       </p>
     </>
   ),

@@ -32,6 +32,9 @@ import {
   createSlice,
   type PayloadAction,
 } from "@reduxjs/toolkit";
+import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 
 export interface SettingsConfigInfo {
   path: string;
@@ -64,6 +67,14 @@ export interface SaveResponse {
   backend_restart?: BackendRestartResult;
 }
 
+function normalizeSettingsDwell(config: unknown): unknown {
+  return writePath(
+    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 16),
+    [...ACTION_DATA_PATH, "vectorScan", "dwell"],
+    16,
+  );
+}
+
 interface SettingsState {
   dialogOpen: boolean;
   /** Active tab inside the dialog. */
@@ -87,6 +98,8 @@ interface SettingsState {
   error: string | null;
   /** Last restart-command result, surfaced under the buttons after a save. */
   lastRestart: RestartResult | null;
+  /** True while the backend proxy is restarting after a config save. */
+  backendRestarting: boolean;
   /** "Backup created on first read" notice; consumed by the dialog once. */
   backupNotice: boolean;
 }
@@ -97,6 +110,7 @@ export type SettingsTab =
   | "vector"
   | "pins"
   | "simulation"
+  | "ftp"
   | "admin";
 
 const initialState: SettingsState = {
@@ -112,6 +126,7 @@ const initialState: SettingsState = {
   hasBackup: false,
   error: null,
   lastRestart: null,
+  backendRestarting: false,
   backupNotice: false,
 };
 
@@ -120,12 +135,12 @@ const initialState: SettingsState = {
 export const fetchSettingsConfig = createAsyncThunk<SettingsConfigInfo>(
   "settings/fetch",
   async () => {
-    const r = await fetch("/api/admin/config");
+    const r = await fetch(apiUrl("/api/admin/config"));
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`fetch config: HTTP ${r.status} ${text}`);
     }
-    return (await r.json()) as SettingsConfigInfo;
+    return await readJsonResponse<SettingsConfigInfo>(r, "fetch config");
   }
 );
 
@@ -133,39 +148,46 @@ export const saveSettingsConfig = createAsyncThunk<
   SaveResponse,
   unknown
 >("settings/save", async (data) => {
-  const r = await fetch("/api/admin/config", {
+  const normalized = normalizeSettingsDwell(data);
+  const r = await fetch(apiUrl("/api/admin/config"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data }),
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+    body: JSON.stringify({ data: normalized }),
   });
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`save config: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as SaveResponse;
+  return await readJsonResponse<SaveResponse>(r, "save config");
 });
 
 export const restoreSettingsConfig = createAsyncThunk<SaveResponse>(
   "settings/restore",
   async () => {
-    const r = await fetch("/api/admin/config/restore", { method: "POST" });
+    const r = await fetch(apiUrl("/api/admin/config/restore"), {
+      method: "POST",
+      headers: scanAuthHeaders(),
+    });
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`restore config: HTTP ${r.status} ${text}`);
     }
-    return (await r.json()) as SaveResponse;
+    return await readJsonResponse<SaveResponse>(r, "restore config");
   }
 );
 
 export const restartSettingsServices = createAsyncThunk<SaveResponse>(
   "settings/restartServices",
   async () => {
-    const r = await fetch("/api/admin/restart-services", { method: "POST" });
+    const r = await fetch(apiUrl("/api/admin/restart-services"), {
+      method: "POST",
+      headers: scanAuthHeaders(),
+    });
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`restart services: HTTP ${r.status} ${text}`);
     }
-    return (await r.json()) as SaveResponse;
+    return await readJsonResponse<SaveResponse>(r, "restart services");
   }
 );
 
@@ -189,6 +211,7 @@ const slice = createSlice({
       s.error = null;
       s.backupNotice = false;
       s.lastRestart = null;
+      s.backendRestarting = false;
     },
     setActiveTab(s, a: PayloadAction<SettingsTab>) {
       s.activeTab = a.payload;
@@ -219,6 +242,9 @@ const slice = createSlice({
     clearLastRestart(s) {
       s.lastRestart = null;
     },
+    setBackendRestarting(s, a: PayloadAction<boolean>) {
+      s.backendRestarting = a.payload;
+    },
   },
   extraReducers: (b) => {
     /* fetch ------------------------------------------------------------ */
@@ -228,8 +254,8 @@ const slice = createSlice({
     });
     b.addCase(fetchSettingsConfig.fulfilled, (s, a) => {
       s.loading = false;
-      s.source = a.payload.data;
-      s.draft = a.payload.data;
+      s.source = normalizeSettingsDwell(a.payload.data);
+      s.draft = s.source;
       s.configPath = a.payload.path;
       s.backupPath = a.payload.backup_path;
       s.hasBackup = a.payload.has_backup;
@@ -251,10 +277,12 @@ const slice = createSlice({
     b.addCase(saveSettingsConfig.fulfilled, (s, a) => {
       s.saving = false;
       s.lastRestart = a.payload.restart;
+      s.backendRestarting = Boolean(a.payload.backend_restart?.scheduled);
       // The save endpoint doesn't echo the saved JSON back (saves a
       // round-trip on a multi-KB blob); promote the draft to source
       // ourselves so the next "discard changes" / dirty check works.
-      s.source = s.draft;
+      s.source = normalizeSettingsDwell(s.draft);
+      s.draft = s.source;
     });
     b.addCase(saveSettingsConfig.rejected, (s, a) => {
       s.saving = false;
@@ -270,6 +298,7 @@ const slice = createSlice({
     b.addCase(restoreSettingsConfig.fulfilled, (s, a) => {
       s.restoring = false;
       s.lastRestart = a.payload.restart;
+      s.backendRestarting = Boolean(a.payload.backend_restart?.scheduled);
       // The server overwrote the live file with the backup. The
       // component dispatches fetchSettingsConfig() right after the
       // restore thunk resolves, so source/draft reload to the
@@ -289,6 +318,7 @@ const slice = createSlice({
     b.addCase(restartSettingsServices.fulfilled, (s, a) => {
       s.saving = false;
       s.lastRestart = a.payload.restart;
+      s.backendRestarting = Boolean(a.payload.backend_restart?.scheduled);
     });
     b.addCase(restartSettingsServices.rejected, (s, a) => {
       s.saving = false;
@@ -307,6 +337,7 @@ export const {
   setError,
   consumeBackupNotice,
   clearLastRestart,
+  setBackendRestarting,
 } = slice.actions;
 
 export default slice.reducer;
@@ -407,4 +438,9 @@ export const PINS_PATH: ReadonlyArray<string | number> = [
 export const SIMULATION_PATH: ReadonlyArray<string | number> = [
   ...ACTION_DATA_PATH,
   "simulation",
+];
+
+export const FTP_PATH: ReadonlyArray<string | number> = [
+  ...ACTION_DATA_PATH,
+  "ftp",
 ];

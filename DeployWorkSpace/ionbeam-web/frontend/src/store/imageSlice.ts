@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ROIRequest } from "../types/api";
+import type { ROIRequest, VectorPoint, VectorPointTuple, VectorScanPath } from "../types/api";
+import { vectorScanSamplePixel } from "../lib/vectorScanPath";
 
 /**
  * Image / pixel buffers, kept here (outside the serialisability check)
@@ -19,6 +20,7 @@ import type { ROIRequest } from "../types/api";
  */
 
 export type VectorPattern = "default" | "custom";
+export type VectorSource = "vector" | "roi";
 
 interface ImageState {
   // ---------- raster -----------------------------------------------------
@@ -28,6 +30,8 @@ interface ImageState {
 
   // ---------- vector -----------------------------------------------------
   vectorPattern: VectorPattern;
+  vectorScanPath: VectorScanPath;
+  vectorSource: VectorSource;
   /** Edge length of the square render target. 2048 matches the default
    *  sweep and the FPGA DAC range. */
   vectorEdge: number;
@@ -38,9 +42,15 @@ interface ImageState {
   vectorCustomPoints: Float32Array | null;
   /** For custom pattern only: flat render-space (x, y) pairs, length 2*N. */
   vectorCustomRenderPoints: Float32Array | null;
+  /** For custom pattern only: 1 when the point is explicitly beam-blanked. */
+  vectorCustomBlankMask: Uint8Array | null;
+  /** For custom pattern only: 1 when the point is a selected Spot beam-on pixel. */
+  vectorCustomSpotMask: Uint8Array | null;
   vectorCustomCount: number;
   /** Number of ADC samples received so far. */
   vectorCursor: number;
+  /** Whether ROI gray feedback should be composited after this cycle completes. */
+  retainVectorFeedbackOnComplete: boolean;
 
   // ---------- repaint trigger -------------------------------------------
   revision: number;
@@ -55,20 +65,26 @@ const initialState: ImageState = {
   frame: new Uint16Array(RES * RES),
 
   vectorPattern: "default",
+  vectorScanPath: "vertical_raster",
+  vectorSource: "vector",
   vectorEdge: VEC_EDGE,
   vectorImage: new Uint16Array(VEC_EDGE * VEC_EDGE),
   vectorCustomPoints: null,
   vectorCustomRenderPoints: null,
+  vectorCustomBlankMask: null,
+  vectorCustomSpotMask: null,
   vectorCustomCount: 0,
   vectorCursor: 0,
+  retainVectorFeedbackOnComplete: true,
 
   revision: 0,
 };
 
 interface SetupVectorPayload {
   pattern: VectorPattern;
-  /** (x, y, dwell) triples copied from VectorRequest.points for custom mode. */
-  points?: Array<[number, number, number]> | null;
+  scanPath?: VectorScanPath;
+  /** Custom points copied from VectorRequest.points for custom mode. */
+  points?: Array<VectorPointTuple | VectorPoint> | null;
   /** Edge of the render target. Defaults to 2048 (FPGA DAC range). */
   edge?: number;
   /** Active ROI in 14-bit DAC coordinates. Used to map custom points to pixels. */
@@ -80,6 +96,14 @@ const slice = createSlice({
   name: "image",
   initialState,
   reducers: {
+    bumpRevision(state) {
+      state.revision++;
+    },
+
+    setRetainVectorFeedbackOnComplete(state, a: PayloadAction<boolean>) {
+      state.retainVectorFeedbackOnComplete = a.payload;
+    },
+
     /* ---------- raster -------------------------------------------------- */
 
     resetRaster(state, a: PayloadAction<{ resolution: number }>) {
@@ -107,6 +131,8 @@ const slice = createSlice({
       const pattern = a.payload.pattern;
       const edge = a.payload.edge ?? VEC_EDGE;
       state.vectorPattern = pattern;
+      state.vectorScanPath = a.payload.scanPath ?? "vertical_raster";
+      state.vectorSource = pattern === "custom" && a.payload.roi ? "roi" : "vector";
       state.vectorEdge = edge;
       state.vectorImage = new Uint16Array(edge * edge);
       state.vectorCursor = 0;
@@ -115,15 +141,22 @@ const slice = createSlice({
         const pts = a.payload.points;
         const flat = new Float32Array(pts.length * 2);
         const renderFlat = new Float32Array(pts.length * 2);
+        const blankMask = new Uint8Array(pts.length);
+        const spotMask = new Uint8Array(pts.length);
         const bounds = customPointBounds(pts, a.payload.roi);
         for (let i = 0; i < pts.length; i++) {
-          flat[2 * i] = pts[i][0];
-          flat[2 * i + 1] = pts[i][1];
-          renderFlat[2 * i] = mapCoordToPixel(pts[i][0], bounds.x0, bounds.x1, edge);
-          renderFlat[2 * i + 1] = mapCoordToPixel(pts[i][1], bounds.y0, bounds.y1, edge);
+          const [x, y] = pointCoords(pts[i]);
+          flat[2 * i] = x;
+          flat[2 * i + 1] = y;
+          renderFlat[2 * i] = mapCoordToPixel(x, bounds.x0, bounds.x1, edge);
+          renderFlat[2 * i + 1] = mapCoordToPixel(y, bounds.y0, bounds.y1, edge);
+          blankMask[i] = pointBlanked(pts[i]) ? 1 : 0;
+          spotMask[i] = pointSpotHighlighted(pts[i]) ? 1 : 0;
         }
         state.vectorCustomPoints = flat;
         state.vectorCustomRenderPoints = renderFlat;
+        state.vectorCustomBlankMask = blankMask;
+        state.vectorCustomSpotMask = spotMask;
         state.vectorCustomCount = pts.length;
       } else if (pattern === "custom" && a.payload.simulationBitmap) {
         const width = Math.max(1, a.payload.simulationBitmap.width | 0);
@@ -150,10 +183,14 @@ const slice = createSlice({
         }
         state.vectorCustomPoints = flat;
         state.vectorCustomRenderPoints = renderFlat;
+        state.vectorCustomBlankMask = null;
+        state.vectorCustomSpotMask = null;
         state.vectorCustomCount = count;
       } else {
         state.vectorCustomPoints = null;
         state.vectorCustomRenderPoints = null;
+        state.vectorCustomBlankMask = null;
+        state.vectorCustomSpotMask = null;
         state.vectorCustomCount = 0;
       }
       state.revision++;
@@ -181,10 +218,9 @@ const slice = createSlice({
       if (state.vectorPattern === "default") {
         for (let k = 0; k < N; k++) {
           const i = cur + k;
-          const col = (i / edge) | 0; // outer loop var (FPGA's x)
-          const row = i % edge; // inner loop var (FPGA's y)
-          if (col < edge) {
-            state.vectorImage[row * edge + col] = values[k];
+          const pixel = vectorScanSamplePixel(i, edge, state.vectorScanPath);
+          if (pixel) {
+            state.vectorImage[pixel.y * edge + pixel.x] = values[k];
           }
         }
       } else {
@@ -222,6 +258,7 @@ const slice = createSlice({
       const edge = state.vectorEdge;
       if (
         state.vectorPattern !== "default" ||
+        state.vectorScanPath !== "vertical_raster" ||
         !Number.isFinite(lineShift) ||
         lineShift === 0 ||
         edge <= 1 ||
@@ -254,18 +291,20 @@ const slice = createSlice({
 });
 
 export const {
+  bumpRevision,
   resetRaster,
   appendRaster,
   setupVector,
   appendVectorSamples,
   correctVectorLineShift,
   resetVector,
+  setRetainVectorFeedbackOnComplete,
 } = slice.actions;
 
 export default slice.reducer;
 
 function customPointBounds(
-  points: Array<[number, number, number]>,
+  points: Array<VectorPointTuple | VectorPoint>,
   roi?: ROIRequest | null
 ): { x0: number; x1: number; y0: number; y1: number } {
   if (roi) {
@@ -280,7 +319,8 @@ function customPointBounds(
   let x1 = -Infinity;
   let y0 = Infinity;
   let y1 = -Infinity;
-  for (const [x, y] of points) {
+  for (const point of points) {
+    const [x, y] = pointCoords(point);
     if (x < x0) x0 = x;
     if (x > x1) x1 = x;
     if (y < y0) y0 = y;
@@ -295,6 +335,24 @@ function customPointBounds(
     y1 = 16383;
   }
   return { x0, x1, y0, y1 };
+}
+
+function pointCoords(point: VectorPointTuple | VectorPoint): [number, number] {
+  if (Array.isArray(point)) {
+    return [point[0], point[1]];
+  }
+  return [point.x, point.y];
+}
+
+function pointBlanked(point: VectorPointTuple | VectorPoint): boolean {
+  return Array.isArray(point) ? point[3] === true : point.blank === true;
+}
+
+function pointSpotHighlighted(point: VectorPointTuple | VectorPoint): boolean {
+  if (Array.isArray(point)) {
+    return point[4] === 1 && point[3] === false;
+  }
+  return point.passIndex === 1 && point.blank === false;
 }
 
 function mapCoordToPixel(value: number, start: number, end: number, edge: number): number {

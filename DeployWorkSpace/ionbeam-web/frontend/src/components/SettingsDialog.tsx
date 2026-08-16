@@ -23,16 +23,19 @@
  * every render. The Redux DevTools timeline becomes the edit history
  * for free.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
 import { clearLastResult, clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
-import { fetchDefaults, previewConfigDefaults } from "../store/statusSlice";
+import { fetchDefaultsMetadata, previewConfigDefaults } from "../store/statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 import {
   ACTION_DATA_PATH,
+  FTP_PATH,
   PINS_PATH,
   RASTER_PATH,
   SIMULATION_PATH,
@@ -40,6 +43,7 @@ import {
   clearError,
   clearLastRestart,
   closeDialog,
+  setBackendRestarting,
   consumeBackupNotice,
   fetchSettingsConfig,
   readPath,
@@ -54,15 +58,25 @@ import {
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
 import { Icon } from "./Icon";
+import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
+import { NumberStepperInput } from "./NumberStepperField";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
+
+const RASTER_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
+const VECTOR_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
+const DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
 
 export function SettingsDialog({
   targetAccountId = null,
   targetLogin = null,
+  mobilityMode = false,
+  scanLocked = false,
 }: {
   targetAccountId?: number | null;
   targetLogin?: string | null;
+  mobilityMode?: boolean;
+  scanLocked?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.settings.dialogOpen);
@@ -90,21 +104,19 @@ export function SettingsDialog({
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <SettingsModalShell targetAccountId={targetAccountId} targetLogin={targetLogin} />
+      <SettingsModalShell
+        targetAccountId={targetAccountId}
+        targetLogin={targetLogin}
+        mobilityMode={mobilityMode}
+        scanLocked={scanLocked}
+      />
     </div>
   );
 }
 
 async function refreshDefaultsForSettings(dispatch: AppDispatch) {
-  const result = await dispatch(fetchDefaults());
-  if (fetchDefaults.rejected.match(result)) {
-    dispatch(
-      setError(
-        result.error.message ??
-          "Service restart completed, but refreshed defaults could not be loaded.",
-      ),
-    );
-  }
+  const result = await dispatch(fetchDefaultsMetadata());
+  return fetchDefaultsMetadata.fulfilled.match(result);
 }
 
 function resetPartialROISelection(dispatch: AppDispatch) {
@@ -145,9 +157,13 @@ function simulationImageChanged(before: unknown, after: unknown): boolean {
 function SettingsModalShell({
   targetAccountId,
   targetLogin,
+  mobilityMode,
+  scanLocked,
 }: {
   targetAccountId: number | null;
   targetLogin: string | null;
+  mobilityMode: boolean;
+  scanLocked: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -182,14 +198,47 @@ function SettingsModalShell({
     }
   }, [activeTab, dispatch, targetAccountId, targetLogin]);
 
+  useEffect(() => {
+    if (mobilityMode && activeTab !== "admin") {
+      dispatch(setActiveTab("admin"));
+    }
+  }, [activeTab, dispatch, mobilityMode]);
+
   // "Save As" and "Default" both fire a confirm-then-action flow. We
   // use local component state for the confirm row rather than a nested
   // modal - a second modal layer is heavy for a yes/no prompt.
   const [confirmSave, setConfirmSave] = useState(false);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
+  const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
 
   const busy = loading || saving || restoring;
+  const adcTimingValid = draft === null || validAdcTiming(draft);
+  const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+  const canEditFtp = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+  const visibleTabs: SettingsTab[] = mobilityMode
+    ? ["admin"]
+    : ["general", "raster", "vector", "pins", "simulation", "admin"];
+
+  useEffect(() => {
+    if (targetAccountId !== null || targetLogin) {
+      setActiveSubTab("users");
+    }
+  }, [targetAccountId, targetLogin]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCurrentAccountRole()
+      .then((role) => {
+        if (!cancelled) setCurrentAccountRole(role);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentAccountRole(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function onSelectTab(tab: SettingsTab) {
     if (confirmSave) setConfirmSave(false);
@@ -199,6 +248,11 @@ function SettingsModalShell({
 
   async function onConfirmSave() {
     if (draft === null) return;
+    if (!validAdcTiming(draft)) {
+      setConfirmSave(false);
+      dispatch(setError(t("settings.general.adcTiming.validation")));
+      return;
+    }
     setConfirmSave(false);
     const imageChanged = simulationImageChanged(source, draft);
     const result = await dispatch(saveSettingsConfig(draft));
@@ -210,7 +264,9 @@ function SettingsModalShell({
       }
       resetScanImages(dispatch, rasterResolution);
       dispatch(previewConfigDefaults(configDefaultsPreview(draft)));
-      await refreshDefaultsForSettings(dispatch);
+      if (await refreshDefaultsForSettings(dispatch)) {
+        dispatch(setBackendRestarting(false));
+      }
     }
     // The restart result is surfaced via `lastRestart`; we don't
     // auto-close the dialog so the operator can see whether it
@@ -236,7 +292,9 @@ function SettingsModalShell({
       } else {
         resetPartialROISelection(dispatch);
       }
-      await refreshDefaultsForSettings(dispatch);
+      if (await refreshDefaultsForSettings(dispatch)) {
+        dispatch(setBackendRestarting(false));
+      }
     }
   }
 
@@ -268,7 +326,7 @@ function SettingsModalShell({
         </button>
       </div>
 
-      {configPath && (
+      {!mobilityMode && configPath && (
         <div className="settings-path-strip" title={configPath}>
           <span className="settings-path-strip__label">
             {t("settings.boundTo")}
@@ -309,12 +367,9 @@ function SettingsModalShell({
       )}
 
       <div className="settings-tabs" role="tablist" aria-label={t("settings.tabs.aria")}>
-        <SettingsTabButton tab="general" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="raster" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="vector" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="pins" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="simulation" active={activeTab} onSelect={onSelectTab} />
-        <SettingsTabButton tab="admin" active={activeTab} onSelect={onSelectTab} />
+        {visibleTabs.map((tab) => (
+          <SettingsTabButton key={tab} tab={tab} active={activeTab} onSelect={onSelectTab} />
+        ))}
       </div>
 
       <div className="modal__body settings-modal__body">
@@ -323,18 +378,21 @@ function SettingsModalShell({
         ) : draft === null ? (
           <div className="settings-loading">{t("settings.empty")}</div>
         ) : (
-          <SettingsTabBody
-            tab={activeTab}
-            draft={draft}
-            targetAccountId={targetAccountId}
-            targetLogin={targetLogin}
-            activeSubTab={activeSubTab}
-            onSelectAdminSubTab={(tab) => {
+        <SettingsTabBody
+          tab={activeTab}
+          draft={draft}
+          targetAccountId={targetAccountId}
+          targetLogin={targetLogin}
+          activeSubTab={activeSubTab}
+          onSelectAdminSubTab={(tab) => {
               setConfirmSave(false);
               setConfirmDefault(false);
               setActiveSubTab(tab);
             }}
-          />
+          mobilityMode={mobilityMode}
+          canEditPins={canEditPins}
+          canEditFtp={canEditFtp}
+        />
         )}
       </div>
 
@@ -355,11 +413,11 @@ function SettingsModalShell({
             onConfirm={onConfirmDefault}
             onCancel={() => setConfirmDefault(false)}
           />
-        ) : activeTab === "admin" && (activeSubTab === "users" || activeSubTab === "equipment") ? null : (
+        ) : activeTab === "admin" ? null : (
           <div className="settings-footer__row">
             <span
               className="scan-busy"
-              data-visible={busy ? "true" : "false"}
+              data-visible={busy || scanLocked ? "true" : "false"}
               aria-hidden={!busy}
             >
               <span className="scan-busy__spinner" />
@@ -369,7 +427,7 @@ function SettingsModalShell({
               type="button"
               className="btn btn--ghost"
               onClick={() => dispatch(fetchSettingsConfig())}
-              disabled={busy}
+              disabled={busy || scanLocked}
               title={t("settings.reload.title")}
             >
               <Icon name="refresh" tone="accent" />
@@ -381,7 +439,7 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--warn"
-              disabled={busy || !hasBackup}
+              disabled={busy || scanLocked || !hasBackup}
               onClick={() => setConfirmDefault(true)}
               title={
                 hasBackup
@@ -395,7 +453,7 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || draft === null || draft === source}
+              disabled={busy || scanLocked || draft === null || draft === source || !adcTimingValid}
               onClick={() => setConfirmSave(true)}
               title={t("settings.btn.saveAs.title")}
             >
@@ -428,6 +486,7 @@ function SettingsTabButton({
       vector: "settings.tabs.vector",
       pins: "settings.tabs.pins",
       simulation: "settings.tabs.simulation",
+      ftp: "settings.tabs.ftp",
       admin: "settings.tabs.admin",
     } as const
   )[tab];
@@ -453,6 +512,9 @@ function SettingsTabBody({
   targetLogin,
   activeSubTab,
   onSelectAdminSubTab,
+  mobilityMode,
+  canEditPins,
+  canEditFtp,
 }: {
   tab: SettingsTab;
   draft: unknown;
@@ -460,6 +522,9 @@ function SettingsTabBody({
   targetLogin: string | null;
   activeSubTab: AdminSubTab;
   onSelectAdminSubTab: (tab: AdminSubTab) => void;
+  mobilityMode: boolean;
+  canEditPins: boolean;
+  canEditFtp: boolean;
 }) {
   switch (tab) {
     case "general":
@@ -469,9 +534,11 @@ function SettingsTabBody({
     case "vector":
       return <VectorTab draft={draft} />;
     case "pins":
-      return <PinsTab draft={draft} />;
+      return <PinsTab draft={draft} disabled={!canEditPins} />;
     case "simulation":
       return <SimulationTab draft={draft} />;
+    case "ftp":
+      return <FtpTab draft={draft} disabled={!canEditFtp} />;
     case "admin":
       return (
         <AdminTab
@@ -479,6 +546,7 @@ function SettingsTabBody({
           targetLogin={targetLogin}
           activeSubTab={activeSubTab}
           onSelectSubTab={onSelectAdminSubTab}
+          mobilityMode={mobilityMode}
         />
       );
   }
@@ -501,8 +569,18 @@ function GeneralTab({ draft }: { draft: unknown }) {
   const deviceId = stringField(draft, ["Glasgow", "Device0", "Id"], "");
 
   // actionData scalars.
-  const voltage = numberField(draft, [...ACTION_DATA_PATH, "voltage"], 0);
+  const ev = numberField(
+    draft,
+    [...ACTION_DATA_PATH, "ev"],
+    1000,
+  );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
+  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
+  const adcSettleCycles = numberField(draft, [...ACTION_DATA_PATH, "adcSettleCycles"], 2);
+  const adcTimingValid = validAdcTiming(draft);
+  const adcClockMHz = Number.isFinite(adcHalfPeriod) && adcHalfPeriod > 0
+    ? 48 / (2 * adcHalfPeriod)
+    : 0;
   const enableEbeam = boolField(draft, [...ACTION_DATA_PATH, "enableEbeam"], false);
   const enableIbeam = boolField(draft, [...ACTION_DATA_PATH, "enableIbeam"], true);
   const selectedBeam = enableIbeam || !enableEbeam ? "ion" : "ebeam";
@@ -557,17 +635,47 @@ function GeneralTab({ draft }: { draft: unknown }) {
 
       <div className="field-row">
         <NumberField
-          label={t("settings.general.voltage")}
+          label={t("settings.general.ev")}
           help={<SettingsHelp topic="generalVoltage" />}
-          value={voltage}
+          value={ev}
           step="any"
-          onChange={(v) => set([...ACTION_DATA_PATH, "voltage"], v)}
+          onChange={(v) => set([...ACTION_DATA_PATH, "ev"], v)}
         />
         <TextField
           label={t("settings.general.bufferSize")}
           help={<SettingsHelp topic="generalBuffer" />}
           value={bufferSize}
           onChange={(v) => set([...ACTION_DATA_PATH, "bufferSize"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">
+        {t("settings.general.group.adcTiming")}
+      </h4>
+
+      <p className="settings-form__hint">
+        {t("settings.general.adcClock", { mhz: adcClockMHz.toFixed(2) })}
+      </p>
+
+      <div className="field-row">
+        <NumberField
+          label={t("settings.general.adcHalfPeriod")}
+          help={<SettingsHelp topic="generalAdcHalfPeriod" />}
+          value={adcHalfPeriod}
+          min={1}
+          max={255}
+          invalid={!adcTimingValid}
+          warning={!adcTimingValid ? t("settings.general.adcTiming.validation") : undefined}
+          onChange={(v) => set([...ACTION_DATA_PATH, "adcHalfPeriod"], Math.trunc(v))}
+        />
+        <NumberField
+          label={t("settings.general.adcSettleCycles")}
+          help={<SettingsHelp topic="generalAdcSettleCycles" />}
+          value={adcSettleCycles}
+          min={1}
+          max={255}
+          invalid={!adcTimingValid}
+          onChange={(v) => set([...ACTION_DATA_PATH, "adcSettleCycles"], Math.trunc(v))}
         />
       </div>
 
@@ -620,9 +728,9 @@ function RasterTab({ draft }: { draft: unknown }) {
 
   const pixels = numberField(draft, [...RASTER_PATH, "pixels"], 0);
   const frameBlank = boolField(draft, [...RASTER_PATH, "frameBlank"], false);
-  const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 0);
-  const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 0);
-  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 0);
+  const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 512);
+  const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 8);
+  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 16);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
@@ -639,10 +747,13 @@ function RasterTab({ draft }: { draft: unknown }) {
           value={pixels}
           onChange={(v) => set([...RASTER_PATH, "pixels"], v)}
         />
-        <NumberField
-          label={t("settings.raster.resolution")}
-          help={<SettingsHelp topic="rasterResolution" />}
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.raster.resolution")} help={<SettingsHelp topic="rasterResolution" />} />}
           value={resolution}
+          options={RASTER_RESOLUTION_OPTIONS}
+          min={1}
+          max={2048}
+          disabled={false}
           onChange={(v) => set([...RASTER_PATH, "resolution"], v)}
         />
       </div>
@@ -654,10 +765,13 @@ function RasterTab({ draft }: { draft: unknown }) {
           value={adcLatency}
           onChange={(v) => set([...RASTER_PATH, "adcLatency"], v)}
         />
-        <NumberField
-          label={t("settings.raster.dwell")}
-          help={<SettingsHelp topic="rasterDwell" />}
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.raster.dwell")} help={<SettingsHelp topic="rasterDwell" />} />}
           value={dwell}
+          options={DWELL_OPTIONS}
+          min={1}
+          max={65535}
+          disabled={false}
           onChange={(v) => set([...RASTER_PATH, "dwell"], v)}
         />
       </div>
@@ -679,6 +793,8 @@ function VectorTab({ draft }: { draft: unknown }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
+  const vectorResolution = numberField(draft, [...VECTOR_PATH, "vectorResolution"], 2048);
+  const dwell = numberField(draft, [...VECTOR_PATH, "dwell"], 16);
   const latency = numberField(draft, [...VECTOR_PATH, "latency"], 0);
   const adcLatency = numberField(draft, [...VECTOR_PATH, "adcLatency"], 0);
   const lineShift = numberField(draft, [...VECTOR_PATH, "lineShiftPerXRow"], 0);
@@ -688,9 +804,40 @@ function VectorTab({ draft }: { draft: unknown }) {
     dispatch(setDraft(writePath(draft, p, v)));
   }
 
+  function validateCustomVectorResolution(value: number): string | null {
+    const intValue = Math.trunc(value);
+    if (intValue < 128) return t("vector.resolution.validation.min128");
+    if (!Number.isInteger(intValue) || (intValue & (intValue - 1)) !== 0) {
+      return t("vector.resolution.validation.powerOfTwo");
+    }
+    return null;
+  }
+
   return (
     <div className="settings-form">
       <h4 className="settings-form__group">{t("settings.vector.group.scan")}</h4>
+
+      <div className="field-row">
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.vector.resolution")} help={<SettingsHelp topic="vectorResolution" />} />}
+          value={vectorResolution}
+          options={VECTOR_RESOLUTION_OPTIONS}
+          min={1}
+          max={2048}
+          disabled={false}
+          customValidate={validateCustomVectorResolution}
+          onChange={(v) => set([...VECTOR_PATH, "vectorResolution"], v)}
+        />
+        <PresetNumberField
+          label={<FieldLabel label={t("settings.vector.dwell")} help={<SettingsHelp topic="vectorDwell" />} />}
+          value={dwell}
+          options={DWELL_OPTIONS}
+          min={1}
+          max={65535}
+          disabled={false}
+          onChange={(v) => set([...VECTOR_PATH, "dwell"], v)}
+        />
+      </div>
 
       <div className="field-row">
         <NumberField
@@ -722,6 +869,7 @@ function VectorTab({ draft }: { draft: unknown }) {
           onChange={(v) => set([...VECTOR_PATH, "drainFloorPixels"], v)}
         />
       </div>
+
     </div>
   );
 }
@@ -746,7 +894,7 @@ function VectorTab({ draft }: { draft: unknown }) {
  * any UI benefit. Operators who need an extra strobe edit the file
  * directly.
  * --------------------------------------------------------------------- */
-function PinsTab({ draft }: { draft: unknown }) {
+function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
@@ -809,12 +957,14 @@ function PinsTab({ draft }: { draft: unknown }) {
               role="cell"
               value={typeof row?.pin === "string" ? row.pin : ""}
               placeholder=""
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "pin", e.target.value)}
             />
             <select
               className="select"
               role="cell"
               value={typeof row?.direction === "string" ? row.direction : "o"}
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "direction", e.target.value)}
             >
               <option value="o">{t("settings.pins.dir.o")}</option>
@@ -826,6 +976,7 @@ function PinsTab({ draft }: { draft: unknown }) {
               type="checkbox"
               role="cell"
               checked={Boolean(row?.invert)}
+              disabled={disabled}
               onChange={(e) => setSubsignalField(i, "invert", e.target.checked)}
             />
           </div>
@@ -836,6 +987,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.control.attrs.ioStandard")}
           value={controlIoStd}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "control", "attrs", "IO_STANDARD"], v)}
         />
       </div>
@@ -847,6 +999,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.data.pins")}
           value={dataPins}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "data", "pins"], v)}
         />
       </div>
@@ -857,6 +1010,7 @@ function PinsTab({ draft }: { draft: unknown }) {
           <select
             className="select"
             value={dataDirection}
+            disabled={disabled}
             onChange={(e) => set([...PINS_PATH, "data", "direction"], e.target.value)}
           >
             <option value="o">{t("settings.pins.dir.o")}</option>
@@ -868,6 +1022,7 @@ function PinsTab({ draft }: { draft: unknown }) {
         <TextField
           label={t("settings.pins.data.attrs.ioStandard")}
           value={dataIoStd}
+          disabled={disabled}
           onChange={(v) => set([...PINS_PATH, "data", "attrs", "IO_STANDARD"], v)}
         />
       </div>
@@ -1033,17 +1188,105 @@ function SimulationTab({ draft }: { draft: unknown }) {
   );
 }
 
+function FtpTab({
+  draft,
+  disabled = false,
+  onChangeDraft,
+}: {
+  draft: unknown;
+  disabled?: boolean;
+  onChangeDraft?: (next: unknown) => void;
+}) {
+  const dispatch = useAppDispatch();
+  const { t } = useTranslation();
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
+  const enabled = boolField(draft, [...FTP_PATH, "enabled"], true);
+  const host = stringField(draft, [...FTP_PATH, "host"], "localhost");
+  const username = stringField(draft, [...FTP_PATH, "username"], "vboxuser");
+  const password = stringField(draft, [...FTP_PATH, "password"], "ionbeam123");
+  const folder = stringField(draft, [...FTP_PATH, "folder"], "/tmp/ftp");
+
+  function set(p: ReadonlyArray<string | number>, v: unknown) {
+    const next = writePath(draft, p, v);
+    if (onChangeDraft) {
+      onChangeDraft(next);
+      return;
+    }
+    dispatch(setDraft(next));
+  }
+
+  return (
+    <div className="settings-form">
+      <p className="settings-form__hint">{t("settings.ftp.hint")}</p>
+      {disabled && (
+        <p className="settings-form__hint" style={{ color: "var(--c-danger)" }}>
+          {t("settings.admin.privilegeRequired")}
+        </p>
+      )}
+
+      <div className="settings-flags">
+        <CheckboxField
+          label={t("settings.ftp.enabled")}
+          value={enabled}
+          onChange={(v) => set([...FTP_PATH, "enabled"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">{t("settings.ftp.group.connection")}</h4>
+      <div className="field-row">
+        <TextField
+          label={t("settings.ftp.host")}
+          value={host}
+          disabled={disabled || !enabled}
+          onChange={(v) => set([...FTP_PATH, "host"], v)}
+        />
+        <TextField
+          label={t("settings.ftp.username")}
+          value={username}
+          disabled={disabled || !enabled}
+          onChange={(v) => set([...FTP_PATH, "username"], v)}
+        />
+      </div>
+
+      <div className="field-row">
+        <PasswordField
+          label={t("settings.ftp.password")}
+          value={password}
+          visible={passwordVisible}
+          configured={false}
+          revealLabel={t("settings.admin.db.password.show")}
+          disabled={disabled || !enabled}
+          onReveal={() => setPasswordVisible(true)}
+          onHide={() => setPasswordVisible(false)}
+          onChange={(v) => set([...FTP_PATH, "password"], v)}
+        />
+      </div>
+
+      <h4 className="settings-form__group">{t("settings.ftp.group.destination")}</h4>
+      <div className="field-row">
+        <TextField
+          label={t("settings.ftp.folder")}
+          value={folder}
+          disabled={disabled || !enabled}
+          onChange={(v) => set([...FTP_PATH, "folder"], v)}
+        />
+      </div>
+    </div>
+  );
+}
+
 async function fetchAdminConfig(): Promise<SettingsConfigInfo> {
-  const r = await fetch("/api/admin/iobeam/config");
+  const r = await fetch(apiUrl("/api/admin/iobeam/config"));
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`fetch admin config: HTTP ${r.status} ${text}`);
   }
-  return (await r.json()) as SettingsConfigInfo;
+  return await readJsonResponse<SettingsConfigInfo>(r, "fetch admin config");
 }
 
 async function saveAdminConfig(data: unknown): Promise<void> {
-  const r = await fetch("/api/admin/iobeam/config", {
+  const r = await fetch(apiUrl("/api/admin/iobeam/config"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
     body: JSON.stringify({ data }),
@@ -1054,12 +1297,95 @@ async function saveAdminConfig(data: unknown): Promise<void> {
   }
 }
 
+async function applyAdminDatabaseSetup(data: unknown): Promise<AdminDatabaseApplyResponse> {
+  const r = await fetch(apiUrl("/api/admin/iobeam/db/apply"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+    body: JSON.stringify({ data }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`apply admin database setup: HTTP ${r.status} ${text}`);
+  }
+  return await readJsonResponse<AdminDatabaseApplyResponse>(r, "apply admin database setup");
+}
+
+async function fetchAdminDatabaseConnection(includePassword = false): Promise<AdminDatabaseConnectionResponse> {
+  const qs = includePassword ? "?include_password=1" : "";
+  const r = await fetch(apiUrl(`/api/admin/iobeam/db/connection${qs}`), {
+    headers: scanAuthHeaders(),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`fetch admin database connection: HTTP ${r.status} ${text}`);
+  }
+  return await readJsonResponse<AdminDatabaseConnectionResponse>(r, "fetch admin database connection");
+}
+
 async function restoreAdminConfig(): Promise<void> {
-  const r = await fetch("/api/admin/iobeam/config/restore", { method: "POST" });
+  const r = await fetch(apiUrl("/api/admin/iobeam/config/restore"), { method: "POST" });
   if (!r.ok) {
     const text = await r.text();
     throw new Error(`restore admin config: HTTP ${r.status} ${text}`);
   }
+}
+
+async function fetchStreamConfig(): Promise<SettingsConfigInfo> {
+  const r = await fetch(apiUrl("/api/admin/config"));
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`fetch stream config: HTTP ${r.status} ${text}`);
+  }
+  return await readJsonResponse<SettingsConfigInfo>(r, "fetch stream config");
+}
+
+async function saveStreamConfig(data: unknown): Promise<void> {
+  const r = await fetch(apiUrl("/api/admin/config"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+    body: JSON.stringify({ data }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`save stream config: HTTP ${r.status} ${text}`);
+  }
+}
+
+function normalizeStreamConfigDwell(config: unknown): unknown {
+  return writePath(
+    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 16),
+    [...ACTION_DATA_PATH, "vectorScan", "dwell"],
+    16,
+  );
+}
+
+async function restoreStreamConfig(): Promise<void> {
+  const r = await fetch(apiUrl("/api/admin/config/restore"), {
+    method: "POST",
+    headers: scanAuthHeaders(),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`restore stream config: HTTP ${r.status} ${text}`);
+  }
+}
+
+function writeAdminDatabaseConnection(
+  data: unknown,
+  connection: AdminDatabaseConnectionResponse["connection"],
+  includePassword: boolean,
+): unknown {
+  let next = writePath(data, ["Database", "Host"], connection.host);
+  next = writePath(next, ["Database", "Port"], connection.port);
+  next = writePath(next, ["Database", "DatabaseName"], connection.database);
+  next = writePath(next, ["Database", "User"], connection.user);
+  next = writePath(next, ["Database", "SslMode"], connection.sslMode);
+  next = writePath(next, ["Database", "ConnectionString"], connection.connectionString);
+  next = writePath(next, ["Database", "CommandTimeoutMs"], connection.commandTimeoutMs);
+  if (includePassword) {
+    next = writePath(next, ["Database", "Password"], connection.password ?? "");
+  }
+  return next;
 }
 
 interface AdminUserRow {
@@ -1095,6 +1421,41 @@ interface CurrentAccountResponse {
   user: { role?: number } | null;
 }
 
+interface AdminDatabaseApplyResponse {
+  ok: boolean;
+  steps: Array<{ name: string; ok: boolean; detail: string }>;
+}
+
+interface AdminDatabaseConnectionResponse {
+  ok: boolean;
+  connection: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: string | null;
+    password_configured: boolean;
+    sslMode: string;
+    connectionString: string;
+    commandTimeoutMs: number;
+  };
+}
+
+interface AllowedHostsResponse {
+  ok: boolean;
+  hosts: string[];
+  error?: string;
+  sync_warning?: string;
+}
+
+interface FtpConnectionResponse {
+  ok: boolean;
+  enabled: boolean;
+  reachable: boolean;
+  message?: string;
+  error?: string;
+}
+
 const ADMIN_ROLE_OPTIONS = [
   { value: 3, key: "settings.admin.role.admin" },
   { value: 2, key: "settings.admin.role.developer" },
@@ -1104,7 +1465,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "users" | "equipment";
+type AdminSubTab = "configuration" | "users" | "equipment" | "allowedHosts" | "ftp";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1197,6 +1558,63 @@ function equipmentFromDraft(draft: unknown): EquipmentRow[] {
     }));
 }
 
+const DEFAULT_ALLOWED_HOSTS = ["localhost", "ion.o-0.top"];
+const ALLOWED_HOSTNAME_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
+const ALLOWED_IPV4_RE =
+  /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+function normalizeAllowedHostList(hosts: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const host of hosts) {
+    const value = String(host ?? "").trim().toLowerCase();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    normalized.push(value);
+  }
+  return normalized.length > 0 ? normalized : [...DEFAULT_ALLOWED_HOSTS];
+}
+
+function validateAllowedHostList(hosts: string[]): string[] {
+  const invalid: string[] = [];
+  for (const host of hosts) {
+    if (!isValidAllowedHost(host)) invalid.push(host);
+  }
+  return invalid;
+}
+
+function parseAllowedHostsText(text: string): string[] {
+  return normalizeAllowedHostList(
+    text
+      .split(/[\r\n,]+/)
+      .map((host) => host.trim())
+      .filter((host) => host.length > 0),
+  );
+}
+
+function isValidAllowedHost(host: string): boolean {
+  const value = String(host ?? "").trim().toLowerCase();
+  if (!value || value.length > 253) return false;
+  if (
+    value.includes("/") ||
+    value.includes("\\") ||
+    value.includes(":") ||
+    value.includes("@") ||
+    value.includes("#") ||
+    value.includes("?") ||
+    value.includes("*") ||
+    value.includes(" ")
+  ) {
+    return false;
+  }
+  if (value === "localhost") return true;
+  if (ALLOWED_IPV4_RE.test(value)) return true;
+
+  const labels = value.split(".");
+  if (labels.length === 0) return false;
+  return labels.every((label) => label.length > 0 && label.length <= 63 && ALLOWED_HOSTNAME_LABEL_RE.test(label));
+}
+
 function adminUserRowKey(user: AdminUserRow, index: number): string {
   if (user.id !== null) return `id:${user.id}`;
   const login = user.login_name.trim().toLowerCase();
@@ -1236,6 +1654,20 @@ function adminRoleApprovalRecipients(draft: unknown): string[] {
   return [...emails];
 }
 
+function adminRoleApprovalRequired(source: unknown, draft: unknown): boolean {
+  const previousRoleByKey = new Map(
+    adminUsersFromDraft(source).map((user, index) => [
+      adminUserRowKey(user, index),
+      user.role,
+    ] as const),
+  );
+
+  return adminUsersFromDraft(draft).some((user, index) => {
+    const previousRole = previousRoleByKey.get(adminUserRowKey(user, index)) ?? 0;
+    return user.role === ADMIN_ROLE && previousRole < ADMIN_ROLE;
+  });
+}
+
 function adminRoleRequestLink(user: AdminUserRow): string {
   const url = new URL(`${window.location.origin}/`);
   url.searchParams.set("settings", "admin");
@@ -1267,11 +1699,11 @@ function composeAdminRoleRequestEmail(user: AdminUserRow, recipients: string[]) 
 }
 
 async function fetchCurrentAccountRole(): Promise<number | null> {
-  const r = await fetch("/api/admin/iobeam/auth/current-account", {
+  const r = await fetch(apiUrl("/api/admin/iobeam/auth/current-account"), {
     headers: scanAuthHeaders(),
   });
   if (!r.ok) return null;
-  const data = (await r.json()) as CurrentAccountResponse;
+  const data = await readJsonResponse<CurrentAccountResponse>(r, "current account");
   return typeof data.user?.role === "number" ? data.user.role : null;
 }
 
@@ -1280,11 +1712,13 @@ function AdminTab({
   targetLogin,
   activeSubTab,
   onSelectSubTab,
+  mobilityMode,
 }: {
   targetAccountId: number | null;
   targetLogin: string | null;
   activeSubTab: AdminSubTab;
   onSelectSubTab: (tab: AdminSubTab) => void;
+  mobilityMode: boolean;
 }) {
   const { t } = useTranslation();
   const [source, setSource] = useState<unknown | null>(null);
@@ -1294,9 +1728,52 @@ function AdminTab({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [dbApplying, setDbApplying] = useState(false);
   const [error, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [privilegeNotice, setPrivilegeNotice] = useState<string | null>(null);
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
+  const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
+  const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
+  const [ftpSource, setFtpSource] = useState<unknown | null>(null);
+  const [ftpDraft, setFtpDraft] = useState<unknown | null>(null);
+  const [ftpConfigPath, setFtpConfigPath] = useState("");
+  const [ftpHasBackup, setFtpHasBackup] = useState(false);
+  const [ftpLoading, setFtpLoading] = useState(false);
+  const [ftpSaving, setFtpSaving] = useState(false);
+  const [ftpRestoring, setFtpRestoring] = useState(false);
+  const [ftpConnectionState, setFtpConnectionState] = useState<"idle" | "checking" | "ok" | "warn" | "error">("idle");
+  const [ftpConnectionMessage, setFtpConnectionMessage] = useState<string | null>(null);
+  const privilegeNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showPrivilegeNotice() {
+    setNotice(null);
+    setPrivilegeNotice(t("settings.admin.privilegeRequired"));
+    if (privilegeNoticeTimer.current) clearTimeout(privilegeNoticeTimer.current);
+    privilegeNoticeTimer.current = setTimeout(() => {
+      setPrivilegeNotice(null);
+      privilegeNoticeTimer.current = null;
+    }, 3500);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (privilegeNoticeTimer.current) clearTimeout(privilegeNoticeTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mobilityMode && activeSubTab === "configuration") {
+      onSelectSubTab("users");
+    }
+  }, [activeSubTab, mobilityMode, onSelectSubTab]);
+
+  useEffect(() => {
+    if (activeSubTab !== "ftp" || ftpDraft !== null || ftpLoading) {
+      return;
+    }
+    void loadFtp();
+  }, [activeSubTab, ftpDraft, ftpLoading]);
 
   async function load() {
     setLoading(true);
@@ -1304,16 +1781,44 @@ function AdminTab({
     try {
       const info = await fetchAdminConfig();
       const accountRole = await fetchCurrentAccountRole();
+      let data = info.data;
+      const dbConnection = await fetchAdminDatabaseConnection(false).catch(() => null);
+      if (dbConnection?.ok) {
+        data = writeAdminDatabaseConnection(data, dbConnection.connection, false);
+        setDbPasswordConfigured(dbConnection.connection.password_configured);
+      }
       setSource(info.data);
-      setDraftLocal(info.data);
+      setDraftLocal(data);
       setConfigPath(info.path);
       setHasBackup(info.has_backup);
       setCurrentAccountRole(accountRole);
+      setDbPasswordVisible(false);
       setNotice(info.backup_created ? t("settings.admin.backupCreated") : null);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadFtp() {
+    setFtpLoading(true);
+    setLocalError(null);
+    try {
+      const info = await fetchStreamConfig();
+      const normalized = normalizeStreamConfigDwell(info.data);
+      setFtpSource(normalized);
+      setFtpDraft(normalized);
+      setFtpConfigPath(info.path);
+      setFtpHasBackup(info.has_backup);
+      if (info.backup_created) {
+        setNotice(t("settings.backupCreated"));
+      }
+      await testFtpConnection();
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFtpLoading(false);
     }
   }
 
@@ -1406,8 +1911,122 @@ function AdminTab({
     }
   }
 
-  const busy = loading || saving || restoring;
+  async function onApplyDatabase() {
+    if (draft === null) return;
+    setDbApplying(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      const result = await applyAdminDatabaseSetup(draft);
+      setSource(draft);
+      setNotice(t("settings.admin.db.apply.ok", { steps: result.steps.map((step) => step.name).join(", ") }));
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDbApplying(false);
+    }
+  }
+
+  async function onSaveFtp() {
+    if (ftpDraft === null) return;
+    setFtpSaving(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      const normalized = normalizeStreamConfigDwell(ftpDraft);
+      await saveStreamConfig(normalized);
+      setFtpSource(normalized);
+      setFtpDraft(normalized);
+      setNotice(t("settings.ftp.save.ok"));
+      await testFtpConnection();
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFtpSaving(false);
+    }
+  }
+
+  async function onRestoreFtp() {
+    setFtpRestoring(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      await restoreStreamConfig();
+      await loadFtp();
+      setNotice(t("settings.ftp.restore.ok"));
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFtpRestoring(false);
+    }
+  }
+
+  async function testFtpConnection() {
+    setFtpConnectionState("checking");
+    setFtpConnectionMessage(t("settings.ftp.testing"));
+    try {
+      const r = await fetch(apiUrl("/api/admin/ftp/test-connection"), {
+        headers: scanAuthHeaders(),
+      });
+      const data = (await r.json().catch(() => null)) as FtpConnectionResponse | null;
+      if (!r.ok || !data?.ok) {
+        throw new Error(data?.message || data?.error || `HTTP ${r.status}`);
+      }
+      if (!data.enabled) {
+        setFtpConnectionState("idle");
+        setFtpConnectionMessage(t("settings.ftp.disabled"));
+        return;
+      }
+      if (data.reachable) {
+        setFtpConnectionState("ok");
+        setFtpConnectionMessage(data.message || t("settings.ftp.reachable"));
+      } else {
+        setFtpConnectionState("warn");
+        setFtpConnectionMessage(data.message || t("settings.ftp.unreachable"));
+      }
+    } catch (err) {
+      setFtpConnectionState("error");
+      setFtpConnectionMessage(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function onRevealDbPassword() {
+    if (draft === null) return;
+    if (!canManageAdminConfig) {
+      showPrivilegeNotice();
+      return;
+    }
+    try {
+      const dbConnection = await fetchAdminDatabaseConnection(true);
+      setDraftLocal(writeAdminDatabaseConnection(draft, dbConnection.connection, true));
+      setDbPasswordVisible(true);
+      setDbPasswordConfigured(dbConnection.connection.password_configured);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function onHideDbPassword() {
+    setDbPasswordVisible(false);
+  }
+
+  const busy = loading || saving || restoring || dbApplying;
   const dirty = draft !== null && draft !== source;
+  const canManageAdminConfig = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
+  const adminApprovalRequired =
+    currentAccountRole !== null &&
+    currentAccountRole < ADMIN_ROLE &&
+    adminRoleApprovalRequired(source, draft);
+  const ftpBusy = ftpLoading || ftpSaving || ftpRestoring;
+  const ftpDirty = ftpDraft !== null && ftpDraft !== ftpSource;
+  const ftpNoticeTone =
+    ftpConnectionState === "error"
+      ? "error"
+      : ftpConnectionState === "warn"
+        ? "warning"
+        : ftpConnectionState === "ok"
+          ? "success"
+          : "info";
 
   if (loading && draft === null) {
     return <div className="settings-loading">{t("settings.admin.loading")}</div>;
@@ -1419,7 +2038,7 @@ function AdminTab({
 
   return (
     <div className="settings-form">
-      {configPath && (
+      {!mobilityMode && configPath && (
         <div className="settings-path-strip" title={configPath}>
           <span className="settings-path-strip__label">
             {t("settings.admin.boundTo")}
@@ -1442,7 +2061,52 @@ function AdminTab({
           onDismiss={() => setLocalError(null)}
         />
       )}
+      {privilegeNotice && (
+        <SettingsNotice
+          tone="error"
+          volatile
+          message={privilegeNotice}
+          onDismiss={() => setPrivilegeNotice(null)}
+        />
+      )}
 
+      <div className="settings-admin-subtabs" role="tablist" aria-label={t("settings.admin.subtabs.aria")}>
+        <AdminSubTabButton
+          tab="users"
+          active={activeSubTab}
+          label={t("settings.admin.group.users")}
+          onSelect={onSelectSubTab}
+        />
+        <AdminSubTabButton
+          tab="equipment"
+          active={activeSubTab}
+          label={t("settings.admin.group.equipment")}
+          onSelect={onSelectSubTab}
+        />
+        {!mobilityMode && (
+          <AdminSubTabButton
+            tab="configuration"
+            active={activeSubTab}
+            label={t("settings.admin.group.configuration")}
+            onSelect={onSelectSubTab}
+          />
+        )}
+        <AdminSubTabButton
+          tab="allowedHosts"
+          active={activeSubTab}
+          label={t("settings.admin.group.allowedHosts")}
+          onSelect={onSelectSubTab}
+        />
+        <AdminSubTabButton
+          tab="ftp"
+          active={activeSubTab}
+          label={t("settings.admin.group.ftp")}
+          onSelect={onSelectSubTab}
+        />
+      </div>
+
+      {activeSubTab === "configuration" && !mobilityMode && (
+        <>
       <h4 className="settings-form__group">{t("settings.admin.group.header")}</h4>
       <div className="field-row">
         <TextField
@@ -1494,31 +2158,80 @@ function AdminTab({
           onChange={(v) => set(["Database", "Port"], v)}
         />
       </div>
-
-      <div className="settings-admin-subtabs" role="tablist" aria-label={t("settings.admin.subtabs.aria")}>
-        <AdminSubTabButton
-          tab="users"
-          active={activeSubTab}
-          label={t("settings.admin.group.users")}
-          onSelect={onSelectSubTab}
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.db.user")}
+          value={stringField(draft, ["Database", "User"], "")}
+          onChange={(v) => set(["Database", "User"], v)}
         />
-        <AdminSubTabButton
-          tab="equipment"
-          active={activeSubTab}
-          label={t("settings.admin.group.equipment")}
-          onSelect={onSelectSubTab}
+        <PasswordField
+          label={t("settings.admin.db.password")}
+          value={stringField(draft, ["Database", "Password"], "")}
+          visible={dbPasswordVisible}
+          configured={dbPasswordConfigured}
+          revealLabel={t("settings.admin.db.password.show")}
+          onReveal={() => void onRevealDbPassword()}
+          onHide={onHideDbPassword}
+          onChange={(v) => set(["Database", "Password"], v)}
+        />
+        <TextField
+          label={t("settings.admin.db.sslMode")}
+          value={stringField(draft, ["Database", "SslMode"], "")}
+          onChange={(v) => set(["Database", "SslMode"], v)}
         />
       </div>
+      <div className="field-row">
+        <TextField
+          label={t("settings.admin.db.connectionString")}
+          value={stringField(draft, ["Database", "ConnectionString"], "")}
+          onChange={(v) => set(["Database", "ConnectionString"], v)}
+        />
+        <NumberField
+          label={t("settings.admin.db.timeout")}
+          value={numberField(draft, ["Database", "CommandTimeoutMs"], 30000)}
+          onChange={(v) => set(["Database", "CommandTimeoutMs"], v)}
+        />
+      </div>
+      <div className="settings-form__group-row settings-form__group-row--db-apply">
+        <span />
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => {
+            if (!canManageAdminConfig) {
+              showPrivilegeNotice();
+              return;
+            }
+            void onApplyDatabase();
+          }}
+          disabled={busy}
+          aria-disabled={!canManageAdminConfig}
+          title={t("settings.admin.db.apply.title")}
+        >
+          <Icon name="tools" />
+          {t("settings.admin.db.apply")}
+        </button>
+      </div>
 
-      {activeSubTab === "users" ? (
+        </>
+      )}
+
+      {activeSubTab === "users" && (
         <>
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.users")}</h4>
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={addUser}
+              onClick={() => {
+                if (!canManageAdminConfig) {
+                  showPrivilegeNotice();
+                  return;
+                }
+                addUser();
+              }}
               disabled={busy}
+              aria-disabled={!canManageAdminConfig}
               title={t("settings.admin.user.add.title")}
             >
               <Icon name="upload" tone="accent" />
@@ -1529,11 +2242,14 @@ function AdminTab({
             users={adminUsersFromDraft(draft)}
             sourceUsers={adminUsersFromDraft(source)}
             auditorEmails={adminRoleApprovalRecipients(draft)}
-            canApproveAdminRole={currentAccountRole !== null && currentAccountRole >= AUDITOR_ROLE}
-            disabled={busy}
+            canApproveAdminRole={currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE}
+            disabled={busy || !canManageAdminConfig}
+            actionDisabled={busy}
+            canManage={canManageAdminConfig}
             onUpdate={updateUser}
             onPersist={() => void onSave()}
             onDelete={deleteUser}
+            onBlockedAction={showPrivilegeNotice}
             onRequestAdminApproval={(user, recipients) => {
               if (recipients.length === 0) {
                 setLocalError(t("settings.admin.user.requestAdmin.noAuditors"));
@@ -1546,15 +2262,24 @@ function AdminTab({
             targetLogin={targetLogin}
           />
         </>
-      ) : (
+      )}
+
+      {activeSubTab === "equipment" && (
         <>
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.equipment")}</h4>
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={addEquipment}
+              onClick={() => {
+                if (!canManageAdminConfig) {
+                  showPrivilegeNotice();
+                  return;
+                }
+                addEquipment();
+              }}
               disabled={busy}
+              aria-disabled={!canManageAdminConfig}
               title={t("settings.admin.equipment.add.title")}
             >
               <Icon name="upload" tone="accent" />
@@ -1564,84 +2289,327 @@ function AdminTab({
           <EquipmentTable
             equipment={equipmentFromDraft(draft)}
             sourceEquipment={equipmentFromDraft(source)}
-            disabled={busy}
+            disabled={busy || !canManageAdminConfig}
+            actionDisabled={busy}
+            canManage={canManageAdminConfig}
             onUpdate={updateEquipment}
             onPersist={() => void onSave()}
             onDelete={deleteEquipment}
+            onBlockedAction={showPrivilegeNotice}
           />
         </>
       )}
 
-      <h4 className="settings-form__group">{t("settings.admin.group.session")}</h4>
+      {activeSubTab === "configuration" && (
+        <div className="settings-footer__row">
+          <span
+            className="scan-busy"
+            data-visible={busy ? "true" : "false"}
+            aria-hidden={!busy}
+          >
+            <span className="scan-busy__spinner" />
+          </span>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => void load()}
+            disabled={busy}
+            title={t("settings.admin.reload.title")}
+          >
+            <Icon name="refresh" tone="accent" />
+            {t("settings.reload")}
+          </button>
+          <span className="spacer" />
+          <button
+            type="button"
+            className="btn btn--warn"
+            disabled={busy || !hasBackup}
+            onClick={() => void onRestore()}
+            title={t("settings.admin.default.title")}
+          >
+            <Icon name="refresh" tone="warn" />
+            {t("settings.btn.default")}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={busy || !dirty || adminApprovalRequired}
+            aria-disabled={!canManageAdminConfig}
+            onClick={() => {
+              if (!canManageAdminConfig) {
+                showPrivilegeNotice();
+                return;
+              }
+              void onSave();
+            }}
+            title={t("settings.admin.save.title")}
+          >
+            <Icon name="download" />
+            {t("settings.btn.saveAs")}
+          </button>
+        </div>
+      )}
+
+      {activeSubTab === "allowedHosts" && (
+        <AllowedHostsTab
+          canManage={canManageAdminConfig}
+          onBlockedAction={showPrivilegeNotice}
+        />
+      )}
+
+      {activeSubTab === "ftp" && (
+        <>
+          {!mobilityMode && ftpConfigPath && (
+            <div className="settings-path-strip" title={ftpConfigPath}>
+              <span className="settings-path-strip__label">
+                {t("settings.boundTo")}
+              </span>
+              <code className="settings-path-strip__path">{ftpConfigPath}</code>
+            </div>
+          )}
+
+          {ftpConnectionMessage && (
+            <SettingsNotice
+              tone={ftpNoticeTone}
+              volatile={ftpConnectionState === "checking"}
+              message={ftpConnectionMessage}
+              onDismiss={() => {
+                setFtpConnectionState("idle");
+                setFtpConnectionMessage(null);
+              }}
+            />
+          )}
+
+          {ftpLoading && ftpDraft === null ? (
+            <div className="settings-loading">{t("settings.loading")}</div>
+          ) : ftpDraft === null ? (
+            <div className="settings-loading">{t("settings.empty")}</div>
+          ) : (
+            <FtpTab
+              draft={ftpDraft}
+              disabled={!canManageAdminConfig}
+              onChangeDraft={setFtpDraft}
+            />
+          )}
+
+          <div className="settings-footer__row">
+            <span
+              className="scan-busy"
+              data-visible={ftpBusy ? "true" : "false"}
+              aria-hidden={!ftpBusy}
+            >
+              <span className="scan-busy__spinner" />
+            </span>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => void loadFtp()}
+              disabled={ftpBusy}
+              title={t("settings.reload.title")}
+            >
+              <Icon name="refresh" tone="accent" />
+              {t("settings.reload")}
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => void testFtpConnection()}
+              disabled={ftpBusy}
+              title={t("settings.ftp.test.title")}
+            >
+              <Icon name="check" tone="accent" />
+              {t("settings.ftp.test")}
+            </button>
+            <span className="spacer" />
+            <button
+              type="button"
+              className="btn btn--warn"
+              disabled={ftpBusy || !ftpHasBackup}
+              onClick={() => void onRestoreFtp()}
+              title={t("settings.btn.default.title")}
+            >
+              <Icon name="refresh" tone="warn" />
+              {t("settings.btn.default")}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={ftpBusy || !ftpDirty}
+              aria-disabled={!canManageAdminConfig}
+              onClick={() => {
+                if (!canManageAdminConfig) {
+                  showPrivilegeNotice();
+                  return;
+                }
+                void onSaveFtp();
+              }}
+              title={t("settings.btn.saveAs.title")}
+            >
+              <Icon name="download" />
+              {t("settings.btn.saveAs")}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AllowedHostsTab({
+  canManage,
+  onBlockedAction,
+}: {
+  canManage: boolean;
+  onBlockedAction: () => void;
+}) {
+  const { t } = useTranslation();
+  const [sourceHosts, setSourceHosts] = useState<string[]>(DEFAULT_ALLOWED_HOSTS);
+  const [draft, setDraft] = useState(DEFAULT_ALLOWED_HOSTS.join("\n"));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTone, setNoticeTone] = useState<"info" | "success">("success");
+
+  const draftHosts = useMemo(() => parseAllowedHostsText(draft), [draft]);
+  const invalidHosts = useMemo(() => validateAllowedHostList(draftHosts), [draftHosts]);
+  const dirty = draftHosts.join("\n") !== sourceHosts.join("\n");
+
+  async function loadHosts(cancelledRef: { current: boolean }): Promise<boolean> {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(apiUrl("/api/admin/iobeam/hosts"), { headers: scanAuthHeaders() });
+      const data = (await r.json().catch(() => null)) as AllowedHostsResponse | null;
+      if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      const hosts = normalizeAllowedHostList(Array.isArray(data.hosts) ? data.hosts : []);
+      if (cancelledRef.current) return false;
+      setSourceHosts(hosts);
+      setDraft(hosts.join("\n"));
+      return true;
+    } catch (err) {
+      if (cancelledRef.current) return false;
+      const fallback = [...DEFAULT_ALLOWED_HOSTS];
+      setSourceHosts(fallback);
+      setDraft(fallback.join("\n"));
+      setError(err instanceof Error ? err.message : String(err));
+      return false;
+    } finally {
+      if (!cancelledRef.current) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const cancelled = { current: false };
+    void loadHosts(cancelled);
+    return () => {
+      cancelled.current = true;
+    };
+  }, []);
+
+  async function onSave() {
+    if (!canManage) {
+      onBlockedAction();
+      return;
+    }
+    if (invalidHosts.length > 0) {
+      setNotice(null);
+      setError(t("settings.admin.allowedHosts.validation.error", { hosts: invalidHosts.join(", ") }));
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    setNoticeTone("success");
+    try {
+      const r = await fetch(apiUrl("/api/admin/iobeam/hosts"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+        body: JSON.stringify({ hosts: draftHosts }),
+      });
+      const data = (await r.json().catch(() => null)) as AllowedHostsResponse | null;
+      if (!r.ok || !data?.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      const hosts = normalizeAllowedHostList(Array.isArray(data.hosts) ? data.hosts : draftHosts);
+      setSourceHosts(hosts);
+      setDraft(hosts.join("\n"));
+      setNoticeTone(data.sync_warning ? "info" : "success");
+      setNotice(
+        data.sync_warning
+          ? t("settings.admin.allowedHosts.save.warning", { warning: data.sync_warning })
+          : t("settings.admin.allowedHosts.save.ok"),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function reloadHosts() {
+    setNotice(null);
+    const cancelled = { current: false };
+    void loadHosts(cancelled).then((loaded) => {
+      if (!cancelled.current && loaded) {
+        setNoticeTone("success");
+        setNotice(t("settings.admin.allowedHosts.reload.ok"));
+      }
+    });
+  }
+
+  return (
+    <div className="settings-form">
+      {notice && (
+        <SettingsNotice tone={noticeTone} message={notice} onDismiss={() => setNotice(null)} />
+      )}
+      {error && (
+        <SettingsNotice tone="error" message={error} onDismiss={() => setError(null)} />
+      )}
+
+      <h4 className="settings-form__group">{t("settings.admin.group.allowedHosts")}</h4>
+      <p className="settings-form__hint">{t("settings.admin.allowedHosts.hint")}</p>
+
       <div className="field-row">
-        <TextField
-          label={t("settings.admin.session.client")}
-          value={stringField(draft, ["session", "client_machine_name"], "")}
-          onChange={(v) => set(["session", "client_machine_name"], v)}
-        />
-        <TextField
-          label={t("settings.admin.session.loginTime")}
-          value={stringField(draft, ["session", "login_time"], "")}
-          onChange={(v) => set(["session", "login_time"], v)}
-        />
-      </div>
-      <div className="settings-flags">
-        <CheckboxField
-          label={t("settings.admin.session.authorized")}
-          value={boolField(draft, ["session", "is_autorized"], false)}
-          onChange={(v) => set(["session", "is_autorized"], v)}
-        />
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label htmlFor="allowed-hosts-input">{t("settings.admin.allowedHosts.label")}</label>
+          <textarea
+            id="allowed-hosts-input"
+            className="input settings-admin-hosts__textarea"
+            rows={6}
+            value={draft}
+            disabled={loading || saving}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={DEFAULT_ALLOWED_HOSTS.join("\n")}
+          />
+        </div>
       </div>
 
-      <h4 className="settings-form__group">{t("settings.admin.group.activity")}</h4>
-      <div className="field-row">
-        <TextField
-          label={t("settings.admin.activity.type")}
-          value={stringField(draft, ["activity", "activity_type"], "")}
-          onChange={(v) => set(["activity", "activity_type"], v)}
-        />
-      </div>
-
-      <div className="settings-footer__row">
-        <span
-          className="scan-busy"
-          data-visible={busy ? "true" : "false"}
-          aria-hidden={!busy}
-        >
-          <span className="scan-busy__spinner" />
-        </span>
+      <div className="settings-form__group-row settings-form__group-row--db-apply">
+        <span />
         <button
           type="button"
           className="btn btn--ghost"
-          onClick={() => void load()}
-          disabled={busy}
-          title={t("settings.admin.reload.title")}
+          onClick={reloadHosts}
+          disabled={loading || saving}
+          title={t("settings.admin.allowedHosts.reload.title")}
         >
           <Icon name="refresh" tone="accent" />
           {t("settings.reload")}
         </button>
-        <span className="spacer" />
-        <button
-          type="button"
-          className="btn btn--warn"
-          disabled={busy || !hasBackup}
-          onClick={() => void onRestore()}
-          title={t("settings.admin.default.title")}
-        >
-          <Icon name="refresh" tone="warn" />
-          {t("settings.btn.default")}
-        </button>
         <button
           type="button"
           className="btn btn--primary"
-          disabled={busy || !dirty}
-          onClick={() => void onSave()}
-          title={t("settings.admin.save.title")}
+          onClick={onSave}
+          disabled={loading || saving || !dirty}
+          aria-disabled={!canManage}
+          title={t("settings.admin.allowedHosts.save.title")}
         >
           <Icon name="download" />
-          {t("settings.btn.saveAs")}
+          {t("settings.admin.allowedHosts.save.label")}
         </button>
       </div>
+
+      <p className="settings-form__hint">{t("settings.admin.allowedHosts.note")}</p>
+      <p className="settings-form__hint">{t("settings.admin.allowedHosts.help")}</p>
     </div>
   );
 }
@@ -1676,9 +2644,12 @@ function AdminUsersTable({
   auditorEmails,
   canApproveAdminRole,
   disabled,
+  actionDisabled,
+  canManage,
   onUpdate,
   onPersist,
   onDelete,
+  onBlockedAction,
   onRequestAdminApproval,
   targetAccountId,
   targetLogin,
@@ -1688,9 +2659,12 @@ function AdminUsersTable({
   auditorEmails: string[];
   canApproveAdminRole: boolean;
   disabled: boolean;
+  actionDisabled: boolean;
+  canManage: boolean;
   onUpdate: (index: number, field: keyof AdminUserRow, value: string | number | boolean | null) => void;
   onPersist: (index: number) => void;
   onDelete: (index: number) => void;
+  onBlockedAction: () => void;
   onRequestAdminApproval: (user: AdminUserRow, recipients: string[]) => void;
   targetAccountId: number | null;
   targetLogin: string | null;
@@ -1712,7 +2686,15 @@ function AdminUsersTable({
   }, [targetAccountId, targetLogin, users.length]);
 
   return (
-    <div className="settings-admin-table-wrap">
+    <div
+      className="settings-admin-table-wrap"
+      onPointerDownCapture={(event) => {
+        if (canManage) return;
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target?.closest("input, select, button")) return;
+        onBlockedAction();
+      }}
+    >
       <div className="settings-admin-table" role="table">
         <div className="settings-admin-table__head" role="row">
           <span role="columnheader">{t("settings.admin.user.id")}</span>
@@ -1748,15 +2730,16 @@ function AdminUsersTable({
             key={`${user.id ?? "new"}-${index}`}
             ref={rowRef}
           >
-            <input
-              aria-label={t("settings.admin.user.id")}
-              className="input"
-              type="number"
+            <NumberStepperInput
               value={user.id ?? ""}
               disabled={disabled}
-              onChange={(e) =>
-                onUpdate(index, "id", e.target.value === "" ? null : Number(e.target.value))
+              onValueChange={(value) =>
+                onUpdate(index, "id", value === "" ? null : Number(value))
               }
+              step={1}
+              min={0}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.user.id")}
             />
             <input
               aria-label={t("settings.admin.user.login")}
@@ -1828,21 +2811,20 @@ function AdminUsersTable({
                 </option>
               ))}
             </select>
-            <input
-              aria-label={t("settings.admin.user.sessionLifetimeDays")}
-              className="input"
-              type="number"
-              min={1}
-              step={1}
+            <NumberStepperInput
               value={user.session_lifetime_limit_days}
               disabled={disabled}
-              onChange={(e) =>
+              onValueChange={(value) =>
                 onUpdate(
                   index,
                   "session_lifetime_limit_days",
-                  Math.max(1, Math.trunc(Number(e.target.value) || 1)),
+                  Math.max(1, Math.trunc(Number(value) || 1)),
                 )
               }
+              step={1}
+              min={1}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.user.sessionLifetimeDays")}
             />
             <label className="settings-admin-table__check">
               <input
@@ -1858,8 +2840,15 @@ function AdminUsersTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled || !rowDirty}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || !rowDirty || needsAdminApproval}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.user.update")}
                   title={t("settings.admin.user.update")}
                 >
@@ -1869,8 +2858,15 @@ function AdminUsersTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || needsAdminApproval}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.user.save")}
                   title={t("settings.admin.user.save")}
                 >
@@ -1892,8 +2888,15 @@ function AdminUsersTable({
               <button
                 type="button"
                 className="modal__close"
-                onClick={() => onDelete(index)}
-                disabled={disabled || users.length <= 1}
+                onClick={() => {
+                  if (!canManage) {
+                    onBlockedAction();
+                    return;
+                  }
+                  onDelete(index);
+                }}
+                disabled={actionDisabled || users.length <= 1}
+                aria-disabled={!canManage}
                 aria-label={t("settings.admin.user.delete")}
                 title={t("settings.admin.user.delete")}
               >
@@ -1912,16 +2915,22 @@ function EquipmentTable({
   equipment,
   sourceEquipment,
   disabled,
+  actionDisabled,
+  canManage,
   onUpdate,
   onPersist,
   onDelete,
+  onBlockedAction,
 }: {
   equipment: EquipmentRow[];
   sourceEquipment: EquipmentRow[];
   disabled: boolean;
+  actionDisabled: boolean;
+  canManage: boolean;
   onUpdate: (index: number, field: keyof EquipmentRow, value: string | number | null) => void;
   onPersist: (index: number) => void;
   onDelete: (index: number) => void;
+  onBlockedAction: () => void;
 }) {
   const { t } = useTranslation();
   const sourceSignatureByKey = new Map(
@@ -1932,7 +2941,15 @@ function EquipmentTable({
   );
 
   return (
-    <div className="settings-admin-table-wrap">
+    <div
+      className="settings-admin-table-wrap"
+      onPointerDownCapture={(event) => {
+        if (canManage) return;
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (!target?.closest("input, select, button")) return;
+        onBlockedAction();
+      }}
+    >
       <div className="settings-equipment-table" role="table">
         <div className="settings-equipment-table__head" role="row">
           <span role="columnheader">{t("settings.admin.equipment.id")}</span>
@@ -1950,15 +2967,16 @@ function EquipmentTable({
 
           return (
           <div className="settings-equipment-table__row" role="row" key={`${row.id ?? "new"}-${index}`}>
-            <input
-              aria-label={t("settings.admin.equipment.id")}
-              className="input"
-              type="number"
+            <NumberStepperInput
               value={row.id ?? ""}
               disabled={disabled}
-              onChange={(e) =>
-                onUpdate(index, "id", e.target.value === "" ? null : Number(e.target.value))
+              onValueChange={(value) =>
+                onUpdate(index, "id", value === "" ? null : Number(value))
               }
+              step={1}
+              min={0}
+              inputMode="numeric"
+              ariaLabel={t("settings.admin.equipment.id")}
             />
             <input
               aria-label={t("settings.admin.equipment.name")}
@@ -2005,8 +3023,15 @@ function EquipmentTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled || !rowDirty}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled || !rowDirty}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.equipment.update")}
                   title={t("settings.admin.equipment.update")}
                 >
@@ -2016,8 +3041,15 @@ function EquipmentTable({
                 <button
                   type="button"
                   className="modal__close"
-                  onClick={() => onPersist(index)}
-                  disabled={disabled}
+                  onClick={() => {
+                    if (!canManage) {
+                      onBlockedAction();
+                      return;
+                    }
+                    onPersist(index);
+                  }}
+                  disabled={actionDisabled}
+                  aria-disabled={!canManage}
                   aria-label={t("settings.admin.equipment.save")}
                   title={t("settings.admin.equipment.save")}
                 >
@@ -2027,8 +3059,15 @@ function EquipmentTable({
               <button
                 type="button"
                 className="modal__close"
-                onClick={() => onDelete(index)}
-                disabled={disabled || equipment.length <= 1}
+                onClick={() => {
+                  if (!canManage) {
+                    onBlockedAction();
+                    return;
+                  }
+                  onDelete(index);
+                }}
+                disabled={actionDisabled || equipment.length <= 1}
+                aria-disabled={!canManage}
                 aria-label={t("settings.admin.equipment.delete")}
                 title={t("settings.admin.equipment.delete")}
               >
@@ -2046,11 +3085,15 @@ function EquipmentTable({
 type SettingsHelpTopic =
   | "generalVoltage"
   | "generalBuffer"
+  | "generalAdcHalfPeriod"
+  | "generalAdcSettleCycles"
   | "rasterPixels"
   | "rasterResolution"
   | "rasterAdcLatency"
   | "rasterDwell"
   | "rasterFrameBlank"
+  | "vectorResolution"
+  | "vectorDwell"
   | "vectorLatency"
   | "vectorAdcLatency"
   | "vectorLineShift"
@@ -2065,12 +3108,13 @@ type SettingsHelpTopic =
 
 function SettingsHelp({ topic }: { topic: SettingsHelpTopic }) {
   const { t } = useTranslation();
+  const meta = SETTINGS_HELP_META[topic];
   return (
     <HelpPopover
-      title={t(SETTINGS_HELP_META[topic].title)}
+      title={t(meta.title)}
       ariaLabel={t("settings.help.aria")}
     >
-      {SETTINGS_HELP_BODY[topic]}
+      {meta.body ? <p>{t(meta.body)}</p> : SETTINGS_HELP_BODY[topic]}
     </HelpPopover>
   );
 }
@@ -2093,14 +3137,27 @@ function configDefaultsPreview(config: unknown): {
   };
 }
 
-const SETTINGS_HELP_META: Record<SettingsHelpTopic, { title: TranslationKey }> = {
+const SETTINGS_HELP_META: Record<SettingsHelpTopic, {
+  title: TranslationKey;
+  body?: TranslationKey;
+}> = {
   generalVoltage: { title: "settings.help.generalVoltage.title" },
   generalBuffer: { title: "settings.help.generalBuffer.title" },
+  generalAdcHalfPeriod: {
+    title: "settings.help.generalAdcHalfPeriod.title",
+    body: "settings.help.generalAdcHalfPeriod.body",
+  },
+  generalAdcSettleCycles: {
+    title: "settings.help.generalAdcSettleCycles.title",
+    body: "settings.help.generalAdcSettleCycles.body",
+  },
   rasterPixels: { title: "settings.help.rasterPixels.title" },
   rasterResolution: { title: "settings.help.rasterResolution.title" },
   rasterAdcLatency: { title: "settings.help.rasterAdcLatency.title" },
   rasterDwell: { title: "settings.help.rasterDwell.title" },
   rasterFrameBlank: { title: "settings.help.rasterFrameBlank.title" },
+  vectorResolution: { title: "settings.help.vectorResolution.title" },
+  vectorDwell: { title: "settings.help.vectorDwell.title" },
   vectorLatency: { title: "settings.help.vectorLatency.title" },
   vectorAdcLatency: { title: "settings.help.vectorAdcLatency.title" },
   vectorLineShift: { title: "settings.help.vectorLineShift.title" },
@@ -2114,14 +3171,14 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, { title: TranslationKey }> =
   simulationSeed: { title: "settings.help.simulationSeed.title" },
 };
 
-const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
+const SETTINGS_HELP_BODY: Partial<Record<SettingsHelpTopic, JSX.Element>> = {
   generalVoltage: (
     <>
       <p>
-        Default beam-control voltage from <code>actionData.voltage</code>.
-        It is loaded with the rest of <code>streamData.json</code> and
-        should match the analog range expected by the connected scan
-        electronics.
+        Beam energy in electron-volts from <code>actionData.ev</code>.
+        This is not the Glasgow I/O port voltage. It is stored with the
+        rest of <code>streamData.json</code> and should match the beam
+        energy expected by the microscope configuration.
       </p>
     </>
   ),
@@ -2165,7 +3222,8 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
   rasterDwell: (
     <>
       <p>
-        Number of 125 ns ADC sample periods accumulated per raster pixel.
+        Number of 166.667 ns ADC sample periods accumulated per raster pixel
+        with the current revC3 timing configuration.
         Higher dwell improves noise averaging but increases frame time
         linearly. Practical values are usually powers of two.
       </p>
@@ -2177,6 +3235,26 @@ const SETTINGS_HELP_BODY: Record<SettingsHelpTopic, JSX.Element> = {
         When enabled, the macro blanks the beam at frame boundaries and
         during abort cleanup. Leave it off for fastest live preview; enable
         it for beam-sensitive samples.
+      </p>
+    </>
+  ),
+  vectorResolution: (
+    <>
+      <p>
+        Default-vector sweep resolution. The scan still covers the full
+        DAC range, but this value controls how many evenly spaced sample
+        sites are visited on each axis. Presets are common powers of two;
+        custom values allow finer control from <code>1..2048</code>.
+      </p>
+    </>
+  ),
+  vectorDwell: (
+    <>
+      <p>
+        Default-vector dwell in 166.667 ns revC3 sample periods. This only affects
+        the built-in default sweep. Custom point lists already carry a
+        per-point <code>dwell</code> value in each <code>x, y, dwell</code>
+        triple.
       </p>
     </>
   ),
@@ -2287,11 +3365,13 @@ function TextField({
   label,
   help,
   value,
+  disabled = false,
   onChange,
 }: {
   label: string;
   help?: JSX.Element;
   value: string;
+  disabled?: boolean;
   onChange: (v: string) => void;
 }) {
   return (
@@ -2301,8 +3381,64 @@ function TextField({
         type="text"
         className="input"
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  visible,
+  configured,
+  revealLabel,
+  disabled = false,
+  onReveal,
+  onHide,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  visible: boolean;
+  configured: boolean;
+  revealLabel: string;
+  disabled?: boolean;
+  onReveal: () => void;
+  onHide: () => void;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="field">
+      <FieldLabel label={label} />
+      <div className="settings-password-field">
+        <input
+          type={visible ? "text" : "password"}
+          className="input"
+          value={visible ? value : configured ? "********" : value}
+          disabled={disabled}
+          readOnly={!visible && configured}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <button
+          type="button"
+          className="modal__close settings-password-field__reveal"
+          disabled={disabled}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            onReveal();
+          }}
+          onPointerUp={onHide}
+          onPointerLeave={onHide}
+          onPointerCancel={onHide}
+          onBlur={onHide}
+          aria-label={revealLabel}
+          title={revealLabel}
+        >
+          <Icon name="eye" tone="accent" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -2312,12 +3448,20 @@ function NumberField({
   help,
   value,
   step,
+  min,
+  max,
+  invalid,
+  warning,
   onChange,
 }: {
   label: string;
   help?: JSX.Element;
   value: number;
   step?: string;
+  min?: number;
+  max?: number;
+  invalid?: boolean;
+  warning?: JSX.Element | string;
   onChange: (v: number) => void;
 }) {
   // Mirror the input as a string so the user can briefly hold "-" / "."
@@ -2329,19 +3473,33 @@ function NumberField({
   return (
     <div className="field">
       <FieldLabel label={label} help={help} />
-      <input
-        type="number"
-        step={step ?? "1"}
-        className="input"
+      <NumberStepperInput
         value={local}
-        onChange={(e) => {
-          setLocal(e.target.value);
-          const n = Number(e.target.value);
+        onValueChange={(next) => {
+          setLocal(next);
+          const n = Number(next);
           if (Number.isFinite(n)) onChange(n);
         }}
+        step={step === "any" ? 1 : Number(step ?? 1)}
+        min={min}
+        max={max}
+        invalid={invalid}
+        warning={warning}
       />
     </div>
   );
+}
+
+function validAdcTiming(config: unknown): boolean {
+  const halfPeriod = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
+  const settleCycles = numberField(config, [...ACTION_DATA_PATH, "adcSettleCycles"], 2);
+  return Number.isInteger(halfPeriod)
+    && Number.isInteger(settleCycles)
+    && halfPeriod >= 1
+    && halfPeriod <= 255
+    && settleCycles >= 1
+    && settleCycles <= 255
+    && (halfPeriod * 2) >= (settleCycles + 6);
 }
 
 function CheckboxField({
@@ -2408,15 +3566,17 @@ function FieldLabel({ label, help }: { label: string; help?: JSX.Element }) {
 
 function SettingsNotice({
   tone,
+  volatile = false,
   message,
   onDismiss,
 }: {
-  tone: "info" | "success" | "error";
+  tone: "info" | "success" | "warning" | "error";
+  volatile?: boolean;
   message: string;
   onDismiss: () => void;
 }) {
   return (
-    <div className={`settings-notice settings-notice--${tone}`}>
+    <div className={`settings-notice settings-notice--${tone}`} data-volatile={volatile ? "true" : "false"}>
       <span className="settings-notice__message">{message}</span>
       <button
         type="button"

@@ -8,22 +8,25 @@ import type {
   ScanResult,
   ServerDefaults,
   VectorRequest,
+  VectorScanPath,
   ROIRequest,
 } from "../types/api";
+import { normalizeGrayScaleSelection, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { fetchDefaults } from "./statusSlice";
-import { recordScanActivity } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
 
-export type ScanKind = "raster" | "vector" | "roi";
+export type ScanKind = "raster" | "vector" | "roi" | "mag";
 export type ScanPhase =
   | "idle"
   | "running"
-  | "paused"
   | "stopping"
   | "completed"
   | "error";
 
 export type VectorRenderMode = "native" | "decimated";
+const ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY = "ionbeam.roiGrayScaleStepDelta";
 
 interface ScanState {
   kind: ScanKind;
@@ -33,12 +36,27 @@ interface ScanState {
   chunksReceived: number;
   /** Result of the last blocking POST call (validated). */
   lastResult: ScanResult | null;
+  /** Latest scan output filenames, regardless of validated vs streamed run. */
+  lastOutput: {
+    kind: "raster" | "vector";
+    csv_filename: string | null;
+    image_filename: string | null;
+  } | null;
   errorMessage: string | null;
 
   /** Most recent params, kept editable in state. */
   raster: RasterRequest;
   vector: VectorRequest;
+  preview: boolean;
   roi: ROIState;
+  /** Manual beam energy entry shared by the raster/vector panels. */
+  beamEnergyEv: number;
+
+  /** Committed grayscale interval for the ROI image viewer. */
+  roiGrayScaleSelection: GrayScaleSelection;
+  /** `true` skips highlighted pixels, `false` spots them, `null` means no special handling. */
+  roiGrayScaleSkipped: boolean | null;
+  roiGrayScaleStepDelta: number;
 
   /** How the vector image is rendered onto the canvas. Per-session — not
    *  persisted to localStorage — because the right choice depends on the
@@ -51,20 +69,39 @@ export interface ROIState {
   x_end: number;
   y_origin: number;
   y_end: number;
+  viewport_x_start: number;
+  viewport_x_end: number;
+  viewport_y_start: number;
+  viewport_y_end: number;
+  calibration_enabled: boolean;
+  calibration_x_origin: number;
+  calibration_x_end: number;
+  calibration_y_origin: number;
+  calibration_y_end: number;
+  calibration_viewport_x_start: number;
+  calibration_viewport_x_end: number;
+  calibration_viewport_y_start: number;
+  calibration_viewport_y_end: number;
+  calibration_confirmed: boolean;
   x_scale_length: number;
   y_scale_length: number;
   scale_unit: string;
   show_grid: boolean;
+  raster_show_grid: boolean;
+  vector_show_grid: boolean;
+  vector_show_scan_path: boolean;
   selection: ROIRequest | null;
   imageName: string;
   imageDataUrl: string | null;
   imageKind: "none" | "file" | "lastScan";
-  keep_loaded_bitmap_after_scan: boolean;
+  /** Physical world bounds represented by the current image; null means the full hardware FOV. */
+  imageBounds: ROIRequest | null;
+  scanImageDataUrl: string | null;
 }
 
 const defaultRaster: RasterRequest = {
   resolution: 512,
-  dwell: 2,
+  dwell: 16,
   latency_bytes: 16384,
   frame_blank: false,
   cookie: 123,
@@ -74,8 +111,10 @@ const defaultRaster: RasterRequest = {
 
 const defaultVector: VectorRequest = {
   pattern: "default",
+  scan_path: "vertical_raster",
   points: null,
   vector_resolution: 2048,
+  dwell: 16,
   latency_bytes: 8196,
   output_mode: "SixteenBit",
   cookie: 123,
@@ -89,30 +128,59 @@ const initialState: ScanState = {
   bytesReceived: 0,
   chunksReceived: 0,
   lastResult: null,
+  lastOutput: null,
   errorMessage: null,
   raster: defaultRaster,
   vector: defaultVector,
+  preview: true,
   roi: {
     x_origin: 0,
     x_end: 100,
     y_origin: 0,
     y_end: 100,
+    viewport_x_start: 0,
+    viewport_x_end: 640,
+    viewport_y_start: 0,
+    viewport_y_end: 640,
+    calibration_enabled: false,
+    calibration_x_origin: 0,
+    calibration_x_end: 100,
+    calibration_y_origin: 0,
+    calibration_y_end: 100,
+    calibration_viewport_x_start: 0,
+    calibration_viewport_x_end: 640,
+    calibration_viewport_y_start: 0,
+    calibration_viewport_y_end: 640,
+    calibration_confirmed: false,
     x_scale_length: 100,
     y_scale_length: 100,
     scale_unit: "um",
     show_grid: true,
+    raster_show_grid: true,
+    vector_show_grid: true,
+    vector_show_scan_path: false,
     selection: null,
     imageName: "No image selected",
     imageDataUrl: null,
     imageKind: "none",
-    keep_loaded_bitmap_after_scan: true,
+    imageBounds: null,
+    scanImageDataUrl: null,
   },
+  beamEnergyEv: 1000.0,
+  roiGrayScaleSelection: null,
+  roiGrayScaleSkipped: null,
+  roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
   vectorRenderMode: "decimated",
 };
 
 function numberDefault(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+
+function floatDefault(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function booleanDefault(value: unknown, fallback: boolean): boolean {
@@ -129,6 +197,22 @@ function booleanDefault(value: unknown, fallback: boolean): boolean {
 function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"] | undefined): VectorRequest["output_mode"] {
   if (value === "EightBit" || value === "SixteenBit") return value;
   return fallback ?? "SixteenBit";
+}
+
+function vectorScanPathDefault(value: unknown, fallback: VectorScanPath): VectorScanPath {
+  switch (value) {
+    case "vertical_raster":
+    case "vertical_serpentine":
+    case "horizontal_sawtooth":
+    case "horizontal_triangle":
+      return value;
+    default:
+      return fallback;
+  }
+}
+
+function dwellDefault(value: unknown, fallback: number): number {
+  return Math.max(16, numberDefault(value, fallback));
 }
 
 function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
@@ -155,7 +239,7 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
       rasterParams.resolution ?? raster.resolution,
       state.raster.resolution
     ),
-    dwell: numberDefault(
+    dwell: dwellDefault(
       rasterParams.dwell ?? raster.dwell,
       state.raster.dwell
     ),
@@ -180,6 +264,17 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
 
   state.vector = {
     ...state.vector,
+    scan_path: vectorScanPathDefault(vectorParams.scan_path, state.vector.scan_path),
+    vector_resolution: numberDefault(
+      vectorParams.vector_resolution ??
+        vector.vector_resolution ??
+        vector.vectorResolution,
+      state.vector.vector_resolution
+    ),
+    dwell: dwellDefault(
+      vectorParams.dwell ?? vector.dwell,
+      state.vector.dwell
+    ),
     latency_bytes: numberDefault(
       vectorParams.latency_bytes ?? vector.latency_bytes ?? vector.latency,
       state.vector.latency_bytes
@@ -242,15 +337,70 @@ function normalizeROIPatch(
     ...(Object.prototype.hasOwnProperty.call(patch, "show_grid")
       ? { show_grid: booleanDefault(patch.show_grid, current.show_grid) }
       : {}),
-    ...(Object.prototype.hasOwnProperty.call(patch, "keep_loaded_bitmap_after_scan")
+    ...(Object.prototype.hasOwnProperty.call(patch, "raster_show_grid")
+      ? { raster_show_grid: booleanDefault(patch.raster_show_grid, current.raster_show_grid) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_grid")
+      ? { vector_show_grid: booleanDefault(patch.vector_show_grid, current.vector_show_grid) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_scan_path")
       ? {
-          keep_loaded_bitmap_after_scan: booleanDefault(
-            patch.keep_loaded_bitmap_after_scan,
-            current.keep_loaded_bitmap_after_scan
+          vector_show_scan_path: booleanDefault(
+            patch.vector_show_scan_path,
+            current.vector_show_scan_path
           ),
         }
       : {}),
   };
+}
+
+function calibrationPatchTouchesConfirmedMapping(patch: Partial<ROIState>): boolean {
+  return [
+    "x_origin",
+    "x_end",
+    "y_origin",
+    "y_end",
+    "viewport_x_start",
+    "viewport_x_end",
+    "viewport_y_start",
+    "viewport_y_end",
+    "calibration_x_origin",
+    "calibration_x_end",
+    "calibration_y_origin",
+    "calibration_y_end",
+    "calibration_viewport_x_start",
+    "calibration_viewport_x_end",
+    "calibration_viewport_y_start",
+    "calibration_viewport_y_end",
+  ].some((key) => Object.prototype.hasOwnProperty.call(patch, key));
+}
+
+function clampGrayScaleStepDelta(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 10;
+  return Math.max(1, Math.min(255, Math.round(n)));
+}
+
+function loadInitialGrayScaleStepDelta(): number {
+  if (typeof window === "undefined") return 10;
+  try {
+    return clampGrayScaleStepDelta(window.localStorage.getItem(ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY));
+  } catch {
+    return 10;
+  }
+}
+
+export function persistGrayScaleStepDelta(stepDelta: number): void {
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY,
+        String(clampGrayScaleStepDelta(stepDelta))
+      );
+    }
+  } catch {
+    /* localStorage may be disabled */
+  }
 }
 
 /* -------- blocking REST runs ------------------------------------------- */
@@ -258,34 +408,42 @@ function normalizeROIPatch(
 export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
   "scan/runRasterValidated",
   async (req, { signal }) => {
-    const r = await fetch("/api/scan/raster/run", {
+    const r = await fetch(apiUrl("/api/scan/raster/run"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify(req),
       signal,
     });
-    if (!r.ok) throw new Error(`raster run: HTTP ${r.status} ${await r.text()}`);
-    const result = (await r.json()) as ScanResult;
-    recordScanActivity("raster");
-    return result;
+    if (!r.ok) throw new Error(await scanRunErrorMessage(r, "raster run"));
+    return await readJsonResponse<ScanResult>(r, "raster run");
   }
 );
 
 export const runVectorValidated = createAsyncThunk<ScanResult, VectorRequest>(
   "scan/runVectorValidated",
   async (req, { signal }) => {
-    const r = await fetch("/api/scan/vector/run", {
+    const r = await fetch(apiUrl("/api/scan/vector/run"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
       body: JSON.stringify(req),
       signal,
     });
-    if (!r.ok) throw new Error(`vector run: HTTP ${r.status} ${await r.text()}`);
-    const result = (await r.json()) as ScanResult;
-    recordScanActivity("vector");
-    return result;
+    if (!r.ok) throw new Error(await scanRunErrorMessage(r, "vector run"));
+    return await readJsonResponse<ScanResult>(r, "vector run");
   }
 );
+
+async function scanRunErrorMessage(response: Response, prefix: string): Promise<string> {
+  const text = await response.text();
+  try {
+    const data = JSON.parse(text) as { error?: unknown; message?: unknown };
+    const message = typeof data.error === "string" ? data.error : typeof data.message === "string" ? data.message : "";
+    if (message) return message;
+  } catch {
+    /* fall through to HTTP detail */
+  }
+  return `${prefix}: HTTP ${response.status}${text ? ` ${text}` : ""}`;
+}
 
 const slice = createSlice({
   name: "scan",
@@ -300,25 +458,89 @@ const slice = createSlice({
     updateVector(s, a: PayloadAction<Partial<VectorRequest>>) {
       s.vector = { ...s.vector, ...normalizeVectorPatch(a.payload, s.vector) };
     },
+    setPreview(s, a: PayloadAction<boolean>) {
+      s.preview = Boolean(a.payload);
+    },
+    updateBeamEnergyEv(s, a: PayloadAction<number>) {
+      s.beamEnergyEv = floatDefault(a.payload, s.beamEnergyEv);
+    },
     updateROI(s, a: PayloadAction<Partial<ROIState>>) {
       s.roi = { ...s.roi, ...normalizeROIPatch(a.payload, s.roi) };
+      if (calibrationPatchTouchesConfirmedMapping(a.payload)) {
+        s.roi.calibration_confirmed = false;
+      }
       if ("selection" in a.payload) {
         s.raster.roi = a.payload.selection ?? null;
         s.vector.roi = a.payload.selection ?? null;
+        if (a.payload.selection) {
+          s.roi.vector_show_scan_path = true;
+        }
       }
+    },
+    beginROICalibration(s) {
+      s.roi.calibration_enabled = true;
+      s.roi.calibration_confirmed = false;
+      s.roi.calibration_x_origin = s.roi.x_origin;
+      s.roi.calibration_x_end = s.roi.x_end;
+      s.roi.calibration_y_origin = s.roi.y_origin;
+      s.roi.calibration_y_end = s.roi.y_end;
+      s.roi.calibration_viewport_x_start = s.roi.viewport_x_start;
+      s.roi.calibration_viewport_x_end = s.roi.viewport_x_end;
+      s.roi.calibration_viewport_y_start = s.roi.viewport_y_start;
+      s.roi.calibration_viewport_y_end = s.roi.viewport_y_end;
+    },
+    setROIGrayScaleSelection(
+      s,
+      a: PayloadAction<{ selection: GrayScaleSelection; isSkipped?: boolean | null; stepDelta?: number }>
+    ) {
+      s.roiGrayScaleSelection = normalizeGrayScaleSelection(a.payload.selection);
+      if (a.payload.selection === null) {
+        s.roiGrayScaleSkipped = null;
+      } else if (Object.prototype.hasOwnProperty.call(a.payload, "isSkipped")) {
+        s.roiGrayScaleSkipped = a.payload.isSkipped === null ? null : Boolean(a.payload.isSkipped);
+      }
+      if (a.payload.stepDelta !== undefined) {
+        s.roiGrayScaleStepDelta = clampGrayScaleStepDelta(a.payload.stepDelta);
+      }
+    },
+    confirmROICalibration(s) {
+      s.roi.x_origin = s.roi.calibration_x_origin;
+      s.roi.x_end = s.roi.calibration_x_end;
+      s.roi.y_origin = s.roi.calibration_y_origin;
+      s.roi.y_end = s.roi.calibration_y_end;
+      // Commit the measured dimensions but keep calibration mode open so
+      // the operator can review or refine the setup before leaving it.
+      s.roi.viewport_x_start = 0;
+      s.roi.viewport_x_end = 640;
+      s.roi.viewport_y_start = 0;
+      s.roi.viewport_y_end = 640;
+      s.roi.calibration_confirmed = true;
+      s.roi.selection = null;
+      s.raster.roi = null;
+      s.vector.roi = null;
     },
     clearROIImage(s) {
       s.roi.imageName = "No image selected";
       s.roi.imageDataUrl = null;
       s.roi.imageKind = "none";
+      s.roi.imageBounds = null;
+    },
+    clearROIScanImage(s) {
+      s.roi.scanImageDataUrl = null;
     },
     clearROISelection(s) {
       s.roi.selection = null;
       s.raster.roi = null;
       s.vector.roi = null;
+      s.roiGrayScaleSelection = null;
+      s.roiGrayScaleSkipped = null;
+      s.roi.scanImageDataUrl = null;
     },
     clearLastResult(s) {
       s.lastResult = null;
+    },
+    clearLastOutput(s) {
+      s.lastOutput = null;
     },
     setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
       s.vectorRenderMode = a.payload;
@@ -329,6 +551,7 @@ const slice = createSlice({
       s.bytesReceived = 0;
       s.chunksReceived = 0;
       s.lastResult = null;
+      s.lastOutput = null;
       s.errorMessage = null;
     },
     streamProgress(
@@ -338,29 +561,27 @@ const slice = createSlice({
       s.bytesReceived += a.payload.bytes;
       s.chunksReceived += a.payload.chunks;
     },
-    streamPaused(s) {
-      // Pause is dispatched by the WS onclose handler. By that point
-      // streamStopping has already moved phase to "stopping" — the
-      // previous "phase === 'running'" guard rejected this case and left
-      // the UI stuck on "stopping" forever.
-      //
-      // Hardware can't actually pause mid-frame. Pause is a UI concept
-      // meaning "the stream is closed but the partial frame is kept on
-      // the canvas". Accept transitions only from the active states; if
-      // a "done" or "error" already landed we shouldn't downgrade them.
-      if (s.phase === "running" || s.phase === "stopping") {
-        s.phase = "paused";
-      }
-    },
     streamStopping(s) {
       s.phase = "stopping";
     },
     streamCompleted(
       s,
-      a: PayloadAction<{ chunks: number } | undefined>
+      a: PayloadAction<{
+        chunks: number;
+        kind?: "raster" | "vector";
+        csv_filename?: string | null;
+        image_filename?: string | null;
+      } | undefined>
     ) {
       s.phase = "completed";
       if (a.payload?.chunks !== undefined) s.chunksReceived = a.payload.chunks;
+      if (a.payload?.kind) {
+        s.lastOutput = {
+          kind: a.payload.kind,
+          csv_filename: a.payload.csv_filename ?? null,
+          image_filename: a.payload.image_filename ?? null,
+        };
+      }
     },
     streamErrored(s, a: PayloadAction<string>) {
       s.phase = "error";
@@ -371,6 +592,7 @@ const slice = createSlice({
       s.bytesReceived = 0;
       s.chunksReceived = 0;
       s.errorMessage = null;
+      s.lastOutput = null;
     },
   },
   extraReducers: (b) => {
@@ -379,11 +601,17 @@ const slice = createSlice({
       s.bytesReceived = 0;
       s.chunksReceived = 0;
       s.lastResult = null;
+      s.lastOutput = null;
       s.errorMessage = null;
     });
     b.addCase(runRasterValidated.fulfilled, (s, a) => {
       s.phase = "completed";
       s.lastResult = a.payload;
+      s.lastOutput = {
+        kind: "raster",
+        csv_filename: a.payload.csv_filename ?? null,
+        image_filename: a.payload.image_filename ?? null,
+      };
     });
     b.addCase(runRasterValidated.rejected, (s, a) => {
       if (a.meta.aborted) {
@@ -399,11 +627,17 @@ const slice = createSlice({
       s.bytesReceived = 0;
       s.chunksReceived = 0;
       s.lastResult = null;
+      s.lastOutput = null;
       s.errorMessage = null;
     });
     b.addCase(runVectorValidated.fulfilled, (s, a) => {
       s.phase = "completed";
       s.lastResult = a.payload;
+      s.lastOutput = {
+        kind: "vector",
+        csv_filename: a.payload.csv_filename ?? null,
+        image_filename: a.payload.image_filename ?? null,
+      };
     });
     b.addCase(runVectorValidated.rejected, (s, a) => {
       if (a.meta.aborted) {
@@ -416,6 +650,7 @@ const slice = createSlice({
     });
     b.addCase(fetchDefaults.fulfilled, (s, a) => {
       applyServerDefaults(s, a.payload);
+      s.beamEnergyEv = floatDefault(a.payload.ev, s.beamEnergyEv);
     });
   },
 });
@@ -424,14 +659,20 @@ export const {
   setKind,
   updateRaster,
   updateVector,
+  setPreview,
+  updateBeamEnergyEv,
   updateROI,
+  beginROICalibration,
+  confirmROICalibration,
   clearROIImage,
+  clearROIScanImage,
   clearROISelection,
+  setROIGrayScaleSelection,
   clearLastResult,
+  clearLastOutput,
   setVectorRenderMode,
   streamStarted,
   streamProgress,
-  streamPaused,
   streamStopping,
   streamCompleted,
   streamErrored,
