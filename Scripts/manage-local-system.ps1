@@ -18,8 +18,8 @@ $dataRoot = Join-Path $developmentRoot "GlasgowDataIO"
 if (-not (Test-Path -LiteralPath $dataRoot)) { $dataRoot = Join-Path $operationsRoot "GlasgowDataIO" }
 $backendRoot = Join-Path $developmentRoot "ionbeam-web\backend"
 $frontendRoot = Join-Path $developmentRoot "ionbeam-web\frontend"
-if (-not (Test-Path -LiteralPath $backendRoot)) { $backendRoot = Join-Path $operationsRoot "ionbeam-web\backend" }
-if (-not (Test-Path -LiteralPath $frontendRoot)) { $frontendRoot = Join-Path $operationsRoot "ionbeam-web\frontend" }
+if (-not (Test-Path -LiteralPath (Join-Path $backendRoot "package.json"))) { $backendRoot = Join-Path $operationsRoot "ionbeam-web\backend" }
+if (-not (Test-Path -LiteralPath (Join-Path $frontendRoot "package.json"))) { $frontendRoot = Join-Path $operationsRoot "ionbeam-web\frontend" }
 $venvRoot = if ($env:IOBEAM_VENV) { [IO.Path]::GetFullPath($env:IOBEAM_VENV) } else { Join-Path $operationsRoot ".venv" }
 $python = Join-Path $venvRoot "Scripts\python.exe"
 $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
@@ -116,6 +116,10 @@ function Start-Stack {
     $env:GLASGOW_CONFIG = Join-Path $dataRoot "Json\streamData.json"
     $env:SBC_VACUUM_CONFIG = Join-Path $dataRoot "Json\vacuumSystem.json"
     if (-not $env:VACUUM_REDIS_SENTINELS) { $env:VACUUM_REDIS_SENTINELS = "127.0.0.1:26379" }
+    $env:SBC_VACUUM_PORT = "8766"
+    if (-not $env:VACUUM_EXECUTOR_ID) { $env:VACUUM_EXECUTOR_ID = "local-executor" }
+    if (-not $env:VACUUM_REDIS_MASTER) { $env:VACUUM_REDIS_MASTER = "mymaster" }
+    if (-not $env:VACUUM_REDIS_WAIT_REPLICAS) { $env:VACUUM_REDIS_WAIT_REPLICAS = "0" }
 
     Start-Managed "sbc-vacuum" $python @("-m", "glasgow_service.sbc_vacuum_app") $serviceRoot
     Wait-Http "SBC vacuum" "http://127.0.0.1:8766/health/ready"

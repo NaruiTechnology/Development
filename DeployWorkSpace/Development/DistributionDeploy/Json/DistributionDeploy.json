@@ -234,7 +234,7 @@
 				"skip": false,
 				"transactionComplete": false,
 				"actionData": {
-					"script": "glasgow_service\\deploy\\setup-redis-sentinel.ps1"
+					"script": "Development\\glasgow_service\\deploy\\setup-redis-sentinel.ps1"
 				},
 				"timeout": 600
 			}

@@ -5,6 +5,7 @@
 #-------------------------------------------------------------------------------
 import fnmatch
 import os
+import shutil
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -159,6 +160,41 @@ class unzipDistribution_state(executeShellCommand_state):
             elif filename == name:
                 return True
         return False
+
+    def _prepareDeployRoot(self, deployRoot):
+        """Create the deploy root, or safely remove each existing child."""
+        root = os.path.abspath(os.path.expanduser(str(deployRoot)))
+        if not self._isSafeDeployRoot(root):
+            self.error("[{}] refusing to clear unsafe deploy root: {}"
+                       .format(type(self).__name__, root))
+            return False
+
+        try:
+            if not os.path.exists(root):
+                os.makedirs(root, exist_ok=True)
+                self.info("[{}] created deploy root: {}"
+                          .format(type(self).__name__, root))
+                return True
+
+            if not os.path.isdir(root):
+                self.error("[{}] deploy root exists but is not a directory: {}"
+                           .format(type(self).__name__, root))
+                return False
+
+            for name in os.listdir(root):
+                path = os.path.join(root, name)
+                if os.path.isdir(path) and not os.path.islink(path):
+                    shutil.rmtree(path)
+                else:
+                    os.unlink(path)
+
+            self.info("[{}] cleared deploy root: {}"
+                      .format(type(self).__name__, root))
+            return True
+        except OSError as e:
+            self.error("[{}] could not prepare deploy root '{}': {}"
+                       .format(type(self).__name__, root, e))
+            return False
 
     @staticmethod
     def _isSafeDeployRoot(path):

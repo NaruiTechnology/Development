@@ -15,10 +15,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "Docker Desktop is installed, but its engine is not ready."
 }
 
-& $docker.Source network inspect $NetworkName *> $null
-if ($LASTEXITCODE -ne 0) {
+$existingNetwork = & $docker.Source network ls `
+    --filter "name=^${NetworkName}$" --format "{{.Name}}"
+if ($existingNetwork -notcontains $NetworkName) {
     & $docker.Source network create $NetworkName | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not create Docker network $NetworkName." }
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not create Docker network $NetworkName."
+    }
 }
 
 $runtimeRoot = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "Iobeam\Redis"
@@ -27,16 +30,18 @@ $sentinelConfig = Join-Path $runtimeRoot "sentinel.conf"
 @"
 port 26379
 dir /tmp
+sentinel resolve-hostnames yes
 sentinel monitor mymaster iobeam-redis 6379 1
 sentinel down-after-milliseconds mymaster 5000
 sentinel failover-timeout mymaster 10000
 sentinel parallel-syncs mymaster 1
-"@ | Set-Content -LiteralPath $sentinelConfig -Encoding utf8
+"@ | Set-Content -LiteralPath $sentinelConfig -Encoding ascii
 
 function Test-Container {
     param([string]$Name)
-    & $docker.Source inspect $Name *> $null
-    return $LASTEXITCODE -eq 0
+    $existingContainer = & $docker.Source container ls -a `
+        --filter "name=^/${Name}$" --format "{{.Names}}"
+    return $existingContainer -contains $Name
 }
 
 if (Test-Container "iobeam-redis") {
@@ -56,7 +61,7 @@ if (Test-Container "iobeam-sentinel") {
 } else {
     $sentinelArgs = @(
         "run", "-d", "--name", "iobeam-sentinel", "--network", $NetworkName,
-        "-p", "26379:26379", "-v", "$($mountPath):/etc/redis/sentinel.conf:ro",
+        "-p", "26379:26379", "-v", "$($mountPath):/etc/redis/sentinel.conf",
         $Image, "redis-server", "/etc/redis/sentinel.conf", "--sentinel"
     )
     & $docker.Source @sentinelArgs | Out-Null
@@ -64,10 +69,16 @@ if (Test-Container "iobeam-sentinel") {
 if ($LASTEXITCODE -ne 0) { throw "Could not start the iobeam-sentinel container." }
 
 for ($attempt = 0; $attempt -lt 40; $attempt++) {
-    & $docker.Source exec iobeam-redis redis-cli ping *> $null
-    $redisReady = $LASTEXITCODE -eq 0
-    & $docker.Source exec iobeam-sentinel redis-cli -p 26379 ping *> $null
-    $sentinelReady = $LASTEXITCODE -eq 0
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    try {
+        & $docker.Source exec iobeam-redis redis-cli ping *> $null
+        $redisReady = $LASTEXITCODE -eq 0
+        & $docker.Source exec iobeam-sentinel redis-cli -p 26379 ping *> $null
+        $sentinelReady = $LASTEXITCODE -eq 0
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
     if ($redisReady -and $sentinelReady) {
         Write-Host "Redis is ready on 127.0.0.1:6379; Sentinel is ready on 127.0.0.1:26379."
         exit 0
