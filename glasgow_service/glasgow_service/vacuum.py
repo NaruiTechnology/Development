@@ -182,6 +182,11 @@ class VacuumController:
                     **{pump.write: pump.power.lower() == "on" for pump in config.pumps},
                     config.high_voltage_transformer.write: False,
                 },
+                gauge_channels={
+                    pump.read: (pump.write, pump.threshold) for pump in config.pumps
+                },
+                error_range=config.error_range,
+                simulation_step_fraction=self.SIMULATION_STEP_FRACTION,
             )
         else:
             self.gpio = RaspberryPiGPIODevice(
@@ -203,7 +208,7 @@ class VacuumController:
             )
         if config.simulate and not isinstance(self.gpio, SimulatedVacuumDeviceControl):
             raise TypeError(
-                "simulation requires a device implementing write_comparator"
+                "simulation requires a device implementing set_gauge_ready"
             )
         self._states = {
             pump.name: VacuumPumpState(
@@ -270,7 +275,7 @@ class VacuumController:
                 state.ready = False
                 if self.config.simulate:
                     async with self._io_lock:
-                        await self.gpio.write_comparator(state.read, False)
+                        await self.gpio.set_gauge_ready(state.read, False)
                 if name != MECHANICAL_PUMP:
                     await self.set_power(name, False, automatic=True)
             await self.set_power(MECHANICAL_PUMP, True, automatic=True)
@@ -358,15 +363,13 @@ class VacuumController:
                 self._require_authority()
                 await self.gpio.write(state.write, power)
                 if self.config.simulate and not power:
-                    await self.gpio.write_comparator(state.read, False)
+                    await self.gpio.set_gauge_ready(state.read, False)
             state.power = power
             state.port_a_value = self.config.device.voltage if power else 0.0
             state.ready = False
             state.border = "waiting" if power else "off"
             state.port_b_value = 0.0
-            if self.config.simulate:
-                state.value = self._simulation_initial_value(state) if power else None
-            elif not power:
+            if not power:
                 state.value = None
             if not power:
                 self._simulation_reads[name] = False
@@ -407,13 +410,8 @@ class VacuumController:
             raise KeyError(name)
         self._simulation_reads[name] = checked
         state.simulation_read = checked
-        if checked and state.power:
-            # The simulation control represents the comparator's measured
-            # input reaching its configured reference; it does not bypass the
-            # comparator and force the digital output high.
-            state.value = abs(state.threshold)
-        elif name == MECHANICAL_PUMP and state.power:
-            state.value = self._simulation_initial_value(state)
+        async with self._io_lock:
+            await self.gpio.set_gauge_ready(state.read, checked)
         if name == MECHANICAL_PUMP and checked:
             self._cascade_stopped = False
         if name != MECHANICAL_PUMP and not checked:
@@ -435,9 +433,9 @@ class VacuumController:
             return
         self._simulation_reads[MECHANICAL_PUMP] = False
         async with self._io_lock:
-            await self.gpio.write_comparator(mechanical.read, False)
+            await self.gpio.set_gauge_ready(mechanical.read, False)
         mechanical.simulation_read = False
-        mechanical.value = self._simulation_initial_value(mechanical)
+        mechanical.value = None
         mechanical.port_b_value = 0.0
         mechanical.ready = False
         mechanical.border = "waiting" if mechanical.power else "off"
@@ -445,29 +443,11 @@ class VacuumController:
 
     async def poll_once(self) -> None:
         try:
-            readings: dict[str, int] = {}
-            if not self.config.simulate:
-                async with self._io_lock:
-                    readings = await self.gpio.read_port_b()
+            async with self._io_lock:
+                gauge_values = await self.gpio.read_gauge_values()
+                readings = await self.gpio.read_port_b()
             for state in self._states.values():
-                if self.config.simulate:
-                    if state.power:
-                        state.value = self._next_simulation_value(state)
-                        comparator_output = self._comparator_matches(
-                            state.value, state.threshold
-                        )
-                        async with self._io_lock:
-                            await self.gpio.write_comparator(state.read, comparator_output)
-                    else:
-                        async with self._io_lock:
-                            await self.gpio.write_comparator(state.read, False)
-                        state.value = None
-                else:
-                    state.value = None
-            if self.config.simulate:
-                async with self._io_lock:
-                    readings = await self.gpio.read_port_b()
-            for state in self._states.values():
+                state.value = gauge_values.get(state.read)
                 state.port_a_value = (
                     self.config.device.voltage if self.gpio.output_level(state.write) else 0.0
                 )
@@ -514,27 +494,11 @@ class VacuumController:
             self._cascade_stopped = True
             self._last_error = "; ".join(errors)
             for state in self._states.values():
+                state.value = None
                 state.port_b_value = 0.0
                 state.ready = False
                 if state.power:
                     state.border = "error"
-
-    @staticmethod
-    def _simulation_initial_value(state: VacuumPumpState) -> float:
-        return 1.5 * abs(state.threshold)
-
-    def _comparator_matches(self, measured: float, configured: float) -> bool:
-        target = abs(configured)
-        tolerance = target * self.config.error_range
-        return abs(measured - target) <= tolerance
-
-    def _next_simulation_value(self, state: VacuumPumpState) -> float:
-        target = abs(state.threshold)
-        current = state.value
-        if current is None:
-            return self._simulation_initial_value(state)
-        step = abs(state.threshold) * self.SIMULATION_STEP_FRACTION
-        return max(target, current - step)
 
     async def _advance_cascade(self) -> None:
         mechanical = self._states.get(MECHANICAL_PUMP)

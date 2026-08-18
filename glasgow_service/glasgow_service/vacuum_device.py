@@ -7,7 +7,9 @@ the vacuum-pressure/cascade model.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
+import inspect
+import math
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from typing import Protocol, runtime_checkable
 
 
@@ -19,6 +21,8 @@ class VacuumDevice(Protocol):
 
     async def read_port_b(self) -> dict[str, int]: ...
 
+    async def read_gauge_values(self) -> dict[str, float | None]: ...
+
     def output_level(self, pin: str) -> bool: ...
 
     async def close(self) -> None: ...
@@ -28,7 +32,7 @@ class VacuumDevice(Protocol):
 class SimulatedVacuumDeviceControl(Protocol):
     """Extra control surface used only by the deterministic plant model."""
 
-    async def write_comparator(self, pin: str, value: bool) -> None: ...
+    async def set_gauge_ready(self, pin: str, ready: bool) -> None: ...
 
     def reconnect(self) -> None: ...
 
@@ -47,10 +51,20 @@ class SimulatedVacuumDevice:
         input_pins: Iterable[str],
         *,
         initial_outputs: dict[str, bool] | None = None,
+        gauge_channels: Mapping[str, tuple[str, float]] | None = None,
+        error_range: float = 0.0,
+        simulation_step_fraction: float = 0.02,
     ) -> None:
         self._outputs = {pin: False for pin in output_pins}
         self._outputs.update(initial_outputs or {})
         self._inputs = {pin: False for pin in input_pins}
+        self._gauge_channels = dict(gauge_channels or {})
+        self._gauge_values: dict[str, float | None] = {
+            pin: None for pin in self._gauge_channels
+        }
+        self._forced_ready = {pin: False for pin in self._gauge_channels}
+        self._error_range = error_range
+        self._simulation_step_fraction = simulation_step_fraction
         self._connected = True
         self._closed = False
         self._next_failure: dict[str, BaseException] = {}
@@ -68,7 +82,7 @@ class SimulatedVacuumDevice:
         self._connected = True
 
     def fail_next(self, operation: str, error: BaseException | None = None) -> None:
-        if operation not in {"write", "read", "write_comparator", "close"}:
+        if operation not in {"write", "read", "set_gauge_ready", "close"}:
             raise ValueError(f"unknown simulated operation: {operation}")
         self._next_failure[operation] = error or RuntimeError(
             f"simulated {operation} failure"
@@ -79,14 +93,53 @@ class SimulatedVacuumDevice:
         if pin not in self._outputs:
             raise ValueError(f"unknown vacuum output pin: {pin}")
         self._outputs[pin] = bool(value)
+        for read_pin, (write_pin, threshold) in self._gauge_channels.items():
+            if write_pin != pin:
+                continue
+            if value:
+                if self._gauge_values[read_pin] is None:
+                    self._gauge_values[read_pin] = 1.5 * abs(threshold)
+            else:
+                self._gauge_values[read_pin] = None
+                self._forced_ready[read_pin] = False
+                self._inputs[read_pin] = False
         self.history.append(("write", pin, bool(value)))
 
-    async def write_comparator(self, pin: str, value: bool) -> None:
-        self._check("write_comparator")
-        if pin not in self._inputs:
-            raise ValueError(f"unknown comparator output pin: {pin}")
-        self._inputs[pin] = bool(value)
-        self.history.append(("write_comparator", pin, bool(value)))
+    async def set_gauge_ready(self, pin: str, ready: bool) -> None:
+        self._check("set_gauge_ready")
+        if pin not in self._gauge_channels:
+            raise ValueError(f"unknown simulated gauge pin: {pin}")
+        self._forced_ready[pin] = bool(ready)
+        _write_pin, threshold = self._gauge_channels[pin]
+        self._gauge_values[pin] = (
+            abs(threshold) if ready else 1.5 * abs(threshold)
+        )
+        self._inputs[pin] = bool(ready)
+        self.history.append(("set_gauge_ready", pin, bool(ready)))
+
+    async def read_gauge_values(self) -> dict[str, float | None]:
+        self._check("read")
+        readings: dict[str, float | None] = {}
+        for read_pin, (write_pin, threshold) in self._gauge_channels.items():
+            if not self._outputs[write_pin]:
+                value = None
+            elif self._forced_ready[read_pin]:
+                value = abs(threshold)
+            else:
+                current = self._gauge_values[read_pin]
+                if current is None:
+                    value = 1.5 * abs(threshold)
+                else:
+                    step = abs(threshold) * self._simulation_step_fraction
+                    value = max(abs(threshold), current - step)
+            self._gauge_values[read_pin] = value
+            readings[read_pin] = value
+            tolerance = abs(threshold) * self._error_range
+            self._inputs[read_pin] = (
+                value is not None and abs(value - abs(threshold)) <= tolerance
+            )
+        self.history.append(("read_gauges", None, None))
+        return readings
 
     async def read_port_b(self) -> dict[str, int]:
         self._check("read")
@@ -130,6 +183,9 @@ class RaspberryPiGPIODevice:
         initial_outputs: dict[str, bool] | None = None,
         active_high: bool = True,
         input_pull_up: bool | None = None,
+        gauge_reader: Callable[
+            [], Mapping[str, float | None] | Awaitable[Mapping[str, float | None]]
+        ] | None = None,
         gpio_factory=None,
     ) -> None:
         all_bcm = [*output_pins.values(), *input_pins.values()]
@@ -165,6 +221,7 @@ class RaspberryPiGPIODevice:
             name: gpio_factory("input", bcm, pull_up=input_pull_up)
             for name, bcm in input_pins.items()
         }
+        self._gauge_reader = gauge_reader
 
     async def write(self, pin: str, value: bool) -> None:
         try:
@@ -174,6 +231,33 @@ class RaspberryPiGPIODevice:
 
     async def read_port_b(self) -> dict[str, int]:
         return {name: int(device.value) for name, device in self._inputs.items()}
+
+    async def read_gauge_values(self) -> dict[str, float | None]:
+        """Read numeric gauges through an injected SBC hardware adapter.
+
+        GPIO comparator inputs remain usable when no analog/serial gauge
+        adapter is configured; in that case every channel has an unknown
+        numeric value.
+        """
+        if self._gauge_reader is None:
+            return {name: None for name in self._inputs}
+        result = self._gauge_reader()
+        if inspect.isawaitable(result):
+            result = await result
+        unknown = set(result) - set(self._inputs)
+        if unknown:
+            channels = ", ".join(sorted(unknown))
+            raise ValueError(f"gauge reader returned unknown channels: {channels}")
+        readings = {name: result.get(name) for name in self._inputs}
+        for name, value in readings.items():
+            if value is not None and (
+                not isinstance(value, (int, float)) or not math.isfinite(value)
+            ):
+                raise ValueError(f"gauge reader returned invalid value for {name}")
+        return {
+            name: None if value is None else float(value)
+            for name, value in readings.items()
+        }
 
     def output_level(self, pin: str) -> bool:
         try:

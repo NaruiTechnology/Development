@@ -7,6 +7,8 @@ Type=exec
 WorkingDirectory=@FRONTEND_ROOT@
 Environment=PATH=@NPM_DIR@:/usr/local/bin:/usr/bin:/bin
 ExecStart=@NPM_BIN@ run dev -- --host 127.0.0.1
+StandardOutput=append:@LOG_DIR@/ionbeam-web-frontend.log
+StandardError=append:@LOG_DIR@/ionbeam-web-frontend.log
 Restart=on-failure
 RestartSec=2
 KillSignal=SIGINT

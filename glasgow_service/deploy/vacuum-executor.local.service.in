@@ -10,6 +10,8 @@ WorkingDirectory=@SERVICE_ROOT@
 Environment=PYTHONPATH=@OPERATIONS_ROOT@/Development:@SERVICE_ROOT@
 EnvironmentFile=/etc/vacuum-executor.env
 ExecStart=@PYTHON_BIN@ -m glasgow_service.vacuum_executor_app
+StandardOutput=append:@LOG_DIR@/vacuum-executor.log
+StandardError=append:@LOG_DIR@/vacuum-executor.log
 Restart=always
 RestartSec=3
 KillSignal=SIGINT

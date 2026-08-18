@@ -17,6 +17,7 @@ BACKEND_UNIT="ionbeam-web-backend.service"
 FRONTEND_UNIT="ionbeam-web-frontend.service"
 BACKEND_ROOT="${OPERATIONS_ROOT}/Development/ionbeam-web/backend"
 FRONTEND_ROOT="${OPERATIONS_ROOT}/Development/ionbeam-web/frontend"
+LOG_DIR="${OPERATIONS_LOG_DIR:-${OPERATIONS_ROOT}/logs}"
 NPM_BIN="${NPM_BIN:-$(command -v npm || true)}"
 NPM_DIR="$(dirname -- "${NPM_BIN:-/usr/bin/npm}")"
 ACTION="${1:-restart}"
@@ -31,7 +32,8 @@ Usage: manage-local-system.sh [start|restart|stop|status|logs|install]
   logs           Follow logs for all five services (Ctrl-C exits)
   install        Install/reload/enable units without restarting running services
 
-Environment overrides: OPERATIONS_ROOT, OPERATIONS_VENV, ADMIN_USER.
+Log files are written under OPERATIONS_ROOT/logs.
+Environment overrides: OPERATIONS_ROOT, OPERATIONS_VENV, OPERATIONS_LOG_DIR, ADMIN_USER.
 EOF
 }
 
@@ -80,6 +82,7 @@ render() {
     -e "s|@NPM_DIR@|${NPM_DIR}|g" \
     -e "s|@BACKEND_ROOT@|${BACKEND_ROOT}|g" \
     -e "s|@FRONTEND_ROOT@|${FRONTEND_ROOT}|g" \
+    -e "s|@LOG_DIR@|${LOG_DIR}|g" \
     -e "s|@ADMIN_USER@|${ADMIN_USER}|g" \
     "$1"
 }
@@ -93,6 +96,12 @@ install_units() {
     echo "npm was not found; install Node.js/npm or set NPM_BIN." >&2
     exit 1
   }
+  install -d -m 0755 "${LOG_DIR}"
+  touch "${LOG_DIR}/glasgow-svc.log" \
+    "${LOG_DIR}/vacuum-executor.log" \
+    "${LOG_DIR}/sbc-vacuum.log" \
+    "${LOG_DIR}/ionbeam-web-backend.log" \
+    "${LOG_DIR}/ionbeam-web-frontend.log"
   local temp_dir
   temp_dir="$(mktemp -d)"
   trap 'rm -rf -- "${temp_dir}"' RETURN
@@ -214,13 +223,17 @@ case "${ACTION}" in
     show_status
     ;;
   logs)
-    echo "Showing recent user-service logs, then following system logs. Ctrl-C exits."
-    if [[ "$(id -un)" == "${ADMIN_USER}" ]]; then
-      journalctl --user -u "${SBC_UNIT}" -u "${BACKEND_UNIT}" -u "${FRONTEND_UNIT}" -n 80 --no-pager || true
-    else
-      sudo_cmd -u "${ADMIN_USER}" env XDG_RUNTIME_DIR="/run/user/${ADMIN_UID}" \
-        journalctl --user -u "${SBC_UNIT}" -u "${BACKEND_UNIT}" -u "${FRONTEND_UNIT}" -n 80 --no-pager || true
-    fi
-    sudo_cmd journalctl -u "${GLASGOW_UNIT}" -u "${EXECUTOR_UNIT}" -f
+    echo "Following service logs in ${LOG_DIR}. Ctrl-C exits."
+    touch "${LOG_DIR}/glasgow-svc.log" \
+      "${LOG_DIR}/vacuum-executor.log" \
+      "${LOG_DIR}/sbc-vacuum.log" \
+      "${LOG_DIR}/ionbeam-web-backend.log" \
+      "${LOG_DIR}/ionbeam-web-frontend.log"
+    tail -n 80 -F \
+      "${LOG_DIR}/glasgow-svc.log" \
+      "${LOG_DIR}/vacuum-executor.log" \
+      "${LOG_DIR}/sbc-vacuum.log" \
+      "${LOG_DIR}/ionbeam-web-backend.log" \
+      "${LOG_DIR}/ionbeam-web-frontend.log"
     ;;
 esac

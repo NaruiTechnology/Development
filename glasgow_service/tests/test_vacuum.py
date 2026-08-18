@@ -128,7 +128,7 @@ def test_simulated_vacuum_cascade_and_stop():
             assert controller.status().pumps[0].power is True
             assert controller.status().pumps[0].port_a_value == pytest.approx(3.3)
             assert controller.status().pumps[0].border == "waiting"
-            assert controller.status().pumps[0].value == pytest.approx(0.15)
+            assert controller.status().pumps[0].value is None
             assert controller.status().pumps[0].port_b_value == 0
             assert controller.gpio.output_level("A0") is True
             with pytest.raises(ValueError, match="requires the vacuum system to be ready"):
@@ -293,7 +293,7 @@ def test_reacquire_resets_simulated_cascade_to_initial_state():
             mechanical = states[MECHANICAL_PUMP]
             assert mechanical.power is True
             assert mechanical.border == "waiting"
-            assert mechanical.value == pytest.approx(0.15)
+            assert mechanical.value is None
             assert mechanical.port_b_value == 0
             assert mechanical.simulation_read is False
             assert all(
@@ -329,15 +329,6 @@ def test_simulated_comparator_goes_high_when_analog_value_reaches_tolerance():
             await controller.close()
 
     asyncio.run(scenario())
-
-
-def test_simulated_comparator_uses_half_percent_configured_value_window():
-    controller, _commands = simulated_controller()
-
-    assert controller._comparator_matches(0.10049, 0.1) is True
-    assert controller._comparator_matches(0.09951, 0.1) is True
-    assert controller._comparator_matches(0.10051, 0.1) is False
-    assert controller._comparator_matches(0.09949, 0.1) is False
 
 
 def test_vacuum_system_ready_requires_every_configured_port_b_pin_high():
@@ -389,6 +380,30 @@ def test_port_b_levels_are_reported_as_configured_pin_voltage():
         assert states["B2"].port_b_value == pytest.approx(config.device.voltage)
         assert states["B3"].port_b_value == 0.0
         assert controller.status().isVacuumSystemReady is False
+
+    asyncio.run(scenario())
+
+
+def test_numeric_gauge_values_flow_from_sbc_device_into_status():
+    async def scenario():
+        config = make_config(simulate=False)
+        device = SimulatedVacuumDevice(
+            (pump.write for pump in config.pumps),
+            (pump.read for pump in config.pumps),
+        )
+        controller = VacuumController(config, device=device)
+
+        async def fake_read_gauges() -> dict[str, float | None]:
+            return {"B0": 8.5e-2, "B1": 1.7e-3, "B2": 2.8e-5, "B3": None}
+
+        controller.gpio.read_gauge_values = fake_read_gauges
+        await controller.poll_once()
+        states = {state.read: state for state in controller.status().pumps}
+
+        assert states["B0"].value == pytest.approx(8.5e-2)
+        assert states["B1"].value == pytest.approx(1.7e-3)
+        assert states["B2"].value == pytest.approx(2.8e-5)
+        assert states["B3"].value is None
 
     asyncio.run(scenario())
 

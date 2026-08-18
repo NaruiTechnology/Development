@@ -10,6 +10,8 @@ Environment=PYTHONPATH=@OPERATIONS_ROOT@/Development:@SERVICE_ROOT@
 Environment=GLASGOW_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/streamData.json
 EnvironmentFile=-/etc/glasgow-svc.env
 ExecStart=@UVICORN_BIN@ glasgow_service.api:app --host 127.0.0.1 --port 8765
+StandardOutput=append:@LOG_DIR@/glasgow-svc.log
+StandardError=append:@LOG_DIR@/glasgow-svc.log
 Restart=on-failure
 RestartSec=2
 KillSignal=SIGINT
