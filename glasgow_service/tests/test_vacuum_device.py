@@ -1,5 +1,3 @@
-
-
 import asyncio
 from pathlib import Path
 
@@ -38,6 +36,7 @@ def test_raspberry_pi_device_maps_bcm_lines_and_reads_physical_state():
         assert device.output_level("A0") is True
         created[("input", 27)].value = True
         assert await device.read_port_b() == {"B0": 1, "B1": 0}
+        assert await device.read_gauge_values() == {"B0": None, "B1": None}
         await device.write("A1", True)
         assert created[("output", 22)].value is True
         # Mutating the fake driver proves output_level reads hardware state.
@@ -60,16 +59,25 @@ def test_raspberry_pi_device_rejects_duplicate_bcm_assignments():
 
 def test_simulated_device_is_deterministic_and_satisfies_protocol():
     async def scenario():
-        device = SimulatedVacuumDevice(["A0", "A1"], ["B0", "B1"])
+        device = SimulatedVacuumDevice(
+            ["A0", "A1"],
+            ["B0", "B1"],
+            gauge_channels={"B0": ("A0", 0.1), "B1": ("A1", 0.002)},
+            error_range=0.005,
+        )
         assert isinstance(device, VacuumDevice)
         await device.write("A0", True)
-        await device.write_comparator("B0", True)
+        values = await device.read_gauge_values()
+        assert values["B0"] == pytest.approx(0.148)
+        assert values["B1"] is None
+        await device.set_gauge_ready("B0", True)
         assert device.output_level("A0") is True
         assert device.output_level("A1") is False
         assert await device.read_port_b() == {"B0": 1, "B1": 0}
         assert device.history == [
             ("write", "A0", True),
-            ("write_comparator", "B0", True),
+            ("read_gauges", None, None),
+            ("set_gauge_ready", "B0", True),
             ("read", None, None),
         ]
 
@@ -114,9 +122,15 @@ def test_controller_accepts_injected_hardware_neutral_device():
             update={"enabled": True, "simulate": True, "error_range": 0.005},
         )
         device = SimulatedVacuumDevice(
-            [*(pump.write for pump in config.pumps),
-             config.high_voltage_transformer.write],
+            [
+                *(pump.write for pump in config.pumps),
+                config.high_voltage_transformer.write,
+            ],
             [pump.read for pump in config.pumps],
+            gauge_channels={
+                pump.read: (pump.write, pump.threshold) for pump in config.pumps
+            },
+            error_range=config.error_range,
         )
         controller = VacuumController(config, device=device)
         await controller.start()
@@ -126,5 +140,19 @@ def test_controller_accepts_injected_hardware_neutral_device():
             assert device.output_level("A1") is False
         finally:
             await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_raspberry_pi_device_exposes_injected_numeric_gauge_reader():
+    async def scenario():
+        device = RaspberryPiGPIODevice(
+            {"A0": 17},
+            {"B0": 27},
+            gauge_reader=lambda: {"B0": 1.25e-4},
+            gpio_factory=lambda *_args, **_kwargs: FakeGpioLine(),
+        )
+        values = await device.read_gauge_values()
+        assert values["B0"] == pytest.approx(1.25e-4)
 
     asyncio.run(scenario())

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAppDispatch, useAppSelector } from "../store";
 import { confirmROICalibration, updateROI } from "../store/scanSlice";
+import { saveDimensionCalibration } from "../store/dimensionCalibrationSlice";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { viewportBounds } from "../lib/roiGeometry";
 import { useTranslation, type TranslationKey } from "../i18n";
@@ -58,6 +59,17 @@ export function ROICalibrationCard({
   function confirmCalibration() {
     if (disabled || validation) return;
     clearBitmapSelectionCache();
+    dispatch(saveDimensionCalibration({
+      x_origin: roi.calibration_x_origin,
+      x_end: roi.calibration_x_end,
+      y_origin: roi.calibration_y_origin,
+      y_end: roi.calibration_y_end,
+      viewport_x_start: roi.calibration_viewport_x_start,
+      viewport_x_end: roi.calibration_viewport_x_end,
+      viewport_y_start: roi.calibration_viewport_y_start,
+      viewport_y_end: roi.calibration_viewport_y_end,
+      scale_unit: roi.scale_unit,
+    }));
     dispatch(confirmROICalibration());
   }
 

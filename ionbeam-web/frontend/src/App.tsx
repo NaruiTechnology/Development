@@ -61,7 +61,9 @@ import {
 import { completedROIImagePatch } from "./lib/roiWorkflow";
 
 import {
-  beginROICalibration,
+  beginDimensionCalibration,
+  applyPersistedDimensionCalibration,
+  restorePersistedDimensionCalibration,
   clearROISelection,
   clearROIScanImage,
   persistGrayScaleStepDelta,
@@ -134,6 +136,10 @@ export function App() {
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const dimensionCalibration = useAppSelector((s) => s.dimensionCalibration.values);
+  const hasPersistedDimensionCalibration = useAppSelector(
+    (s) => s.dimensionCalibration.persisted
+  );
   const roiStateRef = useRef(roiState);
   roiStateRef.current = roiState;
   const roiSelectionKey = roiState.selection
@@ -210,6 +216,15 @@ export function App() {
   useEffect(() => {
     dispatch(fetchDefaults());
   }, [dispatch]);
+
+  const dimensionCalibrationRestoredRef = useRef(false);
+  useEffect(() => {
+    if (dimensionCalibrationRestoredRef.current) return;
+    dimensionCalibrationRestoredRef.current = true;
+    if (!hasPersistedDimensionCalibration) return;
+    clearBitmapSelectionCache();
+    dispatch(restorePersistedDimensionCalibration(dimensionCalibration));
+  }, [dimensionCalibration, dispatch, hasPersistedDimensionCalibration]);
 
   useEffect(() => {
     if (route !== "vacuum" || serviceStatus === null || vacuumEnabled) return;
@@ -915,7 +930,11 @@ export function App() {
       if (kind !== "roi") {
         selectKind("roi");
       }
-      dispatch(beginROICalibration());
+      dispatch(
+        hasPersistedDimensionCalibration
+          ? applyPersistedDimensionCalibration(dimensionCalibration)
+          : beginDimensionCalibration(dimensionCalibration)
+      );
       return;
     }
     dispatch(updateROI({ calibration_enabled: false }));

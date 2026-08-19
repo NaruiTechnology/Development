@@ -10,6 +10,7 @@
     "src/lib/grayScaleUI.ts",
     "src/lib/roiDac.ts",
     "src/lib/roiGeometry.ts",
+    "src/lib/dimensionCalibrationPersistence.ts",
     "src/lib/roiWorkflow.ts",
     "src/lib/scanError.ts",
     "src/lib/scanRepeat.ts",

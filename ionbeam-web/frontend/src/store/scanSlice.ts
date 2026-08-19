@@ -16,6 +16,7 @@ import { fetchDefaults } from "./statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
+import type { DimensionCalibrationValues } from "../lib/dimensionCalibrationPersistence";
 
 export type ScanKind = "raster" | "vector" | "roi" | "mag";
 export type ScanPhase =
@@ -489,6 +490,72 @@ const slice = createSlice({
       s.roi.calibration_viewport_y_start = s.roi.viewport_y_start;
       s.roi.calibration_viewport_y_end = s.roi.viewport_y_end;
     },
+    beginDimensionCalibration(s, a: PayloadAction<DimensionCalibrationValues>) {
+      s.roi.calibration_enabled = true;
+      s.roi.calibration_confirmed = false;
+      s.roi.calibration_x_origin = a.payload.x_origin;
+      s.roi.calibration_x_end = a.payload.x_end;
+      s.roi.calibration_y_origin = a.payload.y_origin;
+      s.roi.calibration_y_end = a.payload.y_end;
+      s.roi.calibration_viewport_x_start = a.payload.viewport_x_start;
+      s.roi.calibration_viewport_x_end = a.payload.viewport_x_end;
+      s.roi.calibration_viewport_y_start = a.payload.viewport_y_start;
+      s.roi.calibration_viewport_y_end = a.payload.viewport_y_end;
+      s.roi.scale_unit = a.payload.scale_unit;
+    },
+    applyPersistedDimensionCalibration(s, a: PayloadAction<DimensionCalibrationValues>) {
+      const values = a.payload;
+      s.roi.calibration_enabled = true;
+      s.roi.calibration_x_origin = values.x_origin;
+      s.roi.calibration_x_end = values.x_end;
+      s.roi.calibration_y_origin = values.y_origin;
+      s.roi.calibration_y_end = values.y_end;
+      s.roi.calibration_viewport_x_start = values.viewport_x_start;
+      s.roi.calibration_viewport_x_end = values.viewport_x_end;
+      s.roi.calibration_viewport_y_start = values.viewport_y_start;
+      s.roi.calibration_viewport_y_end = values.viewport_y_end;
+      s.roi.x_origin = values.x_origin;
+      s.roi.x_end = values.x_end;
+      s.roi.y_origin = values.y_origin;
+      s.roi.y_end = values.y_end;
+      // Match the manual Confirm transition: the entered dimensions become
+      // the full active canvas mapping, while the saved wedge positions stay
+      // available in the calibration draft for later refinement.
+      s.roi.viewport_x_start = 0;
+      s.roi.viewport_x_end = 640;
+      s.roi.viewport_y_start = 0;
+      s.roi.viewport_y_end = 640;
+      s.roi.scale_unit = values.scale_unit;
+      s.roi.calibration_confirmed = true;
+      s.roi.selection = null;
+      s.raster.roi = null;
+      s.vector.roi = null;
+    },
+    restorePersistedDimensionCalibration(s, a: PayloadAction<DimensionCalibrationValues>) {
+      const values = a.payload;
+      s.roi.calibration_enabled = false;
+      s.roi.calibration_x_origin = values.x_origin;
+      s.roi.calibration_x_end = values.x_end;
+      s.roi.calibration_y_origin = values.y_origin;
+      s.roi.calibration_y_end = values.y_end;
+      s.roi.calibration_viewport_x_start = values.viewport_x_start;
+      s.roi.calibration_viewport_x_end = values.viewport_x_end;
+      s.roi.calibration_viewport_y_start = values.viewport_y_start;
+      s.roi.calibration_viewport_y_end = values.viewport_y_end;
+      s.roi.x_origin = values.x_origin;
+      s.roi.x_end = values.x_end;
+      s.roi.y_origin = values.y_origin;
+      s.roi.y_end = values.y_end;
+      s.roi.viewport_x_start = 0;
+      s.roi.viewport_x_end = 640;
+      s.roi.viewport_y_start = 0;
+      s.roi.viewport_y_end = 640;
+      s.roi.scale_unit = values.scale_unit;
+      s.roi.calibration_confirmed = true;
+      s.roi.selection = null;
+      s.raster.roi = null;
+      s.vector.roi = null;
+    },
     setROIGrayScaleSelection(
       s,
       a: PayloadAction<{ selection: GrayScaleSelection; isSkipped?: boolean | null; stepDelta?: number }>
@@ -663,6 +730,9 @@ export const {
   updateBeamEnergyEv,
   updateROI,
   beginROICalibration,
+  beginDimensionCalibration,
+  applyPersistedDimensionCalibration,
+  restorePersistedDimensionCalibration,
   confirmROICalibration,
   clearROIImage,
   clearROIScanImage,

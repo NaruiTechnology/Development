@@ -36,6 +36,15 @@ and a hardwired emergency chain that removes hazardous energy independently of
 Linux, Python, and the Raspberry Pi. Never drive pump loads, contactors, or
 solenoids directly from GPIO.
 
+Numeric gauge acquisition uses the same SBC device boundary in both modes.
+`VacuumController.poll_once()` calls `VacuumDevice.read_gauge_values()` and
+publishes the result as each pump's `value`. The deterministic SBC simulator
+owns the simulated pressure progression and drives its comparator inputs from
+those values. On hardware, `RaspberryPiGPIODevice` accepts a gauge adapter for
+the installed ADC or serial gauge protocol. Until an adapter is supplied,
+numeric values are `null` while the independent digital comparator/interlock
+path remains active.
+
 ## API
 
 Run `python -m glasgow_service.sbc_vacuum_app`. It exposes:
