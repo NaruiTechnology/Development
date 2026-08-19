@@ -1,4 +1,4 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore, createListenerMiddleware } from "@reduxjs/toolkit";
 import { useDispatch, useSelector, type TypedUseSelectorHook } from "react-redux";
 
 import statusReducer from "./statusSlice";
@@ -8,6 +8,10 @@ import themeReducer from "./themeSlice";
 import localeReducer from "./localeSlice";
 import settingsReducer from "./settingsSlice";
 import magCalibrationReducer from "./magCalibrationSlice";
+import dimensionCalibrationReducer, { saveDimensionCalibration } from "./dimensionCalibrationSlice";
+import { persistDimensionCalibration } from "../lib/dimensionCalibrationPersistence";
+
+const calibrationPersistence = createListenerMiddleware();
 
 export const store = configureStore({
   reducer: {
@@ -18,6 +22,7 @@ export const store = configureStore({
     locale: localeReducer,
     settings: settingsReducer,
     magCalibration: magCalibrationReducer,
+    dimensionCalibration: dimensionCalibrationReducer,
   },
   // The image slice carries large typed arrays (Uint16Array up to 8 MB for
   // the 2048x2048 vector render target) plus an ArrayBuffer of points for
@@ -50,11 +55,18 @@ export const store = configureStore({
           "image/resetVector",
         ],
       },
-    }),
+    }).prepend(calibrationPersistence.middleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
+
+calibrationPersistence.startListening({
+  actionCreator: saveDimensionCalibration,
+  effect: (action) => {
+    persistDimensionCalibration(action.payload);
+  },
+});
 
 export const useAppDispatch: () => AppDispatch = useDispatch;
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
