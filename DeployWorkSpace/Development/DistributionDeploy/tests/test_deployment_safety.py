@@ -1,3 +1,4 @@
+import asyncio
 import importlib.util
 import json
 import os
@@ -6,12 +7,14 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from workstates.unzipDistribution_state import unzipDistribution_state
+from workstates.createDeployFolder_state import createDeployFolder_state
 from workthreads.DistributionDeployThread import DistributionDeployThread
 
 
@@ -42,6 +45,42 @@ class DeployRootSafetyTests(unittest.TestCase):
             self.assertTrue(state._prepareDeployRoot(str(deploy)))
             self.assertTrue(marker.exists())
             self.assertFalse((deploy / "link").exists())
+
+
+class DeployRootLifecycleTests(unittest.TestCase):
+    def test_running_stack_is_stopped_before_deploy_root_is_cleared(self):
+        with tempfile.TemporaryDirectory() as parent:
+            deploy = Path(parent) / "IobeamPlatform"
+            deploy.mkdir()
+            parentThread = SimpleNamespace(
+                deployRoot=str(deploy),
+                GetStateConfig=lambda _state: {"timeout": 30.0},
+            )
+            state = createDeployFolder_state(parentThread)
+
+            events = []
+
+            async def stopStack(_deployRoot, _timeout):
+                events.append("stop")
+                return True
+
+            def clearDeployRoot(_deployRoot):
+                events.append("clear")
+                return True
+
+            with mock.patch.object(
+                state,
+                "_stopManagedWindowsStack",
+                side_effect=stopStack,
+            ), mock.patch.object(
+                unzipDistribution_state,
+                "_prepareDeployRoot",
+                side_effect=clearDeployRoot,
+            ):
+                asyncio.run(state.DoWork())
+
+            self.assertEqual(events, ["stop", "clear"])
+            self.assertTrue(state.Success)
 
 
 class WorkflowContractTests(unittest.TestCase):
