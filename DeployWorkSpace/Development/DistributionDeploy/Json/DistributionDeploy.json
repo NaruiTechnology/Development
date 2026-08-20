@@ -303,13 +303,19 @@
 				"transactionComplete": false,
 				"actionData": {
 					"commandFormat": "internal",
+					"remove": [
+						"IOBEAM_ADMIN_CONFIG",
+						"IOBEAM_ADMIN_DB_CONFIG",
+						"IOBEAM_ADMIN_DB_HOST",
+						"IOBEAM_ADMIN_DB_PORT",
+						"IOBEAM_ADMIN_DB_NAME",
+						"IOBEAM_ADMIN_DB_USER",
+						"IOBEAM_ADMIN_DB_PASSWORD",
+						"IOBEAM_ADMIN_DB_SSLMODE",
+						"IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS"
+					],
 					"exports": {
-						"GLASGOW_CONFIG": "C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
-						"IOBEAM_ADMIN_CONFIG": "C:\\Project\\Iobeam\\Deploy\\IobeamAdmin\\Json\\IobeamAdmin.json",
-						"IOBEAM_ADMIN_DB_HOST": "localhost",
-						"IOBEAM_ADMIN_DB_PORT": "5432",
-						"IOBEAM_ADMIN_DB_NAME": "iobeam_admin",
-						"IOBEAM_ADMIN_DB_USER": "postgres"
+						"GLASGOW_CONFIG": "C:\\Project\\Iobeam\\Deploy\\Development\\GlasgowDataIO\\Json\\streamData.json"
 					}
 				},
 				"timeout": 5
@@ -398,8 +404,8 @@
 					"command": "npm.cmd start",
 					"useNvm": false,
 					"exports": {
-						"GLASGOW_CONFIG": "C:\\Project\\Iobeam\\Deploy\\GlasgowDataIO\\Json\\streamData.json",
-						"IOBEAM_ADMIN_CONFIG": "C:\\Project\\Iobeam\\Deploy\\IobeamAdmin\\Json\\IobeamAdmin.json",
+						"GLASGOW_CONFIG": "C:\\Project\\Iobeam\\Deploy\\Development\\GlasgowDataIO\\Json\\streamData.json",
+						"IOBEAM_ADMIN_CONFIG": "C:\\Project\\Iobeam\\Deploy\\Development\\IobeamAdmin\\Json\\IobeamAdmin.json",
 						"IOBEAM_ADMIN_DB_HOST": "localhost",
 						"IOBEAM_ADMIN_DB_PORT": "5432",
 						"IOBEAM_ADMIN_DB_NAME": "iobeam_admin",

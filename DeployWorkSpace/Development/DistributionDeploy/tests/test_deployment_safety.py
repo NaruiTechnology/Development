@@ -13,6 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from workstates.exportEnv_state import exportEnv_state
 from workstates.unzipDistribution_state import unzipDistribution_state
 from workstates.createDeployFolder_state import createDeployFolder_state
 from workstates.manageLocalSystem_state import manageLocalSystem_state
@@ -112,6 +113,42 @@ class LocalSystemManagerTests(unittest.TestCase):
             self.assertTrue((deploy / "Logs" / "manage-local-system.log").is_file())
 
 
+class ExportEnvironmentTests(unittest.TestCase):
+    def test_stale_values_are_removed_before_exports_are_written(self):
+        parentThread = SimpleNamespace(
+            GetStateConfig=lambda _state: {
+                "actionData": {
+                    "remove": ["IOBEAM_TEST_STALE"],
+                    "exports": {"IOBEAM_TEST_KEEP": "C:\\fresh"},
+                },
+            },
+        )
+        state = exportEnv_state(parentThread)
+        registryKey = mock.MagicMock()
+        registryContext = mock.MagicMock()
+        registryContext.__enter__.return_value = registryKey
+
+        with mock.patch.dict(
+            os.environ,
+            {"IOBEAM_TEST_STALE": "old"},
+            clear=False,
+        ), mock.patch(
+            "workstates.exportEnv_state.winreg.CreateKey",
+            return_value=registryContext,
+        ), mock.patch(
+            "workstates.exportEnv_state.winreg.DeleteValue",
+        ) as deleteValue, mock.patch(
+            "workstates.exportEnv_state.winreg.SetValueEx",
+        ) as setValue:
+            asyncio.run(state.DoWork())
+            self.assertNotIn("IOBEAM_TEST_STALE", os.environ)
+            self.assertEqual(os.environ["IOBEAM_TEST_KEEP"], "C:\\fresh")
+
+        deleteValue.assert_called_once_with(registryKey, "IOBEAM_TEST_STALE")
+        self.assertEqual(setValue.call_args.args[-1], "C:\\fresh")
+        self.assertTrue(state.Success)
+
+
 class WorkflowContractTests(unittest.TestCase):
     def tearDown(self):
         try:
@@ -157,6 +194,20 @@ class WorkflowContractTests(unittest.TestCase):
             "launchIonbeamWebFrontend",
         ):
             self.assertTrue(actions[legacy]["skip"])
+
+    def test_admin_environment_is_cleared_for_backend_dotenv(self):
+        payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+        actions = {name: cfg for item in payload["Actions"] for name, cfg in item.items()}
+        actionData = actions["exportEnv"]["actionData"]
+        removals = set(actionData["remove"])
+
+        self.assertIn("IOBEAM_ADMIN_CONFIG", removals)
+        self.assertIn("IOBEAM_ADMIN_DB_CONFIG", removals)
+        self.assertIn("IOBEAM_ADMIN_DB_HOST", removals)
+        self.assertFalse(
+            any(name.startswith("IOBEAM_ADMIN_")
+                for name in actionData["exports"])
+        )
 
     def test_every_enabled_action_has_an_importable_workstate(self):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())

@@ -18,13 +18,27 @@ class exportEnv_state(distributionDeploy_state):
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             exports = actionData.get("exports", {}) or {}
-            if not exports:
+            removals = actionData.get("remove", []) or []
+            if isinstance(removals, str):
+                removals = [removals]
+            if not exports and not removals:
                 self.info("[{}] no environment values declared."
                           .format(type(self).__name__))
                 self._success = True
                 return
 
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                for rawName in removals:
+                    name = str(rawName).strip()
+                    if not name:
+                        continue
+                    os.environ.pop(name, None)
+                    try:
+                        winreg.DeleteValue(key, name)
+                    except FileNotFoundError:
+                        pass
+                    self.info("[{}] removed {} from the current-user environment"
+                              .format(type(self).__name__, name))
                 for name, rawValue in exports.items():
                     value = str(self.resolveEnvValue(rawValue))
                     os.environ[str(name)] = value
