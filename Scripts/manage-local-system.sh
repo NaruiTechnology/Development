@@ -15,6 +15,7 @@ EXECUTOR_UNIT="vacuum-executor.service"
 SBC_UNIT="sbc-vacuum.service"
 BACKEND_UNIT="ionbeam-web-backend.service"
 FRONTEND_UNIT="ionbeam-web-frontend.service"
+POLKIT_RULE="60-ionbeam-glasgow-restart.rules"
 BACKEND_ROOT="${OPERATIONS_ROOT}/Development/ionbeam-web/backend"
 FRONTEND_ROOT="${OPERATIONS_ROOT}/Development/ionbeam-web/frontend"
 LOG_DIR="${OPERATIONS_LOG_DIR:-${OPERATIONS_ROOT}/logs}"
@@ -122,6 +123,8 @@ install_units() {
 
   sudo_cmd install -m 0644 "${temp_dir}/${GLASGOW_UNIT}" "/etc/systemd/system/${GLASGOW_UNIT}"
   sudo_cmd install -m 0644 "${temp_dir}/${EXECUTOR_UNIT}" "/etc/systemd/system/${EXECUTOR_UNIT}"
+  sudo_cmd install -d -m 0755 /etc/polkit-1/rules.d
+  sudo_cmd install -m 0644 "${DEPLOY_DIR}/${POLKIT_RULE}" "/etc/polkit-1/rules.d/${POLKIT_RULE}"
   install -d -m 0755 "${USER_SYSTEMD_DIR}"
   install -m 0644 "${temp_dir}/${SBC_UNIT}" "${USER_SYSTEMD_DIR}/${SBC_UNIT}"
   install -m 0644 "${temp_dir}/${BACKEND_UNIT}" "${USER_SYSTEMD_DIR}/${BACKEND_UNIT}"

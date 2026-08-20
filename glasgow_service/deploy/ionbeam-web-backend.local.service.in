@@ -6,7 +6,7 @@ After=network-online.target
 Type=exec
 WorkingDirectory=@BACKEND_ROOT@
 Environment=GLASGOW_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/streamData.json
-Environment=GLASGOW_RESTART_CMD=@OPERATIONS_ROOT@/Scripts/restart-glasgow-service.sh
+Environment=GLASGOW_RESTART_CMD=@BACKEND_ROOT@/scripts/restart-glasgow-service.sh
 Environment=PATH=@NPM_DIR@:/usr/local/bin:/usr/bin:/bin
 ExecStart=@NPM_BIN@ run dev
 StandardOutput=append:@LOG_DIR@/ionbeam-web-backend.log

@@ -37,6 +37,23 @@ class DeployRootSafetyTests(unittest.TestCase):
             self.assertTrue(marker.exists())
             self.assertFalse((deploy / "link").exists())
 
+    def test_all_extracted_shell_scripts_become_executable(self):
+        with tempfile.TemporaryDirectory() as parent:
+            deploy = Path(parent) / "IobeamPlatform"
+            scripts = deploy / "nested"
+            scripts.mkdir(parents=True)
+            shell_script = scripts / "runtime.sh"
+            shell_script.write_text("#!/usr/bin/env bash\n")
+            shell_script.chmod(0o644)
+            ordinary_file = scripts / "settings.json"
+            ordinary_file.write_text("{}")
+            ordinary_file.chmod(0o644)
+
+            state = unzipDistribution_state(None)
+            self.assertEqual(state._makeShellScriptsExecutable(str(deploy)), 1)
+            self.assertTrue(shell_script.stat().st_mode & 0o111)
+            self.assertFalse(ordinary_file.stat().st_mode & 0o111)
+
 
 class WorkflowContractTests(unittest.TestCase):
     def tearDown(self):
@@ -98,6 +115,26 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("Scripts", module.COPY_TREES)
         self.assertIn("*.service.in", module.ASSET_PATTERNS)
         self.assertIn("*.env.in", module.ASSET_PATTERNS)
+        self.assertIn("*.rules", module.ASSET_PATTERNS)
+
+    def test_builder_makes_every_shell_script_executable(self):
+        builder_path = ROOT.parents[2] / "buidCompiledDist.py"
+        spec = importlib.util.spec_from_file_location("distribution_builder", builder_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as parent:
+            root = Path(parent)
+            first = root / "first.sh"
+            second = root / "nested" / "second.sh"
+            second.parent.mkdir()
+            first.write_text("#!/bin/sh\n")
+            second.write_text("#!/bin/sh\n")
+            first.chmod(0o644)
+            second.chmod(0o600)
+
+            self.assertEqual(module.make_shell_scripts_executable(str(root)), 2)
+            self.assertTrue(first.stat().st_mode & 0o111)
+            self.assertTrue(second.stat().st_mode & 0o111)
 
 
 if __name__ == "__main__":

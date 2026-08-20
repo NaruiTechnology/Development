@@ -96,6 +96,9 @@ class unzipDistribution_state(executeShellCommand_state):
 
             if self._success:
                 self._makeDeployTreeReadable(deployRoot)
+                scriptCount = self._makeShellScriptsExecutable(deployRoot)
+                self.info("[{}] granted executable permission to {} shell script(s)"
+                          .format(type(self).__name__, scriptCount))
                 self.info("[{}] OK".format(type(self).__name__))
             else:
                 self.error("[{}] FAILED. stderr:\n{}"
@@ -227,6 +230,25 @@ class unzipDistribution_state(executeShellCommand_state):
             self.warn("[{}] chmod a+rX failed for '{}': {}"
                       .format(type(self).__name__, root,
                               proc.stderr.strip() or "<no stderr>"))
+
+    def _makeShellScriptsExecutable(self, root):
+        """Ensure archive mode loss cannot leave runtime scripts unusable."""
+        root = os.path.abspath(os.path.expanduser(str(root)))
+        if not self._isSafeDeployRoot(root):
+            raise ValueError("refusing to chmod shell scripts outside deploy root: {}"
+                             .format(root))
+
+        updated = 0
+        for dirpath, _, filenames in os.walk(root):
+            for filename in filenames:
+                if not filename.endswith(".sh"):
+                    continue
+                path = os.path.join(dirpath, filename)
+                if os.path.islink(path):
+                    continue
+                os.chmod(path, os.stat(path).st_mode | 0o111)
+                updated += 1
+        return updated
 
     @staticmethod
     def _isSafeDeployRoot(path):

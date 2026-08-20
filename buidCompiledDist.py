@@ -21,7 +21,7 @@ REQUIRED_LOCAL_REDIS_APT_PACKAGES = (
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = [
     '*.ihex', '*.toml', 'requirements.txt', 'README.md', '*.service',
-    '*.service.in', '*.env.example', '*.env.in', '*.sh'
+    '*.service.in', '*.env.example', '*.env.in', '*.sh', '*.rules'
 ]
 
 # Files to exclude from any copied tree or asset sweep.
@@ -247,6 +247,23 @@ def validate_packaged_local_system_manager(dist_dir):
           'Development/Scripts/manage-local-system.sh')
 
 
+def make_shell_scripts_executable(root):
+    """Grant runtime execute permission to every packaged shell script."""
+    updated = 0
+    for dirpath, _, filenames in os.walk(root):
+        for filename in filenames:
+            if not filename.endswith('.sh'):
+                continue
+            path = os.path.join(dirpath, filename)
+            if os.path.islink(path):
+                continue
+            mode = os.stat(path).st_mode
+            os.chmod(path, mode | 0o111)
+            updated += 1
+    print(f'Granted executable permission to {updated} packaged shell script(s).')
+    return updated
+
+
 def _tree_copy_ignore_for(rel_tree):
     """Return a per-tree ignore callback.
 
@@ -411,6 +428,7 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
 
     # The script must retain Development/Scripts depth so its ../.. root
     # discovery resolves to DeployRoot.
+    make_shell_scripts_executable(dist_dir)
     validate_packaged_local_system_manager(dist_dir)
 
     # 6. Zip the output content (distinct names so raw/compiled don't overwrite)
