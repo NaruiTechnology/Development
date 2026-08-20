@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 from workstates.unzipDistribution_state import unzipDistribution_state
 from workstates.createDeployFolder_state import createDeployFolder_state
+from workstates.manageLocalSystem_state import manageLocalSystem_state
 from workthreads.DistributionDeployThread import DistributionDeployThread
 
 
@@ -81,6 +82,34 @@ class DeployRootLifecycleTests(unittest.TestCase):
 
             self.assertEqual(events, ["stop", "clear"])
             self.assertTrue(state.Success)
+
+
+class LocalSystemManagerTests(unittest.TestCase):
+    def test_manager_output_uses_file_instead_of_asyncio_pipes(self):
+        with tempfile.TemporaryDirectory() as parent:
+            deploy = Path(parent) / "IobeamPlatform"
+            deploy.mkdir()
+            parentThread = SimpleNamespace(deployRoot=str(deploy))
+            state = manageLocalSystem_state(parentThread)
+            fakeProcess = SimpleNamespace(
+                returncode=0,
+                pid=123,
+                wait=mock.AsyncMock(return_value=0),
+            )
+            args = ["powershell.exe", "-NoProfile", "stop"]
+
+            launcher = mock.AsyncMock(return_value=fakeProcess)
+            with mock.patch(
+                "workstates.manageLocalSystem_state.asyncio.create_subprocess_exec",
+                new=launcher,
+            ):
+                success = asyncio.run(state._runManager(args, timeout=1.0))
+
+            self.assertTrue(success)
+            kwargs = launcher.await_args.kwargs
+            self.assertIsNot(kwargs["stdout"], asyncio.subprocess.PIPE)
+            self.assertEqual(kwargs["stderr"], asyncio.subprocess.STDOUT)
+            self.assertTrue((deploy / "Logs" / "manage-local-system.log").is_file())
 
 
 class WorkflowContractTests(unittest.TestCase):
