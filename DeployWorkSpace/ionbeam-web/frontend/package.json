@@ -7,9 +7,9 @@
   "scripts": {
     "sync:allowed-hosts": "node scripts/sync-allowed-hosts.mjs",
     "dev": "npm run sync:allowed-hosts && vite",
-    "dev:mobility": "npm run sync:allowed-hosts && set \u0022VITE_MOBILITY_ONLY=1\u0022 && vite",
+    "dev:mobility": "npm run sync:allowed-hosts && set \"VITE_MOBILITY_ONLY=1\" && vite",
     "build": "tsc -b && npm run sync:allowed-hosts && vite build",
-    "build:mobility": "tsc -b && npm run sync:allowed-hosts && set \u0022VITE_MOBILITY_ONLY=1\u0022 && vite build",
+    "build:mobility": "tsc -b && npm run sync:allowed-hosts && set \"VITE_MOBILITY_ONLY=1\" && vite build",
     "test": "npm run test:compile && node --test tests/*.test.mjs",
     "test:compile": "node scripts/clean-test-dist.mjs && tsc -p tsconfig.test.json",
     "preview": "vite preview",
@@ -24,8 +24,8 @@
   "devDependencies": {
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-react": "^6.0.5",
     "typescript": "^5.4.5",
-    "vite": "^8.0.13"
+    "vite": "^8.2.1"
   }
 }
