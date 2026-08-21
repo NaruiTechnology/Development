@@ -886,7 +886,7 @@ function VectorTab({ draft }: { draft: unknown }) {
  * strobes plus d_clock) - their *names* are dictated by BusController
  * and shouldn't be edited at runtime. We render `name` as a read-only
  * label, `pin` as a text input, `direction` as a select, and `invert`
- * as a checkbox.
+ * as a sliding switch.
  *
  * Adding rows is intentionally NOT supported: build_iobeam_resources()
  * silently skips entries whose `name` isn't on the catalogue. Removing
@@ -972,13 +972,21 @@ function PinsTab({ draft, disabled = false }: { draft: unknown; disabled?: boole
               <option value="io">{t("settings.pins.dir.io")}</option>
               <option value="oe">{t("settings.pins.dir.oe")}</option>
             </select>
-            <input
-              type="checkbox"
+            <label
+              className="vacuum-switch settings-switch settings-switch--table"
               role="cell"
-              checked={Boolean(row?.invert)}
-              disabled={disabled}
-              onChange={(e) => setSubsignalField(i, "invert", e.target.checked)}
-            />
+            >
+              <input
+                type="checkbox"
+                aria-label={`${row?.name ?? `subsignal ${i + 1}`} ${t("settings.pins.col.invert")}`}
+                checked={Boolean(row?.invert)}
+                disabled={disabled}
+                onChange={(e) => setSubsignalField(i, "invert", e.target.checked)}
+              />
+              <span className="vacuum-switch__track">
+                <span className="vacuum-switch__thumb" />
+              </span>
+            </label>
           </div>
         ))}
       </div>
@@ -2826,7 +2834,7 @@ function AdminUsersTable({
               inputMode="numeric"
               ariaLabel={t("settings.admin.user.sessionLifetimeDays")}
             />
-            <label className="settings-admin-table__check">
+            <label className="settings-admin-table__check vacuum-switch settings-switch">
               <input
                 aria-label={t("settings.admin.user.active")}
                 type="checkbox"
@@ -2834,6 +2842,9 @@ function AdminUsersTable({
                 disabled={disabled}
                 onChange={(e) => onUpdate(index, "is_active", e.target.checked)}
               />
+              <span className="vacuum-switch__track">
+                <span className="vacuum-switch__thumb" />
+              </span>
             </label>
             <div className="settings-admin-table__actions">
               {rowExistsInDb ? (
@@ -3514,12 +3525,15 @@ function CheckboxField({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="settings-checkbox">
+    <label className="settings-checkbox vacuum-switch settings-switch">
       <input
         type="checkbox"
         checked={value}
         onChange={(e) => onChange(e.target.checked)}
       />
+      <span className="vacuum-switch__track">
+        <span className="vacuum-switch__thumb" />
+      </span>
       <span>{label}</span>
       {help}
     </label>

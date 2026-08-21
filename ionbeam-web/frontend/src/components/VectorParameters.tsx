@@ -277,24 +277,26 @@ export function VectorParameters({
         {t("card.validatedRunOptions")}
       </div>
 
-      <label className="checkbox">
+      <label className="checkbox vacuum-switch app-switch">
         <input
           type="checkbox"
           checked={v.pre_process}
           disabled={disabled}
           onChange={(e) => dispatch(updateVector({ pre_process: e.target.checked }))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("vector.preProcess")}
         <PreProcessHelp />
       </label>
 
-      <label className="checkbox">
+      <label className="checkbox vacuum-switch app-switch">
         <input
           type="checkbox"
           checked={v.do_validate}
           disabled={disabled}
           onChange={(e) => dispatch(updateVector({ do_validate: e.target.checked }))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("vector.doValidate")}
         <ValidationHelp />
       </label>

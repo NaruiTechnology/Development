@@ -641,7 +641,7 @@ export function ScanControls({
         <div className="scan-loop-controls">
           <div className="scan-loop-controls__preview">
             <label
-              className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+              className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
               title={t("scan.preview.title")}
             >
               <input
@@ -650,6 +650,7 @@ export function ScanControls({
                 disabled={controlsDisabled || roiEbeamDisabled}
                 onChange={(event) => dispatch(setPreview(event.target.checked))}
               />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
               {preview && <Icon name="alertTriangle" tone="warn" />}
               <span>{t("scan.preview")}</span>
             </label>
@@ -728,7 +729,7 @@ export function ScanControls({
         </select>
       </label>
           <label
-            className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+            className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
             title={t("scan.preview.title")}
           >
         <input
@@ -737,6 +738,7 @@ export function ScanControls({
           disabled={controlsDisabled || kind === "roi"}
           onChange={(event) => dispatch(setPreview(event.target.checked))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {preview && <Icon name="alertTriangle" tone="warn" />}
         <span>{t("scan.preview")}</span>
           </label>

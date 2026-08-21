@@ -184,7 +184,7 @@ export function ValidationPanel({
         <span className="muted" style={{ fontSize: 12 }}>
           {downloadDirLabel}
         </span>
-        <label className="checkbox" style={{ padding: 0 }}>
+        <label className="checkbox vacuum-switch app-switch" style={{ padding: 0 }}>
           <input
             type="checkbox"
             checked={autoDownload}
@@ -194,6 +194,7 @@ export function ValidationPanel({
               setAutoErr(null);
             }}
           />
+          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
           {t("validation.autoDownload")}
         </label>
       </div>

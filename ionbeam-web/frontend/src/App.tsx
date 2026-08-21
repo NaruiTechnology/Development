@@ -466,39 +466,42 @@ export function App() {
   });
   const gridLineToggle =
     kind === "roi" ? (
-      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
+      <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.show_grid}
           disabled={panelDisabled}
           onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("roi.showGrid")}
       </label>
     ) : kind === "raster" ? (
-      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
+      <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.raster_show_grid}
           disabled={panelDisabled}
           onChange={(e) => dispatch(updateROI({ raster_show_grid: e.target.checked }))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("roi.showGrid")}
       </label>
     ) : kind === "vector" ? (
-      <label className="checkbox canvas-grid-toggle canvas-grid-toggle--grid">
+      <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
         <input
           type="checkbox"
           checked={roiState.vector_show_grid}
           disabled={panelDisabled}
           onChange={(e) => dispatch(updateROI({ vector_show_grid: e.target.checked }))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("roi.showGrid")}
       </label>
     ) : null;
   const scanPathToggle =
     kind === "vector" || (kind === "roi" && hasPartialROI) ? (
-    <label className="checkbox canvas-grid-toggle canvas-scan-path-toggle">
+    <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-scan-path-toggle">
       <input
         type="checkbox"
         checked={roiState.vector_show_scan_path}
@@ -507,6 +510,7 @@ export function App() {
           dispatch(updateROI({ vector_show_scan_path: e.target.checked }))
         }
       />
+      <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
       {t("vector.displayScanPath")}
     </label>
     ) : null;
@@ -1292,13 +1296,14 @@ export function App() {
                   {gridLineToggle}
                   {scanPathToggle}
                   {kind === "vector" && (
-                    <label className="checkbox canvas-grid-toggle vector-gray-level-toggle">
+                    <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">
                       <input
                         type="checkbox"
                         checked={vectorGrayLevelsEnabled}
                         disabled={panelDisabled}
                         onChange={(event) => handleVectorGrayLevelsToggle(event.target.checked)}
                       />
+                      <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
                       {t("vector.grayLevels")}
                       <VectorGrayLevelHelp />
                     </label>
