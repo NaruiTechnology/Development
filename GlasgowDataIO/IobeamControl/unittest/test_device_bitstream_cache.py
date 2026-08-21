@@ -1,0 +1,44 @@
+import unittest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import GlasgowDevice
+
+
+class DownloadTargetCacheTestCase(unittest.IsolatedAsyncioTestCase):
+    async def test_matching_image_is_reused_without_build_or_download(self):
+        image_id = bytes.fromhex("00112233445566778899aabbccddeeff")
+        device = object.__new__(GlasgowDevice)
+        device.bitstream_id = AsyncMock(return_value=image_id)
+        device.download_bitstream = AsyncMock()
+        plan = SimpleNamespace(
+            bitstream_id=image_id,
+            get_bitstream=AsyncMock(return_value=b"bitstream"),
+        )
+
+        programmed = await device.download_target(plan)
+
+        self.assertFalse(programmed)
+        plan.get_bitstream.assert_not_awaited()
+        device.download_bitstream.assert_not_awaited()
+
+    async def test_changed_image_is_built_and_downloaded(self):
+        image_id = bytes.fromhex("00112233445566778899aabbccddeeff")
+        bitstream = b"bitstream"
+        device = object.__new__(GlasgowDevice)
+        device.bitstream_id = AsyncMock(return_value=b"different-image")
+        device.download_bitstream = AsyncMock()
+        plan = SimpleNamespace(
+            bitstream_id=image_id,
+            get_bitstream=AsyncMock(return_value=bitstream),
+        )
+
+        programmed = await device.download_target(plan)
+
+        self.assertTrue(programmed)
+        plan.get_bitstream.assert_awaited_once_with()
+        device.download_bitstream.assert_awaited_once_with(bitstream, image_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

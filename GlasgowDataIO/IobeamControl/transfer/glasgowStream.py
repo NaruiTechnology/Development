@@ -142,25 +142,11 @@ class GlasgowConnection(Connection):
     async def _post_transfer_cleanup(self):
         """Tear down and rebuild the connection between transfers.
 
-        Why we don't just call iface.reset() here:
-        --------------------------------------------------------------------
-        iface.reset() cycles only the demultiplexer's ResetInserter, which
-        wraps the multiplexer subtarget. Empirically that is NOT enough to
-        revive the applet's command parser between scans — after a reset
-        the FPGA accepts a SynchronizeCommand byte stream but never produces
-        the cookie response, and the host hits a 20s readuntil timeout in
-        Connection._synchronize().
-
-        The behavior of "kill uvicorn, restart it" is the only proven way
-        to recover the data path. So that's what we do here: a full
-        disconnect (with proper USB handle release) followed by a fresh
-        IobeamLauncher run on the next transfer.
-
-        Cost: each transfer now pays the FPGA flash + voltage settle time
-        (~5 seconds — see IobeamLauncher.run()). For interactive scanning
-        this is acceptable; for high-throughput batch scanning it isn't,
-        and the right fix would be in the applet itself (e.g., adding a
-        soft-reset register that cycles only the command parser).
+        A full disconnect releases the USB handle and cancels every pending
+        transfer. On the next IobeamLauncher run, download_target() reuses a
+        matching FPGA image, while DirectDemultiplexerInterface._activate()
+        pulses the gateware reset so the command parser and FIFOs start clean.
+        A changed image is still synthesized and programmed normally.
 
         Idempotency: this is called from `finally` blocks. If the stream
         is already torn down (prior cleanup, exception during _connect),

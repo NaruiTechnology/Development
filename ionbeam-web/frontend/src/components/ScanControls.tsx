@@ -326,16 +326,32 @@ export function ScanControls({
         const hasGrayFilter =
           scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
         if (hasGrayFilter) {
-          const req = await vectorRequestWithROIGrayScaleAction(
-            { ...vector, roi },
-            roiState,
-            {
-              grayScaleSelection: scanGrayScaleSelection,
-              grayScaleSkipped: scanGrayScaleSkipped,
-            }
-          );
+          // Production must make the gray decision from the live 14-bit ADC,
+          // not from the loaded ROI reference bitmap. Simulation keeps the
+          // bitmap-derived custom point path because it has no physical ADC.
+          const adaptiveProductionFilter = isProduction && vectorPixelFallbackBlank;
+          const req = adaptiveProductionFilter
+            ? await vectorRequestWithAdaptiveGrayFeedback(
+                { ...vector, roi },
+                roiState,
+                {
+                  grayScaleSelection: scanGrayScaleSelection,
+                  grayScaleSkipped: scanGrayScaleSkipped,
+                }
+              )
+            : await vectorRequestWithROIGrayScaleAction(
+                { ...vector, roi },
+                roiState,
+                {
+                  grayScaleSelection: scanGrayScaleSelection,
+                  grayScaleSkipped: scanGrayScaleSkipped,
+                }
+              );
+          const grayFilterScanType = adaptiveProductionFilter
+            ? ScanType.VECTOR_ADAPTIVE_GRAN_FEED_BLANK
+            : ScanType.CUSTOM_GRAY_FEEDBACK_BLANK;
           if (Math.trunc(repeat) > 1) {
-            startActionLoop(req, ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
+            startActionLoop(req, grayFilterScanType);
             dispatch(setRetainVectorFeedbackOnComplete(false));
           } else {
             clearActionLoopState();
@@ -343,7 +359,7 @@ export function ScanControls({
           }
           dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
-          onScanRunStart?.(ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
+          onScanRunStart?.(grayFilterScanType);
           stream.startVector({ ...req, preview });
         } else {
           const req = await vectorRequestWithBitmapSelection(

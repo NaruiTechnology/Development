@@ -532,15 +532,18 @@ class GlasgowDevice:
                     "on community channels")
                         
     async def download_target(self, plan, *, reload=False):
+        """Ensure ``plan`` is running and return whether it was programmed."""
         if await self.bitstream_id() == plan.bitstream_id and not reload:
             logger.info("device already has bitstream ID %s", plan.bitstream_id.hex())
-            return
+            return False
         logger.info("generating bitstream ID %s", plan.bitstream_id.hex())
         
         # await self.download_bitstream(plan.get_bitstream(), plan.bitstream_id)    #TODO     
         bitstream = await plan.get_bitstream()
         if bitstream:
             await self.download_bitstream(bitstream, plan.bitstream_id)
+            return True
+        return False
             
     async def download_prebuilt(self, plan, bitstream_file):
         bitstream_file_id = bitstream_file.read(16)
