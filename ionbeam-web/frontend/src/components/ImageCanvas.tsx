@@ -273,8 +273,20 @@ export function ImageCanvas({
       const s = paintGrayscale(canvas, vectorImage, vectorEdge, vectorCursor);
       setStats(s);
     }
+    // The gray-level filter is browser-side display state, so it does not
+    // necessarily advance the streamed-image revision. Repaint when its
+    // range or action changes to ensure the completed canvas contains the
+    // same red spot overlay shown during the live scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revision, kind, renderMode, theme]);
+  }, [
+    revision,
+    kind,
+    renderMode,
+    theme,
+    vectorGrayScaleSelection?.[0],
+    vectorGrayScaleSelection?.[1],
+    vectorGrayScaleSkipped,
+  ]);
 
   useEffect(() => {
     if (!onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
@@ -303,7 +315,18 @@ export function ImageCanvas({
     });
 
     return () => window.cancelAnimationFrame(handle);
-  }, [kind, phase, revision, renderMode, cursor, vectorCursor, hasLiveCanvasData]);
+  }, [
+    kind,
+    phase,
+    revision,
+    renderMode,
+    cursor,
+    vectorCursor,
+    hasLiveCanvasData,
+    vectorGrayScaleSelection?.[0],
+    vectorGrayScaleSelection?.[1],
+    vectorGrayScaleSkipped,
+  ]);
 
   useEffect(() => {
     const filename =
@@ -463,6 +486,10 @@ export function ImageCanvas({
   const preferServerFigure =
     Boolean(serverFigureUrl) &&
     phase === "completed" &&
+    // Gray-filter spots are painted by the browser and are absent from the
+    // service-rendered figure. Keep the completed live canvas visible when
+    // that overlay is active so the final image retains the red pixels.
+    vectorGraySpotSelection === null &&
     (!hasLiveCanvasData || stats.max > stats.min);
   const displayedFigureUrl = mergedFigureUrl ?? (preferServerFigure ? serverFigureUrl : null);
 

@@ -1,7 +1,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet("install", "start", "restart", "stop", "status", "logs")]
+    [ValidateSet("install", "start", "start-sample-stage", "restart", "stop", "status", "logs")]
     [string]$Operation = "restart"
 )
 
@@ -103,11 +103,21 @@ function Wait-Http {
 }
 
 function Show-Status {
-    foreach ($name in @("glasgow", "vacuum-executor", "sbc-vacuum", "ionbeam-backend", "ionbeam-frontend")) {
+    foreach ($name in @("glasgow", "sample-stage", "vacuum-executor", "sbc-vacuum", "ionbeam-backend", "ionbeam-frontend")) {
         $process = Get-ManagedProcess $name
         if ($process) { Write-Host ("{0,-20} running PID {1}" -f $name, $process.Id) }
         else { Write-Host ("{0,-20} stopped" -f $name) }
     }
+}
+
+function Start-SampleStage {
+    if (-not (Test-Path -LiteralPath $python)) { throw "Virtual-environment Python was not found at $python." }
+    if (-not (Test-Path -LiteralPath $serviceRoot)) { throw "Sample-stage service directory was not found: $serviceRoot" }
+    $env:PYTHONPATH = "$developmentRoot;$serviceRoot"
+    $env:SAMPLE_STAGE_CONFIG = Join-Path $dataRoot "Json\sampleStageSystem.json"
+    $env:SAMPLE_STAGE_STATE = Join-Path $runtimeRoot "sample-stage-position.json"
+    Start-Managed "sample-stage" $python @("-m", "uvicorn", "glasgow_service.sample_stage_app:app", "--host", "127.0.0.1", "--port", "8790") $serviceRoot
+    Wait-Http "sample stage" "http://127.0.0.1:8790/status"
 }
 
 function Start-Stack {
@@ -125,6 +135,7 @@ function Start-Stack {
     Wait-Http "SBC vacuum" "http://127.0.0.1:8766/health/ready"
     Start-Managed "glasgow" $python @("-m", "uvicorn", "glasgow_service.api:app", "--host", "127.0.0.1", "--port", "8765") $serviceRoot
     Wait-Http "Glasgow" "http://127.0.0.1:8765/status"
+    Start-SampleStage
     Start-Managed "vacuum-executor" $python @("-m", "glasgow_service.vacuum_executor_app") $serviceRoot
     Wait-Http "vacuum executor" "http://127.0.0.1:8780/health/live"
     Start-Managed "ionbeam-backend" $npmCommand.Source @("run", "dev") $backendRoot
@@ -134,7 +145,7 @@ function Start-Stack {
 }
 
 function Stop-Stack {
-    foreach ($name in @("ionbeam-frontend", "ionbeam-backend", "vacuum-executor", "glasgow", "sbc-vacuum")) {
+    foreach ($name in @("ionbeam-frontend", "ionbeam-backend", "vacuum-executor", "sample-stage", "glasgow", "sbc-vacuum")) {
         Stop-Managed $name
     }
 }
@@ -142,6 +153,7 @@ function Stop-Stack {
 switch ($Operation) {
     "install" { Assert-Prerequisites; Write-Host "Windows local stack prerequisites are available." }
     "start" { Start-Stack; Show-Status }
+    "start-sample-stage" { Start-SampleStage; Show-Status }
     "restart" { Stop-Stack; Start-Stack; Show-Status }
     "stop" { Stop-Stack }
     "status" { Show-Status }

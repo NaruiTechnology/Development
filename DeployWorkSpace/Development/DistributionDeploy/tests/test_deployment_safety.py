@@ -86,6 +86,15 @@ class DeployRootLifecycleTests(unittest.TestCase):
 
 
 class LocalSystemManagerTests(unittest.TestCase):
+    def test_windows_manager_runs_sample_stage_controller(self):
+        manager = (ROOT.parents[2] / "Scripts" / "manage-local-system.ps1").read_text()
+
+        self.assertIn('$env:SAMPLE_STAGE_CONFIG', manager)
+        self.assertIn('$env:SAMPLE_STAGE_STATE', manager)
+        self.assertIn('Start-Managed "sample-stage"', manager)
+        self.assertIn('glasgow_service.sample_stage_app:app', manager)
+        self.assertIn('http://127.0.0.1:8790/status', manager)
+
     def test_manager_output_uses_file_instead_of_asyncio_pipes(self):
         with tempfile.TemporaryDirectory() as parent:
             deploy = Path(parent) / "IobeamPlatform"
