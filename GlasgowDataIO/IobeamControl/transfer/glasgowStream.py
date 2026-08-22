@@ -3,6 +3,7 @@ import gc
 from .abc import Stream, Connection
 from ..IobeamLauncher import IobeamLauncher
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import _transfer_timeout_s
 
 class GlasgowStream(Stream):
     def __init__(self, iface, config):
@@ -25,7 +26,12 @@ class GlasgowStream(Stream):
         before = len(self.lower._in_buffer)
         self._logger.debug(f"[GlasgowStream.read] requested={length}  in_buffer_before={before}")
         try:
-            data = await self.lower.read(length)
+            # This is an inactivity timeout for the next scan chunk. Unlike
+            # the USB pipeline's former submission-age timeout, it restarts
+            # after every successful read and therefore permits scans of any
+            # total duration while still detecting a genuinely stalled FPGA.
+            data = await asyncio.wait_for(
+                self.lower.read(length), timeout=_transfer_timeout_s())
             after = len(self.lower._in_buffer)
             got = len(data) if data is not None else 0
             print(f"[GlasgowStream.read] returned={got}  in_buffer_after={after}", flush=True)

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TRANSFER_TIMEOUT_S = 30.0
 TRANSFER_TIMEOUT_ENV = "GLASGOW_USB_TRANSFER_TIMEOUT_S"
+_DEFAULT_TRANSFER_TIMEOUT = object()
 
 
 def _transfer_timeout_s():
@@ -298,7 +299,8 @@ class GlasgowDevice:
         self.usb_poller.stop()
         self.usb_context.close()
 
-    async def _do_transfer(self, is_read, setup):
+    async def _do_transfer(self, is_read, setup,
+                           timeout_s=_DEFAULT_TRANSFER_TIMEOUT):
         # libusb transfer cancellation is asynchronous, and moreover, it is necessary to wait for
         # all transfers to finish cancelling before closing the event loop. To do this, use
         # separate futures for result and cancel.
@@ -359,7 +361,20 @@ class GlasgowDevice:
         transfer.setCallback(lambda transfer: loop.call_soon_threadsafe(usb_callback, transfer))
         handle_usb_error(lambda: transfer.submit())
         try:
-            return await asyncio.wait_for(result_future, timeout=_transfer_timeout_s())
+            # Streaming bulk-IN transfers are submitted as a standing queue
+            # long before the scan reaches them. Giving those queued reads an
+            # absolute deadline makes every pending transfer expire together
+            # during otherwise healthy scans whose total duration exceeds the
+            # deadline. Their no-data watchdog belongs at GlasgowStream.read(),
+            # where it is renewed for every consumed scan chunk.
+            if timeout_s is None:
+                return await result_future
+            timeout = (
+                _transfer_timeout_s()
+                if timeout_s is _DEFAULT_TRANSFER_TIMEOUT
+                else float(timeout_s)
+            )
+            return await asyncio.wait_for(result_future, timeout=timeout)
         finally:
             if result_future.cancelled():
                 try:
@@ -390,7 +405,7 @@ class GlasgowDevice:
     async def bulk_read(self, endpoint, length):
         logger.info("USB: BULK EP%d IN length=%d (submit)", endpoint & 0x7f, length)
         data = await self._do_transfer(is_read=True, setup=lambda transfer:
-            transfer.setBulk(endpoint|usb1.ENDPOINT_IN, length))
+            transfer.setBulk(endpoint|usb1.ENDPOINT_IN, length), timeout_s=None)
         logger.info("USB: BULK EP%d IN data=<%s> (completed)", endpoint & 0x7f, dump_hex(data))
         return data
 
