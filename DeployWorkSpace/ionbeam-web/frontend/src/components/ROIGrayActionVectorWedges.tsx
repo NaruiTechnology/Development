@@ -145,11 +145,12 @@ export function ROIGrayActionVectorWedges({ active, disabled }: { active: boolea
           <NumberStepperInput value={vector.cookie} min={0} max={0xffff} step={1} inputMode="numeric" disabled onValueChange={() => undefined} />
         </div>
         <label
-          className="checkbox checkbox--disabled"
+          className="checkbox checkbox--disabled vacuum-switch app-switch"
           aria-disabled="true"
           style={{ alignSelf: "end" }}
         >
           <input type="checkbox" checked={FORCED_PRE_PROCESS} disabled onChange={() => undefined} />
+          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
           {t("vector.preProcess")}
           <PreProcessHelp />
         </label>

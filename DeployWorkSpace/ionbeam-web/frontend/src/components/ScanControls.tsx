@@ -326,16 +326,32 @@ export function ScanControls({
         const hasGrayFilter =
           scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
         if (hasGrayFilter) {
-          const req = await vectorRequestWithROIGrayScaleAction(
-            { ...vector, roi },
-            roiState,
-            {
-              grayScaleSelection: scanGrayScaleSelection,
-              grayScaleSkipped: scanGrayScaleSkipped,
-            }
-          );
+          // Production must make the gray decision from the live 14-bit ADC,
+          // not from the loaded ROI reference bitmap. Simulation keeps the
+          // bitmap-derived custom point path because it has no physical ADC.
+          const adaptiveProductionFilter = isProduction && vectorPixelFallbackBlank;
+          const req = adaptiveProductionFilter
+            ? await vectorRequestWithAdaptiveGrayFeedback(
+                { ...vector, roi },
+                roiState,
+                {
+                  grayScaleSelection: scanGrayScaleSelection,
+                  grayScaleSkipped: scanGrayScaleSkipped,
+                }
+              )
+            : await vectorRequestWithROIGrayScaleAction(
+                { ...vector, roi },
+                roiState,
+                {
+                  grayScaleSelection: scanGrayScaleSelection,
+                  grayScaleSkipped: scanGrayScaleSkipped,
+                }
+              );
+          const grayFilterScanType = adaptiveProductionFilter
+            ? ScanType.VECTOR_ADAPTIVE_GRAN_FEED_BLANK
+            : ScanType.CUSTOM_GRAY_FEEDBACK_BLANK;
           if (Math.trunc(repeat) > 1) {
-            startActionLoop(req, ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
+            startActionLoop(req, grayFilterScanType);
             dispatch(setRetainVectorFeedbackOnComplete(false));
           } else {
             clearActionLoopState();
@@ -343,7 +359,7 @@ export function ScanControls({
           }
           dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
-          onScanRunStart?.(ScanType.CUSTOM_GRAY_FEEDBACK_BLANK);
+          onScanRunStart?.(grayFilterScanType);
           stream.startVector({ ...req, preview });
         } else {
           const req = await vectorRequestWithBitmapSelection(
@@ -625,7 +641,7 @@ export function ScanControls({
         <div className="scan-loop-controls">
           <div className="scan-loop-controls__preview">
             <label
-              className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+              className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
               title={t("scan.preview.title")}
             >
               <input
@@ -634,6 +650,7 @@ export function ScanControls({
                 disabled={controlsDisabled || roiEbeamDisabled}
                 onChange={(event) => dispatch(setPreview(event.target.checked))}
               />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
               {preview && <Icon name="alertTriangle" tone="warn" />}
               <span>{t("scan.preview")}</span>
             </label>
@@ -712,7 +729,7 @@ export function ScanControls({
         </select>
       </label>
           <label
-            className={`checkbox scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+            className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
             title={t("scan.preview.title")}
           >
         <input
@@ -721,6 +738,7 @@ export function ScanControls({
           disabled={controlsDisabled || kind === "roi"}
           onChange={(event) => dispatch(setPreview(event.target.checked))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {preview && <Icon name="alertTriangle" tone="warn" />}
         <span>{t("scan.preview")}</span>
           </label>

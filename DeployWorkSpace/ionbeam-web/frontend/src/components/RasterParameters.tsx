@@ -158,13 +158,14 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         </select>
       </div>
 
-      <label className="checkbox">
+      <label className="checkbox vacuum-switch app-switch">
         <input
           type="checkbox"
           checked={r.frame_blank}
           disabled={disabled}
           onChange={(e) => dispatch(updateRaster({ frame_blank: e.target.checked }))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("raster.frameBlank")}
         <FrameBlankHelp />
       </label>
@@ -175,13 +176,14 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         {t("card.validatedRunOptions")}
       </div>
 
-      <label className="checkbox">
+      <label className="checkbox vacuum-switch app-switch">
         <input
           type="checkbox"
           checked={r.do_validate}
           disabled={disabled}
           onChange={(e) => dispatch(updateRaster({ do_validate: e.target.checked }))}
         />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("raster.doValidate")}
         <ValidationHelp />
       </label>
