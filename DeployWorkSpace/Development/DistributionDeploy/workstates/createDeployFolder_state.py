@@ -14,6 +14,33 @@ from .unzipDistribution_state import unzipDistribution_state
 
 
 class createDeployFolder_state(distributionDeploy_state):
+    _STOP_DEPLOY_ROOT_PROCESSES = r"""
+$ErrorActionPreference = "Stop"
+$DeployRoot = $env:IOBEAM_DEPLOY_ROOT_TO_STOP
+$separator = [IO.Path]::DirectorySeparatorChar
+$rootPrefix = [IO.Path]::GetFullPath($DeployRoot).TrimEnd([char[]]"\/") + $separator
+$targets = @(Get-Process | Where-Object {
+    try {
+        $imagePath = $_.Path
+        $imagePath -and
+            [IO.Path]::GetFullPath($imagePath).StartsWith(
+                $rootPrefix, [StringComparison]::OrdinalIgnoreCase)
+    } catch {
+        $false
+    }
+})
+
+foreach ($target in $targets) {
+    Write-Output ("Stopping deploy-root process {0} ({1})" -f
+        $target.Id, $target.Path)
+    & taskkill.exe /PID $target.Id /T /F | Out-Null
+    if ($LASTEXITCODE -ne 0 -and
+            (Get-Process -Id $target.Id -ErrorAction SilentlyContinue)) {
+        throw "Could not stop deploy-root process $($target.Id)."
+    }
+}
+"""
+
     def __init__(self, parent):
         super(createDeployFolder_state, self).__init__(parent)
 
@@ -58,30 +85,58 @@ class createDeployFolder_state(distributionDeploy_state):
         script = self._findLocalSystemManager(deployRoot)
         if script is None:
             self.info("[{}] no prior Windows local-system manager found; "
-                      "continuing with a fresh deploy"
+                      "checking for deploy-root processes"
                       .format(type(self).__name__))
-            return True
+        else:
+            self.info("[{}] stopping the existing Windows deployment stack via {}"
+                      .format(type(self).__name__, script))
+            proc = await asyncio.create_subprocess_exec(
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", script,
+                "stop",
+                cwd=deployRoot,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            if not await self._waitForStopProcess(
+                    proc, timeout, "existing Windows stack"):
+                return False
 
-        self.info("[{}] stopping the existing Windows deployment stack via {}"
-                  .format(type(self).__name__, script))
+        # The manager can only stop PIDs it recorded. Services launched by a
+        # dedicated restart script still load native modules from .venv and
+        # keep them locked on Windows, so stop any remaining process whose
+        # executable is actually inside this guarded deploy root. taskkill /T
+        # also terminates the base-Python child created by a venv launcher.
+        return await self._stopDeployRootProcesses(deployRoot, timeout)
+
+    async def _stopDeployRootProcesses(self, deployRoot, timeout):
+        self.info("[{}] stopping remaining processes running from {}"
+                  .format(type(self).__name__, deployRoot))
+        processEnv = os.environ.copy()
+        processEnv["IOBEAM_DEPLOY_ROOT_TO_STOP"] = deployRoot
         proc = await asyncio.create_subprocess_exec(
             "powershell.exe",
             "-NoProfile",
             "-ExecutionPolicy", "Bypass",
-            "-File", script,
-            "stop",
-            cwd=deployRoot,
+            "-Command", self._STOP_DEPLOY_ROOT_PROCESSES,
+            env=processEnv,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+        return await self._waitForStopProcess(
+            proc, timeout, "deploy-root processes")
+
+    async def _waitForStopProcess(self, proc, timeout, description):
         try:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.communicate()
-            self.error("[{}] timed out after {}s while stopping the existing stack"
-                       .format(type(self).__name__, timeout))
+            self.error("[{}] timed out after {}s while stopping {}"
+                       .format(type(self).__name__, timeout, description))
             return False
 
         stdoutText = stdout.decode(errors="replace").strip()
@@ -90,9 +145,9 @@ class createDeployFolder_state(distributionDeploy_state):
             self.info("[{}] stop output:\n{}"
                       .format(type(self).__name__, stdoutText))
         if proc.returncode != 0:
-            self.error("[{}] Windows stack stop failed with exit code {}:\n{}"
-                       .format(type(self).__name__, proc.returncode,
-                               stderrText or "<no stderr>"))
+            self.error("[{}] failed to stop {} (exit code {}):\n{}"
+                       .format(type(self).__name__, description,
+                               proc.returncode, stderrText or "<no stderr>"))
             return False
         if stderrText:
             self.warn("[{}] Windows stack stop stderr:\n{}"

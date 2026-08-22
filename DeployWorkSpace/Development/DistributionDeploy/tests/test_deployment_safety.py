@@ -84,6 +84,64 @@ class DeployRootLifecycleTests(unittest.TestCase):
             self.assertEqual(events, ["stop", "clear"])
             self.assertTrue(state.Success)
 
+    def test_unmanaged_deploy_processes_are_stopped_after_manager(self):
+        state = createDeployFolder_state(None)
+        managerProcess = SimpleNamespace()
+
+        with mock.patch(
+            "workstates.createDeployFolder_state.os.name", "nt"
+        ), mock.patch.object(
+            state,
+            "_findLocalSystemManager",
+            return_value=r"C:\deploy\manage-local-system.ps1",
+        ), mock.patch(
+            "workstates.createDeployFolder_state.asyncio.create_subprocess_exec",
+            new=mock.AsyncMock(return_value=managerProcess),
+        ), mock.patch.object(
+            state,
+            "_waitForStopProcess",
+            new=mock.AsyncMock(return_value=True),
+        ) as waitForStop, mock.patch.object(
+            state,
+            "_stopDeployRootProcesses",
+            new=mock.AsyncMock(return_value=True),
+        ) as stopDeployProcesses:
+            success = asyncio.run(
+                state._stopManagedWindowsStack(r"C:\Project\Iobeam\Deploy", 30))
+
+        self.assertTrue(success)
+        waitForStop.assert_awaited_once_with(
+            managerProcess, 30, "existing Windows stack")
+        stopDeployProcesses.assert_awaited_once_with(
+            r"C:\Project\Iobeam\Deploy", 30)
+
+    def test_deploy_process_cleanup_receives_root_without_shell_interpolation(self):
+        state = createDeployFolder_state(None)
+        cleanupProcess = SimpleNamespace()
+
+        with mock.patch(
+            "workstates.createDeployFolder_state.asyncio.create_subprocess_exec",
+            new=mock.AsyncMock(return_value=cleanupProcess),
+        ) as launch, mock.patch.object(
+            state,
+            "_waitForStopProcess",
+            new=mock.AsyncMock(return_value=True),
+        ):
+            success = asyncio.run(
+                state._stopDeployRootProcesses(r"C:\Project\Iobeam\Deploy", 30))
+
+        self.assertTrue(success)
+        args = launch.await_args.args
+        kwargs = launch.await_args.kwargs
+        command = "\n".join(args)
+        self.assertIn("Get-Process", command)
+        self.assertIn("taskkill.exe", command)
+        self.assertNotIn(r"C:\Project\Iobeam\Deploy", args)
+        self.assertEqual(
+            kwargs["env"]["IOBEAM_DEPLOY_ROOT_TO_STOP"],
+            r"C:\Project\Iobeam\Deploy",
+        )
+
 
 class LocalSystemManagerTests(unittest.TestCase):
     def test_windows_manager_runs_sample_stage_controller(self):
