@@ -169,6 +169,14 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             self._endpoint_in,  self._in_interface,
             self.device.usb_handle.getConfiguration())
 
+        # A new host connection may reuse an already-running bitstream. In
+        # that case the gateware is not reset by FPGA configuration, so its
+        # command parser and FIFOs may still contain state from the previous
+        # connection. Always assert the interface reset before activating the
+        # USB endpoints; it is deasserted below after the read queue is ready.
+
+        await self.device.write_register(self._addr_reset, 1)
+
         for intf_num in [self._in_interface, self._out_interface]:
             try:
                 self.device.usb_handle.setInterfaceAltSetting(intf_num, 1)

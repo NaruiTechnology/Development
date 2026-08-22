@@ -5352,11 +5352,8 @@ body {
   margin: 0;
 }
 
-.settings-pins-table__row input[type="checkbox"] {
-  accent-color: var(--c-accent);
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
+.settings-switch--table {
+  justify-self: center;
 }
 
 .settings-flags {
@@ -5498,13 +5495,6 @@ body {
   justify-content: center;
 }
 
-.settings-admin-table__check input {
-  accent-color: var(--c-accent);
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
 .settings-admin-table__actions {
   display: inline-flex;
   align-items: center;
@@ -5529,11 +5519,24 @@ body {
   cursor: pointer;
 }
 
-.settings-checkbox input {
-  accent-color: var(--c-accent);
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
+.app-switch input,
+.settings-switch input {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  flex: 0 0 1px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-switch:has(input:disabled),
+.settings-switch:has(input:disabled) {
+  cursor: not-allowed;
 }
 
 .settings-loading {

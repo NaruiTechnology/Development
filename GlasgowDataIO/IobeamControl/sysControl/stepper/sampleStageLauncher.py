@@ -59,16 +59,21 @@ class SampleStageLauncher:
                 raise ValueError("sample-stage Glasgow pins must be unique")
             applet = SampleStageApplet(self.axes)
             applet.build(target, args_by_axis)
-            await device.download_target(target.build_plan(), reload=True)
+            # Reuse the running image when its deterministic plan ID matches.
+            image_programmed = await device.download_target(
+                target.build_plan(), reload=False
+            )
             device.demultiplexer = DirectDemultiplexer(
                 device, target.multiplexer.pipe_count
             )
             await device.set_voltage("AB", self.voltage)
-            await asyncio.sleep(3.0)
+            if image_programmed:
+                await asyncio.sleep(3.0)
             status = await device._status()
             if not status & ST_FPGA_RDY:
                 raise RuntimeError(f"sample-stage FPGA target is not ready; status={status:#04x}")
-            await asyncio.sleep(1.2)
+            if image_programmed:
+                await asyncio.sleep(1.2)
             interfaces = await applet.run(device, args_by_axis)
             return device, interfaces
         except BaseException:

@@ -1,4 +1,5 @@
 import asyncio
+import time
 from types import SimpleNamespace
 from .applet.DataStreamApplet import DataStreamApplet
 from .glasgowLib.glasgow.hardware.device import GlasgowDevice, ST_FPGA_RDY
@@ -21,6 +22,7 @@ class IobeamLauncher:
         return await self.run()
 
     async def run(self):
+        connect_started = time.monotonic()
         stateConfig  = util.GetStateConfigByName(self._config, Consts.STREAM_DATA)
         deviceId     = self._config.Glasgow.get("DeviceId")
         actionConfig = stateConfig.get(Consts.ACTION_DATA)
@@ -57,9 +59,10 @@ class IobeamLauncher:
         # ------------------------------------------------------------------ #
         plan = target.build_plan()
 
-        # reload=True forces re-flash even when bitstream_id hasn't changed.
-        # Switch to False in production to use the cache.
-        await device.download_target(plan, reload=True)
+        # The plan ID is deterministic for the generated design. The device
+        # retains the ID of the running FPGA image, so download_target() can
+        # skip synthesis and programming when the same image is still loaded.
+        image_programmed = await device.download_target(plan, reload=False)
 
         # DirectDemultiplexer is constructed AFTER download_target so the USB
         # configuration switch runs on a fully-enumerated, stable device.
@@ -67,7 +70,8 @@ class IobeamLauncher:
                                                    target.multiplexer.pipe_count)
 
         await device.set_voltage("AB", action_voltage)
-        await asyncio.sleep(3.0)
+        if image_programmed:
+            await asyncio.sleep(3.0)
 
         # ------------------------------------------------------------------ #
         # 3.  Verify FPGA is alive and open the run gate                      #
@@ -78,7 +82,8 @@ class IobeamLauncher:
                 "FPGA is not ready after bitstream download. "
                 f"Status register = {status:#04x}")
 
-        await asyncio.sleep(1.2)
+        if image_programmed:
+            await asyncio.sleep(1.2)
 
         # Open the applet run gate (gates in_fifo.w_en in IobeamDataSubtarget).
         # This must be written before claim_interface so the FPGA can send data
@@ -95,8 +100,13 @@ class IobeamLauncher:
             write_buffer_size = applet_args.buffer_size,
         )
 
-        await asyncio.sleep(0.5)
-        self._logger.info("IobeamLauncher: initialisation complete — returning interface")
+        if image_programmed:
+            await asyncio.sleep(0.5)
+        self._logger.info(
+            "IobeamLauncher: initialisation complete in %.3fs (%s image)",
+            time.monotonic() - connect_started,
+            "programmed" if image_programmed else "cached",
+        )
         return iface
 
 
