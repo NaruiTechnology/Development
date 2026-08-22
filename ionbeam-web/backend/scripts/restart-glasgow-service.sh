@@ -7,7 +7,6 @@ set -Eeuo pipefail
 SYSTEMCTL=/usr/bin/systemctl
 SERVICE=glasgow-svc.service
 ACCOUNT="$(id -un)"
-POLKIT_RULE=/etc/polkit-1/rules.d/60-ionbeam-glasgow-restart.rules
 
 # The signed-in account must be an administrator. This is only an eligibility
 # check; --no-ask-password below is what guarantees this backend command can
@@ -17,11 +16,10 @@ if ! id -nG "${ACCOUNT}" | tr ' ' '\n' | grep -Eq '^(sudo|admin|wheel)$'; then
   exit 1
 fi
 
-if [[ ! -r "${POLKIT_RULE}" ]]; then
-  echo "restart authorization is not installed; rerun the distribution installer" >&2
-  exit 1
-fi
-
+# Do not test the rule file directly.  polkit rule directories may be hidden
+# from this unprivileged user even when the rule is installed and active.
+# systemd/polkit is the authority: --no-ask-password makes a missing or
+# rejected authorization fail immediately without opening an auth dialog.
 "${SYSTEMCTL}" --no-ask-password restart "${SERVICE}"
 
 # Require the unit to remain active for several consecutive checks so an
