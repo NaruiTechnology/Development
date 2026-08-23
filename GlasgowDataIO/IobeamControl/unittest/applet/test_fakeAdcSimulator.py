@@ -23,19 +23,23 @@ class FakeAdcSimulatorTest(unittest.TestCase):
         m.submodules.dut = dut
 
         sim = Simulator(m)
+        sim.add_clock(1e-6)
         observed = []
 
         async def bench(ctx):
             ctx.set(dut.dac_x_code, 0)
             ctx.set(dut.dac_y_code, 0)
+            await ctx.tick()
             observed.append(ctx.get(dut.loopback_value))
 
             ctx.set(dut.dac_x_code, 8192)
             ctx.set(dut.dac_y_code, 4096)
+            await ctx.tick()
             observed.append(ctx.get(dut.loopback_value))
 
             ctx.set(dut.dac_x_code, 16383)
             ctx.set(dut.dac_y_code, 16383)
+            await ctx.tick()
             observed.append(ctx.get(dut.loopback_value))
 
         sim.add_testbench(bench)

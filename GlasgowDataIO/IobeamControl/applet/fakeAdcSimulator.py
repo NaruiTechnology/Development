@@ -1,5 +1,5 @@
 """
-fakeAdcSimulator.py  v9  (ROM-based combinatorial Elaboratable)
+fakeAdcSimulator.py  v10  (block-RAM-backed synchronous ROM)
 
 Root-cause fix
 --------------
@@ -8,10 +8,11 @@ v7/v8 used a Python yield-loop process that wrote to adc_out_signal every
 ADC timing, so the sample latched at each adc_oe edge is from several
 pixels in the future, producing the characteristic diagonal-skew artefact.
 
-v9 replaces the process with a combinatorial ROM Elaboratable.  The
-loopback_value output is driven continuously from the live DAC codes, and the
-PipelinedLoopbackAdapter samples it on the exact adc_oe rising edge in sync
-with the BusController, giving zero skew by construction.
+v10 stores the image in a synchronous ROM so arbitrary images infer iCE40
+block RAM rather than thousands of LUTs. The DAC coordinates are stable for
+several clocks before BusController raises adc_oe, so the ROM's one-clock read
+latency is hidden inside the existing ADC setup interval. PipelinedLoopbackAdapter
+still samples the selected value on the adc_oe rising edge.
 
 Interface (matches iobeamDataSubtarget.py hard-wiring)
 -------------------------------------------------------
@@ -36,12 +37,13 @@ ROM layout
 
 from amaranth import *
 from amaranth.lib import wiring
+from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import In, Out
 
 
 class FakeAdcSimulator(wiring.Component):
     """
-    Combinatorial ROM-based simulated ADC for Amaranth hardware simulations.
+    Synchronous block-ROM-based simulated ADC for gateware simulation.
 
     Parameters
     ----------
@@ -104,7 +106,17 @@ class FakeAdcSimulator(wiring.Component):
             addr.eq(Cat(x_idx, y_idx)),
         ]
 
-        rom = Array(Const(v, self.ADC_BITS) for v in self._rom)
-        m.d.comb += self.loopback_value.eq(rom[addr])
+        m.submodules.rom = rom = Memory(
+            shape=self.ADC_BITS,
+            depth=N * N,
+            init=self._rom,
+            attrs={"rom_style": "block"},
+        )
+        read_port = rom.read_port(domain="sync")
+        m.d.comb += [
+            read_port.addr.eq(addr),
+            read_port.en.eq(1),
+            self.loopback_value.eq(read_port.data),
+        ]
 
         return m
