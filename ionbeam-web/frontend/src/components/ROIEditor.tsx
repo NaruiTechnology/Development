@@ -1056,7 +1056,6 @@ export function ROIEditor({
             <select
               className="select"
               value={roi.scale_unit}
-              disabled
               onChange={(e) => dispatch(updateROI({ scale_unit: e.target.value }))}
             >
               {UNITS.map((u) => (
