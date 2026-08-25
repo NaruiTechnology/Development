@@ -1684,6 +1684,8 @@ body {
 .icon--tab { color: var(--c-tab-icon); }
 .icon--warn { color: var(--c-warn); }
 .icon--ruler { color: lawngreen; }
+.icon--calibrate { filter: brightness(1.6) saturate(1.15); }
+.icon--magCal { filter: brightness(1.6) saturate(1.15); }
 
 /* ---------- management report --------------------------------------- */
 

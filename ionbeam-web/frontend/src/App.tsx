@@ -1076,7 +1076,7 @@ export function App() {
                 disabled={panelDisabled}
                 onClick={activateCalibrateTopTab}
               >
-                <Icon name="ruler" tone="tab" />
+                <Icon name="calibrate" tone="tab" />
                 {t("tabs.calibrate")}
               </button>
             </div>
@@ -1132,7 +1132,7 @@ export function App() {
                   disabled={panelDisabled}
                   onClick={() => activateCalibrateSubTab("mag")}
                 >
-                  <Icon name="tools" tone="tab" />
+                  <Icon name="magCal" tone="tab" />
                   {t("tabs.mag")}
                 </button>
               </div>

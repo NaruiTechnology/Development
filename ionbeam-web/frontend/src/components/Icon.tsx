@@ -1,4 +1,7 @@
+import scanIcon from "../assets/Scan.png";
+import calibrateIcon from "../assets/Calibrate.png";
 import rulerIcon from "../assets/ruler.png";
+import magCalIcon from "../assets/MagCal.png";
 import roiIcon from "../assets/ROI.png";
 import rasterIcon from "../assets/raster.png";
 import vectorIcon from "../assets/vector.png";
@@ -6,6 +9,7 @@ import dashboardIcon from "../assets/UHVacuumPump_1.png";
 
 type IconName =
   | "check"
+  | "calibrate"
   | "circleTool"
   | "cog"
   | "commentTool"
@@ -23,6 +27,7 @@ type IconName =
   | "layers"
   | "link"
   | "mail"
+  | "magCal"
   | "moon"
   | "pause"
   | "play"
@@ -54,33 +59,18 @@ export function Icon({
   name: IconName;
   tone?: "accent" | "danger" | "success" | "tab" | "warn";
 }) {
-  if (name === "ruler") {
-    return (
-      <span
-        className="icon icon--ruler"
-        aria-hidden
-        style={{
-          WebkitMaskImage: `url(${rulerIcon})`,
-          WebkitMaskPosition: "center",
-          WebkitMaskRepeat: "no-repeat",
-          WebkitMaskSize: "contain",
-          backgroundColor: "currentColor",
-          maskImage: `url(${rulerIcon})`,
-          maskPosition: "center",
-          maskRepeat: "no-repeat",
-          maskSize: "contain",
-        }}
-      />
-    );
-  }
-
   const imageSource = imageSources[name];
   const className = `${tone ? `icon icon--${tone}` : "icon"} icon--${name}`;
   if (imageSource) {
     const intrinsicClass =
       name === "target"
         ? " icon--intrinsic icon--intrinsic-roi"
-        : name === "grid" || name === "route"
+        : name === "grid" ||
+          name === "route" ||
+          name === "scan" ||
+          name === "calibrate" ||
+          name === "ruler" ||
+          name === "magCal"
         ? " icon--intrinsic"
         : "";
     return (
@@ -101,6 +91,10 @@ export function Icon({
 }
 
 const imageSources: Partial<Record<IconName, string>> = {
+  scan: scanIcon,
+  calibrate: calibrateIcon,
+  ruler: rulerIcon,
+  magCal: magCalIcon,
   dashboard: dashboardIcon,
   target: roiIcon,
   grid: rasterIcon,
