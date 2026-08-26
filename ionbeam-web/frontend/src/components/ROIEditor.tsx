@@ -32,6 +32,10 @@ import { NumberStepperInput } from "./NumberStepperField";
 
 type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
 type ROISelectionCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+type CalibrationLine = {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+};
 
 const UNITS = [
   { value: "um", label: "μm" },
@@ -90,7 +94,19 @@ export function ROIEditor({
     corner: ROISelectionCorner;
     point: { x: number; y: number };
   } | null>(null);
+  const [calibrationLine, setCalibrationLine] = useState<CalibrationLine | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [calibrationCorrection, setCalibrationCorrection] = useState<{
+    x1: string;
+    x2: string;
+    y1: string;
+    y2: string;
+  } | null>(null);
+  const [calibrationCorrectionBasis, setCalibrationCorrectionBasis] = useState<{
+    original: { x1: number; x2: number; y1: number; y2: number };
+    measured: { x1: number; x2: number; y1: number; y2: number };
+  } | null>(null);
+  const [calibrationCorrectionError, setCalibrationCorrectionError] = useState<string | null>(null);
   const [ctrlCursor, setCtrlCursor] = useState<{ x: number; y: number; captured: boolean } | null>(null);
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
@@ -250,6 +266,7 @@ export function ROIEditor({
     bytesReceived,
     chunksReceived,
     resizeTrace,
+    calibrationLine,
   ]);
 
   useEffect(() => {
@@ -398,6 +415,10 @@ export function ROIEditor({
 
   function toDut(point: { x: number; y: number }) {
     return canvasPointToWorld(point, imageWorldBounds(roi), viewportBounds(roi));
+  }
+
+  function calibrationWorldPoint(point: { x: number; y: number }) {
+    return canvasPointToWorld(point, imageWorldBounds(roi), viewportBounds(roi, "draft"));
   }
 
   function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }): ROIRequest {
@@ -911,6 +932,14 @@ export function ROIEditor({
     ctx.strokeStyle = "lawngreen";
     ctx.lineWidth = 0.2;
     ctx.strokeRect(bounds.left, bounds.top, bounds.width, bounds.height);
+    if (calibrationLine) {
+      ctx.strokeStyle = "#ff0000";
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(calibrationLine.start.x, calibrationLine.start.y);
+      ctx.lineTo(calibrationLine.end.x, calibrationLine.end.y);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1213,8 +1242,16 @@ export function ROIEditor({
           <div
             className={`roi-canvas-layer roi-canvas-layer--base${disabled ? " is-disabled" : ""}${ctrlCursor ? " roi-canvas-layer--ctrl-cursor" : ""}`}
             onPointerDown={(e) => {
-              if (disabled || roi.calibration_enabled) return;
               if (e.button !== 0) return;
+              if (disabled) return;
+              if (roi.calibration_enabled) {
+                if (e.target instanceof Element && e.target.closest("button")) return;
+                e.preventDefault();
+                const point = rawCanvasPoint(e);
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setCalibrationLine({ start: point, end: point });
+                return;
+              }
               e.preventDefault();
               const p = canvasPoint(e);
               setDraft(null);
@@ -1237,7 +1274,15 @@ export function ROIEditor({
             }}
             onPointerMove={(e) => {
               if (resizeCornerRef.current) return;
-              if (disabled || roi.calibration_enabled) return;
+              if (disabled) return;
+              if (roi.calibration_enabled) {
+                if (!calibrationLine) return;
+                e.preventDefault();
+                setCalibrationLine((current) =>
+                  current ? { ...current, end: rawCanvasPoint(e) } : current
+                );
+                return;
+              }
               e.preventDefault();
               const p = canvasPoint(e);
               const d = toDut(p);
@@ -1260,7 +1305,40 @@ export function ROIEditor({
             }}
             onPointerUp={(e) => {
               if (resizeCornerRef.current) return;
-              if (disabled || roi.calibration_enabled) return;
+              if (disabled) return;
+              if (roi.calibration_enabled) {
+                const line = calibrationLine;
+                if (!line) return;
+                e.preventDefault();
+                const end = rawCanvasPoint(e);
+                const startWorld = calibrationWorldPoint(line.start);
+                const endWorld = calibrationWorldPoint(end);
+                const deltaX = Math.abs(endWorld.x - startWorld.x);
+                const deltaY = Math.abs(endWorld.y - startWorld.y);
+                setCalibrationCorrection({
+                  x1: formatOneDecimal(startWorld.x),
+                  x2: formatOneDecimal(startWorld.x + deltaX),
+                  y1: formatOneDecimal(startWorld.y),
+                  y2: formatOneDecimal(startWorld.y + deltaY),
+                });
+                setCalibrationCorrectionBasis({
+                  original: {
+                    x1: roi.calibration_x_origin,
+                    x2: roi.calibration_x_end,
+                    y1: roi.calibration_y_origin,
+                    y2: roi.calibration_y_end,
+                  },
+                  measured: {
+                    x1: startWorld.x,
+                    x2: startWorld.x + deltaX,
+                    y1: startWorld.y,
+                    y2: startWorld.y + deltaY,
+                  },
+                });
+                setCalibrationCorrectionError(null);
+                setCalibrationLine(null);
+                return;
+              }
               e.preventDefault();
               const nextPoint = canvasPoint(e);
               const start = dragStartRef.current;
@@ -1385,6 +1463,28 @@ export function ROIEditor({
           {roi.calibration_enabled && (
             <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} />
           )}
+          {roi.calibration_enabled && calibrationLine && (() => {
+            const startWorld = calibrationWorldPoint(calibrationLine.start);
+            const endWorld = calibrationWorldPoint(calibrationLine.end);
+            const x1 = startWorld.x;
+            const y1 = startWorld.y;
+            const xLength = Math.abs(endWorld.x - startWorld.x);
+            const yLength = Math.abs(endWorld.y - startWorld.y);
+            const x2 = x1 + xLength;
+            const y2 = y1 + yLength;
+            const left = ((calibrationLine.start.x + calibrationLine.end.x) / 2 / ROI_CANVAS_EDGE) * 100;
+            const top = ((calibrationLine.start.y + calibrationLine.end.y) / 2 / ROI_CANVAS_EDGE) * 100;
+            return (
+              <div
+                className="calibration-line-readout"
+                style={{ left: `${left}%`, top: `${top}%` }}
+                aria-live="polite"
+              >
+                <span>X1: {formatDimensionValue(x1, roi.scale_unit)} | Y1: {formatDimensionValue(y1, roi.scale_unit)}</span>
+                <span>X2: {formatDimensionValue(x2, roi.scale_unit)} | Y2: {formatDimensionValue(y2, roi.scale_unit)}</span>
+              </div>
+            );
+          })()}
           {roi.calibration_enabled && (
             <>
               <div className="roi-calibration-ruler roi-calibration-ruler--top">
@@ -1545,6 +1645,107 @@ export function ROIEditor({
               <span>Spot beam-on pixels</span>
             </div>
           )}
+        </div>
+      )}
+      {calibrationCorrection && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="calibration-correction-title">
+            <div className="modal__header">
+              <h3 id="calibration-correction-title">Correct calibration values</h3>
+            </div>
+            <div className="modal__body">
+              <p className="muted">Review the delta-derived coordinates before applying them.</p>
+              <div className="field-row">
+                <label className="field">
+                  <span>X1 ({unitLabel(roi.scale_unit)})</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={calibrationCorrection.x1}
+                    onChange={(event) =>
+                      setCalibrationCorrection({ ...calibrationCorrection, x1: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>X2 ({unitLabel(roi.scale_unit)})</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={calibrationCorrection.x2}
+                    onChange={(event) =>
+                      setCalibrationCorrection({ ...calibrationCorrection, x2: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="field-row">
+                <label className="field">
+                  <span>Y1 ({unitLabel(roi.scale_unit)})</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={calibrationCorrection.y1}
+                    onChange={(event) =>
+                      setCalibrationCorrection({ ...calibrationCorrection, y1: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Y2 ({unitLabel(roi.scale_unit)})</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={calibrationCorrection.y2}
+                    onChange={(event) =>
+                      setCalibrationCorrection({ ...calibrationCorrection, y2: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              {calibrationCorrectionError && <div className="field-warning">{calibrationCorrectionError}</div>}
+            </div>
+            <div className="modal__footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn--ghost" onClick={() => {
+                setCalibrationCorrection(null);
+                setCalibrationCorrectionBasis(null);
+              }}>
+                <Icon name="x" tone="danger" />
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  const x1 = Number(calibrationCorrection.x1);
+                  const x2 = Number(calibrationCorrection.x2);
+                  const y1 = Number(calibrationCorrection.y1);
+                  const y2 = Number(calibrationCorrection.y2);
+                  if (![x1, x2, y1, y2].every(Number.isFinite)) {
+                    setCalibrationCorrectionError("Enter valid numeric X1, X2, Y1, and Y2 values.");
+                    return;
+                  }
+                  if (x2 <= x1 || y2 <= y1) {
+                    setCalibrationCorrectionError("X2 must be greater than X1 and Y2 must be greater than Y1.");
+                    return;
+                  }
+                  const basis = calibrationCorrectionBasis;
+                  if (!basis) return;
+                  dispatch(updateROI({
+                    calibration_x_origin: basis.original.x1 + (x1 - basis.measured.x1),
+                    calibration_x_end: basis.original.x2 + (x2 - basis.measured.x2),
+                    calibration_y_origin: basis.original.y1 + (y1 - basis.measured.y1),
+                    calibration_y_end: basis.original.y2 + (y2 - basis.measured.y2),
+                  }));
+                  setCalibrationCorrection(null);
+                  setCalibrationCorrectionBasis(null);
+                }}
+              >
+                <Icon name="check" tone="success" />
+                Apply
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
