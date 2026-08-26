@@ -1887,8 +1887,14 @@ function ROICalibrationAxisOverlay({
       key: i,
       ratio,
       major: i % 5 === 0,
-      xLabel: `${Math.round(ratio * 100)}%`,
-      yLabel: `${Math.round(ratio * 100)}%`,
+      xLabel: `${formatOneDecimal(
+        roi.calibration_x_origin +
+          (roi.calibration_x_end - roi.calibration_x_origin) * ratio
+      )} ${unitLabel(roi.scale_unit)}`,
+      yLabel: `${formatOneDecimal(
+        roi.calibration_y_origin +
+          (roi.calibration_y_end - roi.calibration_y_origin) * ratio
+      )} ${unitLabel(roi.scale_unit)}`,
       x: `${ratio * 100}%`,
       y: `${ratio * 100}%`,
     };

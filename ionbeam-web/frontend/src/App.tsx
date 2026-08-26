@@ -63,7 +63,6 @@ import { completedROIImagePatch } from "./lib/roiWorkflow";
 import {
   beginDimensionCalibration,
   applyPersistedDimensionCalibration,
-  restorePersistedDimensionCalibration,
   clearROISelection,
   clearROIScanImage,
   persistGrayScaleStepDelta,
@@ -204,7 +203,9 @@ export function App() {
   const showROIPreviewSideCard = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
   const isSignedIn = Boolean(signedInUser);
   const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>(
-    kind === "mag" || roiState.calibration_enabled ? "calibrate" : "scan"
+    kind === "mag" || roiState.calibration_enabled || hasPersistedDimensionCalibration
+      ? "calibrate"
+      : "scan"
   );
   const [scanSubTab, setScanSubTab] = useState<ScanSubTab>(
     kind === "raster" ? "raster" : kind === "vector" ? "vector" : "roi"
@@ -223,7 +224,7 @@ export function App() {
     dimensionCalibrationRestoredRef.current = true;
     if (!hasPersistedDimensionCalibration) return;
     clearBitmapSelectionCache();
-    dispatch(restorePersistedDimensionCalibration(dimensionCalibration));
+    dispatch(applyPersistedDimensionCalibration(dimensionCalibration));
   }, [dimensionCalibration, dispatch, hasPersistedDimensionCalibration]);
 
   useEffect(() => {
