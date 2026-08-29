@@ -5,6 +5,8 @@ from buildingblocks.automation_log import AutomationLog
 import buildingblocks.utils as util
 import os
 import queue
+import shutil
+import subprocess
 
 TRANSACTION_COMPLETE = "transactionComplete"
 
@@ -157,6 +159,9 @@ class DistributionDeployThread(WorkThread):
                         "[transactionComplete=true] '{}' already done.".format(key))
                     continue
 
+                if not self._shouldInstantiate(key, actionConfig):
+                    continue
+
                 instance = util.CreateInstance("{}_state".format(key), self)
                 if instance is None:
                     self._logger.error(
@@ -176,6 +181,44 @@ class DistributionDeployThread(WorkThread):
         elif self._workflowError is None:
             self._workflowSucceeded = True
         return state
+
+    def _shouldInstantiate(self, actionName, actionConfig):
+        """Apply host preconditions before constructing a workstate.
+
+        This is intentionally evaluated in the work thread (not in DoWork),
+        so one-time bootstrap states do not even enter the execution queue
+        after their prerequisite has already been installed.
+        """
+        condition = str((actionConfig or {}).get(
+            "instantiateWhen", "always")).strip().lower()
+        if condition in ("", "always"):
+            return True
+        if condition == "dockermissing":
+            missing = shutil.which("docker") is None
+            if not missing:
+                self._logger.info(
+                    "[instantiateWhen=dockerMissing] '{}' skipped; Docker is installed."
+                    .format(actionName))
+            return missing
+        if condition == "dockerunavailable":
+            available = False
+            if shutil.which("docker") is not None:
+                try:
+                    available = subprocess.run(
+                        ["docker", "info"], stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL, timeout=10).returncode == 0
+                except (OSError, subprocess.TimeoutExpired):
+                    available = False
+            if available:
+                self._logger.info(
+                    "[instantiateWhen=dockerUnavailable] '{}' skipped; Docker engine is ready."
+                    .format(actionName))
+            return not available
+        self._logger.error(
+            "Unknown instantiateWhen condition '{}' for action '{}'."
+            .format(condition, actionName))
+        self._workflowError = "invalid instantiateWhen: {}".format(condition)
+        return False
 
     # -- helpers ------------------------------------------------------------
     def _markComplete(self, workState):

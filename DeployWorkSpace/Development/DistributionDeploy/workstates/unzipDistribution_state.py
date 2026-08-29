@@ -79,20 +79,21 @@ class unzipDistribution_state(executeShellCommand_state):
             self.info("[{}] using zip: {}"
                       .format(type(self).__name__, zipPath))
 
-            # 3. Build and run the unzip command.
+            # 3. Extract with the Python standard library. This is available
+            #    on both Linux and Windows and avoids requiring unzip.exe.
             deployRoot = self.deployRoot()
             if not self._prepareDeployRoot(deployRoot):
                 self._success = False
                 return
 
             destPath = self.resolveDeployPath(dest)
-            cmd = commandFormat.format(zipPath, destPath)
-            self.info("[{}] >> {}".format(type(self).__name__, cmd))
+            self.info("[{}] extracting {} -> {}".format(
+                type(self).__name__, zipPath, destPath))
 
             self.ParentWorkThread.activateVirtualEnv()
 
-            timeout = float(stateConfig.get(Consts.TIMEOUT, 0.0) or 0.0)
-            self._success = await self._run(cmd, timeout)
+            shutil.unpack_archive(zipPath, destPath, "zip")
+            self._success = True
 
             if self._success:
                 self._makeDeployTreeReadable(deployRoot)
@@ -164,6 +165,15 @@ class unzipDistribution_state(executeShellCommand_state):
             if os.path.isdir(parent) and os.access(parent, os.W_OK | os.X_OK):
                 return True
 
+        if os.name == "nt":
+            try:
+                os.makedirs(root, exist_ok=True)
+                return os.path.isdir(root) and os.access(root, os.W_OK)
+            except OSError as e:
+                self.error("[{}] could not prepare Windows deploy root '{}': {}"
+                           .format(type(self).__name__, root, e))
+                return False
+
         uid = os.getuid()
         gid = os.getgid()
         cmd = [
@@ -211,6 +221,8 @@ class unzipDistribution_state(executeShellCommand_state):
         if not self._isSafeDeployRoot(root):
             self.warn("[{}] refusing to chmod unsafe deploy root: {}"
                       .format(type(self).__name__, root))
+            return
+        if os.name == "nt":
             return
 
         cmd = ["chmod", "-R", "a+rX", root]

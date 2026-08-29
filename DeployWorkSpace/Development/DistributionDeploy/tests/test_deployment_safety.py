@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -57,10 +58,11 @@ class DeployRootSafetyTests(unittest.TestCase):
 
 class WorkflowContractTests(unittest.TestCase):
     def tearDown(self):
-        try:
-            (ROOT / "deployment-test.log").unlink()
-        except FileNotFoundError:
-            pass
+        for path in (ROOT / "deployment-test.log", Path.cwd() / "deployment-test.log"):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
 
     def config(self, actions):
         return SimpleNamespace(
@@ -86,6 +88,57 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIsNone(thread.IntialWork())
         self.assertIsNone(thread._workflowError)
         self.assertTrue(thread._workflowSucceeded)
+
+    def test_docker_install_state_is_not_instantiated_when_docker_exists(self):
+        thread = DistributionDeployThread(self.config([
+            {"installDockerRuntime": {
+                "skip": False,
+                "transactionComplete": False,
+                "instantiateWhen": "dockerMissing",
+            }},
+        ]))
+        with mock.patch(
+                "workthreads.DistributionDeployThread.shutil.which",
+                return_value="/usr/bin/docker"), mock.patch(
+                    "workthreads.DistributionDeployThread.util.CreateInstance") as create:
+            self.assertIsNone(thread.IntialWork())
+        create.assert_not_called()
+        self.assertTrue(thread._workflowSucceeded)
+
+    def test_docker_config_has_importable_parallel_workflow(self):
+        payload = json.loads(
+            (ROOT / "Json" / "DistributionDeploy-docker.json").read_text())
+        names = [next(iter(action)) for action in payload["Actions"]]
+        self.assertEqual(names[-3:], [
+            "installDockerRuntime",
+            "buildGlasgowDockerImage",
+            "manageLocalSystemDocker",
+        ])
+        config = self.config(payload["Actions"])
+        with mock.patch(
+                "workthreads.DistributionDeployThread.shutil.which",
+                return_value=None):
+            thread = DistributionDeployThread(config)
+            self.assertIsNotNone(thread.IntialWork())
+            self.assertIsNone(thread._workflowError)
+
+    def test_docker_distribution_assets_exist(self):
+        operations = ROOT.parents[2]
+        self.assertTrue((ROOT / "distributionDeployApp-docker.py").is_file())
+        self.assertTrue((operations / "Scripts" /
+                         "manage-local-system-docker.sh").is_file())
+        self.assertTrue((operations / "Scripts" /
+                         "build-glasgow-service-docker.sh").is_file())
+        self.assertTrue((operations / "Scripts" /
+                         "build-glasgow-service-docker.py").is_file())
+        self.assertTrue((operations / "Scripts" /
+                         "manage-local-system-docker.py").is_file())
+        self.assertTrue((operations / "glasgow_service" / "deploy" /
+                         "Dockerfile.glasgow-service").is_file())
+        self.assertTrue((ROOT / "install-docker-distribution.sh").is_file())
+        self.assertTrue((ROOT / "install-docker-distribution.ps1").is_file())
+        self.assertTrue((ROOT.parents[1] / "install-docker-distribution.sh").is_file())
+        self.assertTrue((ROOT.parents[1] / "install-docker-distribution.cmd").is_file())
 
     def test_config_uses_systemd_manager_not_detached_launches(self):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
@@ -116,6 +169,8 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("*.service.in", module.ASSET_PATTERNS)
         self.assertIn("*.env.in", module.ASSET_PATTERNS)
         self.assertIn("*.rules", module.ASSET_PATTERNS)
+        self.assertIn("Dockerfile*", module.ASSET_PATTERNS)
+        self.assertIn("*.ps1", module.ASSET_PATTERNS)
 
     def test_builder_makes_every_shell_script_executable(self):
         builder_path = ROOT.parents[2] / "buidCompiledDist.py"

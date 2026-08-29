@@ -21,7 +21,8 @@ REQUIRED_LOCAL_REDIS_APT_PACKAGES = (
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = [
     '*.ihex', '*.toml', 'requirements.txt', 'README.md', '*.service',
-    '*.service.in', '*.env.example', '*.env.in', '*.sh', '*.rules'
+    '*.service.in', '*.env.example', '*.env.in', '*.sh', '*.ps1', '*.rules',
+    'Dockerfile*'
 ]
 
 # Files to exclude from any copied tree or asset sweep.
@@ -325,7 +326,8 @@ def copy_matching_assets(src_dir, dist_dir, patterns):
                 shutil.copy2(src_file, dest_file)
                 print(f"Copied asset: {os.path.normpath(os.path.join(rel_path, filename))}")
 
-def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
+def build_compiled_dist(src_dir, dist_dir, deliver_raw=False,
+                        archive_name=None, preserved_python_files=()):
     validate_glasgow_runtime_dependencies(src_dir)
     validate_local_redis_distribution_workflow(src_dir)
     # 1. Byte-compile all .py files to __pycache__ (skip in raw mode)
@@ -361,7 +363,7 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
             os.path.join('Development', 'ionbeam-web', 'deploy', 'remote-vm.md'),
             os.path.join('Development', 'ionbeam-web', 'deploy', 'remote-vm.md'),
         ),
-    ])
+    ] + [(path, path) for path in preserved_python_files])
 
     # 3. Package source files: raw .py files OR extracted/flattened .pyc files
     abs_dist = os.path.abspath(dist_dir)
@@ -432,7 +434,7 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
     validate_packaged_local_system_manager(dist_dir)
 
     # 6. Zip the output content (distinct names so raw/compiled don't overwrite)
-    zip_name = "dist_app_raw" if deliver_raw else "dist_app"
+    zip_name = archive_name or ("dist_app_raw" if deliver_raw else "dist_app")
     print(f"\nCreating archive {zip_name}.zip...")
     if os.path.exists(f"{zip_name}.zip"):
         os.remove(f"{zip_name}.zip")

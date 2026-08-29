@@ -1,0 +1,70 @@
+{
+  "Header": {
+    "Application": "Project Docker Distribution Deploy",
+    "TargetEnv": "Windows 10/11 with Docker Desktop, or a Linux Docker host",
+    "Version": "1.0.0",
+    "Description": "Cross-platform parallel package that installs Docker once, builds the local glasgowService image, and launches it."
+  },
+  "Deployment": {
+    "SourceRoot": "Development/DistributionDeploy",
+    "DistDir": "dist_app_docker",
+    "DistZip": "dist_app_docker.zip",
+    "DeployRoot": "~/IobeamPlatform",
+    "GlasgowConfig": "Development/GlasgowDataIO/Json/streamData.json",
+    "GlasgowHost": "127.0.0.1",
+    "GlasgowPort": 8765
+  },
+  "Actions": [
+    {
+      "createDeployFolder": {
+        "skip": false,
+        "transactionComplete": false,
+        "actionData": {"commandFormat": "internal-guarded"},
+        "timeout": 30.0
+      }
+    },
+    {
+      "unzipDistribution": {
+        "skip": false,
+        "transactionComplete": false,
+        "actionData": {
+          "commandFormat": "unzip -o {} -d {}",
+          "zip": "Development/DistributionDeploy/dist_app_docker*.zip",
+          "dest": "."
+        },
+        "timeout": 120.0
+      }
+    },
+    {
+      "installDockerRuntime": {
+        "skip": false,
+        "transactionComplete": false,
+        "instantiateWhen": "dockerUnavailable",
+        "actionData": {},
+        "timeout": 900.0
+      }
+    },
+    {
+      "buildGlasgowDockerImage": {
+        "skip": false,
+        "transactionComplete": false,
+        "actionData": {
+          "script": "Development/Scripts/build-glasgow-service-docker.py",
+          "image": "glasgow-service:local"
+        },
+        "timeout": 1800.0
+      }
+    },
+    {
+      "manageLocalSystemDocker": {
+        "skip": false,
+        "transactionComplete": false,
+        "actionData": {
+          "script": "Development/Scripts/manage-local-system-docker.py",
+          "operation": "restart"
+        },
+        "timeout": 300.0
+      }
+    }
+  ]
+}
