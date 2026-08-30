@@ -34,7 +34,7 @@ class CommandExecutor(wiring.Component):
 
 
     def __init__(self, *, out_only:bool=False, adc_latency=8,
-                adc_half_period=4, adc_settle_cycles=2,
+                adc_half_period=6, adc_settle_cycles=2,
                 ext_switch_delay=960000,
                 transforms: Transforms=Transforms(False, False, False)):
         self.adc_latency = adc_latency

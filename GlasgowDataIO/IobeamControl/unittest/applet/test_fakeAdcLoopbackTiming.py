@@ -15,7 +15,7 @@ from GlasgowDataIO.IobeamControl.applet.pipelinedLoopbackAdapter import (
 class FakeAdcLoopbackTimingTest(unittest.TestCase):
     def test_fake_adc_samples_bus_controller_latched_dac_codes(self):
         adc_latency = 1
-        bus = BusController(adc_half_period=4, adc_latency=adc_latency)
+        bus = BusController(adc_half_period=6, adc_latency=adc_latency)
         fake = FakeAdcSimulator(
             image_data=[
                 10, 20, 30, 40,

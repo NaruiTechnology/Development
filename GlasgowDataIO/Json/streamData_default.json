@@ -12,7 +12,7 @@
                     "ev": 1000.0,
                     "voltage": 2.5,
                     "bufferSize": "1024*1024",
-                    "adcHalfPeriod": 4,
+                    "adcHalfPeriod": 6,
                     "adcSettleCycles": 2,
                     "enableEbeam": false,
                     "enableIbeam": true,

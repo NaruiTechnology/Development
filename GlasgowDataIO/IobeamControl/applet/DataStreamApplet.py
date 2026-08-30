@@ -213,7 +213,7 @@ class DataStreamApplet(GlasgowApplet):
         pin_config, sim_image, sim_res, loopback = self._resolve_simulation()
         action_data = util.GetStateConfigByName(
             self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
-        adc_half_period = int(action_data.get("adcHalfPeriod", 4))
+        adc_half_period = int(action_data.get("adcHalfPeriod", 6))
         adc_settle_cycles = int(action_data.get("adcSettleCycles", 2))
 
         subtarget = IobeamDataSubtarget(

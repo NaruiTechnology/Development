@@ -28,10 +28,12 @@ class BusController(wiring.Component):
         assert adc_settle_cycles >= 1, \
             "ADC bus must settle for at least one cycle"
         # One enable cycle, adc_settle_cycles - 1 additional settling
-        # cycles, one capture cycle, one stream cycle, and four DAC cycles.
-        required_period = adc_settle_cycles + 6
+        # cycles, one latch-close cycle, one OE-enable cycle, one capture
+        # cycle, one stream cycle, one bus-turnaround cycle, and four DAC
+        # cycles.
+        required_period = adc_settle_cycles + 9
         assert (adc_half_period * 2) >= required_period, \
-            "ADC period must contain the settle, capture, read, and DAC states"
+            "ADC period must contain settle, capture, read, turnaround, and DAC states"
         self.adc_half_period = adc_half_period
         self.adc_latency     = adc_latency
         self.adc_settle_cycles = adc_settle_cycles
@@ -82,24 +84,34 @@ class BusController(wiring.Component):
         self.adc_sample = Signal.like(self.bus.data_i)
         m.d.comb += adc_stream_data.adc_code.eq(self.adc_sample)
 
-        settle_counter = Signal(range(max(2, self.adc_settle_cycles)))
+        settle_counter = Signal(range(max(2, self.adc_settle_cycles + 1)))
 
         stalled = Signal()
 
         with m.FSM():
             with m.State("ADC_Wait"):
                 with m.If(self.bus.adc_clk & (adc_cycles == 0)):
+                    # Close the ADC-side latch while its outputs are still
+                    # disabled. This prevents a stale latch value from
+                    # appearing on the shared bus during the enable edge.
                     m.d.comb += self.bus.adc_le_clk.eq(1)
-                    m.d.comb += self.bus.adc_oe.eq(1)
-                    m.d.sync += settle_counter.eq(self.adc_settle_cycles - 1)
-                    if self.adc_settle_cycles == 1:
-                        m.next = "ADC_Capture"
-                    else:
-                        m.next = "ADC_Settle"
+                    m.d.comb += self.bus.adc_oe.eq(0)
+                    m.d.sync += settle_counter.eq(self.adc_settle_cycles)
+                    m.next = "ADC_Latch_Hold"
+
+            with m.State("ADC_Latch_Hold"):
+                # Ensure LE has returned low before enabling U6 outputs.
+                m.next = "ADC_Enable"
+
+            with m.State("ADC_Enable"):
+                # Give the external transceiver a complete clock to turn on
+                # before the input register samples the shared bus.
+                m.d.comb += self.bus.adc_oe.eq(1)
+                m.next = "ADC_Settle"
 
             with m.State("ADC_Settle"):
                 m.d.comb += self.bus.adc_oe.eq(1)
-                with m.If(settle_counter == 1):
+                with m.If(settle_counter == 0):
                     m.next = "ADC_Capture"
                 with m.Else():
                     m.d.sync += settle_counter.eq(settle_counter - 1)
@@ -111,7 +123,8 @@ class BusController(wiring.Component):
 
             with m.State("ADC_Read"):
                 # Keep the ADC-side transceiver enabled while the registered
-                # sample is submitted. It is released on entry to X_DAC_Write.
+                # sample is submitted. It is released on entry to the
+                # high-impedance Bus_Turnaround state.
                 m.d.comb += self.bus.adc_oe.eq(1)
                 # buffers up to self.adc_latency samples if skid_buffer.i.ready
                 m.d.comb += skid_buffer.i.valid.eq(accept_sample[self.adc_latency-1])
@@ -150,6 +163,13 @@ class BusController(wiring.Component):
                     m.d.sync += accept_sample.eq(Cat(0, accept_sample))
                     # The value of this flag is discarded, so it doesn't matter what it is.
                     m.d.sync += last_sample.eq(Cat(0, last_sample))
+                m.next = "Bus_Turnaround"
+
+            with m.State("Bus_Turnaround"):
+                # Leave both sides of the shared bus in high impedance for a
+                # complete FPGA clock. The external latch/transceiver may
+                # take a finite time to disable after adc_oe is released; do
+                # not enable the FPGA DAC driver on the same clock edge.
                 m.next = "X_DAC_Write"
 
             with m.State("X_DAC_Write"):

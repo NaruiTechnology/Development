@@ -73,7 +73,7 @@ class IobeamDataSubtarget(Elaboratable):
                  data=None,
                  ext_switch_delay=0, transforms: Transforms = None,
                  benchmark_counters=None, loopback=False, out_only=False,
-                 adc_half_period=4, adc_settle_cycles=2,
+                 adc_half_period=6, adc_settle_cycles=2,
                  pin_config=None,
                  sim_image=None,
                  sim_image_resolution=64,
