@@ -66,6 +66,71 @@ class DeviceBusy(RuntimeError):     ...
 class DeviceNotReady(RuntimeError): ...
 
 
+# A disconnected revC3 ADC bus is pulled high and therefore reads as full
+# scale forever.  Depending on where the sample is observed, the same 14-bit
+# value can be represented as raw 0x3fff, left-aligned in the 16-bit stream as
+# 0xfffc, or reduced to 0xff in EightBit output mode.
+_ADC_FULL_SCALE_VALUES = frozenset((0x3FFF, 0xFFFC, 0xFF))
+_ADC_PRESENCE_MIN_SAMPLES = 256
+
+
+class _AdcPresenceMonitor:
+    """Detect the disconnected-bus signature while samples are streaming."""
+
+    def __init__(self, *, enabled: bool,
+                 minimum_samples: int = _ADC_PRESENCE_MIN_SAMPLES):
+        self.enabled = enabled
+        self.minimum_samples = minimum_samples
+        self.full_scale_samples = 0
+        self.conclusive = False
+
+    def observe(self, chunk) -> Optional[str]:
+        if not self.enabled or self.conclusive:
+            return None
+        for sample in chunk:
+            if int(sample) not in _ADC_FULL_SCALE_VALUES:
+                # Presence is established for this scan. Do no more work on
+                # later chunks and do not mistake ordinary clipped regions
+                # for a disconnected bus.
+                self.conclusive = True
+                return None
+            self.full_scale_samples += 1
+            if self.full_scale_samples >= self.minimum_samples:
+                self.conclusive = True
+                return (
+                    "ADC/subtarget presence check failed: the first "
+                    f"{self.full_scale_samples} returned samples were all full "
+                    "scale (0x3fff/0xfffc/0xff). The production ADC data bus "
+                    "appears disconnected, tri-stated, or permanently saturated."
+                )
+        return None
+
+
+def _production_adc_fault(chunks: Iterable, *, minimum_samples: int = _ADC_PRESENCE_MIN_SAMPLES) -> Optional[str]:
+    """Return a diagnostic as soon as a scan looks like an undriven bus.
+
+    Requiring a sustained, exact full-scale run avoids classifying ordinary
+    images containing a few clipped pixels as disconnected.  Very small
+    diagnostic scans are intentionally left alone because they do not provide
+    enough evidence for a hardware-presence decision.
+    """
+    monitor = _AdcPresenceMonitor(
+        enabled=True, minimum_samples=minimum_samples)
+    for chunk in chunks:
+        fault = monitor.observe(chunk)
+        if fault is not None:
+            return fault
+    return None
+
+
+def _assert_production_adc_present(config, chunks: Iterable) -> None:
+    if _simulation_enabled(config):
+        return
+    fault = _production_adc_fault(chunks)
+    if fault is not None:
+        raise DeviceNotReady(fault)
+
+
 def _default_vector_iter(edge: int = 2048, dwell: int = 1) -> Iterable[Tuple[int, int, int]]:
     """Yield (x, y, dwell) triples for a default sweep at the given edge
     resolution. Coverage is always the full 14-bit DAC range; smaller
@@ -696,12 +761,21 @@ class DeviceService:
                 cmd._pre_process_chunks(latency=req.latency_bytes)
             transfer_iter = conn.transfer_multiple(
                 cmd, latency=req.latency_bytes)
+            adc_monitor = _AdcPresenceMonitor(
+                enabled=not _simulation_enabled(self._config))
+            adc_presence_fault = False
             try:
                 async for chunk in transfer_iter:
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
+                    fault = adc_monitor.observe(chunk)
+                    if fault is not None:
+                        logger.warning("production ADC presence warning: %s", fault)
+                        raise DeviceNotReady(fault)
                     yield _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
+                adc_presence_fault = isinstance(e, DeviceNotReady) and \
+                    str(e).startswith("ADC/subtarget presence check failed:")
                 self._drop_conn_on_error(e)
                 raise
             finally:
@@ -711,17 +785,21 @@ class DeviceService:
                     # before the service releases this scan generator.
                     await transfer_iter.aclose()
                 finally:
-                    self._set_last_scan({
-                        "kind": "vector",
-                        "chunks": captured,
-                        "latency_bytes": req.latency_bytes,
-                        "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
-                        "scan_path": req.scan_path.value,
-                        "points": req.points,
-                        "vector_resolution": req.vector_resolution,
-                        "roi": req.roi,
-                        "source": "stream",
-                    })
+                    # Preserve the previous known-good scan when this frame
+                    # is the disconnected/full-scale signature. Partial
+                    # operator-stopped captures remain downloadable.
+                    if not adc_presence_fault:
+                        self._set_last_scan({
+                            "kind": "vector",
+                            "chunks": captured,
+                            "latency_bytes": req.latency_bytes,
+                            "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+                            "scan_path": req.scan_path.value,
+                            "points": req.points,
+                            "vector_resolution": req.vector_resolution,
+                            "roi": req.roi,
+                            "source": "stream",
+                        })
 
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
@@ -876,11 +954,17 @@ class DeviceService:
                 eff.max_pipeline, eff.effective_drain_floor_pixels,
             )
             t0 = time.perf_counter()
+            adc_monitor = _AdcPresenceMonitor(
+                enabled=not _simulation_enabled(self._config))
             try:
                 async for chunk in conn.transfer_multiple(
                         cmd, latency=req.latency_bytes):
                     chunks.append(chunk)
                     self._status.chunks_in_flight += 1
+                    fault = adc_monitor.observe(chunk)
+                    if fault is not None:
+                        logger.warning("production ADC presence warning: %s", fault)
+                        raise DeviceNotReady(fault)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 if _is_fatal_usb_error(e):

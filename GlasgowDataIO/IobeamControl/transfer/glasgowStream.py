@@ -109,6 +109,35 @@ class GlasgowConnection(Connection):
         iface = self._stream.lower
         device = iface.device
 
+        # Read sticky FPGA observations before cancelling USB access. This
+        # logs actual internal bus ownership activity from the completed
+        # transfer without producing a line on every 48 MHz clock cycle.
+        ownership_addr = getattr(iface, "iobeam_bus_ownership_addr", None)
+        if ownership_addr is not None:
+            try:
+                ownership = await device.read_register(ownership_addr)
+                adc_driving = bool(ownership & 0x01)
+                fpga_driving = bool(ownership & 0x02)
+                contention = bool(ownership & 0x04)
+                turnaround = bool(ownership & 0x08)
+                self._logger.info(
+                    "Bus ownership observed: ADC driving "
+                    "(adc_oe=1, data_oe=0)=%s; FPGA driving "
+                    "(adc_oe=0, data_oe=1)=%s; turnaround=%s; contention=%s",
+                    adc_driving, fpga_driving, turnaround, contention,
+                )
+                if contention:
+                    self._logger.error(
+                        "Bus ownership fault: adc_oe=1 and data_oe=1 were "
+                        "observed simultaneously")
+                if not adc_driving or not fpga_driving:
+                    self._logger.warning(
+                        "Incomplete bus ownership activity: adc_driving=%s "
+                        "fpga_driving=%s", adc_driving, fpga_driving)
+            except Exception as e:
+                self._logger.warning(
+                    "Unable to read FPGA bus ownership diagnostics: %s", e)
+
         # 1) Cancel in-flight bulk_read/bulk_write tasks cleanly, before yanking
         #    the USB handle out from under them. iface.cancel() is the library's
         #    documented way to do this and awaits the cancellations to settle.

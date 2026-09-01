@@ -299,6 +299,14 @@ export function useScanStream() {
         ws.close(1000, "mock-stop");
         return;
       }
+      // The stream may finish or fault between the operator pressing Stop
+      // and this request reaching the backend. "No active scan" is therefore
+      // an idempotent successful stop, not a new device error that should
+      // overwrite the real scan result/warning.
+      if (response.status === 409) {
+        ws.close(1000, "already-stopped");
+        return;
+      }
       const detail = await response.text().catch(() => "");
       throw new Error(detail || `abort: HTTP ${response.status}`);
     }).catch((error) => {
@@ -371,7 +379,7 @@ function handleRasterControlMessage(
         }),
       );
     } else if (msg.event === "error") {
-      dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
+      dispatch(streamErrored(controlErrorMessage(msg)));
     }
   } catch {
     dispatch(streamErrored("Malformed raster stream control message"));
@@ -400,13 +408,29 @@ function handleVectorControlMessage(
         }),
       );
     } else if (msg.event === "error") {
-      dispatch(streamErrored(msg.detail ?? msg.message ?? msg.code ?? "stream error"));
+      dispatch(streamErrored(controlErrorMessage(msg)));
     }
   } catch {
     dispatch(streamErrored("Malformed vector stream control message"));
     return false;
   }
   return true;
+}
+
+function controlErrorMessage(msg: any): string {
+  const failedChecks = Array.isArray(msg?.validation?.checks)
+    ? msg.validation.checks.filter((check: any) => check?.passed === false)
+    : [];
+  if (failedChecks.length > 0) {
+    return failedChecks
+      .map((check: any) => {
+        const name = typeof check?.name === "string" ? check.name : "validation";
+        const detail = typeof check?.detail === "string" ? check.detail : "failed";
+        return `[FAIL] ${name}: ${detail}`;
+      })
+      .join("\n");
+  }
+  return msg?.detail ?? msg?.message ?? msg?.code ?? "stream error";
 }
 
 function createPendingSamples(): PendingSamples {

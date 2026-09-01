@@ -246,7 +246,22 @@ async def _stream_scan(ws: WebSocket, make_gen):
     except DeviceBusy:
         await ws.send_json({"event": "error", "code": "busy"})
     except DeviceNotReady as e:
-        await ws.send_json({"event": "error", "code": "not_ready", "detail": str(e)})
+        detail = str(e)
+        payload = {"event": "error", "code": "not_ready", "detail": detail}
+        if detail.startswith("ADC/subtarget presence check failed:"):
+            payload.update({
+                "severity": "warning",
+                "code": "adc_subtarget_disconnected",
+                "validation": {
+                    "passed": False,
+                    "checks": [{
+                        "name": "adc_subtarget_presence",
+                        "passed": False,
+                        "detail": detail,
+                    }],
+                },
+            })
+        await ws.send_json(payload)
     except WebSocketDisconnect:
         pass
     except Exception as e:

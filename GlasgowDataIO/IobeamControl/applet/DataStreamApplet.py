@@ -200,6 +200,10 @@ class DataStreamApplet(GlasgowApplet):
         self.magic_reg, self.addr_magic = target.registers.add_ro(8, init=0xa5)
         self.reset_reg, addr_reset = target.registers.add_rw(8, init=0)
         self.addr_reset = addr_reset
+        self.bus_ownership_reg, self.addr_bus_ownership = \
+            target.registers.add_ro(8, init=0)
+        self.bus_ownership_clear_reg, self.addr_bus_ownership_clear = \
+            target.registers.add_rw(1, init=0)
 
         self.mux_interface = iface = target.multiplexer.claim_interface(
             self, args)
@@ -221,6 +225,8 @@ class DataStreamApplet(GlasgowApplet):
             in_fifo              = in_fifo,
             out_fifo             = out_fifo,
             _addr_reset          = self.reset_reg,
+            bus_ownership_status = self.bus_ownership_reg,
+            bus_ownership_clear  = self.bus_ownership_clear_reg,
             loopback             = loopback,
             adc_half_period      = adc_half_period,
             adc_settle_cycles    = adc_settle_cycles,

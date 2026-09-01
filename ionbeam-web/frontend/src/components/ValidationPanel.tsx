@@ -423,7 +423,12 @@ export function ValidationPanel({
     return (
       <div className="card__body">
         {downloadSettings}
-        <div style={{ color: "var(--c-danger)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+        <div style={{
+          color: "var(--c-danger)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          whiteSpace: "pre-wrap",
+        }}>
           {error}
         </div>
       </div>

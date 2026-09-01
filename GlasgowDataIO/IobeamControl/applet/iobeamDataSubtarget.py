@@ -80,6 +80,8 @@ class IobeamDataSubtarget(Elaboratable):
                  **kwargs):
         super().__init__()
         self._addr_reset = kwargs.get("_addr_reset", None)
+        self.bus_ownership_status = kwargs.get("bus_ownership_status", None)
+        self.bus_ownership_clear = kwargs.get("bus_ownership_clear", None)
         self.ports               = ports
         self.out_fifo            = out_fifo
         self.in_fifo             = in_fifo
@@ -131,6 +133,27 @@ class IobeamDataSubtarget(Elaboratable):
 
         wiring.connect(m, parser.cmd_stream, executor.cmd_stream)
         wiring.connect(m, executor.img_stream, serializer.img_stream)
+
+        # Sticky observations exported through FPGA registers for host-side
+        # diagnostics. Bits record that each ownership state occurred at
+        # least once; contention is retained until explicitly cleared.
+        #   bit 0: ADC driving   (adc_oe=1, data_oe=0)
+        #   bit 1: FPGA driving  (adc_oe=0, data_oe=1)
+        #   bit 2: contention    (adc_oe=1, data_oe=1)
+        #   bit 3: turnaround    (adc_oe=0, data_oe=0)
+        if self.bus_ownership_status is not None:
+            ownership_now = Cat(
+                executor.bus.adc_oe & ~executor.bus.data_oe,
+                ~executor.bus.adc_oe & executor.bus.data_oe,
+                executor.bus.adc_oe & executor.bus.data_oe,
+                ~executor.bus.adc_oe & ~executor.bus.data_oe,
+                Const(0, 4),
+            )
+            with m.If(self.bus_ownership_clear):
+                m.d.sync += self.bus_ownership_status.eq(0)
+            with m.Else():
+                m.d.sync += self.bus_ownership_status.eq(
+                    self.bus_ownership_status | ownership_now)
 
         # Wire executor.output_mode to serializer.output_mode at module
         # level so the sync cookie response and image bytes aren't

@@ -89,6 +89,8 @@ class IobeamLauncher:
         # This must be written before claim_interface so the FPGA can send data
         # as soon as the demultiplexer reset is deasserted inside _activate().
         await device.write_register(applet.addr_reset, 1)
+        await device.write_register(applet.addr_bus_ownership_clear, 1)
+        await device.write_register(applet.addr_bus_ownership_clear, 0)
         self._logger.info("Run gate open")
 
         # ------------------------------------------------------------------ #
@@ -99,6 +101,7 @@ class IobeamLauncher:
             read_buffer_size  = applet_args.buffer_size,
             write_buffer_size = applet_args.buffer_size,
         )
+        iface.iobeam_bus_ownership_addr = applet.addr_bus_ownership
 
         if image_programmed:
             await asyncio.sleep(0.5)
