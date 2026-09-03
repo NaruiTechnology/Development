@@ -92,6 +92,21 @@ def test_presence_monitor_stops_checking_after_presence_is_established():
     assert monitor.observe(array.array("H", [0x3FFF] * 256)) is None
 
 
+def test_presence_monitor_collects_bounded_diagnostics_after_presence():
+    monitor = _AdcPresenceMonitor(enabled=True, minimum_samples=256)
+
+    monitor.observe(array.array("H", [0x3FFF, 0x1234, 0x1234]))
+    monitor.observe(array.array("H", [0x3DFD] * 100))
+
+    summary = monitor.summary()
+    assert summary is not None
+    assert "samples=103" in summary
+    assert "min=0x1234" in summary
+    assert "max=0x3fff" in summary
+    assert "unique=3" in summary
+    assert "full_scale=1" in summary
+
+
 def test_simulation_presence_check_allows_sustained_full_scale():
     chunks = [array.array("H", [0x3FFF] * 256)]
 

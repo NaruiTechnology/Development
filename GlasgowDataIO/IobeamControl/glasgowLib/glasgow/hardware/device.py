@@ -539,7 +539,9 @@ class GlasgowDevice:
         logger.info("generating bitstream ID %s", plan.bitstream_id.hex())
         
         # await self.download_bitstream(plan.get_bitstream(), plan.bitstream_id)    #TODO     
-        bitstream = await plan.get_bitstream()
+        # Preserve the generated build tree (top.pcf/top.il/top.v/top.bin)
+        # for pin/netlist inspection while troubleshooting gateware.
+        bitstream = await plan.get_bitstream(debug=True)
         if bitstream:
             await self.download_bitstream(bitstream, plan.bitstream_id)
             return True

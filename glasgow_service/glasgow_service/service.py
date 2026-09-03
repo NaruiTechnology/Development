@@ -72,6 +72,7 @@ class DeviceNotReady(RuntimeError): ...
 # 0xfffc, or reduced to 0xff in EightBit output mode.
 _ADC_FULL_SCALE_VALUES = frozenset((0x3FFF, 0xFFFC, 0xFF))
 _ADC_PRESENCE_MIN_SAMPLES = 256
+_ADC_DIAGNOSTIC_UNIQUE_LIMIT = 64
 
 
 class _AdcPresenceMonitor:
@@ -83,27 +84,58 @@ class _AdcPresenceMonitor:
         self.minimum_samples = minimum_samples
         self.full_scale_samples = 0
         self.conclusive = False
+        self.sample_count = 0
+        self.minimum = None
+        self.maximum = None
+        self.first_samples = []
+        self.unique_values = set()
 
     def observe(self, chunk) -> Optional[str]:
-        if not self.enabled or self.conclusive:
+        if not self.enabled:
             return None
         for sample in chunk:
-            if int(sample) not in _ADC_FULL_SCALE_VALUES:
+            value = int(sample)
+            self.sample_count += 1
+            self.minimum = value if self.minimum is None else min(self.minimum, value)
+            self.maximum = value if self.maximum is None else max(self.maximum, value)
+            if len(self.first_samples) < 8:
+                self.first_samples.append(value)
+            if len(self.unique_values) < _ADC_DIAGNOSTIC_UNIQUE_LIMIT:
+                self.unique_values.add(value)
+
+            # Presence detection stops after the first non-full-scale sample,
+            # but diagnostics continue for the rest of the scan.
+            if self.conclusive:
+                continue
+            if value not in _ADC_FULL_SCALE_VALUES:
                 # Presence is established for this scan. Do no more work on
                 # later chunks and do not mistake ordinary clipped regions
                 # for a disconnected bus.
                 self.conclusive = True
-                return None
-            self.full_scale_samples += 1
-            if self.full_scale_samples >= self.minimum_samples:
-                self.conclusive = True
-                return (
-                    "ADC/subtarget presence check failed: the first "
-                    f"{self.full_scale_samples} returned samples were all full "
-                    "scale (0x3fff/0xfffc/0xff). The production ADC data bus "
-                    "appears disconnected, tri-stated, or permanently saturated."
-                )
+            else:
+                self.full_scale_samples += 1
+                if self.full_scale_samples >= self.minimum_samples:
+                    self.conclusive = True
+                    return (
+                        "ADC/subtarget presence check failed: the first "
+                        f"{self.full_scale_samples} returned samples were all full "
+                        "scale (0x3fff/0xfffc/0xff). The production ADC data bus "
+                        "appears disconnected, tri-stated, or permanently saturated."
+                    )
         return None
+
+    def summary(self) -> Optional[str]:
+        if not self.enabled or not self.sample_count:
+            return None
+        unique = len(self.unique_values)
+        unique_suffix = ">=" if unique >= _ADC_DIAGNOSTIC_UNIQUE_LIMIT else ""
+        first = ",".join(f"0x{value:x}" for value in self.first_samples)
+        return (
+            "ADC sample summary: samples=%d min=0x%x max=0x%x unique=%s%d "
+            "full_scale=%d first=[%s]"
+            % (self.sample_count, self.minimum, self.maximum, unique_suffix,
+               unique, self.full_scale_samples, first)
+        )
 
 
 def _production_adc_fault(chunks: Iterable, *, minimum_samples: int = _ADC_PRESENCE_MIN_SAMPLES) -> Optional[str]:
@@ -785,6 +817,9 @@ class DeviceService:
                     # before the service releases this scan generator.
                     await transfer_iter.aclose()
                 finally:
+                    summary = adc_monitor.summary()
+                    if summary is not None:
+                        logger.info("%s", summary)
                     # Preserve the previous known-good scan when this frame
                     # is the disconnected/full-scale signature. Partial
                     # operator-stopped captures remain downloadable.
@@ -859,10 +894,16 @@ class DeviceService:
                     chunks.append(chunk)
                     self._status.chunks_in_flight += 1
             except BaseException as e:
+                summary = adc_monitor.summary()
+                if summary is not None:
+                    logger.info("%s", summary)
                 self._drop_conn_on_error(e)
                 if _is_fatal_usb_error(e):
                     raise DeviceNotReady(str(e)) from e
                 raise
+            summary = adc_monitor.summary()
+            if summary is not None:
+                logger.info("%s", summary)
             send_time = time.perf_counter() - t0
 
         pixels_per_chunk = math.ceil(req.latency_bytes / req.dwell)

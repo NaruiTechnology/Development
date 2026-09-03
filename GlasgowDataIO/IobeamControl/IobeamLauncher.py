@@ -62,7 +62,7 @@ class IobeamLauncher:
         # The plan ID is deterministic for the generated design. The device
         # retains the ID of the running FPGA image, so download_target() can
         # skip synthesis and programming when the same image is still loaded.
-        image_programmed = await device.download_target(plan, reload=False)
+        image_programmed = await device.download_target(plan, reload=True)
 
         # DirectDemultiplexer is constructed AFTER download_target so the USB
         # configuration switch runs on a fully-enumerated, stable device.
