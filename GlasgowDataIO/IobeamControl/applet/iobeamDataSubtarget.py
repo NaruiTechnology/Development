@@ -204,17 +204,24 @@ class IobeamDataSubtarget(Elaboratable):
         present_strobes = set()
         if platform is not None and _has_resource("control"):
             ctrl_res = next(r for r in resources if r.name == "control")
-            ctrl_dirs = {sub.name: "-" for sub in ctrl_res.ios}
+            # These are control strobes, never bidirectional signals. Request
+            # output direction explicitly so the platform cannot preserve an
+            # ambiguous/inherited direction and leave OE high-impedance.
+            ctrl_dirs = {sub.name: "o" for sub in ctrl_res.ios}
             self.control = platform.request("control", dir=ctrl_dirs)
             for sub in ctrl_res.ios:
                 if hasattr(self.control, sub.name):
                     present_strobes.add(sub.name)
-                    buf = io.Buffer("o", getattr(self.control, sub.name))
-                    m.submodules[f"{sub.name}_buffer"] = buf
                     # Map known names to executor.bus signals; ignore others
                     # (e.g. d_clock, a_clock from the legacy resource).
                     if sub.name in _BUS_STROBES:
-                        m.d.comb += buf.o.eq(getattr(executor.bus, sub.name))
+                        # `dir="o"` requests an amaranth.lib.io.Pin
+                        # signature, whose `.o` is the component-facing
+                        # output. Drive it directly; wrapping the signature
+                        # in io.Buffer creates a second direction layer and
+                        # can leave the physical pad weak/high-Z.
+                        m.d.comb += getattr(self.control, sub.name).o.eq(
+                            getattr(executor.bus, sub.name))
 
         # ------------------------------------------------------------------ #
         # Optional data bus

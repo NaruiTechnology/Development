@@ -52,12 +52,10 @@ DEFAULT_RASTER_LATENCY_BYTES           = 16384
 DEFAULT_RASTER_FRAME_BLANK             = False
 DEFAULT_RASTER_COOKIE                  = 123
 DEFAULT_RASTER_OUTPUT_MODE             = "SixteenBit"
+DEFAULT_RASTER_ADC_VALID               = True
 DEFAULT_RASTER_BEAM_TYPE               = "Ion"
 DEFAULT_RASTER_EXTERNAL_CONTROL        = True
-# Keep the raster OUT window bounded like the vector path. A 32-chunk
-# window can overrun the FX2/FPGA buffering in production and leave the
-# receiver waiting for a chunk that never arrives.
-DEFAULT_RASTER_MAX_PIPELINE            = 4
+DEFAULT_RASTER_MAX_PIPELINE            = 32
 DEFAULT_RASTER_PADDING_MIN_PIXELS      = 128
 DEFAULT_RASTER_PADDING_RATIO_DENOM     = 200      # padding = total // 200 (0.5%)
 DEFAULT_RASTER_PADDING_DWELL           = 2        # used to be literally =2 in the sender
@@ -68,6 +66,7 @@ DEFAULT_VECTOR_RESOLUTION              = 2048
 DEFAULT_VECTOR_DWELL                   = 1
 DEFAULT_VECTOR_LATENCY_BYTES           = 8196
 DEFAULT_VECTOR_OUTPUT_MODE             = "SixteenBit"
+DEFAULT_VECTOR_ADC_VALID               = True
 DEFAULT_VECTOR_BEAM_TYPE               = "Ion"
 DEFAULT_VECTOR_EXTERNAL_CONTROL        = True
 DEFAULT_VECTOR_COOKIE                  = 123
@@ -162,6 +161,7 @@ class RasterParams:
     frame_blank:   bool = DEFAULT_RASTER_FRAME_BLANK
     cookie:        int  = DEFAULT_RASTER_COOKIE
     output_mode:   str  = DEFAULT_RASTER_OUTPUT_MODE
+    adc_valid:     bool = DEFAULT_RASTER_ADC_VALID
     beam_type:     str  = DEFAULT_RASTER_BEAM_TYPE
     external_control: bool = DEFAULT_RASTER_EXTERNAL_CONTROL
 
@@ -200,6 +200,7 @@ class RasterParams:
             cookie        = _coerce_int(_pick(cfg, "cookie"),                      DEFAULT_RASTER_COOKIE),
             output_mode   = _coerce_output_mode(
                 _pick(cfg, "output_mode", "outputMode"),                           DEFAULT_RASTER_OUTPUT_MODE),
+            adc_valid     = _coerce_bool(_pick(cfg, "adc_valid", "adcValid"),       DEFAULT_RASTER_ADC_VALID),
             beam_type     = _coerce_beam_type(
                 _pick(cfg, "beam_type", "beamType"),                                DEFAULT_RASTER_BEAM_TYPE),
             external_control = _coerce_bool(
@@ -251,6 +252,7 @@ class VectorParams:
     dwell:             int  = DEFAULT_VECTOR_DWELL
     latency_bytes:     int  = DEFAULT_VECTOR_LATENCY_BYTES
     output_mode:       str  = DEFAULT_VECTOR_OUTPUT_MODE
+    adc_valid:         bool = DEFAULT_VECTOR_ADC_VALID
     beam_type:         str  = DEFAULT_VECTOR_BEAM_TYPE
     external_control:  bool = DEFAULT_VECTOR_EXTERNAL_CONTROL
     cookie:            int  = DEFAULT_VECTOR_COOKIE
@@ -284,6 +286,7 @@ class VectorParams:
                 _pick(cfg, "latency_bytes", "latency"),                       DEFAULT_VECTOR_LATENCY_BYTES),
             output_mode       = _coerce_output_mode(
                 _pick(cfg, "output_mode", "outputMode"),                      DEFAULT_VECTOR_OUTPUT_MODE),
+            adc_valid         = _coerce_bool(_pick(cfg, "adc_valid", "adcValid"), DEFAULT_VECTOR_ADC_VALID),
             beam_type         = _coerce_beam_type(
                 _pick(cfg, "beam_type", "beamType"),                           DEFAULT_VECTOR_BEAM_TYPE),
             external_control  = _coerce_bool(

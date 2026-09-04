@@ -62,6 +62,7 @@ export interface RasterRequest {
    *  "SixteenBit" when omitted, so this field is optional for frontends
    *  that don't expose a control for it. */
   output_mode?: "SixteenBit" | "EightBit";
+  adc_valid: boolean;
   do_validate: boolean;
   roi?: ROIRequest | null;
   /** Browser-provided grayscale crop for simulation-only raster scans.
@@ -106,6 +107,7 @@ export interface VectorRequest {
   dwell: number;
   latency_bytes: number;
   output_mode: "SixteenBit" | "EightBit";
+  adc_valid: boolean;
   feedback_mode?: VectorFeedbackMode;
   /** Confirmed gray interval in 8-bit UI units (0..255). */
   gray_level_range?: [number, number] | null;

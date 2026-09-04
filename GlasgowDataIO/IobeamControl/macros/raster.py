@@ -49,7 +49,7 @@ BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
 # AutomationPy.buildingblocks.scan_params; these mirror the values there
 # so this module stays importable without that dependency for callers
 # that just want the macro and pass everything explicitly.
-DEFAULT_MAX_PIPELINE        = 4
+DEFAULT_MAX_PIPELINE        = 32
 DEFAULT_PADDING_MIN_PIXELS  = 128
 DEFAULT_PADDING_RATIO_DENOM = 200    # padding = total_pixels // 200 (0.5%)
 DEFAULT_PADDING_DWELL       = 2

@@ -226,15 +226,15 @@ function validateAdcTiming(data: unknown): void {
   const actionData = streamData ? asRecord(streamData.actionData) : null;
   if (!actionData) return;
 
-  const halfPeriod = actionData.adcHalfPeriod ?? 4;
+  const halfPeriod = actionData.adcHalfPeriod ?? 6;
   const settleCycles = actionData.adcSettleCycles ?? 2;
   if (!Number.isInteger(halfPeriod) || !Number.isInteger(settleCycles)
       || (halfPeriod as number) < 1 || (halfPeriod as number) > 255
       || (settleCycles as number) < 1 || (settleCycles as number) > 255
-      || (halfPeriod as number) * 2 < (settleCycles as number) + 6) {
+      || (halfPeriod as number) * 2 < (settleCycles as number) + 9) {
     throw new ConfigError(
       "invalid ADC timing: adcHalfPeriod and adcSettleCycles must be whole numbers " +
-      "from 1 to 255, with 2 * adcHalfPeriod >= adcSettleCycles + 6",
+      "from 1 to 255, with 2 * adcHalfPeriod >= adcSettleCycles + 9",
       400
     );
   }
