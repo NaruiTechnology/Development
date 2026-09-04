@@ -209,7 +209,7 @@ export function VectorParameters({
           </label>
           <select
             className="select"
-            value={v.output_mode}
+            value={v.output_mode ?? "EightBit"}
             disabled={disabled}
             onChange={(e) =>
               dispatch(

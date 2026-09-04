@@ -141,7 +141,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         </label>
         <select
           className="select"
-          value={r.output_mode ?? "SixteenBit"}
+          value={r.output_mode ?? "EightBit"}
           disabled={disabled}
           onChange={(e) =>
             dispatch(

@@ -894,16 +894,10 @@ class DeviceService:
                     chunks.append(chunk)
                     self._status.chunks_in_flight += 1
             except BaseException as e:
-                summary = adc_monitor.summary()
-                if summary is not None:
-                    logger.info("%s", summary)
                 self._drop_conn_on_error(e)
                 if _is_fatal_usb_error(e):
                     raise DeviceNotReady(str(e)) from e
                 raise
-            summary = adc_monitor.summary()
-            if summary is not None:
-                logger.info("%s", summary)
             send_time = time.perf_counter() - t0
 
         pixels_per_chunk = math.ceil(req.latency_bytes / req.dwell)

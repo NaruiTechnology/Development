@@ -302,7 +302,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>如何选择：</p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit（默认）</strong> — 任何关心图像质量的场合。定量 SEM、EBIC，以及任何需要后期做对比度调整或噪声分析的工作。</li>
+        <li><strong>SixteenBit</strong> — 任何关心图像质量的场合。定量 SEM、EBIC，以及任何需要后期做对比度调整或噪声分析的工作。</li>
         <li><strong>EightBit</strong> — 当 USB 带宽是瓶颈、只需预览时。大型矢量扫描（数百万点）且驻留率较高，会超出 480 Mbps USB 2.0 链路时使用。屏幕显示效果仍然良好；只是无法定量恢复微弱信号。</li>
       </ul>
 
