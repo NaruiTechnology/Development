@@ -286,7 +286,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>Picking between them:</p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit, default</strong> — when you care about image quality at all. Quantitative SEM, EBIC, anything where you&apos;ll do contrast adjustment or noise analysis in post.</li>
+        <li><strong>SixteenBit</strong> — when you care about image quality at all. Quantitative SEM, EBIC, anything where you&apos;ll do contrast adjustment or noise analysis in post.</li>
         <li><strong>EightBit</strong> — when USB bandwidth is the bottleneck and you only need a preview. Large vector scans (millions of points) at high dwell rates where the scan would otherwise outrun the 480 Mbps USB 2.0 link. The on-screen image still looks fine; you just can&apos;t quantitatively recover faint signal.</li>
       </ul>
 

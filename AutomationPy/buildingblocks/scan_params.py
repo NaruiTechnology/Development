@@ -54,7 +54,10 @@ DEFAULT_RASTER_COOKIE                  = 123
 DEFAULT_RASTER_OUTPUT_MODE             = "SixteenBit"
 DEFAULT_RASTER_BEAM_TYPE               = "Ion"
 DEFAULT_RASTER_EXTERNAL_CONTROL        = True
-DEFAULT_RASTER_MAX_PIPELINE            = 32
+# Keep the raster OUT window bounded like the vector path. A 32-chunk
+# window can overrun the FX2/FPGA buffering in production and leave the
+# receiver waiting for a chunk that never arrives.
+DEFAULT_RASTER_MAX_PIPELINE            = 4
 DEFAULT_RASTER_PADDING_MIN_PIXELS      = 128
 DEFAULT_RASTER_PADDING_RATIO_DENOM     = 200      # padding = total // 200 (0.5%)
 DEFAULT_RASTER_PADDING_DWELL           = 2        # used to be literally =2 in the sender

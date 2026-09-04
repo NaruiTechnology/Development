@@ -2,9 +2,9 @@
  * Renders the raster grayscale frame or vector ADC image onto a canvas.
  *
  * Raster and vector scans are stored as flat Uint16Array buffers and
- * rendered as auto-scaled grayscale. The hardware returns 16-bit ADC
- * samples, and real signals can live mostly below the high byte; a fixed
- * `sample >> 8` display can look blank even while data is arriving.
+ * rendered as fixed-range grayscale. The hardware returns 14-bit ADC
+ * samples in a Uint16Array, so display scaling is performed against the
+ * physical 0..0x3fff range rather than the per-frame range.
  *
  * For raster the buffer is populated row-major as the FPGA emits samples.
  * For vector default, samples arrive x-major/y-inner and are painted back
@@ -32,6 +32,7 @@ import { CanvasViewHelp } from "./CanvasViewHelp";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 
 const DAC_RANGE = 2048;
+const ADC_FULL_SCALE = 0x3fff;
 const ROI_ACTION_BLANK_COLOR = { r: 97, g: 0, b: 0 };
 const ROI_ACTION_HIGHLIGHT_COLOR = { r: 253, g: 224, b: 71 };
 
@@ -1697,7 +1698,7 @@ function paintGrayscale(
   const totalPx = edge * edge;
   const reg = limit < totalPx ? limit : totalPx;
   for (let i = 0; i < reg; i++) {
-    const g = scaleSample(buf[i], lo, hi);
+    const g = scaleSample(buf[i]);
     const p = i * 4;
     data[p + 0] = g;
     data[p + 1] = g;
@@ -1741,7 +1742,7 @@ function paintVectorDefault(
     if (!pixel) break;
     const idx = pixel.y * edge + pixel.x;
     const sample = buf[idx];
-    const g = scaleSample(sample, range.min, range.max);
+    const g = scaleSample(sample);
     const p = idx * 4;
     if (sampleInGraySpotSelection(sample, graySpotSelection)) {
       paintSpotPixel(data, p, graySpotColor);
@@ -1800,7 +1801,7 @@ function paintVectorCustom(
     const y = points[2 * i + 1] | 0;
     if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
     const idx = y * edge + x;
-    const g = scaleSample(buf[idx], lo, hi);
+    const g = scaleSample(buf[idx]);
     const p = idx * 4;
     if (blankMask?.[i] === 1) {
       paintSpotPixel(data, p, ROI_ACTION_BLANK_COLOR);
@@ -1871,7 +1872,7 @@ function paintVectorDefaultBlockFill(
     const cellRow = pixel.y;
     const cellIdx = cellRow * edge + cellCol;
     const sample = buf[cellIdx];
-    const g = scaleSample(sample, range.min, range.max);
+    const g = scaleSample(sample);
     const isSpot = sampleInGraySpotSelection(sample, graySpotSelection);
     const baseY = Math.floor((cellRow * nativeSize) / edge);
     const nextY = Math.floor(((cellRow + 1) * nativeSize) / edge);
@@ -1922,9 +1923,9 @@ function vectorDefaultRange(
   return { min: lo, max: hi, populated: limit };
 }
 
-function scaleSample(value: number, lo: number, hi: number): number {
-  if (hi <= lo) return hi > 0 ? 255 : 0;
-  return Math.max(0, Math.min(255, Math.round(((value - lo) * 255) / (hi - lo))));
+function scaleSample(value: number): number {
+  const clamped = Math.max(0, Math.min(ADC_FULL_SCALE, value));
+  return Math.round((clamped * 255) / ADC_FULL_SCALE);
 }
 
 function sampleInGraySpotSelection(sample: number, selection: GrayScaleSelection): boolean {

@@ -106,7 +106,7 @@ const defaultRaster: RasterRequest = {
   latency_bytes: 16384,
   frame_blank: false,
   cookie: 123,
-  output_mode: "SixteenBit",
+  output_mode: "EightBit",
   do_validate: true,
 };
 
@@ -117,7 +117,7 @@ const defaultVector: VectorRequest = {
   vector_resolution: 2048,
   dwell: 16,
   latency_bytes: 8196,
-  output_mode: "SixteenBit",
+  output_mode: "EightBit",
   cookie: 123,
   pre_process: true,
   do_validate: true,
@@ -195,11 +195,6 @@ function booleanDefault(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
-function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"] | undefined): VectorRequest["output_mode"] {
-  if (value === "EightBit" || value === "SixteenBit") return value;
-  return fallback ?? "SixteenBit";
-}
-
 function vectorScanPathDefault(value: unknown, fallback: VectorScanPath): VectorScanPath {
   switch (value) {
     case "vertical_raster":
@@ -257,10 +252,9 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
         raster.doValidate,
       state.raster.do_validate
     ),
-    output_mode: outputModeDefault(
-      rasterParams.output_mode ?? raster.output_mode ?? raster.outputMode,
-      state.raster.output_mode ?? "SixteenBit"
-    ),
+    // Keep the operator-facing production default independent of legacy
+    // backend defaults, which historically advertised SixteenBit.
+    output_mode: "EightBit",
   };
 
   state.vector = {
@@ -280,10 +274,7 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
       vectorParams.latency_bytes ?? vector.latency_bytes ?? vector.latency,
       state.vector.latency_bytes
     ),
-    output_mode: outputModeDefault(
-      vectorParams.output_mode ?? vector.output_mode ?? vector.outputMode,
-      state.vector.output_mode
-    ),
+    output_mode: "EightBit",
     pre_process: booleanDefault(
       vectorParams.pre_process ??
         vector.pre_process ??
