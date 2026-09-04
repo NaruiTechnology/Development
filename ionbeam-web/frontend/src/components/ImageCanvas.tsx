@@ -33,6 +33,7 @@ import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanP
 
 const DAC_RANGE = 2048;
 const ADC_FULL_SCALE = 0x3fff;
+// Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
 const ROI_ACTION_BLANK_COLOR = { r: 97, g: 0, b: 0 };
 const ROI_ACTION_HIGHLIGHT_COLOR = { r: 253, g: 224, b: 71 };
 
@@ -244,6 +245,7 @@ export function ImageCanvas({
         vectorCursor,
         vectorScanPath,
         vectorGraySpotSelection,
+        vectorGraySpotSkipped,
         vectorGraySpotColor,
       );
       setStats(s);
@@ -255,6 +257,7 @@ export function ImageCanvas({
         vectorCursor,
         vectorScanPath,
         vectorGraySpotSelection,
+        vectorGraySpotSkipped,
         vectorGraySpotColor,
       );
       setStats(s);
@@ -275,7 +278,14 @@ export function ImageCanvas({
       setStats(s);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revision, kind, renderMode, theme]);
+  }, [
+    revision,
+    kind,
+    renderMode,
+    theme,
+    vectorGraySpotSelection,
+    vectorGraySpotSkipped,
+  ]);
 
   useEffect(() => {
     if (!onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
@@ -1723,6 +1733,7 @@ function paintVectorDefault(
   populated: number,
   scanPath: VectorScanPath,
   graySpotSelection: GrayScaleSelection = null,
+  graySpotSkipped: boolean | null = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
@@ -1744,7 +1755,7 @@ function paintVectorDefault(
     const sample = buf[idx];
     const g = scaleSample(sample);
     const p = idx * 4;
-    if (sampleInGraySpotSelection(sample, graySpotSelection)) {
+    if (sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped)) {
       paintSpotPixel(data, p, graySpotColor);
     } else {
       data[p + 0] = g;
@@ -1841,6 +1852,7 @@ function paintVectorDefaultBlockFill(
   populated: number,
   scanPath: VectorScanPath,
   graySpotSelection: GrayScaleSelection = null,
+  graySpotSkipped: boolean | null = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
 ): PaintStats {
   const nativeSize = DAC_RANGE;
@@ -1873,7 +1885,7 @@ function paintVectorDefaultBlockFill(
     const cellIdx = cellRow * edge + cellCol;
     const sample = buf[cellIdx];
     const g = scaleSample(sample);
-    const isSpot = sampleInGraySpotSelection(sample, graySpotSelection);
+    const isSpot = sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped);
     const baseY = Math.floor((cellRow * nativeSize) / edge);
     const nextY = Math.floor(((cellRow + 1) * nativeSize) / edge);
     const baseX = Math.floor((cellCol * nativeSize) / edge);
@@ -1928,9 +1940,14 @@ function scaleSample(value: number): number {
   return Math.round((clamped * 255) / ADC_FULL_SCALE);
 }
 
-function sampleInGraySpotSelection(sample: number, selection: GrayScaleSelection): boolean {
+function sampleInGraySelectionToFilter(
+  sample: number,
+  selection: GrayScaleSelection,
+  skipped: boolean | null,
+): boolean {
   if (!selection) return false;
-  return grayScaleSelectionContains(selection, scaleSample(sample));
+  const selected = grayScaleSelectionContains(selection, scaleSample(sample));
+  return skipped === false ? !selected : selected;
 }
 
 function paintSpotPixel(

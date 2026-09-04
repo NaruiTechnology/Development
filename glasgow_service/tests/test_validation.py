@@ -10,6 +10,7 @@ from glasgow_service.service import (
     DeviceNotReady,
     _AdcPresenceMonitor,
     _assert_production_adc_present,
+    _production_adc_monitor_enabled,
     _production_adc_fault,
 )
 
@@ -113,6 +114,12 @@ def test_simulation_presence_check_allows_sustained_full_scale():
 
     _assert_production_adc_present(
         SimpleNamespace(IsProduction=False), chunks)
+
+
+def test_production_adc_monitor_cannot_be_disabled_by_request_flag():
+    assert _production_adc_monitor_enabled(SimpleNamespace(IsProduction=True), True)
+    assert not _production_adc_monitor_enabled(SimpleNamespace(IsProduction=True), False)
+    assert not _production_adc_monitor_enabled(SimpleNamespace(IsProduction=False), True)
 
 
 class EnsureConnErrorTest(unittest.TestCase):

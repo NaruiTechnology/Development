@@ -241,12 +241,6 @@ class VectorScanCommand(BaseCommand):
         return in_range if cfg.blank_when_inside else not in_range
 
     @staticmethod
-    def _feedback_zero_sample_like(samples):
-        if samples is None:
-            return None
-        return array.array(samples.typecode, [0] * len(samples))
-
-    @staticmethod
     def _feedback_combine_samples(probe_samples, action_samples, *, probe_dwell: int, action_dwell: int):
         if probe_samples is None:
             return action_samples
@@ -314,7 +308,10 @@ class VectorScanCommand(BaseCommand):
             blank_state = self._feedback_blank_decision(probe_samples)
 
             if self.abort.is_set():
-                yield self._feedback_zero_sample_like(probe_samples)
+                # Keep the probe value in the returned image.  The action
+                # sample is intentionally blank, but the UI needs the probe
+                # gray level to identify and mark this filtered point red.
+                yield probe_samples
                 break
 
             action_samples = None
@@ -334,7 +331,10 @@ class VectorScanCommand(BaseCommand):
                 action_samples = await self.recv_res(1, stream, OutputMode.SixteenBit)
 
             if blank_state:
-                yield self._feedback_zero_sample_like(probe_samples if probe_samples is not None else action_samples)
+                # Return the unblanked probe reading rather than a synthetic
+                # zero.  A zero loses the source gray level and makes the
+                # filtered column render black instead of the ROI red spot.
+                yield probe_samples if probe_samples is not None else action_samples
             else:
                 yield self._feedback_combine_samples(
                     probe_samples,

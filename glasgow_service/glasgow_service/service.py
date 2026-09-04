@@ -335,6 +335,11 @@ def _simulation_enabled(config) -> bool:
     return not bool(getattr(config, "IsProduction", True))
 
 
+def _production_adc_monitor_enabled(config, adc_valid: bool = True) -> bool:
+    """Enable the ADC monitor only for production scans that request it."""
+    return bool(adc_valid) and not _simulation_enabled(config)
+
+
 def _bitmap_sample(bitmap, x_norm: float, y_norm: float) -> int:
     x_norm = min(1.0, max(0.0, x_norm if math.isfinite(x_norm) else 0.0))
     y_norm = min(1.0, max(0.0, y_norm if math.isfinite(y_norm) else 0.0))
@@ -741,28 +746,43 @@ class DeviceService:
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
             self._activate_command(cmd)
+            adc_monitor = _AdcPresenceMonitor(
+                enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
+            adc_presence_fault = False
             try:
                 async for chunk in conn.transfer_multiple(
                         cmd, latency=req.latency_bytes):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
+                    fault = adc_monitor.observe(chunk)
+                    if fault is not None:
+                        logger.warning("production ADC presence warning: %s", fault)
+                        adc_presence_fault = True
+                        raise DeviceNotReady(fault)
                     yield _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
+                adc_presence_fault = adc_presence_fault or (
+                    isinstance(e, DeviceNotReady) and
+                    str(e).startswith("ADC/subtarget presence check failed:"))
                 self._drop_conn_on_error(e)
                 raise
             finally:
                 self._deactivate_command(cmd)
+                summary = adc_monitor.summary()
+                if summary is not None:
+                    logger.info("%s", summary)
                 # On normal completion AND on cancellation (Pause/Stop),
                 # snapshot whatever we got. Partial captures are still
                 # downloadable — better than nothing for a paused scan.
-                self._set_last_scan({
-                    "kind": "raster",
-                    "chunks": captured,
-                    "resolution": req.resolution,
-                    "dwell": req.dwell,
-                    "latency_bytes": req.latency_bytes,
-                    "source": "stream",
-                })
+                if not adc_presence_fault:
+                    self._set_last_scan({
+                        "kind": "raster",
+                        "chunks": captured,
+                        "resolution": req.resolution,
+                        "dwell": req.dwell,
+                        "latency_bytes": req.latency_bytes,
+                        "source": "stream",
+                    })
 
     async def vector_scan(self, req: VectorRequest) -> AsyncIterator[bytes]:
         simulated_chunks = (
@@ -798,7 +818,7 @@ class DeviceService:
             transfer_iter = conn.transfer_multiple(
                 cmd, latency=req.latency_bytes)
             adc_monitor = _AdcPresenceMonitor(
-                enabled=bool(req.adc_valid) and not _simulation_enabled(self._config))
+                enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
             adc_presence_fault = False
             try:
                 async for chunk in transfer_iter:

@@ -75,8 +75,6 @@ class IobeamLauncher:
         image_programmed = await device.download_target(plan, reload=True)
         self._logger.info("IobeamLauncher: flashed bitstream %s (build_dir=%s)",
                           plan.bitstream_id.hex(), plan.buildDir)
-
-
         # DirectDemultiplexer is constructed AFTER download_target so the USB
         # configuration switch runs on a fully-enumerated, stable device.
         device.demultiplexer = DirectDemultiplexer(device,
