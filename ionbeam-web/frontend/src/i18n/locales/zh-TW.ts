@@ -173,6 +173,7 @@ export const zhTW: Partial<TranslationTable> = {
   "raster.outputMode": "輸出模式",
   "raster.frameBlank": "畫面消隱（開始與結束時消隱）",
   "raster.doValidate": "執行資料區塊計數 / 大小 / 填充檢查",
+  "raster.adcValid": "ADC 有效",
   "raster.footnote": "驗證僅對<驗證執行>生效。掃描完成後，請使用執行報告中的<下載 CSV> / <下載影像>按鈕匯出資料。",
 
   /* ===== vector parameter form ==================================== */
@@ -215,6 +216,7 @@ export const zhTW: Partial<TranslationTable> = {
   "vector.grayLevels.select": "選擇",
   "vector.preProcess": "預先處理資料區塊",
   "vector.doValidate": "執行非空 / 填充檢查",
+  "vector.adcValid": "ADC 有效",
 
   /* ===== magnification calibration ================================ */
   "mag.beam": "束流",
@@ -457,6 +459,8 @@ export const zhTW: Partial<TranslationTable> = {
   "help.frameBlank.aria": "畫面消隱欄位的作用是什麼？",
   "help.validation.title": "驗證 — 掃描後完整性檢查",
   "help.validation.aria": "驗證欄位的作用是什麼？",
+  "help.adcValid.title": "ADC 有效 — ADC 存在性檢查",
+  "help.adcValid.aria": "ADC 有效開關有什麼作用？",
   "help.runValidated.title": "驗證執行 — 帶檢查的阻塞掃描",
   "help.runValidated.aria": "驗證執行的作用是什麼？",
   "help.pattern.title": "圖樣 — 預設掃描與自訂點列",

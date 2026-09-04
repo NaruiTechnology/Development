@@ -70,7 +70,9 @@ class DeviceNotReady(RuntimeError): ...
 # scale forever.  Depending on where the sample is observed, the same 14-bit
 # value can be represented as raw 0x3fff, left-aligned in the 16-bit stream as
 # 0xfffc, or reduced to 0xff in EightBit output mode.
-_ADC_FULL_SCALE_VALUES = frozenset((0x3FFF, 0xFFFC, 0xFF))
+# Depending on output mode/alignment, full-scale may be right-aligned
+# (0x3fff/0x3f) or left-aligned (0xfffc/0xff).
+_ADC_FULL_SCALE_VALUES = frozenset((0x3FFF, 0xFFFC, 0xFF, 0x3F))
 _ADC_PRESENCE_MIN_SAMPLES = 256
 _ADC_DIAGNOSTIC_UNIQUE_LIMIT = 64
 
@@ -625,6 +627,7 @@ class DeviceService:
             latency_bytes = req.latency_bytes,
             frame_blank   = req.frame_blank,
             cookie        = req.cookie,
+            adc_valid     = req.adc_valid,
             output_mode   = req.output_mode,
             beam_type     = req.beam_type,
             external_control = req.external_control,
@@ -639,6 +642,7 @@ class DeviceService:
             dwell             = req.dwell,
             latency_bytes     = req.latency_bytes,
             output_mode       = req.output_mode,
+            adc_valid         = req.adc_valid,
             beam_type         = req.beam_type,
             external_control  = req.external_control,
             cookie            = req.cookie,
@@ -794,7 +798,7 @@ class DeviceService:
             transfer_iter = conn.transfer_multiple(
                 cmd, latency=req.latency_bytes)
             adc_monitor = _AdcPresenceMonitor(
-                enabled=not _simulation_enabled(self._config))
+                enabled=bool(req.adc_valid) and not _simulation_enabled(self._config))
             adc_presence_fault = False
             try:
                 async for chunk in transfer_iter:
@@ -883,16 +887,22 @@ class DeviceService:
             eff = self._effective_raster_params(req)
             logger.debug(
                 "[raster] %dx%d dwell=%d latency=%d frame_blank=%s "
-                "output_mode=%s cookie=%d max_pipeline=%d",
+                "output_mode=%s cookie=%d adc_valid=%s max_pipeline=%d",
                 eff.resolution, eff.resolution, eff.dwell, eff.latency_bytes,
-                eff.frame_blank, eff.output_mode, eff.cookie, eff.max_pipeline,
+                eff.frame_blank, eff.output_mode, eff.cookie, eff.adc_valid, eff.max_pipeline,
             )
             t0 = time.perf_counter()
+            adc_monitor = _AdcPresenceMonitor(
+                enabled=bool(req.adc_valid) and not _simulation_enabled(self._config))
             try:
                 async for chunk in conn.transfer_multiple(
                         cmd, latency=req.latency_bytes):
                     chunks.append(chunk)
                     self._status.chunks_in_flight += 1
+                    fault = adc_monitor.observe(chunk)
+                    if fault is not None:
+                        logger.warning("production ADC presence warning: %s", fault)
+                        raise DeviceNotReady(fault)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 if _is_fatal_usb_error(e):

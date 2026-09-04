@@ -73,6 +73,7 @@ def test_presence_check_accepts_short_full_scale_diagnostic_scan():
 def test_presence_check_recognizes_left_aligned_and_eight_bit_full_scale():
     assert _production_adc_fault([array.array("H", [0xFFFC] * 256)])
     assert _production_adc_fault([array.array("B", [0xFF] * 256)])
+    assert _production_adc_fault([array.array("B", [0x3F] * 256)])
 
 
 def test_presence_monitor_warns_on_the_first_conclusive_chunk():

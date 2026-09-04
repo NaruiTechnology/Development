@@ -12,6 +12,9 @@ import type { ReactNode } from "react";
 import type { HelpKey } from "./en";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
+  adcValid: () => (
+    <p>啟用後，生產掃描會監視 ADC 資料流中的持續滿量程值，這通常表示 ADC 匯流排斷線或未被驅動。只有在刻意收集原始診斷資料時才關閉。</p>
+  ),
   dwell: () => (
     <>
       <div className="dwell-help__rule">

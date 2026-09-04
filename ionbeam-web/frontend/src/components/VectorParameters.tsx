@@ -18,6 +18,7 @@ import { VectorResolutionHelp } from "./VectorResolutionHelp";
 import { CustomPointsHelp } from "./CustomPointsHelp";
 import { PreProcessHelp } from "./PreProcessHelp";
 import { ValidationHelp } from "./ValidationHelp";
+import { AdcValidHelp } from "./AdcValidHelp";
 import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { DwellHelp } from "./DwellHelp";
@@ -184,32 +185,12 @@ export function VectorParameters({
       <div className="field-row">
         <div className="field">
           <label>
-            {t("vector.latencyBytes")}
-            <LatencyHelp />
-          </label>
-          <NumberStepperInput
-            value={v.latency_bytes}
-            min={latencyMin}
-            step={1}
-            inputMode="numeric"
-            disabled={disabled}
-            onValueChange={(next) =>
-              dispatch(
-                updateVector({
-                  latency_bytes: clamp(next, latencyMin, 1 << 20, 8196),
-                })
-              )
-            }
-          />
-        </div>
-        <div className="field">
-          <label>
             {t("vector.outputMode")}
             <OutputModeHelp />
           </label>
           <select
             className="select"
-            value={v.output_mode ?? "EightBit"}
+            value={v.output_mode ?? "SixteenBit"}
             disabled={disabled}
             onChange={(e) =>
               dispatch(
@@ -223,9 +204,22 @@ export function VectorParameters({
             <option value="EightBit">EightBit</option>
           </select>
         </div>
+        <label className="checkbox vacuum-switch app-switch">
+          <input type="checkbox" checked={v.adc_valid} disabled={disabled}
+            onChange={(e) => dispatch(updateVector({ adc_valid: e.target.checked }))} />
+          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+          {t("vector.adcValid")} <AdcValidHelp />
+        </label>
       </div>
 
-      <div className="field">
+      <div className="field-row">
+        <div className="field">
+          <label>{t("vector.latencyBytes")} <LatencyHelp /></label>
+          <NumberStepperInput value={v.latency_bytes} min={latencyMin} step={1}
+            inputMode="numeric" disabled={disabled}
+            onValueChange={(next) => dispatch(updateVector({ latency_bytes: clamp(next, latencyMin, 1 << 20, 8196) }))} />
+        </div>
+        <div className="field">
         <label>
           {t("vector.cookie")}
           <CookieHelp />
@@ -241,6 +235,7 @@ export function VectorParameters({
             dispatch(updateVector({ cookie: clamp(next, 0, 0xffff, 123) }))
           }
         />
+        </div>
       </div>
 
       {v.pattern === "custom" && (
@@ -300,6 +295,7 @@ export function VectorParameters({
         {t("vector.doValidate")}
         <ValidationHelp />
       </label>
+
     </div>
   );
 }

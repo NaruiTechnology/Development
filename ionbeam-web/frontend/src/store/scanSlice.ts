@@ -106,7 +106,8 @@ const defaultRaster: RasterRequest = {
   latency_bytes: 16384,
   frame_blank: false,
   cookie: 123,
-  output_mode: "EightBit",
+  output_mode: "SixteenBit",
+  adc_valid: true,
   do_validate: true,
 };
 
@@ -117,7 +118,8 @@ const defaultVector: VectorRequest = {
   vector_resolution: 2048,
   dwell: 16,
   latency_bytes: 8196,
-  output_mode: "EightBit",
+  output_mode: "SixteenBit",
+  adc_valid: true,
   cookie: 123,
   pre_process: true,
   do_validate: true,
@@ -252,9 +254,11 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
         raster.doValidate,
       state.raster.do_validate
     ),
-    // Keep the operator-facing production default independent of legacy
-    // backend defaults, which historically advertised SixteenBit.
-    output_mode: "EightBit",
+    adc_valid: booleanDefault(
+      rasterParams.adc_valid ?? raster.adc_valid ?? raster.adcValid,
+      state.raster.adc_valid
+    ),
+    output_mode: "SixteenBit",
   };
 
   state.vector = {
@@ -274,7 +278,11 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
       vectorParams.latency_bytes ?? vector.latency_bytes ?? vector.latency,
       state.vector.latency_bytes
     ),
-    output_mode: "EightBit",
+    output_mode: "SixteenBit",
+    adc_valid: booleanDefault(
+      vectorParams.adc_valid ?? vector.adc_valid ?? vector.adcValid,
+      state.vector.adc_valid
+    ),
     pre_process: booleanDefault(
       vectorParams.pre_process ??
         vector.pre_process ??
@@ -302,6 +310,9 @@ function normalizeRasterPatch(
     ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
       ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
       : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "adc_valid")
+      ? { adc_valid: booleanDefault(patch.adc_valid, current.adc_valid) }
+      : {}),
   };
 }
 
@@ -316,6 +327,9 @@ function normalizeVectorPatch(
       : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
       ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "adc_valid")
+      ? { adc_valid: booleanDefault(patch.adc_valid, current.adc_valid) }
       : {}),
   };
 }

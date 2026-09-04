@@ -26,7 +26,7 @@ class DownloadTargetCacheTestCase(unittest.IsolatedAsyncioTestCase):
         image_id = bytes.fromhex("00112233445566778899aabbccddeeff")
         bitstream = b"bitstream"
         device = object.__new__(GlasgowDevice)
-        device.bitstream_id = AsyncMock(return_value=b"different-image")
+        device.bitstream_id = AsyncMock(side_effect=[b"different-image", image_id])
         device.download_bitstream = AsyncMock()
         plan = SimpleNamespace(
             bitstream_id=image_id,
@@ -36,8 +36,22 @@ class DownloadTargetCacheTestCase(unittest.IsolatedAsyncioTestCase):
         programmed = await device.download_target(plan)
 
         self.assertTrue(programmed)
-        plan.get_bitstream.assert_awaited_once_with()
+        plan.get_bitstream.assert_awaited_once_with(debug=True)
         device.download_bitstream.assert_awaited_once_with(bitstream, image_id)
+
+    async def test_programmed_image_id_must_match_plan(self):
+        image_id = bytes.fromhex("00112233445566778899aabbccddeeff")
+        device = object.__new__(GlasgowDevice)
+        device.bitstream_id = AsyncMock(
+            side_effect=[b"different-image", b"unexpected-image"])
+        device.download_bitstream = AsyncMock()
+        plan = SimpleNamespace(
+            bitstream_id=image_id,
+            get_bitstream=AsyncMock(return_value=b"bitstream"),
+        )
+
+        with self.assertRaisesRegex(Exception, "bitstream verification failed"):
+            await device.download_target(plan)
 
 
 if __name__ == "__main__":

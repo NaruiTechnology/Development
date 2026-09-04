@@ -25,6 +25,7 @@ export type HelpKey =
   | "outputMode"
   | "frameBlank"
   | "validation"
+  | "adcValid"
   | "runValidated"
   | "pattern"
   | "vectorResolution"
@@ -37,6 +38,9 @@ export type HelpKey =
   | "magCalibration";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
+  adcValid: () => (
+    <p>When enabled, production scans monitor the ADC stream for sustained full-scale values that indicate a disconnected or undriven ADC bus. Turn it off only for deliberate raw diagnostic captures.</p>
+  ),
   dwell: () => (
     <>
       <div className="dwell-help__rule">
