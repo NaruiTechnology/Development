@@ -27,13 +27,6 @@ class IobeamLauncher:
         deviceId     = self._config.Glasgow.get("DeviceId")
         actionConfig = stateConfig.get(Consts.ACTION_DATA)
 
-        # Record the exact Python/config provenance for field diagnostics. A
-        # bitstream ID alone is not enough when multiple source trees are
-        # installed on the host.
-        self._logger.info(
-            "IobeamLauncher: source=%s config=%s",
-            __file__, getattr(self._config, "_jsonFile", "<inline>"))
-
         # ------------------------------------------------------------------ #
         # 1.  Open device and build Amaranth design                           #
         # ------------------------------------------------------------------ #
@@ -49,7 +42,6 @@ class IobeamLauncher:
             for p in actionConfig.get("ports", [])
             for n in p.get("pinList", [])
         ]
-        self._logger.info("IobeamLauncher: stream pins=%s", ",".join(pin_list) or "<none>")
 
         applet_args = SimpleNamespace(
             voltage_map  = {"A": action_voltage, "B": action_voltage},
@@ -66,14 +58,11 @@ class IobeamLauncher:
         # 2.  Synthesise and flash bitstream                                  #
         # ------------------------------------------------------------------ #
         plan = target.build_plan()
-        self._logger.info("IobeamLauncher: force-building bitstream %s", plan.bitstream_id.hex())
 
         # The plan ID is deterministic for the generated design. The device
         # retains the ID of the running FPGA image, so download_target() can
         # skip synthesis and programming when the same image is still loaded.
-        image_programmed = await device.download_target(plan, reload=True)
-        self._logger.info("IobeamLauncher: flashed bitstream %s (build_dir=%s)",
-                          plan.bitstream_id.hex(), plan.buildDir)
+        image_programmed = await device.download_target(plan, reload=False)
 
         # DirectDemultiplexer is constructed AFTER download_target so the USB
         # configuration switch runs on a fully-enumerated, stable device.

@@ -24,7 +24,6 @@ import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
 import { FrameBlankHelp } from "./FrameBlankHelp";
 import { ValidationHelp } from "./ValidationHelp";
-import { AdcValidHelp } from "./AdcValidHelp";
 import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
@@ -57,7 +56,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
     <div>
       <BeamEnergyField disabled={disabled} />
 
-      <div className="field-row">
+      <div className="field">
         <label>
           {t("scan.modeGuide")}
           <ScanModeHelp />
@@ -135,8 +134,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         </div>
       </div>
 
-      <div className="field-row">
-        <div className="field">
+      <div className="field">
         <label>
           {t("raster.outputMode")}
           <OutputModeHelp />
@@ -158,13 +156,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           <option value="SixteenBit">SixteenBit</option>
           <option value="EightBit">EightBit</option>
         </select>
-      </div>
-      <label className="checkbox vacuum-switch app-switch">
-        <input type="checkbox" checked={r.adc_valid} disabled={disabled}
-          onChange={(e) => dispatch(updateRaster({ adc_valid: e.target.checked }))} />
-        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-        {t("raster.adcValid")} <AdcValidHelp />
-      </label>
       </div>
 
       <label className="checkbox vacuum-switch app-switch">
@@ -196,7 +187,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         {t("raster.doValidate")}
         <ValidationHelp />
       </label>
-
 
       <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
         {footnoteParts}

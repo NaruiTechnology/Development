@@ -575,7 +575,7 @@ function GeneralTab({ draft }: { draft: unknown }) {
     1000,
   );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
-  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 6);
+  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
   const adcSettleCycles = numberField(draft, [...ACTION_DATA_PATH, "adcSettleCycles"], 2);
   const adcTimingValid = validAdcTiming(draft);
   const adcClockMHz = Number.isFinite(adcHalfPeriod) && adcHalfPeriod > 0

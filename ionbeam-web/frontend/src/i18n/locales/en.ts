@@ -188,7 +188,6 @@ export const en = {
   "raster.outputMode": "Output mode",
   "raster.frameBlank": "Frame blank (start and end blanked)",
   "raster.doValidate": "Run chunk-count / size checks",
-  "raster.adcValid": "ADC valid",
   "raster.footnote": "Validation applies to <Run validated>. After any scan completes, use the <Download CSV> / <Download figure> buttons in the Run report to export the data.",
 
   /* ===== vector parameter form ==================================== */
@@ -231,7 +230,6 @@ export const en = {
   "vector.grayLevels.select": "Select",
   "vector.preProcess": "Pre-process chunks",
   "vector.doValidate": "Run chunk presence checks",
-  "vector.adcValid": "ADC valid",
 
   /* ===== magnification calibration ================================ */
   "mag.beam": "Beam",
@@ -514,8 +512,6 @@ export const en = {
   "help.frameBlank.aria": "What does the frame blank field do?",
   "help.validation.title": "Validation — post-scan integrity checks",
   "help.validation.aria": "What does the validation field do?",
-  "help.adcValid.title": "ADC valid — ADC presence check",
-  "help.adcValid.aria": "What does the ADC valid switch do?",
   "help.runValidated.title": "Run validated — blocking scan with checks",
   "help.runValidated.aria": "What does Run validated do?",
   "help.pattern.title": "Pattern — default sweep vs custom points",

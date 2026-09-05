@@ -5,8 +5,6 @@ GlasgowDataIO/__init__.py
 GlasgowDataIO/glasgowReadDataApp.py
 GlasgowDataIO/glasgowStreamDataApp.py
 GlasgowDataIO/glasgowWriteDataApp.py
-LoadFPGAImage/__init__.py
-LoadFPGAImage/loadFPGAImageApp.py
 iobeam_development.egg-info/PKG-INFO
 iobeam_development.egg-info/SOURCES.txt
 iobeam_development.egg-info/dependency_links.txt

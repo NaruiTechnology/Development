@@ -107,7 +107,6 @@ const defaultRaster: RasterRequest = {
   frame_blank: false,
   cookie: 123,
   output_mode: "SixteenBit",
-  adc_valid: true,
   do_validate: true,
 };
 
@@ -119,7 +118,6 @@ const defaultVector: VectorRequest = {
   dwell: 16,
   latency_bytes: 8196,
   output_mode: "SixteenBit",
-  adc_valid: true,
   cookie: 123,
   pre_process: true,
   do_validate: true,
@@ -197,6 +195,11 @@ function booleanDefault(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
+function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"] | undefined): VectorRequest["output_mode"] {
+  if (value === "EightBit" || value === "SixteenBit") return value;
+  return fallback ?? "SixteenBit";
+}
+
 function vectorScanPathDefault(value: unknown, fallback: VectorScanPath): VectorScanPath {
   switch (value) {
     case "vertical_raster":
@@ -254,11 +257,10 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
         raster.doValidate,
       state.raster.do_validate
     ),
-    adc_valid: booleanDefault(
-      rasterParams.adc_valid ?? raster.adc_valid ?? raster.adcValid,
-      state.raster.adc_valid
+    output_mode: outputModeDefault(
+      rasterParams.output_mode ?? raster.output_mode ?? raster.outputMode,
+      state.raster.output_mode ?? "SixteenBit"
     ),
-    output_mode: "SixteenBit",
   };
 
   state.vector = {
@@ -278,10 +280,9 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
       vectorParams.latency_bytes ?? vector.latency_bytes ?? vector.latency,
       state.vector.latency_bytes
     ),
-    output_mode: "SixteenBit",
-    adc_valid: booleanDefault(
-      vectorParams.adc_valid ?? vector.adc_valid ?? vector.adcValid,
-      state.vector.adc_valid
+    output_mode: outputModeDefault(
+      vectorParams.output_mode ?? vector.output_mode ?? vector.outputMode,
+      state.vector.output_mode
     ),
     pre_process: booleanDefault(
       vectorParams.pre_process ??
@@ -310,9 +311,6 @@ function normalizeRasterPatch(
     ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
       ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
       : {}),
-    ...(Object.prototype.hasOwnProperty.call(patch, "adc_valid")
-      ? { adc_valid: booleanDefault(patch.adc_valid, current.adc_valid) }
-      : {}),
   };
 }
 
@@ -327,9 +325,6 @@ function normalizeVectorPatch(
       : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
       ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
-      : {}),
-    ...(Object.prototype.hasOwnProperty.call(patch, "adc_valid")
-      ? { adc_valid: booleanDefault(patch.adc_valid, current.adc_valid) }
       : {}),
   };
 }

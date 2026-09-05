@@ -1,12 +1,12 @@
 {
   "Provider": "PostgreSQL",
-  "DatabaseName": "ionbeam_admin_db",
-  "Schema": "ionbeam_admin",
-  "Host": "124.221.175.89",
+  "DatabaseName": "iobeam_admin",
+  "Schema": "iobeam_admin",
+  "Host": "localhost",
   "Port": 5432,
-  "User": "deployworkspace",
+  "User": "iobeam_admin_app",
   "Password": "DWS_112233",
-  "ConnectionString": "postgresql://deployworkspace:DWS_112233@124.221.175.89:5432/ionbeam_admin_db",
+  "ConnectionString": "postgresql://iobeam_admin_app:DWS_112233@localhost:5432/iobeam_admin",
   "SslMode": "",
   "CommandTimeoutMs": 30000
 }

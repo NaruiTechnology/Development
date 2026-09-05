@@ -164,7 +164,6 @@ export const zhCN: Partial<TranslationTable> = {
   "raster.outputMode": "输出模式",
   "raster.frameBlank": "帧消隐（开始与结束时消隐）",
   "raster.doValidate": "执行数据块计数 / 大小 / 填充检查",
-  "raster.adcValid": "ADC 有效",
   "raster.footnote": "验证仅对<验证运行>生效。扫描完成后，请使用运行报告中的<下载 CSV> / <下载图像>按钮导出数据。",
 
   /* ===== vector parameter form ==================================== */
@@ -207,7 +206,6 @@ export const zhCN: Partial<TranslationTable> = {
   "vector.grayLevels.select": "选择",
   "vector.preProcess": "预处理数据块",
   "vector.doValidate": "执行非空 / 填充检查",
-  "vector.adcValid": "ADC 有效",
 
   /* ===== magnification calibration ================================ */
   "mag.beam": "束流",
@@ -453,8 +451,6 @@ export const zhCN: Partial<TranslationTable> = {
   "help.frameBlank.aria": "帧消隐字段的作用是什么？",
   "help.validation.title": "验证 — 扫描后完整性检查",
   "help.validation.aria": "验证字段的作用是什么？",
-  "help.adcValid.title": "ADC 有效 — ADC 存在性检查",
-  "help.adcValid.aria": "ADC 有效开关有什么作用？",
   "help.runValidated.title": "验证运行 — 带检查的阻塞扫描",
   "help.runValidated.aria": "验证运行的作用是什么？",
   "help.pattern.title": "图样 — 默认扫描与自定义点列",

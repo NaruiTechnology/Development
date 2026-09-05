@@ -89,7 +89,6 @@ class RasterRequest(BaseModel):
     # New in scan-params refactor. Was previously hardcoded to SixteenBit
     # inside the macro because the API had no field for it.
     output_mode:   str  = Field("SixteenBit", description="SixteenBit or EightBit.")
-    adc_valid:     bool = Field(True, description="Run the production ADC presence/saturation check.")
     beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
 
@@ -209,7 +208,6 @@ class VectorRequest(BaseModel):
     )
     latency_bytes:  int  = Field(8196, ge=2, description="Matches `vectorScan.latency` in streamData.json.")
     output_mode:    str  = Field("SixteenBit", description="SixteenBit or EightBit.")
-    adc_valid:      bool = Field(True, description="Run the production ADC presence/saturation check.")
     feedback_mode:  VectorFeedbackMode = Field(
         VectorFeedbackMode.standard,
         description="Vector blanking mode. adaptive_gray_feedback enables host-side feedback blanking.",

@@ -12,9 +12,6 @@ import type { ReactNode } from "react";
 import type { HelpKey } from "./en";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
-  adcValid: () => (
-    <p>啟用後，生產掃描會監視 ADC 資料流中的持續滿量程值，這通常表示 ADC 匯流排斷線或未被驅動。只有在刻意收集原始診斷資料時才關閉。</p>
-  ),
   dwell: () => (
     <>
       <div className="dwell-help__rule">
@@ -301,7 +298,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>如何選擇：</p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit</strong> — 任何在意影像品質的場合。定量 SEM、EBIC，以及任何需要後期做對比度調整或雜訊分析的工作。</li>
+        <li><strong>SixteenBit（預設）</strong> — 任何在意影像品質的場合。定量 SEM、EBIC，以及任何需要後期做對比度調整或雜訊分析的工作。</li>
         <li><strong>EightBit</strong> — 當 USB 頻寬成為瓶頸、僅需預覽時。大型矢量掃描（數百萬點）且 dwell 較高，會超出 480 Mbps USB 2.0 連結時使用。螢幕顯示效果仍然良好；只是無法定量還原微弱訊號。</li>
       </ul>
 

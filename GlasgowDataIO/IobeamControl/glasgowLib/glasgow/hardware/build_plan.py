@@ -189,9 +189,7 @@ class GlasgowBuildPlan:
         bitstream_filename = cache_path / "bitstreams" / self.bitstream_id.hex()
         stdout_filename = bitstream_filename.with_suffix(".output")
 
-        # A debug build must bypass the cache so the generated constraint and
-        # netlist files are regenerated and preserved for inspection.
-        cache_exists = (not debug) and bitstream_filename.exists() and stdout_filename.exists()
+        cache_exists = bitstream_filename.exists() and stdout_filename.exists()
         if cache_exists:
             with bitstream_filename.open("rb") as f:
                 stored_hash = f.read(hashlib.blake2s().digest_size)

@@ -539,19 +539,9 @@ class GlasgowDevice:
         logger.info("generating bitstream ID %s", plan.bitstream_id.hex())
         
         # await self.download_bitstream(plan.get_bitstream(), plan.bitstream_id)    #TODO     
-        # Preserve the generated build tree (top.pcf/top.il/top.v/top.bin)
-        # for pin/netlist inspection while troubleshooting gateware.
-        bitstream = await plan.get_bitstream(debug=True)
+        bitstream = await plan.get_bitstream()
         if bitstream:
             await self.download_bitstream(bitstream, plan.bitstream_id)
-            running_id = await self.bitstream_id()
-            if running_id != plan.bitstream_id:
-                expected = plan.bitstream_id.hex()
-                actual = "none" if running_id is None else running_id.hex()
-                raise GlasgowDeviceError(
-                    f"FPGA bitstream verification failed: expected {expected}, "
-                    f"device reports {actual}")
-            logger.info("verified running FPGA bitstream ID %s", running_id.hex())
             return True
         return False
             
