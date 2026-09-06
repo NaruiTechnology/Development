@@ -1,0 +1,1810 @@
+{
+  "status": "reference audit, not a manufacturing release",
+  "captures": [
+    {
+      "path": "/home/vboxuser/Downloads/rawData/生产模式_矢量/GlasgowService.log",
+      "sha256": "9452a0ff5ba09cd319406084a50d74fda6cb90564459624a338abe7771e39603",
+      "data_read_records": 8177,
+      "truncated_data_read_records": 8176,
+      "sync_reply_records_excluded": 1,
+      "sync_reply_lines": [
+        45
+      ],
+      "records_with_incomplete_visible_word": 0,
+      "first_data_read_line": 54,
+      "first_non_3fff_word_line": null,
+      "visible_complete_words": 261648,
+      "visible_unique_words": 1,
+      "visible_3fff_words": 261648,
+      "visible_min": 16383,
+      "visible_max": 16383,
+      "most_common_visible_words": [
+        {
+          "hex": "0x3FFF",
+          "count": 261648
+        }
+      ],
+      "limitation": "Visible log words only; omitted transfer bytes are unknown. Four-byte FFFF/cookie replies excluded by recorded format. Log record boundaries assumed to align to 16-bit samples."
+    },
+    {
+      "path": "/home/vboxuser/Downloads/rawData/仿真模式_矢量/GlasgowService.log",
+      "sha256": "ef7db0d7c22b97f1d754b99c67918cb3e8055f94d2aefd6001919cca63300d24",
+      "data_read_records": 8177,
+      "truncated_data_read_records": 8176,
+      "sync_reply_records_excluded": 1,
+      "sync_reply_lines": [
+        46
+      ],
+      "records_with_incomplete_visible_word": 0,
+      "first_data_read_line": 55,
+      "first_non_3fff_word_line": 55,
+      "visible_complete_words": 261648,
+      "visible_unique_words": 8,
+      "visible_3fff_words": 0,
+      "visible_min": 0,
+      "visible_max": 57344,
+      "most_common_visible_words": [
+        {
+          "hex": "0x0000",
+          "count": 32706
+        },
+        {
+          "hex": "0x2000",
+          "count": 32706
+        },
+        {
+          "hex": "0x4000",
+          "count": 32706
+        },
+        {
+          "hex": "0x6000",
+          "count": 32706
+        },
+        {
+          "hex": "0x8000",
+          "count": 32706
+        },
+        {
+          "hex": "0xA000",
+          "count": 32706
+        },
+        {
+          "hex": "0xC000",
+          "count": 32706
+        },
+        {
+          "hex": "0xE000",
+          "count": 32706
+        }
+      ],
+      "limitation": "Visible log words only; omitted transfer bytes are unknown. Four-byte FFFF/cookie replies excluded by recorded format. Log record boundaries assumed to align to 16-bit samples."
+    },
+    {
+      "path": "/home/vboxuser/Downloads/rawData/X_and_Y_矢量/GlasgowService.log",
+      "sha256": "6519e2afa59d765211fd978386853f8eeba0d731e43f78b3257b32df153c651a",
+      "data_read_records": 8177,
+      "truncated_data_read_records": 8176,
+      "sync_reply_records_excluded": 1,
+      "sync_reply_lines": [
+        45
+      ],
+      "records_with_incomplete_visible_word": 0,
+      "first_data_read_line": 54,
+      "first_non_3fff_word_line": null,
+      "visible_complete_words": 261648,
+      "visible_unique_words": 1,
+      "visible_3fff_words": 261648,
+      "visible_min": 16383,
+      "visible_max": 16383,
+      "most_common_visible_words": [
+        {
+          "hex": "0x3FFF",
+          "count": 261648
+        }
+      ],
+      "limitation": "Visible log words only; omitted transfer bytes are unknown. Four-byte FFFF/cookie replies excluded by recorded format. Log record boundaries assumed to align to 16-bit samples."
+    }
+  ],
+  "reference_boards": [
+    {
+      "path": "/home/vboxuser/Downloads/rawData/硬件文档/OBI Data Interconnect.kicad_pcb",
+      "sha256": "4e090ab428883a7f69a37a29d7031050356f497d06c54b44d158611249d09522",
+      "footprints": 23,
+      "track_segments": 345,
+      "vias": 230,
+      "zones": 3,
+      "selected_connectivity": {
+        "J2": {
+          "value": "Conn_02x10_Odd_Even",
+          "footprint": "OBI Data Interconnect:IDC-Header_Receptacle_2x10_P2.54mm_Vertical_No_Pin_1_Mark",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "External +3.3V Source",
+              "pin_function": "Pin_1"
+            },
+            {
+              "pad": "2",
+              "net": "+3.3V",
+              "pin_function": "Pin_2"
+            },
+            {
+              "pad": "3",
+              "net": "/D-17",
+              "pin_function": "Pin_3"
+            },
+            {
+              "pad": "4",
+              "net": "GNDD",
+              "pin_function": "Pin_4"
+            },
+            {
+              "pad": "5",
+              "net": "/D-18",
+              "pin_function": "Pin_5"
+            },
+            {
+              "pad": "6",
+              "net": "GNDD",
+              "pin_function": "Pin_6"
+            },
+            {
+              "pad": "7",
+              "net": "/D-19",
+              "pin_function": "Pin_7"
+            },
+            {
+              "pad": "8",
+              "net": "GNDD",
+              "pin_function": "Pin_8"
+            },
+            {
+              "pad": "9",
+              "net": "/D-20",
+              "pin_function": "Pin_9"
+            },
+            {
+              "pad": "10",
+              "net": "GNDD",
+              "pin_function": "Pin_10"
+            },
+            {
+              "pad": "11",
+              "net": "/D-21",
+              "pin_function": "Pin_11"
+            },
+            {
+              "pad": "12",
+              "net": "GNDD",
+              "pin_function": "Pin_12"
+            },
+            {
+              "pad": "13",
+              "net": "/D-22",
+              "pin_function": "Pin_13"
+            },
+            {
+              "pad": "14",
+              "net": "GNDD",
+              "pin_function": "Pin_14"
+            },
+            {
+              "pad": "15",
+              "net": "/D-23",
+              "pin_function": "Pin_15"
+            },
+            {
+              "pad": "16",
+              "net": "GNDD",
+              "pin_function": "Pin_16"
+            },
+            {
+              "pad": "17",
+              "net": "/D-24",
+              "pin_function": "Pin_17"
+            },
+            {
+              "pad": "18",
+              "net": "GNDD",
+              "pin_function": "Pin_18"
+            },
+            {
+              "pad": "19",
+              "net": "unconnected-(J2-Pin_19-Pad19)",
+              "pin_function": "Pin_19"
+            },
+            {
+              "pad": "20",
+              "net": "unconnected-(J2-Pin_20-Pad20)",
+              "pin_function": "Pin_20"
+            }
+          ]
+        },
+        "J4": {
+          "value": "Conn_02x10_Odd_Even",
+          "footprint": "OBI Data Interconnect:IDC-Header_Receptacle_2x10_P2.54mm_Vertical_No_Pin_1_Mark",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "unconnected-(J4-Pin_1-Pad1)",
+              "pin_function": "Pin_1"
+            },
+            {
+              "pad": "2",
+              "net": "+3.3V",
+              "pin_function": "Pin_2"
+            },
+            {
+              "pad": "3",
+              "net": "/D-9",
+              "pin_function": "Pin_3"
+            },
+            {
+              "pad": "4",
+              "net": "GNDD",
+              "pin_function": "Pin_4"
+            },
+            {
+              "pad": "5",
+              "net": "/D-10",
+              "pin_function": "Pin_5"
+            },
+            {
+              "pad": "6",
+              "net": "GNDD",
+              "pin_function": "Pin_6"
+            },
+            {
+              "pad": "7",
+              "net": "/D-11",
+              "pin_function": "Pin_7"
+            },
+            {
+              "pad": "8",
+              "net": "GNDD",
+              "pin_function": "Pin_8"
+            },
+            {
+              "pad": "9",
+              "net": "/D-12",
+              "pin_function": "Pin_9"
+            },
+            {
+              "pad": "10",
+              "net": "GNDD",
+              "pin_function": "Pin_10"
+            },
+            {
+              "pad": "11",
+              "net": "/D-13",
+              "pin_function": "Pin_11"
+            },
+            {
+              "pad": "12",
+              "net": "GNDD",
+              "pin_function": "Pin_12"
+            },
+            {
+              "pad": "13",
+              "net": "/D-14",
+              "pin_function": "Pin_13"
+            },
+            {
+              "pad": "14",
+              "net": "GNDD",
+              "pin_function": "Pin_14"
+            },
+            {
+              "pad": "15",
+              "net": "/D-15",
+              "pin_function": "Pin_15"
+            },
+            {
+              "pad": "16",
+              "net": "GNDD",
+              "pin_function": "Pin_16"
+            },
+            {
+              "pad": "17",
+              "net": "/D-16",
+              "pin_function": "Pin_17"
+            },
+            {
+              "pad": "18",
+              "net": "GNDD",
+              "pin_function": "Pin_18"
+            },
+            {
+              "pad": "19",
+              "net": "unconnected-(J4-Pin_19-Pad19)",
+              "pin_function": "Pin_19"
+            },
+            {
+              "pad": "20",
+              "net": "unconnected-(J4-Pin_20-Pad20)",
+              "pin_function": "Pin_20"
+            }
+          ]
+        },
+        "J3": {
+          "value": "Conn_02x10_Odd_Even",
+          "footprint": "OBI Data Interconnect:IDC-Header_Receptacle_2x10_P2.54mm_Vertical_No_Pin_1_Mark",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "unconnected-(J3-Pin_1-Pad1)",
+              "pin_function": "Pin_1"
+            },
+            {
+              "pad": "2",
+              "net": "+3.3V",
+              "pin_function": "Pin_2"
+            },
+            {
+              "pad": "3",
+              "net": "/D-1",
+              "pin_function": "Pin_3"
+            },
+            {
+              "pad": "4",
+              "net": "GNDD",
+              "pin_function": "Pin_4"
+            },
+            {
+              "pad": "5",
+              "net": "/D-2",
+              "pin_function": "Pin_5"
+            },
+            {
+              "pad": "6",
+              "net": "GNDD",
+              "pin_function": "Pin_6"
+            },
+            {
+              "pad": "7",
+              "net": "/D-3",
+              "pin_function": "Pin_7"
+            },
+            {
+              "pad": "8",
+              "net": "GNDD",
+              "pin_function": "Pin_8"
+            },
+            {
+              "pad": "9",
+              "net": "/D-4",
+              "pin_function": "Pin_9"
+            },
+            {
+              "pad": "10",
+              "net": "GNDD",
+              "pin_function": "Pin_10"
+            },
+            {
+              "pad": "11",
+              "net": "/D-5",
+              "pin_function": "Pin_11"
+            },
+            {
+              "pad": "12",
+              "net": "GNDD",
+              "pin_function": "Pin_12"
+            },
+            {
+              "pad": "13",
+              "net": "/D-6",
+              "pin_function": "Pin_13"
+            },
+            {
+              "pad": "14",
+              "net": "GNDD",
+              "pin_function": "Pin_14"
+            },
+            {
+              "pad": "15",
+              "net": "/D-7",
+              "pin_function": "Pin_15"
+            },
+            {
+              "pad": "16",
+              "net": "GNDD",
+              "pin_function": "Pin_16"
+            },
+            {
+              "pad": "17",
+              "net": "/D-8",
+              "pin_function": "Pin_17"
+            },
+            {
+              "pad": "18",
+              "net": "GNDD",
+              "pin_function": "Pin_18"
+            },
+            {
+              "pad": "19",
+              "net": "unconnected-(J3-Pin_19-Pad19)",
+              "pin_function": "Pin_19"
+            },
+            {
+              "pad": "20",
+              "net": "unconnected-(J3-Pin_20-Pad20)",
+              "pin_function": "Pin_20"
+            }
+          ]
+        },
+        "J1": {
+          "value": "Conn_02x22_Odd_Even",
+          "footprint": "OBI Data Interconnect:PinReceptacle_2x22_P1.27mm_Vertical_BackSide_SMD",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "GNDD",
+              "pin_function": "Pin_1"
+            },
+            {
+              "pad": "2",
+              "net": "Glasgow +3.3V Source",
+              "pin_function": "Pin_2"
+            },
+            {
+              "pad": "3",
+              "net": "/K1",
+              "pin_function": "Pin_3"
+            },
+            {
+              "pad": "4",
+              "net": "GNDD",
+              "pin_function": "Pin_4"
+            },
+            {
+              "pad": "5",
+              "net": "/J1",
+              "pin_function": "Pin_5"
+            },
+            {
+              "pad": "6",
+              "net": "GNDD",
+              "pin_function": "Pin_6"
+            },
+            {
+              "pad": "7",
+              "net": "GNDD",
+              "pin_function": "Pin_7"
+            },
+            {
+              "pad": "8",
+              "net": "/Z12_P",
+              "pin_function": "Pin_8"
+            },
+            {
+              "pad": "9",
+              "net": "/H1",
+              "pin_function": "Pin_9"
+            },
+            {
+              "pad": "10",
+              "net": "/Z12_N",
+              "pin_function": "Pin_10"
+            },
+            {
+              "pad": "11",
+              "net": "/H2",
+              "pin_function": "Pin_11"
+            },
+            {
+              "pad": "12",
+              "net": "GNDD",
+              "pin_function": "Pin_12"
+            },
+            {
+              "pad": "13",
+              "net": "GNDD",
+              "pin_function": "Pin_13"
+            },
+            {
+              "pad": "14",
+              "net": "/H3",
+              "pin_function": "Pin_14"
+            },
+            {
+              "pad": "15",
+              "net": "/G1",
+              "pin_function": "Pin_15"
+            },
+            {
+              "pad": "16",
+              "net": "/G3",
+              "pin_function": "Pin_16"
+            },
+            {
+              "pad": "17",
+              "net": "/G2",
+              "pin_function": "Pin_17"
+            },
+            {
+              "pad": "18",
+              "net": "GNDD",
+              "pin_function": "Pin_18"
+            },
+            {
+              "pad": "19",
+              "net": "GNDD",
+              "pin_function": "Pin_19"
+            },
+            {
+              "pad": "20",
+              "net": "/F3",
+              "pin_function": "Pin_20"
+            },
+            {
+              "pad": "21",
+              "net": "/F1",
+              "pin_function": "Pin_21"
+            },
+            {
+              "pad": "22",
+              "net": "/F4",
+              "pin_function": "Pin_22"
+            },
+            {
+              "pad": "23",
+              "net": "/F2",
+              "pin_function": "Pin_23"
+            },
+            {
+              "pad": "24",
+              "net": "GNDD",
+              "pin_function": "Pin_24"
+            },
+            {
+              "pad": "25",
+              "net": "GNDD",
+              "pin_function": "Pin_25"
+            },
+            {
+              "pad": "26",
+              "net": "/E3",
+              "pin_function": "Pin_26"
+            },
+            {
+              "pad": "27",
+              "net": "/E1",
+              "pin_function": "Pin_27"
+            },
+            {
+              "pad": "28",
+              "net": "/E2",
+              "pin_function": "Pin_28"
+            },
+            {
+              "pad": "29",
+              "net": "/D1",
+              "pin_function": "Pin_29"
+            },
+            {
+              "pad": "30",
+              "net": "GNDD",
+              "pin_function": "Pin_30"
+            },
+            {
+              "pad": "31",
+              "net": "GNDD",
+              "pin_function": "Pin_31"
+            },
+            {
+              "pad": "32",
+              "net": "/D2",
+              "pin_function": "Pin_32"
+            },
+            {
+              "pad": "33",
+              "net": "/C1",
+              "pin_function": "Pin_33"
+            },
+            {
+              "pad": "34",
+              "net": "/D3",
+              "pin_function": "Pin_34"
+            },
+            {
+              "pad": "35",
+              "net": "/C2",
+              "pin_function": "Pin_35"
+            },
+            {
+              "pad": "36",
+              "net": "GNDD",
+              "pin_function": "Pin_36"
+            },
+            {
+              "pad": "37",
+              "net": "GNDD",
+              "pin_function": "Pin_37"
+            },
+            {
+              "pad": "38",
+              "net": "/C3",
+              "pin_function": "Pin_38"
+            },
+            {
+              "pad": "39",
+              "net": "/B1",
+              "pin_function": "Pin_39"
+            },
+            {
+              "pad": "40",
+              "net": "/C4",
+              "pin_function": "Pin_40"
+            },
+            {
+              "pad": "41",
+              "net": "/B2",
+              "pin_function": "Pin_41"
+            },
+            {
+              "pad": "42",
+              "net": "GNDD",
+              "pin_function": "Pin_42"
+            },
+            {
+              "pad": "43",
+              "net": "GNDD",
+              "pin_function": "Pin_43"
+            },
+            {
+              "pad": "44",
+              "net": "+3.3V",
+              "pin_function": "Pin_44"
+            }
+          ]
+        }
+      },
+      "limitation": "Pad net assignments only. Not an ERC, DRC, or continuity check; does not establish as-built connections or component population."
+    },
+    {
+      "path": "/home/vboxuser/Downloads/rawData/硬件文档/Open Beam Interface.kicad_pcb",
+      "sha256": "444526e78ffa2e29a64613cda0b092d421c5605def65dd584a30fa385198f19c",
+      "footprints": 334,
+      "track_segments": 2127,
+      "vias": 450,
+      "zones": 33,
+      "selected_connectivity": {
+        "J3": {
+          "value": "Conn_02x10_Odd_Even",
+          "footprint": "Scan Generator:IDC-Header_2x10_P2.54mm_Vertical_No_Pin_1_Mark",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "unconnected-(J3-Pin_1-Pad1)",
+              "pin_function": "Pin_1"
+            },
+            {
+              "pad": "2",
+              "net": "unconnected-(J3-Pin_2-Pad2)",
+              "pin_function": "Pin_2"
+            },
+            {
+              "pad": "3",
+              "net": "/D-1",
+              "pin_function": "Pin_3"
+            },
+            {
+              "pad": "4",
+              "net": "GNDA",
+              "pin_function": "Pin_4"
+            },
+            {
+              "pad": "5",
+              "net": "/D-2",
+              "pin_function": "Pin_5"
+            },
+            {
+              "pad": "6",
+              "net": "GNDA",
+              "pin_function": "Pin_6"
+            },
+            {
+              "pad": "7",
+              "net": "/D-3",
+              "pin_function": "Pin_7"
+            },
+            {
+              "pad": "8",
+              "net": "GNDA",
+              "pin_function": "Pin_8"
+            },
+            {
+              "pad": "9",
+              "net": "/D-4",
+              "pin_function": "Pin_9"
+            },
+            {
+              "pad": "10",
+              "net": "GNDA",
+              "pin_function": "Pin_10"
+            },
+            {
+              "pad": "11",
+              "net": "/D-5",
+              "pin_function": "Pin_11"
+            },
+            {
+              "pad": "12",
+              "net": "GNDA",
+              "pin_function": "Pin_12"
+            },
+            {
+              "pad": "13",
+              "net": "/D-6",
+              "pin_function": "Pin_13"
+            },
+            {
+              "pad": "14",
+              "net": "GNDA",
+              "pin_function": "Pin_14"
+            },
+            {
+              "pad": "15",
+              "net": "/D-7",
+              "pin_function": "Pin_15"
+            },
+            {
+              "pad": "16",
+              "net": "GNDA",
+              "pin_function": "Pin_16"
+            },
+            {
+              "pad": "17",
+              "net": "/D-8",
+              "pin_function": "Pin_17"
+            },
+            {
+              "pad": "18",
+              "net": "GNDA",
+              "pin_function": "Pin_18"
+            },
+            {
+              "pad": "19",
+              "net": "unconnected-(J3-Pin_19-Pad19)",
+              "pin_function": "Pin_19"
+            },
+            {
+              "pad": "20",
+              "net": "unconnected-(J3-Pin_20-Pad20)",
+              "pin_function": "Pin_20"
+            }
+          ]
+        },
+        "U10": {
+          "value": "AD8137YRZ",
+          "footprint": "Scan Generator:SOIC-8_3.9x4.9mm_P1.27mm",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "Net-(U10--)",
+              "pin_function": "-"
+            },
+            {
+              "pad": "2",
+              "net": "Net-(U10-Vocm)",
+              "pin_function": "Vocm"
+            },
+            {
+              "pad": "3",
+              "net": "+3V0",
+              "pin_function": "V+"
+            },
+            {
+              "pad": "4",
+              "net": "Net-(R35-Pad2)",
+              "pin_function": ""
+            },
+            {
+              "pad": "5",
+              "net": "Net-(R34-Pad2)",
+              "pin_function": ""
+            },
+            {
+              "pad": "6",
+              "net": "GNDA",
+              "pin_function": "V-"
+            },
+            {
+              "pad": "7",
+              "net": "unconnected-(U10-PD-Pad7)",
+              "pin_function": "PD"
+            },
+            {
+              "pad": "8",
+              "net": "Net-(U10-+)",
+              "pin_function": "+"
+            }
+          ]
+        },
+        "U6": {
+          "value": "SN74ALVCH16374DGGR",
+          "footprint": "Scan Generator:TSSOP-48_6.1x12.5mm_P0.5mm",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "/S.WRITE_A",
+              "pin_function": "1OE"
+            },
+            {
+              "pad": "2",
+              "net": "/D-1",
+              "pin_function": "1Q1"
+            },
+            {
+              "pad": "3",
+              "net": "/D-2",
+              "pin_function": "1Q2"
+            },
+            {
+              "pad": "4",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "5",
+              "net": "/D-3",
+              "pin_function": "1Q3"
+            },
+            {
+              "pad": "6",
+              "net": "/D-4",
+              "pin_function": "1Q4"
+            },
+            {
+              "pad": "7",
+              "net": "+3.3V",
+              "pin_function": "Vcc"
+            },
+            {
+              "pad": "8",
+              "net": "/D-5",
+              "pin_function": "1Q5"
+            },
+            {
+              "pad": "9",
+              "net": "/D-6",
+              "pin_function": "1Q6"
+            },
+            {
+              "pad": "10",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "11",
+              "net": "/D-7",
+              "pin_function": "1Q7"
+            },
+            {
+              "pad": "12",
+              "net": "/D-8",
+              "pin_function": "1Q8"
+            },
+            {
+              "pad": "13",
+              "net": "/D-9",
+              "pin_function": "2Q1"
+            },
+            {
+              "pad": "14",
+              "net": "/D-10",
+              "pin_function": "2Q2"
+            },
+            {
+              "pad": "15",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "16",
+              "net": "/D-11",
+              "pin_function": "2Q3"
+            },
+            {
+              "pad": "17",
+              "net": "/D-12",
+              "pin_function": "2Q4"
+            },
+            {
+              "pad": "18",
+              "net": "+3.3V",
+              "pin_function": "Vcc"
+            },
+            {
+              "pad": "19",
+              "net": "/D-13",
+              "pin_function": "2Q5"
+            },
+            {
+              "pad": "20",
+              "net": "/D-14",
+              "pin_function": "2Q6"
+            },
+            {
+              "pad": "21",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "22",
+              "net": "/D-15",
+              "pin_function": "2Q7"
+            },
+            {
+              "pad": "23",
+              "net": "unconnected-(U6-2Q8-Pad23)",
+              "pin_function": "2Q8"
+            },
+            {
+              "pad": "24",
+              "net": "/S.WRITE_A",
+              "pin_function": "2OE"
+            },
+            {
+              "pad": "25",
+              "net": "/S.LATCH_A",
+              "pin_function": "2LE"
+            },
+            {
+              "pad": "26",
+              "net": "unconnected-(U6-2D8-Pad26)",
+              "pin_function": "2D8"
+            },
+            {
+              "pad": "27",
+              "net": "/A-15",
+              "pin_function": "2D7"
+            },
+            {
+              "pad": "28",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "29",
+              "net": "/A-14",
+              "pin_function": "2D6"
+            },
+            {
+              "pad": "30",
+              "net": "/A-13",
+              "pin_function": "2D5"
+            },
+            {
+              "pad": "31",
+              "net": "+3.3V",
+              "pin_function": "Vcc"
+            },
+            {
+              "pad": "32",
+              "net": "/A-12",
+              "pin_function": "2D4"
+            },
+            {
+              "pad": "33",
+              "net": "/A-11",
+              "pin_function": "2D3"
+            },
+            {
+              "pad": "34",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "35",
+              "net": "/A-10",
+              "pin_function": "2D2"
+            },
+            {
+              "pad": "36",
+              "net": "/A-9",
+              "pin_function": "2D1"
+            },
+            {
+              "pad": "37",
+              "net": "/A-8",
+              "pin_function": "1D8"
+            },
+            {
+              "pad": "38",
+              "net": "/A-7",
+              "pin_function": "1D7"
+            },
+            {
+              "pad": "39",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "40",
+              "net": "/A-6",
+              "pin_function": "1D6"
+            },
+            {
+              "pad": "41",
+              "net": "/A-5",
+              "pin_function": "1D5"
+            },
+            {
+              "pad": "42",
+              "net": "+3.3V",
+              "pin_function": "Vcc"
+            },
+            {
+              "pad": "43",
+              "net": "/A-4",
+              "pin_function": "1D4"
+            },
+            {
+              "pad": "44",
+              "net": "/A-3",
+              "pin_function": "1D3"
+            },
+            {
+              "pad": "45",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "46",
+              "net": "/A-2",
+              "pin_function": "1D2"
+            },
+            {
+              "pad": "47",
+              "net": "/A-1",
+              "pin_function": "1D1"
+            },
+            {
+              "pad": "48",
+              "net": "/S.LATCH_A",
+              "pin_function": "1LE"
+            }
+          ]
+        },
+        "J8": {
+          "value": "Coaxial Con Amphenol 031-5538-10RFX",
+          "footprint": "Scan Generator:BNC_Amphenol_B6252HB-NPP3G-50_Horizontal_Flipable",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "Net-(J8-In)",
+              "pin_function": "In"
+            },
+            {
+              "pad": "2",
+              "net": "GNDA",
+              "pin_function": "Ext"
+            },
+            {
+              "pad": "2",
+              "net": "GNDA",
+              "pin_function": "Ext"
+            },
+            {
+              "pad": "2",
+              "net": "GNDA",
+              "pin_function": "Ext"
+            },
+            {
+              "pad": "2",
+              "net": "GNDA",
+              "pin_function": "Ext"
+            }
+          ]
+        },
+        "U15": {
+          "value": "LT1363",
+          "footprint": "Scan Generator:SOIC-8_3.9x4.9mm_P1.27mm",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "unconnected-(U15-VOS-Pad1)",
+              "pin_function": "VOS"
+            },
+            {
+              "pad": "2",
+              "net": "Net-(U15--)",
+              "pin_function": "-"
+            },
+            {
+              "pad": "3",
+              "net": "Net-(U10-Vocm)",
+              "pin_function": "+"
+            },
+            {
+              "pad": "4",
+              "net": "-14V0",
+              "pin_function": "V-"
+            },
+            {
+              "pad": "5",
+              "net": "unconnected-(U15-NC-Pad5)",
+              "pin_function": "NC"
+            },
+            {
+              "pad": "6",
+              "net": "Net-(C74-Pad1)",
+              "pin_function": ""
+            },
+            {
+              "pad": "7",
+              "net": "+14V0",
+              "pin_function": "V+"
+            },
+            {
+              "pad": "8",
+              "net": "unconnected-(U15-VOS-Pad8)",
+              "pin_function": "VOS"
+            }
+          ]
+        },
+        "J4": {
+          "value": "Conn_02x10_Odd_Even",
+          "footprint": "Scan Generator:IDC-Header_2x10_P2.54mm_Vertical_No_Pin_1_Mark",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "unconnected-(J4-Pin_1-Pad1)",
+              "pin_function": "Pin_1"
+            },
+            {
+              "pad": "2",
+              "net": "unconnected-(J4-Pin_2-Pad2)",
+              "pin_function": "Pin_2"
+            },
+            {
+              "pad": "3",
+              "net": "/D-9",
+              "pin_function": "Pin_3"
+            },
+            {
+              "pad": "4",
+              "net": "GNDA",
+              "pin_function": "Pin_4"
+            },
+            {
+              "pad": "5",
+              "net": "/D-10",
+              "pin_function": "Pin_5"
+            },
+            {
+              "pad": "6",
+              "net": "GNDA",
+              "pin_function": "Pin_6"
+            },
+            {
+              "pad": "7",
+              "net": "/D-11",
+              "pin_function": "Pin_7"
+            },
+            {
+              "pad": "8",
+              "net": "GNDA",
+              "pin_function": "Pin_8"
+            },
+            {
+              "pad": "9",
+              "net": "/D-12",
+              "pin_function": "Pin_9"
+            },
+            {
+              "pad": "10",
+              "net": "GNDA",
+              "pin_function": "Pin_10"
+            },
+            {
+              "pad": "11",
+              "net": "/D-13",
+              "pin_function": "Pin_11"
+            },
+            {
+              "pad": "12",
+              "net": "GNDA",
+              "pin_function": "Pin_12"
+            },
+            {
+              "pad": "13",
+              "net": "/D-14",
+              "pin_function": "Pin_13"
+            },
+            {
+              "pad": "14",
+              "net": "GNDA",
+              "pin_function": "Pin_14"
+            },
+            {
+              "pad": "15",
+              "net": "/D-15",
+              "pin_function": "Pin_15"
+            },
+            {
+              "pad": "16",
+              "net": "GNDA",
+              "pin_function": "Pin_16"
+            },
+            {
+              "pad": "17",
+              "net": "unconnected-(J4-Pin_17-Pad17)",
+              "pin_function": "Pin_17"
+            },
+            {
+              "pad": "18",
+              "net": "GNDA",
+              "pin_function": "Pin_18"
+            },
+            {
+              "pad": "19",
+              "net": "unconnected-(J4-Pin_19-Pad19)",
+              "pin_function": "Pin_19"
+            },
+            {
+              "pad": "20",
+              "net": "unconnected-(J4-Pin_20-Pad20)",
+              "pin_function": "Pin_20"
+            }
+          ]
+        },
+        "U9": {
+          "value": "LTC2246HLX#PBF",
+          "footprint": "Scan Generator:LQFP-48_7x7mm_P0.5mm",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "2",
+              "net": "Net-(U9-Ain+)",
+              "pin_function": "Ain+"
+            },
+            {
+              "pad": "3",
+              "net": "Net-(U9-Ain-)",
+              "pin_function": "Ain-"
+            },
+            {
+              "pad": "4",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "5",
+              "net": "Net-(C49-Pad1)",
+              "pin_function": "REFH"
+            },
+            {
+              "pad": "6",
+              "net": "Net-(C49-Pad1)",
+              "pin_function": "REFH"
+            },
+            {
+              "pad": "7",
+              "net": "Net-(C49-Pad2)",
+              "pin_function": "REFL"
+            },
+            {
+              "pad": "8",
+              "net": "Net-(C49-Pad2)",
+              "pin_function": "REFL"
+            },
+            {
+              "pad": "9",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "10",
+              "net": "+3V0",
+              "pin_function": "VDD"
+            },
+            {
+              "pad": "11",
+              "net": "+3V0",
+              "pin_function": "VDD"
+            },
+            {
+              "pad": "12",
+              "net": "+3V0",
+              "pin_function": "VDD"
+            },
+            {
+              "pad": "13",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "14",
+              "net": "/S.CLK_A",
+              "pin_function": "CLK"
+            },
+            {
+              "pad": "15",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "16",
+              "net": "GNDA",
+              "pin_function": "SHDIN"
+            },
+            {
+              "pad": "17",
+              "net": "GNDA",
+              "pin_function": "OE"
+            },
+            {
+              "pad": "18",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "19",
+              "net": "/A-1",
+              "pin_function": "D0"
+            },
+            {
+              "pad": "20",
+              "net": "/A-2",
+              "pin_function": "D1"
+            },
+            {
+              "pad": "21",
+              "net": "/A-3",
+              "pin_function": "D2"
+            },
+            {
+              "pad": "22",
+              "net": "/A-4",
+              "pin_function": "D3"
+            },
+            {
+              "pad": "23",
+              "net": "/A-5",
+              "pin_function": "D4"
+            },
+            {
+              "pad": "24",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "25",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "26",
+              "net": "/A-6",
+              "pin_function": "D5"
+            },
+            {
+              "pad": "27",
+              "net": "/A-7",
+              "pin_function": "D6"
+            },
+            {
+              "pad": "28",
+              "net": "/A-8",
+              "pin_function": "D7"
+            },
+            {
+              "pad": "29",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "30",
+              "net": "GNDA",
+              "pin_function": "0GND"
+            },
+            {
+              "pad": "31",
+              "net": "+3.3V",
+              "pin_function": "0VDD"
+            },
+            {
+              "pad": "32",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "33",
+              "net": "/A-9",
+              "pin_function": "D8"
+            },
+            {
+              "pad": "34",
+              "net": "/A-10",
+              "pin_function": "D9"
+            },
+            {
+              "pad": "35",
+              "net": "/A-11",
+              "pin_function": "D10"
+            },
+            {
+              "pad": "36",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "37",
+              "net": "GNDA",
+              "pin_function": "GND"
+            },
+            {
+              "pad": "38",
+              "net": "/A-12",
+              "pin_function": "D11"
+            },
+            {
+              "pad": "39",
+              "net": "/A-13",
+              "pin_function": "D12"
+            },
+            {
+              "pad": "40",
+              "net": "/A-14",
+              "pin_function": "D13"
+            },
+            {
+              "pad": "41",
+              "net": "/A-15",
+              "pin_function": "OF"
+            },
+            {
+              "pad": "42",
+              "net": "Net-(JP6-C)",
+              "pin_function": "MODE"
+            },
+            {
+              "pad": "43",
+              "net": "+3V0",
+              "pin_function": "SENSE"
+            },
+            {
+              "pad": "44",
+              "net": "Net-(U10-Vocm)",
+              "pin_function": "VCM"
+            },
+            {
+              "pad": "45",
+              "net": "Net-(U10-Vocm)",
+              "pin_function": "VCM"
+            },
+            {
+              "pad": "46",
+              "net": "+3V0",
+              "pin_function": "VDD"
+            },
+            {
+              "pad": "47",
+              "net": "+3V0",
+              "pin_function": "VDD"
+            },
+            {
+              "pad": "48",
+              "net": "GNDA",
+              "pin_function": "GND"
+            }
+          ]
+        },
+        "U16": {
+          "value": "LT1363",
+          "footprint": "Scan Generator:SOIC-8_3.9x4.9mm_P1.27mm",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "unconnected-(U16-VOS-Pad1)",
+              "pin_function": "VOS"
+            },
+            {
+              "pad": "2",
+              "net": "Net-(U16--)",
+              "pin_function": "-"
+            },
+            {
+              "pad": "3",
+              "net": "Net-(U16-+)",
+              "pin_function": "+"
+            },
+            {
+              "pad": "4",
+              "net": "-14V0",
+              "pin_function": "V-"
+            },
+            {
+              "pad": "5",
+              "net": "unconnected-(U16-NC-Pad5)",
+              "pin_function": "NC"
+            },
+            {
+              "pad": "6",
+              "net": "Net-(U16--)",
+              "pin_function": ""
+            },
+            {
+              "pad": "7",
+              "net": "+14V0",
+              "pin_function": "V+"
+            },
+            {
+              "pad": "8",
+              "net": "unconnected-(U16-VOS-Pad8)",
+              "pin_function": "VOS"
+            }
+          ]
+        },
+        "J2": {
+          "value": "Conn_02x10_Odd_Even",
+          "footprint": "Scan Generator:IDC-Header_2x10_P2.54mm_Vertical_No_Pin_1_Mark",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "+3.3V",
+              "pin_function": "Pin_1"
+            },
+            {
+              "pad": "2",
+              "net": "unconnected-(J2-Pin_2-Pad2)",
+              "pin_function": "Pin_2"
+            },
+            {
+              "pad": "3",
+              "net": "/Power Good",
+              "pin_function": "Pin_3"
+            },
+            {
+              "pad": "4",
+              "net": "GNDA",
+              "pin_function": "Pin_4"
+            },
+            {
+              "pad": "5",
+              "net": "unconnected-(J2-Pin_5-Pad5)",
+              "pin_function": "Pin_5"
+            },
+            {
+              "pad": "6",
+              "net": "GNDA",
+              "pin_function": "Pin_6"
+            },
+            {
+              "pad": "7",
+              "net": "/S.LATCH_X",
+              "pin_function": "Pin_7"
+            },
+            {
+              "pad": "8",
+              "net": "GNDA",
+              "pin_function": "Pin_8"
+            },
+            {
+              "pad": "9",
+              "net": "/S.LATCH_Y",
+              "pin_function": "Pin_9"
+            },
+            {
+              "pad": "10",
+              "net": "GNDA",
+              "pin_function": "Pin_10"
+            },
+            {
+              "pad": "11",
+              "net": "/S.WRITE_A",
+              "pin_function": "Pin_11"
+            },
+            {
+              "pad": "12",
+              "net": "GNDA",
+              "pin_function": "Pin_12"
+            },
+            {
+              "pad": "13",
+              "net": "/S.LATCH_A",
+              "pin_function": "Pin_13"
+            },
+            {
+              "pad": "14",
+              "net": "GNDA",
+              "pin_function": "Pin_14"
+            },
+            {
+              "pad": "15",
+              "net": "/S.CLK_D",
+              "pin_function": "Pin_15"
+            },
+            {
+              "pad": "16",
+              "net": "GNDA",
+              "pin_function": "Pin_16"
+            },
+            {
+              "pad": "17",
+              "net": "/S.CLK_A",
+              "pin_function": "Pin_17"
+            },
+            {
+              "pad": "18",
+              "net": "GNDA",
+              "pin_function": "Pin_18"
+            },
+            {
+              "pad": "19",
+              "net": "unconnected-(J2-Pin_19-Pad19)",
+              "pin_function": "Pin_19"
+            },
+            {
+              "pad": "20",
+              "net": "unconnected-(J2-Pin_20-Pad20)",
+              "pin_function": "Pin_20"
+            }
+          ]
+        },
+        "J1": {
+          "value": "Conn_01x04_Shielded",
+          "footprint": "Scan Generator:M8 Right Angle Panel Mount Connector",
+          "pads": [
+            {
+              "pad": "1",
+              "net": "GNDA",
+              "pin_function": "Pin_1"
+            },
+            {
+              "pad": "2",
+              "net": "Net-(J1-Pin_2)",
+              "pin_function": "Pin_2"
+            },
+            {
+              "pad": "3",
+              "net": "Net-(J1-Pin_3)",
+              "pin_function": "Pin_3"
+            },
+            {
+              "pad": "4",
+              "net": "Net-(J1-Pin_4)",
+              "pin_function": "Pin_4"
+            },
+            {
+              "pad": "5",
+              "net": "GNDA",
+              "pin_function": "Shield"
+            },
+            {
+              "pad": "5",
+              "net": "GNDA",
+              "pin_function": "Shield"
+            }
+          ]
+        }
+      },
+      "limitation": "Pad net assignments only. Not an ERC, DRC, or continuity check; does not establish as-built connections or component population."
+    }
+  ],
+  "current_interface": {
+    "config_path": "/home/vboxuser/Project/Operations/Development/GlasgowDataIO/Json/streamData.json",
+    "platform_sha256": "ee014e6e81334a41c3df1ec312f9290c90e4e4767ffeaeb8b1c7ea058c81b9f0",
+    "controls": [
+      {
+        "signal": "adc_clk",
+        "fpga_ball": "G1",
+        "connector_pin": 15,
+        "inverted_at_pad": true
+      },
+      {
+        "signal": "adc_le_clk",
+        "fpga_ball": "H2",
+        "connector_pin": 11,
+        "inverted_at_pad": false
+      },
+      {
+        "signal": "adc_oe",
+        "fpga_ball": "G3",
+        "connector_pin": 16,
+        "inverted_at_pad": true
+      },
+      {
+        "signal": "dac_clk",
+        "fpga_ball": "F3",
+        "connector_pin": 20,
+        "inverted_at_pad": true
+      },
+      {
+        "signal": "dac_x_le_clk",
+        "fpga_ball": "H3",
+        "connector_pin": 14,
+        "inverted_at_pad": false
+      },
+      {
+        "signal": "dac_y_le_clk",
+        "fpga_ball": "H1",
+        "connector_pin": 9,
+        "inverted_at_pad": false
+      }
+    ],
+    "data_lsb_first": [
+      {
+        "bit": 0,
+        "fpga_ball": "B2",
+        "connector_pin": 41
+      },
+      {
+        "bit": 1,
+        "fpga_ball": "C4",
+        "connector_pin": 40
+      },
+      {
+        "bit": 2,
+        "fpga_ball": "B1",
+        "connector_pin": 39
+      },
+      {
+        "bit": 3,
+        "fpga_ball": "C3",
+        "connector_pin": 38
+      },
+      {
+        "bit": 4,
+        "fpga_ball": "C2",
+        "connector_pin": 35
+      },
+      {
+        "bit": 5,
+        "fpga_ball": "C1",
+        "connector_pin": 33
+      },
+      {
+        "bit": 6,
+        "fpga_ball": "D3",
+        "connector_pin": 34
+      },
+      {
+        "bit": 7,
+        "fpga_ball": "D1",
+        "connector_pin": 29
+      },
+      {
+        "bit": 8,
+        "fpga_ball": "F4",
+        "connector_pin": 22
+      },
+      {
+        "bit": 9,
+        "fpga_ball": "G2",
+        "connector_pin": 17
+      },
+      {
+        "bit": 10,
+        "fpga_ball": "E3",
+        "connector_pin": 26
+      },
+      {
+        "bit": 11,
+        "fpga_ball": "F1",
+        "connector_pin": 21
+      },
+      {
+        "bit": 12,
+        "fpga_ball": "E2",
+        "connector_pin": 28
+      },
+      {
+        "bit": 13,
+        "fpga_ball": "F2",
+        "connector_pin": 23
+      }
+    ],
+    "adc_half_period_cycles": 6,
+    "adc_settle_cycles": 2,
+    "nominal_rev_c_sync_hz": 48000000,
+    "nominal_adc_hz": 4000000.0,
+    "limitation": "Current checked-out configuration, not proven capture-time firmware."
+  }
+}

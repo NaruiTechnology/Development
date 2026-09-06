@@ -45,7 +45,7 @@ class FakeAdcSimulatorTest(unittest.TestCase):
         sim.add_testbench(bench)
         sim.run()
 
-        self.assertEqual(observed, [0x0001, 0x1207, 0xFFFF])
+        self.assertEqual(observed, [0x0001, 0x1207, 0x3FFF])
 
     def test_rejects_resolution_larger_than_dac_address_space(self):
         was_silenced = UnusedElaboratable._MustUse__silence

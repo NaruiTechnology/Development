@@ -1930,7 +1930,7 @@ function scaleSample(value: number): number {
 
 function sampleInGraySpotSelection(sample: number, selection: GrayScaleSelection): boolean {
   if (!selection) return false;
-  return grayScaleSelectionContains(selection, sample >> 8);
+  return grayScaleSelectionContains(selection, scaleSample(sample));
 }
 
 function paintSpotPixel(

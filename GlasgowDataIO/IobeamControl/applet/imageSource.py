@@ -8,10 +8,10 @@ FakeAdcSimulator's BRAM init. Three modes:
     load_image(path, resolution=64, invert=False) -> list[int]
         Open a PNG/BMP/JPEG via PIL, convert to grayscale,
         resize to `resolution x resolution`, return as a flat
-        row-major list of N*N ints (each 0..65535).
+        row-major list of N*N native 14-bit ADC samples (each 0..16383).
 
     random_image(resolution=64, seed=None) -> list[int]
-        Generate `resolution * resolution` random 0..65535 ints. Useful
+        Generate `resolution * resolution` random 0..16383 ints. Useful
         when no test image is available.
 
     pattern_image(resolution=64, kind="ramp") -> list[int]
@@ -61,6 +61,8 @@ import random
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+ADC_FULL_SCALE = 0x3FFF
 
 
 # ---------------------------------------------------------------------------- #
@@ -146,7 +148,7 @@ def load_image(path, resolution=64, invert=False):
     """
     Load `path` (PNG/BMP/JPEG/etc.), convert to grayscale, resize
     to a `resolution x resolution` square, and return the pixel data as
-    a flat row-major list of ints in [0, 65535].
+    a flat row-major list of native ADC samples in [0, 16383].
 
     The path is resolved through :func:`_resolve_iobeam_path`, so
     relative paths in streamData.json are interpreted against
@@ -175,11 +177,16 @@ def load_image(path, resolution=64, invert=False):
 
     im = Image.open(p).convert("I")
     im = im.resize((resolution, resolution), resample=Image.Resampling.NEAREST)
-    pixels = list(im.getdata())
+    pixels = [int(v) for v in im.getdata()]
+    if pixels and max(pixels) <= 255:
+        pixels = [(v * ADC_FULL_SCALE + 127) // 255 for v in pixels]
+    else:
+        pixels = [
+            (max(0, min(0xFFFF, v)) * ADC_FULL_SCALE + 0x7FFF) // 0xFFFF
+            for v in pixels
+        ]
     if invert:
-        pixels = [65535 - int(v) for v in pixels]
-    elif pixels and max(pixels) <= 255:
-        pixels = [int(v) * 257 for v in pixels]
+        pixels = [ADC_FULL_SCALE - v for v in pixels]
     logger.info(f"loaded {p.name} -> {resolution}x{resolution} grayscale "
                 f"({len(pixels)} pixels, range {min(pixels)}..{max(pixels)})")
     return pixels
@@ -187,12 +194,12 @@ def load_image(path, resolution=64, invert=False):
 
 def random_image(resolution=64, seed=None):
     """
-    Generate `resolution * resolution` random 0..65535 ints.
+    Generate `resolution * resolution` random native ADC samples.
     Deterministic when seed is not None.
     """
     _validate_resolution(resolution)
     rng = random.Random(seed)
-    return [rng.randint(0, 65535) for _ in range(resolution * resolution)]
+    return [rng.randint(0, ADC_FULL_SCALE) for _ in range(resolution * resolution)]
 
 
 def pattern_image(resolution=64, kind="ramp"):
@@ -211,23 +218,23 @@ def pattern_image(resolution=64, kind="ramp"):
     if kind == "ramp":
         for y in range(n):
             for x in range(n):
-                out[y * n + x] = (x * 65535) // (n - 1)
+                out[y * n + x] = (x * ADC_FULL_SCALE) // (n - 1)
     elif kind == "checker":
         cell = max(1, n // 8)
         for y in range(n):
             for x in range(n):
-                out[y * n + x] = 65535 if ((x // cell) + (y // cell)) & 1 else 0
+                out[y * n + x] = ADC_FULL_SCALE if ((x // cell) + (y // cell)) & 1 else 0
     elif kind == "bars":
         for y in range(n):
             for x in range(n):
-                out[y * n + x] = ((x * 8) // n) * 8192  # 8 bars, 0,8192,...,57344
+                out[y * n + x] = ((x * 8) // n) * 2048  # 8 bars, 0,2048,...,14336
     elif kind == "bullseye":
         cx = cy = (n - 1) / 2
         max_r = ((cx ** 2) + (cy ** 2)) ** 0.5
         for y in range(n):
             for x in range(n):
                 r = (((x - cx) ** 2) + ((y - cy) ** 2)) ** 0.5
-                out[y * n + x] = int(65535 * (1 - r / max_r))
+                out[y * n + x] = int(ADC_FULL_SCALE * (1 - r / max_r))
     else:
         raise ValueError(f"unknown pattern kind: {kind}")
     return out

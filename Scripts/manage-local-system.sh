@@ -93,6 +93,10 @@ install_units() {
     echo "Missing virtual environment executables under ${VENV_DIR}" >&2
     exit 1
   }
+  "${PYTHON_BIN}" -c 'import fastapi, pydantic' >/dev/null 2>&1 || {
+    echo "The virtual environment under ${VENV_DIR} is missing FastAPI/Pydantic. Install glasgow_service/requirements.txt before restarting." >&2
+    exit 1
+  }
   [[ -x "${NPM_BIN}" ]] || {
     echo "npm was not found; install Node.js/npm or set NPM_BIN." >&2
     exit 1
@@ -202,16 +206,16 @@ case "${ACTION}" in
     ;;
   start|restart)
     install_units
-    user_systemctl stop "${BACKEND_UNIT}" "${FRONTEND_UNIT}" || true
     sudo_cmd systemctl stop "${EXECUTOR_UNIT}" "${GLASGOW_UNIT}" || true
     stop_stale_glasgow
-    stop_stale_web_processes
     user_systemctl "${ACTION}" "${SBC_UNIT}"
     wait_http "SBC vacuum" "http://127.0.0.1:8766/health/ready"
     sudo_cmd systemctl start "${GLASGOW_UNIT}"
     wait_http "Glasgow" "http://127.0.0.1:8765/status"
     sudo_cmd systemctl start "${EXECUTOR_UNIT}"
     wait_http "vacuum executor" "http://127.0.0.1:8780/health/live"
+    user_systemctl stop "${BACKEND_UNIT}" "${FRONTEND_UNIT}" || true
+    stop_stale_web_processes
     user_systemctl start "${BACKEND_UNIT}"
     wait_http "web backend" "http://127.0.0.1:4000/api/status"
     user_systemctl start "${FRONTEND_UNIT}"

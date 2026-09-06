@@ -32,7 +32,7 @@ ROM layout
     x_idx     = dac_x_code >> shift   # 0 .. N-1
     y_idx     = dac_y_code >> shift   # 0 .. N-1
     addr      = Cat(x_idx, y_idx)     # = y_idx*N + x_idx  (row-major)
-    rom[addr] = image_data[addr]       # native 16-bit grayscale source
+    rom[addr] = image_data[addr]       # native 14-bit ADC sample
 """
 
 from amaranth import *
@@ -48,7 +48,7 @@ class FakeAdcSimulator(wiring.Component):
     Parameters
     ----------
     image_data : list[int]
-        Flat 1-D list of 16-bit pixel values (0-65535), row-major:
+        Flat 1-D list of native 14-bit ADC samples (0-16383), row-major:
         image_data[y * image_resolution + x].
     image_resolution : int
         Side length N of the square image (power of 2, 2 <= N <= 16384).
@@ -62,6 +62,7 @@ class FakeAdcSimulator(wiring.Component):
 
     DAC_BITS: int = 14
     ADC_BITS: int = 16
+    ADC_VALUE_BITS: int = 14
 
     dac_x_code:     In(14)   # type: ignore
     dac_y_code:     In(14)   # type: ignore
@@ -83,8 +84,12 @@ class FakeAdcSimulator(wiring.Component):
         self._bits  = (N - 1).bit_length()          # index width (e.g. 6 for N=64)
         self._shift = self.DAC_BITS - self._bits    # e.g. 8 for N=64
 
-        # Preserve 16-bit grayscale values end-to-end.
-        self._rom = [min(int(v), (1 << self.ADC_BITS) - 1) for v in image_data]
+        # The wire remains 16 bits wide, but simulated values use the same
+        # 14-bit full scale as the physical ADC and UI display path.
+        self._rom = [
+            max(0, min(int(v), (1 << self.ADC_VALUE_BITS) - 1))
+            for v in image_data
+        ]
 
         super().__init__()
 
