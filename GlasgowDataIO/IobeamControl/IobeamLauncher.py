@@ -80,7 +80,7 @@ class IobeamLauncher:
         device.demultiplexer = DirectDemultiplexer(device,
                                                    target.multiplexer.pipe_count)
 
-        await device.set_voltage("AB", action_voltage)
+        #await device.set_voltage("AB", action_voltage)
         if image_programmed:
             await asyncio.sleep(3.0)
 
