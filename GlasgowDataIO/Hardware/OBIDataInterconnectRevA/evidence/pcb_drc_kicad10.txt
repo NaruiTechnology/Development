@@ -1,0 +1,359 @@
+** Drc report for OBI Data Interconnect.kicad_pcb **
+** Created on 2026-09-06T00:27:48 **
+** Report includes: Errors, Warnings, Exclusions **
+
+** Found 48 DRC violations **
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(155.6500 mm, 88.0400 mm): Footprint J3
+    @(155.6500 mm, 120.9000 mm): Footprint H3
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(131.8100 mm, 48.8960 mm): Segment on Edge.Cuts
+    @(145.4000 mm, 78.3000 mm): PCB text 'J3: D1-D8    J4: D9-D16    J2: D17-D24' on B.Silkscreen
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(131.8100 mm, 48.8960 mm): Segment on Edge.Cuts
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(131.8100 mm, 81.6160 mm): Segment on Edge.Cuts
+    @(145.4000 mm, 81.7000 mm): PCB text 'SHARED BUS: ADC READ / X DAC / Y DAC' on B.Silkscreen
+[lib_footprint_mismatch]: Footprint 'PinSocket_1x02_P2.54mm_Vertical' does not match copy in library 'Connector_PinSocket_2.54mm'
+    Local override; warning
+    @(147.4950 mm, 59.8100 mm): Footprint J5
+[lib_footprint_mismatch]: Footprint 'R_0603_1608Metric' does not match copy in library 'Resistor_SMD'
+    Local override; warning
+    @(142.6800 mm, 57.7900 mm): Footprint R1
+[lib_footprint_mismatch]: Footprint 'R_0603_1608Metric' does not match copy in library 'Resistor_SMD'
+    Local override; warning
+    @(142.6850 mm, 59.2600 mm): Footprint R2
+[lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(160.2000 mm, 59.2800 mm): Footprint C5
+[lib_footprint_mismatch]: Footprint 'R_0603_1608Metric' does not match copy in library 'Resistor_SMD'
+    Local override; warning
+    @(160.2100 mm, 55.2200 mm): Footprint JP1
+[lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(141.9700 mm, 80.2600 mm): Footprint C2
+[lib_footprint_mismatch]: Footprint 'R_0603_1608Metric' does not match copy in library 'Resistor_SMD'
+    Local override; warning
+    @(144.9000 mm, 58.5200 mm): Footprint R3
+[lib_footprint_mismatch]: Footprint 'C_1206_3216Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(156.2500 mm, 58.8500 mm): Footprint C6
+[lib_footprint_mismatch]: Footprint 'C_1206_3216Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(145.8000 mm, 79.8400 mm): Footprint C4
+[lib_footprint_mismatch]: Footprint 'R_0603_1608Metric' does not match copy in library 'Resistor_SMD'
+    Local override; warning
+    @(141.9400 mm, 53.9800 mm): Footprint JP2
+[lib_footprint_mismatch]: Footprint 'C_0603_1608Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(162.8100 mm, 117.8100 mm): Footprint C1
+[lib_footprint_mismatch]: Footprint 'C_1206_3216Metric' does not match copy in library 'Capacitor_SMD'
+    Local override; warning
+    @(166.8500 mm, 118.2400 mm): Footprint C3
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1250 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(134.6740 mm, 72.6955 mm): PCB text '0
+1
+1
+0
+1
+1
+0
+0' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.5000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(134.6740 mm, 72.6955 mm): PCB text '0
+1
+1
+0
+1
+1
+0
+0' on F.Silkscreen
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1250 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(136.1980 mm, 72.6955 mm): PCB text '0
+1
+1
+0
+1
+1
+0
+0' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.5000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(136.1980 mm, 72.6955 mm): PCB text '0
+1
+1
+0
+1
+1
+0
+0' on F.Silkscreen
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1250 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(132.1340 mm, 72.1875 mm): PCB text '0
+1
+1
+0
+1
+0
+0
+0' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.5000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(132.1340 mm, 72.1875 mm): PCB text '0
+1
+1
+0
+1
+0
+0
+0' on F.Silkscreen
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1250 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(133.1500 mm, 72.6955 mm): PCB text '0
+1
+1
+0
+0
+1
+0
+1' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.5000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(133.1500 mm, 72.6955 mm): PCB text '0
+1
+1
+0
+0
+1
+0
+1' on F.Silkscreen
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1250 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(137.7220 mm, 72.6955 mm): PCB text '0
+1
+1
+0
+1
+1
+1
+1' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.5000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(137.7220 mm, 72.6955 mm): PCB text '0
+1
+1
+0
+1
+1
+1
+1' on F.Silkscreen
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1250 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(138.9920 mm, 72.4415 mm): PCB text '0
+0
+1
+0
+0
+0
+0
+1' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.5000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(138.9920 mm, 72.4415 mm): PCB text '0
+0
+1
+0
+0
+0
+0
+1' on F.Silkscreen
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1200 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(145.4000 mm, 78.3000 mm): PCB text 'J3: D1-D8    J4: D9-D16    J2: D17-D24' on B.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7500 mm)
+    Rule: board setup constraints silk text height; warning
+    @(145.4000 mm, 78.3000 mm): PCB text 'J3: D1-D8    J4: D9-D16    J2: D17-D24' on B.Silkscreen
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1100 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+[text_thickness]: Text thickness out of range (board setup constraints silk text thickness min thickness 0.1270 mm; actual 0.1100 mm)
+    Rule: board setup constraints silk text thickness; warning
+    @(145.4000 mm, 81.7000 mm): PCB text 'SHARED BUS: ADC READ / X DAC / Y DAC' on B.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(145.4000 mm, 81.7000 mm): PCB text 'SHARED BUS: ADC READ / X DAC / Y DAC' on B.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(162.5200 mm, 80.5500 mm): Segment of J2 on F.Silkscreen
+    @(141.8800 mm, 75.1400 mm): PCB text 'revA 2026-09 | 14-bit shared bus' on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(141.8800 mm, 75.1400 mm): PCB text 'revA 2026-09 | 14-bit shared bus' on F.Silkscreen
+    @(165.8100 mm, 75.3400 mm): PTH pad 19 [unconnected-(J2-Pin_19-Pad19)] of J2
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(141.9900 mm, 78.3200 mm): Reference field of C2
+    @(145.4000 mm, 78.3000 mm): PCB text 'J3: D1-D8    J4: D9-D16    J2: D17-D24' on B.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(137.9150 mm, 81.4200 mm): Segment of J1 on B.Silkscreen
+    @(145.4000 mm, 81.7000 mm): PCB text 'SHARED BUS: ADC READ / X DAC / Y DAC' on B.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(134.3850 mm, 81.4200 mm): Segment of J1 on B.Silkscreen
+    @(145.4000 mm, 81.7000 mm): PCB text 'SHARED BUS: ADC READ / X DAC / Y DAC' on B.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+    @(142.1106 mm, 79.7500 mm): Segment of C2 on B.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+    @(138.0250 mm, 79.4550 mm): Pad 42 [GNDD] of J1 on B.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(145.4000 mm, 78.3000 mm): PCB text 'J3: D1-D8    J4: D9-D16    J2: D17-D24' on B.Silkscreen
+    @(134.2750 mm, 78.1850 mm): Pad 39 [/B1] of J1 on B.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+    @(134.2750 mm, 79.4550 mm): Pad 41 [/B2] of J1 on B.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(145.4000 mm, 81.7000 mm): PCB text 'SHARED BUS: ADC READ / X DAC / Y DAC' on B.Silkscreen
+    @(138.0250 mm, 80.7250 mm): Pad 44 [+3.3V] of J1 on B.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(145.4000 mm, 81.7000 mm): PCB text 'SHARED BUS: ADC READ / X DAC / Y DAC' on B.Silkscreen
+    @(134.2750 mm, 80.7250 mm): Pad 43 [GNDD] of J1 on B.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+    @(144.3250 mm, 79.8400 mm): Pad 2 [GNDD] of C4 on B.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+    @(142.7450 mm, 80.2600 mm): Pad 2 [GNDD] of C2 on B.Cu
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(145.4000 mm, 80.0000 mm): PCB text 'D1-D14 active scan bus; D15-D24 reserved' on B.Silkscreen
+    @(141.1950 mm, 80.2600 mm): Pad 1 [+3.3V] of C2 on B.Cu
+
+** Found 0 unconnected pads **
+
+** Found 31 Footprint errors **
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(162.8100 mm, 117.8100 mm): Footprint C1
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(141.9700 mm, 80.2600 mm): Footprint C2
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(166.8500 mm, 118.2400 mm): Footprint C3
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(145.8000 mm, 79.8400 mm): Footprint C4
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(160.2000 mm, 59.2800 mm): Footprint C5
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(156.2500 mm, 58.8500 mm): Footprint C6
+[footprint_symbol_mismatch]: Footprint attributes don't match symbol: 'Do not populate' settings differ
+    Local override; warning
+    @(137.6500 mm, 48.9000 mm): Footprint H1
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(137.6500 mm, 48.9000 mm): Footprint H1
+[footprint_symbol_mismatch]: Footprint attributes don't match symbol: 'Do not populate' settings differ
+    Local override; warning
+    @(155.6500 mm, 48.9000 mm): Footprint H2
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(155.6500 mm, 48.9000 mm): Footprint H2
+[footprint_symbol_mismatch]: Footprint attributes don't match symbol: 'Do not populate' settings differ
+    Local override; warning
+    @(155.6500 mm, 120.9000 mm): Footprint H3
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(155.6500 mm, 120.9000 mm): Footprint H3
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(136.1500 mm, 68.6600 mm): Footprint J1
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(165.8100 mm, 52.4800 mm): Footprint J2
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(155.6500 mm, 88.0400 mm): Footprint J3
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Link' in footprint
+    Local override; warning
+    @(165.8100 mm, 88.0400 mm): Footprint J4
+[footprint_symbol_mismatch]: Footprint attributes don't match symbol: 'Do not populate' settings differ
+    Local override; warning
+    @(147.4950 mm, 59.8100 mm): Footprint J5
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(147.4950 mm, 59.8100 mm): Footprint J5
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(160.2100 mm, 55.2200 mm): Footprint JP1
+[footprint_symbol_mismatch]: Footprint attributes don't match symbol: 'Do not populate' settings differ
+    Local override; warning
+    @(141.9400 mm, 53.9800 mm): Footprint JP2
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(141.9400 mm, 53.9800 mm): Footprint JP2
+[footprint_symbol_mismatch]: Footprint attributes don't match symbol: 'Do not populate' settings differ
+    Local override; warning
+    @(142.6800 mm, 57.7900 mm): Footprint R1
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(142.6800 mm, 57.7900 mm): Footprint R1
+[footprint_symbol_mismatch]: Footprint attributes don't match symbol: 'Do not populate' settings differ
+    Local override; warning
+    @(142.6850 mm, 59.2600 mm): Footprint R2
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(142.6850 mm, 59.2600 mm): Footprint R2
+[footprint_symbol_mismatch]: Footprint attributes don't match symbol: 'Do not populate' settings differ
+    Local override; warning
+    @(144.9000 mm, 58.5200 mm): Footprint R3
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(144.9000 mm, 58.5200 mm): Footprint R3
+[footprint_symbol_field_mismatch]: Field 'Digikey Link' differs (PCB: 'https://www.digikey.com/en/products/detail/panasonic-electronic-components/EXB-2HV471JV/285315', Schematic: 'https://www.digikey.com/en/products/detail/panasonic-electronic-components/EXB-2HV330JV/285301')
+    Local override; warning
+    @(155.7500 mm, 64.7400 mm): Footprint RN1
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(154.4700 mm, 77.9400 mm): Footprint RN2
+[footprint_symbol_field_mismatch]: Missing symbol field 'Digikey Part Number' in footprint
+    Local override; warning
+    @(158.6000 mm, 73.7700 mm): Footprint RN3
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(147.9438 mm, 76.9300 mm): Footprint REF**
+
+** Ignored checks **
+    - Footprint has no courtyard defined
+    - Track endpoint not centered on via
+    - Tuning profile track geometries
+    - Footprint doesn't match symbol's footprint filters
+    - PTH inside courtyard
+    - NPTH inside courtyard
+    - Footprint component type doesn't match footprint pads
+
+** End of Report **

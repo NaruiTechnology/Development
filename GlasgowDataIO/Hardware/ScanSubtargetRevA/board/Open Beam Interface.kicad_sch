@@ -5818,7 +5818,7 @@
 				)
 			)
 			(symbol "LT3045_MSE_1_1"
-				(pin power_in line
+				(pin passive line
 					(at -15.24 2.54 0)
 					(length 2.54)
 					(name "IN"
@@ -5872,7 +5872,7 @@
 						)
 					)
 				)
-				(pin power_out line
+				(pin passive line
 					(at 15.24 0 180)
 					(length 2.54)
 					(name "OUT"
@@ -5908,7 +5908,7 @@
 						)
 					)
 				)
-				(pin power_in line
+				(pin passive line
 					(at -15.24 0 0)
 					(length 2.54)
 					(name "IN"
@@ -5926,7 +5926,7 @@
 						)
 					)
 				)
-				(pin power_in line
+				(pin passive line
 					(at -15.24 -2.54 0)
 					(length 2.54)
 					(name "IN"
@@ -5944,7 +5944,7 @@
 						)
 					)
 				)
-				(pin input line
+				(pin passive line
 					(at -5.08 12.7 270)
 					(length 2.54)
 					(name "EN/UV"
@@ -6115,7 +6115,7 @@
 				)
 			)
 			(symbol "LT3094_MSE_1_1"
-				(pin power_in line
+				(pin passive line
 					(at -15.24 2.54 0)
 					(length 2.54)
 					(name "IN"
@@ -6169,7 +6169,7 @@
 						)
 					)
 				)
-				(pin power_out line
+				(pin passive line
 					(at 15.24 0 180)
 					(length 2.54)
 					(name "OUT"
@@ -6187,7 +6187,7 @@
 						)
 					)
 				)
-				(pin power_in line
+				(pin passive line
 					(at -15.24 -2.54 0)
 					(length 2.54)
 					(name "IN_Pad"
@@ -6205,7 +6205,7 @@
 						)
 					)
 				)
-				(pin power_in line
+				(pin passive line
 					(at -15.24 0 0)
 					(length 2.54)
 					(name "IN"
@@ -6223,7 +6223,7 @@
 						)
 					)
 				)
-				(pin input line
+				(pin passive line
 					(at -5.08 12.7 270)
 					(length 2.54)
 					(name "EN/UV"
@@ -7101,7 +7101,7 @@
 						)
 					)
 				)
-				(pin output line
+				(pin passive line
 					(at 25.4 21.59 180)
 					(length 2.54)
 					(name "VCM"
@@ -8726,8 +8726,8 @@
 					)
 				)
 			)
-			(symbol "+5VA_1_1"
-				(pin power_in line
+		(symbol "+5VA_1_1"
+			(pin passive line
 					(at 0 0 90)
 					(length 0) hide
 					(name "+5VA"
@@ -8846,8 +8846,8 @@
 					)
 				)
 			)
-			(symbol "+5VD_1_1"
-				(pin power_in line
+		(symbol "+5VD_1_1"
+			(pin passive line
 					(at 0 0 90)
 					(length 0) hide
 					(name "+5VD"
@@ -24962,6 +24962,14 @@
 		)
 		(uuid "ddc74e6c-48ef-4481-8b26-58bf49c16c90")
 	)
+	(no_connect
+		(at 162.56 218.44)
+		(uuid "7e6ec5f3-51a5-4c80-9e87-4903b9d0fc01")
+	)
+	(no_connect
+		(at 168.91 218.44)
+		(uuid "8ca8fb52-e8a3-4c11-9d1e-04747f0c59b5")
+	)
 	(bus
 		(pts
 			(xy 288.29 186.69) (xy 288.29 189.23)
@@ -29798,7 +29806,7 @@
 		)
 		(uuid "ff7cd06c-0429-46b4-b541-75435162d4cf")
 	)
-	(hierarchical_label "+5V Supply"
+	(global_label "+5V Supply"
 		(shape input)
 		(at 30.48 93.98 180)
 		(fields_autoplaced yes)
@@ -29810,7 +29818,7 @@
 		)
 		(uuid "437a79c6-f316-4277-ae14-a5d97bbcf1dd")
 	)
-	(hierarchical_label "+15V Supply"
+	(global_label "+15V Supply"
 		(shape input)
 		(at 30.48 137.16 180)
 		(fields_autoplaced yes)
@@ -29822,7 +29830,7 @@
 		)
 		(uuid "69bc0e73-4a4b-431f-a6ac-7b27fd48f891")
 	)
-	(hierarchical_label "-15V Supply"
+	(global_label "-15V Supply"
 		(shape input)
 		(at 30.48 152.4 180)
 		(fields_autoplaced yes)
@@ -29834,7 +29842,7 @@
 		)
 		(uuid "93b9cd98-45b8-4774-b0b4-9843dcb9f910")
 	)
-	(hierarchical_label "+5V Supply"
+	(global_label "+5V Supply"
 		(shape input)
 		(at 116.84 30.48 0)
 		(fields_autoplaced yes)
@@ -29846,7 +29854,7 @@
 		)
 		(uuid "a4ec1ddc-5427-4bb8-970d-a02a9a014a52")
 	)
-	(hierarchical_label "+15V Supply"
+	(global_label "+15V Supply"
 		(shape input)
 		(at 116.84 27.94 0)
 		(fields_autoplaced yes)
@@ -29858,7 +29866,7 @@
 		)
 		(uuid "ab6e72d2-a09f-4d5f-aad0-79076eed66dc")
 	)
-	(hierarchical_label "-15V Supply"
+	(global_label "-15V Supply"
 		(shape input)
 		(at 116.84 25.4 0)
 		(fields_autoplaced yes)
@@ -43134,7 +43142,7 @@
 		)
 	)
 	(symbol
-		(lib_id "power:PWR_FLAG")
+		(lib_id "Connector:TestPoint")
 		(at 156.21 220.98 180)
 		(unit 1)
 		(exclude_from_sim no)
@@ -46420,7 +46428,7 @@
 		)
 	)
 	(symbol
-		(lib_id "power:PWR_FLAG")
+		(lib_id "Connector:TestPoint")
 		(at 199.39 220.98 180)
 		(unit 1)
 		(exclude_from_sim no)

@@ -1,0 +1,21 @@
+Ref,Val,Package,PosX,PosY,Rot,Side
+"C1","0.1uF","C_0603_1608Metric",162.810000,-117.810000,180.000000,bottom
+"C2","0.1uF","C_0603_1608Metric",141.970000,-80.260000,0.000000,bottom
+"C3","4.7uF","C_1206_3216Metric",166.850000,-118.240000,0.000000,bottom
+"C4","4.7uF","C_1206_3216Metric",145.800000,-79.840000,180.000000,bottom
+"C5","0.1uF","C_0603_1608Metric",160.200000,-59.280000,180.000000,bottom
+"C6","4.7uF","C_1206_3216Metric",156.250000,-58.850000,0.000000,bottom
+"J1","Conn_02x22_Odd_Even","PinReceptacle_2x22_P1.27mm_Vertical_BackSide_SMD",136.150000,-68.660000,0.000000,bottom
+"JP1","Jumper_2_Open","R_0603_1608Metric",160.210000,-55.220000,0.000000,bottom
+"JP2","Jumper_2_Open","R_0603_1608Metric",141.940000,-53.980000,180.000000,bottom
+"R1","R","R_0603_1608Metric",142.680000,-57.790000,0.000000,bottom
+"R2","R","R_0603_1608Metric",142.685000,-59.260000,0.000000,bottom
+"R3","R","R_0603_1608Metric",144.900000,-58.520000,90.000000,bottom
+"RN1","R_Pack08","RES_EXB2HV",155.750000,-64.740000,180.000000,bottom
+"RN2","R_Pack08","RES_EXB2HV",154.470000,-77.940000,-45.000000,bottom
+"RN3","R_Pack08","RES_EXB2HV",158.600000,-73.770000,135.000000,bottom
+"J2","Conn_02x10_Odd_Even","IDC-Header_Receptacle_2x10_P2.54mm_Vertical_No_Pin_1_Mark",165.810000,-52.480000,0.000000,top
+"J3","Conn_02x10_Odd_Even","IDC-Header_Receptacle_2x10_P2.54mm_Vertical_No_Pin_1_Mark",155.650000,-88.040000,0.000000,top
+"J4","Conn_02x10_Odd_Even","IDC-Header_Receptacle_2x10_P2.54mm_Vertical_No_Pin_1_Mark",165.810000,-88.040000,0.000000,top
+"J5","Conn_01x02_Pin","PinSocket_1x02_P2.54mm_Vertical",147.495000,-59.810000,180.000000,top
+"REF**","nanographs smaller","nanographs smaller",147.943830,-76.930000,0.000000,top

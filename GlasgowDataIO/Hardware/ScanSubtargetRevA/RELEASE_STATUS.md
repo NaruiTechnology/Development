@@ -22,7 +22,22 @@ Verified in this workspace:
 - Reference device sources were checked for LTC2246H package/range and the
   SN74ALVCH16374 register function.
 
-Validation results:
+KiCad 10.0.3 validation and export results (2026-09-06):
+
+- Schematic ERC reports zero errors. The all-message report is
+  `evidence/kicad10/schematic_erc_final.txt`; the error-only gate is
+  `evidence/kicad10/erc_errors_only.txt`.
+- PCB DRC reports zero unconnected pads and 18 rule warnings. With schematic
+  parity enabled, the report contains 50 footprint/net parity warnings; it is
+  saved as `evidence/kicad10/pcb_drc_final.txt`.
+- Fresh KiCad 10 exports are under `manufacturing/kicad10/`: Gerbers and
+  drills, placement CSV, IPC-2581 XML, STEP, schematic PDF, layer PDF, and a
+  top-side PNG render.
+- A consolidated handoff archive is available at
+  `manufacturing/ScanSubtargetRevA-KiCad10-fabrication-package.zip`. The
+  individual Gerbers are in `manufacturing/kicad10/gerbers/`.
+
+Previous validation results:
 
 - KiCad 8.0.8 DRC runs successfully, reports 212 violations, and reports zero
   unconnected items after adding the four missing power-pad/track joins on
@@ -32,13 +47,11 @@ Validation results:
 - KiCad 8.0.8 ERC runs successfully, but reports 13 violations: 12 errors and
   1 warning. The report is saved as `evidence/schematic_erc.txt`.
 
-Not yet verified:
+Remaining release checks:
 
-- KiCad ERC and PCB DRC for this package.
-- Schematic-to-PCB netlist agreement after any Rev-A edits.
-- Gerbers, drill, IPC-356, centroid, and assembly drawing exports for this
-  package.
 - Fabricator stackup, impedance, copper weight, and manufacturing constraints.
+- Schematic-to-PCB netlist agreement after any Rev-A edits.
+- Electrical/bench validation and sign-off of the inherited parity warnings.
 - Physical ADC/DAC timing, bus contention, analog range, or X/Y calibration.
 
 KiCad CLI was supplied through a temporary extracted runtime so the checks and

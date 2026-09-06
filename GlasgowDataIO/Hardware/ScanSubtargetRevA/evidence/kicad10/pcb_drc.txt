@@ -1,0 +1,141 @@
+** Drc report for Open Beam Interface.kicad_pcb **
+** Created on 2026-09-06T00:03:33 **
+** Report includes: Errors, Warnings, Exclusions **
+
+** Found 18 DRC violations **
+[lib_footprint_issues]: Footprint 'MSOP-12-1EP_3x4mm_P0.65mm_EP1.65x2.85mm_ThermalVias' not found in library 'Package_SO'
+    Local override; warning
+    @(152.9023 mm, 62.6500 mm): Footprint U19
+[lib_footprint_issues]: Footprint 'MSOP-12-1EP_3x4mm_P0.65mm_EP1.65x2.85mm_ThermalVias' not found in library 'Package_SO'
+    Local override; warning
+    @(175.8823 mm, 62.6500 mm): Footprint U2
+[lib_footprint_issues]: Footprint 'MSOP-12-1EP_3x4mm_P0.65mm_EP1.65x2.85mm_ThermalVias' not found in library 'Package_SO'
+    Local override; warning
+    @(187.3623 mm, 62.6500 mm): Footprint U3
+[lib_footprint_issues]: Footprint 'MSOP-12-1EP_3x4mm_P0.65mm_EP1.65x2.85mm_ThermalVias' not found in library 'Package_SO'
+    Local override; warning
+    @(164.4023 mm, 62.6500 mm): Footprint U1
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(183.0600 mm, 61.9100 mm): PCB text 'Out' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(160.0800 mm, 61.8500 mm): PCB text 'Out' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(194.5400 mm, 61.8900 mm): PCB text 'Out' on F.Silkscreen
+[text_height]: Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)
+    Rule: board setup constraints silk text height; warning
+    @(171.5800 mm, 61.9700 mm): PCB text 'Out' on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(166.0069 mm, 93.7259 mm): Polygon of scanning_art on B.Silkscreen
+    @(170.0100 mm, 93.7800 mm): PTH pad 1 [GNDA] of GNDD5
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(186.8563 mm, 88.4787 mm): Polygon of scanning_art on B.Silkscreen
+    @(180.3900 mm, 77.9800 mm): PTH pad 1 [Net-(U13--)] of R70
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(177.1853 mm, 72.4805 mm): Polygon of scanning_art on B.Silkscreen
+    @(180.3900 mm, 77.9800 mm): PTH pad 1 [Net-(U13--)] of R70
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(189.3032 mm, 84.2401 mm): Polygon of scanning_art on B.Silkscreen
+    @(184.3600 mm, 75.2700 mm): PTH pad 1 [GNDA] of GNDA3
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(189.3032 mm, 84.2401 mm): Polygon of scanning_art on B.Silkscreen
+    @(185.4700 mm, 77.9800 mm): PTH pad 2 [Net-(R59-Pad2)] of R70
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(181.3514 mm, 110.6047 mm): Segment of scanning_art on B.Silkscreen
+    @(181.6400 mm, 111.8400 mm): PTH pad 1 [GNDA] of GNDA6
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(181.3514 mm, 110.6047 mm): Segment of scanning_art on B.Silkscreen
+    @(181.6400 mm, 111.8400 mm): PTH pad 1 [GNDA] of GNDA6
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(170.5035 mm, 129.5224 mm): Polygon of scanning_art on B.Silkscreen
+    @(181.6400 mm, 111.8400 mm): PTH pad 1 [GNDA] of GNDA6
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(181.3514 mm, 113.2506 mm): Segment of scanning_art on B.Silkscreen
+    @(181.6400 mm, 111.8400 mm): PTH pad 1 [GNDA] of GNDA6
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(181.3514 mm, 113.2506 mm): Segment of scanning_art on B.Silkscreen
+    @(181.6400 mm, 111.8400 mm): PTH pad 1 [GNDA] of GNDA6
+
+** Found 0 unconnected pads **
+
+** Found 17 Footprint errors **
+[duplicate_footprints]: Duplicate footprints
+    Local override; warning
+    @(124.5616 mm, 74.5490 mm): Footprint REF**
+    @(114.7826 mm, 107.5690 mm): Footprint REF**
+[duplicate_footprints]: Duplicate footprints
+    Local override; warning
+    @(124.8156 mm, 107.5690 mm): Footprint REF**
+    @(114.7826 mm, 107.5690 mm): Footprint REF**
+[footprint_symbol_field_mismatch]: Field 'Datasheet' differs (PCB: ' ~', Schematic: '~')
+    Local override; warning
+    @(201.2000 mm, 68.5000 mm): Footprint J5
+[footprint_symbol_field_mismatch]: Field 'Datasheet' differs (PCB: ' ~', Schematic: '~')
+    Local override; warning
+    @(201.2000 mm, 87.5000 mm): Footprint J6
+[footprint_symbol_field_mismatch]: Field 'Datasheet' differs (PCB: ' ~', Schematic: '~')
+    Local override; warning
+    @(201.2000 mm, 117.5000 mm): Footprint J8
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(126.9721 mm, 130.7159 mm): Footprint OSHW_logo_front
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(193.2489 mm, 130.4738 mm): Footprint front_logo
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(114.7826 mm, 107.5690 mm): Footprint REF**
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(124.5616 mm, 74.5490 mm): Footprint REF**
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(124.8156 mm, 107.5690 mm): Footprint REF**
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(124.8200 mm, 107.5700 mm): Footprint D9-D16_silk_labels
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(114.7870 mm, 107.5700 mm): Footprint D1-D8_silk_labels
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(177.0134 mm, 92.2585 mm): Footprint scanning_art
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(149.6500 mm, 124.7600 mm): Footprint OSHW_logo_back
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(122.2818 mm, 74.5500 mm): Footprint ctrl_silk_labels
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(150.1900 mm, 84.8700 mm): Footprint offset_scale_single_diff_drawing
+[extra_footprint]: Extra footprint
+    Local override; warning
+    @(139.0157 mm, 95.5321 mm): Footprint back_logo
+
+** Ignored checks **
+    - Courtyards overlap
+    - Footprint has no courtyard defined
+    - Track endpoint not centered on via
+    - Tuning profile track geometries
+    - Footprint doesn't match symbol's footprint filters
+    - Silkscreen clearance
+    - Silkscreen clipped by board edge
+    - PTH inside courtyard
+    - NPTH inside courtyard
+    - Footprint component type doesn't match footprint pads
+    - Footprint doesn't match copy in library
+
+** End of Report **

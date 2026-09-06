@@ -1,11 +1,17 @@
 # Manufacturing manifest
 
-This directory contains the connector STEP models used by the board source. Manufacturing exports are intentionally withheld until KiCad 9 DRC/ERC can be run against the revised KiCad 9 board; see `../RELEASE_STATUS.md`.
+This directory contains the connector STEP models and the KiCad 10.0.3
+engineering exports for the OBI connection board. See `../RELEASE_STATUS.md`
+for the ERC/DRC review status.
 
-Required exports at release:
+Current exports:
 
-- Gerber copper, solder mask, paste, silkscreen, and Edge.Cuts
-- Excellon drill file
-- Pick-and-place position file
-- Board STEP
-- IPC-2581 or equivalent fabrication database
+- Gerbers and Excellon drill: `Gerbers/`
+- Original KiCad export Gerbers: `kicad10/gerbers/`
+- Pick-and-place: `kicad10/obi-interconnect-pos.csv`
+- Board STEP: `kicad10/obi-interconnect.step`
+- IPC-2581: `kicad10/obi-interconnect-ipc2581.xml`
+- Schematic PDF: `OBIDataInterconnectRevA-schematic.pdf`
+- Layer PDF: `OBIDataInterconnectRevA-layers.pdf`
+- Top render: `OBIDataInterconnectRevA-top.png`
+- Complete archive: `OBIDataInterconnectRevA-KiCad10-fabrication-package.zip`

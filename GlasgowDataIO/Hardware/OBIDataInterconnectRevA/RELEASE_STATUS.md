@@ -2,7 +2,16 @@
 
 Status: engineering release candidate, not yet fabrication-cleared.
 
-The KiCad 9 source, custom libraries, schematic, and assembly references are included. The local KiCad CLI is version 8 and rejects the source format, so this package intentionally does not claim a passing local DRC/ERC. Before fabrication, run KiCad 9 or newer on `board/OBI Data Interconnect.kicad_pcb` and `board/OBI Data Interconnect.kicad_sch`, then export fresh manufacturing outputs from that same source revision. The repeatable export command is `tools/export_manufacturing.sh`; the release gate is listed in `manufacturing/RELEASE_CHECKLIST.md`.
+The KiCad source, custom libraries, schematic, and assembly references are
+included. KiCad 10.0.3 was run on the source on 2026-09-06. ERC reports 2
+violations and PCB DRC reports 48 warnings with 31 schematic-parity warnings;
+the reports are saved under `evidence/`. Fresh KiCad 10 exports are under
+`manufacturing/kicad10/`: Gerbers and drills, placement CSV, IPC-2581 XML,
+STEP, schematic PDF, layer PDF, and a top-side PNG render. The warnings remain
+fabrication review items, especially the parity/net-name warnings.
+The consolidated handoff archive is
+`manufacturing/OBIDataInterconnectRevA-KiCad10-fabrication-package.zip`; the
+individual Gerbers are in `manufacturing/kicad10/gerbers/`.
 
 Acceptance checks:
 
