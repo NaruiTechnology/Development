@@ -44,6 +44,8 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
 import { VacuumDashboard } from "./components/VacuumDashboard";
 import { SampleStageDashboard } from "./components/SampleStageDashboard";
+import { AdcTestControls, AdcTimelineCanvas } from "./components/AdcTest";
+import { useAdcTestStream } from "./hooks/useAdcTestStream";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 import {
   formatGrayScaleSelection,
@@ -96,7 +98,7 @@ const MIN_RIGHT_PANEL_WIDTH = 380;
 const SPLITTER_SPACE = 32;
 const LAST_ADMIN_LOGIN_STORAGE_KEY = "ionbeam:lastAdminLogin";
 type AppRoute = "control" | "report" | "vacuum";
-type LeftTopTab = "scan" | "calibrate";
+type LeftTopTab = "scan" | "calibrate" | "adcTest";
 type ScanSubTab = "roi" | "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
 
@@ -126,6 +128,7 @@ export function App() {
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
+  const adcTestEnabled = useAppSelector((s) => s.status.defaults?.adc_test !== false);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
   const rasterCursor = useAppSelector((s) => s.image.cursor);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
@@ -200,7 +203,7 @@ export function App() {
   const settingsTarget = useMemo(() => parseSettingsTarget(window.location.search), []);
   const hasPartialROI = isPartialROISelection(roiState);
   const showROICalibrationInControls = kind === "roi" && roiState.calibration_enabled;
-  const showROIPreviewSideCard = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
+  const showROIPreviewSideCardBase = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
   const isSignedIn = Boolean(signedInUser);
   const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>(
     kind === "mag" || roiState.calibration_enabled || hasPersistedDimensionCalibration
@@ -213,10 +216,19 @@ export function App() {
   const [calibrateSubTab, setCalibrateSubTab] = useState<CalibrateSubTab>(
     kind === "mag" ? "mag" : "dimension"
   );
+  const adcTest = useAdcTestStream();
+  const adcActive = adcTest.state.phase === "connecting" || adcTest.state.phase === "running";
+  const showROIPreviewSideCard = showROIPreviewSideCardBase && activeTopTab !== "adcTest";
 
   useEffect(() => {
     dispatch(fetchDefaults());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!adcTestEnabled && activeTopTab === "adcTest") {
+      setActiveTopTab("scan");
+    }
+  }, [adcTestEnabled, activeTopTab]);
 
   const dimensionCalibrationRestoredRef = useRef(false);
   useEffect(() => {
@@ -414,7 +426,7 @@ export function App() {
 
   const scanActive = phase === "running" || phase === "stopping";
   const panelDisabled = shouldDisableScanPanel({
-    scanActive,
+    scanActive: scanActive || adcActive,
     signedIn: isSignedIn,
     vacuumEnabled,
     vacuumReady: isVacuumSystemReady,
@@ -952,6 +964,11 @@ export function App() {
     activateCalibrateSubTab(calibrateSubTab);
   }
 
+  function activateAdcTestTab() {
+    if (scanActive) return;
+    setActiveTopTab("adcTest");
+  }
+
   function navigateTo(nextRoute: AppRoute) {
     const nextPath = `/${nextRoute}`;
     if (window.location.pathname === nextPath) return;
@@ -1020,7 +1037,7 @@ export function App() {
         highVoltagePending={highVoltagePending}
         highVoltageError={highVoltageError}
         onToggleHighVoltage={() => void toggleHighVoltage()}
-        scanLocked={scanActive}
+        scanLocked={scanActive || adcActive}
       />
 
       {grayScaleConfirmOpen && pendingGrayScaleSelection !== null && pendingGrayScaleAnchor === null && (
@@ -1080,6 +1097,16 @@ export function App() {
                 <Icon name="calibrate" tone="tab" />
                 {t("tabs.calibrate")}
               </button>
+              {adcTestEnabled && <button
+                role="tab"
+                className="tab tab--top"
+                aria-selected={activeTopTab === "adcTest"}
+                disabled={scanActive}
+                onClick={activateAdcTestTab}
+              >
+                <Icon name="waveform" tone="tab" />
+                {t("tabs.adcTest")}
+              </button>}
             </div>
             {activeTopTab === "scan" ? (
               <div className="tabs tabs--sub" role="tablist" aria-label={t("tabs.scan.aria")}>
@@ -1114,7 +1141,7 @@ export function App() {
                   {t("tabs.vector")}
                 </button>
               </div>
-            ) : (
+            ) : activeTopTab === "calibrate" ? (
               <div className="tabs tabs--sub" role="tablist" aria-label={t("tabs.calibrate.aria")}>
                 <button
                   role="tab"
@@ -1137,9 +1164,15 @@ export function App() {
                   {t("tabs.mag")}
                 </button>
               </div>
-            )}
+            ) : null}
             <div className="card__body">
-              {activeTopTab === "scan" ? (
+              {activeTopTab === "adcTest" ? (
+                <AdcTestControls
+                  state={adcTest.state}
+                  onStart={adcTest.start}
+                  onStop={adcTest.stop}
+                />
+              ) : activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
                   <RasterParameters disabled={panelDisabled} />
                 ) : scanSubTab === "vector" ? (
@@ -1216,7 +1249,7 @@ export function App() {
             </div>
           </div>
 
-          {showROIActionControls && kind !== "roi" && (
+          {activeTopTab !== "adcTest" && showROIActionControls && kind !== "roi" && (
             <>
               <div
                 className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
@@ -1290,13 +1323,15 @@ export function App() {
               <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}`}>
                 <div className="image-panel-card__header-main">
                   <span className="card__title">{t(
-                    kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
+                    activeTopTab === "adcTest"
+                      ? "card.adcTimeline"
+                      : kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
                       ? "card.vectorPattern"
                       : imagePanelTitleKey
                   )}</span>
-                  {gridLineToggle}
-                  {scanPathToggle}
-                  {kind === "vector" && (
+                  {activeTopTab !== "adcTest" && gridLineToggle}
+                  {activeTopTab !== "adcTest" && scanPathToggle}
+                  {activeTopTab !== "adcTest" && kind === "vector" && (
                     <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">
                       <input
                         type="checkbox"
@@ -1309,7 +1344,7 @@ export function App() {
                       <VectorGrayLevelHelp />
                     </label>
                   )}
-                  <div
+                  {activeTopTab !== "adcTest" && <div
                     id="image-panel-toolbar-slot"
                     className={`card__header-toolbar-slot image-panel-card__toolbar-slot${kind === "vector" ? " image-panel-card__toolbar-slot--vector" : ""}`}
                   >
@@ -1351,11 +1386,13 @@ export function App() {
                         {t("scan.clear")}
                       </button>
                     )}
-                  </div>
+                  </div>}
                 </div>
             </div>
             <div className="card__body">
-                {kind === "roi" ? (
+                {activeTopTab === "adcTest" ? (
+                  <AdcTimelineCanvas state={adcTest.state} />
+                ) : kind === "roi" ? (
                   roiActionCanvasVisible &&
                   !roiActionGrayFilterActive &&
                   roiState.scanImageDataUrl === null ? (

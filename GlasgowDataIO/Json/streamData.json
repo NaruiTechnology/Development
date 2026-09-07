@@ -157,5 +157,6 @@
     "LogName": "PatternScan",
     "Verbose": true,
     "IsProduction": true,
-    "DumpData": true
+    "DumpData": true,
+    "AdcTest": true
 }

@@ -21,6 +21,7 @@ type IconName =
   | "gridSvg"
   | "help"
   | "alertTriangle"
+  | "waveform"
   | "highlightTool"
   | "image"
   | "home"
@@ -104,6 +105,9 @@ const imageSources: Partial<Record<IconName, string>> = {
 };
 
 const paths: Partial<Record<IconName, JSX.Element>> = {
+  waveform: (
+    <path d="M3 13h3l2-6 4 12 3-9 2 3h4" />
+  ),
   check: <path d="M5 12.5l4 4L19 6.5" />,
   highlightTool: (
     <>

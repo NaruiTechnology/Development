@@ -123,6 +123,24 @@ class RasterRequest(BaseModel):
     }
 
 
+class AdcTestRequest(BaseModel):
+    """Bounded, DAC-free ADC acquisition request."""
+    duration_minutes: Literal[5, 10, 15, 20] = 5
+    simulation: bool = Field(
+        False,
+        description="Use the seeded FPGA random source instead of physical ADC pins.",
+    )
+    seed: int = Field(42, ge=1, le=0x3FFF)
+    chunk_bytes: int = Field(65536, ge=1024, le=1024 * 1024)
+
+    @field_validator("chunk_bytes")
+    @classmethod
+    def _chunk_bytes_are_even(cls, value: int) -> int:
+        if value & 1:
+            raise ValueError("chunk_bytes must be even for uint16 samples")
+        return value
+
+
 class VectorPattern(str, Enum):
     default = "default"
     custom  = "custom"

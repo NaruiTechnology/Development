@@ -1320,11 +1320,47 @@ app.get("/api/defaults", async (_req, res) => {
     }
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    res.status(502).json({
-      error: "defaults_unreachable",
-      detail: `glasgow_service unreachable: ${detail}`,
-      upstream: config.proxyTargetHttp,
-    });
+    // Defaults are configuration metadata, not device state. Keep the UI
+    // authoritative when the Glasgow service is disconnected by reading the
+    // local streamData.json directly. In particular, this prevents a cached
+    // simulation checkbox from remaining enabled after IsProduction=true.
+    try {
+      const info = await readWithBackup();
+      const root = (info.data && typeof info.data === "object")
+        ? info.data as Record<string, any>
+        : {};
+      const states = root.Actions ?? root.WorkStates ?? root.workStates ?? root.states ?? [];
+      const stream = Array.isArray(states)
+        ? states.find((entry: any) => entry?.streamData || entry?.name === "streamData" || entry?.Name === "streamData")
+        : null;
+      const action = stream?.streamData?.actionData
+        ?? stream?.actionData
+        ?? stream?.ActionData
+        ?? stream?.action_data
+        ?? root.actionData
+        ?? {};
+      res.json({
+        raster: action.rasterScan ?? {},
+        vector: action.vectorScan ?? {},
+        simulation: action.simulation ?? {},
+        adc: {
+          adcHalfPeriod: action.adcHalfPeriod ?? 6,
+          adcSettleCycles: action.adcSettleCycles ?? 2,
+        },
+        is_production: root.IsProduction === true,
+        adc_test: root.AdcTest !== false && action.AdcTest !== false,
+        version: String(root.Version ?? ""),
+        defaults_source: "local-config",
+        service_error: detail,
+      });
+    } catch (fallbackError) {
+      res.status(502).json({
+        error: "defaults_unreachable",
+        detail: `glasgow_service unreachable: ${detail}`,
+        fallback_error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        upstream: config.proxyTargetHttp,
+      });
+    }
   }
 });
 

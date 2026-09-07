@@ -224,11 +224,13 @@ export interface ServerDefaults {
   raster: Record<string, unknown>;
   vector: Record<string, unknown>;
   simulation?: Record<string, unknown>;
+  adc?: Record<string, unknown>;
   mag_calibration?: Record<string, unknown>;
   ev?: number;
   raster_params?: Record<string, unknown>;
   vector_params?: Record<string, unknown>;
   selected_beam?: "ebeam" | "ion";
   is_production?: boolean;
+  adc_test?: boolean;
   version?: string;
 }

@@ -37,9 +37,6 @@ class IobeamLauncher:
         # ------------------------------------------------------------------ #
         # 1.  Open device and build Amaranth design                           #
         # ------------------------------------------------------------------ #
-        device = GlasgowDevice(deviceId)
-        target = GlasgowHardwareTarget(revision=device.revision,
-                                       multiplexer_cls=DirectMultiplexer)
         applet = DataStreamApplet(self._config)
 
         action_voltage = actionConfig.get("voltage", 2.5)
@@ -58,60 +55,16 @@ class IobeamLauncher:
             sample_rate  = 1_000_000,
         )
 
-        # build() populates target with the subtarget and registers the
-        # multiplexer interface.  It must be called before build_plan().
-        applet.build(target, applet_args)
+        async def prepare(device):
+            # Open the applet run gate before claiming the interface so the
+            # FPGA may send data as soon as _activate() releases reset.
+            await device.write_register(applet.addr_reset, 1)
+            await device.write_register(applet.addr_bus_ownership_clear, 1)
+            await device.write_register(applet.addr_bus_ownership_clear, 0)
+            self._logger.info("Run gate open")
 
-        # ------------------------------------------------------------------ #
-        # 2.  Synthesise and flash bitstream                                  #
-        # ------------------------------------------------------------------ #
-        plan = target.build_plan()
-        self._logger.info("IobeamLauncher: force-building bitstream %s", plan.bitstream_id.hex())
-
-        # The plan ID is deterministic for the generated design. The device
-        # retains the ID of the running FPGA image, so download_target() can
-        # skip synthesis and programming when the same image is still loaded.
-
-        image_programmed = await device.download_target(plan, reload=True)
-        self._logger.info("IobeamLauncher: flashed bitstream %s (build_dir=%s)",
-                          plan.bitstream_id.hex(), plan.buildDir)
-        # DirectDemultiplexer is constructed AFTER download_target so the USB
-        # configuration switch runs on a fully-enumerated, stable device.
-        device.demultiplexer = DirectDemultiplexer(device,
-                                                   target.multiplexer.pipe_count)
-
-        #await device.set_voltage("AB", action_voltage)
-        if image_programmed:
-            await asyncio.sleep(3.0)
-
-        # ------------------------------------------------------------------ #
-        # 3.  Verify FPGA is alive and open the run gate                      #
-        # ------------------------------------------------------------------ #
-        status = await device._status()
-        if not (status & ST_FPGA_RDY):
-            raise RuntimeError(
-                "FPGA is not ready after bitstream download. "
-                f"Status register = {status:#04x}")
-
-        if image_programmed:
-            await asyncio.sleep(1.2)
-
-        # Open the applet run gate (gates in_fifo.w_en in IobeamDataSubtarget).
-        # This must be written before claim_interface so the FPGA can send data
-        # as soon as the demultiplexer reset is deasserted inside _activate().
-        await device.write_register(applet.addr_reset, 1)
-        await device.write_register(applet.addr_bus_ownership_clear, 1)
-        await device.write_register(applet.addr_bus_ownership_clear, 0)
-        self._logger.info("Run gate open")
-
-        # ------------------------------------------------------------------ #
-        # 4.  Claim the streaming interface                                   #
-        # ------------------------------------------------------------------ #
-        iface = await device.demultiplexer.claim_interface(
-            applet, applet.mux_interface, applet_args,
-            read_buffer_size  = applet_args.buffer_size,
-            write_buffer_size = applet_args.buffer_size,
-        )
+        iface, image_programmed = await self._launch_applet(
+            applet, applet_args, deviceId=deviceId, prepare=prepare)
         iface.iobeam_bus_ownership_addr = applet.addr_bus_ownership
 
         if image_programmed:
@@ -122,6 +75,39 @@ class IobeamLauncher:
             "programmed" if image_programmed else "cached",
         )
         return iface
+
+    async def _launch_applet(self, applet, applet_args, *, deviceId=None,
+                             prepare=None):
+        """Shared Glasgow build/download/claim lifecycle for Iobeam applets."""
+        device = GlasgowDevice(deviceId)
+        target = GlasgowHardwareTarget(
+            revision=device.revision, multiplexer_cls=DirectMultiplexer)
+        applet.build(target, applet_args)
+        plan = target.build_plan()
+        self._logger.info("launcher: building bitstream %s", plan.bitstream_id.hex())
+        image_programmed = await device.download_target(plan, reload=True)
+        self._logger.info("launcher: loaded bitstream %s (build_dir=%s)",
+                          plan.bitstream_id.hex(), plan.buildDir)
+        device.demultiplexer = DirectDemultiplexer(
+            device, target.multiplexer.pipe_count)
+        if image_programmed:
+            await asyncio.sleep(3.0)
+        status = await device._status()
+        if not (status & ST_FPGA_RDY):
+            device.close()
+            raise RuntimeError(
+                "FPGA is not ready after bitstream download. "
+                f"Status register = {status:#04x}")
+        if image_programmed:
+            await asyncio.sleep(1.2)
+        if prepare is not None:
+            await prepare(device)
+        iface = await device.demultiplexer.claim_interface(
+            applet, applet.mux_interface, applet_args,
+            read_buffer_size=applet_args.buffer_size,
+            write_buffer_size=applet_args.buffer_size,
+        )
+        return iface, image_programmed
 
 
 if __name__ == "__main__":

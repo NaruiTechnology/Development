@@ -536,6 +536,7 @@ export const mockRest = {
     const voltage = finiteNumber(action.voltage, 2.5);
     return {
       is_production: false,
+      adc_test: streamDataConfig.AdcTest !== false && action.AdcTest !== false,
       ev,
       voltage,
       simulation: action.simulation ?? {},

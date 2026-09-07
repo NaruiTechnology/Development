@@ -44,6 +44,7 @@ from GlasgowDataIO.IobeamControl.macros.vector import (
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, BeamType
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
+from GlasgowDataIO.IobeamControl.transfer.adcStream import AdcConnection
 
 from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
@@ -55,7 +56,8 @@ from AutomationPy.buildingblocks.automation_log import AutomationLog
 from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .models import (
-    DeviceState, ServiceStatus, RasterRequest, VectorRequest, VectorPattern, VectorScanPath,
+    DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
+    VectorPattern, VectorScanPath,
     ScanResult, ScanValidation, ValidationCheck,
 )
 
@@ -533,6 +535,7 @@ class DeviceService:
         self._vector_params_defaults = VectorParams.from_json(self._vector_defaults)
 
         self._conn: Optional[GlasgowConnection] = None
+        self._adc_conn: Optional[AdcConnection] = None
         self._active_command = None
         self._abort_requested = False
         self._lock = asyncio.Lock()
@@ -555,7 +558,12 @@ class DeviceService:
     async def stop(self) -> None:
         """Best-effort: drop the reference. The library has no clean USB
         teardown, so we rely on process exit / GC for actual release."""
-        self._conn = None
+        if self._adc_conn is not None:
+            await self._adc_conn.close()
+            self._adc_conn = None
+        if self._conn is not None:
+            await self._conn._hard_close()
+            self._conn = None
         self._status.state = DeviceState.DISCONNECTED
         logger.debug("service stopped (connection reference dropped)")
         logger.info("service stopped (connection reference dropped)")
@@ -563,7 +571,12 @@ class DeviceService:
     async def reconnect(self) -> None:
         """Drop the current connection so the next scan opens a fresh one."""
         async with self._lock:
-            self._conn = None
+            if self._adc_conn is not None:
+                await self._adc_conn.close()
+                self._adc_conn = None
+            if self._conn is not None:
+                await self._conn._hard_close()
+                self._conn = None
             self._status.state = DeviceState.IDLE
             self._status.last_error = None
         logger.debug("connection dropped; next scan will reconnect")
@@ -581,6 +594,48 @@ class DeviceService:
             abort.set()
         logger.info("scan abort requested")
         return True
+
+    async def adc_stream(self, req: AdcTestRequest) -> AsyncIterator[bytes]:
+        """Stream from the ADC-only image while holding the global device lock.
+
+        Loading this image replaces the scan image. The normal connection is
+        therefore closed first and left empty so the next scan reloads its own
+        gateware. AdcConnection.close() always clears capture-enable before it
+        releases the USB interface.
+        """
+        async with self._acquire("adc"):
+            if self._conn is not None:
+                await self._conn._hard_close()
+                self._conn = None
+
+            conn = AdcConnection(
+                self._config,
+                duration_minutes=req.duration_minutes,
+                simulation=req.simulation,
+                seed=req.seed,
+                chunk_bytes=req.chunk_bytes,
+            )
+            self._adc_conn = conn
+            stop = asyncio.Event()
+
+            class _AdcCommand:
+                abort = stop
+
+            command = _AdcCommand()
+            self._activate_command(command)
+            try:
+                await conn.connect()
+                async for chunk in conn.chunks():
+                    if stop.is_set():
+                        break
+                    self._status.chunks_in_flight += 1
+                    yield chunk
+            finally:
+                self._deactivate_command(command)
+                try:
+                    await conn.close()
+                finally:
+                    self._adc_conn = None
 
     def _activate_command(self, command) -> None:
         self._active_command = command
@@ -608,6 +663,10 @@ class DeviceService:
             "raster": dict(self._raster_defaults),
             "vector": dict(self._vector_defaults),
             "simulation": dict(self._simulation_defaults),
+            "adc": {
+                "adcHalfPeriod": self._action_defaults.get("adcHalfPeriod", 6),
+                "adcSettleCycles": self._action_defaults.get("adcSettleCycles", 2),
+            },
             "mag_calibration": dict(self._action_defaults.get("magCalibration", {}) or {}),
             "raster_params": self._raster_params_defaults.to_public_dict(),
             "vector_params": self._vector_params_defaults.to_public_dict(),
@@ -615,6 +674,9 @@ class DeviceService:
                 "ebeam" if bool(self._action_defaults.get("enableEbeam", False)) else "ion"
             ),
             "is_production": bool(getattr(self._config, "IsProduction", True)),
+            "adc_test": bool(getattr(
+                self._config, "AdcTest", self._action_defaults.get("AdcTest", True)
+            )),
             "version": str(getattr(self._config, "Version", "")),
         }
 

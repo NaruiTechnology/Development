@@ -34,6 +34,7 @@ import { recordInputSetupInDb, recordOutputDataInDb } from "./operationDataRepos
 import { uploadScanArtifactsToConfiguredFtp } from "./ftpUpload";
 
 type ScanKind = "raster" | "vector";
+type StreamKind = ScanKind | "adc";
 type RawData = Buffer | ArrayBuffer | Buffer[];
 type ScanUpgradeAuthorization =
   | { ok: true; actor?: AdminUser }
@@ -42,9 +43,10 @@ type ScanUpgradeAuthorize = (
   req: IncomingMessage,
 ) => Promise<ScanUpgradeAuthorization>;
 
-const STREAM_PATHS: Record<string, ScanKind> = {
+const STREAM_PATHS: Record<string, StreamKind> = {
   "/ws/scan/raster/stream": "raster",
   "/ws/scan/vector/stream": "vector",
+  "/ws/adc/stream": "adc",
 };
 const VECTOR_TRACE_LOG_FILE = "/tmp/ionbeam-vector-trace.log";
 
@@ -106,11 +108,13 @@ export function attachWsProxy(
 
 function handleProxy(
   client: WebSocket,
-  kind: ScanKind,
+  kind: StreamKind,
   req: IncomingMessage,
   auth: Extract<ScanUpgradeAuthorization, { ok: true }>,
 ): void {
-  const upstreamUrl = `${config.proxyTargetWs}/scan/${kind}/stream`;
+  const upstreamUrl = kind === "adc"
+    ? `${config.proxyTargetWs}/adc/stream`
+    : `${config.proxyTargetWs}/scan/${kind}/stream`;
   const headers: Record<string, string> = {};
   if (config.glasgowToken) {
     headers["Authorization"] = `Bearer ${config.glasgowToken}`;
@@ -122,6 +126,7 @@ function handleProxy(
   let previewScan = false;
   let activityIdPromise: Promise<number | null> | null = null;
   let completionHandled = false;
+  let adcMockMode = false;
 
   // Buffer client frames sent before upstream is open. Almost always this
   // is just the first JSON request; bufferless drop loses scan params.
@@ -135,6 +140,21 @@ function handleProxy(
       if (parsed) {
         scanRequest = parsed;
         previewScan = isPreviewScan(parsed);
+        // Simulation is intentionally self-contained: do not require the
+        // Glasgow service or build/program an FPGA image for test data.
+        if (kind === "adc" && parsed.simulation === true) {
+          adcMockMode = true;
+          if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
+            upstream.close(1000, "ADC simulation handled by proxy");
+          }
+          void streamMockAdc(client, parsed).catch((err) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({ event: "error", message: String(err) }), { binary: false });
+              client.close(1011, "adc_simulation_error");
+            }
+          });
+          return;
+        }
         if (kind === "vector") {
           appendVectorTrace("request", {
             at: new Date().toISOString(),
@@ -148,7 +168,7 @@ function handleProxy(
             simulation_bitmap: parsed.simulation_bitmap != null,
           });
         }
-        if (actor && !previewScan) {
+        if (kind !== "adc" && actor && !previewScan) {
           activityIdPromise = recordScanStart(kind, actor, parsed).catch((err) => {
             console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
             return null;
@@ -187,6 +207,12 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed?.event === "done") {
         completionHandled = true;
+        if (kind === "adc") {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(data, { binary: false });
+          }
+          return;
+        }
         void recordAndMaybePersistScanCompletion(kind, scanRequest, activityIdPromise, parsed, !previewScan)
           .then((output) => {
             if (!output) return;
@@ -214,6 +240,7 @@ function handleProxy(
   });
 
   upstream.on("close", (code, reason) => {
+    if (adcMockMode) return;
     if (
       client.readyState === WebSocket.OPEN ||
       client.readyState === WebSocket.CONNECTING
@@ -223,6 +250,7 @@ function handleProxy(
   });
 
   upstream.on("error", (err) => {
+    if (adcMockMode) return;
     if (client.readyState === WebSocket.OPEN) {
       // Always send error metadata as a TEXT frame so the browser parses
       // it as JSON, not as pixels.
@@ -265,7 +293,7 @@ function appendVectorTrace(
 
 function handleMock(
   client: WebSocket,
-  kind: ScanKind,
+  kind: StreamKind,
   req: IncomingMessage,
   auth: Extract<ScanUpgradeAuthorization, { ok: true }>,
 ): void {
@@ -287,7 +315,7 @@ function handleMock(
     scanRequest = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
     if (scanRequest) {
       previewScan = isPreviewScan(scanRequest);
-      if (actor && !previewScan) {
+      if (kind !== "adc" && actor && !previewScan) {
         activityIdPromise = recordScanStart(kind, actor, scanRequest).catch((err) => {
           console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
           return null;
@@ -295,7 +323,9 @@ function handleMock(
       }
     }
     try {
-      if (kind === "raster") {
+      if (kind === "adc") {
+        await streamMockAdc(client, body);
+      } else if (kind === "raster") {
         await streamMockRaster(client, {
           resolution: Number(body.resolution ?? 256),
           dwell: Number(body.dwell ?? 16),
@@ -321,7 +351,7 @@ function handleMock(
         client.send(JSON.stringify({ event: "error", message: String(e) }));
       }
     } finally {
-      if (scanRequest) {
+      if (kind !== "adc" && scanRequest) {
         void recordAndMaybePersistScanCompletion(
           kind,
           scanRequest,
@@ -335,6 +365,45 @@ function handleMock(
       if (client.readyState === WebSocket.OPEN) client.close(1000);
     }
   });
+}
+
+async function streamMockAdc(client: WebSocket, body: any): Promise<void> {
+  const durationMinutes = [5, 10, 15, 20].includes(Number(body.duration_minutes))
+    ? Number(body.duration_minutes)
+    : 5;
+  let state = Math.max(1, Number(body.seed) & 0x3fff);
+  client.send(JSON.stringify({
+    event: "metadata",
+    duration_minutes: durationMinutes,
+    simulation: true,
+    sample_bits: 14,
+    wire_format: "uint16-be",
+  }), { binary: false });
+  const deadline = Date.now() + durationMinutes * 60_000;
+  let chunks = 0;
+  let level = state;
+  while (client.readyState === WebSocket.OPEN && Date.now() < deadline) {
+    const samples = 4096;
+    const chunk = Buffer.allocUnsafe(samples * 2);
+    // Move the simulated signal between levels once per chunk, then add
+    // bounded sample noise. This keeps the displayed time bins visibly
+    // randomized instead of averaging uniform LFSR samples to mid-gray.
+    const levelFeedback = ((state >> 13) ^ (state >> 12)) & 1;
+    state = ((state << 1) & 0x3fff) | levelFeedback;
+    level = state;
+    for (let index = 0; index < samples; index += 1) {
+      const feedback = ((state >> 13) ^ (state >> 12)) & 1;
+      state = ((state << 1) & 0x3fff) | feedback;
+      const noise = ((state & 0xff) - 128) * 8;
+      chunk.writeUInt16BE(Math.max(0, Math.min(0x3fff, level + noise)), index * 2);
+    }
+    client.send(chunk, { binary: true });
+    chunks += 1;
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+  if (client.readyState === WebSocket.OPEN) {
+    client.send(JSON.stringify({ event: "done", chunks }), { binary: false });
+  }
 }
 
 async function recordScanStart(

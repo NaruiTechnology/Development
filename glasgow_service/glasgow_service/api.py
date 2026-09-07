@@ -15,7 +15,7 @@ from typing import Literal
 
 from .service import DeviceService, DeviceBusy, DeviceNotReady
 from .models  import (
-    RasterRequest, VectorRequest, ScanResult, ServiceStatus,
+    RasterRequest, VectorRequest, AdcTestRequest, ScanResult, ServiceStatus,
 )
 from .auth    import require_token
 from .config  import find_config_path
@@ -142,6 +142,52 @@ async def run_vector(req: VectorRequest):
 @app.websocket("/scan/vector/stream")
 async def stream_vector(ws: WebSocket):
     await _stream_scan(ws, lambda p: svc.vector_scan(VectorRequest(**p)))
+
+
+@app.websocket("/adc/stream")
+async def stream_adc(ws: WebSocket):
+    """Stream uint16 ADC samples from the DAC-free diagnostic image."""
+    await ws.accept()
+    gen = None
+    chunks = 0
+    metadata_sent = False
+    try:
+        req = AdcTestRequest(**(await ws.receive_json()))
+        gen = svc.adc_stream(req)
+        async for chunk in gen:
+            if not metadata_sent:
+                await ws.send_json({
+                    "event": "metadata",
+                    "duration_minutes": req.duration_minutes,
+                    "simulation": req.simulation,
+                    "sample_bits": 14,
+                    "wire_format": "uint16-be",
+                })
+                metadata_sent = True
+            await ws.send_bytes(chunk)
+            chunks += 1
+        await ws.send_json({"event": "done", "chunks": chunks})
+    except DeviceBusy:
+        await ws.send_json({"event": "error", "code": "busy"})
+    except DeviceNotReady as exc:
+        await ws.send_json({
+            "event": "error", "code": "not_ready", "detail": str(exc),
+        })
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.exception("ADC stream error")
+        try:
+            await ws.send_json({"event": "error", "message": repr(exc)})
+        except Exception:
+            pass
+    finally:
+        if gen is not None:
+            await gen.aclose()
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 @app.post("/scan/abort", tags=["scan"], dependencies=[Depends(require_token)])
