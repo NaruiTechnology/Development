@@ -94,6 +94,8 @@ class AdcDataSubtarget(Elaboratable):
             })
             for name in ("adc_clk", "adc_le_clk", "adc_oe"):
                 if hasattr(control, name):
+                    # platform.request(dir=...) installs PinBuffer and
+                    # applies Pins(..., invert=True) at the pad boundary.
                     m.d.comb += getattr(control, name).o.eq(getattr(self, name))
         if platform is not None and "adc_data" in resource_names:
             data_port = platform.request("adc_data", dir="-")
@@ -108,6 +110,10 @@ class AdcDataSubtarget(Elaboratable):
         conversion_counter = Signal(range(period))
         sample_phase = min(period - 1, self.adc_settle_cycles + 1)
         sample_tick = Signal()
+        sampled = Signal()
+        fifo_written = Signal()
+        fifo_stalled = Signal()
+        sample_dropped = Signal()
 
         # adc_oe is the logical active-high signal. The production pin is
         # inverted in streamData.json, so logical 1 is physical OE low.
@@ -117,7 +123,9 @@ class AdcDataSubtarget(Elaboratable):
                             (conversion_counter >= self.adc_half_period)),
             self.adc_le_clk.eq(self.running & (conversion_counter == 0)),
             sample_tick.eq(self.running & (conversion_counter == sample_phase)),
-            self.capture_status.eq(Cat(self.running, self.complete, started)),
+            self.capture_status.eq(Cat(self.running, self.complete, started,
+                                       sampled, fifo_written, fifo_stalled,
+                                       sample_dropped)),
         ]
 
         with m.If(~self.capture_enable):
@@ -146,6 +154,19 @@ class AdcDataSubtarget(Elaboratable):
         # repeatedly so a fixed-size host read always terminates.
         IDLE, SAMPLE_HI, SAMPLE_LO, END_HI, END_LO = range(5)
         writer_state = Signal(range(5), reset=IDLE)
+        with m.If(~self.capture_enable):
+            m.d.sync += [sampled.eq(0), fifo_written.eq(0),
+                         fifo_stalled.eq(0), sample_dropped.eq(0)]
+        with m.Else():
+            with m.If(sample_tick):
+                m.d.sync += sampled.eq(1)
+                with m.If(writer_state != IDLE):
+                    m.d.sync += sample_dropped.eq(1)
+            with m.If(self.in_fifo.w_en):
+                with m.If(self.in_fifo.w_rdy):
+                    m.d.sync += fifo_written.eq(1)
+                with m.Else():
+                    m.d.sync += fifo_stalled.eq(1)
         sample = Signal(16)
         lfsr = Signal(14, reset=self.seed)
         random_value = Signal(14)
@@ -211,7 +232,10 @@ class AdcDataStreamApplet(GlasgowApplet):
         self.capture_enable, self.addr_capture_enable = target.registers.add_rw(1, init=0)
         self.capture_status, self.addr_capture_status = target.registers.add_ro(8, init=0)
         self.mux_interface = iface = target.multiplexer.claim_interface(self, args)
-        in_fifo = iface.get_in_fifo()
+        # Continuous acquisition must fill USB packets, rather than flushing
+        # a short packet each time the two-byte serializer pauses. Repeated
+        # end markers also fill the final transfer, including short captures.
+        in_fifo = iface.get_in_fifo(auto_flush=False)
         # Claim the OUT FIFO as well so the direct multiplexer pipe layout is
         # identical to the normal applet, although this applet never consumes it.
         iface.get_out_fifo()

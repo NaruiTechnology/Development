@@ -54,7 +54,7 @@ def test_adc_stream_closes_scan_transport_and_releases_adc_connection():
         async def connect(self):
             pass
 
-        async def chunks(self):
+        async def chunks(self, *, stop=None):
             yield b"\x00\x01\x00\x02"
 
         async def close(self):

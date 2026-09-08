@@ -32,6 +32,15 @@ class AdcDataStreamAppletTest(unittest.TestCase):
         adc_data = next(resource for resource in resources if resource.name == "adc_data")
         self.assertEqual(adc_data.ios[0].dir, "i")
 
+    def test_active_low_oe_is_preserved_as_a_physical_inversion(self):
+        resources = build_adc_resources({
+            "control": {"subsignals": [
+                {"name": "adc_oe", "pin": "A3", "invert": True},
+            ]},
+        })
+        oe = resources[0].ios[0]
+        self.assertTrue(oe.ios[0].invert)
+
     def test_oe_is_continuous_until_hardware_timeout_then_released(self):
         fifo = SimpleNamespace(
             w_en=Signal(), w_data=Signal(8), w_rdy=Signal(reset=1),
@@ -74,4 +83,3 @@ class AdcDataStreamAppletTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

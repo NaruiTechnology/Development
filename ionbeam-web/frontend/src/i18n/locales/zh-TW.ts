@@ -50,6 +50,7 @@ export const zhTW: Partial<TranslationTable> = {
   "header.state.idle": "閒置",
   "header.state.busy": "掃描中",
   "header.state.connecting": "連線中",
+  "header.state.adcConnecting": "連線中",
   "header.state.error": "錯誤",
   "header.state.disconnected": "已中斷連線",
 

@@ -10,9 +10,9 @@ pixels in the future, producing the characteristic diagonal-skew artefact.
 
 v10 stores the image in a synchronous ROM so arbitrary images infer iCE40
 block RAM rather than thousands of LUTs. The DAC coordinates are stable for
-several clocks before BusController raises adc_oe, so the ROM's one-clock read
-latency is hidden inside the existing ADC setup interval. PipelinedLoopbackAdapter
-still samples the selected value on the adc_oe rising edge.
+several clocks before the conversion edge, so the ROM's one-clock read
+latency is hidden inside the existing DAC setup interval. PipelinedLoopbackAdapter
+samples on the logical falling ADC clock edge, independently of output-enable.
 
 Interface (matches iobeamDataSubtarget.py hard-wiring)
 -------------------------------------------------------

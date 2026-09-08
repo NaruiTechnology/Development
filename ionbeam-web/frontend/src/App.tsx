@@ -1038,6 +1038,7 @@ export function App() {
         highVoltageError={highVoltageError}
         onToggleHighVoltage={() => void toggleHighVoltage()}
         scanLocked={scanActive || adcActive}
+        adcTestActive={adcActive}
       />
 
       {grayScaleConfirmOpen && pendingGrayScaleSelection !== null && pendingGrayScaleAnchor === null && (

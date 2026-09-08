@@ -15,14 +15,20 @@ class PipelinedLoopbackAdapter(wiring.Component):
     def elaborate(self, platform):
         m = Module()
 
-        prev_bus_adc_oe = Signal()
-        adc_oe_rising = Signal()
-        m.d.sync += prev_bus_adc_oe.eq(self.bus.adc_oe)
-        m.d.comb += adc_oe_rising.eq(~prev_bus_adc_oe & self.bus.adc_oe)
+        # The converter advances even if its output register is disabled.
+        # Follow the conversion clock, so a missed bus read cannot silently
+        # stretch the simulated pipeline to match a broken bus schedule.
+        # Logical falling edges are physical rising edges with production
+        # adc_clk inversion. The configured latency is the end-to-end model
+        # delay, not a claim about the ADC chip's pipeline depth alone.
+        prev_bus_adc_clk = Signal()
+        adc_conversion = Signal()
+        m.d.sync += prev_bus_adc_clk.eq(self.bus.adc_clk)
+        m.d.comb += adc_conversion.eq(prev_bus_adc_clk & ~self.bus.adc_clk)
 
         shift_register = Signal(16 * self.adc_latency)
 
-        with m.If(adc_oe_rising):
+        with m.If(adc_conversion):
             m.d.sync += shift_register.eq((shift_register << 16) | self.loopback_stream)
 
         m.d.comb += self.bus.data_i.eq(shift_register.word_select(self.adc_latency - 1, 16))

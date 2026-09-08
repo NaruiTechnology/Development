@@ -40,6 +40,7 @@ export const en = {
   "header.state.idle": "Idle",
   "header.state.busy": "Scanning",
   "header.state.connecting": "Connecting",
+  "header.state.adcConnecting": "Connecting",
   "header.state.error": "Error",
   "header.state.disconnected": "Disconnected",
 

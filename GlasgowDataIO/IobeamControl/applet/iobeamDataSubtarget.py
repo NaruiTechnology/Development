@@ -215,11 +215,9 @@ class IobeamDataSubtarget(Elaboratable):
                     # Map known names to executor.bus signals; ignore others
                     # (e.g. d_clock, a_clock from the legacy resource).
                     if sub.name in _BUS_STROBES:
-                        # `dir="o"` requests an amaranth.lib.io.Pin
-                        # signature, whose `.o` is the component-facing
-                        # output. Drive it directly; wrapping the signature
-                        # in io.Buffer creates a second direction layer and
-                        # can leave the physical pad weak/high-Z.
+                        # platform.request(dir=...) installs Amaranth's
+                        # PinBuffer, which applies Pins(..., invert=True).
+                        # Drive the component-facing signal exactly once.
                         m.d.comb += getattr(self.control, sub.name).o.eq(
                             getattr(executor.bus, sub.name))
 

@@ -27,11 +27,11 @@ class BusController(wiring.Component):
                  transforms: Transforms = Transforms(False,False,False)):
         assert adc_settle_cycles >= 1, \
             "ADC bus must settle for at least one cycle"
-        # One enable cycle, adc_settle_cycles - 1 additional settling
-        # cycles, one latch-close cycle, one OE-enable cycle, one capture
-        # cycle, one stream cycle, one bus-turnaround cycle, and four DAC
-        # cycles.
-        required_period = adc_settle_cycles + 9
+        # One data-valid guard cycle after the conversion edge, one latch
+        # pulse, one OE-enable cycle, N settle cycles, capture, stream,
+        # turnaround, and four DAC write cycles. This must fit EVERY ADC
+        # period; otherwise the free-running ADC outruns the sample tags.
+        required_period = adc_settle_cycles + 10
         assert (adc_half_period * 2) >= required_period, \
             "ADC period must contain settle, capture, read, turnaround, and DAC states"
         self.adc_half_period = adc_half_period
@@ -90,18 +90,15 @@ class BusController(wiring.Component):
 
         with m.FSM():
             with m.State("ADC_Wait"):
-                with m.If(self.bus.adc_clk & (adc_cycles == 0)):
-                    # Close the ADC-side latch while its outputs are still
-                    # disabled. This prevents a stale latch value from
-                    # appearing on the shared bus during the enable edge.
+                with m.If(~self.bus.adc_clk & (adc_cycles == 1)):
+                    # Production adc_clk/dac_clk pins are inverted: logical
+                    # falling is the physical conversion/update rising edge.
+                    # Latch one FPGA cycle later, after ADC clock-to-data.
+                    # LE also supports the fitted edge-triggered 16374.
                     m.d.comb += self.bus.adc_le_clk.eq(1)
                     m.d.comb += self.bus.adc_oe.eq(0)
-                    m.d.sync += settle_counter.eq(self.adc_settle_cycles)
-                    m.next = "ADC_Latch_Hold"
-
-            with m.State("ADC_Latch_Hold"):
-                # Ensure LE has returned low before enabling U6 outputs.
-                m.next = "ADC_Enable"
+                    m.d.sync += settle_counter.eq(self.adc_settle_cycles - 1)
+                    m.next = "ADC_Enable"
 
             with m.State("ADC_Enable"):
                 # Give the external transceiver a complete clock to turn on

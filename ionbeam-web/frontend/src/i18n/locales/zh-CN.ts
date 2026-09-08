@@ -41,6 +41,7 @@ export const zhCN: Partial<TranslationTable> = {
   "header.state.idle": "空闲",
   "header.state.busy": "扫描中",
   "header.state.connecting": "连接中",
+  "header.state.adcConnecting": "连接中",
   "header.state.error": "错误",
   "header.state.disconnected": "已断开",
 

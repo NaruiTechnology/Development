@@ -47,6 +47,16 @@ class IobeamLauncher:
             for n in p.get("pinList", [])
         ]
         self._logger.info("IobeamLauncher: stream pins=%s", ",".join(pin_list) or "<none>")
+        self._logger.info(
+            "Scan acquisition: production=%s adc_half_period=%s adc_settle_cycles=%s "
+            "nominal_adc_hz=%.1f adc_clock_inverted=%s dac_clock_inverted=%s",
+            getattr(self._config, "IsProduction", None),
+            actionConfig.get("adcHalfPeriod", 6), actionConfig.get("adcSettleCycles", 2),
+            48_000_000 / (2 * int(actionConfig.get("adcHalfPeriod", 6))),
+            next((p.get("invert", False) for p in actionConfig.get("pins", {}).get(
+                "control", {}).get("subsignals", []) if p.get("name") == "adc_clk"), None),
+            next((p.get("invert", False) for p in actionConfig.get("pins", {}).get(
+                "control", {}).get("subsignals", []) if p.get("name") == "dac_clk"), None))
 
         applet_args = SimpleNamespace(
             voltage_map  = {"A": action_voltage, "B": action_voltage},

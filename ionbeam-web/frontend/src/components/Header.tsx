@@ -67,6 +67,7 @@ export function Header({
   highVoltageError,
   onToggleHighVoltage,
   scanLocked,
+  adcTestActive,
 }: {
   signedInUser: SignedInUser | null;
   onSignedIn: (user: SignedInUser) => void;
@@ -85,6 +86,7 @@ export function Header({
   highVoltageError: string | null;
   onToggleHighVoltage: () => void;
   scanLocked: boolean;
+  adcTestActive: boolean;
 }) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
@@ -125,6 +127,7 @@ export function Header({
 
   const state = status?.state ?? "disconnected";
   const stateKey = STATE_LABEL_KEYS[state];
+  const displayedStateKey = adcTestActive ? "header.state.adcConnecting" : stateKey;
   const beamLabelKey =
     selectedBeam === "ebeam"
       ? "header.beam.ebeam"
@@ -180,7 +183,7 @@ export function Header({
       )}
 
       <span className="status-pill" data-state={state}>
-        {stateKey ? t(stateKey) : state}
+        {displayedStateKey ? t(displayedStateKey) : state}
       </span>
       <div className="row" style={{ gap: 8 }}>
         <span className="card__title" id="theme-picker-label">

@@ -123,8 +123,9 @@ class _AdcPresenceMonitor:
                     return (
                         "ADC/subtarget presence check failed: the first "
                         f"{self.full_scale_samples} returned samples were all full "
-                        "scale (0x3fff/0xfffc/0xff). The production ADC data bus "
-                        "appears disconnected, tri-stated, or permanently saturated."
+                        "scale (0x3fff/0xfffc/0xff). This establishes constant "
+                        "full-scale data, not its cause; check scan capture timing "
+                        "and compare with an independent ADC capture."
                     )
         return None
 
@@ -625,7 +626,7 @@ class DeviceService:
             self._activate_command(command)
             try:
                 await conn.connect()
-                async for chunk in conn.chunks():
+                async for chunk in conn.chunks(stop=stop):
                     if stop.is_set():
                         break
                     self._status.chunks_in_flight += 1
@@ -1592,7 +1593,9 @@ class DeviceService:
                 svc._status.state = DeviceState.BUSY
                 svc._status.last_error = None
                 svc._status.chunks_in_flight = 0
-                logger.debug("scan start kind=%s", kind)
+                self.started = time.monotonic()
+                logger.info("scan start kind=%s production=%s", kind,
+                            getattr(svc._config, "IsProduction", None))
                 return svc
             async def __aexit__(self, exc_type, exc, tb):
                 if exc is None:
@@ -1604,8 +1607,11 @@ class DeviceService:
                     svc._status.state = DeviceState.ERROR if exc else DeviceState.IDLE
                 else:
                     svc._status.state = DeviceState.IDLE
+                chunks = svc._status.chunks_in_flight
                 svc._status.chunks_in_flight = 0
                 svc._lock.release()
-                logger.debug("scan end kind=%s ok=%s", kind, exc is None)
+                logger.info("scan end kind=%s ok=%s elapsed=%.3fs chunks=%d error=%s",
+                            kind, exc is None, time.monotonic() - self.started,
+                            chunks, None if exc is None else f"{type(exc).__name__}: {exc}")
                 return False
         return _Ctx()
