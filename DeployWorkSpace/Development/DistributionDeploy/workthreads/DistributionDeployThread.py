@@ -142,6 +142,27 @@ class DistributionDeployThread(WorkThread):
     def IntialWork(self):
         state = None
         self._queue = queue.Queue()
+        actions = {key: value for action in self._config.Actions for key, value in action.items()}
+        if "createDeployFolder" in actions:
+            required = ("stopLocalSystem", "createDeployFolder", "unzipDistribution", "programFpgaRam")
+            names = list(actions)
+            if (any(name not in actions or actions[name].get(Consts.SKIP, False)
+                    or actions[name].get(TRANSACTION_COMPLETE, False) for name in required)
+                    or [names.index(name) for name in required] != sorted(names.index(name) for name in required)):
+                self._workflowError = "clean deployment requires stop, recreate, extract, and FPGA verification in order; reset completion flags for a new run"
+                self._logger.error(self._workflowError)
+                return None
+            # A clean replacement invalidates every old installation receipt.
+            if any(value.get(TRANSACTION_COMPLETE, False) and not value.get(Consts.SKIP, False)
+                   for value in actions.values()):
+                self._workflowError = "clean deployment cannot reuse completed installation states; reset completion flags"
+                self._logger.error(self._workflowError)
+                return None
+            for name in ("manageLocalSystem", "launchGlasgowService", "launchIonbeamWebBackend", "launchIonbeamWebFrontend"):
+                if name in actions and not actions[name].get(Consts.SKIP, False) and names.index(name) < names.index("programFpgaRam"):
+                    self._workflowError = "FPGA verification must precede service startup"
+                    self._logger.error(self._workflowError)
+                    return None
         for action in self._config.Actions:
             for key, val in action.items():
                 actionConfig = val

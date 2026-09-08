@@ -3,6 +3,7 @@
 #
 # Recreate the configured deploy root before unpacking the distribution.
 #-------------------------------------------------------------------------------
+import os
 from buildingblocks.decorators import overrides
 from .distributionDeploy_state import distributionDeploy_state
 from .unzipDistribution_state import unzipDistribution_state
@@ -17,6 +18,11 @@ class createDeployFolder_state(distributionDeploy_state):
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             deployRoot = self.deployRoot()
+            if not getattr(self.ParentWorkThread, "_localSystemStopped", False):
+                raise RuntimeError("stopLocalSystem must succeed before deleting the deploy root")
+            if os.path.commonpath([os.path.realpath(self.workRoot()),
+                                   os.path.realpath(deployRoot)]) == os.path.realpath(deployRoot):
+                raise RuntimeError("installer workspace must be outside the deploy root")
 
             if not unzipDistribution_state._isSafeDeployRoot(deployRoot):
                 self.error("[{}] refusing to recreate unsafe deploy root: {}"
@@ -30,6 +36,7 @@ class createDeployFolder_state(distributionDeploy_state):
             helper.Config = self.Config
             helper.Logger = self.Logger
             self._success = helper._prepareDeployRoot(deployRoot)
+            self.ParentWorkThread._deployRootPrepared = self._success
             if self._success:
                 self.info("[{}] safely prepared {}".format(
                     type(self).__name__, deployRoot))

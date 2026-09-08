@@ -44,7 +44,7 @@ case "${ACTION}" in
   *) usage >&2; exit 2 ;;
 esac
 
-[[ -d "${SERVICE_ROOT}" ]] || {
+[[ "${ACTION}" == "stop" || -d "${SERVICE_ROOT}" ]] || {
   echo "Operations service tree not found: ${SERVICE_ROOT}" >&2
   exit 1
 }
@@ -199,6 +199,24 @@ wait_http() {
   return 1
 }
 
+stop_installed_units() {
+  local scope="$1" unit load_state
+  shift
+  for unit in "$@"; do
+    if [[ "${scope}" == "user" ]]; then
+      load_state="$(user_systemctl show "${unit}" --property=LoadState --value)"
+    else
+      load_state="$(sudo_cmd systemctl show "${unit}" --property=LoadState --value)"
+    fi
+    [[ "${load_state}" == "not-found" ]] && continue
+    if [[ "${scope}" == "user" ]]; then
+      user_systemctl stop "${unit}"
+    else
+      sudo_cmd systemctl stop "${unit}"
+    fi
+  done
+}
+
 case "${ACTION}" in
   install)
     install_units
@@ -223,8 +241,10 @@ case "${ACTION}" in
     show_status
     ;;
   stop)
-    user_systemctl stop "${FRONTEND_UNIT}" "${BACKEND_UNIT}" "${SBC_UNIT}"
-    sudo_cmd systemctl stop "${EXECUTOR_UNIT}" "${GLASGOW_UNIT}"
+    stop_installed_units user "${FRONTEND_UNIT}" "${BACKEND_UNIT}" "${SBC_UNIT}"
+    stop_installed_units system "${EXECUTOR_UNIT}" "${GLASGOW_UNIT}" "ionbeam-web.service"
+    stop_stale_glasgow
+    stop_stale_web_processes
     ;;
   status)
     show_status

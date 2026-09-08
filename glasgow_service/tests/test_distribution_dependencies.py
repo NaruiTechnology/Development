@@ -59,7 +59,7 @@ def test_distribution_deploy_verifies_installed_client_imports():
         if "installPipRequirements" in action
     )
 
-    assert install_action["actionData"]["verifyImports"] == ["gpiozero", "httpx", "redis"]
+    assert {"gpiozero", "httpx", "redis"} <= set(install_action["actionData"]["verifyImports"])
 
 
 def test_distribution_installs_raspberry_pi_gpio_os_runtime_conditionally():

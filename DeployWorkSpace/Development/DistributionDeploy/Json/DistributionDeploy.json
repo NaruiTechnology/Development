@@ -33,6 +33,14 @@
     "Actions": [
         
         {
+            "stopLocalSystem": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {},
+                "timeout": 120.0
+            }
+        },
+        {
             "createDeployFolder": {
                 "skip": false,
                 "transactionComplete": false,
@@ -107,28 +115,6 @@
         },
 
         {
-            "installNodeJS": {
-                "skip": false,
-                "transactionComplete": false,
-                "actionData": {
-                    "commandFormat": "bash",
-                    "nvmInstaller": "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh",
-                    "nodeVersion": "--lts"
-                },
-                "timeout": 600.0
-            }
-        },
-        {
-            "installUuidRuntime": {
-                "skip": false,
-                "transactionComplete": false,
-                "actionData": {
-                    "package": "uuid-runtime"
-                },
-                "timeout": 600.0
-            }
-        },
-        {
             "installToolchain": {
                 "skip": false,
                 "transactionComplete": false,
@@ -162,6 +148,59 @@
             }
         },
         {
+            "setupGlasgow": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "iterative",
+                    "deployRoot": ".",
+                    "repoUrl": "https://github.com/GlasgowEmbedded/glasgow",
+                    "repoDir": "glasgow",
+                    "rulesSrc": "glasgow/config/70-glasgow.rules",
+                    "rulesDst": "/etc/udev/rules.d",
+                    "idVendor": "20b7",
+                    "idProduct": "9db1",
+                    "pipxTarget": "glasgow/software[builtin-toolchain]",
+                    "pipxPython": "python3.13",
+                    "pipxRequired": false,
+                    "pyprojectPath": "glasgow/software/pyproject.toml",
+                    "pythonRequires": ">=3.12.3,<4",
+                    "stopOnError": true
+                },
+                "timeout": 900.0
+            }
+        },
+        {
+            "programFpgaRam": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {},
+                "timeout": 900.0
+            }
+        },
+        {
+            "installNodeJS": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "bash",
+                    "nvmInstaller": "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh",
+                    "nodeVersion": "--lts"
+                },
+                "timeout": 600.0
+            }
+        },
+        {
+            "installUuidRuntime": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "package": "uuid-runtime"
+                },
+                "timeout": 600.0
+            }
+        },
+        {
             "installPostgreSQL": {
                 "skip": false,
                 "transactionComplete": false,
@@ -191,29 +230,6 @@
                         "adminDbSslMode": ""
                     },
                     "installCommand": "sudo apt-get -o DPkg::Lock::Timeout=600 update && sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client"
-                },
-                "timeout": 900.0
-            }
-        },
-        {
-            "setupGlasgow": {
-                "skip": false,
-                "transactionComplete": false,
-                "actionData": {
-                    "commandFormat": "iterative",
-                    "deployRoot": ".",
-                    "repoUrl": "https://github.com/GlasgowEmbedded/glasgow",
-                    "repoDir": "glasgow",
-                    "rulesSrc": "glasgow/config/70-glasgow.rules",
-                    "rulesDst": "/etc/udev/rules.d",
-                    "idVendor": "20b7",
-                    "idProduct": "9db1",
-                    "pipxTarget": "glasgow/software[builtin-toolchain]",
-                    "pipxPython": "python3.13",
-                    "pipxRequired": false,
-                    "pyprojectPath": "glasgow/software/pyproject.toml",
-                    "pythonRequires": ">=3.12.3,<4",
-                    "stopOnError": true
                 },
                 "timeout": 900.0
             }

@@ -18,6 +18,7 @@ import os
 import fnmatch
 import shutil
 import subprocess
+import shlex
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -59,7 +60,7 @@ class unzipDistribution_state(executeShellCommand_state):
             #    _findZipFile handles both and falls back to the newest
             #    .zip in the folder when nothing matches.
             preferred = os.path.basename(zipHint)
-            zipPath = self._findZipFile(searchFolder, preferred)
+            zipPath = getattr(self.ParentWorkThread, "_distributionZip", None) or self._findZipFile(searchFolder, preferred)
             if not zipPath:
                 self.error("[{}] no .zip file found in {}"
                            .format(type(self).__name__, searchFolder))
@@ -81,12 +82,11 @@ class unzipDistribution_state(executeShellCommand_state):
 
             # 3. Build and run the unzip command.
             deployRoot = self.deployRoot()
-            if not self._prepareDeployRoot(deployRoot):
-                self._success = False
-                return
+            if not getattr(self.ParentWorkThread, "_deployRootPrepared", False):
+                raise RuntimeError("deploy root must be recreated by createDeployFolder first")
 
             destPath = self.resolveDeployPath(dest)
-            cmd = commandFormat.format(zipPath, destPath)
+            cmd = commandFormat.format(shlex.quote(zipPath), shlex.quote(destPath))
             self.info("[{}] >> {}".format(type(self).__name__, cmd))
 
             self.ParentWorkThread.activateVirtualEnv()
@@ -114,7 +114,7 @@ class unzipDistribution_state(executeShellCommand_state):
         """
         Prepare Deployment.DeployRoot as the current user:
           - create it when missing
-          - remove every child when it already exists
+          - remove the entire directory and recreate it when it already exists
 
         If the root is missing or owned by another user, sudo is used only to
         create/chown this one deploy root. Clearing and extraction still run
@@ -141,13 +141,9 @@ class unzipDistribution_state(executeShellCommand_state):
                            .format(type(self).__name__, root))
                 return False
 
-            for name in os.listdir(root):
-                path = os.path.join(root, name)
-                if os.path.isdir(path) and not os.path.islink(path):
-                    shutil.rmtree(path)
-                else:
-                    os.unlink(path)
-            self.info("[{}] cleared deploy root as current user: {}"
+            shutil.rmtree(root)
+            os.makedirs(root)
+            self.info("[{}] removed and recreated deploy root as current user: {}"
                       .format(type(self).__name__, root))
             return True
         except OSError as e:
@@ -254,7 +250,11 @@ class unzipDistribution_state(executeShellCommand_state):
     def _isSafeDeployRoot(path):
         if not path or path == os.path.abspath(os.sep):
             return False
-        return os.path.basename(path.rstrip(os.sep)) == "IobeamPlatform"
+        path = os.path.abspath(os.path.expanduser(str(path)))
+        return (os.path.basename(path) == "IobeamPlatform"
+                and os.path.realpath(path) == path
+                and not os.path.islink(path)
+                and not os.path.ismount(path))
 
     def _resolveSearchFolder(self, zipHint):
         """

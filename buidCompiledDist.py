@@ -216,8 +216,7 @@ def copy_source_trees(src_dir, dist_dir, trees):
         # operational Scripts source is Development/Scripts, but it must
         # always be emitted as Development/Scripts because the deployed
         # workflow and the script's ../.. root discovery require that depth.
-        if (not os.path.isdir(src_tree) and
-                os.path.normpath(rel_tree) == 'Scripts'):
+        if os.path.normpath(rel_tree) == 'Scripts':
             parent_layout = os.path.join(src_dir, 'Development', 'Scripts')
             if os.path.isdir(parent_layout):
                 src_tree = parent_layout
@@ -243,6 +242,9 @@ def validate_packaged_local_system_manager(dist_dir):
     if not os.path.isfile(manager):
         raise FileNotFoundError(
             'Distribution is missing required local system manager: ' + manager)
+    programmer = os.path.join(dist_dir, 'Development', 'Scripts', 'program-fpga-ram.py')
+    if not os.path.isfile(programmer):
+        raise FileNotFoundError('Distribution is missing FPGA RAM programmer: ' + programmer)
     print('Validated packaged local system manager: '
           'Development/Scripts/manage-local-system.sh')
 

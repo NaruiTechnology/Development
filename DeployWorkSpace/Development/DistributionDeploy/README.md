@@ -333,3 +333,43 @@ list.
   and `launchIonbeamWebFrontend` use `nohup ... &` so their processes
   outlive the state. Each writes a PID to `/tmp/<service>.pid` so you can
   stop them with `kill $(cat /tmp/glasgow.pid)`.
+
+# Clean distribution installation
+
+The default workflow now runs in this order:
+
+1. Validate the incoming archive and invoke its
+   `./Development/Scripts/manage-local-system.sh stop` with `OPERATIONS_ROOT`
+   pointing to the installation. This stops the local stack before removing
+   files, including when upgrading from an older service-manager script.
+2. Remove the entire `Deployment.DeployRoot` directory (`~/IobeamPlatform`
+   by default), then recreate it. Nothing inside it is retained, including
+   virtual environments, logs, settings, and old `.pyc` files. The installer
+   and incoming archive must reside outside this directory.
+3. Extract the selected archive once. Set up the virtual environment, GPIO
+   runtime, Python dependencies, FPGA toolchain, and Glasgow USB access.
+4. Run the extracted `Development/Scripts/program-fpga-ram.py` using the new
+   virtual environment. It builds the configured scan design using the
+   connected device revision and forces a download to FPGA RAM, even if the
+   image ID already matches. It verifies the device-reported ID, readiness,
+   and closed scan run gate. It writes `fpga-ram-verification.json` in the
+   installation root and logs `FPGA RAM VERIFIED` on success.
+5. Continue Node, database, web, Redis, service restart, and health checks.
+
+Any failed stop, deletion, download, or verification aborts the workflow.
+Clean installs reject skipped or previously completed mandatory gates;
+reset transaction completion flags before a new run. Missing FPGA hardware
+is an installation failure, including in the local deployment mode.
+
+RAM programming does not write persistent FPGA flash or start a scan. ADC
+TEST and normal scans use different images; their runtime launchers load
+their respective designs when requested. The installation receipt verifies
+the scan image at installation time, not ADC signal quality or RAM contents
+after a subsequent power cycle or applet switch.
+
+Validation:
+
+```sh
+python3 -m unittest discover -s Development/DeployWorkSpace/Development/DistributionDeploy/tests -v
+bash -n Development/Scripts/manage-local-system.sh
+```

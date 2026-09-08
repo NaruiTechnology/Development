@@ -4,6 +4,9 @@ import os
 import sys
 import tempfile
 import unittest
+import asyncio
+import zipfile
+from unittest.mock import AsyncMock, Mock, patch
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,9 +16,111 @@ sys.path.insert(0, str(ROOT))
 
 from workstates.unzipDistribution_state import unzipDistribution_state
 from workthreads.DistributionDeployThread import DistributionDeployThread
+from workstates.createDeployFolder_state import createDeployFolder_state
+from workstates.stopLocalSystem_state import stopLocalSystem_state
+from workstates.programFpgaRam_state import programFpgaRam_state
+
+
+class DeploymentGateTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stop_uses_incoming_script_and_failure_preserves_installation(self):
+        for succeeds in (False, True):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                deploy = root / "IobeamPlatform"
+                deploy.mkdir()
+                marker = deploy / "old.pyc"
+                marker.touch()
+                archive = root / "dist_app.zip"
+                with zipfile.ZipFile(archive, "w") as bundle:
+                    bundle.writestr("Development/Scripts/manage-local-system.sh", "#!/bin/bash\n# incoming manager\n")
+                    bundle.writestr("Development/Scripts/program-fpga-ram.py", "# helper\n")
+                config = SimpleNamespace(Actions=[{"unzipDistribution": {"actionData": {"zip": str(archive)}}}])
+                thread = SimpleNamespace(deployRoot=str(deploy), workRoot=str(root), GetStateConfig=lambda _: {})
+                state = stopLocalSystem_state(thread)
+                state.Config = config
+
+                async def run(command, cwd, verbose):
+                    self.assertIn("./Development/Scripts/manage-local-system.sh stop", command)
+                    self.assertIn(str(deploy), command)
+                    self.assertIn("incoming manager", (Path(cwd) / "Development/Scripts/manage-local-system.sh").read_text())
+                    return succeeds
+
+                state.commandAsyncio = AsyncMock(side_effect=run)
+                await state.DoWork()
+                self.assertEqual(state._success, succeeds)
+                self.assertEqual(thread._localSystemStopped, succeeds)
+                self.assertTrue(marker.exists())
+                self.assertEqual(thread._distributionZip, str(archive))
+
+    async def test_extraction_does_not_clear_prepared_directory_again(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            deploy = root / "IobeamPlatform"
+            deploy.mkdir()
+            marker = deploy / "prepared-marker"
+            marker.touch()
+            archive = root / "dist_app.zip"
+            archive.touch()
+            config = {"actionData": {"zip": str(archive), "dest": "."}}
+            thread = SimpleNamespace(deployRoot=str(deploy), workRoot=str(root),
+                                     _deployRootPrepared=True, _distributionZip=str(archive),
+                                     GetStateConfig=lambda _: config, activateVirtualEnv=lambda: None)
+            state = unzipDistribution_state(thread)
+            state._run = AsyncMock(return_value=True)
+            await state.DoWork()
+            self.assertTrue(state._success)
+            self.assertTrue(marker.exists())
+
+    async def test_fpga_subprocess_failure_blocks_completion(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in (".venv/bin/python", "Development/Scripts/program-fpga-ram.py", "scan.json"):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            thread = SimpleNamespace(deployRoot=str(root), venvDir=".venv", glasgowConfig=str(root / "scan.json"),
+                                     _localSystemStopped=True, GetStateConfig=lambda _: {})
+            state = programFpgaRam_state(thread)
+            state.commandAsyncio = AsyncMock(return_value=False)
+            await state.DoWork()
+            self.assertFalse(state._success)
+            self.assertIn(" -I ", state.commandAsyncio.call_args.args[0])
 
 
 class DeployRootSafetyTests(unittest.TestCase):
+    def test_root_symlink_is_rejected_without_touching_destination(self):
+        with tempfile.TemporaryDirectory() as parent:
+            outside = Path(parent) / "outside"
+            outside.mkdir()
+            marker = outside / "keep"
+            marker.touch()
+            deploy = Path(parent) / "IobeamPlatform"
+            deploy.symlink_to(outside, target_is_directory=True)
+            self.assertFalse(unzipDistribution_state(None)._prepareDeployRoot(str(deploy)))
+            self.assertTrue(marker.exists())
+
+    def test_replaces_root_itself_and_removes_hidden_stale_files(self):
+        with tempfile.TemporaryDirectory() as parent:
+            deploy = Path(parent) / "IobeamPlatform"
+            deploy.mkdir(mode=0o700)
+            (deploy / ".stale.pyc").touch()
+            with patch("workstates.unzipDistribution_state.shutil.rmtree", wraps=__import__('shutil').rmtree) as remove:
+                self.assertTrue(unzipDistribution_state(None)._prepareDeployRoot(str(deploy)))
+                remove.assert_called_once_with(str(deploy))
+            self.assertEqual(list(deploy.iterdir()), [])
+
+    def test_deletion_requires_successful_stop(self):
+        with tempfile.TemporaryDirectory() as parent:
+            deploy = Path(parent) / "IobeamPlatform"
+            deploy.mkdir()
+            marker = deploy / "keep"
+            marker.touch()
+            thread = SimpleNamespace(deployRoot=str(deploy), GetStateConfig=lambda _: {})
+            state = createDeployFolder_state(thread)
+            asyncio.run(state.DoWork())
+            self.assertFalse(state._success)
+            self.assertTrue(marker.exists())
+
     def test_only_named_deployment_root_is_clearable(self):
         self.assertFalse(unzipDistribution_state._isSafeDeployRoot("/"))
         self.assertFalse(unzipDistribution_state._isSafeDeployRoot(str(Path.home())))
@@ -99,6 +204,32 @@ class WorkflowContractTests(unittest.TestCase):
         ):
             self.assertTrue(actions[legacy]["skip"])
 
+    def test_stop_and_fpga_gates_cannot_be_skipped_or_reused(self):
+        for gate in ("stopLocalSystem", "programFpgaRam"):
+            for flag in ("skip", "transactionComplete"):
+                payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+                next(a[gate] for a in payload["Actions"] if gate in a)[flag] = True
+                thread = DistributionDeployThread(self.config(payload["Actions"]))
+                self.assertIsNone(thread.IntialWork())
+                self.assertIsNotNone(thread._workflowError)
+
+    def test_failure_aborts_before_next_state(self):
+        payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+        thread = DistributionDeployThread(self.config(payload["Actions"]))
+        state = thread.IntialWork()
+        self.assertIsInstance(state, stopLocalSystem_state)
+        self.assertIsNone(thread.StateFactory(state))
+        self.assertFalse(thread._workflowSucceeded)
+
+    def test_fpga_precedes_remaining_installation_and_restart(self):
+        payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+        names = [name for action in payload["Actions"] for name in action]
+        self.assertEqual(names[:3], ["stopLocalSystem", "createDeployFolder", "unzipDistribution"])
+        for prerequisite in ("installPipRequirements", "installToolchain", "setupGlasgow"):
+            self.assertLess(names.index(prerequisite), names.index("programFpgaRam"))
+        for remaining in ("installPostgreSQL", "setupIonbeamWeb", "manageLocalSystem"):
+            self.assertLess(names.index("programFpgaRam"), names.index(remaining))
+
     def test_every_enabled_action_has_an_importable_workstate(self):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
         config = self.config(payload["Actions"])
@@ -135,6 +266,25 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertEqual(module.make_shell_scripts_executable(str(root)), 2)
             self.assertTrue(first.stat().st_mode & 0o111)
             self.assertTrue(second.stat().st_mode & 0o111)
+
+    def test_builder_prefers_development_scripts_over_stale_workspace_scripts(self):
+        builder_path = ROOT.parents[2] / "buidCompiledDist.py"
+        spec = importlib.util.spec_from_file_location("distribution_builder", builder_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            old = root / "Scripts"
+            fresh = root / "Development/Scripts"
+            old.mkdir()
+            fresh.mkdir(parents=True)
+            (old / "manage-local-system.sh").write_text("stale")
+            (fresh / "manage-local-system.sh").write_text("fresh")
+            (fresh / "program-fpga-ram.py").write_text("programmer")
+            output = root / "out"
+            module.copy_source_trees(str(root), str(output), ["Scripts"])
+            self.assertEqual((output / "Development/Scripts/manage-local-system.sh").read_text(), "fresh")
+            module.validate_packaged_local_system_manager(str(output))
 
 
 if __name__ == "__main__":
