@@ -9,6 +9,7 @@ export interface AdcBin {
   min: number;
   max: number;
   average: number;
+  latest: number;
   count: number;
 }
 
@@ -117,12 +118,14 @@ export function useAdcTestStream() {
       let count = 0;
       let min = 0x3fff;
       let max = 0;
+      let latest = 0;
       for (let index = 0; index + 1 < bytes.length; index += 2) {
         const value = ((bytes[index] << 8) | bytes[index + 1]) & 0x3fff;
         sum += value;
         count += 1;
         min = Math.min(min, value);
         max = Math.max(max, value);
+        latest = value;
       }
       if (count) {
         const previous = binsRef.current[binIndex];
@@ -132,6 +135,7 @@ export function useAdcTestStream() {
           min: Math.min(previous?.min ?? min, min),
           max: Math.max(previous?.max ?? max, max),
           average: total / totalCount,
+          latest,
           count: totalCount,
         };
         statsRef.current.count += count;

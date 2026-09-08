@@ -1686,6 +1686,7 @@ body {
 .icon--ruler { color: lawngreen; }
 .icon--calibrate { filter: brightness(1.6) saturate(1.15); }
 .icon--magCal { filter: brightness(1.6) saturate(1.15); }
+.icon--adcTest { filter: brightness(3) saturate(1.4) drop-shadow(0 0 4px rgba(255, 214, 64, .85)); }
 
 .calibration-line-readout {
   position: absolute;

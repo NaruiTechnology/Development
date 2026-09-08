@@ -1104,7 +1104,7 @@ export function App() {
                 disabled={scanActive}
                 onClick={activateAdcTestTab}
               >
-                <Icon name="waveform" tone="tab" />
+                <Icon name="adcTest" tone="tab" />
                 {t("tabs.adcTest")}
               </button>}
             </div>

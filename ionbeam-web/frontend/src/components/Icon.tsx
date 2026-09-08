@@ -6,6 +6,7 @@ import roiIcon from "../assets/ROI.png";
 import rasterIcon from "../assets/raster.png";
 import vectorIcon from "../assets/vector.png";
 import dashboardIcon from "../assets/UHVacuumPump_1.png";
+import adcTestIcon from "../assets/Cog.png";
 
 type IconName =
   | "check"
@@ -21,6 +22,7 @@ type IconName =
   | "gridSvg"
   | "help"
   | "alertTriangle"
+  | "adcTest"
   | "waveform"
   | "highlightTool"
   | "image"
@@ -71,7 +73,8 @@ export function Icon({
           name === "scan" ||
           name === "calibrate" ||
           name === "ruler" ||
-          name === "magCal"
+          name === "magCal" ||
+          name === "adcTest"
         ? " icon--intrinsic"
         : "";
     return (
@@ -96,6 +99,7 @@ const imageSources: Partial<Record<IconName, string>> = {
   calibrate: calibrateIcon,
   ruler: rulerIcon,
   magCal: magCalIcon,
+  adcTest: adcTestIcon,
   dashboard: dashboardIcon,
   target: roiIcon,
   grid: rasterIcon,

@@ -767,6 +767,7 @@ class DeviceService:
             raise
 
         self._status.state = DeviceState.IDLE
+        self._status.last_error = None
         return self._conn
 
     def _drop_conn_on_error(self, exc: BaseException) -> None:
@@ -1589,6 +1590,7 @@ class DeviceService:
                 await svc._lock.acquire()
                 svc._abort_requested = False
                 svc._status.state = DeviceState.BUSY
+                svc._status.last_error = None
                 svc._status.chunks_in_flight = 0
                 logger.debug("scan start kind=%s", kind)
                 return svc

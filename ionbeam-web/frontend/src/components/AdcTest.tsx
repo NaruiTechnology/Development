@@ -182,7 +182,9 @@ function drawTimeline(
   state.bins.forEach((bin, index) => {
     if (!bin) return;
     const x = left + (index / state.bins.length) * plotWidth;
-    const gray = Math.round((Math.min(0x3fff, bin.average) * 255) / 0x3fff);
+    // Keep this conversion identical to the image canvas: raw 14-bit ADC
+    // values map linearly to the displayed 8-bit grayscale range.
+    const gray = Math.round((Math.min(0x3fff, bin.latest) * 255) / 0x3fff);
     const barHeight = (gray / 255) * plotHeight;
     context.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
     context.fillRect(x, 10 + plotHeight - barHeight, Math.max(1, plotWidth / state.bins.length), barHeight);
