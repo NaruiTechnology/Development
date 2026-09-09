@@ -62,7 +62,8 @@ class AdcDataSubtarget(Elaboratable):
     def __init__(self, *, in_fifo, capture_enable, capture_status,
                  pin_config=None, simulation=False, seed=1,
                  adc_half_period=6, adc_settle_cycles=2,
-                 duration_cycles=None, clock_hz=48_000_000, power_good_status=None):
+                 duration_cycles=None, clock_hz=48_000_000, power_good_status=None,
+                 pin_diagnostics=None, latch_phase=0, sample_phase=None):
         self.in_fifo = in_fifo
         self.capture_enable = capture_enable
         self.capture_status = capture_status
@@ -73,6 +74,14 @@ class AdcDataSubtarget(Elaboratable):
         self.adc_settle_cycles = max(1, int(adc_settle_cycles))
         self.duration_cycles = max(1, int(duration_cycles or clock_hz))
         self.power_good_status = power_good_status
+        self.pin_diagnostics = pin_diagnostics
+        self.latch_phase = int(latch_phase)
+        self.sample_phase = (min(self.adc_half_period * 2 - 1, self.adc_settle_cycles + 1)
+                             if sample_phase is None else int(sample_phase))
+        if not 0 <= self.latch_phase < self.adc_half_period * 2:
+            raise ValueError("adcLatchPhase must be within one ADC period")
+        if not 0 <= self.sample_phase < self.adc_half_period * 2:
+            raise ValueError("adcSamplePhase must be within one ADC period")
 
         # Public signals make the no-DAC invariants directly testable.
         self.adc_oe = Signal()
@@ -115,8 +124,9 @@ class AdcDataSubtarget(Elaboratable):
         started = Signal()
         period = self.adc_half_period * 2
         conversion_counter = Signal(range(period))
-        sample_phase = min(period - 1, self.adc_settle_cycles + 1)
+        sample_phase = self.sample_phase
         sample_tick = Signal()
+        sample_accepted = Signal()
         sampled = Signal()
         fifo_written = Signal()
         fifo_stalled = Signal()
@@ -128,12 +138,26 @@ class AdcDataSubtarget(Elaboratable):
             self.adc_oe.eq(self.running),
             self.adc_clk.eq(self.running &
                             (conversion_counter >= self.adc_half_period)),
-            self.adc_le_clk.eq(self.running & (conversion_counter == 0)),
+            self.adc_le_clk.eq(self.running & (conversion_counter == self.latch_phase)),
             sample_tick.eq(self.running & (conversion_counter == sample_phase)),
             self.capture_status.eq(Cat(self.running, self.complete, started,
                                        sampled, fifo_written, fifo_stalled,
                                        sample_dropped)),
         ]
+
+        if self.pin_diagnostics is not None:
+            raw_last, seen_low, seen_high, sampled_low = self.pin_diagnostics
+            # Independent of the sample register, serializer and USB FIFO.
+            # Observe every sync edge while OE is asserted. These masks are
+            # diagnostic observations, not a synchronized analog measurement.
+            with m.If(~self.capture_enable):
+                m.d.sync += [raw_last.eq(0), seen_low.eq(0), seen_high.eq(0), sampled_low.eq(0)]
+            with m.Elif(self.running):
+                m.d.sync += [raw_last.eq(self.data_i),
+                             seen_low.eq(seen_low | ~self.data_i),
+                             seen_high.eq(seen_high | self.data_i)]
+                with m.If(sample_accepted):
+                    m.d.sync += sampled_low.eq(sampled_low | ~self.data_i)
 
         with m.If(~self.capture_enable):
             m.d.sync += [
@@ -209,6 +233,7 @@ class AdcDataSubtarget(Elaboratable):
             with m.If(self.complete):
                 m.d.sync += writer_state.eq(END_HI)
             with m.Elif(sample_tick):
+                m.d.comb += sample_accepted.eq(1)
                 m.d.sync += [
                     sample.eq(random_value if self.simulation else self.data_i),
                     writer_state.eq(SAMPLE_HI),
@@ -239,6 +264,9 @@ class AdcDataStreamApplet(GlasgowApplet):
         self.capture_enable, self.addr_capture_enable = target.registers.add_rw(1, init=0)
         self.capture_status, self.addr_capture_status = target.registers.add_ro(8, init=0)
         self.power_good_status, self.addr_power_good = target.registers.add_ro(8, init=0)
+        diagnostics = [target.registers.add_ro(14, init=0) for _ in range(4)]
+        self.pin_diagnostics = tuple(signal for signal, _ in diagnostics)
+        self.pin_diagnostic_addresses = tuple(address for _, address in diagnostics)
         self.mux_interface = iface = target.multiplexer.claim_interface(self, args)
         # Continuous acquisition must fill USB packets, rather than flushing
         # a short packet each time the two-byte serializer pauses. Repeated
@@ -261,6 +289,9 @@ class AdcDataStreamApplet(GlasgowApplet):
             capture_enable=self.capture_enable,
             capture_status=self.capture_status,
             power_good_status=self.power_good_status,
+            pin_diagnostics=self.pin_diagnostics,
+            latch_phase=action.get("adcLatchPhase", 0),
+            sample_phase=action.get("adcSamplePhase"),
             pin_config=action.get("pins", {}),
             simulation=self.simulation,
             seed=self.seed,

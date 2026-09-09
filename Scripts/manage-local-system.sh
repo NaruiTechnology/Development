@@ -73,6 +73,24 @@ user_systemctl() {
   fi
 }
 
+ensure_log_files() {
+  install -d -m 0755 "${LOG_DIR}"
+  local log_file
+  for log_file in \
+    "${LOG_DIR}/glasgow-svc.log" \
+    "${LOG_DIR}/vacuum-executor.log" \
+    "${LOG_DIR}/sbc-vacuum.log" \
+    "${LOG_DIR}/ionbeam-web-backend.log" \
+    "${LOG_DIR}/ionbeam-web-frontend.log"; do
+    # A previous system unit may have created a log as another service user.
+    # Recover ownership in place so existing logs are preserved.
+    if ! touch "${log_file}" 2>/dev/null; then
+      sudo_cmd chown "${ADMIN_USER}:$(id -gn "${ADMIN_USER}")" "${log_file}"
+      touch "${log_file}"
+    fi
+  done
+}
+
 render() {
   sed \
     -e "s|@OPERATIONS_ROOT@|${OPERATIONS_ROOT}|g" \
@@ -101,12 +119,7 @@ install_units() {
     echo "npm was not found; install Node.js/npm or set NPM_BIN." >&2
     exit 1
   }
-  install -d -m 0755 "${LOG_DIR}"
-  touch "${LOG_DIR}/glasgow-svc.log" \
-    "${LOG_DIR}/vacuum-executor.log" \
-    "${LOG_DIR}/sbc-vacuum.log" \
-    "${LOG_DIR}/ionbeam-web-backend.log" \
-    "${LOG_DIR}/ionbeam-web-frontend.log"
+  ensure_log_files
   local temp_dir
   temp_dir="$(mktemp -d)"
   trap 'rm -rf -- "${temp_dir}"' RETURN
@@ -251,11 +264,7 @@ case "${ACTION}" in
     ;;
   logs)
     echo "Following service logs in ${LOG_DIR}. Ctrl-C exits."
-    touch "${LOG_DIR}/glasgow-svc.log" \
-      "${LOG_DIR}/vacuum-executor.log" \
-      "${LOG_DIR}/sbc-vacuum.log" \
-      "${LOG_DIR}/ionbeam-web-backend.log" \
-      "${LOG_DIR}/ionbeam-web-frontend.log"
+    ensure_log_files
     tail -n 80 -F \
       "${LOG_DIR}/glasgow-svc.log" \
       "${LOG_DIR}/vacuum-executor.log" \

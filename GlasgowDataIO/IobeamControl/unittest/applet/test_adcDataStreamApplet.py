@@ -1,7 +1,8 @@
 import unittest
 from types import SimpleNamespace
 
-from amaranth import Module, Signal
+from amaranth import Fragment, Module, Signal
+from amaranth.lib import io
 from amaranth.sim import Simulator
 
 from GlasgowDataIO.IobeamControl.applet.AdcDataStreamApplet import (
@@ -11,6 +12,47 @@ from GlasgowDataIO.IobeamControl.applet.AdcDataStreamApplet import (
 
 
 class AdcDataStreamAppletTest(unittest.TestCase):
+    def test_pin_diagnostics_distinguish_missed_phase_from_captured_data(self):
+        for only_at_latch in (False, True):
+            with self.subTest(only_at_latch=only_at_latch):
+                pads = io.SimulationPort("i", 14)
+
+                class Platform:
+                    def add_resources(self, resources):
+                        pass
+
+                    def request(self, name, *, dir):
+                        return pads
+
+                fifo = SimpleNamespace(w_en=Signal(), w_data=Signal(8), w_rdy=Signal(init=1))
+                enable, status = Signal(), Signal(8)
+                diagnostics = tuple(Signal(14) for _ in range(4))
+                dut = AdcDataSubtarget(in_fifo=fifo, capture_enable=enable, capture_status=status,
+                                      pin_config={"data": {"pins": " ".join(f"D{i}" for i in range(14))}},
+                                      duration_cycles=120, pin_diagnostics=diagnostics)
+                sim = Simulator(Fragment.get(dut, Platform()))
+                sim.add_clock(1/48e6)
+
+                async def bench(ctx):
+                    ctx.set(enable, 1)
+                    await ctx.tick()
+                    received = bytearray()
+                    for _ in range(110):
+                        ctx.set(pads.i, 0x1234 if not only_at_latch or ctx.get(dut.adc_le_clk) else 0x3fff)
+                        if ctx.get(fifo.w_en):
+                            received.append(ctx.get(fifo.w_data))
+                        await ctx.tick()
+                    _, low, high, sampled_low = (ctx.get(signal) for signal in diagnostics)
+                    self.assertEqual(low, 0x2dcb)
+                    self.assertEqual(high, 0x3fff if only_at_latch else 0x1234)
+                    self.assertEqual(sampled_low, 0 if only_at_latch else 0x2dcb)
+                    expected = b"\x3f\xff" if only_at_latch else b"\x12\x34"
+                    self.assertGreater(len(received), 4)
+                    self.assertEqual(bytes(received[:len(received)//2*2]), expected * (len(received)//2))
+
+                sim.add_testbench(bench)
+                sim.run()
+
     def test_resources_exclude_every_dac_signal_and_force_input_data(self):
         resources = build_adc_resources({
             "control": {

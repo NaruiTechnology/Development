@@ -1412,7 +1412,10 @@ class DeviceService:
                 flat = np.concatenate([flat, pad])
             else:
                 flat = flat[: res * res]
-            img = flat.reshape(res, res)
+            # RasterScanCommand emits one complete Y sweep per X position,
+            # so the captured stream is column-major. Matplotlib expects the
+            # first dimension to be Y and the second to be X.
+            img = flat.reshape(res, res).T
             dwell = int(last.get("dwell") or self._raster_defaults.get("dwell") or 0)
             adc_latency = int(self._raster_defaults.get("adcLatency", 8))
             line_shift_per_row = ((adc_latency - 1) / dwell) if dwell else 0

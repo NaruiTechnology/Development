@@ -153,16 +153,12 @@ class CommandExecutor(wiring.Component):
                 with m.Switch(command.type):
                     with m.Case(CmdType.Synchronize):
                         m.d.sync += self.flush.eq(1)
-                        # -------------------------------------------------- #
-                        # FIX: Update output_mode HERE, before sync_ack, so
-                        # the new mode is already latched when Write_FFFF and
-                        # Write_cookie run. Previously this was updated after
-                        # sync_ack, meaning the first sync always used the
-                        # old mode (0 = NoOutput) during the cookie write.
-                        # -------------------------------------------------- #
-                        m.d.sync += output_mode.eq(command.payload.synchronize.mode.output)
                         m.d.comb += sync_req.eq(1)
                         with m.If(sync_ack):
+                            # Drain prior pixels using their original format.
+                            # The synchronization words themselves are always
+                            # 16-bit, including when entering/leaving NoOutput.
+                            m.d.sync += output_mode.eq(command.payload.synchronize.mode.output)
                             m.next = "Fetch"
 
                     with m.Case(CmdType.Abort):
@@ -303,6 +299,7 @@ class CommandExecutor(wiring.Component):
 
             with m.State("Write_FFFF"):
                 m.d.comb += [
+                    self.output_mode.eq(OutputMode.SixteenBit),
                     self.img_stream.payload.eq(0xffff),
                     self.img_stream.valid.eq(1),
                 ]
@@ -311,6 +308,7 @@ class CommandExecutor(wiring.Component):
 
             with m.State("Write_cookie"):
                 m.d.comb += [
+                    self.output_mode.eq(OutputMode.SixteenBit),
                     self.img_stream.payload.eq(command.payload.synchronize.cookie),
                     self.img_stream.valid.eq(1),
                 ]

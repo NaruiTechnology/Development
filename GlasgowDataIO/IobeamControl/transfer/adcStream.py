@@ -49,6 +49,13 @@ class AdcConnection:
                 "ADC FPGA %s: status=0x%02x running=%s complete=%s started=%s "
                 "sampled=%s fifo_written=%s fifo_stalled=%s sample_dropped=%s received_bytes=%d",
                 reason, status, *(bool(status & (1 << bit)) for bit in range(7)), self._bytes)
+            if addresses := getattr(self.iface, "adc_pin_diagnostic_addresses", None):
+                raw, low, high, sample_low = [
+                    await self.iface.device.read_register(address, width=2) for address in addresses]
+                self._logger.info(
+                    "ADC PAD diagnostic %s: raw_last=0x%04x seen_low=0x%04x "
+                    "seen_high=0x%04x sampled_low=0x%04x (pre-serializer, all phases vs capture phase)",
+                    reason, raw, low, high, sample_low)
         except Exception as exc:
             self._logger.warning("ADC FPGA status unavailable (%s): %s: %s",
                                  reason, type(exc).__name__, exc)
@@ -92,6 +99,7 @@ class AdcConnection:
                             elapsed, self._bytes, len(samples), min(samples), max(samples),
                             ','.join(f'{value:04x}' for value in samples[:8]))
                         next_log = elapsed + 5
+                        await self.log_status("receiving")
                     if chunk:
                         yield chunk
                     if marker is not None:

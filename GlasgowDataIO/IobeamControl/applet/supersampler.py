@@ -37,14 +37,15 @@ class Supersampler(wiring.Component):
         super().__init__()
 
         self.dac_stream_data = Signal.like(self.dac_stream.payload)
-        self.encoder = PowerOfTwoDetector(16)
+        # A 16-bit dwell encodes dwell+1 conversions, up to 65536.
+        self.encoder = PowerOfTwoDetector(17)
 
     def elaborate(self, platform):
         m = Module()
         m.submodules["encoder"] = self.encoder
 
         dwell_counter = Signal.like(self.dac_stream_data.dwell_time)
-        sample_counter = Signal.like(self.dac_stream_data.dwell_time)
+        sample_counter = Signal(17)
         last = Signal()
         m.d.comb += [
             self.super_dac_stream.payload.dac_x_code.eq(self.dac_stream_data.dac_x_code),
@@ -78,10 +79,10 @@ class Supersampler(wiring.Component):
                         m.d.sync += dwell_counter.eq(dwell_counter + 1)
 
         m.d.comb += self.encoder.i.eq(sample_counter)
-        running_sum = Signal(30)
-        last_p2_sum = Signal(30)
-        selected_sum = Signal(30)
-        shifted_sum = Signal(30)
+        # Local samples can be full16 in simulation, unlike OBI's raw14.
+        running_sum = Signal(32)
+        last_p2_sum = Signal(32)
+        selected_sum = Signal(32)
         with m.If(self.encoder.p): #if the current sample counter is a power of 2, use all samples
             m.d.comb += selected_sum.eq(running_sum)
             m.d.sync += last_p2_sum.eq(running_sum)

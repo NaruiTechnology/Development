@@ -1,7 +1,5 @@
 """Translate explicit instrument configuration to the vendored Glasgow API."""
 import math
-from pathlib import Path
-import tomllib
 
 from .glasgowLib.glasgow.abstract import GlasgowPin
 from .glasgowLib.glasgow.applet import PinArgument
@@ -15,21 +13,11 @@ BEAM_PORTS = tuple(f"{beam}_{role}" for beam in ("ebeam", "ibeam")
 def configure_scan_args(config, action, args):
     """Resolve pin roles, transforms and timing once, before building hardware.
 
-    microscopeConfig is relative to the source JSON. An absent setting keeps
-    the optional beam outputs unassigned. CLI pin lists remain supported.
-    Modern A/B pins are translated to indices relative to port_spec, as required
-    by this repository's legacy multiplexer and configurable-pull API.
+    Read beam pin roles, transforms and timing from JSON actionData. CLI pin
+    lists remain supported. Modern A/B pins are translated to indices relative
+    to port_spec for the legacy multiplexer and configurable-pull API.
     """
-    instrument = {}
-    if path := action.get("microscopeConfig"):
-        path = Path(path)
-        if not path.is_absolute():
-            source = getattr(config, "_jsonFile", None)
-            if not source or str(source).lstrip().startswith("{"):
-                raise ValueError("relative microscopeConfig requires a source JSON file")
-            path = Path(source).resolve().parent / path
-        with path.open("rb") as source:
-            instrument = tomllib.load(source)
+    instrument = action
 
     modern = {}
     for beam, local in (("electron", "ebeam"), ("ion", "ibeam")):

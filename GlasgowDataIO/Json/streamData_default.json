@@ -10,7 +10,16 @@
             "streamData": {
                 "actionData": {
                     "ev": 1000.0,
-                    "microscopeConfig": "../../microscope.toml",
+                    "beam": {
+                        "electron": {
+                            "pinout": {"scan_enable": "A0:1"}
+                        },
+                        "ion": {
+                            "pinout": {"blank_enable": "A4:5", "blank": "A2#,A3"}
+                        }
+                    },
+                    "transforms": {"xflip": false, "yflip": false, "rotate90": false},
+                    "timings": {"ext_switch_delay_ms": 20},
                     "voltage": 2.5,
                     "bufferSize": "1024*1024",
                     "adcHalfPeriod": 6,

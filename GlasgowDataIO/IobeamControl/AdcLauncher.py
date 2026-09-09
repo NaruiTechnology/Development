@@ -59,6 +59,7 @@ class AdcLauncher(IobeamLauncher):
         iface.adc_capture_enable_addr = applet.addr_capture_enable
         iface.adc_capture_status_addr = applet.addr_capture_status
         iface.iobeam_power_good_addr = applet.addr_power_good
+        iface.adc_pin_diagnostic_addresses = applet.pin_diagnostic_addresses
         iface.adc_duration_minutes = self.duration_minutes
         try:
             # Start only after _activate has reset the FIFOs, queued USB reads
@@ -75,10 +76,14 @@ class AdcLauncher(IobeamLauncher):
                 raise RuntimeError(f"ADC capture did not start: FPGA status=0x{status:02x}")
             self._logger.info(
                 "ADC capture armed: enable_addr=%d status_addr=%d status=0x%02x "
-                "half_period=%d settle=%d source=%s",
+                "half_period=%d settle=%d latch_phase=%d sample_phase=%d source=%s",
                 applet.addr_capture_enable, applet.addr_capture_status, status,
                 int(action.get("adcHalfPeriod", 6)),
-                int(action.get("adcSettleCycles", 2)), __file__)
+                int(action.get("adcSettleCycles", 2)),
+                int(action.get("adcLatchPhase", 0)),
+                int(action.get("adcSamplePhase", min(int(action.get("adcHalfPeriod", 6)) * 2 - 1,
+                                                       int(action.get("adcSettleCycles", 2)) + 1))),
+                __file__)
         except BaseException:
             try:
                 await iface.device.write_register(applet.addr_capture_enable, 0)
