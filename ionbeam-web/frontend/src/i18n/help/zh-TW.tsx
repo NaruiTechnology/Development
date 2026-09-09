@@ -287,7 +287,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit</strong> — 每像素 2 位元組。原始 14 位元 ADC 讀數零擴充至 uint16，小端序。這是唯一能在後處理中還原完整 ADC 動態範圍的模式。</li>
+        <li><strong>SixteenBit</strong> — 每像素 2 位元組。原始 14 位元 ADC 讀數零擴充至 uint16，大端序（高位元組在前）。這是唯一能在後處理中還原完整 ADC 動態範圍的模式。</li>
         <li><strong>EightBit</strong> — 每像素 1 位元組。FPGA 捨棄低 6 位元，僅回傳高 8 位元。USB 頻寬減半，但會損失 6 位元的動態範圍 — 依賴那些低位元的微弱特徵將無法還原。</li>
       </ul>
 

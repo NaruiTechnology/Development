@@ -48,10 +48,8 @@ async def program(config_path):
 
     config = AutomationConfig(str(config_path))
     action = GetStateConfigByName(config, Consts.STREAM_DATA)[Consts.ACTION_DATA]
-    voltage = action.get("voltage", 2.5)
     pins = ["{}{}".format(p["port"], n) for p in action.get("ports", []) for n in p.get("pinList", [])]
-    args = SimpleNamespace(voltage_map={"A": voltage, "B": voltage},
-                           pins=GlasgowPin.parse(",".join(pins)) if pins else [],
+    args = SimpleNamespace(pins=GlasgowPin.parse(",".join(pins)) if pins else [],
                            buffer_size=1048576, sample_rate=1000000)
     device = GlasgowDevice(config.Glasgow.get("DeviceId"))
     try:

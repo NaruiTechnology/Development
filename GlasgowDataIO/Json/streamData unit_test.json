@@ -69,7 +69,7 @@
                                 { "name": "dac_clk",      "pin": "",   "direction": "o" },
                                 { "name": "dac_x_le_clk", "pin": "",   "direction": "o" },
                                 { "name": "dac_y_le_clk", "pin": "",   "direction": "o" },
-                                { "name": "d_clock",      "pin": "F3", "direction": "o", "invert": true }
+                                { "name": "dac_clk",      "pin": "F3", "direction": "o", "invert": true }
                             ],
                             "attrs": {
                                 "IO_STANDARD": "SB_LVCMOS33"

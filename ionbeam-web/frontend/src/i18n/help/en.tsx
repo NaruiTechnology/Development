@@ -272,7 +272,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit</strong> — 2 bytes per pixel. The raw 14-bit ADC reading is zero-extended into a uint16, little-endian. This is the only mode where you can recover the full ADC dynamic range in post-processing.</li>
+        <li><strong>SixteenBit</strong> — 2 bytes per pixel. The raw 14-bit ADC reading is zero-extended into a uint16, big-endian (high byte first). This is the only mode where you can recover the full ADC dynamic range in post-processing.</li>
         <li><strong>EightBit</strong> — 1 byte per pixel. The FPGA discards the bottom 6 bits and sends only the top 8. Halves the USB bandwidth, but you lose 6 bits of dynamic range — you can&apos;t recover faint features that needed those low bits.</li>
       </ul>
 

@@ -10,6 +10,7 @@
             "streamData": {
                 "actionData": {
                     "ev": 1000.0,
+                    "microscopeConfig": "../../microscope.toml",
                     "voltage": 2.5,
                     "bufferSize": "1024*1024",
                     "adcHalfPeriod": 6,
@@ -52,6 +53,7 @@
                                 "an active-high digital output unless 'invert': true is set."
                             ],
                             "subsignals": [
+                                {"name": "power_good", "pin": "K1", "direction": "i"},
                                 {
                                     "name": "adc_clk",
                                     "pin": "G1",

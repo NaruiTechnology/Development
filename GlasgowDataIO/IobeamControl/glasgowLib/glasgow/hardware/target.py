@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 from amaranth import *
 from amaranth.lib import io
@@ -49,9 +50,24 @@ class GlasgowHardwareTarget(Elaboratable):
             "flag": "-", "fd": "-"
         }))
 
+        # Modern platforms reserve A/B resources in _init_glasgow_pins().
+        # Adapt those ports to the legacy multiplexer without requesting twice.
+        self._claimed_io_pins = set()
+
+        def request_io(port, number):
+            name = f"{port}{number}"
+            if name in self._claimed_io_pins:
+                raise ResourceError(f"Glasgow pin {name} has already been requested")
+            pin = self.platform.glasgow_pins[name]
+            self._claimed_io_pins.add(name)
+            parts = SimpleNamespace(io=pin.io_port)
+            if pin.oe_port is not None:
+                parts.oe = pin.oe_port
+            return parts
+
         self.ports = {
-            "A": (8, lambda n: self.platform.request("port_a", n, dir={"io": "-", "oe": "-"})),
-            "B": (8, lambda n: self.platform.request("port_b", n, dir={"io": "-", "oe": "-"})),
+            "A": (8, lambda n: request_io("A", n)),
+            "B": (8, lambda n: request_io("B", n)),
         }
 
         if multiplexer_cls:

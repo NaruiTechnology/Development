@@ -28,7 +28,7 @@ def build_adc_resources(pin_config):
     pin_config = pin_config or {}
     resources = []
     control = pin_config.get("control", {}) or {}
-    adc_names = {"adc_clk", "adc_le_clk", "adc_oe"}
+    adc_names = {"adc_clk", "adc_le_clk", "adc_oe", "power_good"}
     subsignals = []
     for entry in control.get("subsignals", []) or []:
         name = entry.get("name")
@@ -37,7 +37,8 @@ def build_adc_resources(pin_config):
             continue
         subsignals.append(Subsignal(
             name,
-            Pins(pin, dir="o", invert=bool(entry.get("invert", False))),
+            Pins(pin, dir="i" if name == "power_good" else "o",
+                 invert=bool(entry.get("invert", False))),
         ))
     if subsignals:
         resources.append(Resource(
@@ -61,7 +62,7 @@ class AdcDataSubtarget(Elaboratable):
     def __init__(self, *, in_fifo, capture_enable, capture_status,
                  pin_config=None, simulation=False, seed=1,
                  adc_half_period=6, adc_settle_cycles=2,
-                 duration_cycles=None, clock_hz=48_000_000):
+                 duration_cycles=None, clock_hz=48_000_000, power_good_status=None):
         self.in_fifo = in_fifo
         self.capture_enable = capture_enable
         self.capture_status = capture_status
@@ -71,6 +72,7 @@ class AdcDataSubtarget(Elaboratable):
         self.adc_half_period = max(2, int(adc_half_period))
         self.adc_settle_cycles = max(1, int(adc_settle_cycles))
         self.duration_cycles = max(1, int(duration_cycles or clock_hz))
+        self.power_good_status = power_good_status
 
         # Public signals make the no-DAC invariants directly testable.
         self.adc_oe = Signal()
@@ -89,9 +91,14 @@ class AdcDataSubtarget(Elaboratable):
 
         resource_names = {resource.name for resource in resources}
         if platform is not None and "adc_control" in resource_names:
+            resource = next(r for r in resources if r.name == "adc_control")
             control = platform.request("adc_control", dir={
-                "adc_clk": "o", "adc_le_clk": "o", "adc_oe": "o",
-            })
+                sub.name: "i" if sub.name == "power_good" else "o" for sub in resource.ios})
+            if hasattr(control, "power_good") and self.power_good_status is not None:
+                from amaranth.lib.cdc import FFSynchronizer
+                pg = Signal()
+                m.submodules.power_good_sync = FFSynchronizer(control.power_good.i, pg)
+                m.d.comb += self.power_good_status.eq(Cat(pg, Const(1, 1)))
             for name in ("adc_clk", "adc_le_clk", "adc_oe"):
                 if hasattr(control, name):
                     # platform.request(dir=...) installs PinBuffer and
@@ -231,6 +238,7 @@ class AdcDataStreamApplet(GlasgowApplet):
         args.pipes = "PQ"
         self.capture_enable, self.addr_capture_enable = target.registers.add_rw(1, init=0)
         self.capture_status, self.addr_capture_status = target.registers.add_ro(8, init=0)
+        self.power_good_status, self.addr_power_good = target.registers.add_ro(8, init=0)
         self.mux_interface = iface = target.multiplexer.claim_interface(self, args)
         # Continuous acquisition must fill USB packets, rather than flushing
         # a short packet each time the two-byte serializer pauses. Repeated
@@ -252,6 +260,7 @@ class AdcDataStreamApplet(GlasgowApplet):
             in_fifo=in_fifo,
             capture_enable=self.capture_enable,
             capture_status=self.capture_status,
+            power_good_status=self.power_good_status,
             pin_config=action.get("pins", {}),
             simulation=self.simulation,
             seed=self.seed,

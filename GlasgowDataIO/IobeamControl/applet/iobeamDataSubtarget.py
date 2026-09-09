@@ -82,6 +82,7 @@ class IobeamDataSubtarget(Elaboratable):
         self._addr_reset = kwargs.get("_addr_reset", None)
         self.bus_ownership_status = kwargs.get("bus_ownership_status", None)
         self.bus_ownership_clear = kwargs.get("bus_ownership_clear", None)
+        self.power_good_status = kwargs.get("power_good_status", None)
         self.ports               = ports
         self.out_fifo            = out_fifo
         self.in_fifo             = in_fifo
@@ -204,10 +205,10 @@ class IobeamDataSubtarget(Elaboratable):
         present_strobes = set()
         if platform is not None and _has_resource("control"):
             ctrl_res = next(r for r in resources if r.name == "control")
-            # These are control strobes, never bidirectional signals. Request
-            # output direction explicitly so the platform cannot preserve an
-            # ambiguous/inherited direction and leave OE high-impedance.
-            ctrl_dirs = {sub.name: "o" for sub in ctrl_res.ios}
+            # Request raw ports and instantiate output buffers explicitly,
+            # as OBI does. The former dir="o" request also inserted an
+            # output PinBuffer; both forms apply the resource's inversion.
+            ctrl_dirs = {sub.name: "-" for sub in ctrl_res.ios}
             self.control = platform.request("control", dir=ctrl_dirs)
             for sub in ctrl_res.ios:
                 if hasattr(self.control, sub.name):
@@ -215,11 +216,19 @@ class IobeamDataSubtarget(Elaboratable):
                     # Map known names to executor.bus signals; ignore others
                     # (e.g. d_clock, a_clock from the legacy resource).
                     if sub.name in _BUS_STROBES:
-                        # platform.request(dir=...) installs Amaranth's
-                        # PinBuffer, which applies Pins(..., invert=True).
-                        # Drive the component-facing signal exactly once.
-                        m.d.comb += getattr(self.control, sub.name).o.eq(
-                            getattr(executor.bus, sub.name))
+                        # io.Buffer applies Pins(..., invert=True) once.
+                        buffer = io.Buffer("o", getattr(self.control, sub.name))
+                        m.submodules[f"control_{sub.name}_buffer"] = buffer
+                        m.d.comb += buffer.o.eq(getattr(executor.bus, sub.name))
+                    elif sub.name == "power_good":
+                        buffer = io.Buffer("i", self.control.power_good)
+                        m.submodules.power_good_buffer = buffer
+                        if self.power_good_status is not None:
+                            # bit 1 means configured, bit 0 is synchronized PG.
+                            from amaranth.lib.cdc import FFSynchronizer
+                            pg = Signal()
+                            m.submodules.power_good_sync = FFSynchronizer(buffer.i, pg)
+                            m.d.comb += self.power_good_status.eq(Cat(pg, Const(1, 1)))
 
         # ------------------------------------------------------------------ #
         # Optional data bus
@@ -276,9 +285,10 @@ class IobeamDataSubtarget(Elaboratable):
                     m.d.comb += loopback_adapter.loopback_stream.eq(
                         executor.supersampler.super_dac_stream.payload.dac_x_code)
         elif data_buf is not None:
-            # Real ADC path: external chip drives data bus during
-            # ADC_Wait/ADC_Read (data_oe == 0). data.i is the latched
-            # value from the input buffer.
+            # Buffer.i is combinational. BusController registers it in
+            # ADC_Capture while the ADC owns the bus (data_oe == 0).
+            # Cat appends two MSB zeros: raw 14-bit samples are right-aligned
+            # in our 16-bit stream, unlike OBI's post-averaging << 2 format.
             m.d.comb += executor.bus.data_i.eq(Cat(data_buf.i, Const(0, 2)))
         else:
             # No loopback, no data pins -> tie data_i low. The design
@@ -295,21 +305,24 @@ class IobeamDataSubtarget(Elaboratable):
                         m.submodules[f"{pin_name}_buffer"] = \
                             io.Buffer("o", self.ports[pin_name])
                     pins = m.submodules[f"{pin_name}_buffer"].o
-                    signal = Value.cast(signal)
-                    for index, pin in enumerate(pins):
-                        if len(signal) == 1:
-                            m.d.comb += pin.eq(signal)
-                        elif index < len(signal):
-                            m.d.comb += pin.eq(signal[index])
-                        else:
-                            m.d.comb += pin.eq(0)
+                    # Every pad in a pair carries the same logical control;
+                    # per-pin inversion creates a complementary physical pair.
+                    # ext_ctrl_enable is currently a 2-bit internal field, but
+                    # only its low bit is the enable, not a per-pad vector.
+                    for pin in pins:
+                        m.d.comb += pin.eq(Value.cast(signal)[0])
 
-        connect_pins("ebeam_scan_enable",  executor.ext_ctrl_enable)
+        connect_pins("ebeam_scan_enable",  1)
         connect_pins("ibeam_scan_enable",  executor.ext_ctrl_enable)
         connect_pins("ebeam_blank_enable", executor.ext_ctrl_enable)
         connect_pins("ibeam_blank_enable", executor.ext_ctrl_enable)
 
-        with m.If(executor.beam_type == BeamType.NoBeam):
+        with m.If(executor.ext_ctrl_enabled == 0):
+            # Match OBI: release blanking to the instrument while external
+            # control is disabled. Resource inversion defines physical levels.
+            connect_pins("ebeam_blank", 0)
+            connect_pins("ibeam_blank", 0)
+        with m.Elif(executor.beam_type == BeamType.NoBeam):
             connect_pins("ebeam_blank", 1)
             connect_pins("ibeam_blank", 1)
         with m.Elif(executor.beam_type == BeamType.Electron):

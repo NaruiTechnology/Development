@@ -293,6 +293,8 @@ async def _stream_scan(ws: WebSocket, make_gen):
         await ws.send_json({"event": "error", "code": "busy"})
     except DeviceNotReady as e:
         detail = str(e)
+        if detail in {"", "ECONNRESET", "read ECONNRESET", "Connection reset by peer"}:
+            detail = "ADC/subtarget presence check failed: device transport reset while reading; verify the physical ADC subtarget and OE/LE/data wiring"
         payload = {"event": "error", "code": "not_ready", "detail": detail}
         if detail.startswith("ADC/subtarget presence check failed:"):
             payload.update({

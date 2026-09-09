@@ -36,8 +36,34 @@ class DownloadTargetCacheTestCase(unittest.IsolatedAsyncioTestCase):
         programmed = await device.download_target(plan)
 
         self.assertTrue(programmed)
-        plan.get_bitstream.assert_awaited_once_with(debug=True)
+        plan.get_bitstream.assert_awaited_once_with()
         device.download_bitstream.assert_awaited_once_with(bitstream, image_id)
+
+    async def test_adc_scan_switches_replace_image_before_verification(self):
+        running = bytes(16)
+        device = object.__new__(GlasgowDevice)
+        events = []
+
+        async def read_id():
+            events.append(("read", running))
+            return running
+
+        async def download(bitstream, image_id):
+            nonlocal running
+            events.append(("download", image_id))
+            running = image_id
+
+        device.bitstream_id = read_id
+        device.download_bitstream = download
+        adc_id, scan_id = b"a" * 16, b"s" * 16
+        for image_id in (adc_id, scan_id, adc_id, adc_id):
+            previous = running
+            events.clear()
+            plan = SimpleNamespace(bitstream_id=image_id,
+                                   get_bitstream=AsyncMock(return_value=b"image"))
+            self.assertTrue(await device.download_target(plan, reload=True))
+            self.assertEqual(events, [("read", previous), ("download", image_id),
+                                      ("read", image_id)])
 
     async def test_programmed_image_id_must_match_plan(self):
         image_id = bytes.fromhex("00112233445566778899aabbccddeeff")

@@ -291,7 +291,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit</strong> — 每像素 2 字节。原始 14 位 ADC 读数零扩展到 uint16，小端序。这是唯一能在后处理中恢复完整 ADC 动态范围的模式。</li>
+        <li><strong>SixteenBit</strong> — 每像素 2 字节。原始 14 位 ADC 读数零扩展到 uint16，大端序（高字节在前）。这是唯一能在后处理中恢复完整 ADC 动态范围的模式。</li>
         <li><strong>EightBit</strong> — 每像素 1 字节。FPGA 丢弃低 6 位，只回传高 8 位。USB 带宽减半，但损失 6 位动态范围 — 依赖那些低位的微弱特征将无法恢复。</li>
       </ul>
 

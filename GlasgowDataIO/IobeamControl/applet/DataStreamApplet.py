@@ -34,6 +34,7 @@ from GlasgowDataIO.IobeamControl.applet.iobeamDataSubtarget import IobeamDataSub
 from GlasgowDataIO.IobeamControl.applet.imageSource import get_image_data
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 from AutomationPy.buildingblocks.definitions import Consts
+from GlasgowDataIO.IobeamControl.scanConfiguration import BEAM_PORTS, configure_scan_args
 
 
 # Sentinel object used by _resolve_simulation() to tell the subtarget
@@ -196,10 +197,14 @@ class DataStreamApplet(GlasgowApplet):
     
     def build(self, target, args):
         args.pipes = "PQ"
+        action_data = util.GetStateConfigByName(
+            self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
+        configure_scan_args(self._config, action_data, args)
 
         self.magic_reg, self.addr_magic = target.registers.add_ro(8, init=0xa5)
         self.reset_reg, addr_reset = target.registers.add_rw(8, init=0)
         self.addr_reset = addr_reset
+        self.power_good_reg, self.addr_power_good = target.registers.add_ro(8, init=0)
         self.bus_ownership_reg, self.addr_bus_ownership = \
             target.registers.add_ro(8, init=0)
         self.bus_ownership_clear_reg, self.addr_bus_ownership_clear = \
@@ -212,7 +217,7 @@ class DataStreamApplet(GlasgowApplet):
         out_fifo = iface.get_out_fifo()
         in_fifo  = iface.get_in_fifo()
 
-        ports = iface.get_port_group()
+        ports = iface.get_port_group(**{name: getattr(args, name) for name in BEAM_PORTS})
 
         pin_config, sim_image, sim_res, loopback = self._resolve_simulation()
         action_data = util.GetStateConfigByName(
@@ -227,9 +232,13 @@ class DataStreamApplet(GlasgowApplet):
             _addr_reset          = self.reset_reg,
             bus_ownership_status = self.bus_ownership_reg,
             bus_ownership_clear  = self.bus_ownership_clear_reg,
+            power_good_status    = self.power_good_reg,
             loopback             = loopback,
             adc_half_period      = adc_half_period,
             adc_settle_cycles    = adc_settle_cycles,
+            transforms           = args.transforms,
+            ext_switch_delay     = args.ext_switch_delay_cycles,
+            out_only             = getattr(args, "out_only", False),
             pin_config           = pin_config,
             sim_image            = sim_image,
             sim_image_resolution = sim_res,
@@ -239,7 +248,7 @@ class DataStreamApplet(GlasgowApplet):
     async def run(self, device, args):
         await device.write_register(self.addr_reset, 0x01)
         return await device.demultiplexer.claim_interface(
-            self, self.mux_interface, args)
+            self, self.mux_interface, args, pull_high=args.beam_pull_high)
 
     async def run_handshake(self, iface):
         if self.logger:

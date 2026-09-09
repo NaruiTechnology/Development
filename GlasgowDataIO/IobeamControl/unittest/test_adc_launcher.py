@@ -15,7 +15,7 @@ class AdcLauncherTest(unittest.IsolatedAsyncioTestCase):
         device = SimpleNamespace(write_register=AsyncMock(side_effect=write),
                                  read_register=AsyncMock(return_value=status), close=Mock())
         iface = SimpleNamespace(device=device, cancel=AsyncMock())
-        applet = SimpleNamespace(addr_capture_enable=1, addr_capture_status=2)
+        applet = SimpleNamespace(addr_capture_enable=1, addr_capture_status=2, addr_power_good=3)
         async def activate(*args, prepare, **kwargs):
             await prepare(device)
             events.append(('activated',))

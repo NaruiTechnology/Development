@@ -39,7 +39,6 @@ class IobeamLauncher:
         # ------------------------------------------------------------------ #
         applet = DataStreamApplet(self._config)
 
-        action_voltage = actionConfig.get("voltage", 2.5)
         buffer_size    = eval(actionConfig.get("bufferSize", "1024*1024"))
         pin_list       = [
             f"{p.get('port')}{n}"
@@ -59,7 +58,6 @@ class IobeamLauncher:
                 "control", {}).get("subsignals", []) if p.get("name") == "dac_clk"), None))
 
         applet_args = SimpleNamespace(
-            voltage_map  = {"A": action_voltage, "B": action_voltage},
             pins         = GlasgowPin.parse(",".join(pin_list)) if pin_list else [],
             buffer_size  = buffer_size,
             sample_rate  = 1_000_000,
@@ -76,6 +74,7 @@ class IobeamLauncher:
         iface, image_programmed = await self._launch_applet(
             applet, applet_args, deviceId=deviceId, prepare=prepare)
         iface.iobeam_bus_ownership_addr = applet.addr_bus_ownership
+        iface.iobeam_power_good_addr = applet.addr_power_good
 
         if image_programmed:
             await asyncio.sleep(0.5)
@@ -116,6 +115,7 @@ class IobeamLauncher:
             applet, applet.mux_interface, applet_args,
             read_buffer_size=applet_args.buffer_size,
             write_buffer_size=applet_args.buffer_size,
+            pull_high=getattr(applet_args, "beam_pull_high", []),
         )
         return iface, image_programmed
 

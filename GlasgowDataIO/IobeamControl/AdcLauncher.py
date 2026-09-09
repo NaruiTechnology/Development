@@ -39,8 +39,8 @@ class AdcLauncher(IobeamLauncher):
             for number in port.get("pinList", [])
         ]
         args = SimpleNamespace(
-            voltage_map={"A": action.get("voltage", 3.3),
-                         "B": action.get("voltage", 3.3)},
+            port_spec="AB",
+            voltage=float(action.get("voltage", 3.3)),
             pins=GlasgowPin.parse(",".join(pin_list)) if pin_list else [],
             pipes="PQ",
             buffer_size=int(eval(str(action.get("bufferSize", "1024*1024")),
@@ -58,6 +58,7 @@ class AdcLauncher(IobeamLauncher):
             applet, args, deviceId=resolved_device_id, prepare=prepare)
         iface.adc_capture_enable_addr = applet.addr_capture_enable
         iface.adc_capture_status_addr = applet.addr_capture_status
+        iface.iobeam_power_good_addr = applet.addr_power_good
         iface.adc_duration_minutes = self.duration_minutes
         try:
             # Start only after _activate has reset the FIFOs, queued USB reads
