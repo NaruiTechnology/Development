@@ -9,6 +9,7 @@ from AutomationPy.buildingblocks.definitions import Consts
 
 from .IobeamLauncher import IobeamLauncher
 from .applet.AdcDataStreamApplet import AdcDataStreamApplet
+from .applet.adcTiming import AdcTiming
 from .glasgowLib.glasgow.abstract import GlasgowPin
 
 
@@ -25,6 +26,9 @@ class AdcLauncher(IobeamLauncher):
         started = time.monotonic()
         state = util.GetStateConfigByName(self._config, Consts.STREAM_DATA)
         action = state.get(Consts.ACTION_DATA, {}) or {}
+        timing = AdcTiming.from_action(action)
+        latch_phase, sample_phase = timing.capture_phases(
+            action.get("adcLatchPhase"), action.get("adcSamplePhase"))
         resolved_device_id = deviceId or self._config.Glasgow.get("DeviceId")
         applet = AdcDataStreamApplet(
             self._config,
@@ -78,11 +82,8 @@ class AdcLauncher(IobeamLauncher):
                 "ADC capture armed: enable_addr=%d status_addr=%d status=0x%02x "
                 "half_period=%d settle=%d latch_phase=%d sample_phase=%d source=%s",
                 applet.addr_capture_enable, applet.addr_capture_status, status,
-                int(action.get("adcHalfPeriod", 6)),
-                int(action.get("adcSettleCycles", 2)),
-                int(action.get("adcLatchPhase", 0)),
-                int(action.get("adcSamplePhase", min(int(action.get("adcHalfPeriod", 6)) * 2 - 1,
-                                                       int(action.get("adcSettleCycles", 2)) + 1))),
+                timing.half_period, timing.settle_cycles,
+                latch_phase, sample_phase,
                 __file__)
         except BaseException:
             try:

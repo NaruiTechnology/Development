@@ -27,6 +27,8 @@ the applet falls back to loopback=True with no image (same behaviour as
 before, minus the dead PCF pins).
 """
 
+from .adcTiming import AdcTiming
+
 import struct
 
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.applet import GlasgowApplet
@@ -222,8 +224,7 @@ class DataStreamApplet(GlasgowApplet):
         pin_config, sim_image, sim_res, loopback = self._resolve_simulation()
         action_data = util.GetStateConfigByName(
             self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
-        adc_half_period = int(action_data.get("adcHalfPeriod", 6))
-        adc_settle_cycles = int(action_data.get("adcSettleCycles", 2))
+        timing = AdcTiming.from_action(action_data)
 
         subtarget = IobeamDataSubtarget(
             ports                = ports,
@@ -234,8 +235,8 @@ class DataStreamApplet(GlasgowApplet):
             bus_ownership_clear  = self.bus_ownership_clear_reg,
             power_good_status    = self.power_good_reg,
             loopback             = loopback,
-            adc_half_period      = adc_half_period,
-            adc_settle_cycles    = adc_settle_cycles,
+            adc_half_period      = timing.half_period,
+            adc_settle_cycles    = timing.settle_cycles,
             transforms           = args.transforms,
             ext_switch_delay     = args.ext_switch_delay_cycles,
             out_only             = getattr(args, "out_only", False),

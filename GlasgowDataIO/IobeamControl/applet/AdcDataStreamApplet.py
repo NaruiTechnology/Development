@@ -11,6 +11,7 @@ from amaranth import *
 from amaranth.build import Attrs, Pins, Resource, Subsignal
 from amaranth.hdl import Elaboratable, Module
 from amaranth.lib import io
+from .adcTiming import AdcTiming
 
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.applet import GlasgowApplet
 from AutomationPy.buildingblocks.automation_log import AutomationLog
@@ -63,25 +64,21 @@ class AdcDataSubtarget(Elaboratable):
                  pin_config=None, simulation=False, seed=1,
                  adc_half_period=6, adc_settle_cycles=2,
                  duration_cycles=None, clock_hz=48_000_000, power_good_status=None,
-                 pin_diagnostics=None, latch_phase=0, sample_phase=None):
+                 pin_diagnostics=None, latch_phase=None, sample_phase=None):
         self.in_fifo = in_fifo
         self.capture_enable = capture_enable
         self.capture_status = capture_status
         self.pin_config = pin_config or {}
         self.simulation = bool(simulation)
         self.seed = int(seed) & 0x3fff or 1
-        self.adc_half_period = max(2, int(adc_half_period))
-        self.adc_settle_cycles = max(1, int(adc_settle_cycles))
+        self.timing = AdcTiming(int(adc_half_period), int(adc_settle_cycles))
+        self.adc_half_period = self.timing.half_period
+        self.adc_settle_cycles = self.timing.settle_cycles
         self.duration_cycles = max(1, int(duration_cycles or clock_hz))
         self.power_good_status = power_good_status
         self.pin_diagnostics = pin_diagnostics
-        self.latch_phase = int(latch_phase)
-        self.sample_phase = (min(self.adc_half_period * 2 - 1, self.adc_settle_cycles + 1)
-                             if sample_phase is None else int(sample_phase))
-        if not 0 <= self.latch_phase < self.adc_half_period * 2:
-            raise ValueError("adcLatchPhase must be within one ADC period")
-        if not 0 <= self.sample_phase < self.adc_half_period * 2:
-            raise ValueError("adcSamplePhase must be within one ADC period")
+        self.latch_phase, self.sample_phase = self.timing.capture_phases(
+            latch_phase, sample_phase)
 
         # Public signals make the no-DAC invariants directly testable.
         self.adc_oe = Signal()
@@ -284,19 +281,20 @@ class AdcDataStreamApplet(GlasgowApplet):
         duration_cycles = self.duration_cycles or (
             self.duration_minutes * 60 * clock_hz
         )
+        timing = AdcTiming.from_action(action)
         subtarget = AdcDataSubtarget(
             in_fifo=in_fifo,
             capture_enable=self.capture_enable,
             capture_status=self.capture_status,
             power_good_status=self.power_good_status,
             pin_diagnostics=self.pin_diagnostics,
-            latch_phase=action.get("adcLatchPhase", 0),
+            latch_phase=action.get("adcLatchPhase"),
             sample_phase=action.get("adcSamplePhase"),
             pin_config=action.get("pins", {}),
             simulation=self.simulation,
             seed=self.seed,
-            adc_half_period=int(action.get("adcHalfPeriod", 6)),
-            adc_settle_cycles=int(action.get("adcSettleCycles", 2)),
+            adc_half_period=timing.half_period,
+            adc_settle_cycles=timing.settle_cycles,
             duration_cycles=duration_cycles,
             clock_hz=clock_hz,
         )

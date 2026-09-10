@@ -6,6 +6,7 @@ from GlasgowDataIO.IobeamControl.commands.structs import CmdType, BeamType, Outp
 #from . import StreamSignature, BusSignature, BlankRequest, SuperDACStream, Transforms
 from GlasgowDataIO.IobeamControl.applet import * #StreamSignature, BusSignature, BlankRequest
 from GlasgowDataIO.IobeamControl.applet.skidBuffer import SkidBuffer
+from .adcTiming import AdcTiming
 
 
 class BusController(wiring.Component):
@@ -25,15 +26,10 @@ class BusController(wiring.Component):
     def __init__(self, *, adc_half_period: int, adc_latency: int,
                  adc_settle_cycles: int = 2,
                  transforms: Transforms = Transforms(False,False,False)):
-        assert adc_settle_cycles >= 1, \
-            "ADC bus must settle for at least one cycle"
-        # One data-valid guard cycle after the conversion edge, one latch
-        # pulse, one OE-enable cycle, N settle cycles, capture, stream,
-        # turnaround, and four DAC write cycles. This must fit EVERY ADC
-        # period; otherwise the free-running ADC outruns the sample tags.
-        required_period = adc_settle_cycles + 10
-        assert (adc_half_period * 2) >= required_period, \
-            "ADC period must contain settle, capture, read, turnaround, and DAC states"
+        self.timing = AdcTiming(adc_half_period, adc_settle_cycles)
+        self.timing.validate_scan()
+        if adc_latency < 1:
+            raise ValueError("adc_latency must be at least 1")
         self.adc_half_period = adc_half_period
         self.adc_latency     = adc_latency
         self.adc_settle_cycles = adc_settle_cycles
@@ -90,7 +86,7 @@ class BusController(wiring.Component):
 
         with m.FSM():
             with m.State("ADC_Wait"):
-                with m.If(~self.bus.adc_clk & (adc_cycles == 1)):
+                with m.If(~self.bus.adc_clk & (adc_cycles == self.timing.latch_phase)):
                     # Production adc_clk/dac_clk pins are inverted: logical
                     # falling is the physical conversion/update rising edge.
                     # Latch one FPGA cycle later, after ADC clock-to-data.
