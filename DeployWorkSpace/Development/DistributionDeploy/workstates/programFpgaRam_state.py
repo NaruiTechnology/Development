@@ -19,7 +19,9 @@ class programFpgaRam_state(distributionDeploy_state):
             for path in (python, script, scan_config):
                 if not os.path.isfile(path):
                     raise FileNotFoundError(path)
-            command = "{} -I {} --config {}".format(
+            # Do not use Python's isolated mode (-I) here: it hides the venv
+            # site-packages and caused ModuleNotFoundError for amaranth.
+            command = "{} {} --config {}".format(
                 shlex.quote(python), shlex.quote(script), shlex.quote(scan_config))
             self.info("[programFpgaRam] >> {}".format(command))
             self._success = await asyncio.wait_for(

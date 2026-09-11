@@ -32,7 +32,7 @@ async def download_and_verify(device, plan, reset_address, ready_mask):
     return status
 
 
-async def program(config_path):
+async def program(config_path, dry_run=False, revision=None):
     development = Path(__file__).resolve().parents[1]
     # The installer invokes Python with -I. Import only the newly extracted
     # application, never another editable checkout inherited through PYTHONPATH.
@@ -51,30 +51,53 @@ async def program(config_path):
     pins = ["{}{}".format(p["port"], n) for p in action.get("ports", []) for n in p.get("pinList", [])]
     args = SimpleNamespace(pins=GlasgowPin.parse(",".join(pins)) if pins else [],
                            buffer_size=1048576, sample_rate=1000000)
-    device = GlasgowDevice(config.Glasgow.get("DeviceId"))
+    device = None
     try:
-        applet = DataStreamApplet(config)
-        target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
-        applet.build(target, args)
-        plan = target.build_plan()
-        print("FPGA RAM download: source={} config={} expected_id={} production={}".format(
-            development, config_path, plan.bitstream_id.hex(), config.IsProduction), flush=True)
-        status = await download_and_verify(device, plan, applet.addr_reset, ST_FPGA_RDY)
-        receipt = {"bitstream_id": plan.bitstream_id.hex(), "status": status,
-                   "config": str(config_path), "source": str(development),
-                   "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
-                   "serial": device.serial, "scan_started": False}
-        receipt_path = development.parent / "fpga-ram-verification.json"
-        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
-        print("FPGA RAM VERIFIED: id={} status={:#04x} receipt={}".format(
-            plan.bitstream_id.hex(), status, receipt_path), flush=True)
+        if dry_run:
+            if not revision:
+                raise RuntimeError("Dry-run requires --revision to be specified (A0,B0,C0,C1,C2,C3)")
+            applet = DataStreamApplet(config)
+            target = GlasgowHardwareTarget(revision=revision, multiplexer_cls=DirectMultiplexer)
+            applet.build(target, args)
+            plan = target.build_plan()
+            print("FPGA build (dry-run): source={} config={} expected_id={} production={}".format(
+                development, config_path, plan.bitstream_id.hex(), config.IsProduction), flush=True)
+            # Write a dry-run receipt (no hardware interaction)
+            receipt = {"bitstream_id": plan.bitstream_id.hex(), "status": None,
+                       "config": str(config_path), "source": str(development),
+                       "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                       "serial": None, "scan_started": False, "dry_run": True}
+            receipt_path = development.parent / "fpga-ram-verification.json"
+            receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+            print("FPGA build (dry-run) complete: id={} receipt={}".format(
+                plan.bitstream_id.hex(), receipt_path), flush=True)
+        else:
+            device = GlasgowDevice(config.Glasgow.get("DeviceId"))
+            applet = DataStreamApplet(config)
+            target = GlasgowHardwareTarget(revision=device.revision, multiplexer_cls=DirectMultiplexer)
+            applet.build(target, args)
+            plan = target.build_plan()
+            print("FPGA RAM download: source={} config={} expected_id={} production={}".format(
+                development, config_path, plan.bitstream_id.hex(), config.IsProduction), flush=True)
+            status = await download_and_verify(device, plan, applet.addr_reset, ST_FPGA_RDY)
+            receipt = {"bitstream_id": plan.bitstream_id.hex(), "status": status,
+                       "config": str(config_path), "source": str(development),
+                       "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                       "serial": device.serial, "scan_started": False}
+            receipt_path = development.parent / "fpga-ram-verification.json"
+            receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+            print("FPGA RAM VERIFIED: id={} status={:#04x} receipt={}".format(
+                plan.bitstream_id.hex(), status, receipt_path), flush=True)
     finally:
-        device.close()
+        if device is not None:
+            device.close()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--dry-run", action="store_true", help="Build bitstream without touching hardware")
+    parser.add_argument("--revision", type=str, help="Glasgow revision to use for dry-run builds (A0,B0,C0,C1,C2,C3)")
     options = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(program(options.config.resolve()))
+    asyncio.run(program(options.config.resolve(), dry_run=options.dry_run, revision=options.revision))

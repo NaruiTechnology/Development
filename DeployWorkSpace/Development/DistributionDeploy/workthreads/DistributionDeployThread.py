@@ -230,6 +230,24 @@ class DistributionDeployThread(WorkThread):
         return str(value).strip().lower() in ("1", "true", "yes", "on")
 
     def activateVirtualEnv(self):
-        if self._venvPath is not None:
-            activate_cmd = f"source {self._venvPath}/bin/activate"
-            self._logger.info(f"Activating virtual environment with command: {activate_cmd}")
+        """Ensure subprocesses use the deployment virtualenv by adjusting
+        the current process environment (PATH and VIRTUAL_ENV). This is
+        inherited by commands launched via the workstates.
+        """
+        try:
+            if self._venvPath is None:
+                # fallback to configured venv dir relative to deploy root
+                candidate = os.path.join(self._deployRoot, self._venvDir)
+                if os.path.isdir(candidate):
+                    self._venvPath = candidate
+            if self._venvPath is not None and os.path.isdir(self._venvPath):
+                venv_bin = os.path.join(self._venvPath, "bin")
+                old_path = os.environ.get('PATH', '')
+                if not old_path.startswith(venv_bin):
+                    os.environ['PATH'] = venv_bin + os.pathsep + old_path
+                os.environ['VIRTUAL_ENV'] = self._venvPath
+                self._logger.info(f"Activated virtualenv: {self._venvPath}")
+            else:
+                self._logger.info("No virtualenv path set; skipping activation")
+        except Exception:
+            self._logger.warning("Failed to activate virtualenv; continuing without it")
