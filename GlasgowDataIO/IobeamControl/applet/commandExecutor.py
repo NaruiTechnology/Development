@@ -35,11 +35,13 @@ class CommandExecutor(wiring.Component):
 
     def __init__(self, *, out_only:bool=False, adc_latency=8,
                 adc_half_period=6, adc_settle_cycles=2,
+                adc_latch_cycles=1,
                 ext_switch_delay=960000,
                 transforms: Transforms=Transforms(False, False, False)):
         self.adc_latency = adc_latency
         self.adc_half_period = adc_half_period
         self.adc_settle_cycles = adc_settle_cycles
+        self.adc_latch_cycles = adc_latch_cycles
         # Time for external control relay/switch to actuate
         self.ext_switch_delay = ext_switch_delay
         self.transforms = transforms
@@ -66,6 +68,7 @@ class CommandExecutor(wiring.Component):
                 adc_half_period=self.adc_half_period,
                 adc_latency=self.adc_latency,
                 adc_settle_cycles=self.adc_settle_cycles,
+                adc_latch_cycles=self.adc_latch_cycles,
                 transforms=self.transforms)
         m.submodules.raster_scanner = self.raster_scanner = RasterScanner()
         m.submodules.supersampler = self.supersampler

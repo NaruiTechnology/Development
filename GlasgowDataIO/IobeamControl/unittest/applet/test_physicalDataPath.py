@@ -41,7 +41,14 @@ class PhysicalDataPathTest(unittest.TestCase):
                     with self.subTest(raster=raster, mode=mode, code=code):
                         self.check_path(raster, mode, code)
 
-    def check_path(self, raster, mode, code):
+    def test_wide_latch_profile_reaches_usb_in_raster_and_vector(self):
+        for raster in (False, True):
+            with self.subTest(raster=raster):
+                self.check_path(raster, OutputMode.SixteenBit, 0x1234,
+                                adc_half_period=12, adc_settle_cycles=4,
+                                adc_latch_cycles=4)
+
+    def check_path(self, raster, mode, code, **timing):
         pins = {"control": {"subsignals": [
             {"name": name, "pin": f"P{i}", "invert": name in ("adc_clk", "dac_clk", "adc_oe")}
             for i, name in enumerate(("adc_clk", "adc_le_clk", "adc_oe", "dac_clk", "dac_x_le_clk", "dac_y_le_clk"))
@@ -51,6 +58,7 @@ class PhysicalDataPathTest(unittest.TestCase):
         platform = PadPlatform()
         dut = IobeamDataSubtarget(ports=SimpleNamespace(), out_fifo=tx,
                                  in_fifo=rx, pin_config=pins,
+                                 **timing,
                                  transforms=Transforms(False, False, False))
         sim = Simulator(Fragment.get(dut, platform))
         sim.add_clock(1 / 48_000_000)

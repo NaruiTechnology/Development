@@ -237,6 +237,7 @@ class DataStreamApplet(GlasgowApplet):
             loopback             = loopback,
             adc_half_period      = timing.half_period,
             adc_settle_cycles    = timing.settle_cycles,
+            adc_latch_cycles     = timing.latch_cycles,
             transforms           = args.transforms,
             ext_switch_delay     = args.ext_switch_delay_cycles,
             out_only             = getattr(args, "out_only", False),

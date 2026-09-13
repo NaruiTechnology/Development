@@ -1,7 +1,7 @@
 import os
 import sys
 import shutil
-import compileall
+import py_compile
 import re
 import fnmatch
 import argparse
@@ -327,14 +327,23 @@ def copy_matching_assets(src_dir, dist_dir, patterns):
                 shutil.copy2(src_file, dest_file)
                 print(f"Copied asset: {os.path.normpath(os.path.join(rel_path, filename))}")
 
+def compile_distribution_file(source, destination):
+    """Compile the selected source, never an arbitrary cached interpreter copy.
+
+    A sourceless deployment imports these files directly. A stale cache from
+    another Python version must not overwrite the new controller, and a
+    syntax error must stop packaging instead of retaining old gateware.
+    """
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    py_compile.compile(source, cfile=destination, doraise=True, optimize=0)
+
+
 def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
     validate_glasgow_runtime_dependencies(src_dir)
     validate_local_redis_distribution_workflow(src_dir)
-    # 1. Byte-compile all .py files to __pycache__ (skip in raw mode)
-    if not deliver_raw:
-        print(f"Compiling source in {src_dir} to .pyc...")
-        compileall.compile_dir(src_dir, force=True, quiet=True, legacy=False)
-    else:
+    # Compile each included source directly to its destination below. Do not
+    # sweep __pycache__: it can contain stale copies for several interpreters.
+    if deliver_raw:
         print("Raw delivery mode: skipping byte-compilation.")
 
     # 2. Refresh the dist folder
@@ -365,7 +374,7 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
         ),
     ])
 
-    # 3. Package source files: raw .py files OR extracted/flattened .pyc files
+    # 3. Package source files: raw .py files OR freshly compiled .pyc files
     abs_dist = os.path.abspath(dist_dir)
     for root, dirs, files in os.walk(src_dir):
         if os.path.abspath(root).startswith(abs_dist):
@@ -386,20 +395,16 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
                     shutil.copy2(src_file, dest_file)
                     print(f"Packaged (raw): {os.path.normpath(os.path.join(rel_path, filename))}")
         else:
-            # Extract .pyc files from __pycache__ and flatten names
-            if '__pycache__' in dirs:
-                cache_path = os.path.join(root, '__pycache__')
+            py_files = [f for f in files if f.endswith('.py')]
+            if py_files:
                 target_folder = os.path.join(dist_dir, rel_path)
                 os.makedirs(target_folder, exist_ok=True)
-
-                for filename in os.listdir(cache_path):
-                    match = re.match(r"(.+)\.cpython-\d+\.pyc", filename)
-                    if match:
-                        clean_name = f"{match.group(1)}.pyc"
-                        src_file = os.path.join(cache_path, filename)
-                        dest_file = os.path.join(target_folder, clean_name)
-                        shutil.copy2(src_file, dest_file)
-                        print(f"Packaged: {os.path.join(rel_path, clean_name)}")
+                for filename in py_files:
+                    clean_name = filename + 'c'
+                    compile_distribution_file(
+                        os.path.join(root, filename),
+                        os.path.join(target_folder, clean_name))
+                    print(f"Packaged: {os.path.join(rel_path, clean_name)}")
 
         # Prune dirs for the next iteration
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]

@@ -11,6 +11,78 @@ from GlasgowDataIO.IobeamControl.applet.busController import BusController
 
 
 class AdcTimingTest(unittest.TestCase):
+    def test_wide_latch_configuration_and_period_limits(self):
+        timing = AdcTiming.from_action({"adcHalfPeriod": 12,
+                                       "adcSettleCycles": 4,
+                                       "adcLatchCycles": 4})
+        timing.validate_scan()
+        self.assertEqual(timing.capture_phases(), (1, 10))
+        with self.assertRaises(ValueError):
+            AdcTiming(latch_cycles=0)
+        with self.assertRaises(ValueError):
+            AdcTiming(latch_cycles=4).validate_scan()
+        with self.assertRaises(ValueError):
+            timing.capture_phases(22, 23)
+
+    def test_scan_and_adc_only_widen_latch_without_skipping_conversions(self):
+        # Check pin-level logical waveforms in both paths, independently of
+        # the loopback adapter. All durations are measured, not inferred
+        # from state names. Defaults and a slower diagnostic profile coexist.
+        for half, settle, width in ((6, 2, 1), (8, 2, 3), (12, 4, 4)):
+            for scan in (True, False):
+                with self.subTest(half=half, width=width, scan=scan):
+                    if scan:
+                        dut = BusController(adc_half_period=half, adc_latency=8,
+                                            adc_settle_cycles=settle,
+                                            adc_latch_cycles=width)
+                        bus = dut.bus
+                    else:
+                        fifo = SimpleNamespace(w_en=Signal(), w_data=Signal(8),
+                                               w_rdy=Signal(init=1))
+                        dut = AdcDataSubtarget(
+                            in_fifo=fifo, capture_enable=Signal(init=1),
+                            capture_status=Signal(8), simulation=True,
+                            duration_cycles=half * 2 * 30,
+                            adc_half_period=half, adc_settle_cycles=settle,
+                            adc_latch_cycles=width)
+                        bus = dut
+                    sim = Simulator(dut)
+                    sim.add_clock(1 / 48e6)
+
+                    async def bench(ctx):
+                        starts, lengths, length = [], [], 0
+                        reads = []
+                        for tick in range(half * 2 * 24):
+                            if scan:
+                                ctx.set(dut.dac_stream.valid, 1)
+                                ctx.set(dut.adc_stream.ready, 1)
+                                self.assertFalse(ctx.get(bus.adc_oe) and
+                                                 ctx.get(bus.data_oe))
+                                if ctx.get(dut.dac_stream.ready):
+                                    reads.append(tick)
+                            if ctx.get(bus.adc_le_clk):
+                                if not length:
+                                    starts.append(tick)
+                                length += 1
+                                if scan:
+                                    self.assertEqual(ctx.get(bus.data_oe), 0)
+                                    self.assertEqual(ctx.get(bus.adc_oe), 0)
+                            elif length:
+                                lengths.append(length)
+                                length = 0
+                            await ctx.tick()
+                        self.assertGreater(len(lengths), 20)
+                        self.assertEqual(set(lengths), {width})
+                        self.assertEqual(set(b-a for a,b in zip(starts, starts[1:])),
+                                         {half * 2})
+                        if scan:
+                            self.assertGreater(len(reads), 20)
+                            self.assertEqual(set(b-a for a,b in zip(reads, reads[1:])),
+                                             {half * 2})
+
+                    sim.add_testbench(bench)
+                    sim.run()
+
     def test_invalid_timing_is_rejected_instead_of_silently_clamped(self):
         for half, settle in ((1, 2), (6, 0)):
             with self.assertRaises(ValueError):
@@ -25,11 +97,11 @@ class AdcTimingTest(unittest.TestCase):
         self.assertEqual(AdcTiming().capture_phases(0, 3), (0, 3))
 
     def test_scan_latch_and_capture_follow_shared_schedule(self):
-        for half, settle in ((6, 2), (7, 3), (8, 4)):
-            with self.subTest(half=half, settle=settle):
-                timing = AdcTiming(half, settle)
+        for half, settle, width in ((6, 2, 1), (7, 3, 1), (8, 4, 1), (12, 4, 4)):
+            with self.subTest(half=half, settle=settle, width=width):
+                timing = AdcTiming(half, settle, width)
                 dut = BusController(adc_half_period=half, adc_latency=8,
-                                    adc_settle_cycles=settle)
+                                    adc_settle_cycles=settle, adc_latch_cycles=width)
                 sim = Simulator(dut)
                 sim.add_clock(1 / 48e6)
 
@@ -44,7 +116,9 @@ class AdcTimingTest(unittest.TestCase):
                         ctx.set(dut.bus.data_i, tick)
                         before = ctx.get(dut.adc_sample)
                         if conversion is not None and ctx.get(dut.bus.adc_le_clk):
-                            self.assertEqual(tick - conversion, timing.latch_phase)
+                            self.assertIn(tick - conversion,
+                                          range(timing.latch_phase,
+                                                timing.latch_phase + width))
                         prev_clock = clock
                         await ctx.tick()
                         if conversion is not None and ctx.get(dut.adc_sample) != before:

@@ -25,8 +25,9 @@ class BusController(wiring.Component):
 
     def __init__(self, *, adc_half_period: int, adc_latency: int,
                  adc_settle_cycles: int = 2,
+                 adc_latch_cycles: int = 1,
                  transforms: Transforms = Transforms(False,False,False)):
-        self.timing = AdcTiming(adc_half_period, adc_settle_cycles)
+        self.timing = AdcTiming(adc_half_period, adc_settle_cycles, adc_latch_cycles)
         self.timing.validate_scan()
         if adc_latency < 1:
             raise ValueError("adc_latency must be at least 1")
@@ -81,6 +82,7 @@ class BusController(wiring.Component):
         m.d.comb += adc_stream_data.adc_code.eq(self.adc_sample)
 
         settle_counter = Signal(range(max(2, self.adc_settle_cycles + 1)))
+        latch_remaining = Signal(range(max(2, self.timing.latch_cycles)))
 
         stalled = Signal()
 
@@ -94,7 +96,22 @@ class BusController(wiring.Component):
                     m.d.comb += self.bus.adc_le_clk.eq(1)
                     m.d.comb += self.bus.adc_oe.eq(0)
                     m.d.sync += settle_counter.eq(self.adc_settle_cycles - 1)
+                    if self.timing.latch_cycles == 1:
+                        m.next = "ADC_Enable"
+                    else:
+                        m.d.sync += latch_remaining.eq(self.timing.latch_cycles - 1)
+                        m.next = "ADC_Latch"
+
+            with m.State("ADC_Latch"):
+                # Stretch the external register clock independently of the
+                # ADC conversion period. Slowing adc_clk alone does not widen
+                # a one-sync-clock pulse through the interconnect network.
+                # Keep both shared-bus drivers off throughout this interval.
+                m.d.comb += self.bus.adc_le_clk.eq(1)
+                with m.If(latch_remaining == 1):
                     m.next = "ADC_Enable"
+                with m.Else():
+                    m.d.sync += latch_remaining.eq(latch_remaining - 1)
 
             with m.State("ADC_Enable"):
                 # Give the external transceiver a complete clock to turn on

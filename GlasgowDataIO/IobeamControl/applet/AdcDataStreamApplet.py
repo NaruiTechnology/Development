@@ -63,6 +63,7 @@ class AdcDataSubtarget(Elaboratable):
     def __init__(self, *, in_fifo, capture_enable, capture_status,
                  pin_config=None, simulation=False, seed=1,
                  adc_half_period=6, adc_settle_cycles=2,
+                 adc_latch_cycles=1,
                  duration_cycles=None, clock_hz=48_000_000, power_good_status=None,
                  pin_diagnostics=None, latch_phase=None, sample_phase=None):
         self.in_fifo = in_fifo
@@ -71,7 +72,8 @@ class AdcDataSubtarget(Elaboratable):
         self.pin_config = pin_config or {}
         self.simulation = bool(simulation)
         self.seed = int(seed) & 0x3fff or 1
-        self.timing = AdcTiming(int(adc_half_period), int(adc_settle_cycles))
+        self.timing = AdcTiming(int(adc_half_period), int(adc_settle_cycles),
+                                int(adc_latch_cycles))
         self.adc_half_period = self.timing.half_period
         self.adc_settle_cycles = self.timing.settle_cycles
         self.duration_cycles = max(1, int(duration_cycles or clock_hz))
@@ -135,7 +137,9 @@ class AdcDataSubtarget(Elaboratable):
             self.adc_oe.eq(self.running),
             self.adc_clk.eq(self.running &
                             (conversion_counter >= self.adc_half_period)),
-            self.adc_le_clk.eq(self.running & (conversion_counter == self.latch_phase)),
+            self.adc_le_clk.eq(self.running &
+                              (conversion_counter >= self.latch_phase) &
+                              (conversion_counter < self.latch_phase + self.timing.latch_cycles)),
             sample_tick.eq(self.running & (conversion_counter == sample_phase)),
             self.capture_status.eq(Cat(self.running, self.complete, started,
                                        sampled, fifo_written, fifo_stalled,
@@ -295,6 +299,7 @@ class AdcDataStreamApplet(GlasgowApplet):
             seed=self.seed,
             adc_half_period=timing.half_period,
             adc_settle_cycles=timing.settle_cycles,
+            adc_latch_cycles=timing.latch_cycles,
             duration_cycles=duration_cycles,
             clock_hz=clock_hz,
         )

@@ -16,7 +16,9 @@ packages = ["AutomationPy", "LoadFPGAImage", "GlasgowDataIO"]
 
 [tool.pytest.ini_options]
 pythonpath = [
-  "GlasgowDataIO"
+  ".",
+  "GlasgowDataIO",
+  "glasgow_service"
 ]
 filterwarnings = [
     "ignore:.*reset=.*:DeprecationWarning",

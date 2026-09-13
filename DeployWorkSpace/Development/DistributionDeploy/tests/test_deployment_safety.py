@@ -1,6 +1,7 @@
 import json
 import importlib.util
 import os
+import shlex
 import sys
 import tempfile
 import unittest
@@ -84,7 +85,11 @@ class DeploymentGateTests(unittest.IsolatedAsyncioTestCase):
             state.commandAsyncio = AsyncMock(return_value=False)
             await state.DoWork()
             self.assertFalse(state._success)
-            self.assertIn(" -I ", state.commandAsyncio.call_args.args[0])
+            self.assertEqual(shlex.split(state.commandAsyncio.call_args.args[0]), [
+                str(root / ".venv/bin/python"),
+                str(root / "Development/Scripts/program-fpga-ram.py"),
+                "--config", str(root / "scan.json"),
+            ])
 
 
 class DeployRootSafetyTests(unittest.TestCase):

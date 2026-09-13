@@ -1,6 +1,11 @@
 import importlib.util
 import json
+import marshal
+import py_compile
+import zipfile
 from pathlib import Path
+
+import pytest
 
 
 DEVELOPMENT_ROOT = Path(__file__).parents[2]
@@ -81,3 +86,47 @@ def test_distribution_installs_raspberry_pi_gpio_os_runtime_conditionally():
     assert action["requireRaspberryPi"] is True
     assert action["aptPackages"] == ["python3-gpiozero", "python3-lgpio"]
     assert action["verifyImports"] == ["gpiozero", "lgpio"]
+
+
+def isolated_builder(monkeypatch, tmp_path):
+    builder = load_distribution_builder()
+    # Exercise real compilation, directory traversal and archive production;
+    # omit unrelated web/assets/dependency requirements from the tiny fixture.
+    for name in ("validate_glasgow_runtime_dependencies",
+                 "validate_local_redis_distribution_workflow",
+                 "copy_source_trees", "copy_preserved_files",
+                 "copy_matching_assets", "validate_packaged_local_system_manager"):
+        monkeypatch.setattr(builder, name, lambda *args, **kwargs: None)
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "source"
+    source.mkdir()
+    return builder, source
+
+
+def test_compiled_archive_uses_source_not_stale_or_orphan_caches(monkeypatch, tmp_path):
+    builder, source = isolated_builder(monkeypatch, tmp_path)
+    (source / "controller.py").write_text("ADC_FSM = True\n")
+    cache = source / "__pycache__"
+    cache.mkdir()
+    stale = tmp_path / "old.py"
+    stale.write_text("ADC_FSM = False\n")
+    for tag in ("310", "313", "999"):
+        py_compile.compile(str(stale), cfile=str(cache / f"controller.cpython-{tag}.pyc"))
+    py_compile.compile(str(stale), cfile=str(cache / "deleted.cpython-313.pyc"))
+    builder.build_compiled_dist(str(source), str(tmp_path / "dist"))
+    with zipfile.ZipFile(tmp_path / "dist_app.zip") as archive:
+        assert archive.namelist() == ["controller.pyc"]
+        namespace = {}
+        exec(marshal.loads(archive.read("controller.pyc")[16:]), namespace)
+        assert namespace["ADC_FSM"] is True
+
+
+def test_compile_failure_stops_archive_instead_of_shipping_old_bytecode(monkeypatch, tmp_path):
+    builder, source = isolated_builder(monkeypatch, tmp_path)
+    module = source / "controller.py"
+    module.write_text("ADC_FSM = True\n")
+    py_compile.compile(str(module), doraise=True)
+    module.write_text("def broken(:\n")
+    with pytest.raises(py_compile.PyCompileError):
+        builder.build_compiled_dist(str(source), str(tmp_path / "dist"))
+    assert not (tmp_path / "dist_app.zip").exists()

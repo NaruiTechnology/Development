@@ -13,12 +13,12 @@ class BusControllerAdcCaptureTest(unittest.TestCase):
         # register only on LE, and expose it only while OE is enabled.
         # adc_latency models the configured complete path (including DAC
         # and analog delay); it is not the ADC silicon latency alone.
-        for half_period, settle in ((6, 2), (7, 3), (8, 4)):
-            with self.subTest(half_period=half_period, settle=settle):
+        for half_period, settle, width in ((6, 2, 1), (7, 3, 1), (8, 4, 1), (12, 4, 4)):
+            with self.subTest(half_period=half_period, settle=settle, width=width):
                 latency = 8
                 dut = BusController(adc_half_period=half_period,
                                     adc_latency=latency,
-                                    adc_settle_cycles=settle)
+                                    adc_settle_cycles=settle, adc_latch_cycles=width)
                 sim = Simulator(dut)
                 sim.add_clock(1 / 48_000_000)
 

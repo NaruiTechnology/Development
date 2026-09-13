@@ -30,8 +30,11 @@ def make_config():
 
 def make_device(config):
     return SimulatedVacuumDevice(
-        [pump.write for pump in config.pumps],
+        [*(pump.write for pump in config.pumps), config.high_voltage_transformer.write],
         [pump.read for pump in config.pumps],
+        gauge_channels={
+            pump.read: (pump.write, pump.threshold) for pump in config.pumps
+        },
     )
 
 
@@ -81,7 +84,7 @@ def test_leadership_loss_blocks_automatic_cascade_and_direct_commands():
         await controller.start()
         try:
             mechanical = controller._states[MECHANICAL_PUMP]
-            mechanical.value = mechanical.threshold
+            await device.set_gauge_ready(mechanical.read, True)
 
             coordinator.set_reachable("node-a", False)
             await executor.step()
@@ -198,4 +201,3 @@ def test_expired_remote_authority_blocks_device_write(tmp_path):
             await controller.close()
 
     asyncio.run(scenario())
-

@@ -28,5 +28,9 @@ forbidden = [name for name in sys.modules
              or name.startswith('glasgow.hardware')]
 raise SystemExit(1 if forbidden else 0)
 """
-    result = subprocess.run([sys.executable, "-c", code], check=False)
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[1],
+        check=False,
+    )
     assert result.returncode == 0

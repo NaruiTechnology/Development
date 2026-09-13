@@ -11,12 +11,15 @@ from dataclasses import dataclass
 class AdcTiming:
     half_period: int = 6
     settle_cycles: int = 2
+    latch_cycles: int = 1
 
     def __post_init__(self):
         if self.half_period < 2:
             raise ValueError("adcHalfPeriod must be at least 2")
         if self.settle_cycles < 1:
             raise ValueError("adcSettleCycles must be at least 1")
+        if self.latch_cycles < 1:
+            raise ValueError("adcLatchCycles must be at least 1")
 
     @property
     def period(self):
@@ -30,10 +33,10 @@ class AdcTiming:
     @property
     def sample_phase(self):
         # Latch, OE enable, settle intervals, then registered capture.
-        return self.latch_phase + 2 + self.settle_cycles
+        return self.latch_phase + self.latch_cycles + 1 + self.settle_cycles
 
     def validate_scan(self):
-        if self.period < self.settle_cycles + 10:
+        if self.period < self.settle_cycles + self.latch_cycles + 9:
             raise ValueError("ADC period must contain settle, capture, read, turnaround, and DAC states")
 
     def capture_phases(self, latch_phase=None, sample_phase=None):
@@ -42,10 +45,13 @@ class AdcTiming:
         for name, phase in (("adcLatchPhase", latch), ("adcSamplePhase", sample)):
             if not 0 <= phase < self.period:
                 raise ValueError(f"{name} must be within one ADC period")
+        if latch + self.latch_cycles > self.period:
+            raise ValueError("ADC latch pulse must fit within one ADC period")
         # Explicit phases remain diagnostic overrides, including phase zero.
         return latch, sample
 
     @classmethod
     def from_action(cls, action):
         return cls(int(action.get("adcHalfPeriod", 6)),
-                   int(action.get("adcSettleCycles", 2)))
+                   int(action.get("adcSettleCycles", 2)),
+                   int(action.get("adcLatchCycles", 1)))

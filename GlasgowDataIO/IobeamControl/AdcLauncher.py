@@ -80,9 +80,9 @@ class AdcLauncher(IobeamLauncher):
                 raise RuntimeError(f"ADC capture did not start: FPGA status=0x{status:02x}")
             self._logger.info(
                 "ADC capture armed: enable_addr=%d status_addr=%d status=0x%02x "
-                "half_period=%d settle=%d latch_phase=%d sample_phase=%d source=%s",
+                "half_period=%d settle=%d latch_cycles=%d latch_phase=%d sample_phase=%d source=%s",
                 applet.addr_capture_enable, applet.addr_capture_status, status,
-                timing.half_period, timing.settle_cycles,
+                timing.half_period, timing.settle_cycles, timing.latch_cycles,
                 latch_phase, sample_phase,
                 __file__)
         except BaseException:
