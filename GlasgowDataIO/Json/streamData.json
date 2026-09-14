@@ -33,8 +33,12 @@
                     },
                     "voltage": 3.3,
                     "bufferSize": "1024*1024",
-                    "adcHalfPeriod": 6,
-                    "adcSettleCycles": 2,
+                    "adcHalfPeriod": 12,
+                    "adcSettleCycles": 4,
+                    "adcLatchCycles": 4,
+                    "busTurnaroundCycles": 1,
+                    "dacDataSetupCycles": 1,
+                    "dacLatchCycles": 1,
                     "enableEbeam": false,
                     "enableIbeam": true,
                     "rasterScan": {
@@ -182,7 +186,7 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": true,
+    "IsProduction": false,
     "DumpData": true,
     "AdcTest": true
 }

@@ -32,6 +32,7 @@ import array
 import csv
 import io
 import math
+import random
 import sys
 import time
 from pathlib import Path
@@ -454,6 +455,116 @@ def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
     return chunks
 
 
+def _configured_raster_simulation_chunks(
+        req: RasterRequest, simulation: dict) -> Optional[List[array.array]]:
+    """Build a hardware-free raster stream from the configured simulator.
+
+    Browser bitmap scans already use ``_bitmap_raster_chunks``. Full-frame
+    scans do not carry a bitmap, so they must use the configured pattern here
+    instead of falling through to the physical Glasgow connection.
+    """
+    if not bool(simulation.get("enabled", False)):
+        return None
+    mode = str(simulation.get("mode", "image")).lower()
+    source = str(simulation.get("source", "pattern")).lower()
+    if mode == "zeros":
+        sampler = lambda _x, _y: 0
+    elif mode == "loopback":
+        sampler = lambda x, _y: round(x * 0x3FFF)
+    elif mode != "image" or source not in {"pattern", "random"}:
+        return None
+    elif source == "random":
+        rng = random.Random(int(simulation.get("seed", 1)))
+        sampler = lambda _x, _y: rng.randrange(0x4000)
+    else:
+        pattern = str(simulation.get("patternKind", "ramp")).lower()
+
+        def sampler(x: float, y: float) -> int:
+            if pattern == "checker":
+                return 0x3FFF if (int(x * 8) + int(y * 8)) % 2 else 0
+            if pattern == "bars":
+                return round((int(x * 8) % 8) * (0x3FFF / 7))
+            if pattern == "bullseye":
+                radius = math.hypot(x - 0.5, y - 0.5)
+                return 0x3FFF if int(radius * 16) % 2 else 0
+            return round(x * 0x3FFF)
+
+    pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
+    total = req.resolution * req.resolution
+    chunks: List[array.array] = []
+    for start in range(0, total, pixels_per_chunk):
+        samples = array.array("H")
+        for idx in range(start, min(start + pixels_per_chunk, total)):
+            x = idx % req.resolution
+            y = idx // req.resolution
+            samples.append(sampler(
+                0.0 if req.resolution <= 1 else x / (req.resolution - 1),
+                0.0 if req.resolution <= 1 else y / (req.resolution - 1),
+            ))
+        chunks.append(samples)
+    return chunks
+
+
+def _configured_vector_simulation_chunks(
+        req: VectorRequest, simulation: dict) -> Optional[List[array.array]]:
+    """Build a hardware-free vector stream from the configured simulator."""
+    if not bool(simulation.get("enabled", False)):
+        return None
+    mode = str(simulation.get("mode", "image")).lower()
+    source = str(simulation.get("source", "pattern")).lower()
+    rng = random.Random(int(simulation.get("seed", 1)))
+    pattern = str(simulation.get("patternKind", "ramp")).lower()
+
+    def sample(x: int, y: int, blank: bool) -> int:
+        if blank:
+            return 0
+        x_norm = min(1.0, max(0.0, x / 0x3FFF))
+        y_norm = min(1.0, max(0.0, y / 0x3FFF))
+        if mode == "zeros":
+            return 0
+        if mode == "loopback":
+            return int(x)
+        if mode != "image" or source not in {"pattern", "random"}:
+            raise ValueError("configured vector simulation source requires FPGA hardware")
+        if source == "random":
+            return rng.randrange(0x4000)
+        if pattern == "checker":
+            return 0x3FFF if (int(x_norm * 8) + int(y_norm * 8)) % 2 else 0
+        if pattern == "bars":
+            return round((int(x_norm * 8) % 8) * (0x3FFF / 7))
+        if pattern == "bullseye":
+            radius = math.hypot(x_norm - 0.5, y_norm - 0.5)
+            return 0x3FFF if int(radius * 16) % 2 else 0
+        return round(x_norm * 0x3FFF)
+
+    if mode not in {"zeros", "loopback", "image"}:
+        return None
+    if mode == "image" and source not in {"pattern", "random"}:
+        return None
+
+    if req.pattern is VectorPattern.custom and req.points is not None:
+        iter_points = iter(req.points)
+    else:
+        iter_points = _roi_vector_iter(
+            req.vector_resolution, req.roi, dwell=req.dwell,
+            scan_path=req.scan_path)
+
+    chunks: List[array.array] = []
+    samples = array.array("H")
+    total_dwell = 0
+    for point in iter_points:
+        x, y, dwell, blank, _pass_index = _normalize_vector_point(point)
+        samples.append(sample(x, y, blank))
+        total_dwell += max(1, int(dwell))
+        if total_dwell >= max(1, req.latency_bytes) or len(samples) >= 65536:
+            chunks.append(samples)
+            samples = array.array("H")
+            total_dwell = 0
+    if samples:
+        chunks.append(samples)
+    return chunks
+
+
 def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
     bitmap = getattr(req, "simulation_bitmap", None)
     if bitmap is None or not bitmap.pixels:
@@ -667,6 +778,10 @@ class DeviceService:
             "adc": {
                 "adcHalfPeriod": self._action_defaults.get("adcHalfPeriod", 6),
                 "adcSettleCycles": self._action_defaults.get("adcSettleCycles", 2),
+                "adcLatchCycles": self._action_defaults.get("adcLatchCycles", 1),
+                "busTurnaroundCycles": self._action_defaults.get("busTurnaroundCycles", 1),
+                "dacDataSetupCycles": self._action_defaults.get("dacDataSetupCycles", 1),
+                "dacLatchCycles": self._action_defaults.get("dacLatchCycles", 1),
             },
             "mag_calibration": dict(self._action_defaults.get("magCalibration", {}) or {}),
             "raster_params": self._raster_params_defaults.to_public_dict(),
@@ -783,7 +898,9 @@ class DeviceService:
 
     async def raster_scan(self, req: RasterRequest) -> AsyncIterator[bytes]:
         simulated_chunks = (
-            _bitmap_raster_chunks(req) if _simulation_enabled(self._config) else None
+            (_bitmap_raster_chunks(req) or
+             _configured_raster_simulation_chunks(req, self._simulation_defaults))
+            if _simulation_enabled(self._config) else None
         )
         if simulated_chunks is not None:
             async with self._acquire("raster"):
@@ -850,7 +967,9 @@ class DeviceService:
 
     async def vector_scan(self, req: VectorRequest) -> AsyncIterator[bytes]:
         simulated_chunks = (
-            _bitmap_vector_chunks(req) if _simulation_enabled(self._config) else None
+            (_bitmap_vector_chunks(req) or
+             _configured_vector_simulation_chunks(req, self._simulation_defaults))
+            if _simulation_enabled(self._config) else None
         )
         if simulated_chunks is not None:
             async with self._acquire("vector"):
@@ -928,7 +1047,9 @@ class DeviceService:
 
     async def run_raster(self, req: RasterRequest) -> ScanResult:
         simulated_chunks = (
-            _bitmap_raster_chunks(req) if _simulation_enabled(self._config) else None
+            (_bitmap_raster_chunks(req) or
+             _configured_raster_simulation_chunks(req, self._simulation_defaults))
+            if _simulation_enabled(self._config) else None
         )
         if simulated_chunks is not None:
             async with self._acquire("raster"):
@@ -1030,7 +1151,9 @@ class DeviceService:
 
     async def run_vector(self, req: VectorRequest) -> ScanResult:
         simulated_chunks = (
-            _bitmap_vector_chunks(req) if _simulation_enabled(self._config) else None
+            (_bitmap_vector_chunks(req) or
+             _configured_vector_simulation_chunks(req, self._simulation_defaults))
+            if _simulation_enabled(self._config) else None
         )
         if simulated_chunks is not None:
             async with self._acquire("vector"):

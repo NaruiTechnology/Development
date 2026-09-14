@@ -26,8 +26,13 @@ class BusController(wiring.Component):
     def __init__(self, *, adc_half_period: int, adc_latency: int,
                  adc_settle_cycles: int = 2,
                  adc_latch_cycles: int = 1,
+                 bus_turnaround_cycles: int = 1,
+                 dac_data_setup_cycles: int = 1,
+                 dac_latch_cycles: int = 1,
                  transforms: Transforms = Transforms(False,False,False)):
-        self.timing = AdcTiming(adc_half_period, adc_settle_cycles, adc_latch_cycles)
+        self.timing = AdcTiming(
+            adc_half_period, adc_settle_cycles, adc_latch_cycles,
+            bus_turnaround_cycles, dac_data_setup_cycles, dac_latch_cycles)
         self.timing.validate_scan()
         if adc_latency < 1:
             raise ValueError("adc_latency must be at least 1")
@@ -83,6 +88,9 @@ class BusController(wiring.Component):
 
         settle_counter = Signal(range(max(2, self.adc_settle_cycles + 1)))
         latch_remaining = Signal(range(max(2, self.timing.latch_cycles)))
+        turnaround_remaining = Signal(range(max(2, self.timing.bus_turnaround_cycles)))
+        dac_setup_remaining = Signal(range(max(2, self.timing.dac_data_setup_cycles)))
+        dac_latch_remaining = Signal(range(max(2, self.timing.dac_latch_cycles)))
 
         stalled = Signal()
 
@@ -173,6 +181,8 @@ class BusController(wiring.Component):
                     m.d.sync += accept_sample.eq(Cat(0, accept_sample))
                     # The value of this flag is discarded, so it doesn't matter what it is.
                     m.d.sync += last_sample.eq(Cat(0, last_sample))
+                m.d.sync += turnaround_remaining.eq(
+                    self.timing.bus_turnaround_cycles - 1)
                 m.next = "Bus_Turnaround"
 
             with m.State("Bus_Turnaround"):
@@ -180,14 +190,24 @@ class BusController(wiring.Component):
                 # complete FPGA clock. The external latch/transceiver may
                 # take a finite time to disable after adc_oe is released; do
                 # not enable the FPGA DAC driver on the same clock edge.
-                m.next = "X_DAC_Write"
+                with m.If(turnaround_remaining == 0):
+                    m.d.sync += dac_setup_remaining.eq(
+                        self.timing.dac_data_setup_cycles - 1)
+                    m.next = "X_DAC_Write"
+                with m.Else():
+                    m.d.sync += turnaround_remaining.eq(turnaround_remaining - 1)
 
             with m.State("X_DAC_Write"):
                 m.d.comb += [
                     self.bus.data_o.eq(self.dac_x_code_transformed),
                     self.bus.data_oe.eq(1),
                 ]
-                m.next = "X_DAC_Write_2"
+                with m.If(dac_setup_remaining == 0):
+                    m.d.sync += dac_latch_remaining.eq(
+                        self.timing.dac_latch_cycles - 1)
+                    m.next = "X_DAC_Write_2"
+                with m.Else():
+                    m.d.sync += dac_setup_remaining.eq(dac_setup_remaining - 1)
 
             with m.State("X_DAC_Write_2"):
                 m.d.comb += [
@@ -195,14 +215,24 @@ class BusController(wiring.Component):
                     self.bus.data_oe.eq(1),
                     self.bus.dac_x_le_clk.eq(1),
                 ]
-                m.next = "Y_DAC_Write"
+                with m.If(dac_latch_remaining == 0):
+                    m.d.sync += dac_setup_remaining.eq(
+                        self.timing.dac_data_setup_cycles - 1)
+                    m.next = "Y_DAC_Write"
+                with m.Else():
+                    m.d.sync += dac_latch_remaining.eq(dac_latch_remaining - 1)
 
             with m.State("Y_DAC_Write"):
                 m.d.comb += [
                     self.bus.data_o.eq(self.dac_y_code_transformed),
                     self.bus.data_oe.eq(1),
                 ]
-                m.next = "Y_DAC_Write_2"
+                with m.If(dac_setup_remaining == 0):
+                    m.d.sync += dac_latch_remaining.eq(
+                        self.timing.dac_latch_cycles - 1)
+                    m.next = "Y_DAC_Write_2"
+                with m.Else():
+                    m.d.sync += dac_setup_remaining.eq(dac_setup_remaining - 1)
 
             with m.State("Y_DAC_Write_2"):
                 m.d.comb += [
@@ -210,6 +240,9 @@ class BusController(wiring.Component):
                     self.bus.data_oe.eq(1),
                     self.bus.dac_y_le_clk.eq(1),
                 ]
-                m.next = "ADC_Wait"
+                with m.If(dac_latch_remaining == 0):
+                    m.next = "ADC_Wait"
+                with m.Else():
+                    m.d.sync += dac_latch_remaining.eq(dac_latch_remaining - 1)
 
         return m

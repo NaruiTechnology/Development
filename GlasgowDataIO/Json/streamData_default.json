@@ -24,6 +24,10 @@
                     "bufferSize": "1024*1024",
                     "adcHalfPeriod": 6,
                     "adcSettleCycles": 2,
+                    "adcLatchCycles": 1,
+                    "busTurnaroundCycles": 1,
+                    "dacDataSetupCycles": 1,
+                    "dacLatchCycles": 1,
                     "enableEbeam": false,
                     "enableIbeam": true,
                     "rasterScan": {

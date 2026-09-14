@@ -228,13 +228,30 @@ function validateAdcTiming(data: unknown): void {
 
   const halfPeriod = actionData.adcHalfPeriod ?? 6;
   const settleCycles = actionData.adcSettleCycles ?? 2;
+  const latchCycles = actionData.adcLatchCycles ?? 1;
+  const turnaroundCycles = actionData.busTurnaroundCycles ?? 1;
+  const dacSetupCycles = actionData.dacDataSetupCycles ?? 1;
+  const dacLatchCycles = actionData.dacLatchCycles ?? 1;
   if (!Number.isInteger(halfPeriod) || !Number.isInteger(settleCycles)
+      || !Number.isInteger(latchCycles)
+      || !Number.isInteger(turnaroundCycles)
+      || !Number.isInteger(dacSetupCycles)
+      || !Number.isInteger(dacLatchCycles)
       || (halfPeriod as number) < 1 || (halfPeriod as number) > 255
       || (settleCycles as number) < 1 || (settleCycles as number) > 255
-      || (halfPeriod as number) * 2 < (settleCycles as number) + 9) {
+      || (latchCycles as number) < 1 || (latchCycles as number) > 255
+      || (turnaroundCycles as number) < 1 || (turnaroundCycles as number) > 255
+      || (dacSetupCycles as number) < 1 || (dacSetupCycles as number) > 255
+      || (dacLatchCycles as number) < 1 || (dacLatchCycles as number) > 255
+      || (halfPeriod as number) * 2
+        < (settleCycles as number) + (latchCycles as number)
+          + (turnaroundCycles as number)
+          + 2 * ((dacSetupCycles as number) + (dacLatchCycles as number)) + 4) {
     throw new ConfigError(
-      "invalid ADC timing: adcHalfPeriod and adcSettleCycles must be whole numbers " +
-      "from 1 to 255, with 2 * adcHalfPeriod >= adcSettleCycles + 9",
+      "invalid ADC timing: adcHalfPeriod, adcSettleCycles, and adcLatchCycles " +
+      "must be whole numbers from 1 to 255, with 2 * adcHalfPeriod >= " +
+      "adcSettleCycles + adcLatchCycles + busTurnaroundCycles + " +
+      "2 * (dacDataSetupCycles + dacLatchCycles) + 4; all six values must be 1..255 integers",
       400
     );
   }

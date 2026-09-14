@@ -75,6 +75,8 @@ class IobeamDataSubtarget(Elaboratable):
                  benchmark_counters=None, loopback=False, out_only=False,
                  adc_half_period=6, adc_settle_cycles=2,
                  adc_latch_cycles=1,
+                 bus_turnaround_cycles=1, dac_data_setup_cycles=1,
+                 dac_latch_cycles=1,
                  pin_config=None,
                  sim_image=None,
                  sim_image_resolution=64,
@@ -97,6 +99,9 @@ class IobeamDataSubtarget(Elaboratable):
         self.adc_half_period     = adc_half_period
         self.adc_settle_cycles   = adc_settle_cycles
         self.adc_latch_cycles    = adc_latch_cycles
+        self.bus_turnaround_cycles = bus_turnaround_cycles
+        self.dac_data_setup_cycles = dac_data_setup_cycles
+        self.dac_latch_cycles = dac_latch_cycles
         self.pin_config          = pin_config or {}
         self.sim_image           = sim_image
         self.sim_image_resolution= sim_image_resolution
@@ -131,6 +136,9 @@ class IobeamDataSubtarget(Elaboratable):
             adc_half_period=self.adc_half_period,
             adc_settle_cycles=self.adc_settle_cycles,
             adc_latch_cycles=self.adc_latch_cycles,
+            bus_turnaround_cycles=self.bus_turnaround_cycles,
+            dac_data_setup_cycles=self.dac_data_setup_cycles,
+            dac_latch_cycles=self.dac_latch_cycles,
             ext_switch_delay=self.ext_switch_delay,
             transforms=self.transforms)
         m.submodules.serializer = serializer = ImageSerializer()

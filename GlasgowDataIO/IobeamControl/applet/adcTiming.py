@@ -12,6 +12,9 @@ class AdcTiming:
     half_period: int = 6
     settle_cycles: int = 2
     latch_cycles: int = 1
+    bus_turnaround_cycles: int = 1
+    dac_data_setup_cycles: int = 1
+    dac_latch_cycles: int = 1
 
     def __post_init__(self):
         if self.half_period < 2:
@@ -20,6 +23,12 @@ class AdcTiming:
             raise ValueError("adcSettleCycles must be at least 1")
         if self.latch_cycles < 1:
             raise ValueError("adcLatchCycles must be at least 1")
+        if self.bus_turnaround_cycles < 1:
+            raise ValueError("busTurnaroundCycles must be at least 1")
+        if self.dac_data_setup_cycles < 1:
+            raise ValueError("dacDataSetupCycles must be at least 1")
+        if self.dac_latch_cycles < 1:
+            raise ValueError("dacLatchCycles must be at least 1")
 
     @property
     def period(self):
@@ -36,8 +45,14 @@ class AdcTiming:
         return self.latch_phase + self.latch_cycles + 1 + self.settle_cycles
 
     def validate_scan(self):
-        if self.period < self.settle_cycles + self.latch_cycles + 9:
+        if self.period < self.scan_required_cycles:
             raise ValueError("ADC period must contain settle, capture, read, turnaround, and DAC states")
+
+    @property
+    def scan_required_cycles(self):
+        return (self.settle_cycles + self.latch_cycles +
+                self.bus_turnaround_cycles +
+                2 * (self.dac_data_setup_cycles + self.dac_latch_cycles) + 4)
 
     def capture_phases(self, latch_phase=None, sample_phase=None):
         latch = self.latch_phase if latch_phase is None else int(latch_phase)
@@ -54,4 +69,7 @@ class AdcTiming:
     def from_action(cls, action):
         return cls(int(action.get("adcHalfPeriod", 6)),
                    int(action.get("adcSettleCycles", 2)),
-                   int(action.get("adcLatchCycles", 1)))
+                   int(action.get("adcLatchCycles", 1)),
+                   int(action.get("busTurnaroundCycles", 1)),
+                   int(action.get("dacDataSetupCycles", 1)),
+                   int(action.get("dacLatchCycles", 1)))

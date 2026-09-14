@@ -11,6 +11,54 @@ from GlasgowDataIO.IobeamControl.applet.busController import BusController
 
 
 class AdcTimingTest(unittest.TestCase):
+    def test_complete_scan_timing_configuration(self):
+        timing = AdcTiming.from_action({
+            "adcHalfPeriod": 20,
+            "adcSettleCycles": 4,
+            "adcLatchCycles": 4,
+            "busTurnaroundCycles": 3,
+            "dacDataSetupCycles": 2,
+            "dacLatchCycles": 3,
+        })
+        self.assertEqual(timing.scan_required_cycles, 25)
+        timing.validate_scan()
+        with self.assertRaises(ValueError):
+            AdcTiming(12, 4, 4, 3, 2, 3).validate_scan()
+
+        dut = BusController(
+            adc_half_period=20, adc_latency=8,
+            adc_settle_cycles=4, adc_latch_cycles=4,
+            bus_turnaround_cycles=3, dac_data_setup_cycles=2,
+            dac_latch_cycles=3)
+        sim = Simulator(dut)
+        sim.add_clock(1 / 48e6)
+
+        async def bench(ctx):
+            x_lengths, y_lengths = [], []
+            x_length = y_length = 0
+            for _ in range(timing.period * 12):
+                ctx.set(dut.adc_stream.ready, 1)
+                ctx.set(dut.dac_stream.valid, 1)
+                self.assertFalse(ctx.get(dut.bus.adc_oe) and
+                                 ctx.get(dut.bus.data_oe))
+                if ctx.get(dut.bus.dac_x_le_clk):
+                    x_length += 1
+                elif x_length:
+                    x_lengths.append(x_length)
+                    x_length = 0
+                if ctx.get(dut.bus.dac_y_le_clk):
+                    y_length += 1
+                elif y_length:
+                    y_lengths.append(y_length)
+                    y_length = 0
+                await ctx.tick()
+            self.assertGreater(len(x_lengths), 5)
+            self.assertEqual(set(x_lengths), {3})
+            self.assertEqual(set(y_lengths), {3})
+
+        sim.add_testbench(bench)
+        sim.run()
+
     def test_wide_latch_configuration_and_period_limits(self):
         timing = AdcTiming.from_action({"adcHalfPeriod": 12,
                                        "adcSettleCycles": 4,

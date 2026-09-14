@@ -1346,6 +1346,10 @@ app.get("/api/defaults", async (_req, res) => {
         adc: {
           adcHalfPeriod: action.adcHalfPeriod ?? 6,
           adcSettleCycles: action.adcSettleCycles ?? 2,
+          adcLatchCycles: action.adcLatchCycles ?? 1,
+          busTurnaroundCycles: action.busTurnaroundCycles ?? 1,
+          dacDataSetupCycles: action.dacDataSetupCycles ?? 1,
+          dacLatchCycles: action.dacLatchCycles ?? 1,
         },
         is_production: root.IsProduction === true,
         adc_test: root.AdcTest !== false && action.AdcTest !== false,

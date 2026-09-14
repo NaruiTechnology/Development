@@ -1154,6 +1154,14 @@ body {
   gap: 8px;
 }
 
+.field-row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-form__timing-row {
+  margin-top: 8px;
+}
+
 .input, .select {
   width: 100%;
   padding: 6px 8px;
