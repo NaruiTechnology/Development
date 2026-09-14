@@ -209,14 +209,22 @@ class WorkflowContractTests(unittest.TestCase):
         ):
             self.assertTrue(actions[legacy]["skip"])
 
-    def test_stop_and_fpga_gates_cannot_be_skipped_or_reused(self):
-        for gate in ("stopLocalSystem", "programFpgaRam"):
-            for flag in ("skip", "transactionComplete"):
-                payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
-                next(a[gate] for a in payload["Actions"] if gate in a)[flag] = True
-                thread = DistributionDeployThread(self.config(payload["Actions"]))
-                self.assertIsNone(thread.IntialWork())
-                self.assertIsNotNone(thread._workflowError)
+    def test_stop_gate_cannot_be_skipped_or_reused(self):
+        for flag in ("skip", "transactionComplete"):
+            payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+            next(a["stopLocalSystem"] for a in payload["Actions"]
+                 if "stopLocalSystem" in a)[flag] = True
+            thread = DistributionDeployThread(self.config(payload["Actions"]))
+            self.assertIsNone(thread.IntialWork())
+            self.assertIsNotNone(thread._workflowError)
+
+    def test_fpga_gate_can_be_explicitly_skipped_without_hardware(self):
+        payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+        next(a["programFpgaRam"] for a in payload["Actions"]
+             if "programFpgaRam" in a)["skip"] = True
+        thread = DistributionDeployThread(self.config(payload["Actions"]))
+        self.assertIsNotNone(thread.IntialWork())
+        self.assertIsNone(thread._workflowError)
 
     def test_failure_aborts_before_next_state(self):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())

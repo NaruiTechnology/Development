@@ -13,9 +13,10 @@ from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.scan_params import RasterParams
 
+DEVELOPMENT = Path(__file__).resolve().parents[4]
 JSON_PATH_CANDIDATES = (
-    Path("./Development/GlasgowDataIO/Json/streamData unit_test.json"),
-    Path("./Development/GlasgowDataIO/Json/streamData_unit_test.json"),
+    DEVELOPMENT / "GlasgowDataIO/Json/streamData unit_test.json",
+    DEVELOPMENT / "GlasgowDataIO/Json/streamData_unit_test.json",
 )
 
 
@@ -115,7 +116,7 @@ class RasterScanTest(unittest.TestCase):
               f"dwell={self.params.dwell}, latency={self.params.latency_bytes}, "
               f"frame_blank={self.params.frame_blank} ===", flush=True)
 
-        conn = GlasgowConnection(self._config)
+        conn = MockConnection()
         await conn._connect()
         if not conn.connected:
             print("[test] connection failed")
