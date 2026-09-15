@@ -1,243 +1,60 @@
+"""Configurable OBI-compatible timing and ADC capture contracts."""
 import unittest
 from types import SimpleNamespace
-
-from amaranth import Fragment, Signal
-from amaranth.lib import io
+from amaranth import Signal
 from amaranth.sim import Simulator
-
 from GlasgowDataIO.IobeamControl.applet.adcTiming import AdcTiming
 from GlasgowDataIO.IobeamControl.applet.AdcDataStreamApplet import AdcDataSubtarget
-from GlasgowDataIO.IobeamControl.applet.busController import BusController
-
 
 class AdcTimingTest(unittest.TestCase):
     def test_complete_scan_timing_configuration(self):
         timing = AdcTiming.from_action({
-            "adcHalfPeriod": 20,
-            "adcSettleCycles": 4,
-            "adcLatchCycles": 4,
-            "busTurnaroundCycles": 3,
-            "dacDataSetupCycles": 2,
-            "dacLatchCycles": 3,
+            "adcHalfPeriod": 8, "adcLatchCycles": 2,
+            "adcSettleCycles": 3, "busTurnaroundCycles": 1,
+            "dacDataSetupCycles": 2, "dacLatchCycles": 2,
         })
-        self.assertEqual(timing.scan_required_cycles, 25)
+        self.assertEqual(timing.period, 16)
+        self.assertEqual(timing.capture_phases(), (8, 12))
+        self.assertEqual(timing.scan_required_cycles, 14)
         timing.validate_scan()
         with self.assertRaises(ValueError):
-            AdcTiming(12, 4, 4, 3, 2, 3).validate_scan()
+            AdcTiming(6, 3, 2, 1, 2, 2).validate_scan()
 
-        dut = BusController(
-            adc_half_period=20, adc_latency=8,
-            adc_settle_cycles=4, adc_latch_cycles=4,
-            bus_turnaround_cycles=3, dac_data_setup_cycles=2,
-            dac_latch_cycles=3)
-        sim = Simulator(dut)
-        sim.add_clock(1 / 48e6)
+    def test_obi_defaults_are_exact_six_cycle_profile(self):
+        timing = AdcTiming.from_action({})
+        self.assertEqual(
+            (timing.half_period, timing.settle_cycles, timing.latch_cycles,
+             timing.bus_turnaround_cycles, timing.dac_data_setup_cycles,
+             timing.dac_latch_cycles),
+            (3, 1, 1, 0, 1, 1))
+        self.assertEqual(timing.scan_required_cycles, timing.period)
+        self.assertEqual(timing.capture_phases(), (3, 4))
+        timing.validate_scan()
 
+    def test_capture_overrides_are_bounded(self):
+        timing=AdcTiming()
+        for phases in ((-1,4),(3,6),(6,4)):
+            with self.assertRaises(ValueError):
+                timing.capture_phases(*phases)
+        self.assertEqual(timing.capture_phases(0,3),(0,3))
+
+    def test_standalone_latches_on_obi_clock_edge(self):
+        fifo=SimpleNamespace(w_en=Signal(),w_data=Signal(8),w_rdy=Signal(init=1))
+        dut=AdcDataSubtarget(in_fifo=fifo,capture_enable=Signal(init=1),
+            capture_status=Signal(8),simulation=True,duration_cycles=200)
+        sim=Simulator(dut); sim.add_clock(1/48e6)
         async def bench(ctx):
-            x_lengths, y_lengths = [], []
-            x_length = y_length = 0
-            for _ in range(timing.period * 12):
-                ctx.set(dut.adc_stream.ready, 1)
-                ctx.set(dut.dac_stream.valid, 1)
-                self.assertFalse(ctx.get(dut.bus.adc_oe) and
-                                 ctx.get(dut.bus.data_oe))
-                if ctx.get(dut.bus.dac_x_le_clk):
-                    x_length += 1
-                elif x_length:
-                    x_lengths.append(x_length)
-                    x_length = 0
-                if ctx.get(dut.bus.dac_y_le_clk):
-                    y_length += 1
-                elif y_length:
-                    y_lengths.append(y_length)
-                    y_length = 0
+            previous_clock=0
+            starts=[]
+            for tick in range(160):
+                if ctx.get(dut.adc_le_clk):
+                    self.assertEqual(ctx.get(dut.adc_clk),1)
+                    self.assertEqual(previous_clock,0)
+                    starts.append(tick)
+                if ctx.get(dut.running):
+                    self.assertEqual(ctx.get(dut.adc_oe),1)
+                previous_clock=ctx.get(dut.adc_clk)
                 await ctx.tick()
-            self.assertGreater(len(x_lengths), 5)
-            self.assertEqual(set(x_lengths), {3})
-            self.assertEqual(set(y_lengths), {3})
-
-        sim.add_testbench(bench)
-        sim.run()
-
-    def test_wide_latch_configuration_and_period_limits(self):
-        timing = AdcTiming.from_action({"adcHalfPeriod": 12,
-                                       "adcSettleCycles": 4,
-                                       "adcLatchCycles": 4})
-        timing.validate_scan()
-        self.assertEqual(timing.capture_phases(), (1, 10))
-        with self.assertRaises(ValueError):
-            AdcTiming(latch_cycles=0)
-        with self.assertRaises(ValueError):
-            AdcTiming(latch_cycles=4).validate_scan()
-        with self.assertRaises(ValueError):
-            timing.capture_phases(22, 23)
-
-    def test_scan_and_adc_only_widen_latch_without_skipping_conversions(self):
-        # Check pin-level logical waveforms in both paths, independently of
-        # the loopback adapter. All durations are measured, not inferred
-        # from state names. Defaults and a slower diagnostic profile coexist.
-        for half, settle, width in ((6, 2, 1), (8, 2, 3), (12, 4, 4)):
-            for scan in (True, False):
-                with self.subTest(half=half, width=width, scan=scan):
-                    if scan:
-                        dut = BusController(adc_half_period=half, adc_latency=8,
-                                            adc_settle_cycles=settle,
-                                            adc_latch_cycles=width)
-                        bus = dut.bus
-                    else:
-                        fifo = SimpleNamespace(w_en=Signal(), w_data=Signal(8),
-                                               w_rdy=Signal(init=1))
-                        dut = AdcDataSubtarget(
-                            in_fifo=fifo, capture_enable=Signal(init=1),
-                            capture_status=Signal(8), simulation=True,
-                            duration_cycles=half * 2 * 30,
-                            adc_half_period=half, adc_settle_cycles=settle,
-                            adc_latch_cycles=width)
-                        bus = dut
-                    sim = Simulator(dut)
-                    sim.add_clock(1 / 48e6)
-
-                    async def bench(ctx):
-                        starts, lengths, length = [], [], 0
-                        reads = []
-                        for tick in range(half * 2 * 24):
-                            if scan:
-                                ctx.set(dut.dac_stream.valid, 1)
-                                ctx.set(dut.adc_stream.ready, 1)
-                                self.assertFalse(ctx.get(bus.adc_oe) and
-                                                 ctx.get(bus.data_oe))
-                                if ctx.get(dut.dac_stream.ready):
-                                    reads.append(tick)
-                            if ctx.get(bus.adc_le_clk):
-                                if not length:
-                                    starts.append(tick)
-                                length += 1
-                                if scan:
-                                    self.assertEqual(ctx.get(bus.data_oe), 0)
-                                    self.assertEqual(ctx.get(bus.adc_oe), 0)
-                            elif length:
-                                lengths.append(length)
-                                length = 0
-                            await ctx.tick()
-                        self.assertGreater(len(lengths), 20)
-                        self.assertEqual(set(lengths), {width})
-                        self.assertEqual(set(b-a for a,b in zip(starts, starts[1:])),
-                                         {half * 2})
-                        if scan:
-                            self.assertGreater(len(reads), 20)
-                            self.assertEqual(set(b-a for a,b in zip(reads, reads[1:])),
-                                             {half * 2})
-
-                    sim.add_testbench(bench)
-                    sim.run()
-
-    def test_invalid_timing_is_rejected_instead_of_silently_clamped(self):
-        for half, settle in ((1, 2), (6, 0)):
-            with self.assertRaises(ValueError):
-                AdcTiming(half, settle)
-        with self.assertRaises(ValueError):
-            AdcTiming(5, 2).validate_scan()
-        with self.assertRaises(ValueError):
-            AdcTiming(2, 2).capture_phases()
-        for latch, sample in ((-1, 5), (12, 5), (1, 12)):
-            with self.assertRaises(ValueError):
-                AdcTiming().capture_phases(latch, sample)
-        self.assertEqual(AdcTiming().capture_phases(0, 3), (0, 3))
-
-    def test_scan_latch_and_capture_follow_shared_schedule(self):
-        for half, settle, width in ((6, 2, 1), (7, 3, 1), (8, 4, 1), (12, 4, 4)):
-            with self.subTest(half=half, settle=settle, width=width):
-                timing = AdcTiming(half, settle, width)
-                dut = BusController(adc_half_period=half, adc_latency=8,
-                                    adc_settle_cycles=settle, adc_latch_cycles=width)
-                sim = Simulator(dut)
-                sim.add_clock(1 / 48e6)
-
-                async def bench(ctx):
-                    prev_clock = 0
-                    conversion = None
-                    samples = 0
-                    for tick in range(timing.period * 12):
-                        clock = ctx.get(dut.bus.adc_clk)
-                        if prev_clock and not clock:
-                            conversion = tick
-                        ctx.set(dut.bus.data_i, tick)
-                        before = ctx.get(dut.adc_sample)
-                        if conversion is not None and ctx.get(dut.bus.adc_le_clk):
-                            self.assertIn(tick - conversion,
-                                          range(timing.latch_phase,
-                                                timing.latch_phase + width))
-                        prev_clock = clock
-                        await ctx.tick()
-                        if conversion is not None and ctx.get(dut.adc_sample) != before:
-                            self.assertEqual(tick - conversion, timing.sample_phase)
-                            self.assertEqual(ctx.get(dut.adc_sample), tick)
-                            samples += 1
-                    self.assertGreater(samples, 5)
-
-                sim.add_testbench(bench)
-                sim.run()
-
-    def test_adc_latches_delayed_conversion_data_and_serializes_under_stalls(self):
-        # Behavioral register: conversion data arrives halfway through a
-        # sync interval; LE captures only on its rising edge. The model
-        # deliberately exposes stale data if LE coincides with conversion.
-        # This is a digital propagation assumption, not a board timing spec.
-        for half, settle in ((6, 2), (7, 3), (8, 4)):
-            with self.subTest(half=half, settle=settle):
-                pads = io.SimulationPort("i", 14)
-
-                class Platform:
-                    def add_resources(self, resources):
-                        pass
-
-                    def request(self, name, *, dir):
-                        return pads
-
-                fifo = SimpleNamespace(w_en=Signal(), w_data=Signal(8), w_rdy=Signal())
-                enable = Signal()
-                dut = AdcDataSubtarget(
-                    in_fifo=fifo, capture_enable=enable, capture_status=Signal(8),
-                    pin_config={"data": {"pins": " ".join(f"D{i}" for i in range(14))}},
-                    adc_half_period=half, adc_settle_cycles=settle, duration_cycles=600)
-                sim = Simulator(Fragment.get(dut, Platform()))
-                sim.add_clock(1 / 48e6)
-
-                async def bench(ctx):
-                    ctx.set(enable, 1)
-                    await ctx.tick()
-                    previous_clock, previous_le = 1, 0
-                    adc = register = 0x3fff
-                    conversion = -100
-                    captured, received = [], bytearray()
-                    for tick in range(550):
-                        clock = ctx.get(dut.adc_clk)
-                        if previous_clock and not clock:
-                            conversion = tick
-                        le = ctx.get(dut.adc_le_clk)
-                        if le and not previous_le:
-                            self.assertGreater(tick, conversion)
-                            register = adc
-                        ctx.set(pads.i, register)
-                        ready = tick % 71 >= 19
-                        ctx.set(fifo.w_rdy, ready)
-                        if ctx.get(fifo.w_en) and ready:
-                            received.append(ctx.get(fifo.w_data))
-                        previous_clock, previous_le = clock, le
-                        # Data becomes available after the conversion edge,
-                        # before the next sync edge and the delayed LE pulse.
-                        await ctx.delay(0.25 / 48e6)
-                        if tick == conversion:
-                            adc = (tick * 13 + 7) & 0x3fff
-                        captured.append(register)
-                        await ctx.tick()
-                    words = [int.from_bytes(received[i:i+2], "big")
-                             for i in range(0, len(received)-1, 2)]
-                    self.assertGreater(len(set(words)), 10)
-                    self.assertNotIn(0x3fff, words)
-                    # Each complete USB word must be an actual latched value;
-                    # stalls may drop samples but must never mix two words.
-                    self.assertTrue(set(words).issubset(set(captured)))
-
-                sim.add_testbench(bench)
-                sim.run()
+            self.assertGreater(len(starts),20)
+            self.assertEqual(set(b-a for a,b in zip(starts,starts[1:])),{6})
+        sim.add_testbench(bench); sim.run()

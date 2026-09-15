@@ -201,6 +201,8 @@ class WorkflowContractTests(unittest.TestCase):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
         actions = {name: cfg for item in payload["Actions"] for name, cfg in item.items()}
         self.assertFalse(actions["manageLocalSystem"]["skip"])
+        self.assertTrue(actions["setupGlasgow"]["skip"])
+        self.assertTrue(actions["programFpgaRam"]["skip"])
         for legacy in (
             "launchGlasgowService",
             "verifyGlasgowService",

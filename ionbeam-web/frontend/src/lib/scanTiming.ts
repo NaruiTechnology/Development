@@ -1,5 +1,5 @@
 export const GLASGOW_REVC3_CLOCK_HZ = 48_000_000;
-export const GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES = 4;
+export const GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES = 3;
 
 export interface ScanTimingEstimate {
   samplePeriodNs: number;
@@ -45,7 +45,7 @@ export function estimateRevC3ScanTiming(
 /** Human-readable choices for the dwell combobox.
  *
  * “MS/s” is deliberately kept separate from “MPix/s”: the converter keeps
- * sampling at 6 MS/s while averaging reduces the number of completed output
+ * sampling at 8 MS/s while averaging reduces the number of completed output
  * pixels per second.
  */
 export function revC3DwellPresetOptions(

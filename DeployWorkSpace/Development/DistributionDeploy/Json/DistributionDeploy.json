@@ -149,7 +149,7 @@
         },
         {
             "setupGlasgow": {
-                "skip": false,
+                "skip": true,
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "iterative",
@@ -172,7 +172,7 @@
         },
         {
             "programFpgaRam": {
-                "skip": false,
+                "skip": true,
                 "transactionComplete": false,
                 "actionData": {},
                 "timeout": 900.0

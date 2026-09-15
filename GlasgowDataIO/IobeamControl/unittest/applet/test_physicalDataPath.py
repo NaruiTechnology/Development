@@ -41,11 +41,11 @@ class PhysicalDataPathTest(unittest.TestCase):
                     with self.subTest(raster=raster, mode=mode, code=code):
                         self.check_path(raster, mode, code)
 
-    def test_wide_latch_profile_reaches_usb_in_raster_and_vector(self):
+    def test_stretched_timing_profile_reaches_usb_path(self):
         for raster in (False, True):
             with self.subTest(raster=raster):
                 self.check_path(raster, OutputMode.SixteenBit, 0x1234,
-                                adc_half_period=12, adc_settle_cycles=4,
+                                adc_half_period=8, adc_settle_cycles=4,
                                 adc_latch_cycles=4)
 
     def check_path(self, raster, mode, code, **timing):
