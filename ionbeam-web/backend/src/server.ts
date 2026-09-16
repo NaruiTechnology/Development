@@ -1344,10 +1344,10 @@ app.get("/api/defaults", async (_req, res) => {
         vector: action.vectorScan ?? {},
         simulation: action.simulation ?? {},
         adc: {
-          adcHalfPeriod: action.adcHalfPeriod ?? 3,
+          adcHalfPeriod: action.adcHalfPeriod ?? 4,
           adcSettleCycles: action.adcSettleCycles ?? 1,
           adcLatchCycles: action.adcLatchCycles ?? 1,
-          busTurnaroundCycles: action.busTurnaroundCycles ?? 0,
+          busTurnaroundCycles: action.busTurnaroundCycles ?? 1,
           dacDataSetupCycles: action.dacDataSetupCycles ?? 1,
           dacLatchCycles: action.dacLatchCycles ?? 1,
         },

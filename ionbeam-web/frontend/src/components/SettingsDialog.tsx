@@ -575,10 +575,10 @@ function GeneralTab({ draft }: { draft: unknown }) {
     1000,
   );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
-  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 3);
+  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
   const adcSettleCycles = numberField(draft, [...ACTION_DATA_PATH, "adcSettleCycles"], 1);
   const adcLatchCycles = numberField(draft, [...ACTION_DATA_PATH, "adcLatchCycles"], 1);
-  const busTurnaroundCycles = numberField(draft, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 0);
+  const busTurnaroundCycles = numberField(draft, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 1);
   const dacDataSetupCycles = numberField(draft, [...ACTION_DATA_PATH, "dacDataSetupCycles"], 1);
   const dacLatchCycles = numberField(draft, [...ACTION_DATA_PATH, "dacLatchCycles"], 1);
   const adcTimingValid = validAdcTiming(draft);
@@ -730,8 +730,8 @@ function GeneralTab({ draft }: { draft: unknown }) {
         <NumberField
           label={t("settings.general.busTurnaroundCycles")}
           help={<SettingsHelp topic="generalBusTurnaroundCycles" />}
-          value={busTurnaroundCycles} min={0} max={255} invalid={!adcTimingValid}
-          onChange={(value) => applyTimingChange({ turnaround: boundedTimingValue(value, 0) })}
+          value={busTurnaroundCycles} min={1} max={255} invalid={!adcTimingValid}
+          onChange={(value) => applyTimingChange({ turnaround: boundedTimingValue(value) })}
         />
         <NumberField
           label={t("settings.general.dacDataSetupCycles")}
@@ -3321,7 +3321,7 @@ const SETTINGS_HELP_BODY: Partial<Record<SettingsHelpTopic, JSX.Element>> = {
   rasterDwell: (
     <>
       <p>
-        Number of 125 ns ADC sample periods accumulated per raster pixel
+        Number of approximately 166.7 ns ADC sample periods accumulated per raster pixel
         with the current revC3 timing configuration.
         Higher dwell improves noise averaging but increases frame time
         linearly. Practical values are usually powers of two.
@@ -3350,7 +3350,7 @@ const SETTINGS_HELP_BODY: Partial<Record<SettingsHelpTopic, JSX.Element>> = {
   vectorDwell: (
     <>
       <p>
-        Default-vector dwell in 125 ns revC3 sample periods. This only affects
+        Default-vector dwell in approximately 166.7 ns revC3 sample periods. This only affects
         the built-in default sweep. Custom point lists already carry a
         per-point <code>dwell</code> value in each <code>x, y, dwell</code>
         triple.
@@ -3590,15 +3590,15 @@ function NumberField({
 }
 
 function validAdcTiming(config: unknown): boolean {
-  const half = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 3);
+  const half = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
   const settle = numberField(config, [...ACTION_DATA_PATH, "adcSettleCycles"], 1);
   const latch = numberField(config, [...ACTION_DATA_PATH, "adcLatchCycles"], 1);
-  const turnaround = numberField(config, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 0);
+  const turnaround = numberField(config, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 1);
   const setup = numberField(config, [...ACTION_DATA_PATH, "dacDataSetupCycles"], 1);
   const dacLatch = numberField(config, [...ACTION_DATA_PATH, "dacLatchCycles"], 1);
   const values = [half, settle, latch, turnaround, setup, dacLatch];
   return values.every((value) => Number.isInteger(value) && value <= 255)
-    && half >= 2 && settle >= 1 && latch >= 1 && turnaround >= 0
+    && half >= 2 && settle >= 1 && latch >= 1 && turnaround >= 1
     && setup >= 1 && dacLatch >= 1
     && latch + settle <= half
     && 2 * half >= settle + latch + turnaround + 2 * (setup + dacLatch);

@@ -62,7 +62,7 @@ class AdcDataSubtarget(Elaboratable):
 
     def __init__(self, *, in_fifo, capture_enable, capture_status,
                  pin_config=None, simulation=False, seed=1,
-                 adc_half_period=3, adc_settle_cycles=1,
+                 adc_half_period=4, adc_settle_cycles=1,
                  adc_latch_cycles=1,
                  duration_cycles=None, clock_hz=48_000_000, power_good_status=None,
                  pin_diagnostics=None, latch_phase=None, sample_phase=None):

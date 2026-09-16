@@ -13,7 +13,7 @@ class BusControllerAdcCaptureTest(unittest.TestCase):
         # register only on LE, and expose it only while OE is enabled.
         # adc_latency models the configured complete path (including DAC
         # and analog delay); it is not the ADC silicon latency alone.
-        for half_period, settle, width in ((3, 1, 1),):
+        for half_period, settle, width in ((4, 1, 1),):
             with self.subTest(half_period=half_period, settle=settle, width=width):
                 latency = 8
                 dut = BusController(adc_half_period=half_period,
@@ -76,15 +76,18 @@ class BusControllerAdcCaptureTest(unittest.TestCase):
                 sim.run()
 
 
-    def test_obi_six_cycle_pin_sequence(self):
-        dut = BusController(adc_half_period=3, adc_latency=8)
+    def test_safe_eight_cycle_pin_sequence_has_dead_time(self):
+        dut = BusController(adc_half_period=4, adc_latency=8)
         sim = Simulator(dut)
         sim.add_clock(1 / 48e6)
         # Columns: logical CLK, LE, logical OE, FPGA OE, X LE, Y LE.
-        # OBI's steady-state sequence, aligned to logical CLK rising.
+        # Safe steady-state sequence. There is a high-impedance cycle between
+        # ADC ownership and FPGA ownership, plus the remaining period slot
+        # releases the FPGA before the next ADC window.
         expected = [(1,1,1,0,0,0), (1,0,1,0,0,0),
-                    (1,0,0,1,0,0), (0,0,0,1,1,0),
-                    (0,0,0,1,0,0), (0,0,0,1,0,1)]
+                    (1,0,0,0,0,0), (1,0,0,1,0,0),
+                    (0,0,0,1,1,0), (0,0,0,1,0,0),
+                    (0,0,0,1,0,1), (0,0,0,0,0,0)]
         async def bench(ctx):
             ctx.set(dut.dac_stream.valid, 1)
             ctx.set(dut.adc_stream.ready, 1)
@@ -93,8 +96,30 @@ class BusControllerAdcCaptureTest(unittest.TestCase):
                     actual = tuple(ctx.get(getattr(dut.bus,n)) for n in
                                    ("adc_clk","adc_le_clk","adc_oe","data_oe",
                                     "dac_x_le_clk","dac_y_le_clk"))
-                    self.assertEqual(actual, expected[(tick-3)%6])
+                    self.assertEqual(actual, expected[(tick-4)%8], f"tick={tick}")
                 await ctx.tick()
+        sim.add_testbench(bench)
+        sim.run()
+
+    def test_bus_owners_never_switch_without_a_high_impedance_cycle(self):
+        dut = BusController(adc_half_period=4, adc_latency=8)
+        sim = Simulator(dut)
+        sim.add_clock(1 / 48e6)
+
+        async def bench(ctx):
+            ctx.set(dut.dac_stream.valid, 1)
+            ctx.set(dut.adc_stream.ready, 1)
+            previous_owner = "none"
+            for _ in range(80):
+                adc = ctx.get(dut.bus.adc_oe)
+                fpga = ctx.get(dut.bus.data_oe)
+                self.assertFalse(adc and fpga)
+                owner = "adc" if adc else "fpga" if fpga else "none"
+                if owner != previous_owner and owner != "none" and previous_owner != "none":
+                    self.fail(f"direct bus-owner transition: {previous_owner} -> {owner}")
+                previous_owner = owner
+                await ctx.tick()
+
         sim.add_testbench(bench)
         sim.run()
 

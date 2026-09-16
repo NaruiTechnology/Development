@@ -51,12 +51,12 @@ class IobeamLauncher:
             "adc_latch_cycles=%s bus_turnaround_cycles=%s dac_data_setup_cycles=%s "
             "dac_latch_cycles=%s nominal_adc_hz=%.1f adc_clock_inverted=%s dac_clock_inverted=%s",
             getattr(self._config, "IsProduction", None),
-            actionConfig.get("adcHalfPeriod", 3), actionConfig.get("adcSettleCycles", 1),
+            actionConfig.get("adcHalfPeriod", 4), actionConfig.get("adcSettleCycles", 1),
             actionConfig.get("adcLatchCycles", 1),
-            actionConfig.get("busTurnaroundCycles", 0),
+            actionConfig.get("busTurnaroundCycles", 1),
             actionConfig.get("dacDataSetupCycles", 1),
             actionConfig.get("dacLatchCycles", 1),
-            48_000_000 / (2 * int(actionConfig.get("adcHalfPeriod", 3))),
+            48_000_000 / (2 * int(actionConfig.get("adcHalfPeriod", 4))),
             next((p.get("invert", False) for p in actionConfig.get("pins", {}).get(
                 "control", {}).get("subsignals", []) if p.get("name") == "adc_clk"), None),
             next((p.get("invert", False) for p in actionConfig.get("pins", {}).get(

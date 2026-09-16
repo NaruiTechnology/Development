@@ -102,7 +102,7 @@ export interface VectorRequest {
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */
   vector_resolution: number;
-  /** Default-pattern dwell in 125 ns units. Ignored when pattern=custom,
+  /** Default-pattern dwell in approximately 166.7 ns units. Ignored when pattern=custom,
    *  because custom points already carry per-point dwell values. */
   dwell: number;
   latency_bytes: number;
