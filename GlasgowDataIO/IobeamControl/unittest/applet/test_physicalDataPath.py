@@ -15,6 +15,7 @@ from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
     SynchronizeCommand, VectorPixelCommand, RasterRegionCommand, RasterPixelCommand,
 )
 from GlasgowDataIO.IobeamControl.commands.structs import DACCodeRange, OutputMode, Transforms
+from GlasgowDataIO.IobeamControl.unittest.applet.test_obiPinMapping import pin_config
 
 
 class PadPlatform:
@@ -25,7 +26,7 @@ class PadPlatform:
                 self.ports["data"] = io.SimulationPort("io", 14)
             elif resource.name == "control":
                 self.ports["control"] = SimpleNamespace(**{
-                    sub.name: io.SimulationPort("o", 1, invert=sub.ios[0].invert)
+                    sub.name: io.SimulationPort(sub.ios[0].dir, 1, invert=sub.ios[0].invert)
                     for sub in resource.ios
                 })
 
@@ -49,10 +50,7 @@ class PhysicalDataPathTest(unittest.TestCase):
                                 adc_latch_cycles=4)
 
     def check_path(self, raster, mode, code, **timing):
-        pins = {"control": {"subsignals": [
-            {"name": name, "pin": f"P{i}", "invert": name in ("adc_clk", "dac_clk", "adc_oe")}
-            for i, name in enumerate(("adc_clk", "adc_le_clk", "adc_oe", "dac_clk", "dac_x_le_clk", "dac_y_le_clk"))
-        ]}, "data": {"pins": " ".join(f"D{i}" for i in range(14))}}
+        pins = pin_config("streamData.json")
         tx = SimpleNamespace(r_data=Signal(8), r_rdy=Signal(), r_en=Signal())
         rx = SimpleNamespace(w_data=Signal(8), w_rdy=Signal(), w_en=Signal())
         platform = PadPlatform()

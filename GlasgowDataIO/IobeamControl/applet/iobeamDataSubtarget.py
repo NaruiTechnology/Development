@@ -15,9 +15,8 @@ The top-level Amaranth Elaboratable that ties everything together:
 
 What changed (vs. the previous version)
 ---------------------------------------
-1. Resources come from `pin_config`, not a hard-coded list. Anything
-   missing from the config is silently skipped - no PCF errors from
-   placeholder strings.
+1. Resources come from `pin_config`. Physical scans validate the complete
+   upstream OBI bus mapping before building; simulation may omit resources.
 2. New `sim_image` / `sim_image_resolution` constructor params. When
    loopback=True AND sim_image is provided, FakeAdcSimulator drives the
    loopback adapter instead of the historical "DAC-loopback" debug path
@@ -31,12 +30,12 @@ What changed (vs. the previous version)
 
 from amaranth import *
 from amaranth.build import *
-from amaranth.lib import enum, data, io, wiring
-from amaranth.lib.wiring import In, Out, flipped
+from amaranth.lib import io, wiring
+from amaranth.lib.wiring import flipped
 from amaranth.hdl import Elaboratable, Module
 
 from GlasgowDataIO.IobeamControl.commands.structs import (
-    CmdType, BeamType, OutputMode, Transforms,
+    CmdType, BeamType, Transforms,
 )
 from GlasgowDataIO.IobeamControl.applet.commandParser    import CommandParser
 from GlasgowDataIO.IobeamControl.applet.commandExecutor  import CommandExecutor
@@ -44,7 +43,9 @@ from GlasgowDataIO.IobeamControl.applet.imageSerializer  import ImageSerializer
 from GlasgowDataIO.IobeamControl.applet.pipelinedLoopbackAdapter \
     import PipelinedLoopbackAdapter
 from GlasgowDataIO.IobeamControl.applet.fakeAdcSimulator import FakeAdcSimulator
-from GlasgowDataIO.IobeamControl.applet import build_iobeam_resources
+from GlasgowDataIO.IobeamControl.applet import (
+    build_iobeam_resources, validate_obi_pin_config,
+)
 
 
 # All bus strobes BusController generates. Order is irrelevant; the names
@@ -73,9 +74,9 @@ class IobeamDataSubtarget(Elaboratable):
                  data=None,
                  ext_switch_delay=0, transforms: Transforms = None,
                  benchmark_counters=None, loopback=False, out_only=False,
-                 adc_half_period=4, adc_settle_cycles=1,
+                 adc_half_period=3, adc_settle_cycles=1,
                  adc_latch_cycles=1,
-                 bus_turnaround_cycles=1, dac_data_setup_cycles=1,
+                 bus_turnaround_cycles=0, dac_data_setup_cycles=1,
                  dac_latch_cycles=1,
                  pin_config=None,
                  sim_image=None,
@@ -189,8 +190,13 @@ class IobeamDataSubtarget(Elaboratable):
         # ------------------------------------------------------------------ #
         # Resources: built dynamically from pin_config
         # ------------------------------------------------------------------ #
+        # Match the upstream OBI top-level contract on the physical path.
+        # An incomplete/misnamed JSON mapping must not silently synthesize
+        # an image with an undriven ADC bus.
+        if not self.loopback:
+            validate_obi_pin_config(self.pin_config)
         resources = build_iobeam_resources(self.pin_config)
-        if resources:
+        if resources and platform is not None:
             platform.add_resources(resources)
 
         # Helper: does the platform actually carry a Resource named `name`?
@@ -296,8 +302,8 @@ class IobeamDataSubtarget(Elaboratable):
                     m.d.comb += loopback_adapter.loopback_stream.eq(
                         executor.supersampler.super_dac_stream.payload.dac_x_code)
         elif data_buf is not None:
-            # Buffer.i is combinational. BusController registers it in
-            # ADC_Capture while the ADC owns the bus (data_oe == 0).
+            # As upstream, the skid FIFO captures Buffer.i in ADC_Read
+            # while the ADC owns the bus (data_oe == 0).
             # Cat appends two MSB zeros: raw 14-bit samples are right-aligned
             # in our 16-bit stream, unlike OBI's post-averaging << 2 format.
             m.d.comb += executor.bus.data_i.eq(Cat(data_buf.i, Const(0, 2)))

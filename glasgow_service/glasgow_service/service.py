@@ -776,10 +776,10 @@ class DeviceService:
             "vector": dict(self._vector_defaults),
             "simulation": dict(self._simulation_defaults),
             "adc": {
-                "adcHalfPeriod": self._action_defaults.get("adcHalfPeriod", 4),
+                "adcHalfPeriod": self._action_defaults.get("adcHalfPeriod", 3),
                 "adcSettleCycles": self._action_defaults.get("adcSettleCycles", 1),
                 "adcLatchCycles": self._action_defaults.get("adcLatchCycles", 1),
-                "busTurnaroundCycles": self._action_defaults.get("busTurnaroundCycles", 1),
+                "busTurnaroundCycles": self._action_defaults.get("busTurnaroundCycles", 0),
                 "dacDataSetupCycles": self._action_defaults.get("dacDataSetupCycles", 1),
                 "dacLatchCycles": self._action_defaults.get("dacLatchCycles", 1),
             },

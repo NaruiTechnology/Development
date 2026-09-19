@@ -2,6 +2,11 @@ import asyncio
 import time
 from types import SimpleNamespace
 from .applet.DataStreamApplet import DataStreamApplet
+from .applet.adcTiming import AdcTiming
+from .applet.upstreamBusController import UpstreamBusController
+from .applet.busController import BusController
+import hashlib
+import marshal
 from .glasgowLib.glasgow.hardware.device import GlasgowDevice, ST_FPGA_RDY
 from .glasgowLib.glasgow.hardware.target import GlasgowHardwareTarget
 from .glasgowLib.glasgow.hardware.multiplexer import DirectMultiplexer
@@ -26,6 +31,7 @@ class IobeamLauncher:
         stateConfig  = util.GetStateConfigByName(self._config, Consts.STREAM_DATA)
         deviceId     = self._config.Glasgow.get("DeviceId")
         actionConfig = stateConfig.get(Consts.ACTION_DATA)
+        timing = AdcTiming.from_action(actionConfig)
 
         # Record the exact Python/config provenance for field diagnostics. A
         # bitstream ID alone is not enough when multiple source trees are
@@ -51,16 +57,26 @@ class IobeamLauncher:
             "adc_latch_cycles=%s bus_turnaround_cycles=%s dac_data_setup_cycles=%s "
             "dac_latch_cycles=%s nominal_adc_hz=%.1f adc_clock_inverted=%s dac_clock_inverted=%s",
             getattr(self._config, "IsProduction", None),
-            actionConfig.get("adcHalfPeriod", 4), actionConfig.get("adcSettleCycles", 1),
+            timing.half_period, timing.settle_cycles,
             actionConfig.get("adcLatchCycles", 1),
-            actionConfig.get("busTurnaroundCycles", 1),
+            timing.bus_turnaround_cycles,
             actionConfig.get("dacDataSetupCycles", 1),
             actionConfig.get("dacLatchCycles", 1),
-            48_000_000 / (2 * int(actionConfig.get("adcHalfPeriod", 4))),
+            48_000_000 / timing.period,
             next((p.get("invert", False) for p in actionConfig.get("pins", {}).get(
                 "control", {}).get("subsignals", []) if p.get("name") == "adc_clk"), None),
             next((p.get("invert", False) for p in actionConfig.get("pins", {}).get(
                 "control", {}).get("subsignals", []) if p.get("name") == "dac_clk"), None))
+
+        implementation = (UpstreamBusController if timing.uses_upstream_sequence
+                          else BusController)
+        self._logger.info(
+            "Scan controller: profile=%s reference=OBI-0f6e62c "
+            "implementation=%s code_sha256=%s",
+            "upstream" if timing.uses_upstream_sequence else "diagnostic-extended",
+            implementation.elaborate.__code__.co_filename,
+            hashlib.sha256(marshal.dumps(
+                implementation.elaborate.__code__)).hexdigest())
 
         applet_args = SimpleNamespace(
             pins         = GlasgowPin.parse(",".join(pin_list)) if pin_list else [],

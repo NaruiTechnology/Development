@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import unittest
 
-from GlasgowDataIO.IobeamControl.applet import build_iobeam_resources
+from GlasgowDataIO.IobeamControl.applet import build_iobeam_resources, validate_obi_pin_config
 from GlasgowDataIO.IobeamControl.applet.AdcDataStreamApplet import build_adc_resources
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.platform.rev_c import (
     GlasgowRevC123Platform,
@@ -40,6 +40,22 @@ def controls(resource):
 
 
 class ObiPinMappingTest(unittest.TestCase):
+    def test_physical_build_rejects_missing_empty_swapped_or_inverted_pins(self):
+        from copy import deepcopy
+        pins = pin_config("streamData.json")
+        validate_obi_pin_config(pins)
+        bad = []
+        for field, value in (("pin", ""), ("pin", "G2"), ("invert", False), ("direction", "i")):
+            cfg = deepcopy(pins)
+            next(s for s in cfg["control"]["subsignals"] if s["name"] == "adc_oe")[field] = value
+            bad.append(cfg)
+        cfg = deepcopy(pins)
+        cfg["data"]["pins"] = " ".join(reversed(DATA))
+        bad.append(cfg)
+        for cfg in bad + [{}]:
+            with self.subTest(config=cfg), self.assertRaises(ValueError):
+                validate_obi_pin_config(cfg)
+
     def test_scan_bus_matches_reference_in_both_shipped_configs(self):
         for filename in ("streamData.json", "streamData_default.json"):
             with self.subTest(config=filename):

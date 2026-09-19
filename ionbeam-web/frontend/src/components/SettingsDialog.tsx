@@ -575,10 +575,10 @@ function GeneralTab({ draft }: { draft: unknown }) {
     1000,
   );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
-  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
+  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 3);
   const adcSettleCycles = numberField(draft, [...ACTION_DATA_PATH, "adcSettleCycles"], 1);
   const adcLatchCycles = numberField(draft, [...ACTION_DATA_PATH, "adcLatchCycles"], 1);
-  const busTurnaroundCycles = numberField(draft, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 1);
+  const busTurnaroundCycles = numberField(draft, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 0);
   const dacDataSetupCycles = numberField(draft, [...ACTION_DATA_PATH, "dacDataSetupCycles"], 1);
   const dacLatchCycles = numberField(draft, [...ACTION_DATA_PATH, "dacLatchCycles"], 1);
   const adcTimingValid = validAdcTiming(draft);
@@ -730,8 +730,8 @@ function GeneralTab({ draft }: { draft: unknown }) {
         <NumberField
           label={t("settings.general.busTurnaroundCycles")}
           help={<SettingsHelp topic="generalBusTurnaroundCycles" />}
-          value={busTurnaroundCycles} min={1} max={255} invalid={!adcTimingValid}
-          onChange={(value) => applyTimingChange({ turnaround: boundedTimingValue(value) })}
+          value={busTurnaroundCycles} min={0} max={255} invalid={!adcTimingValid}
+          onChange={(value) => applyTimingChange({ turnaround: boundedTimingValue(value, 0) })}
         />
         <NumberField
           label={t("settings.general.dacDataSetupCycles")}
@@ -3590,15 +3590,15 @@ function NumberField({
 }
 
 function validAdcTiming(config: unknown): boolean {
-  const half = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
+  const half = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 3);
   const settle = numberField(config, [...ACTION_DATA_PATH, "adcSettleCycles"], 1);
   const latch = numberField(config, [...ACTION_DATA_PATH, "adcLatchCycles"], 1);
-  const turnaround = numberField(config, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 1);
+  const turnaround = numberField(config, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 0);
   const setup = numberField(config, [...ACTION_DATA_PATH, "dacDataSetupCycles"], 1);
   const dacLatch = numberField(config, [...ACTION_DATA_PATH, "dacLatchCycles"], 1);
   const values = [half, settle, latch, turnaround, setup, dacLatch];
   return values.every((value) => Number.isInteger(value) && value <= 255)
-    && half >= 2 && settle >= 1 && latch >= 1 && turnaround >= 1
+    && half >= 2 && settle >= 1 && latch >= 1 && turnaround >= 0
     && setup >= 1 && dacLatch >= 1
     && latch + settle <= half
     && 2 * half >= settle + latch + turnaround + 2 * (setup + dacLatch);

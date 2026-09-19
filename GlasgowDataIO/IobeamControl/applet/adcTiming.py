@@ -9,10 +9,10 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class AdcTiming:
-    half_period: int = 4
+    half_period: int = 3
     settle_cycles: int = 1
     latch_cycles: int = 1
-    bus_turnaround_cycles: int = 1
+    bus_turnaround_cycles: int = 0
     dac_data_setup_cycles: int = 1
     dac_latch_cycles: int = 1
 
@@ -23,12 +23,18 @@ class AdcTiming:
             raise ValueError("adcSettleCycles must be at least 1")
         if self.latch_cycles < 1:
             raise ValueError("adcLatchCycles must be at least 1")
-        if self.bus_turnaround_cycles < 1:
-            raise ValueError("busTurnaroundCycles must be at least 1")
+        if self.bus_turnaround_cycles < 0:
+            raise ValueError("busTurnaroundCycles must be at least 0")
         if self.dac_data_setup_cycles < 1:
             raise ValueError("dacDataSetupCycles must be at least 1")
         if self.dac_latch_cycles < 1:
             raise ValueError("dacLatchCycles must be at least 1")
+
+    @property
+    def uses_upstream_sequence(self):
+        return (self.settle_cycles, self.latch_cycles,
+                self.bus_turnaround_cycles, self.dac_data_setup_cycles,
+                self.dac_latch_cycles) == (1, 1, 0, 1, 1)
 
     @property
     def period(self):
@@ -41,8 +47,7 @@ class AdcTiming:
 
     @property
     def sample_phase(self):
-        # Capture on the final ADC settle/read cycle. The safe default uses
-        # one latch cycle followed by one read cycle, hence phases 4 and 5.
+        # Capture on the final ADC read cycle: upstream phases 3 and 4.
         return self.latch_phase + self.latch_cycles + self.settle_cycles - 1
 
     def validate_scan(self):
@@ -72,9 +77,9 @@ class AdcTiming:
 
     @classmethod
     def from_action(cls, action):
-        return cls(int(action.get("adcHalfPeriod", 4)),
+        return cls(int(action.get("adcHalfPeriod", 3)),
                    int(action.get("adcSettleCycles", 1)),
                    int(action.get("adcLatchCycles", 1)),
-                   int(action.get("busTurnaroundCycles", 1)),
+                   int(action.get("busTurnaroundCycles", 0)),
                    int(action.get("dacDataSetupCycles", 1)),
                    int(action.get("dacLatchCycles", 1)))

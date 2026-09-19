@@ -30,7 +30,6 @@ import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds, revC3DwellP
 
 const MAX_POINTS = 1_000_000;
 const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256, 128] as const;
-const VECTOR_DWELL_OPTIONS: PresetNumberOption[] = revC3DwellPresetOptions();
 
 function validateCustomVectorResolution(value: number, t: (key: "vector.resolution.validation.powerOfTwo" | "vector.resolution.validation.min128") => string): string | null {
   const intValue = Math.trunc(value);
@@ -56,7 +55,9 @@ export function VectorParameters({
     v.points ? v.points.map((p) => formatPoint(p)).join("\n") : ""
   );
   const [pointsErr, setPointsErr] = useState<string | null>(null);
-  const timing = estimateRevC3ScanTiming(v.vector_resolution, v.dwell);
+  const halfPeriod = useAppSelector((s) => Number(s.status.defaults?.adc?.adcHalfPeriod ?? 3));
+  const timing = estimateRevC3ScanTiming(v.vector_resolution, v.dwell, halfPeriod);
+  const vectorDwellOptions = revC3DwellPresetOptions(undefined, halfPeriod);
 
   function commitPoints(text: string) {
     setPointsText(text);
@@ -169,7 +170,7 @@ export function VectorParameters({
                 </label>
               }
               value={v.dwell}
-              options={VECTOR_DWELL_OPTIONS}
+          options={vectorDwellOptions}
               min={1}
               max={65535}
               disabled={disabled}

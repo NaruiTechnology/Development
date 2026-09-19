@@ -919,6 +919,14 @@ export function App() {
 
     if (nextScanKind && (currentScanKind === null || currentScanKind !== nextScanKind)) {
       dispatch(streamReset());
+      // A scan buffer belongs to the run that populated it. Merely changing
+      // tabs is not a new run, so do not present the previous raster/vector
+      // frame as live data for the newly selected mode.
+      if (nextScanKind === "raster") {
+        dispatch(resetRaster({ resolution: rasterResolution }));
+      } else {
+        dispatch(resetVector());
+      }
     }
 
     dispatch(setKind(nextKind));

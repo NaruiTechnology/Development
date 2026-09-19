@@ -130,6 +130,47 @@ def build_iobeam_resources(pin_config):
     return resources
 
 
+def validate_obi_pin_config(pin_config):
+    """Validate the physical OBI bus before a non-loopback build.
+
+    The upstream design has six control strobes and one 14-bit shared bus.
+    Silently omitting one of these resources still produces a valid FPGA image
+    with incomplete physical I/O. Simulation may deliberately omit resources, so this helper is
+    called only for the real-board path.
+    """
+    cfg = pin_config or {}
+    control = cfg.get("control") or {}
+    entries = control.get("subsignals", [])
+    names = {s.get("name") for s in entries if (s.get("pin") or "").strip()}
+    required = {"adc_clk", "adc_le_clk", "adc_oe", "dac_clk",
+                "dac_x_le_clk", "dac_y_le_clk"}
+    missing = sorted(required - names)
+    data = cfg.get("data") or {}
+    data_pins = (data.get("pins") or "").split()
+    expected = {
+        "adc_clk": ("G1", True), "adc_le_clk": ("H2", False),
+        "adc_oe": ("G3", True), "dac_clk": ("F3", True),
+        "dac_x_le_clk": ("H3", False), "dac_y_le_clk": ("H1", False),
+    }
+    if missing or len(data_pins) != 14:
+        problems = []
+        if missing:
+            problems.append("missing control strobes: " + ", ".join(missing))
+        if len(data_pins) != 14:
+            problems.append(f"shared data bus has {len(data_pins)} pins; expected 14")
+        raise ValueError("Invalid OBI pin configuration: " + "; ".join(problems))
+    for name, (pin, invert) in expected.items():
+        matches = [s for s in entries if s.get("name") == name]
+        if len(matches) != 1 or (
+            matches[0].get("pin", "").strip(), matches[0].get("direction", "o"),
+            matches[0].get("invert", False),
+        ) != (pin, "o", invert):
+            raise ValueError(f"Invalid OBI pin configuration for {name}: "
+                             f"expected {pin}, output, invert={invert}")
+    if data_pins != "B2 C4 B1 C3 C2 C1 D3 D1 F4 G2 E3 F1 E2 F2".split() or data.get("direction", "io") != "io":
+        raise ValueError("Invalid OBI pin configuration: shared bus order/direction differs from upstream")
+
+
 # ---------------------------------------------------------------------------- #
 # Bus signature shared by BusController <-> IobeamDataSubtarget.
 #

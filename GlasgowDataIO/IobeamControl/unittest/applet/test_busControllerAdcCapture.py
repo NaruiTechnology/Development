@@ -18,7 +18,8 @@ class BusControllerAdcCaptureTest(unittest.TestCase):
                 latency = 8
                 dut = BusController(adc_half_period=half_period,
                                     adc_latency=latency,
-                                    adc_settle_cycles=settle, adc_latch_cycles=width)
+                                    adc_settle_cycles=settle, adc_latch_cycles=width,
+                                    bus_turnaround_cycles=1)
                 sim = Simulator(dut)
                 sim.add_clock(1 / 48_000_000)
 
@@ -77,7 +78,7 @@ class BusControllerAdcCaptureTest(unittest.TestCase):
 
 
     def test_safe_eight_cycle_pin_sequence_has_dead_time(self):
-        dut = BusController(adc_half_period=4, adc_latency=8)
+        dut = BusController(adc_half_period=4, adc_latency=8, bus_turnaround_cycles=1)
         sim = Simulator(dut)
         sim.add_clock(1 / 48e6)
         # Columns: logical CLK, LE, logical OE, FPGA OE, X LE, Y LE.
@@ -102,7 +103,7 @@ class BusControllerAdcCaptureTest(unittest.TestCase):
         sim.run()
 
     def test_bus_owners_never_switch_without_a_high_impedance_cycle(self):
-        dut = BusController(adc_half_period=4, adc_latency=8)
+        dut = BusController(adc_half_period=4, adc_latency=8, bus_turnaround_cycles=1)
         sim = Simulator(dut)
         sim.add_clock(1 / 48e6)
 

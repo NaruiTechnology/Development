@@ -178,8 +178,12 @@ export function ImageCanvas({
   const lastOutput = useAppSelector((s) => s.scan.lastOutput);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
+  const completedKind = lastOutput?.kind ?? lastResult?.kind ?? null;
   const hasPaintedCanvasImage = stats.populated > 0;
-  const showServerFigure = phase === "completed" && (kind !== "vector" || vectorSource === "vector");
+  const showServerFigure =
+    phase === "completed" &&
+    completedKind === kind &&
+    (kind !== "vector" || vectorSource === "vector");
   const hasLiveCanvasData =
     kind === "raster" ? cursor > 0 : kind === "vector" ? vectorSource === "vector" && vectorCursor > 0 : false;
   const visibleVectorCursor = kind === "vector" && vectorSource !== "vector" ? 0 : vectorCursor;

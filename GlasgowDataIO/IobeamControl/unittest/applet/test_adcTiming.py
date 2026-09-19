@@ -20,19 +20,20 @@ class AdcTimingTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             AdcTiming(6, 3, 2, 1, 2, 2).validate_scan()
 
-    def test_safe_defaults_include_bus_dead_time(self):
+    def test_defaults_match_upstream_six_cycle_transaction(self):
         timing = AdcTiming.from_action({})
         self.assertEqual(
             (timing.half_period, timing.settle_cycles, timing.latch_cycles,
              timing.bus_turnaround_cycles, timing.dac_data_setup_cycles,
              timing.dac_latch_cycles),
-            (4, 1, 1, 1, 1, 1))
-        self.assertEqual(timing.scan_required_cycles, 7)
-        self.assertEqual(timing.period, 8)
-        self.assertEqual(timing.capture_phases(), (4, 5))
+            (3, 1, 1, 0, 1, 1))
+        self.assertEqual(timing.scan_required_cycles, 6)
+        self.assertEqual(timing.period, 6)
+        self.assertEqual(timing.capture_phases(), (3, 4))
+        self.assertTrue(timing.uses_upstream_sequence)
         timing.validate_scan()
-        with self.assertRaisesRegex(ValueError, "at least 1"):
-            AdcTiming(4, 1, 1, 0, 1, 1).validate_scan()
+        with self.assertRaisesRegex(ValueError, "at least 0"):
+            AdcTiming(4, 1, 1, -1, 1, 1).validate_scan()
 
     def test_capture_overrides_are_bounded(self):
         timing=AdcTiming()
@@ -59,5 +60,5 @@ class AdcTimingTest(unittest.TestCase):
                 previous_clock=ctx.get(dut.adc_clk)
                 await ctx.tick()
             self.assertGreaterEqual(len(starts),20)
-            self.assertEqual(set(b-a for a,b in zip(starts,starts[1:])),{8})
+            self.assertEqual(set(b-a for a,b in zip(starts,starts[1:])),{6})
         sim.add_testbench(bench); sim.run()

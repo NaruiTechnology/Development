@@ -1,5 +1,5 @@
 export const GLASGOW_REVC3_CLOCK_HZ = 48_000_000;
-export const GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES = 4;
+export const GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES = 3;
 
 export interface ScanTimingEstimate {
   samplePeriodNs: number;
@@ -23,11 +23,13 @@ export interface DwellPresetOption {
 export function estimateRevC3ScanTiming(
   resolution: number,
   dwell: number,
+  adcHalfPeriod = GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES,
 ): ScanTimingEstimate {
   const safeResolution = Math.max(1, Math.trunc(resolution));
   const safeDwell = Math.max(1, Math.trunc(dwell));
   const samplePeriodNs =
-    (2 * GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES * 1e9) /
+    (2 * (Number.isFinite(adcHalfPeriod) && adcHalfPeriod >= 3
+      ? adcHalfPeriod : GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES) * 1e9) /
     GLASGOW_REVC3_CLOCK_HZ;
   const pixelDwellNs = samplePeriodNs * safeDwell;
   const pixelRate = 1e9 / pixelDwellNs;
@@ -45,14 +47,15 @@ export function estimateRevC3ScanTiming(
 /** Human-readable choices for the dwell combobox.
  *
  * “MS/s” is deliberately kept separate from “MPix/s”: the converter keeps
- * sampling at 6 MS/s while averaging reduces the number of completed output
+ * sampling at 8 MS/s while averaging reduces the number of completed output
  * pixels per second.
  */
 export function revC3DwellPresetOptions(
   values: readonly number[] = [1, 2, 4, 8, 16, 32, 64],
+  adcHalfPeriod = GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES,
 ): DwellPresetOption[] {
   return values.map((value) => {
-    const timing = estimateRevC3ScanTiming(1, value);
+    const timing = estimateRevC3ScanTiming(1, value, adcHalfPeriod);
     return {
       value,
       label: `${value} sample${value === 1 ? "" : "s"}/pixel — ${formatNanoseconds(timing.pixelDwellNs)} — ${formatPixelRate(timing.pixelRate)}`,

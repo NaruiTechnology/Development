@@ -33,10 +33,10 @@
                     },
                     "voltage": 3.3,
                     "bufferSize": "1024*1024",
-                    "adcHalfPeriod": 4,
+                    "adcHalfPeriod": 3,
                     "adcSettleCycles": 1,
                     "adcLatchCycles": 1,
-                    "busTurnaroundCycles": 1,
+                    "busTurnaroundCycles": 0,
                     "dacDataSetupCycles": 1,
                     "dacLatchCycles": 1,
                     "enableEbeam": false,
@@ -186,7 +186,7 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": true,
+    "IsProduction": false,
     "DumpData": true,
     "AdcTest": true
 }
