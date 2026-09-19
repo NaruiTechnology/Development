@@ -22,17 +22,18 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   dwell: () => (
     <>
       <div className="dwell-help__rule">
-        <strong>revC3 硬件下限：166.667 ns。</strong>48 MHz FPGA 时钟和当前配置的
-        8 时钟 ADC/DAC 事务将 dwell 1 限制为理论 6 MPix/s。当前门级电路无法实现
+        <strong>revC3 硬件下限：单次 ADC 采样 125 ns。</strong>48 MHz FPGA 时钟和当前配置的
+        6 时钟 ADC/DAC 事务将单次采样限制为 125 ns（8 MS/s）。dwell 为 N 时每像素采样 N + 1 次，
+        因此界面可请求的最短像素（dwell 1）为 250 ns，即 4 MPix/s。当前门级电路无法实现
         10 ns 驻留；单个 FPGA 时钟周期也需要 20.833 ns。
       </div>
 
       <div className="dwell-help__rule">
-        <strong>请选择 2 的幂次。</strong>如果每像素的有效采样数不是 2 的幂次，
+        <strong>请选择 dwell = 2^k − 1。</strong>每像素采样数为 dwell + 1。如果它不是 2 的幂次，
         门级电路只会对最后 2 的幂次个采样取平均，多余的采样会被丢弃。
-        例如 7 个采样的像素只会平均其中 4 个；9 个采样只会平均其中 8 个。
-        所以请始终选择能使每像素采样数为 2、4、8、16、32、64…… 的{" "}
-        <code>dwell_time</code>。
+        例如 7 个采样的像素只会平均其中 4 个；9 个采样只会平均其中 8 个；
+        dwell 16 需要 17 个采样，只平均其中 16 个。
+        所以请选择 <code>dwell</code> = 1、3、7、15、31、63……，使每像素采样数为 2、4、8、16、32、64……。
       </div>
 
       <div className="dwell-help__rule">
@@ -44,14 +45,13 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p><code>dwell</code> 字段是超采样控制。各取值含义：</p>
 
       <ul className="dwell-help__list">
-        <li><code>"dwell": 1</code> → 超采样器不工作，理论像素率 6 MPix/s</li>
-        <li><code>"dwell": 2</code> → 2 倍平均（3 MPix/s），SNR 增益 √2</li>
-        <li><code>"dwell": 4</code> → 4 倍平均（1.5 MPix/s），SNR 增益 2 倍</li>
-        <li><code>"dwell": 8</code> → 8 倍平均（750 kPix/s），SNR 增益约 2.8 倍</li>
-        <li><code>"dwell": 16</code> → 16 倍平均（375 kPix/s），SNR 增益 4 倍</li>
-        <li><code>"dwell": 32</code> → 32 倍平均（187.5 kPix/s），SNR 增益约 5.7 倍</li>
-        <li><code>"dwell": 64</code> → 64 倍平均（93.75 kPix/s），SNR 增益 8 倍</li>
-        <li>…… 直至 <code>dwell = 65535</code>（约每像素 10.92 ms）</li>
+        <li><code>"dwell": 1</code> → 界面允许的最快扫描（平均 2 个采样）（4 MPix/s）</li>
+        <li><code>"dwell": 3</code> → 平均 4 个采样（2 MPix/s），相对 dwell 1 SNR 增益 √2</li>
+        <li><code>"dwell": 7</code> → 平均 8 个采样（1 MPix/s），SNR 增益 2 倍</li>
+        <li><code>"dwell": 15</code> → 平均 16 个采样（500 kPix/s），SNR 增益约 2.8 倍</li>
+        <li><code>"dwell": 31</code> → 平均 32 个采样（250 kPix/s），SNR 增益 4 倍</li>
+        <li><code>"dwell": 63</code> → 平均 64 个采样（125 kPix/s），SNR 增益约 5.7 倍</li>
+        <li>…… 直至 <code>dwell = 65535</code>（约每像素 8.19 ms）</li>
       </ul>
 
       <div className="dwell-help__table-wrap">
@@ -64,13 +64,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>1</td><td>1</td><td>6.0 MPix/s</td><td>1.00×</td><td>175 ms</td></tr>
-            <tr><td>2</td><td>2</td><td>3.0 MPix/s</td><td>1.41×</td><td>350 ms</td></tr>
-            <tr><td>4</td><td>4</td><td>1.5 MPix/s</td><td>2.00×</td><td>699 ms</td></tr>
-            <tr><td>8</td><td>8</td><td>750 kPix/s</td><td>2.83×</td><td>1.40 s</td></tr>
-            <tr><td>16</td><td>16</td><td>375 kPix/s</td><td>4.00×</td><td>2.80 s</td></tr>
-            <tr><td>32</td><td>32</td><td>187.5 kPix/s</td><td>5.66×</td><td>5.59 s</td></tr>
-            <tr><td>64</td><td>64</td><td>93.75 kPix/s</td><td>8.00×</td><td>11.18 s</td></tr>
+            <tr><td>1</td><td>2</td><td>4.0 MPix/s</td><td>1.00×</td><td>262 ms</td></tr>
+            <tr><td>3</td><td>4</td><td>2.0 MPix/s</td><td>1.41×</td><td>524 ms</td></tr>
+            <tr><td>7</td><td>8</td><td>1.0 MPix/s</td><td>2.00×</td><td>1.05 s</td></tr>
+            <tr><td>15</td><td>16</td><td>500 kPix/s</td><td>2.83×</td><td>2.10 s</td></tr>
+            <tr><td>31</td><td>32</td><td>250 kPix/s</td><td>4.00×</td><td>4.19 s</td></tr>
+            <tr><td>63</td><td>64</td><td>125 kPix/s</td><td>5.66×</td><td>8.39 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -95,7 +94,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>分辨率会影响通常关心的三个量：</p>
 
       <ul className="dwell-help__list">
-        <li><strong>帧时长</strong> — 当前 revC3 按 <code>N² × dwell × 166.667 ns</code> 缩放。分辨率加倍，时间变为四倍。</li>
+        <li><strong>帧时长</strong> — 当前 revC3 按 <code>N² × (dwell + 1) × 125 ns</code> 缩放。分辨率加倍，时间变为四倍。</li>
         <li><strong>CSV / 图像的像素数</strong> — <code>N²</code> 个值。2048² 的 16 位光栅在传输线上为 8 MB，展开成 CSV 后约为 32 MB。</li>
         <li><strong>空间采样率</strong> — 网格越细可分辨越小的特征，但在总驻留预算相同的情况下，分辨率越高意味着每像素时间越短，除非同时增大 dwell。</li>
       </ul>
@@ -110,16 +109,16 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>64</td><td>65 536</td><td>175 ms</td><td>128 KB</td></tr>
-            <tr><td>512</td><td>32</td><td>262 144</td><td>699 ms</td><td>512 KB</td></tr>
-            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.80 s</td><td>2 MB</td></tr>
-            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>11.18 s</td><td>8 MB</td></tr>
+            <tr><td>256</td><td>64</td><td>65 536</td><td>139 ms</td><td>128 KB</td></tr>
+            <tr><td>512</td><td>32</td><td>262 144</td><td>557 ms</td><td>512 KB</td></tr>
+            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.23 s</td><td>2 MB</td></tr>
+            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>8.91 s</td><td>8 MB</td></tr>
           </tbody>
         </table>
       </div>
 
       <p>
-        上述帧时长假设以 revC3 门级电路的理论 6 MSPS 采样率连续流式传输。实际数值会略长，
+        上述帧时长假设以 revC3 门级电路的理论 8 MSPS 采样率连续流式传输。实际数值会略长，
         因为每个数据块都有 USB 开销，并且每次扫描末尾还有用于排空流水线的填充。
       </p>
     </>
@@ -466,10 +465,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><th>分辨率</th><th>步长</th><th>总点数</th><th>大致扫描时间<br /><span className="muted">（dwell=1）</span></th></tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>8</td><td>65 536</td><td>~11 ms</td></tr>
-            <tr><td>512</td><td>4</td><td>262 144</td><td>~44 ms</td></tr>
-            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~175 ms</td></tr>
-            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~699 ms</td></tr>
+            <tr><td>256</td><td>8</td><td>65 536</td><td>~16 ms</td></tr>
+            <tr><td>512</td><td>4</td><td>262 144</td><td>~66 ms</td></tr>
+            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~262 ms</td></tr>
+            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~1.05 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -508,7 +507,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <ul className="dwell-help__list">
         <li><strong><code>x</code>、<code>y</code></strong> — DAC 码值，闭区间 0..16383。超范围的值会在设备上被截断，但无法产生有用输出。</li>
-        <li><strong><code>dwell</code></strong> — 单位与光栅 dwell 一致：当前 revC3 的 166.667 ns 采样周期个数。1 最快（无超采样）；2/4/8/16/…… 是 SNR 平均的实用值。最大可至 65535（约每像素 10.92 ms）。</li>
+        <li><strong><code>dwell</code></strong> — 单位与光栅 dwell 一致：dwell 为 N 时每像素采样 N + 1 次，每次 125 ns（revC3）。1 最快（2 个采样）；3/7/15/31/…… 是 SNR 平均的实用值。最大可至 65535（约每像素 8.19 ms）。</li>
       </ul>
 
       <div className="dwell-help__rule">

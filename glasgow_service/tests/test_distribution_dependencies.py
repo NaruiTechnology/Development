@@ -95,7 +95,9 @@ def isolated_builder(monkeypatch, tmp_path):
     for name in ("validate_glasgow_runtime_dependencies",
                  "validate_local_redis_distribution_workflow",
                  "copy_source_trees", "copy_preserved_files",
-                 "copy_matching_assets", "validate_packaged_local_system_manager"):
+                 "copy_matching_assets", "validate_packaged_local_system_manager",
+                 "validate_dist_contents", "write_dist_manifest",
+                 "verify_built_archive"):
         monkeypatch.setattr(builder, name, lambda *args, **kwargs: None)
     monkeypatch.chdir(tmp_path)
     source = tmp_path / "source"

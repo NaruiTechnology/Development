@@ -9,10 +9,12 @@
 #   - its basename is either an exact filename or a glob pattern.
 # Glob patterns (containing * ? or []) let a single template match
 # both compiled and raw builds -- e.g. "dist_app*.zip" matches both
-# dist_app.zip and dist_app_raw.zip. When multiple .zip files match,
-# the most recently modified one wins. If nothing matches, the code
-# still falls back to the newest .zip in the folder so the deploy
-# isn't blocked by a stale or unusual filename.
+# dist_app.zip and dist_app_raw.zip. Exactly one archive must match:
+# no match is an error, and more than one match is an error too. The
+# deploy never guesses which archive to install (an earlier "newest .zip
+# wins / newest .zip in the folder" fallback could silently deploy a
+# stale build). The builder leaves a single zip in the slot; remove any
+# other or name the exact file in actionData['zip'].
 #-------------------------------------------------------------------------------
 import os
 import fnmatch
@@ -281,52 +283,38 @@ class unzipDistribution_state(executeShellCommand_state):
     @classmethod
     def _findZipFile(cls, folder, preferredName):
         """
-        Pick a .zip from `folder`:
-          1. If preferredName is a glob (e.g. 'dist_app*.zip'),
-             match against names in the folder and return the newest match.
-          2. Else, exact match on preferredName if that file exists.
-          3. Fallback: the newest .zip anywhere in `folder`.
-        Returns an absolute path, or None if no .zip is present.
+        Pick exactly one .zip from `folder`; never guess.
+          * preferredName is a glob (e.g. 'dist_app*.zip'): the zips whose
+            names match it.
+          * preferredName is a plain name: that file, if it exists.
+          * preferredName is empty: every .zip in the folder.
+        Returns the absolute path of the single match, or None when nothing
+        matches. Raises ValueError when more than one archive matches, so a
+        stale build sitting next to a fresh one can never be picked silently.
         """
         try:
             entries = os.listdir(folder)
         except OSError:
             return None
 
-        def _newestAbs(paths):
-            if not paths:
-                return None
-            paths = sorted(paths, key=os.path.getmtime, reverse=True)
-            return os.path.abspath(paths[0])
-
-        # Case 1: glob pattern.
+        zips = sorted(name for name in entries
+                      if name.lower().endswith(".zip")
+                      and os.path.isfile(os.path.join(folder, name)))
         if preferredName and cls._isGlob(preferredName):
-            matches = []
-            for name in entries:
-                if (name.lower().endswith(".zip")
-                        and fnmatch.fnmatch(name, preferredName)):
-                    full = os.path.join(folder, name)
-                    if os.path.isfile(full):
-                        matches.append(full)
-            if matches:
-                return _newestAbs(matches)
-            # Glob missed -- fall through so the generic fallback can
-            # still rescue the deploy with whatever .zip is present.
-
-        # Case 2: exact preferred filename.
-        if preferredName and not cls._isGlob(preferredName):
-            candidate = os.path.join(folder, preferredName)
-            if (os.path.isfile(candidate)
-                    and candidate.lower().endswith(".zip")):
-                return os.path.abspath(candidate)
-
-        # Case 3: newest .zip anywhere in the folder.
-        zips = []
-        for name in entries:
-            full = os.path.join(folder, name)
-            if name.lower().endswith(".zip") and os.path.isfile(full):
-                zips.append(full)
-        return _newestAbs(zips)
+            matches = [n for n in zips if fnmatch.fnmatch(n, preferredName)]
+        elif preferredName:
+            matches = [n for n in zips if n == preferredName]
+        else:
+            matches = zips
+        if not matches:
+            return None
+        if len(matches) > 1:
+            raise ValueError(
+                "ambiguous distribution archive: {} matches {} in {}; "
+                "remove the stale one or name the exact file in "
+                "actionData['zip']".format(
+                    preferredName or "*.zip", matches, folder))
+        return os.path.abspath(os.path.join(folder, matches[0]))
 
 
 def _shquote(value):

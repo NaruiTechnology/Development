@@ -32,7 +32,8 @@ The deploy root must end in `IobeamPlatform`. The workflow refuses to clear
 
 ## 2. Build the distribution
 
-Run the builder from the Operations root:
+Run the builder. It finds its workspace from its own location, so the current
+directory does not matter:
 
 ```bash
 python3 Development/buidCompiledDist.py
@@ -44,8 +45,12 @@ For an internal diagnostic package containing raw Python instead of bytecode:
 python3 Development/buidCompiledDist.py --raw
 ```
 
-The builder creates a versioned `DeployWorkspace_*.zip` handoff archive and
-places `dist_app*.zip` inside its DistributionDeploy directory. Confirm both:
+The builder validates that every required module and file is present, writes
+`dist_manifest.json` into the archive, re-verifies the finished archive, and
+prints a line such as `Verified dist_app.zip: version=... commit=... mode=compiled(cpython-312)`.
+It creates a versioned `DeployWorkspace_*.zip` handoff archive and places
+`dist_app*.zip` inside its DistributionDeploy directory. A build that is missing
+any required input exits nonzero and leaves no archive. Confirm both outputs:
 
 ```bash
 ls -lh DeployWorkspace_*.zip
@@ -59,8 +64,11 @@ Copy the newest `DeployWorkspace_*.zip` to the internal target, then:
 ```bash
 mkdir -p ~/DeployWorkspace
 unzip DeployWorkspace_<version>_<timestamp>.zip -d ~/DeployWorkspace
-cd ~/DeployWorkspace/Development/DistributionDeploy
+cd ~/DeployWorkspace/DeployWorkSpace/Development/DistributionDeploy
 ```
+
+The archive's top-level folder is `DeployWorkSpace` (capital S), so the
+workflow lives one level below the folder you extracted into.
 
 Do not unpack or run the deployment as root. Use the administrator account
 that should own the user services; the workflow requests `sudo` for individual
@@ -93,14 +101,19 @@ python3 distributionDeployApp.py \
 
 The workflow now:
 
-1. Safely clears only the validated deployment root.
-2. Extracts the selected `dist_app*.zip`.
-3. Creates the deployment virtual environment.
-4. Installs Python, Node, PostgreSQL, Glasgow, and optional Pi GPIO runtime.
-5. Creates and secures the backend `.env` as mode `0600`.
-6. Installs the local Redis/Sentinel smoke-test topology.
-7. Calls `Scripts/manage-local-system.sh restart`.
-8. Verifies Glasgow (`8765`), SBC vacuum (`8766`), executor (`8780`), backend
+1. Selects exactly one `dist_app*.zip` (none or several abort the deploy) and
+   verifies it against its manifest *before stopping anything*: every file's
+   SHA-256, no missing or unlisted members, and bytecode built by this host's
+   Python. Then it stops the running system.
+2. Safely clears only the validated deployment root.
+3. Extracts that archive and re-verifies the extracted tree, logging the build
+   identity (`version= commit= built= mode= python=`).
+4. Creates the deployment virtual environment.
+5. Installs Python, Node, PostgreSQL, Glasgow, and optional Pi GPIO runtime.
+6. Creates and secures the backend `.env` as mode `0600`.
+7. Installs the local Redis/Sentinel smoke-test topology.
+8. Calls `Scripts/manage-local-system.sh restart`.
+9. Verifies Glasgow (`8765`), SBC vacuum (`8766`), executor (`8780`), backend
    (`4000`), frontend (`5173`), and administrative API endpoints.
 
 Any missing workstate, failed command, or failed readiness check now makes

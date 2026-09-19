@@ -86,6 +86,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
               {t("scan.dwell.dynamic", {
                 dwell: r.dwell,
                 period: formatNanoseconds(timing.samplePeriodNs),
+                samples: timing.samplesPerPixel,
                 pixel: formatNanoseconds(timing.pixelDwellNs),
                 resolution: r.resolution,
                 frame: formatDuration(timing.frameSeconds),

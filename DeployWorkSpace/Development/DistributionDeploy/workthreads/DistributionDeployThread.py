@@ -144,17 +144,18 @@ class DistributionDeployThread(WorkThread):
         self._queue = queue.Queue()
         actions = {key: value for action in self._config.Actions for key, value in action.items()}
         if "createDeployFolder" in actions:
-            # Stopping the running installation and replacing it from the
-            # validated archive are mandatory clean-deploy gates. FPGA
+            # Stopping the running installation, replacing it from the
+            # validated archive, and verifying what was extracted are
+            # mandatory clean-deploy gates. FPGA
             # programming is hardware-dependent, so an explicit skip must be
             # honored for development/VM deployments where no Glasgow is
             # attached.
-            required = ("stopLocalSystem", "createDeployFolder", "unzipDistribution")
+            required = ("stopLocalSystem", "createDeployFolder", "unzipDistribution", "verifyDistribution")
             names = list(actions)
             if (any(name not in actions or actions[name].get(Consts.SKIP, False)
                     or actions[name].get(TRANSACTION_COMPLETE, False) for name in required)
                     or [names.index(name) for name in required] != sorted(names.index(name) for name in required)):
-                self._workflowError = "clean deployment requires stop, recreate, and extract in order; reset completion flags for a new run"
+                self._workflowError = "clean deployment requires stop, recreate, extract, and verify in order; reset completion flags for a new run"
                 self._logger.error(self._workflowError)
                 return None
             # A clean replacement invalidates every old installation receipt.

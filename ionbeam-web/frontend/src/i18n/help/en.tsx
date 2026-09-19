@@ -44,29 +44,31 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   dwell: () => (
     <>
       <div className="dwell-help__rule">
-        <strong>revC3 hardware floor: 166.667 ns.</strong> The 48 MHz FPGA
-        clock and the configured eight-clock ADC/DAC transaction limit dwell 1
-        to 6 MPix/s. A 10 ns dwell is not achievable with the current gateware;
+        <strong>revC3 hardware floor: one 125 ns ADC sample.</strong> The 48 MHz FPGA
+        clock and the configured six-clock ADC/DAC transaction limit one sample
+        to 125 ns (8 MS/s). A dwell of N takes N + 1 samples, so the shortest
+        pixel the UI can request (dwell 1) is 250 ns, or 4 MPix/s. A 10 ns dwell
+        is not achievable with the current gateware;
         even one FPGA clock is 20.833 ns.
       </div>
 
       <div className="dwell-help__rule">
         <strong>Sample rate and output-pixel rate are different.</strong> The
-        ADC conversion rate remains 6.0 MSamples/s. Dwell 2 combines two ADC
-        samples into one output pixel, so the output ceiling is 3.0 MPixels/s;
-        dwell 4 combines four, so it is 1.5 MPixels/s. In general: output
-        pixel rate = 6.0 MSamples/s ÷ samples per pixel. These are theoretical
+        ADC conversion rate remains 8.0 MSamples/s. Dwell 1 combines two ADC
+        samples into one output pixel, so the output ceiling is 4.0 MPixels/s;
+        dwell 3 combines four, so it is 2.0 MPixels/s. In general: samples per
+        pixel = dwell + 1 and output pixel rate = 8.0 MSamples/s ÷ samples per pixel. These are theoretical
         acquisition ceilings; transport and host overhead can only add time.
       </div>
 
       <div className="dwell-help__rule">
-        <strong>Pick powers of two.</strong> If your effective sample
-        count per pixel isn&apos;t a power of two, the gateware only
+        <strong>Pick dwell = 2^k − 1.</strong> The sample count per pixel
+        is dwell + 1. If it isn&apos;t a power of two, the gateware only
         averages the last power of two samples and the remaining ones
         are thrown away. A pixel with 7 samples averages 4 of them;
-        with 9 samples, 8 of them. So always pick{" "}
-        <code>dwell_time</code> so the resulting sample count per
-        pixel is 2, 4, 8, 16, 32, 64, ….
+        with 9 samples, 8 of them; dwell 16 takes 17 samples and averages 16.
+        So pick <code>dwell</code> = 1, 3, 7, 15, 31, 63, … so that the sample
+        count per pixel is 2, 4, 8, 16, 32, 64, ….
       </div>
 
       <div className="dwell-help__rule">
@@ -83,14 +85,13 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
 
       <ul className="dwell-help__list">
-        <li><code>"dwell": 1</code> → supersampler does nothing, fastest scan, 6 MPix/s theoretical rate</li>
-        <li><code>"dwell": 2</code> → 2× averaging (3 MPix/s), √2 SNR gain</li>
-        <li><code>"dwell": 4</code> → 4× averaging (1.5 MPix/s), 2× SNR gain</li>
-        <li><code>"dwell": 8</code> → 8× averaging (750 kPix/s), ~2.8× SNR gain</li>
-        <li><code>"dwell": 16</code> → 16× averaging (375 kPix/s), 4× SNR gain</li>
-        <li><code>"dwell": 32</code> → 32× averaging (187.5 kPix/s), ~5.7× SNR gain</li>
-        <li><code>"dwell": 64</code> → 64× averaging (93.75 kPix/s), 8× SNR gain</li>
-        <li>… up to <code>dwell = 65535</code> (≈ 10.92 ms per pixel)</li>
+        <li><code>"dwell": 1</code> → fastest scan the UI allows (2 samples averaged) (4 MPix/s)</li>
+        <li><code>"dwell": 3</code> → 4 samples averaged (2 MPix/s), √2 SNR gain vs dwell 1</li>
+        <li><code>"dwell": 7</code> → 8 samples averaged (1 MPix/s), 2× SNR gain</li>
+        <li><code>"dwell": 15</code> → 16 samples averaged (500 kPix/s), ~2.8× SNR gain</li>
+        <li><code>"dwell": 31</code> → 32 samples averaged (250 kPix/s), 4× SNR gain</li>
+        <li><code>"dwell": 63</code> → 64 samples averaged (125 kPix/s), ~5.7× SNR gain</li>
+        <li>… up to <code>dwell = 65535</code> (≈ 8.19 ms per pixel)</li>
       </ul>
 
       <div className="dwell-help__table-wrap">
@@ -103,13 +104,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>1</td><td>1</td><td>6.0 MS/s</td><td>6.0 MPix/s</td><td>1.00×</td><td>175 ms</td></tr>
-            <tr><td>2</td><td>2</td><td>6.0 MS/s</td><td>3.0 MPix/s</td><td>1.41×</td><td>350 ms</td></tr>
-            <tr><td>4</td><td>4</td><td>6.0 MS/s</td><td>1.5 MPix/s</td><td>2.00×</td><td>699 ms</td></tr>
-            <tr><td>8</td><td>8</td><td>6.0 MS/s</td><td>750 kPix/s</td><td>2.83×</td><td>1.40 s</td></tr>
-            <tr><td>16</td><td>16</td><td>6.0 MS/s</td><td>375 kPix/s</td><td>4.00×</td><td>2.80 s</td></tr>
-            <tr><td>32</td><td>32</td><td>6.0 MS/s</td><td>187.5 kPix/s</td><td>5.66×</td><td>5.59 s</td></tr>
-            <tr><td>64</td><td>64</td><td>6.0 MS/s</td><td>93.75 kPix/s</td><td>8.00×</td><td>11.18 s</td></tr>
+            <tr><td>1</td><td>2</td><td>8.0 MS/s</td><td>4.0 MPix/s</td><td>1.00×</td><td>262 ms</td></tr>
+            <tr><td>3</td><td>4</td><td>8.0 MS/s</td><td>2.0 MPix/s</td><td>1.41×</td><td>524 ms</td></tr>
+            <tr><td>7</td><td>8</td><td>8.0 MS/s</td><td>1.0 MPix/s</td><td>2.00×</td><td>1.05 s</td></tr>
+            <tr><td>15</td><td>16</td><td>8.0 MS/s</td><td>500 kPix/s</td><td>2.83×</td><td>2.10 s</td></tr>
+            <tr><td>31</td><td>32</td><td>8.0 MS/s</td><td>250 kPix/s</td><td>4.00×</td><td>4.19 s</td></tr>
+            <tr><td>63</td><td>64</td><td>8.0 MS/s</td><td>125 kPix/s</td><td>5.66×</td><td>8.39 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -137,7 +137,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>Resolution drives three quantities you usually care about:</p>
 
       <ul className="dwell-help__list">
-        <li><strong>Frame time</strong> — scales as <code>N² × dwell × 166.667 ns</code> with the current revC3 timing. Doubling the resolution quadruples the time.</li>
+        <li><strong>Frame time</strong> — scales as <code>N² × (dwell + 1) × 125 ns</code> with the current revC3 timing. Doubling the resolution quadruples the time.</li>
         <li><strong>Pixel count for the CSV / figure</strong> — <code>N²</code> values. A 2048² 16-bit raster is 8 MB on the wire and ~32 MB once expanded to a CSV.</li>
         <li><strong>Spatial sampling rate</strong> — finer grid resolves smaller features but with the same total dwell budget, higher resolution means proportionally less time per pixel unless you also raise dwell.</li>
       </ul>
@@ -152,17 +152,17 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>64</td><td>65 536</td><td>175 ms</td><td>128 KB</td></tr>
-            <tr><td>512</td><td>32</td><td>262 144</td><td>699 ms</td><td>512 KB</td></tr>
-            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.80 s</td><td>2 MB</td></tr>
-            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>11.18 s</td><td>8 MB</td></tr>
+            <tr><td>256</td><td>64</td><td>65 536</td><td>139 ms</td><td>128 KB</td></tr>
+            <tr><td>512</td><td>32</td><td>262 144</td><td>557 ms</td><td>512 KB</td></tr>
+            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.23 s</td><td>2 MB</td></tr>
+            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>8.91 s</td><td>8 MB</td></tr>
           </tbody>
         </table>
       </div>
 
       <p>
         Frame times above assume continuous streaming at the
-        revC3 gateware&apos;s 6 MSPS theoretical sample rate. Real-world numbers
+        revC3 gateware&apos;s 8 MSPS theoretical sample rate. Real-world numbers
         are slightly longer due to per-chunk USB overhead and the
         pipeline-drain padding at the tail of each scan.
       </p>
@@ -485,10 +485,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><th>Resolution</th><th>Stride</th><th>Total points</th><th>Approx scan time<br /><span className="muted">(dwell=1)</span></th></tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>8</td><td>65 536</td><td>~11 ms</td></tr>
-            <tr><td>512</td><td>4</td><td>262 144</td><td>~44 ms</td></tr>
-            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~175 ms</td></tr>
-            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~699 ms</td></tr>
+            <tr><td>256</td><td>8</td><td>65 536</td><td>~16 ms</td></tr>
+            <tr><td>512</td><td>4</td><td>262 144</td><td>~66 ms</td></tr>
+            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~262 ms</td></tr>
+            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~1.05 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -531,7 +531,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <ul className="dwell-help__list">
         <li><strong><code>x</code>, <code>y</code></strong> — DAC code, inclusive 0..16383. Values outside the range get clamped on the device but won&apos;t produce useful output.</li>
-        <li><strong><code>dwell</code></strong> — same units as raster dwell: number of 166.667 ns revC3 sample periods. 1 is the fastest (no supersampling), 2/4/8/16/… are the practical values for SNR averaging. Up to 65535 (≈ 10.92 ms per pixel).</li>
+        <li><strong><code>dwell</code></strong> — same convention as raster dwell: a dwell of N takes N + 1 ADC samples of 125 ns each (revC3). 1 is the fastest the UI allows (2 samples); 3/7/15/31/… are the practical values for SNR averaging. Up to 65535 (≈ 8.19 ms per pixel).</li>
       </ul>
 
       <div className="dwell-help__rule">

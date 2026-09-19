@@ -3321,10 +3321,11 @@ const SETTINGS_HELP_BODY: Partial<Record<SettingsHelpTopic, JSX.Element>> = {
   rasterDwell: (
     <>
       <p>
-        Number of approximately 166.7 ns ADC sample periods accumulated per raster pixel
-        with the current revC3 timing configuration.
+        A dwell of N accumulates N + 1 ADC samples (125 ns each with the current
+        revC3 timing configuration) per raster pixel.
         Higher dwell improves noise averaging but increases frame time
-        linearly. Practical values are usually powers of two.
+        linearly. Practical values are 2^k − 1 (1, 3, 7, 15, 31, 63…) so that
+        every sample is used.
       </p>
     </>
   ),
@@ -3350,7 +3351,8 @@ const SETTINGS_HELP_BODY: Partial<Record<SettingsHelpTopic, JSX.Element>> = {
   vectorDwell: (
     <>
       <p>
-        Default-vector dwell in approximately 166.7 ns revC3 sample periods. This only affects
+        Default-vector dwell: a dwell of N takes N + 1 ADC samples of 125 ns
+        each (revC3). This only affects
         the built-in default sweep. Custom point lists already carry a
         per-point <code>dwell</code> value in each <code>x, y, dwell</code>
         triple.

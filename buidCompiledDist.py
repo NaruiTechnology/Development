@@ -5,6 +5,7 @@ import py_compile
 import re
 import fnmatch
 import argparse
+import importlib.util
 import json
 from datetime import datetime
 
@@ -38,6 +39,7 @@ SKIP_DIRS = {
     '.agents',
     '.codex',
     '.pytest_cache',
+    'node_modules',
     'dist_app',
     'EsmBeamController',
     'Open-Beam-Interface',
@@ -76,6 +78,32 @@ TREE_COPY_IGNORE = (
 
 STREAM_DATA_JSON = os.path.join(
     'Development', 'GlasgowDataIO', 'Json', 'streamData.json')
+
+# The verifier/producer shared with the deploy workflow (see that file's
+# docstring). It lives in the workspace that ships to the deploy host.
+MANIFEST_MODULE_PARTS = (
+    'DeployWorkSpace', 'Development', 'DistributionDeploy',
+    'distributionManifest.py')
+
+# Modules a working deployment cannot do without. Packaged as .pyc when
+# compiled and as .py in raw mode, so they are named without an extension.
+REQUIRED_DIST_MODULES = (
+    'Development/GlasgowDataIO/IobeamControl/IobeamLauncher',
+    'Development/GlasgowDataIO/IobeamControl/applet/busController',
+    'Development/GlasgowDataIO/IobeamControl/applet/upstreamBusController',
+    'Development/GlasgowDataIO/IobeamControl/applet/adcTiming',
+    'Development/GlasgowDataIO/IobeamControl/applet/iobeamDataSubtarget',
+    'Development/GlasgowDataIO/IobeamControl/applet/commandExecutor',
+    'Development/glasgow_service/glasgow_service/service',
+)
+REQUIRED_DIST_FILES = (
+    'Development/GlasgowDataIO/Json/streamData.json',
+    'Development/Scripts/manage-local-system.sh',
+    'Development/Scripts/program-fpga-ram.py',
+    'Development/ionbeam-web/backend/package.json',
+    'Development/glasgow_service/requirements.txt',
+    'Development/requirements.txt',
+)
 
 
 def _development_relative_path(src_dir, *parts):
@@ -201,6 +229,78 @@ def validate_local_redis_distribution_workflow(src_dir):
           ', '.join(REQUIRED_LOCAL_REDIS_APT_PACKAGES))
 
 
+def resolve_workspace(script_path):
+    """Return the workspace root (the parent of ``Development/``).
+
+    Derived from where this script lives, never from the caller's working
+    directory: previously, running it from inside ``Development/`` exited 0
+    with "Build complete" while silently omitting streamData.json and the
+    ionbeam-web backend, and wrote the archive into a stray nested folder.
+    """
+    development = os.path.dirname(os.path.abspath(script_path))
+    if os.path.basename(development) != 'Development':
+        raise RuntimeError(
+            "buidCompiledDist.py must live in a directory named 'Development' "
+            "(found %s); archive paths are rooted at Development/." % development)
+    return os.path.dirname(development)
+
+
+def load_manifest_module(src_dir):
+    """Load the shared manifest producer/verifier by path."""
+    path = _development_relative_path(src_dir, *MANIFEST_MODULE_PARTS)
+    if not os.path.isfile(path):
+        raise FileNotFoundError('Missing distribution manifest module: ' + path)
+    spec = importlib.util.spec_from_file_location('distributionManifest', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def required_dist_members(deliver_raw):
+    suffix = '.py' if deliver_raw else '.pyc'
+    return sorted([m + suffix for m in REQUIRED_DIST_MODULES] +
+                  list(REQUIRED_DIST_FILES))
+
+
+def validate_dist_contents(dist_dir, deliver_raw=False):
+    """Fail the build, loudly, if a required member is not in the staged tree."""
+    missing = [m for m in required_dist_members(deliver_raw)
+               if not os.path.isfile(os.path.join(dist_dir, *m.split('/')))]
+    if missing:
+        raise FileNotFoundError(
+            'Distribution is missing required member(s): ' + ', '.join(missing))
+    print('Validated %d required distribution members.'
+          % len(required_dist_members(deliver_raw)))
+
+
+def write_dist_manifest(src_dir, dist_dir, deliver_raw=False, compiled_sources=None):
+    """Write dist_manifest.json into the staged tree, before it is archived."""
+    manifest_module = load_manifest_module(src_dir)
+    version = None
+    try:
+        with open(stream_data_json_path(src_dir), 'r', encoding='utf-8') as f:
+            version = str(json.load(f).get('Version', '')).strip() or None
+    except FileNotFoundError:
+        pass
+    files = manifest_module.describe_tree(dist_dir, compiled_sources)
+    manifest = manifest_module.build_manifest(
+        files, compiled=not deliver_raw,
+        required=required_dist_members(deliver_raw), version=version,
+        git=manifest_module.git_identity(_development_relative_path(src_dir)))
+    manifest_module.write_manifest(dist_dir, manifest)
+    print('Wrote %s: %s' % (manifest_module.MANIFEST_NAME,
+                            manifest_module.summarize(manifest)))
+    return manifest
+
+
+def verify_built_archive(src_dir, archive_path):
+    """Re-open the finished archive with the deploy-side verifier."""
+    manifest_module = load_manifest_module(src_dir)
+    manifest = manifest_module.verify_zip(archive_path)
+    print('Verified %s: %s' % (archive_path, manifest_module.summarize(manifest)))
+    return manifest
+
+
 def copy_source_trees(src_dir, dist_dir, trees):
     """Copy listed source trees verbatim from src_dir into dist_dir.
 
@@ -305,10 +405,23 @@ def copy_preserved_files(src_dir, dist_dir, file_pairs):
         print(f"Copied preserved file: {rel_dst}")
 
 
-def copy_matching_assets(src_dir, dist_dir, patterns):
-    """Walk src_dir and copy any files matching patterns into dist_dir."""
+def _walk_roots(src_dir, package_roots):
+    """os.walk over src_dir, or only over the named sub-roots of it.
+
+    package_roots keeps a build launched from a parent workspace from
+    packaging unrelated sibling directories.
+    """
+    roots = ([os.path.join(src_dir, r) for r in package_roots]
+             if package_roots else [src_dir])
+    for base in roots:
+        if os.path.isdir(base):
+            yield from os.walk(base)
+
+
+def copy_matching_assets(src_dir, dist_dir, patterns, package_roots=None):
+    """Walk src_dir (or only package_roots under it) and copy files matching patterns."""
     abs_dist = os.path.abspath(dist_dir)
-    for root, dirs, files in os.walk(src_dir):
+    for root, dirs, files in _walk_roots(src_dir, package_roots):
         # Prune skipped dirs in-place
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
 
@@ -327,6 +440,15 @@ def copy_matching_assets(src_dir, dist_dir, patterns):
                 shutil.copy2(src_file, dest_file)
                 print(f"Copied asset: {os.path.normpath(os.path.join(rel_path, filename))}")
 
+def _file_sha256(path):
+    import hashlib
+    digest = hashlib.sha256()
+    with open(path, 'rb') as stream:
+        for block in iter(lambda: stream.read(1 << 20), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def compile_distribution_file(source, destination):
     """Compile the selected source, never an arbitrary cached interpreter copy.
 
@@ -338,7 +460,7 @@ def compile_distribution_file(source, destination):
     py_compile.compile(source, cfile=destination, doraise=True, optimize=0)
 
 
-def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
+def build_compiled_dist(src_dir, dist_dir, deliver_raw=False, package_roots=None):
     validate_glasgow_runtime_dependencies(src_dir)
     validate_local_redis_distribution_workflow(src_dir)
     # Compile each included source directly to its destination below. Do not
@@ -376,7 +498,8 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
 
     # 3. Package source files: raw .py files OR freshly compiled .pyc files
     abs_dist = os.path.abspath(dist_dir)
-    for root, dirs, files in os.walk(src_dir):
+    compiled_sources = {}  # packaged .pyc path -> sha256 of the source it came from
+    for root, dirs, files in _walk_roots(src_dir, package_roots):
         if os.path.abspath(root).startswith(abs_dist):
             dirs[:] = []  # don't descend into the dist tree
             continue
@@ -404,6 +527,9 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
                     compile_distribution_file(
                         os.path.join(root, filename),
                         os.path.join(target_folder, clean_name))
+                    compiled_sources[os.path.normpath(os.path.join(
+                        rel_path, clean_name)).replace(os.sep, '/')] = \
+                        _file_sha256(os.path.join(root, filename))
                     print(f"Packaged: {os.path.join(rel_path, clean_name)}")
 
         # Prune dirs for the next iteration
@@ -431,12 +557,14 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
             print(f"Copied SQL folder: {sx}")
 
     # 5. Copy assets (includes README.md)
-    copy_matching_assets(src_dir, dist_dir, ASSET_PATTERNS)
+    copy_matching_assets(src_dir, dist_dir, ASSET_PATTERNS, package_roots)
 
     # The script must retain Development/Scripts depth so its ../.. root
     # discovery resolves to DeployRoot.
     make_shell_scripts_executable(dist_dir)
     validate_packaged_local_system_manager(dist_dir)
+    validate_dist_contents(dist_dir, deliver_raw)
+    write_dist_manifest(src_dir, dist_dir, deliver_raw, compiled_sources)
 
     # 6. Zip the output content (distinct names so raw/compiled don't overwrite)
     zip_name = "dist_app_raw" if deliver_raw else "dist_app"
@@ -444,6 +572,12 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False):
     if os.path.exists(f"{zip_name}.zip"):
         os.remove(f"{zip_name}.zip")
     shutil.make_archive(zip_name, 'zip', dist_dir)
+    try:
+        verify_built_archive(src_dir, f"{zip_name}.zip")
+    except Exception:
+        # Never leave a zip that failed its own verification lying around.
+        os.remove(f"{zip_name}.zip")
+        raise
     print(f"Archive created successfully.")
 
     # 7. Final Cleanup: Remove the dist_dir tree
@@ -562,13 +696,15 @@ def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_bas
     """
     archive_name = f"{zip_name}.zip"
 
+    # Check first: never delete the last good archive when there is no new one.
+    if not os.path.isfile(archive_name):
+        raise FileNotFoundError(f"Build output not found: {archive_name}")
+
     # 1. Clear existing zips from the deploy slot
     print(f"\n--- Post-build: clearing zips in {deploy_dir} ---")
     clear_zips_in(deploy_dir)
 
     # 2. Move freshly built archive into the deploy slot
-    if not os.path.isfile(archive_name):
-        raise FileNotFoundError(f"Build output not found: {archive_name}")
     moved_path = os.path.join(deploy_dir, archive_name)
     shutil.move(archive_name, moved_path)
     print(f"Moved {archive_name} -> {moved_path}")
@@ -581,15 +717,32 @@ def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_bas
     return zip_folder(workspace_dir, archive_base=workspace_archive_base)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Deploy source code.')
+def main(argv=None, script_path=None):
+    parser = argparse.ArgumentParser(description='Build the deployable distribution.')
     parser.add_argument('-r', '--raw', action='store_true', dest='raw',
                         help="Deliver raw python code (skip byte-compilation)", default=False)
-    args = parser.parse_args()
+    parser.add_argument('--verify', metavar='ZIP', dest='verify',
+                        help="Verify an existing distribution archive and exit")
+    args = parser.parse_args(argv)
+    script_path = script_path or __file__
+    workspace = resolve_workspace(script_path)
 
+    if args.verify:
+        try:
+            verify_built_archive(workspace, os.path.abspath(args.verify))
+            return 0
+        except Exception as e:
+            print(f"Verification failed: {e}")
+            return 1
+
+    # Every relative path below (dist_app, the deploy slot, the handoff
+    # archive) is relative to the workspace root, wherever we were launched.
+    original_cwd = os.getcwd()
+    os.chdir(workspace)
     exit_code = 0
     try:
-        build_compiled_dist('.', './dist_app', deliver_raw=bool(args.raw))
+        build_compiled_dist('.', './dist_app', deliver_raw=bool(args.raw),
+                            package_roots=['Development'])
         mode = "raw source" if args.raw else "compiled .pyc"
         zip_name = "dist_app_raw" if args.raw else "dist_app"
         archive = f"{zip_name}.zip"
@@ -609,16 +762,16 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nBuild failed with error: {e}")
         exit_code = 1
+    finally:
+        os.chdir(original_cwd)
 
     # Flush so any final output reaches the terminal even if the runner is
     # buffering, then return an explicit code. Some launchers won't release
     # the terminal until the process delivers a definitive exit signal.
     sys.stdout.flush()
     sys.stderr.flush()
-    sys.exit(exit_code)
-    # If sys.exit still doesn't terminate (i.e. something is blocking
-    # interpreter shutdown -- non-daemon thread, lingering subprocess, etc.),
-    # uncomment the line below. os._exit skips interpreter cleanup and
-    # always terminates immediately. Using it is a diagnostic signal that
-    # something else needs investigating.
-    # os._exit(exit_code)
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

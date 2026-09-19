@@ -6,11 +6,24 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+import distributionManifest
 from .distributionDeploy_state import distributionDeploy_state
 from .unzipDistribution_state import unzipDistribution_state
 
 
 class stopLocalSystem_state(distributionDeploy_state):
+    def _manifestRequired(self):
+        """Deployment.RequireDistributionManifest (default True).
+
+        Read straight from this run's config: the base-class deploymentValue()
+        helper looks for ``thread.Config``, which the real thread does not
+        define, so it always returns its default.
+        """
+        deployment = getattr(self.Config, "Deployment", None)
+        if isinstance(deployment, dict):
+            return bool(deployment.get("RequireDistributionManifest", True))
+        return True
+
     async def DoWork(self):
         self._success = False
         self.ParentWorkThread._localSystemStopped = False
@@ -30,6 +43,17 @@ class stopLocalSystem_state(distributionDeploy_state):
                 raise ValueError("distribution archive must be outside the deploy root")
             # Pin the archive used by extraction; validate it before stopping
             # anything or deleting the existing installation.
+            if self._manifestRequired():
+                # Complete verification: every file against its recorded
+                # hash, no unlisted or missing members, and (for bytecode)
+                # an interpreter that can import it. A version-mismatched
+                # archive is rejected here, while the old install is intact.
+                manifest = distributionManifest.verify_zip(archive)
+                self.info("[stopLocalSystem] distribution verified: {}".format(
+                    distributionManifest.summarize(manifest)))
+            else:
+                self.warn("[stopLocalSystem] RequireDistributionManifest is false: "
+                          "archive contents are NOT verified against a manifest")
             with zipfile.ZipFile(archive) as bundle:
                 bad = bundle.testzip()
                 if bad:

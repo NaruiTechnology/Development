@@ -297,6 +297,42 @@ def _is_fatal_usb_error(exc: BaseException) -> bool:
     return type(exc).__name__ in _FATAL_EXC_NAMES
 
 
+def _raster_image_from_chunks(chunks, res, dwell, adc_latency):
+    """Assemble raster chunks into a (Y, X) image, one row per scan line.
+
+    The FPGA emits raster pixels row-major with X as the fast axis. That is the
+    order the frontend canvas, ``scan_display`` and upstream OBI's frame buffer
+    all assume, so the frame is a plain reshape. This function used to
+    transpose the frame on the assumption of a column-major stream, which made
+    the PNG disagree with the on-screen image (verified end to end against the
+    gateware: the stream is row-major).
+
+    The per-row latency correction below is unchanged: each row is rolled by
+    ``y * (adc_latency - 1) / dwell`` pixels. It now acts on true scan lines.
+    """
+    import numpy as np
+    total = res * res
+    flat = np.fromiter(
+        (v for chunk in chunks for v in chunk),
+        dtype=np.uint16,
+        count=total if sum(len(c) for c in chunks) >= total else -1,
+    )
+    # If the scan was truncated (paused mid-frame), pad with zeros
+    # so reshape works; downstream display tools tolerate zeros.
+    if flat.size < total:
+        flat = np.concatenate([flat, np.zeros(total - flat.size, dtype=np.uint16)])
+    else:
+        flat = flat[:total]
+    img = flat.reshape(res, res)
+    line_shift_per_row = ((adc_latency - 1) / dwell) if dwell else 0
+    if line_shift_per_row:
+        corrected = np.empty_like(img)
+        for y in range(res):
+            corrected[y] = np.roll(img[y], int(round(y * line_shift_per_row)))
+        img = corrected
+    return img
+
+
 def _percentile_clip_uint16(values, lo_pct: float = 1.0, hi_pct: float = 99.0):
     """Return (lo, hi) cut-off values for percentile-based display
     auto-leveling. Pure helper, used by the matplotlib figure renderer
@@ -1523,30 +1559,9 @@ class DeviceService:
                 fig.colorbar(im, ax=ax, label="ADC sample (8-bit)")
         elif last["kind"] == "raster":
             res = last["resolution"]
-            flat = np.fromiter(
-                (v for chunk in last["chunks"] for v in chunk),
-                dtype=np.uint16,
-                count=res * res if sum(len(c) for c in last["chunks"]) >= res * res else -1,
-            )
-            # If the scan was truncated (paused mid-frame), pad with zeros
-            # so reshape works; downstream display tools tolerate zeros.
-            if flat.size < res * res:
-                pad = np.zeros(res * res - flat.size, dtype=np.uint16)
-                flat = np.concatenate([flat, pad])
-            else:
-                flat = flat[: res * res]
-            # RasterScanCommand emits one complete Y sweep per X position,
-            # so the captured stream is column-major. Matplotlib expects the
-            # first dimension to be Y and the second to be X.
-            img = flat.reshape(res, res).T
             dwell = int(last.get("dwell") or self._raster_defaults.get("dwell") or 0)
             adc_latency = int(self._raster_defaults.get("adcLatency", 8))
-            line_shift_per_row = ((adc_latency - 1) / dwell) if dwell else 0
-            if line_shift_per_row:
-                corrected = np.empty_like(img)
-                for y in range(res):
-                    corrected[y] = np.roll(img[y], int(round(y * line_shift_per_row)))
-                img = corrected
+            img = _raster_image_from_chunks(last["chunks"], res, dwell, adc_latency)
 
             fig, ax = plt.subplots(figsize=(6, 6))
             if view == "texture":

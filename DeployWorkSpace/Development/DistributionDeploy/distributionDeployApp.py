@@ -5,7 +5,9 @@
 # Mirrors LoadFPGAImage/loadFPGAImageApp.py: load a JSON config, hand it to a
 # WorkThread, start the thread, and join.
 #
-# Run from the project root (so 'workstates' and 'workthreads' are importable):
+# May be launched from any directory; the default config is resolved next to
+# this file, and Python puts this file's directory on sys.path so 'workstates'
+# and 'workthreads' import:
 #   python3 distributionDeployApp.py
 #   python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json
 #-------------------------------------------------------------------------------
@@ -57,7 +59,8 @@ def main():
     parser.add_argument(
         '-j', action='store', dest='jsonfile',
         help="Config Json file path",
-        default=os.path.realpath(r'./Json/DistributionDeploy.json'))
+        default=os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                             'Json', 'DistributionDeploy.json'))
     parser.add_argument(
         '-r', action='store', dest='deployRoot',
         help="Override the deploy root directory on the target host",

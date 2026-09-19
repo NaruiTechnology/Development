@@ -162,6 +162,7 @@ export function VectorParameters({
                   {t("scan.dwell.dynamic", {
                     dwell: v.dwell,
                     period: formatNanoseconds(timing.samplePeriodNs),
+                    samples: timing.samplesPerPixel,
                     pixel: formatNanoseconds(timing.pixelDwellNs),
                     resolution: v.vector_resolution,
                     frame: formatDuration(timing.frameSeconds),

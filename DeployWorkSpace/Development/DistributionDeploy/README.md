@@ -42,8 +42,11 @@ The target environment is **Ubuntu 24.04 or newer**.
                                           └──────────────────────────┘
 ```
 
-Stage 1 — `Development/buidCompiledDist.py` — runs from the Operations root on
-the developer host and produces the application and versioned handoff archives.
+Stage 1 — `Development/buidCompiledDist.py` (it lives in `Development/`, not in
+this folder) — runs on the source host from any directory, because it locates its
+workspace from its own path. It produces the application archive and the versioned
+handoff archive, and writes a verified `dist_manifest.json` into the application
+archive (see *Distribution integrity* below).
 
 Stage 2 — `python3 distributionDeployApp.py` — drives the rest of the
 workflow on the deploy host. Building is a separate source-host step; the
@@ -95,7 +98,7 @@ Copy `glasgow_service/examples/vacuum-executor.env.example` to
 ```
 DistributionDeploy/
 ├── distributionDeployApp.py             # Entry point
-├── buidCompiledDist.py                  # Refactored builder (zip output)
+├── distributionManifest.py              # Manifest producer + verifier (shared with the builder)
 ├── README.md
 ├── Json/
 │   └── DistributionDeploy.json          # Workflow definition
@@ -118,6 +121,7 @@ DistributionDeploy/
     ├── launchIonbeamWebFrontend_state.py
     │
     │   # Custom-DoWork states (need branching or iteration):
+    ├── verifyDistribution_state.py      # Re-verifies the extracted tree against the manifest
     ├── installPipRequirements_state.py
     ├── installNodeJS_state.py
     ├── installToolchain_state.py
@@ -160,13 +164,50 @@ sequences that share state across stages (nvm install).
 
 ---
 
+## Distribution integrity
+
+Every archive carries `dist_manifest.json`: the SHA-256 and size of every
+packaged file, the SHA-256 of the exact source each `.pyc` was compiled from,
+the interpreter that produced the bytecode (version, cache tag, magic number),
+the git commit and dirty flag, and the list of members a working deployment
+cannot do without. `distributionManifest.py` both writes and verifies it, so the
+builder and the deployer cannot disagree.
+
+* The **builder** fails, with a nonzero exit, when a required member is absent,
+  and it re-verifies the archive it just wrote (a zip that fails is deleted).
+* **`stopLocalSystem`** verifies the archive *before it stops or deletes
+  anything*: every file against its hash, no missing or unlisted members, and,
+  for bytecode, that this host's Python can import it. A stale, partial,
+  tampered, or wrong-interpreter archive is rejected while the existing
+  installation is still intact.
+* **`verifyDistribution`** runs right after extraction and checks the deployed
+  tree against the same manifest, then logs the build identity
+  (`version= commit= built= mode= python=`), so a deploy log records exactly what
+  is now running.
+* Exactly one `dist_app*.zip` may match. No match, or several, aborts the
+  deploy; it never picks "the newest".
+
+Check an archive at any time without deploying it:
+
+```bash
+python3 Development/buidCompiledDist.py --verify path/to/dist_app.zip
+```
+
+`Deployment.RequireDistributionManifest` (default `true`) can be set to `false`
+to deploy a legacy archive that has no manifest; the workflow then logs a
+warning and skips both checks.
+
+Bytecode is specific to the Python that built it. Build on a host whose Python
+matches the deploy host's (Ubuntu 24.04 ships 3.12), or use `--raw`.
+
+---
+
 ## Running it
 
 ### Build only:
 
 ```bash
-cd /path/to/Operations
-python3 Development/buidCompiledDist.py
+python3 /path/to/Operations/Development/buidCompiledDist.py
 python3 Development/buidCompiledDist.py --raw
 ```
 

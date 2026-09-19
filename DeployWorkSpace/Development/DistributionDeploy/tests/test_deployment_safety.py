@@ -14,7 +14,9 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from archive_fixtures import write_manifested_archive
 from workstates.unzipDistribution_state import unzipDistribution_state
 from workthreads.DistributionDeployThread import DistributionDeployThread
 from workstates.createDeployFolder_state import createDeployFolder_state
@@ -32,9 +34,10 @@ class DeploymentGateTests(unittest.IsolatedAsyncioTestCase):
                 marker = deploy / "old.pyc"
                 marker.touch()
                 archive = root / "dist_app.zip"
-                with zipfile.ZipFile(archive, "w") as bundle:
-                    bundle.writestr("Development/Scripts/manage-local-system.sh", "#!/bin/bash\n# incoming manager\n")
-                    bundle.writestr("Development/Scripts/program-fpga-ram.py", "# helper\n")
+                write_manifested_archive(archive, {
+                    "Development/Scripts/manage-local-system.sh": b"#!/bin/bash\n# incoming manager\n",
+                    "Development/Scripts/program-fpga-ram.py": b"# helper\n",
+                })
                 config = SimpleNamespace(Actions=[{"unzipDistribution": {"actionData": {"zip": str(archive)}}}])
                 thread = SimpleNamespace(deployRoot=str(deploy), workRoot=str(root), GetStateConfig=lambda _: {})
                 state = stopLocalSystem_state(thread)

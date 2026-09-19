@@ -14,16 +14,16 @@ from .upstreamBusController import UpstreamBusController
 
 class BusController(wiring.Component):
     # FPGA-side interface
-    dac_stream: any = In(StreamSignature(SuperDACStream))
+    dac_stream: In(StreamSignature(SuperDACStream))
 
-    adc_stream: any = Out(StreamSignature(data.StructLayout({
+    adc_stream: Out(StreamSignature(data.StructLayout({
         "adc_code": 16,
         "last":     1,
     })))
 
     # IO-side interface
-    bus: any = Out(BusSignature)
-    inline_blank: any = Out(BlankRequest)
+    bus: Out(BusSignature)
+    inline_blank: Out(BlankRequest)
 
     def __init__(self, *, adc_half_period: int, adc_latency: int, transforms: Transforms = Transforms(False,False,False),
                  adc_settle_cycles=1, adc_latch_cycles=1,
