@@ -25,8 +25,17 @@ PID_GLASGOW      = 0x9db1
 
 # Must match the API level compiled into firmware.ihex (see firmware/glasgow.h, CUR_API_LEVEL).
 # The firmware.ihex shipped here is the one installed by Open-Beam-Interface (Glasgow rev 8b02130),
-# which is API level 4.
+# which is API level 4. This is the firmware that is loaded into a device that has none.
 CUR_API_LEVEL    = 0x04
+
+# API levels this host can use without reloading firmware. A device is only found if its level is
+# in this set, so being too strict makes a present, working device "not found": a level mismatch
+# sends it down the reload path, which claims every interface (skipped as busy if another process
+# holds one) and makes the device re-enumerate on the bus (which may not complete in a VM with USB
+# passthrough). Upstream's only change from API 4 to 5 is REQ_TEST_PULLS, a revC self-test request
+# that this host never issues, so a device already running API 5 firmware (for example one flashed
+# with the previous firmware.ihex) is used as it is.
+COMPATIBLE_API_LEVELS = frozenset({CUR_API_LEVEL, 0x05})
 
 REQ_EEPROM       = 0x10
 REQ_FPGA_CFG     = 0x11
@@ -138,15 +147,16 @@ class GlasgowDevice:
                 continue
             if api_level == 0:
                 logger.debug("found rev%s device without firmware", revision)
-            elif api_level != CUR_API_LEVEL:
+            elif api_level not in COMPATIBLE_API_LEVELS:
                 for config in handle.getDevice().iterConfigurations():
                     if config.getConfigurationValue() == handle.getConfiguration():
                         break
                 try:
                     for intf_num in range(config.getNumInterfaces()):
                         handle.claimInterface(intf_num)
-                    logger.info("found rev%s device with API level %d (supported API level is %d)",
-                                revision, api_level, CUR_API_LEVEL)
+                    logger.info("found rev%s device with API level %d (supported API levels are %s)",
+                                revision, api_level,
+                                ", ".join(str(level) for level in sorted(COMPATIBLE_API_LEVELS)))
                     serial = _safe_ascii_string_descriptor(
                         handle, device, device.getSerialNumberDescriptor(), "glasgow")
                     logger.warning("please run `glasgow flash` to update firmware of device %s",
@@ -156,11 +166,12 @@ class GlasgowDevice:
                                  revision, api_level)
                     handle.close()
                     continue
-            else: # api_level == CUR_API_LEVEL
+            else: # api_level in COMPATIBLE_API_LEVELS
                 serial = _safe_ascii_string_descriptor(
                     handle, device, device.getSerialNumberDescriptor(), "glasgow")
                 if serial not in devices_by_serial:
-                    logger.debug("found rev%s device with serial %s", revision, serial)
+                    logger.debug("found rev%s device with serial %s (API level %d)",
+                                 revision, serial, api_level)
                     devices_by_serial[serial] = (revision, device)
                 handle.close()
                 continue
