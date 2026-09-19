@@ -23,8 +23,10 @@ logger = logging.getLogger(__name__)
 VID_QIHW         = 0x20b7
 PID_GLASGOW      = 0x9db1
 
-# The scan path and deployed revC3 firmware use API level 5.
-CUR_API_LEVEL    = 0x05
+# Must match the API level compiled into firmware.ihex (see firmware/glasgow.h, CUR_API_LEVEL).
+# The firmware.ihex shipped here is the one installed by Open-Beam-Interface (Glasgow rev 8b02130),
+# which is API level 4.
+CUR_API_LEVEL    = 0x04
 
 REQ_EEPROM       = 0x10
 REQ_FPGA_CFG     = 0x11
@@ -90,8 +92,8 @@ def _safe_ascii_string_descriptor(handle, device, descriptor, fallback_label):
 class GlasgowDevice:
     @classmethod
     def firmware_file(cls):
-        # Keep the API-5 device code, but use the firmware installed in the
-        # Operations virtualenv exactly as the reference IobeamTech checkout.
+        # Prefer the firmware installed in the Operations virtualenv exactly as the
+        # reference IobeamTech checkout does; its API level must equal CUR_API_LEVEL above.
         installed = (Path(sys.prefix) / "lib" / "python3.13" /
                      "site-packages" / "glasgow" / "hardware" / "firmware.ihex")
         if installed.is_file():
