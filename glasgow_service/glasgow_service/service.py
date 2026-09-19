@@ -32,7 +32,6 @@ import array
 import csv
 import io
 import math
-import random
 import sys
 import time
 from pathlib import Path
@@ -491,114 +490,146 @@ def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
     return chunks
 
 
-def _configured_raster_simulation_chunks(
-        req: RasterRequest, simulation: dict) -> Optional[List[array.array]]:
-    """Build a hardware-free raster stream from the configured simulator.
+# ---------------------------------------------------------------------------
+# Hardware-free simulation
+# ---------------------------------------------------------------------------
+# With IsProduction=false and simulation enabled, a scan must not touch a
+# Glasgow at all. It must still *be* a scan: the same lock and abort handling as
+# a real one, and chunks delivered one at a time as the frame is "acquired",
+# because the frontend paints its live canvas from that chunk stream.
+#
+# Pixel values come from the same source that feeds the FPGA's FakeAdcSimulator
+# (GlasgowDataIO/IobeamControl/applet/imageSource.py), addressed by DAC code the
+# way the gateware does it, so a simulated frame equals what the fake ADC would
+# have returned.
 
-    Browser bitmap scans already use ``_bitmap_raster_chunks``. Full-frame
-    scans do not carry a bitmap, so they must use the configured pattern here
-    instead of falling through to the physical Glasgow connection.
+_SIM_DEFAULT_CHUNK_INTERVAL_S = 0.02
+
+
+class _SimulatedCommand:
+    """Stand-in for a scan macro: the service only needs its abort event."""
+
+    def __init__(self) -> None:
+        self.abort = asyncio.Event()
+
+
+def _simulation_chunk_interval(simulation: dict) -> float:
+    """Seconds between simulated chunks (``simulation.chunkIntervalMs``, default 20)."""
+    try:
+        ms = float((simulation or {}).get(
+            "chunkIntervalMs", _SIM_DEFAULT_CHUNK_INTERVAL_S * 1000))
+    except (TypeError, ValueError):
+        ms = _SIM_DEFAULT_CHUNK_INTERVAL_S * 1000
+    return max(0.0, ms) / 1000.0
+
+
+def _dac_codes(start: int, span: int, count: int):
+    """The DAC codes an FPGA counter visits: ``start + ((i * step) >> 8)``.
+
+    ``step`` is ``span / count`` in 8.8 fixed point, exactly as
+    ``DACCodeRange.from_resolution`` and ``_dac_range_for_bounds`` build it, but
+    without their 16-bit step limit, which hardware-free scans do not need.
     """
-    if not bool(simulation.get("enabled", False)):
-        return None
-    mode = str(simulation.get("mode", "image")).lower()
-    source = str(simulation.get("source", "pattern")).lower()
+    import numpy as np
+    step = max(1, int((max(1, span) / count) * 256))
+    codes = int(start) + ((np.arange(count, dtype=np.int64) * step) >> 8)
+    return np.minimum(codes, 0x3FFF)
+
+
+def _simulation_sampler(simulation: dict):
+    """Return ``f(x_codes, y_codes) -> uint16 samples`` for the simulation block."""
+    import numpy as np
+    mode = str((simulation or {}).get("mode", "image")).lower()
     if mode == "zeros":
-        sampler = lambda _x, _y: 0
-    elif mode == "loopback":
-        sampler = lambda x, _y: round(x * 0x3FFF)
-    elif mode != "image" or source not in {"pattern", "random"}:
-        return None
-    elif source == "random":
-        rng = random.Random(int(simulation.get("seed", 1)))
-        sampler = lambda _x, _y: rng.randrange(0x4000)
-    else:
-        pattern = str(simulation.get("patternKind", "ramp")).lower()
+        return lambda x, y: np.zeros(np.shape(x), dtype=np.uint16)
+    if mode == "loopback":
+        return lambda x, y: (np.asarray(x, dtype=np.int64) & 0x3FFF).astype(np.uint16)
+    if mode != "image":
+        raise ValueError(
+            f"unknown simulation mode {mode!r}; valid: image, zeros, loopback")
 
-        def sampler(x: float, y: float) -> int:
-            if pattern == "checker":
-                return 0x3FFF if (int(x * 8) + int(y * 8)) % 2 else 0
-            if pattern == "bars":
-                return round((int(x * 8) % 8) * (0x3FFF / 7))
-            if pattern == "bullseye":
-                radius = math.hypot(x - 0.5, y - 0.5)
-                return 0x3FFF if int(radius * 16) % 2 else 0
-            return round(x * 0x3FFF)
+    from GlasgowDataIO.IobeamControl.applet.imageSource import get_image_data
+    data, resolution = get_image_data(simulation)
+    side = int(resolution)
+    if side < 2 or side & (side - 1):
+        raise ValueError(f"simulation imageResolution must be a power of two, got {side}")
+    image = np.asarray(data, dtype=np.uint16).reshape(side, side)
+    shift = 14 - (side.bit_length() - 1)      # x_idx = dac_x_code >> shift
+    return lambda x, y: image[np.asarray(y) >> shift, np.asarray(x) >> shift]
 
+
+async def _paced_chunks(chunks, *, abort, interval: float):
+    """Hand out prebuilt chunks one at a time, yielding to the loop between them."""
+    for n, chunk in enumerate(chunks):
+        await asyncio.sleep(interval if n else 0)
+        if abort.is_set():
+            return
+        yield chunk
+
+
+async def _simulated_raster_chunks(req: RasterRequest, simulation: dict, *,
+                                   abort, interval: float):
+    """Raster stream for the configured simulation source: X fast, one row per line."""
+    import numpy as np
+    sampler = await asyncio.to_thread(_simulation_sampler, simulation)
+    bounds = _roi_bounds(req.roi)
+    x0, x1, y0, y1 = bounds if bounds is not None else (0, 0x3FFF, 0, 0x3FFF)
+    width = height = req.resolution
+    xs = _dac_codes(x0, x1 - x0 + 1, width)
+    ys = _dac_codes(y0, y1 - y0 + 1, height)
+    total = width * height
     pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
-    total = req.resolution * req.resolution
-    chunks: List[array.array] = []
-    for start in range(0, total, pixels_per_chunk):
-        samples = array.array("H")
-        for idx in range(start, min(start + pixels_per_chunk, total)):
-            x = idx % req.resolution
-            y = idx // req.resolution
-            samples.append(sampler(
-                0.0 if req.resolution <= 1 else x / (req.resolution - 1),
-                0.0 if req.resolution <= 1 else y / (req.resolution - 1),
-            ))
-        chunks.append(samples)
-    return chunks
+    for n, start in enumerate(range(0, total, pixels_per_chunk)):
+        await asyncio.sleep(interval if n else 0)
+        if abort.is_set():
+            return
+        idx = np.arange(start, min(start + pixels_per_chunk, total), dtype=np.int64)
+        samples = sampler(xs[idx % width], ys[idx // width]).astype(np.uint16)
+        yield array.array("H", samples.tobytes())
 
 
-def _configured_vector_simulation_chunks(
-        req: VectorRequest, simulation: dict) -> Optional[List[array.array]]:
-    """Build a hardware-free vector stream from the configured simulator."""
-    if not bool(simulation.get("enabled", False)):
-        return None
-    mode = str(simulation.get("mode", "image")).lower()
-    source = str(simulation.get("source", "pattern")).lower()
-    rng = random.Random(int(simulation.get("seed", 1)))
-    pattern = str(simulation.get("patternKind", "ramp")).lower()
-
-    def sample(x: int, y: int, blank: bool) -> int:
-        if blank:
-            return 0
-        x_norm = min(1.0, max(0.0, x / 0x3FFF))
-        y_norm = min(1.0, max(0.0, y / 0x3FFF))
-        if mode == "zeros":
-            return 0
-        if mode == "loopback":
-            return int(x)
-        if mode != "image" or source not in {"pattern", "random"}:
-            raise ValueError("configured vector simulation source requires FPGA hardware")
-        if source == "random":
-            return rng.randrange(0x4000)
-        if pattern == "checker":
-            return 0x3FFF if (int(x_norm * 8) + int(y_norm * 8)) % 2 else 0
-        if pattern == "bars":
-            return round((int(x_norm * 8) % 8) * (0x3FFF / 7))
-        if pattern == "bullseye":
-            radius = math.hypot(x_norm - 0.5, y_norm - 0.5)
-            return 0x3FFF if int(radius * 16) % 2 else 0
-        return round(x_norm * 0x3FFF)
-
-    if mode not in {"zeros", "loopback", "image"}:
-        return None
-    if mode == "image" and source not in {"pattern", "random"}:
-        return None
-
+async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
+                                   abort, interval: float):
+    """Vector stream for the configured simulation source: one sample per point."""
+    import numpy as np
+    sampler = await asyncio.to_thread(_simulation_sampler, simulation)
     if req.pattern is VectorPattern.custom and req.points is not None:
         iter_points = iter(req.points)
     else:
         iter_points = _roi_vector_iter(
-            req.vector_resolution, req.roi, dwell=req.dwell,
-            scan_path=req.scan_path)
+            req.vector_resolution, req.roi, dwell=req.dwell, scan_path=req.scan_path)
 
-    chunks: List[array.array] = []
-    samples = array.array("H")
+    limit = max(1, req.latency_bytes)
+    xs: List[int] = []
+    ys: List[int] = []
+    blanks: List[bool] = []
     total_dwell = 0
+    emitted = 0
+
+    def build() -> array.array:
+        x = np.clip(np.asarray(xs, dtype=np.int64), 0, 0x3FFF)
+        y = np.clip(np.asarray(ys, dtype=np.int64), 0, 0x3FFF)
+        samples = np.asarray(sampler(x, y), dtype=np.uint16).copy()
+        samples[np.asarray(blanks, dtype=bool)] = 0
+        return array.array("H", samples.tobytes())
+
     for point in iter_points:
         x, y, dwell, blank, _pass_index = _normalize_vector_point(point)
-        samples.append(sample(x, y, blank))
+        xs.append(x)
+        ys.append(y)
+        blanks.append(bool(blank))
         total_dwell += max(1, int(dwell))
-        if total_dwell >= max(1, req.latency_bytes) or len(samples) >= 65536:
-            chunks.append(samples)
-            samples = array.array("H")
-            total_dwell = 0
-    if samples:
-        chunks.append(samples)
-    return chunks
+        if total_dwell >= limit or len(xs) >= 65536:
+            await asyncio.sleep(interval if emitted else 0)
+            if abort.is_set():
+                return
+            yield build()
+            emitted += 1
+            xs, ys, blanks, total_dwell = [], [], [], 0
+    if xs:
+        await asyncio.sleep(interval if emitted else 0)
+        if not abort.is_set():
+            yield build()
 
 
 def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
@@ -790,6 +821,89 @@ class DeviceService:
         if self._abort_requested:
             command.abort.set()
 
+    # -------- hardware-free simulation --------------------------------------
+
+    def _hardware_free(self, req) -> bool:
+        """True when this scan must run without touching a Glasgow.
+
+        That is the case for IsProduction=false when the simulation is enabled
+        (``simulation.enabled``, on unless switched off) or the browser supplied
+        a ``simulation_bitmap``. IsProduction=true always uses the hardware.
+        """
+        if not _simulation_enabled(self._config):
+            return False
+        if getattr(req, "simulation_bitmap", None) is not None:
+            return True
+        return bool(self._simulation_defaults.get("enabled", True))
+
+    async def _simulated_chunks(self, kind: str, req, command, *, pace: bool):
+        """Stand-in for ``conn.transfer_multiple(cmd)`` that needs no device."""
+        interval = _simulation_chunk_interval(self._simulation_defaults) if pace else 0.0
+        build_bitmap = _bitmap_raster_chunks if kind == "raster" else _bitmap_vector_chunks
+        # Building a bitmap frame is pure Python; keep it off the event loop.
+        bitmap_chunks = await asyncio.to_thread(build_bitmap, req)
+        if bitmap_chunks is not None:
+            source = _paced_chunks(bitmap_chunks, abort=command.abort, interval=interval)
+        elif kind == "raster":
+            source = _simulated_raster_chunks(
+                req, self._simulation_defaults, abort=command.abort, interval=interval)
+        else:
+            source = _simulated_vector_chunks(
+                req, self._simulation_defaults, abort=command.abort, interval=interval)
+        async for chunk in source:
+            yield chunk
+
+    def _simulated_last_scan(self, kind: str, req, chunks: List, source: str) -> dict:
+        if kind == "raster":
+            return {
+                "kind": "raster",
+                "chunks": chunks,
+                "resolution": req.resolution,
+                "dwell": req.dwell,
+                "latency_bytes": req.latency_bytes,
+                "simulation_bitmap": req.simulation_bitmap,
+                "source": source,
+            }
+        return {
+            "kind": "vector",
+            "chunks": chunks,
+            "latency_bytes": req.latency_bytes,
+            "dwell": req.dwell,
+            "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
+            "scan_path": req.scan_path.value,
+            "points": req.points,
+            "vector_resolution": req.vector_resolution,
+            "roi": req.roi,
+            "simulation_bitmap": req.simulation_bitmap,
+            "source": source,
+        }
+
+    async def _simulated_scan(self, kind: str, req) -> AsyncIterator[bytes]:
+        """A streamed scan with no device: same lock, abort and bookkeeping as a real one."""
+        captured: List = []
+        async with self._acquire(kind):
+            command = _SimulatedCommand()
+            self._activate_command(command)
+            try:
+                async for chunk in self._simulated_chunks(kind, req, command, pace=True):
+                    self._status.chunks_in_flight += 1
+                    captured.append(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
+            finally:
+                self._deactivate_command(command)
+                # Like a real scan: keep whatever was captured, even if stopped.
+                self._set_last_scan(self._simulated_last_scan(kind, req, captured, "stream"))
+
+    async def _simulated_run_chunks(self, kind: str, req) -> List:
+        """All chunks of a blocking simulated scan (caller holds the device lock)."""
+        command = _SimulatedCommand()
+        self._activate_command(command)
+        try:
+            return [chunk async for chunk in
+                    self._simulated_chunks(kind, req, command, pace=False)]
+        finally:
+            self._deactivate_command(command)
+
     def _deactivate_command(self, command) -> None:
         if self._active_command is command:
             self._active_command = None
@@ -933,25 +1047,9 @@ class DeviceService:
     # -------- streaming (for WebSocket) -----------------------------------
 
     async def raster_scan(self, req: RasterRequest) -> AsyncIterator[bytes]:
-        simulated_chunks = (
-            (_bitmap_raster_chunks(req) or
-             _configured_raster_simulation_chunks(req, self._simulation_defaults))
-            if _simulation_enabled(self._config) else None
-        )
-        if simulated_chunks is not None:
-            async with self._acquire("raster"):
-                self._set_last_scan({
-                    "kind": "raster",
-                    "chunks": simulated_chunks,
-                    "resolution": req.resolution,
-                    "dwell": req.dwell,
-                    "latency_bytes": req.latency_bytes,
-                    "simulation_bitmap": req.simulation_bitmap,
-                    "source": "stream",
-                })
-                for chunk in simulated_chunks:
-                    self._status.chunks_in_flight += 1
-                    yield _sample_chunk_to_wire_bytes(chunk)
+        if self._hardware_free(req):
+            async for wire in self._simulated_scan("raster", req):
+                yield wire
             return
 
         # Buffer chunks for the /scan/last/* download endpoints. We hold
@@ -1002,29 +1100,9 @@ class DeviceService:
                     })
 
     async def vector_scan(self, req: VectorRequest) -> AsyncIterator[bytes]:
-        simulated_chunks = (
-            (_bitmap_vector_chunks(req) or
-             _configured_vector_simulation_chunks(req, self._simulation_defaults))
-            if _simulation_enabled(self._config) else None
-        )
-        if simulated_chunks is not None:
-            async with self._acquire("vector"):
-                self._set_last_scan({
-                    "kind": "vector",
-                    "chunks": simulated_chunks,
-                    "latency_bytes": req.latency_bytes,
-                    "dwell": req.dwell,
-                    "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
-                    "scan_path": req.scan_path.value,
-                    "points": req.points,
-                    "vector_resolution": req.vector_resolution,
-                    "roi": req.roi,
-                    "simulation_bitmap": req.simulation_bitmap,
-                    "source": "stream",
-                })
-                for chunk in simulated_chunks:
-                    self._status.chunks_in_flight += 1
-                    yield _sample_chunk_to_wire_bytes(chunk)
+        if self._hardware_free(req):
+            async for wire in self._simulated_scan("vector", req):
+                yield wire
             return
 
         captured: List = []
@@ -1082,13 +1160,9 @@ class DeviceService:
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
     async def run_raster(self, req: RasterRequest) -> ScanResult:
-        simulated_chunks = (
-            (_bitmap_raster_chunks(req) or
-             _configured_raster_simulation_chunks(req, self._simulation_defaults))
-            if _simulation_enabled(self._config) else None
-        )
-        if simulated_chunks is not None:
+        if self._hardware_free(req):
             async with self._acquire("raster"):
+                simulated_chunks = await self._simulated_run_chunks("raster", req)
                 pixels_per_chunk = math.ceil(req.latency_bytes / req.dwell)
                 total_pixels = req.resolution * req.resolution
                 expected_chunks = math.ceil(total_pixels / pixels_per_chunk)
@@ -1186,13 +1260,9 @@ class DeviceService:
         )
 
     async def run_vector(self, req: VectorRequest) -> ScanResult:
-        simulated_chunks = (
-            (_bitmap_vector_chunks(req) or
-             _configured_vector_simulation_chunks(req, self._simulation_defaults))
-            if _simulation_enabled(self._config) else None
-        )
-        if simulated_chunks is not None:
+        if self._hardware_free(req):
             async with self._acquire("vector"):
+                simulated_chunks = await self._simulated_run_chunks("vector", req)
                 self._set_last_scan({
                     "kind": "vector",
                     "chunks": simulated_chunks,
