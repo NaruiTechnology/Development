@@ -158,7 +158,7 @@
         },
         {
             "setupGlasgow": {
-                "skip": true,
+                "skip": false,
                 "transactionComplete": false,
                 "actionData": {
                     "commandFormat": "iterative",
