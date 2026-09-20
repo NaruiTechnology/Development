@@ -120,6 +120,8 @@ export function useAdcTestStream() {
       let max = 0;
       let latest = 0;
       for (let index = 0; index + 1 < bytes.length; index += 2) {
+        // ADC-only test samples are the raw 14-bit code, not the OBI-aligned
+        // (code << 2) form that scan data uses.
         const value = ((bytes[index] << 8) | bytes[index + 1]) & 0x3fff;
         sum += value;
         count += 1;

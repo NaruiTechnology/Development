@@ -84,7 +84,8 @@ def samples(frames):
 def expected_image_samples(xs, ys, seed=5, side=64):
     image = np.asarray(random_image(side, seed=seed), dtype=np.uint16).reshape(side, side)
     shift = 14 - (side.bit_length() - 1)
-    return np.array([image[y >> shift, x >> shift] for y in ys for x in xs], dtype=np.uint16)
+    raw = np.array([image[y >> shift, x >> shift] for y in ys for x in xs], dtype=np.uint16)
+    return (raw.astype(np.uint32) << 2).astype(np.uint16)
 
 
 def codes_of(rng):
@@ -248,7 +249,8 @@ def test_zeros_and_loopback_modes(mode):
     if mode == "zeros":
         assert not got.any()
     else:                                            # echoes the X DAC code
-        assert np.array_equal(got[0], codes_of(DACCodeRange.from_resolution(128)))
+        expected = np.asarray(codes_of(DACCodeRange.from_resolution(128)), dtype=np.uint32) << 2
+        assert np.array_equal(got[0], expected.astype(np.uint16))
         assert np.array_equal(got[0], got[5])
 
 

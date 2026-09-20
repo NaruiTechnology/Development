@@ -67,9 +67,9 @@ class PhysicalDataPathTest(unittest.TestCase):
         else:
             commands.extend(VectorPixelCommand(i, i, 3) for i in range(4))
         command_bytes = b"".join(bytes(cmd) for cmd in commands)
-        # Current application contract is raw/right-aligned, not OBI's << 2.
-        expected = (b"\xff\xff\x12\x34" + code.to_bytes(2, "big") * 4
-                    if mode == OutputMode.SixteenBit else b"\xff\xff\x12\x34" + bytes([code >> 8] * 4))
+        obi_code = code << 2
+        expected = (b"\xff\xff\x12\x34" + obi_code.to_bytes(2, "big") * 4
+                    if mode == OutputMode.SixteenBit else b"\xff\xff\x12\x34" + bytes([obi_code >> 8] * 4))
 
         async def bench(ctx):
             sent = 0

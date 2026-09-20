@@ -98,15 +98,6 @@ class CommandExecutor(wiring.Component):
         output_mode = Signal(2)
         command = Signal.like(self.cmd_stream.payload)
 
-        # ------------------------------------------------------------------ #
-        # FIX: Drive self.output_mode at module level so it is valid in ALL
-        # FSM states, including Write_FFFF and Write_cookie.
-        # Previously this was only driven inside the "Imaging" state, which
-        # meant output_mode defaulted to 0 (NoOutput) during the sync cookie
-        # write states — causing the serializer to silently discard the response.
-        # ------------------------------------------------------------------ #
-        m.d.comb += self.output_mode.eq(output_mode)
-
         with m.If(raster_mode):
             wiring.connect(m, self.raster_scanner.dac_stream, self.supersampler.dac_stream)
         with m.Else():
@@ -295,10 +286,15 @@ class CommandExecutor(wiring.Component):
         with m.FSM():
             with m.State("Imaging"):
                 m.d.comb += [
-                    self.img_stream.payload.eq(self.supersampler.adc_stream.payload.adc_code),
+                    # OBI exports the 14-bit ADC code left-aligned in the
+                    # 16-bit image stream.  Keep the two low bits zero so
+                    # the OBI GUI/scripts and this implementation share the
+                    # same full-scale value (0xfffc).
+                    self.img_stream.payload.eq(
+                        self.supersampler.adc_stream.payload.adc_code << 2),
                     self.img_stream.valid.eq(self.supersampler.adc_stream.valid),
                     self.supersampler.adc_stream.ready.eq(self.img_stream.ready),
-                    # output_mode assignment removed from here — now driven at module level above
+                    self.output_mode.eq(output_mode) # input to Serializer
                 ]
                 if self.out_only:
                     m.d.comb += retire_pixel.eq(submit_pixel)
@@ -309,7 +305,6 @@ class CommandExecutor(wiring.Component):
 
             with m.State("Write_FFFF"):
                 m.d.comb += [
-                    self.output_mode.eq(OutputMode.SixteenBit),
                     self.img_stream.payload.eq(0xffff),
                     self.img_stream.valid.eq(1),
                 ]
@@ -318,7 +313,6 @@ class CommandExecutor(wiring.Component):
 
             with m.State("Write_cookie"):
                 m.d.comb += [
-                    self.output_mode.eq(OutputMode.SixteenBit),
                     self.img_stream.payload.eq(command.payload.synchronize.cookie),
                     self.img_stream.valid.eq(1),
                 ]

@@ -166,8 +166,7 @@ class UpstreamEquivalenceTest(unittest.TestCase):
                             self.assertEqual(ctx.get(getattr(local, field)), ctx.get(getattr(ref, field)), (tick, field))
                         self.assertEqual(ctx.get(local.img_stream.valid), ctx.get(ref.img_stream.valid), tick)
                         if ctx.get(ref.img_stream.valid):
-                            # Documented host format adapter: raw14 vs OBI raw14<<2.
-                            self.assertEqual(ctx.get(local.img_stream.payload), ctx.get(ref.img_stream.payload) >> 2)
+                            self.assertEqual(ctx.get(local.img_stream.payload), ctx.get(ref.img_stream.payload))
                             received += bool(ctx.get(ref.img_stream.ready))
                         if ctx.get(lp.usb_stream.valid) and ctx.get(lp.usb_stream.ready):
                             sent += 1
@@ -243,7 +242,7 @@ class UpstreamEquivalenceTest(unittest.TestCase):
                     self.assertEqual(len(local_bytes), len(ref_bytes))
                     for offset in range(4, len(local_bytes), 2):
                         self.assertEqual(int.from_bytes(local_bytes[offset:offset+2], "big"),
-                                         int.from_bytes(ref_bytes[offset:offset+2], "big") >> 2)
+                                         int.from_bytes(ref_bytes[offset:offset+2], "big"))
 
                 sim.add_testbench(bench)
                 sim.run()

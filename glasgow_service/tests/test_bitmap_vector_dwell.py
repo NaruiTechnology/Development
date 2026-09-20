@@ -100,7 +100,7 @@ class BitmapVectorDwellTest(unittest.TestCase):
         chunks = _bitmap_vector_chunks(req)
         self.assertIsNotNone(chunks)
         self.assertEqual(sum(len(chunk) for chunk in chunks), 1)
-        self.assertEqual(chunks[0][0], 16320)
+        self.assertEqual(chunks[0][0], 255 * 256)   # OBI-aligned: (255 * 64) << 2
 
     def test_adaptive_feedback_forces_sixteen_bit_when_enabled(self):
         svc = DeviceService(str(CONFIG_PATH))

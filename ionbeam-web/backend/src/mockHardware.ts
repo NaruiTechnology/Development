@@ -348,7 +348,13 @@ function normalizeVectorPoint(
   ];
 }
 
-function writeSampleBE(buf: Buffer, sampleIndex: number, value: number): void {
+// Scan samples are OBI-aligned like the real gateware sends them: the 14-bit
+// code left-aligned in 16 bits (code << 2, full scale 0xfffc). The ADC-only
+// test mock (wsProxy.ts) stays raw 14-bit because the real ADC-only gateware is.
+const OBI_SAMPLE_SHIFT = 2;
+
+function writeSampleBE(buf: Buffer, sampleIndex: number, raw14: number): void {
+  const value = raw14 << OBI_SAMPLE_SHIFT;
   const o = sampleIndex * 2;
   buf[o] = (value >> 8) & 0xff;
   buf[o + 1] = value & 0xff;

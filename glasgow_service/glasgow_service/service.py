@@ -69,12 +69,28 @@ class DeviceNotReady(RuntimeError): ...
 
 
 # A disconnected revC3 ADC bus is pulled high and therefore reads as full
-# scale forever.  Depending on where the sample is observed, the same 14-bit
-# value can be represented as raw 0x3fff, left-aligned in the 16-bit stream as
-# 0xfffc, or reduced to 0xff in EightBit output mode.
-# Depending on output mode/alignment, full-scale may be right-aligned
-# (0x3fff/0x3f) or left-aligned (0xfffc/0xff).
+# scale forever. The normal SixteenBit stream is OBI-compatible left-aligned
+# raw14 (0xfffc); EightBit output is its high byte (0xff). Raw right-aligned
+# values remain accepted for diagnostics and older captures.
 _ADC_FULL_SCALE_VALUES = frozenset((0x3FFF, 0xFFFC, 0xFF, 0x3F))
+
+# The gateware sends every scan sample the way OBI does: the 14-bit ADC code
+# left-aligned in 16 bits (code << 2, full scale 0xFFFC). All four hardware-free
+# simulators must produce the same convention, or the same input would look
+# four times darker through one of them. Use these helpers, not an inline shift.
+_OBI_SAMPLE_SHIFT = 2
+
+
+def _obi_aligned_int(raw14: int) -> int:
+    """One raw 14-bit ADC code -> the 16-bit value the gateware sends."""
+    return int(raw14) << _OBI_SAMPLE_SHIFT
+
+
+def _obi_aligned_np(raw14):
+    """Raw 14-bit ADC codes (numpy) -> uint16 values as the gateware sends them."""
+    import numpy as np
+    return (np.asarray(raw14, dtype=np.uint32) << _OBI_SAMPLE_SHIFT).astype(np.uint16)
+
 _ADC_PRESENCE_MIN_SAMPLES = 256
 _ADC_DIAGNOSTIC_UNIQUE_LIMIT = 64
 
@@ -123,7 +139,7 @@ class _AdcPresenceMonitor:
                     return (
                         "ADC/subtarget presence check failed: the first "
                         f"{self.full_scale_samples} returned samples were all full "
-                        "scale (0x3fff/0xfffc/0xff). This establishes constant "
+                        "scale (0xfffc/0x3fff/0xff). This establishes constant "
                         "full-scale data, not its cause; check scan capture timing "
                         "and compare with an independent ADC capture."
                     )
@@ -485,7 +501,7 @@ def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
                 0.0 if req.resolution <= 1 else x / (req.resolution - 1),
                 0.0 if req.resolution <= 1 else y / (req.resolution - 1),
             )
-            samples.append(_bitmap_pixel_sample(px, bitmap_mode))
+            samples.append(_obi_aligned_int(_bitmap_pixel_sample(px, bitmap_mode)))
         chunks.append(samples)
     return chunks
 
@@ -537,7 +553,7 @@ def _dac_codes(start: int, span: int, count: int):
 
 
 def _simulation_sampler(simulation: dict):
-    """Return ``f(x_codes, y_codes) -> uint16 samples`` for the simulation block."""
+    """Return raw 14-bit ``f(x_codes, y_codes)`` samples for simulation."""
     import numpy as np
     mode = str((simulation or {}).get("mode", "image")).lower()
     if mode == "zeros":
@@ -584,7 +600,7 @@ async def _simulated_raster_chunks(req: RasterRequest, simulation: dict, *,
         if abort.is_set():
             return
         idx = np.arange(start, min(start + pixels_per_chunk, total), dtype=np.int64)
-        samples = sampler(xs[idx % width], ys[idx // width]).astype(np.uint16)
+        samples = _obi_aligned_np(sampler(xs[idx % width], ys[idx // width]))
         yield array.array("H", samples.tobytes())
 
 
@@ -609,7 +625,7 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
     def build() -> array.array:
         x = np.clip(np.asarray(xs, dtype=np.int64), 0, 0x3FFF)
         y = np.clip(np.asarray(ys, dtype=np.int64), 0, 0x3FFF)
-        samples = np.asarray(sampler(x, y), dtype=np.uint16).copy()
+        samples = _obi_aligned_np(sampler(x, y))
         samples[np.asarray(blanks, dtype=bool)] = 0
         return array.array("H", samples.tobytes())
 
@@ -671,7 +687,7 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
 
     for point in iter_points:
         x, y, dwell, blank, _pass_index = _normalize_vector_point(point)
-        samples.append(sample_value(x, y, blank))
+        samples.append(_obi_aligned_int(sample_value(x, y, blank)))
         total_dwell += max(1, int(dwell))
         if total_dwell >= max(1, req.latency_bytes) or len(samples) >= 65536:
             flush()
@@ -1597,10 +1613,12 @@ class DeviceService:
         simulation_bitmap = last.get("simulation_bitmap")
         if simulation_bitmap is not None and getattr(simulation_bitmap, "pixels", None):
             flat = np.asarray([_bitmap_pixel_value(px) for px in simulation_bitmap.pixels], dtype=np.uint16)
+            # 8-bit gray -> OBI-aligned 16-bit (gray * 64 raw 14-bit, << 2), because the
+            # display below takes the high byte with ``>> 8``.
             img = flat.reshape(
                 int(simulation_bitmap.height),
                 int(simulation_bitmap.width),
-            ) * 64
+            ) * 256
             fig, ax = plt.subplots(figsize=(6, 6))
             vmin, vmax = _percentile_clip_uint16(img)
             if view == "texture":
@@ -1809,20 +1827,32 @@ class DeviceService:
                             getattr(svc._config, "IsProduction", None))
                 return svc
             async def __aexit__(self, exc_type, exc, tb):
+                # A streaming client closing its WebSocket causes the async
+                # generator to be closed with GeneratorExit. Treat that (and
+                # task cancellation) as a normal, incomplete capture rather
+                # than a device fault; the generator's finally block still
+                # owns hardware cleanup.
+                cancelled = exc_type is not None and issubclass(
+                    exc_type, (GeneratorExit, asyncio.CancelledError))
                 if exc is None:
                     svc._status.scans_completed += 1
+                elif cancelled:
+                    svc._status.last_error = None
                 else:
                     svc._status.last_error = f"{type(exc).__name__}: {exc}"
                 # If we still have a connection, we're IDLE; otherwise reflect that.
                 if svc._conn is None:
-                    svc._status.state = DeviceState.ERROR if exc else DeviceState.IDLE
+                    svc._status.state = (
+                        DeviceState.ERROR if exc and not cancelled else DeviceState.IDLE)
                 else:
                     svc._status.state = DeviceState.IDLE
                 chunks = svc._status.chunks_in_flight
                 svc._status.chunks_in_flight = 0
                 svc._lock.release()
-                logger.info("scan end kind=%s ok=%s elapsed=%.3fs chunks=%d error=%s",
-                            kind, exc is None, time.monotonic() - self.started,
-                            chunks, None if exc is None else f"{type(exc).__name__}: {exc}")
+                logger.info("scan end kind=%s ok=%s cancelled=%s elapsed=%.3fs "
+                            "chunks=%d error=%s",
+                            kind, exc is None, cancelled, time.monotonic() - self.started,
+                            chunks, None if exc is None or cancelled
+                            else f"{type(exc).__name__}: {exc}")
                 return False
         return _Ctx()

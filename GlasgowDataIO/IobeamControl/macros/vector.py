@@ -34,8 +34,17 @@ from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
 
 
+# The gateware sends SixteenBit samples the way OBI does: the 14-bit ADC code
+# left-aligned in 16 bits (code << 2, full scale 0xFFFC). The adaptive-gray
+# thresholds below stay in 14-bit units (they are built from the UI's 8-bit gray
+# window), so received samples are converted back before they are compared.
+OBI_SAMPLE_SHIFT = 2
+
+
 @dataclass(frozen=True)
 class AdaptiveGrayFeedbackConfig:
+    """Thresholds are raw 14-bit ADC codes (0..0x3FFF), not OBI-aligned samples."""
+
     gray_min: int
     gray_max: int
     blank_when_inside: bool
@@ -231,7 +240,8 @@ class VectorScanCommand(BaseCommand):
     def _feedback_sample_value(samples) -> int:
         if samples is None or len(samples) == 0:
             return 0
-        return int(sum(int(sample) for sample in samples) / len(samples))
+        # SixteenBit samples arrive OBI-aligned (code << 2); the thresholds are 14-bit.
+        return int(sum(int(sample) for sample in samples) / len(samples)) >> OBI_SAMPLE_SHIFT
 
     def _feedback_blank_decision(self, samples) -> bool:
         cfg = self._adaptive_gray_feedback

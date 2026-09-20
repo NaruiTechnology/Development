@@ -38,6 +38,7 @@ import {
   streamStopping,
 } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
+import { decodeScanSamples } from "../lib/scanSamples";
 import {
   appendRaster,
   appendVectorSamples,
@@ -141,7 +142,7 @@ export function useScanStream() {
           const buf = ev.data as ArrayBuffer;
           queuePendingSamples(
             pendingRasterRef.current,
-            decodeSamples(buf, req.output_mode),
+            decodeScanSamples(buf, req.output_mode),
             buf.byteLength,
             flushRasterSamples,
           );
@@ -231,7 +232,7 @@ export function useScanStream() {
           const buf = ev.data as ArrayBuffer;
           queuePendingSamples(
             pendingVectorRef.current,
-            decodeSamples(buf, req.output_mode),
+            decodeScanSamples(buf, req.output_mode),
             buf.byteLength,
             flushVectorSamples,
           );
@@ -336,29 +337,6 @@ function stopExisting(ref: React.MutableRefObject<WebSocket | null>): void {
     ws.close(1000, "restart");
   }
   ref.current = null;
-}
-
-function decodeSamples(buf: ArrayBuffer, outputMode?: string): Uint16Array {
-  if (outputMode === "EightBit") {
-    const view = new Uint8Array(buf);
-    const out = new Uint16Array(view.length);
-    for (let i = 0; i < view.length; i++) {
-      out[i] = view[i] << 8;
-    }
-    return out;
-  }
-  return decodeUint16BE(buf);
-}
-
-/** Reconstruct uint16 samples from a [hi, lo, hi, lo, ...] byte stream. */
-function decodeUint16BE(buf: ArrayBuffer): Uint16Array {
-  const view = new Uint8Array(buf);
-  const n = view.length >> 1;
-  const out = new Uint16Array(n);
-  for (let i = 0, j = 0; i < n; i++, j += 2) {
-    out[i] = (view[j] << 8) | view[j + 1];
-  }
-  return out;
 }
 
 function handleRasterControlMessage(

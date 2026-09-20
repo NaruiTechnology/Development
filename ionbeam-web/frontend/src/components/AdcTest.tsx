@@ -183,8 +183,9 @@ function drawTimeline(
   state.bins.forEach((bin, index) => {
     if (!bin) return;
     const x = left + (index / state.bins.length) * plotWidth;
-    // Keep this conversion identical to the image canvas: raw 14-bit ADC
-    // values map linearly to the displayed 8-bit grayscale range.
+    // The ADC-only test streams the raw 14-bit code (0..0x3fff), unlike scan
+    // data, which the gateware sends OBI-aligned (code << 2, full scale 0xfffc).
+    // Raw 14-bit values map linearly to the displayed 8-bit grayscale range.
     const gray = Math.round((Math.min(0x3fff, bin.latest) * 255) / 0x3fff);
     const barHeight = (gray / 255) * plotHeight;
     context.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;

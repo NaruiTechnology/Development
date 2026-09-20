@@ -2,9 +2,9 @@
  * Renders the raster grayscale frame or vector ADC image onto a canvas.
  *
  * Raster and vector scans are stored as flat Uint16Array buffers and
- * rendered as fixed-range grayscale. The hardware returns 14-bit ADC
- * samples in a Uint16Array, so display scaling is performed against the
- * physical 0..0x3fff range rather than the per-frame range.
+ * rendered as fixed-range grayscale. The hardware returns OBI-compatible
+ * left-aligned 14-bit ADC samples in a Uint16Array, so display scaling is
+ * performed against 0..0xfffc rather than the per-frame range.
  *
  * For raster the buffer is populated row-major as the FPGA emits samples.
  * For vector default, samples arrive x-major/y-inner and are painted back
@@ -32,7 +32,7 @@ import { CanvasViewHelp } from "./CanvasViewHelp";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 
 const DAC_RANGE = 2048;
-const ADC_FULL_SCALE = 0x3fff;
+const ADC_FULL_SCALE = 0xfffc;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
 const ROI_ACTION_BLANK_COLOR = { r: 97, g: 0, b: 0 };
 const ROI_ACTION_HIGHLIGHT_COLOR = { r: 253, g: 224, b: 71 };
