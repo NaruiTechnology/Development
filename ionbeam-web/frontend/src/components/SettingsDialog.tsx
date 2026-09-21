@@ -57,6 +57,7 @@ import {
   type SettingsTab,
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
+import { CalibrationPanel } from "./calibration/CalibrationPanel";
 import { Icon } from "./Icon";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
@@ -304,7 +305,7 @@ function SettingsModalShell({
   // we light up the tabs.
   return (
     <div
-      className="modal settings-modal"
+      className={`modal settings-modal${activeTab === "admin" && activeSubTab === "calibration" ? " settings-modal--wide" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleIdRef.current}
@@ -1541,7 +1542,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "configuration" | "users" | "equipment" | "allowedHosts" | "ftp";
+type AdminSubTab = "configuration" | "users" | "equipment" | "calibration" | "allowedHosts" | "ftp";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1839,7 +1840,7 @@ function AdminTab({
   }, []);
 
   useEffect(() => {
-    if (mobilityMode && activeSubTab === "configuration") {
+    if (mobilityMode && (activeSubTab === "configuration" || activeSubTab === "calibration")) {
       onSelectSubTab("users");
     }
   }, [activeSubTab, mobilityMode, onSelectSubTab]);
@@ -2161,6 +2162,14 @@ function AdminTab({
         />
         {!mobilityMode && (
           <AdminSubTabButton
+            tab="calibration"
+            active={activeSubTab}
+            label={t("settings.admin.group.calibration")}
+            onSelect={onSelectSubTab}
+          />
+        )}
+        {!mobilityMode && (
+          <AdminSubTabButton
             tab="configuration"
             active={activeSubTab}
             label={t("settings.admin.group.configuration")}
@@ -2375,6 +2384,8 @@ function AdminTab({
           />
         </>
       )}
+
+      {activeSubTab === "calibration" && !mobilityMode && <CalibrationPanel />}
 
       {activeSubTab === "configuration" && (
         <div className="settings-footer__row">

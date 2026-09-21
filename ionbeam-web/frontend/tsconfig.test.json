@@ -10,6 +10,8 @@
     "src/lib/grayScaleUI.ts",
     "src/lib/roiDac.ts",
     "src/lib/roiGeometry.ts",
+    "src/lib/calibrationModel.ts",
+    "src/types/calibration.ts",
     "src/lib/dimensionCalibrationPersistence.ts",
     "src/lib/roiWorkflow.ts",
     "src/lib/scanError.ts",

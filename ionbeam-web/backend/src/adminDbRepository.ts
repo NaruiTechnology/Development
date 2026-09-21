@@ -237,9 +237,17 @@ async function queryStored(sqlTemplate: string, payload: unknown = null, fallbac
   const connection = await resolveCurrentAdminDbConnection();
   await ensureAdminSchema(connection);
   const payloadSql = jsonbLiteral(payload);
-  const sql = `SET search_path TO iobeam_admin, ionbeam_asset, public;\n${sqlTemplate.replace("$$payload$$", payloadSql)}`;
+  // A replacer *function*: String.replace() would otherwise expand "$&", "$'" ... sequences found inside the JSON payload.
+  const sql = `SET search_path TO iobeam_admin, ionbeam_asset, public;\n${sqlTemplate.replace("$$payload$$", () => payloadSql)}`;
   const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
   return out.trim() || fallback;
+}
+
+/** Run a whole SQL script (e.g. a seed file) against the admin database. */
+export async function runAdminSqlScript(sql: string): Promise<void> {
+  const connection = await resolveCurrentAdminDbConnection();
+  await ensureAdminSchema(connection);
+  await runPsql(["-q", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
 }
 
 export async function queryAdminStored(

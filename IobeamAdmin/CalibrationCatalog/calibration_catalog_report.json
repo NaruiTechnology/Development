@@ -1,0 +1,1253 @@
+{
+ "stats": {
+  "definitions": 2435,
+  "limits_derived": 17,
+  "by_type": {
+   "FIB": 501,
+   "SEM": 1934
+  },
+  "by_source": {
+   "('FIB', 'icmd.TXT')": 413,
+   "('SEM', 'md.TXT')": 1286,
+   "('SEM', 'UI1280reg.txt')": 648,
+   "('FIB', 'UI1280reg.txt')": 88
+  },
+  "by_class": {
+   "('FIB', 'identity')": 6,
+   "('FIB', 'config')": 31,
+   "('FIB', 'tuning')": 14,
+   "('FIB', 'calibration')": 178,
+   "('FIB', 'unused')": 10,
+   "('FIB', 'counter')": 7,
+   "('FIB', 'preset')": 255,
+   "('SEM', 'identity')": 15,
+   "('SEM', 'config')": 186,
+   "('SEM', 'unused')": 4,
+   "('SEM', 'calibration')": 473,
+   "('SEM', 'limit')": 59,
+   "('SEM', 'undocumented')": 725,
+   "('SEM', 'counter')": 22,
+   "('SEM', 'tuning')": 125,
+   "('SEM', 'preset')": 325
+  },
+  "by_access": {
+   "fixed": 185,
+   "service": 873,
+   "adjustable": 1325,
+   "auto": 52
+  },
+  "low_confidence": 107,
+  "unnamed": 762,
+  "excluded": {
+   "credential (packed ASCII password) - never stored": 4,
+   "SCSI debug flag": 1,
+   "logging / debug flags": 4,
+   "debug trace flags": 37,
+   "image-engine debug / legacy file setting": 2,
+   "install path": 2,
+   "binary blob (not importable)": 14,
+   "UI layout / file location / accounting / preference": 35,
+   "image-filter kernels (user preference)": 17,
+   "display preference": 41,
+   "UI layout": 4,
+   "user accounts / credentials / obfuscated keys (PII) - never stored": 38
+  },
+  "excluded_total": 199
+ },
+ "excluded": [
+  {
+   "source": "icmd.TXT",
+   "id": "int 21",
+   "name": "IONI_PSWD1",
+   "reason": "credential (packed ASCII password) - never stored"
+  },
+  {
+   "source": "icmd.TXT",
+   "id": "int 22",
+   "name": "IONI_PSWD2",
+   "reason": "credential (packed ASCII password) - never stored"
+  },
+  {
+   "source": "icmd.TXT",
+   "id": "int 23",
+   "name": "IONI_PSWD3",
+   "reason": "credential (packed ASCII password) - never stored"
+  },
+  {
+   "source": "icmd.TXT",
+   "id": "int 24",
+   "name": "IONI_PSWD4",
+   "reason": "credential (packed ASCII password) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "ASPIServer\\ReportExtraScsiData",
+   "name": "ReportExtraScsiData",
+   "reason": "SCSI debug flag"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\FEIGEM\\2.00\\APP\\Logging",
+   "name": "Logging",
+   "reason": "logging / debug flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\FEIGEM\\2.00\\APP\\Tracing",
+   "name": "Tracing",
+   "reason": "logging / debug flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\FEIGEM\\2.00\\APP\\3DCDInstalled",
+   "name": "3DCDInstalled",
+   "reason": "logging / debug flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\JoyStick\\TraceJoyStickCpp",
+   "name": "TraceJoyStickCpp",
+   "reason": "logging / debug flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceImageManager",
+   "name": "TraceImageManager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\ExternalServerManager",
+   "name": "ExternalServerManager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceBeamManager",
+   "name": "TraceBeamManager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceNavmanager",
+   "name": "TraceNavmanager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\NavmanagerZFWD",
+   "name": "NavmanagerZFWD",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceDetectorManager",
+   "name": "TraceDetectorManager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceWaferHandler",
+   "name": "TraceWaferHandler",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceMui",
+   "name": "TraceMui",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceBeamManagerIonBlank",
+   "name": "TraceBeamManagerIonBlank",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceAutoStig",
+   "name": "TraceAutoStig",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceMagnificationManager",
+   "name": "TraceMagnificationManager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceHTmanager",
+   "name": "TraceHTmanager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceVacHandler",
+   "name": "TraceVacHandler",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\EventCounterAndTimeStamp",
+   "name": "EventCounterAndTimeStamp",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "BehaviorServer\\Traces\\TraceEclipseThread",
+   "name": "TraceEclipseThread",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "ib32\\Traces\\Imachine",
+   "name": "Imachine",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "ImageEngine\\DSPBFiles",
+   "name": "DSPBFiles",
+   "reason": "image-engine debug / legacy file setting"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "ImageEngine\\Simulation",
+   "name": "Simulation",
+   "reason": "image-engine debug / legacy file setting"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "ImageEngine\\Traces\\TracePatternCpp",
+   "name": "TracePatternCpp",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "ImageEngine\\Traces\\EventCounterAndTimeStamp",
+   "name": "EventCounterAndTimeStamp",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "server32\\Traces\\Emachine",
+   "name": "Emachine",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "server32\\Traces\\TracePosExtx",
+   "name": "TracePosExtx",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "server32\\Traces\\TracePosStg4",
+   "name": "TracePosStg4",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\InstallDir",
+   "name": "InstallDir",
+   "reason": "install path"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Data",
+   "name": "Data",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\InstallFolder",
+   "name": "InstallFolder",
+   "reason": "install path"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\AcctLog\\Location",
+   "name": "Location",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\AcctLog\\LogFileName",
+   "name": "LogFileName",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\CNeutFiles\\Location",
+   "name": "Location",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\User 1",
+   "name": "User 1",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\User 2",
+   "name": "User 2",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\User 3",
+   "name": "User 3",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\User 4",
+   "name": "User 4",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Average",
+   "name": "Average",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Horizontal Edge",
+   "name": "Horizontal Edge",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\LP1 (laplace1)",
+   "name": "LP1 (laplace1)",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\LP2 (laplace2)",
+   "name": "LP2 (laplace2)",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Max 3X3",
+   "name": "Max 3X3",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Min 3X3",
+   "name": "Min 3X3",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Sharp 1",
+   "name": "Sharp 1",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Sharp 2",
+   "name": "Sharp 2",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Sobel 1",
+   "name": "Sobel 1",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Sobel 2",
+   "name": "Sobel 2",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Sobel 3",
+   "name": "Sobel 3",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Sobel 4",
+   "name": "Sobel 4",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Convolutions\\Vertical Edge",
+   "name": "Vertical Edge",
+   "reason": "image-filter kernels (user preference)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\ErrorHandling\\ErrorProcessing",
+   "name": "ErrorProcessing",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\EXE\\Location",
+   "name": "Location",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Graph Display\\legend horizontal",
+   "name": "legend horizontal",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Graph Display\\dots",
+   "name": "dots",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Graph Display\\log scale",
+   "name": "log scale",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Graph Display\\tracking cursor",
+   "name": "tracking cursor",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Graph Display\\grid",
+   "name": "grid",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Help\\Location",
+   "name": "Location",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Help\\File_prefix",
+   "name": "File_prefix",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Help\\FrameReader5",
+   "name": "FrameReader5",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Help\\Extension",
+   "name": "Extension",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Help\\CommandLine",
+   "name": "CommandLine",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Images\\Location",
+   "name": "Location",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Images\\MeasureInMicronsIfMagIsLessThan",
+   "name": "MeasureInMicronsIfMagIsLessThan",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Images\\LastUsedImageDirectory",
+   "name": "LastUsedImageDirectory",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Mouse\\FocusNeedsCtrlKeyDown",
+   "name": "FocusNeedsCtrlKeyDown",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Network CAD\\CADHostName",
+   "name": "CADHostName",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Network CAD\\PipeBufferSize",
+   "name": "PipeBufferSize",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Network CAD\\PipePacketSize",
+   "name": "PipePacketSize",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Network CAD\\PipeWaitTime",
+   "name": "PipeWaitTime",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Network CAD\\CADHostIPAddr",
+   "name": "CADHostIPAddr",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Network CAD\\Beep",
+   "name": "Beep",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Pattern\\Location",
+   "name": "Location",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Pattern\\EnablePatterningForSEMOnlySystem",
+   "name": "EnablePatterningForSEMOnlySystem",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\EucentricRotation",
+   "name": "EucentricRotation",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\CenterCross",
+   "name": "CenterCross",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Colors\\ColorCenterCross",
+   "name": "ColorCenterCross",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Colors\\ColorAlignmentPoint",
+   "name": "ColorAlignmentPoint",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Colors\\ColorCrossHairs",
+   "name": "ColorCrossHairs",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Colors\\ColorAlignmentLine",
+   "name": "ColorAlignmentLine",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Colors\\ColorGrid",
+   "name": "ColorGrid",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Colors\\ColorMeasurementPoint",
+   "name": "ColorMeasurementPoint",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Colors\\ColorMeasurementLine",
+   "name": "ColorMeasurementLine",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Colors\\ColorMeasurementText",
+   "name": "ColorMeasurementText",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\BeamVoltage",
+   "name": "BeamVoltage",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\SpotVoltage",
+   "name": "SpotVoltage",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\Detector",
+   "name": "Detector",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\scanProperties",
+   "name": "scanProperties",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\Filter",
+   "name": "Filter",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\Magnification",
+   "name": "Magnification",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\WorkingDistance",
+   "name": "WorkingDistance",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\HFW",
+   "name": "HFW",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\SampleTilt",
+   "name": "SampleTilt",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\ScanRotation",
+   "name": "ScanRotation",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\StagePosition",
+   "name": "StagePosition",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\DateTime",
+   "name": "DateTime",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\MicronBar",
+   "name": "MicronBar",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\UserLabel",
+   "name": "UserLabel",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryBeamVoltage",
+   "name": "FactoryBeamVoltage",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactorySpotVoltage",
+   "name": "FactorySpotVoltage",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryDetector",
+   "name": "FactoryDetector",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryscanProperties",
+   "name": "FactoryscanProperties",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryFilter",
+   "name": "FactoryFilter",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryMagnification",
+   "name": "FactoryMagnification",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryWorkingDistance",
+   "name": "FactoryWorkingDistance",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryHFW",
+   "name": "FactoryHFW",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactorySampleTilt",
+   "name": "FactorySampleTilt",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryScanRotation",
+   "name": "FactoryScanRotation",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryStagePosition",
+   "name": "FactoryStagePosition",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryDateTime",
+   "name": "FactoryDateTime",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryMicronBar",
+   "name": "FactoryMicronBar",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactoryUserLabel",
+   "name": "FactoryUserLabel",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\SpotCurrent",
+   "name": "SpotCurrent",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\FactorySpotCurrent",
+   "name": "FactorySpotCurrent",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Preferences\\Databar\\SaveDatabarOnImage",
+   "name": "SaveDatabarOnImage",
+   "reason": "display preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\ServiceTool\\X",
+   "name": "X",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\ServiceTool\\Y",
+   "name": "Y",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Stage\\StageProgressDlgPosLeft",
+   "name": "StageProgressDlgPosLeft",
+   "reason": "UI layout"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Stage\\StageProgressDlgPosRight",
+   "name": "StageProgressDlgPosRight",
+   "reason": "UI layout"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Stage\\StageProgressDlgPosTop",
+   "name": "StageProgressDlgPosTop",
+   "reason": "UI layout"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\Stage\\StageProgressDlgPosBottom",
+   "name": "StageProgressDlgPosBottom",
+   "reason": "UI layout"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\StageFiles\\Location",
+   "name": "Location",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\StageProgressDlgPos\\Left",
+   "name": "Left",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\StageProgressDlgPos\\Right",
+   "name": "Right",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\StageProgressDlgPos\\Top",
+   "name": "Top",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\StageProgressDlgPos\\Bottom",
+   "name": "Bottom",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\APP\\UI1280Test\\ResizeUI",
+   "name": "ResizeUI",
+   "reason": "UI layout / file location / accounting / preference"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\ImageUimanager",
+   "name": "ImageUimanager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\StageCtrl",
+   "name": "StageCtrl",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\mainfrm:mouse",
+   "name": "mainfrm:mouse",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\Electron",
+   "name": "Electron",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\IonAdjUs",
+   "name": "IonAdjUs",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\IonStart",
+   "name": "IonStart",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\waferhandlerpg",
+   "name": "waferhandlerpg",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\patevent",
+   "name": "patevent",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\icpcontext",
+   "name": "icpcontext",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\StageGrp.cpp",
+   "name": "StageGrp.cpp",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\admin:login",
+   "name": "admin:login",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\StgPrgrs",
+   "name": "StgPrgrs",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\StageUiManager",
+   "name": "StageUiManager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\ElectronStartup",
+   "name": "ElectronStartup",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\EBeamUIManager",
+   "name": "EBeamUIManager",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\Traces\\patlayer-srvuiint",
+   "name": "patlayer-srvuiint",
+   "reason": "debug trace flags"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ADMIN\\Login\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ADMIN\\Login\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ADMIN\\Login\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ADMIN\\Login\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\CHMA\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\CHMA\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\CHMA\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\CHMA\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\DL\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\DL\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\DL\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\DL\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\JWG\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\JWG\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\JWG\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\JWG\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\LH\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\LH\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\LH\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\LH\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\LHJ\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\LHJ\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\LHJ\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\LHJ\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\SERVICE\\Login\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\SERVICE\\Login\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\SERVICE\\Login\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\SUPER\\Login\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\SUPER\\Login\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\SUPER\\Login\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\SUPER\\Login\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\USER\\Login\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\USER\\Login\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\USER\\Login\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\USER\\Login\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\WQQ\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\WQQ\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\WQQ\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\WQQ\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\WSH\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\WSH\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\WSH\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\WSH\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ZLN\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ZLN\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ZLN\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ZLN\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ZRT\\LOGIN\\EmailAddress",
+   "name": "EmailAddress",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ZRT\\LOGIN\\FullName",
+   "name": "FullName",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ZRT\\LOGIN\\Description",
+   "name": "Description",
+   "reason": "user accounts / credentials / obfuscated keys (PII) - never stored"
+  },
+  {
+   "source": "UI1280reg.txt",
+   "id": "UI1280\\usr\\ZRT\\LOGIN\\KEY",
+   "name": "KEY",
+   "reason": "binary blob (not importable)"
+  }
+ ]
+}

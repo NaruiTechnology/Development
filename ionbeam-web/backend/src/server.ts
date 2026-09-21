@@ -58,6 +58,7 @@ import {
   readOperationTelemetrySummaryFromDb,
 } from "./operationDataRepository";
 import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
+import { registerCalibrationRoutes } from "./calibrationRoutes";
 import {
   ConfigError,
   type RestartResult,
@@ -421,6 +422,13 @@ app.get("/api/admin/iobeam/equipment", async (_req, res) => {
   } catch (err) {
     sendConfigError(res, err);
   }
+});
+
+// FIB | SEM calibration parameters (CONFIGURATION > Admin > Calibration). See calibrationRoutes.ts.
+registerCalibrationRoutes(app, {
+  currentActor: (req) => currentAdminActor(req),
+  sendError: sendConfigError,
+  roles: { superUser: ROLE_SUPER_USER, developer: ROLE_DEVELOPER, admin: ROLE_ADMIN },
 });
 
 app.get("/api/admin/iobeam/hosts", async (_req, res: express.Response<AllowedHostsResponse>) => {

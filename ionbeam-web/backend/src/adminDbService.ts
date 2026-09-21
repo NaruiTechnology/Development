@@ -113,8 +113,16 @@ export function pgConnectionFromOperationConfig(
   };
 }
 
+/**
+ * Idempotent SQL that is loaded after 001_schema.sql (and the optional seed) on every admin database setup.
+ * 003 adds the FIB / SEM calibration-parameter tables and stored functions (see calibrationRepository.ts).
+ * The 2 MB parameter catalog itself is 004_calibration_seed.sql, loaded by `npm run db:seed:calibration`
+ * or automatically the first time the calibration API is used (ensureCalibrationCatalog).
+ */
+export const ADMIN_EXTRA_SCHEMA_FILES = ["003_calibration_schema.sql"];
+
 export async function applyAdminDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {
-  return applyDatabaseSetup(options, ["public", "iobeam_admin", "ionbeam_asset"]);
+  return applyDatabaseSetup(options, ["public", "iobeam_admin", "ionbeam_asset"], ADMIN_EXTRA_SCHEMA_FILES);
 }
 
 export async function applyOperationDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {
@@ -124,6 +132,7 @@ export async function applyOperationDatabaseSetup(options: AdminDatabaseSetupOpt
 async function applyDatabaseSetup(
   options: AdminDatabaseSetupOptions,
   grantSchemas: string[],
+  extraSchemaFiles: string[] = [],
 ): Promise<AdminDatabaseSetupResult> {
   const connection = options.connection;
   const steps: AdminDatabaseSetupResult["steps"] = [];
@@ -140,11 +149,15 @@ async function applyDatabaseSetup(
   if (options.loadSeed !== false) {
     sqlFiles.push(readSql(seedFile));
   }
+  // After the seed on purpose: extra files change search_path, and 002 relies on the one 001 set.
+  for (const extra of extraSchemaFiles) {
+    sqlFiles.push(readSql(resolveSqlFile(extra)));
+  }
   await runPsql(["-v", "ON_ERROR_STOP=1"], connection.database, sqlFiles.join("\n"), connection);
   steps.push({
     name: "load-schema",
     ok: true,
-    detail: `loaded ${path.basename(schemaFile)}${options.loadSeed === false ? "" : ` and ${path.basename(seedFile)}`}`,
+    detail: `loaded ${[path.basename(schemaFile), ...(options.loadSeed === false ? [] : [path.basename(seedFile)]), ...extraSchemaFiles].join(", ")}`,
   });
 
   if (options.ensureRole !== false) {
@@ -302,7 +315,7 @@ function parsePostgresConnectionString(value: string): Partial<PgConnection> {
   };
 }
 
-function resolveSqlFile(configuredPath: string): string {
+export function resolveSqlFile(configuredPath: string): string {
   if (path.isAbsolute(configuredPath) && fs.existsSync(configuredPath)) return configuredPath;
   const developmentRoot = path.resolve(__dirname, "..", "..", "..");
   const candidates = [
