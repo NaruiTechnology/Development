@@ -106,9 +106,15 @@ const slice = createSlice({
 
     /* ---------- raster -------------------------------------------------- */
 
-    resetRaster(state, a: PayloadAction<{ resolution: number }>) {
+    resetRaster(state, a: PayloadAction<{ resolution: number; preserveFrame?: boolean }>) {
+      const keepExistingFrame =
+        a.payload.preserveFrame === true &&
+        state.resolution === a.payload.resolution &&
+        state.frame.length === a.payload.resolution * a.payload.resolution;
       state.resolution = a.payload.resolution;
-      state.frame = new Uint16Array(a.payload.resolution * a.payload.resolution);
+      if (!keepExistingFrame) {
+        state.frame = new Uint16Array(a.payload.resolution * a.payload.resolution);
+      }
       state.cursor = 0;
       state.revision++;
     },

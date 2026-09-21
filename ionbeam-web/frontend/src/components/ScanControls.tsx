@@ -39,7 +39,7 @@ import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
-import type { VectorRequest } from "../types/api";
+import type { RasterRequest, VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 import type { ROIState } from "../store/scanSlice";
 import {
@@ -128,11 +128,14 @@ export function ScanControls({
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
   const actionLoopCompletionPendingRef = useRef(false);
+  const infiniteRasterRequestRef = useRef<RasterRequest | null>(null);
+  const infiniteRasterActiveRef = useRef(false);
   // Repeated ROI action scans need a longer settle window between runs
   // so blank/spot updates are fully reflected before the next loop starts.
   const actionLoopGapMs = 750;
   const [actionLoopIteration, setActionLoopIteration] = useState(0);
   const [actionLoopActive, setActionLoopActive] = useState(false);
+  const [infiniteRasterActive, setInfiniteRasterActive] = useState(false);
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
   const [equipmentId, setEquipmentId] = useState("");
   const isProduction = defaults?.is_production !== false;
@@ -243,7 +246,7 @@ export function ScanControls({
   const busy = streaming || closing;
   // The panel is disabled while a scan runs to prevent parameter changes, but
   // Stop must remain available so an active scan can always be cancelled.
-  const stopAvailable = streaming || closing || actionLoopActive;
+  const stopAvailable = streaming || closing || actionLoopActive || infiniteRasterActive;
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
   const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
 
@@ -264,6 +267,24 @@ export function ScanControls({
     setActionLoopIteration((current) => current === 0 ? current : 0);
     setActionLoopActive((current) => current ? false : current);
   }, [clearActionLoopTimer]);
+
+  const clearInfiniteRasterState = useCallback(() => {
+    infiniteRasterRequestRef.current = null;
+    infiniteRasterActiveRef.current = false;
+    setInfiniteRasterActive((current) => current ? false : current);
+  }, []);
+
+  // OBI's live scanner runs `capture_frame()` in a `while not abort` loop.
+  // This UI has one WebSocket per frame, so starting the next frame from the
+  // completed transition is the equivalent lifecycle: Stop closes the active
+  // socket, which the service maps to RasterScanCommand.abort.
+  const startInfiniteRasterRun = useCallback((req: RasterRequest, preserveFrame = false) => {
+    onScanRunStart?.(ScanType.RASTER);
+    stream.startRaster(
+      { ...req, preview: req.preview ?? preview },
+      { preserveFrame },
+    );
+  }, [onScanRunStart, preview, stream]);
 
   const startRepeatActionRun = useCallback(
     (entry: { req: VectorRequest; preview: boolean; scanType: ScanType }) => {
@@ -422,9 +443,36 @@ export function ScanControls({
     }
   }
 
+  async function onInfinite() {
+    if (kind !== "raster" || disabled || infiniteRasterActiveRef.current) return;
+    const allowed = await refreshScanPrivilege();
+    if (!allowed) return;
+    try {
+      const req = await rasterRequestWithBitmapSelection(
+        { ...raster, roi: null },
+        withoutPartialROISelection(roiState),
+        {
+          isProduction,
+          allowBitmapSimulation,
+          grayScaleSelection: scanGrayScaleSelection,
+          grayScaleSkipped: scanGrayScaleSkipped,
+        }
+      );
+      const infiniteReq = { ...req, preview };
+      infiniteRasterRequestRef.current = infiniteReq;
+      infiniteRasterActiveRef.current = true;
+      setInfiniteRasterActive(true);
+      startInfiniteRasterRun(infiniteReq);
+    } catch (e: any) {
+      clearInfiniteRasterState();
+      dispatch(streamErrored(e?.message ?? String(e)));
+    }
+  }
+
   function onStop() {
     if (roiEbeamDisabled || !stopAvailable) return;
     clearActionLoopState();
+    clearInfiniteRasterState();
     stream.stop();
     if (roiAction && !roiActionGrayFilterActive) dispatch(resetVector());
     else if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
@@ -493,6 +541,7 @@ export function ScanControls({
     closing ||
     (roiAction && actionLoopActive);
   const stopDisabled = roiEbeamDisabled || !stopAvailable;
+  const infiniteDisabled = kind !== "raster" || runDisabled || infiniteRasterActive;
   const repeatDisplayCount = repeatCountdownDisplay(
     repeat,
     actionLoopIteration,
@@ -586,20 +635,31 @@ export function ScanControls({
       }
       clearActionLoopState();
     }
+    if (completedNow && infiniteRasterActiveRef.current) {
+      const req = infiniteRasterRequestRef.current;
+      if (req) {
+        clearBitmapSelectionCache();
+        startInfiniteRasterRun(req, true);
+        return;
+      }
+    }
     if (phase === "error" || phase === "idle") {
       clearActionLoopState();
+      clearInfiniteRasterState();
     }
-  }, [clearActionLoopState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, scheduleNextActionRun]);
+  }, [clearActionLoopState, clearInfiniteRasterState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, scheduleNextActionRun, startInfiniteRasterRun]);
 
   useEffect(() => {
     clearActionLoopState();
-  }, [clearActionLoopState, roiAction, roiSelectionKey, kind]);
+    clearInfiniteRasterState();
+  }, [clearActionLoopState, clearInfiniteRasterState, roiAction, roiSelectionKey, kind]);
 
   useEffect(() => {
     return () => {
       clearActionLoopState();
+      clearInfiniteRasterState();
     };
-  }, [clearActionLoopState]);
+  }, [clearActionLoopState, clearInfiniteRasterState]);
 
   if (roiAction) {
     const showRoiGrayControls = roiActionGrayFilterActive;
@@ -752,28 +812,43 @@ export function ScanControls({
           <span className="scan-busy__spinner" />
         </span>
       )}
-      <button
-        type="button"
-        className="btn btn--primary"
-        disabled={runDisabled || kind === "roi"}
-        onClick={onRun}
-        title={t("scan.run.title.start")}
-      >
-        <Icon name="play" tone="success" />
-        {t("scan.run")}
-      </button>
-      <button
-        type="button"
-        className="btn btn--danger"
-        disabled={stopDisabled}
-        onClick={onStop}
-        title={t("scan.stop.title")}
-      >
-        <Icon name="square" tone="danger" />
-        {t("scan.stop")}
-      </button>
+      <div className={`scan-primary-controls${kind === "raster" ? " scan-primary-controls--raster" : ""}`}>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={runDisabled || kind === "roi"}
+          onClick={onRun}
+          title={t("scan.run.title.start")}
+        >
+          <Icon name="play" tone="success" />
+          {t("scan.run")}
+        </button>
+        <button
+          type="button"
+          className="btn btn--danger"
+          disabled={stopDisabled}
+          onClick={onStop}
+          title={t("scan.stop.title")}
+        >
+          <Icon name="square" tone="danger" />
+          {t("scan.stop")}
+        </button>
+        {kind === "raster" && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={infiniteDisabled}
+            onClick={onInfinite}
+            title={t("scan.infinite.title")}
+            aria-pressed={infiniteRasterActive}
+          >
+            <Icon name="infinity" tone="accent" />
+            {t("scan.infinite")}
+          </button>
+        )}
+      </div>
 
-      <span className="spacer" />
+      {kind !== "raster" && <span className="spacer" />}
 
       <span className="scan-action-with-help">
         <button

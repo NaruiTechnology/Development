@@ -1410,6 +1410,8 @@ body {
 }
 
 .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.scan-primary-controls { display: inline-flex; gap: 6px; flex-wrap: nowrap; }
+.scan-primary-controls--raster { flex: 1 0 100%; }
 .roi-action-controls { margin-top: 12px; }
 .scan-action-with-help { display: inline-flex; align-items: center; gap: 4px; }
 

@@ -119,12 +119,15 @@ export function useScanStream() {
   }, [dispatch]);
 
   const startRaster = useCallback(
-    (req: RasterRequest) => {
+    (req: RasterRequest, options?: { preserveFrame?: boolean }) => {
       stopExisting(wsRef);
       discardPendingSamples(pendingRasterRef.current);
       activeScanRef.current = { kind: "raster", req };
       autoReconnectAttemptedRef.current = false;
-      dispatch(resetRaster({ resolution: req.resolution }));
+      dispatch(resetRaster({
+        resolution: req.resolution,
+        preserveFrame: options?.preserveFrame,
+      }));
       dispatch(streamStarted());
       const ws = openWs("/ws/scan/raster/stream");
       wsRef.current = ws;

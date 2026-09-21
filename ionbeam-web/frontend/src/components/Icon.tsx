@@ -26,6 +26,7 @@ type IconName =
   | "waveform"
   | "highlightTool"
   | "image"
+  | "infinity"
   | "home"
   | "layers"
   | "link"
@@ -179,6 +180,9 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
       <circle cx="9" cy="9" r="2" />
       <path d="M21 15l-5-5L5 21" />
     </>
+  ),
+  infinity: (
+    <path d="M8.25 7.5c-2.9 0-5.25 2.02-5.25 4.5s2.35 4.5 5.25 4.5c3.75 0 5.75-9 9.5-9 2.9 0 5.25 2.02 5.25 4.5s-2.35 4.5-5.25 4.5c-3.75 0-5.75-9-9.5-9z" />
   ),
   home: (
     <>
