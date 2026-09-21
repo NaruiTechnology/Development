@@ -1570,7 +1570,15 @@ body {
 .scan-equipment-field {
   display: grid;
   gap: 4px;
-  min-width: 280px;
+  min-width: 0;
+}
+
+.scan-equipment-selectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 .scan-equipment-field span {

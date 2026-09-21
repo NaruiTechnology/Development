@@ -59,16 +59,4 @@ BEGIN
 END;
 $$;
 
-INSERT INTO ionbeam_asset.equipment (name, model, serial_number, site, description)
-VALUES (
-    'FEI Helios NanoLab 600i DualBeam',
-    '',
-    'DB123456z',
-    'Taixin',
-    'DualBeam SEM/FIB, containing both a focused Ga+ ion beam ("Tomahawk") and a high resolution field emission scanning electron ("Elstar") column.'
-)
-ON CONFLICT (serial_number) DO UPDATE
-   SET name = EXCLUDED.name,
-       model = EXCLUDED.model,
-       site = EXCLUDED.site,
-       description = EXCLUDED.description;
+SELECT fn_seed_equipment_registry();

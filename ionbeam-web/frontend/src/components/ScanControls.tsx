@@ -39,6 +39,7 @@ import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { SITE_OPTIONS } from "../lib/sites";
 import type { RasterRequest, VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 import type { ROIState } from "../store/scanSlice";
@@ -137,7 +138,12 @@ export function ScanControls({
   const [actionLoopActive, setActionLoopActive] = useState(false);
   const [infiniteRasterActive, setInfiniteRasterActive] = useState(false);
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
+  const [region, setRegion] = useState("");
   const [equipmentId, setEquipmentId] = useState("");
+  const availableRegions = SITE_OPTIONS.filter((option) =>
+    equipment.some((row) => row.site === option.value),
+  );
+  const regionEquipment = equipment.filter((row) => row.site === region);
   const isProduction = defaults?.is_production !== false;
   const vectorPixelFallbackBlank = (() => {
     const vectorParams = defaults?.vector_params;
@@ -562,6 +568,7 @@ export function ScanControls({
         const stored = selectedEquipmentId();
         const selected = rows.find((row) => row.id === stored) ?? rows[0];
         if (selected?.id) {
+          setRegion(selected.site);
           setEquipmentId(String(selected.id));
           setSelectedEquipmentId(selected.id);
         }
@@ -574,6 +581,17 @@ export function ScanControls({
       cancelled = true;
     };
   }, []);
+
+  function onRegionChange(value: string) {
+    setRegion(value);
+    const selected = equipment.find((row) => row.site === value);
+    if (selected?.id) {
+      setEquipmentId(String(selected.id));
+      setSelectedEquipmentId(selected.id);
+    } else {
+      setEquipmentId("");
+    }
+  }
 
   function onEquipmentChange(value: string) {
     setEquipmentId(value);
@@ -665,26 +683,48 @@ export function ScanControls({
     const showRoiGrayControls = roiActionGrayFilterActive;
     return (
       <div className="button-row">
-        <label className="scan-equipment-field">
-          <span>{t("scan.equipment.label")}</span>
-          <select
-            className="select"
-            value={equipmentId}
-            disabled={controlsDisabled || equipment.length === 0}
-            onChange={(event) => onEquipmentChange(event.target.value)}
-            title={t("scan.equipment.title")}
-          >
-            {equipment.length === 0 ? (
-              <option value="">{t("scan.equipment.empty")}</option>
-            ) : (
-              equipment.map((row) => (
-                <option key={row.id ?? row.serial_number} value={String(row.id)}>
-                  {row.name}
-                </option>
-            ))
-          )}
-          </select>
-        </label>
+        <div className="scan-equipment-selectors">
+          <label className="scan-equipment-field">
+            <span>{t("scan.region.label")}</span>
+            <select
+              className="select"
+              value={region}
+              disabled={controlsDisabled || availableRegions.length === 0}
+              onChange={(event) => onRegionChange(event.target.value)}
+              title={t("scan.region.title")}
+            >
+              {availableRegions.length === 0 ? (
+                <option value="">{t("scan.region.empty")}</option>
+              ) : (
+                availableRegions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {t(option.labelKey)}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          <label className="scan-equipment-field">
+            <span>{t("scan.equipment.label")}</span>
+            <select
+              className="select"
+              value={equipmentId}
+              disabled={controlsDisabled || regionEquipment.length === 0}
+              onChange={(event) => onEquipmentChange(event.target.value)}
+              title={t("scan.equipment.title")}
+            >
+              {regionEquipment.length === 0 ? (
+                <option value="">{t("scan.equipment.empty")}</option>
+              ) : (
+                regionEquipment.map((row) => (
+                  <option key={row.id ?? row.serial_number} value={String(row.id)}>
+                    {row.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+        </div>
         {showRoiGrayControls && (
           <div className="scan-loop-controls__roi-wedges">
             <ROIGrayActionVectorWedges
@@ -768,26 +808,48 @@ export function ScanControls({
 
   return (
     <div className="button-row">
-      <label className="scan-equipment-field">
-        <span>{t("scan.equipment.label")}</span>
-        <select
-          className="select"
-          value={equipmentId}
-          disabled={controlsDisabled || equipment.length === 0}
-          onChange={(event) => onEquipmentChange(event.target.value)}
-          title={t("scan.equipment.title")}
-        >
-          {equipment.length === 0 ? (
-            <option value="">{t("scan.equipment.empty")}</option>
-          ) : (
-            equipment.map((row) => (
-              <option key={row.id ?? row.serial_number} value={String(row.id)}>
-                {row.name}
-              </option>
-            ))
-          )}
-        </select>
-      </label>
+      <div className="scan-equipment-selectors">
+        <label className="scan-equipment-field">
+          <span>{t("scan.region.label")}</span>
+          <select
+            className="select"
+            value={region}
+            disabled={controlsDisabled || availableRegions.length === 0}
+            onChange={(event) => onRegionChange(event.target.value)}
+            title={t("scan.region.title")}
+          >
+            {availableRegions.length === 0 ? (
+              <option value="">{t("scan.region.empty")}</option>
+            ) : (
+              availableRegions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {t(option.labelKey)}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+        <label className="scan-equipment-field">
+          <span>{t("scan.equipment.label")}</span>
+          <select
+            className="select"
+            value={equipmentId}
+            disabled={controlsDisabled || regionEquipment.length === 0}
+            onChange={(event) => onEquipmentChange(event.target.value)}
+            title={t("scan.equipment.title")}
+          >
+            {regionEquipment.length === 0 ? (
+              <option value="">{t("scan.equipment.empty")}</option>
+            ) : (
+              regionEquipment.map((row) => (
+                <option key={row.id ?? row.serial_number} value={String(row.id)}>
+                  {row.name}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
           <label
             className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
             title={t("scan.preview.title")}

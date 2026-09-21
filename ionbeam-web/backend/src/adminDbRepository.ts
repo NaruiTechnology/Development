@@ -242,6 +242,14 @@ async function queryStored(sqlTemplate: string, payload: unknown = null, fallbac
   return out.trim() || fallback;
 }
 
+export async function queryAdminStored(
+  sqlTemplate: string,
+  payload: unknown = null,
+  fallback = "",
+): Promise<string> {
+  return queryStored(sqlTemplate, payload, fallback);
+}
+
 function parseFirstUser(raw: string): AdminUser | null {
   const rows = parseArray(raw);
   return rows[0] ? (rows[0] as AdminUser) : null;

@@ -36,12 +36,19 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                            if frontendDir else os.path.join(webRoot, "frontend"))
             createEnv = bool(actionData.get("createBackendEnv", True))
             install = bool(actionData.get("npmInstall", True))
+            build = bool(actionData.get("npmBuild", True))
             useNvm = bool(actionData.get("useNvm", True))
 
             # Optional extra args appended to `npm install` per target.
             # e.g. "--legacy-peer-deps", "--force", "--no-audit --no-fund".
             backendInstallArgs = str(actionData.get("backendInstallArgs", "") or "").strip()
             frontendInstallArgs = str(actionData.get("frontendInstallArgs", "") or "").strip()
+            backendBuildCommand = str(
+                actionData.get("backendBuildCommand", "npm run build") or ""
+            ).strip()
+            frontendBuildCommand = str(
+                actionData.get("frontendBuildCommand", "npm run build") or ""
+            ).strip()
 
             # Layered check: report the highest missing level so the user
             # can tell stale-zip from missing-subdirs from missing-manifests.
@@ -84,17 +91,20 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 envFile = os.path.join(backendDir, ".env")
                 self._writeBackendEnv(envFile, backendDir, actionData)
 
-            if not install:
+            if not install and not build:
                 self._success = True
                 return
 
-            def buildInstallCmd(extra):
-                return "npm install" if not extra else "npm install {}".format(extra)
-
-            commands = [
-                ("backend", backendDir, buildInstallCmd(backendInstallArgs)),
-                ("frontend", frontendDir, buildInstallCmd(frontendInstallArgs)),
-            ]
+            commands = self._projectCommands(
+                backendDir,
+                frontendDir,
+                install,
+                build,
+                backendInstallArgs,
+                frontendInstallArgs,
+                backendBuildCommand,
+                frontendBuildCommand,
+            )
 
             allOk = True
             for label, runDir, rawCmd in commands:
@@ -113,6 +123,33 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         except Exception as e:
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
+
+    @staticmethod
+    def _projectCommands(
+        backendDir,
+        frontendDir,
+        install,
+        build,
+        backendInstallArgs="",
+        frontendInstallArgs="",
+        backendBuildCommand="npm run build",
+        frontendBuildCommand="npm run build",
+    ):
+        def installCommand(extra):
+            return "npm install" if not extra else "npm install {}".format(extra)
+
+        commands = []
+        if install:
+            commands.extend([
+                ("backend-install", backendDir, installCommand(backendInstallArgs)),
+                ("frontend-install", frontendDir, installCommand(frontendInstallArgs)),
+            ])
+        if build:
+            if backendBuildCommand:
+                commands.append(("backend-build", backendDir, backendBuildCommand))
+            if frontendBuildCommand:
+                commands.append(("frontend-build", frontendDir, frontendBuildCommand))
+        return commands
 
     def _writeBackendEnv(self, envFile, backendDir, actionData):
         deployRoot = self.resolveDeployPath(".")

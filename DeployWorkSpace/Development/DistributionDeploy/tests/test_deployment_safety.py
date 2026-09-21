@@ -22,6 +22,7 @@ from workthreads.DistributionDeployThread import DistributionDeployThread
 from workstates.createDeployFolder_state import createDeployFolder_state
 from workstates.stopLocalSystem_state import stopLocalSystem_state
 from workstates.programFpgaRam_state import programFpgaRam_state
+from workstates.setupIonbeamWeb_state import setupIonbeamWeb_state
 
 
 class DeploymentGateTests(unittest.IsolatedAsyncioTestCase):
@@ -213,6 +214,26 @@ class WorkflowContractTests(unittest.TestCase):
             "launchIonbeamWebFrontend",
         ):
             self.assertTrue(actions[legacy]["skip"])
+
+    def test_web_setup_installs_and_builds_backend_and_frontend(self):
+        payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+        actions = {name: cfg for item in payload["Actions"] for name, cfg in item.items()}
+        action_data = actions["setupIonbeamWeb"]["actionData"]
+        self.assertTrue(action_data["npmBuild"])
+        commands = setupIonbeamWeb_state._projectCommands(
+            "/deploy/backend",
+            "/deploy/frontend",
+            action_data["npmInstall"],
+            action_data["npmBuild"],
+            backendBuildCommand=action_data["backendBuildCommand"],
+            frontendBuildCommand=action_data["frontendBuildCommand"],
+        )
+        self.assertEqual(commands, [
+            ("backend-install", "/deploy/backend", "npm install"),
+            ("frontend-install", "/deploy/frontend", "npm install"),
+            ("backend-build", "/deploy/backend", "npm run build"),
+            ("frontend-build", "/deploy/frontend", "npm run build"),
+        ])
 
     def test_stop_gate_cannot_be_skipped_or_reused(self):
         for flag in ("skip", "transactionComplete"):
