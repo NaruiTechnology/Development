@@ -136,6 +136,7 @@ export const en = {
 
   /* ===== card titles ============================================== */
   "card.controls": "Controls",
+  "card.dacCheck": "DAC check",
   "card.runReport": "Run report",
   "card.rasterImage": "Raster image",
   "card.vectorPattern": "Vector pattern",
@@ -174,6 +175,27 @@ export const en = {
   "adc.minimum": "Min",
   "adc.maximum": "Max",
   "adc.grayMapping": "14-bit ADC mapped to 255 gray levels",
+
+  /* ===== DAC ramp (single-axis DAC linearity check, in the Vector panel) */
+  "dacRamp.toggle": "DAC Ramp check",
+  "dacRamp.hint": "Sweeps one DAC axis across its full range while the other is held fixed, to check DAC linearity against a reference capture. Turning this on starts the scan immediately.",
+  "dacRamp.axis": "Axis",
+  "dacRamp.axis.x": "X",
+  "dacRamp.axis.y": "Y",
+  "dacRamp.fixedCode": "Fixed code (other axis)",
+  "dacRamp.dwell": "Dwell",
+  "dacRamp.phase.idle": "Ready",
+  "dacRamp.phase.connecting": "Connecting",
+  "dacRamp.phase.running": "Sweeping",
+  "dacRamp.phase.done": "Complete",
+  "dacRamp.phase.error": "Error",
+  "dacRamp.error.hardwareUnavailable": "The DAC ramp hardware is unavailable. Check the Glasgow connection and service status.",
+  "dacRamp.error.generic": "The DAC ramp check could not be completed.",
+  "dacRamp.samples": "samples",
+  "dacRamp.waveform": "DAC ramp waveform",
+  "dacRamp.waveformHint": "ADC readback over sweep position; a clean ramp matches a reference OBI capture, a staircase points at scan configuration rather than the DAC itself.",
+  "dacRamp.expand": "Expand DAC check",
+  "dacRamp.collapse": "Collapse DAC check",
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "Run",
@@ -537,6 +559,8 @@ export const en = {
    * "What does X do?" tooltip on the trigger button.                */
   "help.dwell.title": "Dwell — supersampler control",
   "help.dwell.aria": "What does the dwell field do?",
+  "help.dacCheck.title": "DAC check — running the other configurations",
+  "help.dacCheck.aria": "How do I check the other DAC configurations?",
   "help.resolution.title": "Resolution — pixel grid size",
   "help.resolution.aria": "What does the resolution field do?",
   "help.magCalibration.title": "Magnification calibration — HFOV mapping",

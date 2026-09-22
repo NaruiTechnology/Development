@@ -1174,6 +1174,56 @@ class DeviceService:
                             "source": "stream",
                         })
 
+    async def dac_ramp_scan(self, req: DacRampRequest) -> AsyncIterator[bytes]:
+        """Streaming counterpart of run_dac_ramp, same shape as raster_scan/
+        vector_scan so the WebSocket path (live UI) and the blocking REST
+        path (/scan/dac_ramp/run) share one command builder and never drift.
+
+        No `_hardware_free`/simulation branch: this is a hardware
+        diagnostic by definition (checking the physical DAC/ADC path), so
+        it always talks to the real device. If simulation-only operation
+        is ever needed here, add it deliberately rather than inheriting
+        raster/vector's bitmap-simulation machinery, which doesn't apply.
+        """
+        captured: List = []
+        async with self._acquire("dac_ramp"):
+            conn = await self._ensure_conn()
+            cmd = self._build_dac_ramp_cmd(req)
+            self._activate_command(cmd)
+            # Same disconnected-bus detection raster/vector already run:
+            # a floating revC3 ADC bus reads as full scale forever, which
+            # looks exactly like a flat line pegged at 16383/16384 on the
+            # waveform — indistinguishable from "Complete" without this
+            # check. Surfacing it as an error (instead of silently
+            # finishing) is what actually explains a flat trace to the
+            # operator; the DAC ramp itself may well be fine.
+            adc_monitor = _AdcPresenceMonitor(
+                enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
+            try:
+                async for chunk in conn.transfer_multiple(
+                        cmd, latency=req.latency_bytes):
+                    self._status.chunks_in_flight += 1
+                    captured.append(chunk)
+                    yield _sample_chunk_to_wire_bytes(chunk)
+                    fault = adc_monitor.observe(chunk)
+                    if fault is not None:
+                        logger.warning("dac_ramp ADC presence warning: %s", fault)
+                        raise DeviceNotReady(fault)
+            except BaseException as e:
+                self._drop_conn_on_error(e)
+                raise
+            finally:
+                self._deactivate_command(cmd)
+                if captured:
+                    self._set_last_scan({
+                        "kind": "dac_ramp",
+                        "chunks": captured,
+                        "resolution": 16384,
+                        "dwell": req.dwell,
+                        "latency_bytes": req.latency_bytes,
+                        "source": "stream",
+                    })
+
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
     async def run_raster(self, req: RasterRequest) -> ScanResult:
@@ -1300,11 +1350,17 @@ class DeviceService:
                 req.axis.value, req.fixed_code, req.dwell, req.latency_bytes, req.cookie,
             )
             t0 = time.perf_counter()
+            adc_monitor = _AdcPresenceMonitor(
+                enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
             try:
                 async for chunk in conn.transfer_multiple(
                         cmd, latency=req.latency_bytes):
                     chunks.append(chunk)
                     self._status.chunks_in_flight += 1
+                    fault = adc_monitor.observe(chunk)
+                    if fault is not None:
+                        logger.warning("dac_ramp ADC presence warning: %s", fault)
+                        raise DeviceNotReady(fault)
             except BaseException as e:
                 self._drop_conn_on_error(e)
                 if _is_fatal_usb_error(e):

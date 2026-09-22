@@ -35,11 +35,36 @@ export type HelpKey =
   | "grayScale"
   | "vectorGrayLevelFilter"
   | "scanModes"
-  | "magCalibration";
+  | "magCalibration"
+  | "dacCheck";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
   adcValid: () => (
     <p>When enabled, production scans monitor the ADC stream for sustained full-scale values that indicate a disconnected or undriven ADC bus. Turn it off only for deliberate raw diagnostic captures.</p>
+  ),
+  dacCheck: () => (
+    <>
+      <p>
+        Turning the switch on runs <strong>one</strong> configuration: it
+        sweeps the selected <strong>Axis</strong> across its full 0–16383
+        range while the other axis stays parked at <strong>Fixed code</strong>.
+        That's why a default run only ever shows one continuous ramp of
+        16384 samples — the switch doesn't cycle through anything else on
+        its own.
+      </p>
+      <p>To check a different configuration, change the fields <em>before</em> turning the switch on:</p>
+      <ul>
+        <li><strong>Axis</strong> — set to Y to sweep the vertical DAC instead of X. The axis you're <em>not</em> sweeping is the one held at Fixed code.</li>
+        <li><strong>Fixed code</strong> — the DAC code (0–16383) the non-swept axis is parked at. Try a few different values (e.g. near 0, mid-range, near 16383) to check linearity isn't only clean around the midpoint.</li>
+        <li><strong>Dwell</strong> — ADC samples averaged per DAC code. Higher values give a less noisy trace at the cost of a slower sweep; the default (500) matches upstream OBI's reference test.</li>
+      </ul>
+      <p>
+        Each time the switch goes from off to on, it starts a fresh
+        16384-sample sweep with whatever Axis / Fixed code / Dwell are set
+        at that moment — turn it off, change a field, then turn it back on
+        to run the next check.
+      </p>
+    </>
   ),
   dwell: () => (
     <>

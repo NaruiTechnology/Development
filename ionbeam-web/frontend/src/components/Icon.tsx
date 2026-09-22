@@ -55,6 +55,7 @@ type IconName =
   | "upload"
   | "zoomIn"
   | "zoomOut"
+  | "chevronDown"
   | "x";
 
 export function Icon({
@@ -327,4 +328,5 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
     </>
   ),
   x: <path d="M5 5l14 14M19 5L5 19" />,
+  chevronDown: <path d="M6 9l6 6 6-6" />,
 };

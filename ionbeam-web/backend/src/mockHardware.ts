@@ -491,6 +491,53 @@ export async function streamMockVector(
   }
 }
 
+export interface DacRampParams {
+  axis: "x" | "y";
+  fixed_code: number;
+  dwell: number;
+  latency_bytes: number;
+}
+
+/**
+ * Mock counterpart of glasgow_service's /scan/dac_ramp/run|/stream:
+ * sweeps one DAC axis across the full 14-bit range (0..16383) while the
+ * other is held at `fixed_code`, mirroring _build_dac_ramp_cmd's
+ * DACCodeRange.from_resolution(16384) + DACCodeRange(count=1). Feeds
+ * sampleFakeAdc() the same way streamMockRaster/streamMockVector do, so
+ * MOCK=1 renders a plausible waveform for UI development without real
+ * hardware — real linearity is only checked on production.
+ */
+export async function streamMockDacRamp(
+  ws: WebSocket,
+  p: DacRampParams
+): Promise<void> {
+  const total = 1 << DAC_BITS; // 16384
+  const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
+  const fixed = Math.max(0, Math.min(total - 1, Math.trunc(p.fixed_code)));
+
+  let sent = 0;
+  let chunks = 0;
+  while (sent < total) {
+    if (ws.readyState !== ws.OPEN) return;
+    const n = Math.min(valuesPerChunk, total - sent);
+    const buf = Buffer.alloc(n * 2);
+    for (let k = 0; k < n; k++) {
+      const swept = sent + k;
+      const dacX = p.axis === "y" ? fixed : swept;
+      const dacY = p.axis === "y" ? swept : fixed;
+      writeSampleBE(buf, k, sampleFakeAdc(dacX, dacY));
+    }
+    ws.send(buf);
+    sent += n;
+    chunks++;
+    await sleep(30);
+  }
+
+  if (ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify({ event: "done", chunks }));
+  }
+}
+
 function vectorScanPoints(p: VectorParams): VectorPointTuple[] {
   const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 2048));
   const path = p.scan_path ?? "vertical_raster";

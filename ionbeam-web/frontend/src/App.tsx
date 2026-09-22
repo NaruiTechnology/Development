@@ -45,6 +45,8 @@ import { ManagementReport } from "./components/ManagementReport";
 import { VacuumDashboard } from "./components/VacuumDashboard";
 import { SampleStageDashboard } from "./components/SampleStageDashboard";
 import { AdcTestControls, AdcTimelineCanvas } from "./components/AdcTest";
+import { DacRampPanel } from "./components/DacRampTest";
+import { DacCheckHelp } from "./components/DacCheckHelp";
 import { useAdcTestStream } from "./hooks/useAdcTestStream";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 import {
@@ -114,6 +116,10 @@ export function App() {
   const [sampleStageOpen, setSampleStageOpen] = useState(true);
   const [sampleStageMinimized, setSampleStageMinimized] = useState(true);
   const [sampleStageControllerBusy, setSampleStageControllerBusy] = useState(false);
+  // DAC check card starts collapsed — it's an occasional diagnostic,
+  // not part of the normal vector-scan flow, so it shouldn't compete
+  // with Controls/Run report for attention by default.
+  const [dacCheckCollapsed, setDacCheckCollapsed] = useState(true);
   const handleVacuumActivityChange = useCallback((active: boolean) => {
     setVacuumControllerBusy(active);
     setVacuumMinimized(!active);
@@ -1281,6 +1287,31 @@ export function App() {
                   />
                 </div>
               </div>
+              {kind === "vector" && (
+                <div className="card dac-check-card">
+                  <div className="card__header">
+                    <span className="card__title">
+                      {t("card.dacCheck")}
+                      <DacCheckHelp />
+                    </span>
+                    <button
+                      type="button"
+                      className="card__collapse-btn"
+                      aria-expanded={!dacCheckCollapsed}
+                      aria-label={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
+                      title={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
+                      onClick={() => setDacCheckCollapsed((collapsed) => !collapsed)}
+                    >
+                      <Icon name="chevronDown" />
+                    </button>
+                  </div>
+                  {!dacCheckCollapsed && (
+                    <div className="card__body">
+                      <DacRampPanel disabled={panelDisabled} />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="card">
                 <div className="card__header">
                   <span className="card__title">{t("card.runReport")}</span>

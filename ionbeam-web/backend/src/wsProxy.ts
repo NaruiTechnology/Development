@@ -27,14 +27,18 @@ import { WebSocket, WebSocketServer } from "ws";
 import { URL } from "node:url";
 import { Buffer } from "node:buffer";
 import { config } from "./config";
-import { streamMockRaster, streamMockVector } from "./mockHardware";
+import { streamMockRaster, streamMockVector, streamMockDacRamp } from "./mockHardware";
 import { recordActivityInDb } from "./adminDbRepository";
 import type { AdminUser } from "./adminDbRepository";
 import { recordInputSetupInDb, recordOutputDataInDb } from "./operationDataRepository";
 import { uploadScanArtifactsToConfiguredFtp } from "./ftpUpload";
 
 type ScanKind = "raster" | "vector";
-type StreamKind = ScanKind | "adc";
+// "dac_ramp" is deliberately NOT part of ScanKind: it's a hardware
+// diagnostic (single-axis DAC linearity check), not a real scan, so it's
+// excluded from activity/FTP recording below exactly like "adc" is —
+// see the `kind !== "adc"` guards.
+type StreamKind = ScanKind | "adc" | "dac_ramp";
 type RawData = Buffer | ArrayBuffer | Buffer[];
 type ScanUpgradeAuthorization =
   | { ok: true; actor?: AdminUser }
@@ -47,6 +51,7 @@ const STREAM_PATHS: Record<string, StreamKind> = {
   "/ws/scan/raster/stream": "raster",
   "/ws/scan/vector/stream": "vector",
   "/ws/adc/stream": "adc",
+  "/ws/scan/dac_ramp/stream": "dac_ramp",
 };
 const VECTOR_TRACE_LOG_FILE = "/tmp/ionbeam-vector-trace.log";
 
@@ -115,6 +120,8 @@ function handleProxy(
   const upstreamUrl = kind === "adc"
     ? `${config.proxyTargetWs}/adc/stream`
     : `${config.proxyTargetWs}/scan/${kind}/stream`;
+  // (dac_ramp falls through to the second branch: /scan/dac_ramp/stream,
+  // matching the FastAPI route added in glasgow_service/api.py.)
   const headers: Record<string, string> = {};
   if (config.glasgowToken) {
     headers["Authorization"] = `Bearer ${config.glasgowToken}`;
@@ -168,7 +175,7 @@ function handleProxy(
             simulation_bitmap: parsed.simulation_bitmap != null,
           });
         }
-        if (kind !== "adc" && actor && !previewScan) {
+        if (kind !== "adc" && kind !== "dac_ramp" && actor && !previewScan) {
           activityIdPromise = recordScanStart(kind, actor, parsed).catch((err) => {
             console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
             return null;
@@ -207,7 +214,10 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed?.event === "done") {
         completionHandled = true;
-        if (kind === "adc") {
+        if (kind === "adc" || kind === "dac_ramp") {
+          // Diagnostic streams: relay "done" as-is, no activity/FTP
+          // enrichment (same treatment as "adc" — see the ScanKind note
+          // above StreamKind).
           if (client.readyState === WebSocket.OPEN) {
             client.send(data, { binary: false });
           }
@@ -315,7 +325,7 @@ function handleMock(
     scanRequest = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
     if (scanRequest) {
       previewScan = isPreviewScan(scanRequest);
-      if (kind !== "adc" && actor && !previewScan) {
+      if (kind !== "adc" && kind !== "dac_ramp" && actor && !previewScan) {
         activityIdPromise = recordScanStart(kind, actor, scanRequest).catch((err) => {
           console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
           return null;
@@ -325,6 +335,13 @@ function handleMock(
     try {
       if (kind === "adc") {
         await streamMockAdc(client, body);
+      } else if (kind === "dac_ramp") {
+        await streamMockDacRamp(client, {
+          axis: body.axis === "y" ? "y" : "x",
+          fixed_code: Number(body.fixed_code ?? 8192),
+          dwell: Number(body.dwell ?? 500),
+          latency_bytes: Number(body.latency_bytes ?? 16384),
+        });
       } else if (kind === "raster") {
         await streamMockRaster(client, {
           resolution: Number(body.resolution ?? 256),
@@ -351,7 +368,7 @@ function handleMock(
         client.send(JSON.stringify({ event: "error", message: String(e) }));
       }
     } finally {
-      if (kind !== "adc" && scanRequest) {
+      if (kind !== "adc" && kind !== "dac_ramp" && scanRequest) {
         void recordAndMaybePersistScanCompletion(
           kind,
           scanRequest,

@@ -174,6 +174,16 @@ async def stream_vector(ws: WebSocket):
     await _stream_scan(ws, lambda p: svc.vector_scan(VectorRequest(**p)))
 
 
+@app.websocket("/scan/dac_ramp/stream")
+async def stream_dac_ramp(ws: WebSocket):
+    """Live counterpart of /scan/dac_ramp/run, for the Vector panel's
+    DAC Ramp toggle. Same frame shape as /scan/raster/stream and
+    /scan/vector/stream (binary uint16-BE sample chunks, then a
+    `{"event":"done",...}` control frame), so the browser side reuses
+    the existing decode path."""
+    await _stream_scan(ws, lambda p: svc.dac_ramp_scan(DacRampRequest(**p)))
+
+
 @app.websocket("/adc/stream")
 async def stream_adc(ws: WebSocket):
     """Stream uint16 ADC samples from the DAC-free diagnostic image."""

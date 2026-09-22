@@ -152,6 +152,7 @@ class DacRampRequest(BaseModel):
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
     beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
+    adc_valid:     bool = Field(True, description="Run the production ADC presence/saturation check.")
 
 
 class AdcTestRequest(BaseModel):

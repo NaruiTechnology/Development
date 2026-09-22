@@ -122,6 +122,24 @@ export interface VectorRequest {
   simulation_bitmap?: SimulationBitmap | null;
 }
 
+export type DacRampAxis = "x" | "y";
+
+/** Single-axis DAC linearity/ramp check — production port of upstream
+ *  OBI's manual_dac_ctrl.RampControl. Sweeps one DAC axis across its
+ *  full 14-bit range while the other is held at `fixed_code`, unlike
+ *  RasterRequest/VectorRequest which always cover both axes. Maps 1:1
+ *  to glasgow_service.models.DacRampRequest. */
+export interface DacRampRequest {
+  axis: DacRampAxis;
+  fixed_code: number;   // 0..16383
+  dwell: number;        // 1..65535
+  latency_bytes: number; // >= 2
+  cookie: number;        // 0..65535
+  beam_type: "NoBeam" | "Electron" | "Ion";
+  external_control: boolean;
+  adc_valid: boolean;
+}
+
 export interface SimulationBitmap {
   width: number;
   height: number;

@@ -5789,6 +5789,136 @@ body {
   font-size: 11px;
 }
 
+.dac-ramp-body {
+  display: grid;
+  gap: 12px;
+}
+
+.dac-ramp-body__hint {
+  margin: -4px 0 0;
+  color: var(--c-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.dac-ramp-body__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.dac-ramp-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 8px;
+  background: var(--c-bg-elev-2);
+  font-size: 12px;
+}
+
+.dac-ramp-status span {
+  grid-column: 1 / -1;
+}
+
+.dac-ramp-status[data-phase="running"] b,
+.dac-ramp-status[data-phase="connecting"] b {
+  color: var(--c-accent);
+}
+
+.dac-ramp-status[data-phase="error"] b {
+  color: var(--c-accent-hot);
+}
+
+.dac-ramp-waveform {
+  position: relative;
+  min-height: 260px;
+  height: min(36vh, 420px);
+  overflow: hidden;
+  border-radius: 8px;
+  background: #050a14;
+}
+
+.dac-ramp-waveform canvas {
+  display: block;
+}
+
+.dac-ramp-waveform__summary {
+  position: absolute;
+  right: 12px;
+  bottom: 7px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.dac-check-card .card__header {
+  justify-content: space-between;
+}
+
+.dac-check-card .card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The card title is small (12px, uppercase, letterspaced) compared to
+   the body-text contexts .help-btn normally sits in (e.g. "Run
+   validated ⓘ" at ~13px regular weight), so the same fixed 16px icon
+   reads as oversized here. Scale it down to match the title's rhythm.
+   Also override .card__header .icon's 2em sizing (meant for the big
+   nav/tab icons that live in card headers elsewhere) — without this,
+   that rule wins on specificity and the SVG renders at 2x the
+   surrounding button's font-size regardless of the button's own
+   width/height below, which is why the first attempt at this had no
+   visible effect. */
+.dac-check-card .card__title .help-btn {
+  width: 14px;
+  height: 14px;
+  font-size: 12px;
+}
+
+.dac-check-card .card__title .help-btn .icon {
+  width: 1em;
+  height: 1em;
+}
+
+.card__collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text-dim);
+  cursor: pointer;
+}
+
+.card__collapse-btn .icon {
+  width: 14px;
+  height: 14px;
+  transition: transform .15s ease;
+}
+
+.card__collapse-btn[aria-expanded="false"] .icon {
+  transform: rotate(-90deg);
+}
+
+.card__collapse-btn:hover {
+  color: var(--c-accent);
+  background: var(--c-btn-hover);
+}
+
+.card__collapse-btn:focus-visible {
+  outline: none;
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px rgba(95, 184, 255, 0.28);
+}
+
 /* ---------- Admin > Calibration parameters ------------------------- */
 
 .settings-modal--wide { max-width: min(1240px, calc(100vw - 32px)); }

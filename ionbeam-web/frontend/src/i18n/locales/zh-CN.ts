@@ -115,6 +115,7 @@ export const zhCN: Partial<TranslationTable> = {
 
   /* ===== card titles ============================================== */
   "card.controls": "控制",
+  "card.dacCheck": "DAC 检查",
   "card.runReport": "运行报告",
   "card.rasterImage": "光栅图像",
   "card.vectorPattern": "矢量图样",
@@ -153,6 +154,27 @@ export const zhCN: Partial<TranslationTable> = {
   "adc.minimum": "最小值",
   "adc.maximum": "最大值",
   "adc.grayMapping": "14 位 ADC 映射到 255 灰阶",
+
+  /* ===== DAC 斜坡（矢量面板中的单轴 DAC 线性度检查） ================ */
+  "dacRamp.toggle": "DAC 斜坡检查",
+  "dacRamp.hint": "在保持另一轴固定的情况下，扫描单个 DAC 轴的完整范围，以便与参考采集结果比对线性度。打开此开关会立即启动扫描。",
+  "dacRamp.axis": "轴",
+  "dacRamp.axis.x": "X",
+  "dacRamp.axis.y": "Y",
+  "dacRamp.fixedCode": "固定值（另一轴）",
+  "dacRamp.dwell": "停留时间",
+  "dacRamp.phase.idle": "就绪",
+  "dacRamp.phase.connecting": "连接中",
+  "dacRamp.phase.running": "扫描中",
+  "dacRamp.phase.done": "完成",
+  "dacRamp.phase.error": "错误",
+  "dacRamp.error.hardwareUnavailable": "DAC 斜坡硬件不可用，请检查 Glasgow 连接与服务状态。",
+  "dacRamp.error.generic": "DAC 斜坡检查未能完成。",
+  "dacRamp.samples": "样本",
+  "dacRamp.waveform": "DAC 斜坡波形",
+  "dacRamp.waveformHint": "沿扫描位置的 ADC 读回值；干净的斜坡表示与参考 OBI 采集结果一致，阶梯状则指向扫描配置而非 DAC 本身。",
+  "dacRamp.expand": "展开 DAC 检查",
+  "dacRamp.collapse": "折叠 DAC 检查",
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "运行",
@@ -473,6 +495,8 @@ export const zhCN: Partial<TranslationTable> = {
   /* ===== help popovers — titles & aria labels ===================== */
   "help.dwell.title": "驻留 — 超采样控制",
   "help.dwell.aria": "驻留字段的作用是什么？",
+  "help.dacCheck.title": "DAC 检查 — 如何运行其他配置",
+  "help.dacCheck.aria": "如何检查其他 DAC 配置？",
   "help.resolution.title": "分辨率 — 像素网格大小",
   "help.resolution.aria": "分辨率字段的作用是什么？",
   "help.magCalibration.title": "放大倍率校准 — HFOV 映射",
