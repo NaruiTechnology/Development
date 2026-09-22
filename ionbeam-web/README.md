@@ -97,12 +97,17 @@ demonstrating the workflow.
 ### Production build
 
 ```bash
-cd frontend && npm run build  # emits frontend/dist/
+cd frontend && npm ci && rm -rf -- node_modules/.vite && npm run build  # emits frontend/dist/
 cd ../backend && npm run build && npm start
 ```
 
 The Node server then serves `frontend/dist/` and proxies `/api` + `/ws` to
 the FastAPI process. Put it behind nginx/Caddy for TLS.
+
+For the managed local stack, use `Development/Scripts/manage-local-system.sh
+restart`. It verifies the locked AG Grid dependencies and clears Vite's
+optimized-dependency cache before starting the frontend, preventing stale
+`ag-grid-react` resolution errors after dependency changes.
 
 ### Deployment workflow
 

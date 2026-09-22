@@ -119,6 +119,7 @@ install_units() {
     echo "npm was not found; install Node.js/npm or set NPM_BIN." >&2
     exit 1
   }
+  prepare_frontend
   ensure_log_files
   local temp_dir
   temp_dir="$(mktemp -d)"
@@ -200,6 +201,23 @@ stop_stale_web_processes() {
   done
   echo "Web port still occupied (4000: $(port_pids 4000); 5173: $(port_pids 5173))" >&2
   exit 1
+}
+
+prepare_frontend() {
+  [[ -f "${FRONTEND_ROOT}/package.json" && -f "${FRONTEND_ROOT}/package-lock.json" ]] || {
+    echo "Frontend package manifests not found under ${FRONTEND_ROOT}" >&2
+    exit 1
+  }
+
+  # Repair an incomplete checkout from the lockfile before Vite starts.
+  if [[ ! -f "${FRONTEND_ROOT}/node_modules/ag-grid-react/package.json" ||
+        ! -f "${FRONTEND_ROOT}/node_modules/ag-grid-community/package.json" ]]; then
+    echo "Installing frontend dependencies from package-lock.json"
+    (cd "${FRONTEND_ROOT}" && npm ci --no-audit --no-fund)
+  fi
+
+  # Re-optimize dependencies after installs so Vite cannot retain stale bundles.
+  rm -rf -- "${FRONTEND_ROOT}/node_modules/.vite"
 }
 
 wait_http() {
