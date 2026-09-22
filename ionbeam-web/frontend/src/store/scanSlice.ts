@@ -113,7 +113,12 @@ const defaultRaster: RasterRequest = {
 
 const defaultVector: VectorRequest = {
   pattern: "default",
-  scan_path: "vertical_raster",
+  // horizontal_sawtooth: X is the fast/inner axis, matching a reference
+  // OBI DAC capture. The previous default, vertical_raster, makes X the
+  // slow/outer axis, which reads as a staircase on a scope even though
+  // the DAC is fine — see glasgow_service's /scan/dac_ramp/run for a
+  // dedicated single-axis linearity check.
+  scan_path: "horizontal_sawtooth",
   points: null,
   vector_resolution: 2048,
   dwell: 16,

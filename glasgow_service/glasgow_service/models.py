@@ -224,7 +224,14 @@ class SimulationBitmapPixel(BaseModel):
 
 class VectorRequest(BaseModel):
     pattern:        VectorPattern = VectorPattern.default
-    scan_path:      VectorScanPath = VectorScanPath.vertical_raster
+    # Default matches the frontend's VECTOR_SCAN_PATHS ordering (see
+    # ionbeam-web/frontend/src/lib/vectorScanPath.ts): horizontal paths
+    # (X fast/inner axis) sweep the axis a scope probe is usually on
+    # continuously, matching a reference OBI capture. vertical_raster
+    # (the old default) makes X the slow/outer axis, which looks like a
+    # staircase on a scope even though nothing is actually wrong with the
+    # DAC — see /scan/dac_ramp/run for the dedicated single-axis check.
+    scan_path:      VectorScanPath = VectorScanPath.horizontal_sawtooth
     points:         Optional[List[Union[
         Tuple[int, int, int],
         Tuple[int, int, int, Optional[bool]],
