@@ -16,6 +16,7 @@ type IconName =
   | "commentTool"
   | "crop"
   | "download"
+  | "edit"
   | "dashboard"
   | "globe"
   | "grid"
@@ -138,6 +139,12 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
   ),
   crop: <path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14" />,
   download: <path d="M12 3v11m0 0l-4-4m4 4l4-4M5 19h14" />,
+  edit: (
+    <>
+      <path d="M4 20h4l10.5-10.5a2.12 2.12 0 0 0-3-3L5 17v3z" />
+      <path d="M13.5 7.5l3 3" />
+    </>
+  ),
   // Globe — outer circle + equator + a meridian. Two curves are enough
   // to read as "globe" without looking like a tennis ball; deliberately
   // chunky to match the stroke weight of the other 24×24 icons.

@@ -60,3 +60,11 @@ END;
 $$;
 
 SELECT fn_seed_equipment_registry();
+
+-- Account #7 is the xvn Auditor account used by the admin/audit workflow.
+UPDATE "user"
+   SET login_name = 'xvn',
+       role = 4,
+       is_active = true
+ WHERE id = 7
+   AND btrim(email::text) = '2369161342@qq.com';

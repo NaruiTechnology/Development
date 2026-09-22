@@ -33,7 +33,7 @@ import type {
 import { Icon } from "../Icon";
 import { CalibrationHistory } from "./CalibrationHistory";
 import { CalibrationImport } from "./CalibrationImport";
-import { CalibrationMatrix } from "./CalibrationMatrix";
+import { CalibrationMatrixGrid } from "./CalibrationMatrixGrid";
 import { CalibrationRow } from "./CalibrationRow";
 import { CalibrationTree, type TreeSelection } from "./CalibrationTree";
 
@@ -91,6 +91,12 @@ export function CalibrationPanel() {
   const canImport = role !== null && role >= ROLE_DEVELOPER;
   const isAdmin = role !== null && role >= ROLE_ADMIN;
   const profile = bundle?.profile ?? tableData?.profile ?? null;
+  const selectedEquipment = equipment.find((item) => item.id === equipmentId) ?? null;
+  const semAvailable = !selectedEquipment?.name.trim().toUpperCase().startsWith("FIB");
+
+  useEffect(() => {
+    if (!semAvailable && type === "SEM") setType("FIB");
+  }, [semAvailable, type]);
 
   // ---- boot: equipment list + role ------------------------------------------------------------
   useEffect(() => {
@@ -341,7 +347,7 @@ export function CalibrationPanel() {
         <div className="calib__field">
           <span id="calib-type-label">{t("calibration.column")}</span>
           <div className="calib-seg" role="tablist" aria-labelledby="calib-type-label">
-            {(["FIB", "SEM"] as const).map((k) => (
+            {(["FIB", ...(semAvailable ? (["SEM"] as const) : [])] as const).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -474,24 +480,37 @@ export function CalibrationPanel() {
                     <option value="auto">{t("calibration.access.auto")}</option>
                     <option value="fixed">{t("calibration.access.fixed")}</option>
                   </select>
-                  <label className="calib-check">
+                  <label className="calib-check calib-switch vacuum-switch settings-switch">
                     <input type="checkbox" checked={undocumentedOnly} onChange={(e) => setUndocumentedOnly(e.target.checked)} />
-                    {t("calibration.filter.undocumented")}
+                    <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+                    <span>{t("calibration.filter.undocumented")}</span>
                   </label>
+                  {edits.size > 0 && (
+                    <button type="button" className="btn btn--primary" disabled={!canSave} onClick={() => void save()}>
+                      <Icon name="refresh" />{saving ? t("calibration.save.saving") : t("calibration.save.update")}
+                    </button>
+                  )}
                 </div>
               )}
               {loadError && <p className="calib-row__error" role="alert">{loadError}</p>}
               {loading && !bundle && !tableData && <p className="calib-muted">{t("calibration.loading")}</p>}
 
               {tableData && (
-                <CalibrationMatrix
-                  data={tableData}
-                  edits={edits}
-                  role={role}
-                  serverErrors={serverErrors}
-                  resetKey={resetKey}
-                  onParsed={handleParsed}
-                />
+                <>
+                  <div className="calib-matrix__actions">
+                    <button type="button" className="btn btn--primary" disabled={!canSave} onClick={() => void save()}>
+                      <Icon name="refresh" />{saving ? t("calibration.save.saving") : t("calibration.save.update")}
+                    </button>
+                  </div>
+                  <CalibrationMatrixGrid
+                    data={tableData}
+                    edits={edits}
+                    role={role}
+                    serverErrors={serverErrors}
+                    resetKey={resetKey}
+                    onParsed={handleParsed}
+                  />
+                </>
               )}
 
               {bundle && (

@@ -5546,6 +5546,27 @@ body {
   gap: 4px;
   min-width: 0;
 }
+.settings-user-grid .settings-admin-table__actions { gap: 0; justify-content: flex-start; }
+.settings-user-grid .settings-admin-table__actions .modal__close { width: 24px; height: 24px; }
+
+.user-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 58%);
+  backdrop-filter: blur(3px);
+}
+.user-edit-dialog { width: min(620px, calc(100vw - 40px)); max-height: min(760px, calc(100vh - 40px)); display: flex; flex-direction: column; }
+.user-edit-dialog__body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.user-edit-dialog__body label { display: flex; flex-direction: column; gap: 4px; color: var(--c-text-dim); font-size: 11px; }
+.user-edit-dialog__body .input, .user-edit-dialog__body .select { width: 100%; margin: 0; }
+.user-edit-dialog__active { align-self: end; min-height: 32px; }
+.user-edit-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--c-border-soft); }
+@media (max-width: 620px) { .user-edit-dialog__body { grid-template-columns: minmax(0, 1fr); } }
 
 .settings-admin-hosts__textarea {
   min-height: 160px;
@@ -5872,6 +5893,7 @@ body {
 
 .calib-matrix__title { margin: 0 0 4px; font-size: 13px; }
 .calib-matrix__note { margin: 0 0 6px; font-size: 12px; color: var(--c-text-dim); }
+.calib-matrix__actions { display: flex; justify-content: flex-end; margin-bottom: 6px; }
 .calib-matrix__scroll { overflow: auto; max-height: 60vh; border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-elev-1); }
 .calib-matrix__table { border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .calib-matrix__table th {
@@ -5885,6 +5907,27 @@ body {
 .calib-matrix__table td[data-dirty="true"] { background: color-mix(in srgb, var(--c-accent) 14%, transparent); }
 .calib-matrix__table td[data-invalid="true"] { background: color-mix(in srgb, var(--c-danger) 16%, transparent); }
 .calib-matrix__table td[data-risk="true"] .calib-input { border-color: var(--c-warn-border); }
+
+/* AG Grid replacements for the equipment matrix and the calibration table layout (see EquipmentGrid.tsx,
+   CalibrationMatrixGrid.tsx). AG Grid renders its own cell/row DOM, so these target the class names we pass
+   via cellClass/cellRenderer instead of the old [data-dirty]/[data-risk]/[data-invalid] <td> attributes. */
+.settings-equipment-grid { width: 100%; }
+.settings-equipment-grid .ag-cell { display: flex; align-items: center; }
+.settings-equipment-grid__id-cell { color: var(--c-text-dim); font-variant-numeric: tabular-nums; }
+
+.calib-matrix-grid {
+  width: 100%;
+  height: min(60vh, 480px);
+  border: 1px solid var(--c-border-soft);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.calib-matrix-grid .ag-cell { display: flex; align-items: center; padding-left: 4px; padding-right: 4px; }
+.calib-matrix-grid__row-header { font-weight: 600; justify-content: flex-start !important; }
+.calib-matrix-grid__cell--empty { background: var(--c-bg-elev); }
+.calib-matrix-grid__cell--dirty { background: color-mix(in srgb, var(--c-accent) 14%, transparent); }
+.calib-matrix-grid__cell--invalid { background: color-mix(in srgb, var(--c-danger) 16%, transparent); }
+.calib-matrix-grid__cell--risk .calib-input { border-color: var(--c-warn-border); }
 
 .calib-history, .calib-import { display: flex; flex-direction: column; gap: 8px; }
 .calib-history__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

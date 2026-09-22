@@ -264,7 +264,8 @@ INSERT INTO auditor (user_name, email, is_active)
 VALUES
     ('Henry Li', 'lyh1154@gmail.com', true),
     ('Sen Da', 'xda@ionbeamtech.com', true),
-    ('Yuyao Jiang', 'yuyao.jiang@ionbeamtech.com', true)
+    ('Yuyao Jiang', 'yuyao.jiang@ionbeamtech.com', true),
+    ('xvn', '2369161342@qq.com', true)
 ON CONFLICT (email) DO UPDATE
    SET user_name = EXCLUDED.user_name,
        is_active = EXCLUDED.is_active;

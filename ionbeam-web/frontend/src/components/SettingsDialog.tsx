@@ -58,6 +58,13 @@ import {
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
 import { CalibrationPanel } from "./calibration/CalibrationPanel";
+import { EquipmentGrid } from "./EquipmentGrid";
+import { UserAccountsGrid } from "./UserAccountsGrid";
+import {
+  emptyEquipment,
+  equipmentFromDraft,
+  type EquipmentRow,
+} from "../lib/equipmentModel";
 import { Icon } from "./Icon";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
@@ -1484,15 +1491,6 @@ interface AuditorRow {
   is_active: boolean;
 }
 
-interface EquipmentRow {
-  id: number | null;
-  name: string;
-  model: string;
-  serial_number: string;
-  site: string;
-  description: string;
-}
-
 interface CurrentAccountResponse {
   ok: boolean;
   user: { role?: number } | null;
@@ -1534,6 +1532,7 @@ interface FtpConnectionResponse {
 }
 
 const ADMIN_ROLE_OPTIONS = [
+  { value: 4, key: "settings.admin.role.audit" },
   { value: 3, key: "settings.admin.role.admin" },
   { value: 2, key: "settings.admin.role.developer" },
   { value: 1, key: "settings.admin.role.superUser" },
@@ -1604,37 +1603,6 @@ function auditorsFromDraft(draft: unknown): AuditorRow[] {
     }));
 }
 
-function emptyEquipment(nextId: number): EquipmentRow {
-  return {
-    id: nextId,
-    name: "",
-    model: "",
-    serial_number: "",
-    site: "",
-    description: "",
-  };
-}
-
-function equipmentFromDraft(draft: unknown): EquipmentRow[] {
-  const equipment = readPath(draft, ["equipments"]);
-  const rawEquipment = Array.isArray(equipment)
-    ? equipment
-    : readPath(draft, ["equipment"]) && typeof readPath(draft, ["equipment"]) === "object"
-      ? [readPath(draft, ["equipment"])]
-      : [];
-
-  return rawEquipment
-    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
-    .map((row, index) => ({
-      id: typeof row.id === "number" ? row.id : index + 1,
-      name: String(row.name ?? ""),
-      model: String(row.model ?? ""),
-      serial_number: String(row.serial_number ?? ""),
-      site: String(row.site ?? ""),
-      description: String(row.description ?? ""),
-    }));
-}
-
 const DEFAULT_ALLOWED_HOSTS = ["localhost", "ion.o-0.top"];
 const ALLOWED_HOSTNAME_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
 const ALLOWED_IPV4_RE =
@@ -1699,19 +1667,8 @@ function adminUserRowKey(user: AdminUserRow, index: number): string {
   return `index:${index}`;
 }
 
-function equipmentRowKey(row: EquipmentRow, index: number): string {
-  if (row.id !== null) return `id:${row.id}`;
-  const serial = row.serial_number.trim().toLowerCase();
-  if (serial) return `serial:${serial}`;
-  return `index:${index}`;
-}
-
 function adminUserRowSignature(user: AdminUserRow): string {
   return JSON.stringify(user);
-}
-
-function equipmentRowSignature(row: EquipmentRow): string {
-  return JSON.stringify(row);
 }
 
 function adminRoleApprovalRecipients(draft: unknown): string[] {
@@ -1957,14 +1914,14 @@ function AdminTab({
     setEquipment(equipmentFromDraft(draft).filter((_row, rowIndex) => rowIndex !== index));
   }
 
-  async function onSave() {
-    if (draft === null) return;
+  async function onSave(nextDraft: unknown = draft) {
+    if (nextDraft === null || nextDraft === undefined) return;
     setSaving(true);
     setLocalError(null);
     setNotice(null);
     try {
-      await saveAdminConfig(draft);
-      setSource(draft);
+      await saveAdminConfig(nextDraft);
+      setSource(nextDraft);
       setNotice(t("settings.admin.save.ok"));
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err));
@@ -2323,7 +2280,7 @@ function AdminTab({
               {t("settings.admin.user.add")}
             </button>
           </div>
-          <AdminUsersTable
+          <UserAccountsGrid
             users={adminUsersFromDraft(draft)}
             sourceUsers={adminUsersFromDraft(source)}
             auditorEmails={adminRoleApprovalRecipients(draft)}
@@ -2331,8 +2288,16 @@ function AdminTab({
             disabled={busy || !canManageAdminConfig}
             actionDisabled={busy}
             canManage={canManageAdminConfig}
+            siteOptions={SITE_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+            roleOptions={ADMIN_ROLE_OPTIONS.map((option) => ({ value: option.value, label: t(option.key) }))}
             onUpdate={updateUser}
-            onPersist={() => void onSave()}
+            onApplyChanges={async (index, updatedUser) => {
+              if (draft === null) return;
+              const users = adminUsersFromDraft(draft).map((user, rowIndex) => rowIndex === index ? updatedUser : user);
+              const next = writePath(writePath(draft, ["users"], users), ["user"], users[0] ?? emptyAdminUser(1));
+              setDraftLocal(next);
+              await onSave(next);
+            }}
             onDelete={deleteUser}
             onBlockedAction={showPrivilegeNotice}
             onRequestAdminApproval={(user, recipients) => {
@@ -2343,8 +2308,6 @@ function AdminTab({
               composeAdminRoleRequestEmail(user, recipients);
               setNotice(t("settings.admin.user.requestAdmin.composed"));
             }}
-            targetAccountId={targetAccountId}
-            targetLogin={targetLogin}
           />
         </>
       )}
@@ -2371,7 +2334,7 @@ function AdminTab({
               {t("settings.admin.equipment.add")}
             </button>
           </div>
-          <EquipmentTable
+          <EquipmentGrid
             equipment={equipmentFromDraft(draft)}
             sourceEquipment={equipmentFromDraft(source)}
             disabled={busy || !canManageAdminConfig}
@@ -2989,177 +2952,6 @@ function AdminUsersTable({
                 aria-disabled={!canManage}
                 aria-label={t("settings.admin.user.delete")}
                 title={t("settings.admin.user.delete")}
-              >
-                <Icon name="trash" tone="danger" />
-              </button>
-            </div>
-          </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function EquipmentTable({
-  equipment,
-  sourceEquipment,
-  disabled,
-  actionDisabled,
-  canManage,
-  onUpdate,
-  onPersist,
-  onDelete,
-  onBlockedAction,
-}: {
-  equipment: EquipmentRow[];
-  sourceEquipment: EquipmentRow[];
-  disabled: boolean;
-  actionDisabled: boolean;
-  canManage: boolean;
-  onUpdate: (index: number, field: keyof EquipmentRow, value: string | number | null) => void;
-  onPersist: (index: number) => void;
-  onDelete: (index: number) => void;
-  onBlockedAction: () => void;
-}) {
-  const { t } = useTranslation();
-  const sourceSignatureByKey = new Map(
-    sourceEquipment.map((row, index) => [
-      equipmentRowKey(row, index),
-      equipmentRowSignature(row),
-    ] as const),
-  );
-
-  return (
-    <div
-      className="settings-admin-table-wrap"
-      onPointerDownCapture={(event) => {
-        if (canManage) return;
-        const target = event.target instanceof HTMLElement ? event.target : null;
-        if (!target?.closest("input, select, button")) return;
-        onBlockedAction();
-      }}
-    >
-      <div className="settings-equipment-table" role="table">
-        <div className="settings-equipment-table__head" role="row">
-          <span role="columnheader">{t("settings.admin.equipment.id")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.name")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.model")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.serial")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.site")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.description")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.actions")}</span>
-        </div>
-        {equipment.map((row, index) => {
-          const persistedSignature = sourceSignatureByKey.get(equipmentRowKey(row, index));
-          const rowExistsInDb = persistedSignature !== undefined;
-          const rowDirty = persistedSignature !== equipmentRowSignature(row);
-
-          return (
-          <div className="settings-equipment-table__row" role="row" key={`${row.id ?? "new"}-${index}`}>
-            <NumberStepperInput
-              value={row.id ?? ""}
-              disabled={disabled}
-              onValueChange={(value) =>
-                onUpdate(index, "id", value === "" ? null : Number(value))
-              }
-              step={1}
-              min={0}
-              inputMode="numeric"
-              ariaLabel={t("settings.admin.equipment.id")}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.name")}
-              className="input"
-              maxLength={100}
-              value={row.name}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "name", e.target.value)}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.model")}
-              className="input"
-              maxLength={100}
-              value={row.model}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "model", e.target.value)}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.serial")}
-              className="input"
-              maxLength={15}
-              value={row.serial_number}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "serial_number", e.target.value)}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.site")}
-              className="input"
-              maxLength={50}
-              value={row.site}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "site", e.target.value)}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.description")}
-              className="input"
-              maxLength={1000}
-              value={row.description}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "description", e.target.value)}
-            />
-            <div className="settings-admin-table__actions">
-              {rowExistsInDb ? (
-                <button
-                  type="button"
-                  className="modal__close"
-                  onClick={() => {
-                    if (!canManage) {
-                      onBlockedAction();
-                      return;
-                    }
-                    onPersist(index);
-                  }}
-                  disabled={actionDisabled || !rowDirty}
-                  aria-disabled={!canManage}
-                  aria-label={t("settings.admin.equipment.update")}
-                  title={t("settings.admin.equipment.update")}
-                >
-                  <Icon name="refresh" tone="accent" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="modal__close"
-                  onClick={() => {
-                    if (!canManage) {
-                      onBlockedAction();
-                      return;
-                    }
-                    onPersist(index);
-                  }}
-                  disabled={actionDisabled}
-                  aria-disabled={!canManage}
-                  aria-label={t("settings.admin.equipment.save")}
-                  title={t("settings.admin.equipment.save")}
-                >
-                  <Icon name="save" tone="success" />
-                </button>
-              )}
-              <button
-                type="button"
-                className="modal__close"
-                onClick={() => {
-                  if (!canManage) {
-                    onBlockedAction();
-                    return;
-                  }
-                  onDelete(index);
-                }}
-                disabled={actionDisabled || equipment.length <= 1}
-                aria-disabled={!canManage}
-                aria-label={t("settings.admin.equipment.delete")}
-                title={t("settings.admin.equipment.delete")}
               >
                 <Icon name="trash" tone="danger" />
               </button>
