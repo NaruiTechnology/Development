@@ -117,12 +117,21 @@ class GlasgowBuildPlan:
                     f"Files present: {sorted(self._inner.files.keys())}")
 
             logger.debug("Running build script '%s' in %s", script_name, build_dir)
+            # The generated build script locates each tool (yosys, nextpnr-ice40,
+            # icepack) via environment variables such as NEXTPNR_ICE40, which
+            # ToolchainBuildPlan.env_vars exposes. Without passing them through,
+            # the subprocess falls back to bare command names on PATH, which
+            # breaks whenever a tool (e.g. the WASM/yowasp nextpnr-ice40) is only
+            # reachable via its env var and not installed system-wide.
+            build_env = dict(os.environ)
+            build_env.update(self._inner.env_vars)
             proc = subprocess.run(
                 [f"./{script_name}"],
                 cwd=build_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True
+                text=True,
+                env=build_env,
             )
 
             if proc.returncode != 0:
