@@ -15,7 +15,8 @@ from typing import Literal
 
 from .service import DeviceService, DeviceBusy, DeviceNotReady
 from .models  import (
-    RasterRequest, VectorRequest, AdcTestRequest, ScanResult, ServiceStatus,
+    RasterRequest, VectorRequest, AdcTestRequest, DacRampRequest,
+    ScanResult, ServiceStatus,
 )
 from .auth    import require_token
 from .config  import find_config_path
@@ -93,6 +94,35 @@ async def get_defaults():
 async def run_raster(req: RasterRequest):
     try:
         return await svc.run_raster(req)
+    except DeviceBusy:
+        raise HTTPException(409, "device busy")
+    except DeviceNotReady as e:
+        raise HTTPException(503, str(e))
+
+
+@app.post(
+    "/scan/dac_ramp/run",
+    response_model=ScanResult,
+    tags=["scan"],
+    summary="Run a single-axis DAC ramp/linearity check (blocking)",
+    description=(
+        "Sweeps one DAC axis across its full 14-bit range while the other "
+        "axis is held at `fixed_code`, mirroring upstream OBI's "
+        "manual_dac_ctrl.RampControl test. Use this — not "
+        "`/scan/vector/run` with the default `scan_path` — to verify DAC "
+        "output against a reference OBI capture: vertical_raster's default "
+        "axis order makes the slow axis look like a staircase on a scope, "
+        "which is a scan-pattern artifact, not a DAC fault."
+    ),
+    responses={
+        409: {"description": "Device busy — another scan is running"},
+        503: {"description": "Device not ready (disconnected or error state)"},
+    },
+    dependencies=[Depends(require_token)],
+)
+async def run_dac_ramp(req: DacRampRequest):
+    try:
+        return await svc.run_dac_ramp(req)
     except DeviceBusy:
         raise HTTPException(409, "device busy")
     except DeviceNotReady as e:

@@ -123,6 +123,37 @@ class RasterRequest(BaseModel):
     }
 
 
+class DacRampAxis(str, Enum):
+    x = "x"
+    y = "y"
+
+
+class DacRampRequest(BaseModel):
+    """Single-axis DAC linearity/ramp check.
+
+    Production port of upstream OBI's manual_dac_ctrl.RampControl, which
+    this fork never carried over. Sweeps one DAC axis across its full
+    14-bit range while the other axis is held at `fixed_code`, using the
+    same RasterScanCommand / UpstreamBusController path as
+    `/scan/raster/run` — not a separate diagnostic implementation that can
+    drift out of sync with production.
+
+    Use this (not `/scan/vector/run` with its default `scan_path`) to
+    check DAC output against a reference OBI capture: vertical_raster's
+    default axis order makes the slow axis look like a staircase on a
+    scope, which is a scan-pattern artifact, not a DAC fault.
+    """
+    axis:          DacRampAxis = DacRampAxis.x
+    fixed_code:    int  = Field(8192, ge=0, le=16383,
+                                 description="DAC code held on the non-swept axis.")
+    dwell:         int  = Field(500,  ge=1, le=65535,
+                                 description="ADC cycles per DAC code (OBI RampControl default: 500).")
+    latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
+    cookie:        int  = Field(123, ge=0, le=0xFFFF)
+    beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
+    external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
+
+
 class AdcTestRequest(BaseModel):
     """Bounded, DAC-free ADC acquisition request."""
     duration_minutes: Literal[5, 10, 15, 20] = 5

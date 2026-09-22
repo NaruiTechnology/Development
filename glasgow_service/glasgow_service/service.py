@@ -57,6 +57,7 @@ from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
+    DacRampRequest, DacRampAxis,
     VectorPattern, VectorScanPath,
     ScanResult, ScanValidation, ValidationCheck,
 )
@@ -1275,6 +1276,65 @@ class DeviceService:
             validation=validation,
         )
 
+    async def run_dac_ramp(self, req: DacRampRequest) -> ScanResult:
+        """Blocking single-axis DAC ramp/linearity check (production, not
+        a side script).
+
+        This is the end-to-end fix for the DAC-output mismatch: upstream
+        OBI verifies the DAC via manual_dac_ctrl.RampControl (one axis
+        full-range, the other pinned), which was never ported into this
+        fork. Without it, the only way to sanity-check DAC output was
+        `/scan/vector/run`, whose default `scan_path` (vertical_raster)
+        sweeps the *other* axis fast — on a scope the axis under test then
+        shows a staircase (one step per full sweep of the other axis),
+        which looks like a hardware fault but is a scan-pattern artifact.
+        This reuses the same connection/lock/RasterScanCommand path as
+        `/scan/raster/run`, just with one axis pinned to a single code.
+        """
+        chunks: List = []
+        async with self._acquire("dac_ramp"):
+            conn = await self._ensure_conn()
+            cmd = self._build_dac_ramp_cmd(req)
+            logger.debug(
+                "[dac_ramp] axis=%s fixed_code=%d dwell=%d latency=%d cookie=%d",
+                req.axis.value, req.fixed_code, req.dwell, req.latency_bytes, req.cookie,
+            )
+            t0 = time.perf_counter()
+            try:
+                async for chunk in conn.transfer_multiple(
+                        cmd, latency=req.latency_bytes):
+                    chunks.append(chunk)
+                    self._status.chunks_in_flight += 1
+            except BaseException as e:
+                self._drop_conn_on_error(e)
+                if _is_fatal_usb_error(e):
+                    raise DeviceNotReady(str(e)) from e
+                raise
+            send_time = time.perf_counter() - t0
+
+        total_bytes = sum(len(c) * 2 for c in chunks)
+
+        # Cache for /scan/last/csv and /scan/last/figure, same as raster/vector.
+        if chunks:
+            self._set_last_scan({
+                "kind": "dac_ramp",
+                "chunks": chunks,
+                "resolution": 16384,
+                "dwell": req.dwell,
+                "latency_bytes": req.latency_bytes,
+                "source": "validated",
+            })
+
+        return ScanResult(
+            kind="dac_ramp",
+            chunks=len(chunks),
+            bytes=total_bytes,
+            resolution=16384,
+            dwell=req.dwell,
+            send_time_s=send_time,
+            has_data=bool(chunks),
+        )
+
     async def run_vector(self, req: VectorRequest) -> ScanResult:
         if self._hardware_free(req):
             async with self._acquire("vector"):
@@ -1420,6 +1480,38 @@ class DeviceService:
             padding_min_pixels=params.padding_min_pixels,
             padding_ratio_denominator=params.padding_ratio_denominator,
             padding_dwell=params.padding_dwell,
+        )
+
+    def _build_dac_ramp_cmd(self, req: DacRampRequest) -> RasterScanCommand:
+        """Mirror upstream OBI's manual_dac_ctrl.RampControl.scan(): full
+        resolution on the swept axis, count=1 (a single fixed code) on the
+        held axis. Goes through the exact same RasterScanCommand /
+        UpstreamBusController path as `/scan/raster/run` — the gateware
+        side has already been verified bit-for-bit against upstream, so
+        this only needs to reproduce the *stimulus*, not re-implement the
+        drive logic."""
+        full  = DACCodeRange.from_resolution(16384)
+        fixed = DACCodeRange(start=req.fixed_code, count=1, step=1)
+
+        if req.axis == DacRampAxis.y:
+            x_rng, y_rng = fixed, full
+        else:
+            x_rng, y_rng = full, fixed
+
+        try:
+            beam_type = BeamType[req.beam_type]
+        except KeyError:
+            raise ValueError(
+                f"unknown beam_type {req.beam_type!r}; "
+                f"valid: {[m.name for m in BeamType]}"
+            )
+
+        return RasterScanCommand(
+            cookie=req.cookie,
+            x_range=x_rng, y_range=y_rng,
+            dwell_time=req.dwell,
+            beam_type=beam_type,
+            external_control=req.external_control,
         )
 
     def _build_vector_cmd(self, req: VectorRequest) -> VectorScanCommand:
