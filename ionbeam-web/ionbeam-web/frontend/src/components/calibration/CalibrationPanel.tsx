@@ -33,8 +33,6 @@ import type {
 import { Icon } from "../Icon";
 import { CalibrationHistory } from "./CalibrationHistory";
 import { CalibrationImport } from "./CalibrationImport";
-import { CalibrationSaveHelp } from "./CalibrationSaveHelp";
-import { RiskAck } from "./RiskAck";
 import { CalibrationMatrixGrid } from "./CalibrationMatrixGrid";
 import { CalibrationRow } from "./CalibrationRow";
 import { CalibrationTree, type TreeSelection } from "./CalibrationTree";
@@ -382,7 +380,6 @@ export function CalibrationPanel() {
           )}
         </div>
         <div className="calib__actions">
-          <CalibrationSaveHelp />
           <button type="button" className="btn btn--ghost" onClick={() => { setHistoryKey(null); setMode(mode === "history" && historyKey === null ? "values" : "history"); }} aria-pressed={mode === "history"}>
             <Icon name="fileText" tone="accent" />{t("calibration.action.history")}
           </button>
@@ -579,21 +576,17 @@ export function CalibrationPanel() {
           <span className="calib-savebar__count">{t("calibration.save.pending", { count: edits.size })}</span>
           <input className="input calib-savebar__reason" value={reason} maxLength={500} placeholder={t("calibration.save.reasonPlaceholder")} aria-label={t("calibration.save.reasonPlaceholder")} onChange={(e) => setReason(e.target.value)} />
           {riskyKeys.length > 0 && (
-            <RiskAck checked={ack} onChange={setAck}>{t("calibration.ack.count", { count: riskyKeys.length })}</RiskAck>
+            <label className="calib-check calib-savebar__ack">
+              <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
+              {t("calibration.ack.count", { count: riskyKeys.length })}
+            </label>
           )}
           {parseErrors.size > 0 && <span className="calib-row__error">{t("calibration.save.invalid", { count: parseErrors.size })}</span>}
-          <span className="calib-savebar__buttons">
-            <button type="button" className="btn btn--ghost" disabled={saving} onClick={discardAll}>{t("calibration.save.discard")}</button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={!canSave}
-              title={riskyKeys.length > 0 && !ack ? t("calibration.ack.required") : undefined}
-              onClick={() => void save()}
-            >
-              <Icon name="save" />{saving ? t("calibration.save.saving") : t("calibration.save.button")}
-            </button>
-          </span>
+          <span className="spacer" />
+          <button type="button" className="btn btn--ghost" disabled={saving} onClick={discardAll}>{t("calibration.save.discard")}</button>
+          <button type="button" className="btn btn--primary" disabled={!canSave} onClick={() => void save()}>
+            <Icon name="save" />{saving ? t("calibration.save.saving") : t("calibration.save.button")}
+          </button>
         </div>
       )}
     </div>

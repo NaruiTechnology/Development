@@ -5,6 +5,7 @@ import { useTranslation, type TranslationKey } from "../../i18n";
 import { CalibrationApiError, calibrationApi } from "../../lib/calibrationApi";
 import { formatValue, ROLE_SUPER_USER } from "../../lib/calibrationModel";
 import type { CalibrationEquipmentType, CalibrationRevision, CalibrationWriteResult } from "../../types/calibration";
+import { RiskAck } from "./RiskAck";
 
 const PAGE = 25;
 
@@ -152,10 +153,9 @@ export function CalibrationHistory({
                   <>
                     <p className="calib-row__error">{t("calibration.history.needsAck", { count: restore.needsAck.length })}</p>
                     <ul className="calib-history__changes">{restore.needsAck.slice(0, 8).map((m) => <li key={m}>{m}</li>)}</ul>
-                    <label className="calib-check">
-                      <input type="checkbox" checked={restore.ack} onChange={(e) => void startRestore(rev.revision, e.target.checked)} />
+                    <RiskAck className="calib-ack--inline" checked={restore.ack} onChange={(checked) => void startRestore(rev.revision, checked)}>
                       {t("calibration.ack.label")}
-                    </label>
+                    </RiskAck>
                   </>
                 )}
                 {restore.preview && (

@@ -490,10 +490,6 @@ export const zhCN: Partial<TranslationTable> = {
 
   /* ===== help popover chrome ====================================== */
   "help.close": "关闭",
-  "help.calibrationSave.title": "如何编辑并保存校准参数",
-  "help.calibrationSave.aria": "如何保存我修改的参数？",
-  "help.calibrationSave.alt": "校准页面标注图：1 数值框，2 更新按钮，3 含原因与“保存为新修订版本”的保存栏，4 风险确认，5 修订版本与历史记录。",
-  "help.calibrationSave.caption": "第 2、3 项及 ↺ 还原按钮仅在修改数值后出现。单击或将指针移出此对话框即关闭（或按 Esc）。",
   "help.ariaSuffix": "打开帮助",
 
   /* ===== help popovers — titles & aria labels ===================== */
@@ -866,7 +862,6 @@ export const zhCN: Partial<TranslationTable> = {
   "calibration.edit.cancel": "取消",
   "calibration.ack.label": "我了解这些是厂商无文档、固定或低置信度的参数。",
   "calibration.ack.count": "我了解其中 {count} 项修改涉及厂商无文档、固定或低置信度的参数。",
-  "calibration.ack.required": "请勾选确认后再保存。",
   "calibration.save.bar": "未保存的修改",
   "calibration.save.pending": "{count} 项未保存的修改",
   "calibration.save.reasonPlaceholder": "修改原因（记入历史）",

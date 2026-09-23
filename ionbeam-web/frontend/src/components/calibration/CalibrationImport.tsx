@@ -6,6 +6,7 @@ import { CalibrationApiError, calibrationApi } from "../../lib/calibrationApi";
 import { decodeVendorFile, formatValue } from "../../lib/calibrationModel";
 import type { CalibrationEquipmentType, CalibrationImportPreview } from "../../types/calibration";
 import { Icon } from "../Icon";
+import { RiskAck } from "./RiskAck";
 
 type Phase = "idle" | "reading" | "ready" | "committing" | "done";
 
@@ -144,10 +145,9 @@ export function CalibrationImport({
             </details>
           )}
           {risky > 0 && (
-            <label className="calib-check calib-import__ack">
-              <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
+            <RiskAck className="calib-ack--inline calib-import__ack" checked={ack} onChange={setAck}>
               {t("calibration.import.ack", { count: fmt(risky) })}
-            </label>
+            </RiskAck>
           )}
           {preview.changed === 0 && <p className="calib-muted">{t("calibration.import.nothingToDo")}</p>}
           <span className="calib-details__buttons">

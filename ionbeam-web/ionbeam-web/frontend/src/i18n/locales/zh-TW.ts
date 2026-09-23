@@ -496,10 +496,6 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== help popover chrome ====================================== */
   "help.close": "關閉",
-  "help.calibrationSave.title": "如何編輯並儲存校準參數",
-  "help.calibrationSave.aria": "如何儲存我修改的參數？",
-  "help.calibrationSave.alt": "校準頁面標註圖：1 數值框，2 更新按鈕，3 含原因與「儲存為新修訂版本」的儲存列，4 風險確認，5 修訂版本與歷史紀錄。",
-  "help.calibrationSave.caption": "第 2、3 項及 ↺ 還原按鈕僅在修改數值後出現。按一下或將指標移出此對話框即關閉（或按 Esc）。",
   "help.ariaSuffix": "開啟說明",
 
   /* ===== help popovers — titles & aria labels ===================== */
@@ -872,7 +868,6 @@ export const zhTW: Partial<TranslationTable> = {
   "calibration.edit.cancel": "取消",
   "calibration.ack.label": "我了解這些是廠商無文件、固定或低信心的參數。",
   "calibration.ack.count": "我了解其中 {count} 項修改涉及廠商無文件、固定或低信心的參數。",
-  "calibration.ack.required": "請勾選確認後再儲存。",
   "calibration.save.bar": "未儲存的修改",
   "calibration.save.pending": "{count} 項未儲存的修改",
   "calibration.save.reasonPlaceholder": "修改原因（記入歷史）",

@@ -551,10 +551,6 @@ export const en = {
 
   /* ===== help popover chrome ====================================== */
   "help.close": "Close",
-  "help.calibrationSave.title": "How to edit and save calibration values",
-  "help.calibrationSave.aria": "How do I save the values I changed?",
-  "help.calibrationSave.alt": "Annotated Calibration screen: 1 value box, 2 Update button, 3 save bar with reason and Save as new revision, 4 risk acknowledgement, 5 revision and History.",
-  "help.calibrationSave.caption": "Items 2, 3 and the ↺ revert button appear only after you change a value. Closes when you click or move the pointer off this dialog (or press Esc).",
   "help.ariaSuffix": "open help",
 
   /* ===== help popovers — titles & aria labels ===================== *
@@ -1033,7 +1029,6 @@ export const en = {
   "calibration.edit.cancel": "Cancel",
   "calibration.ack.label": "I understand these are vendor-undocumented, fixed or low-confidence parameters.",
   "calibration.ack.count": "I understand {count} of these changes affect vendor-undocumented, fixed or low-confidence parameters.",
-  "calibration.ack.required": "Tick the acknowledgement to enable saving.",
   "calibration.save.bar": "Unsaved changes",
   "calibration.save.pending": "{count} unsaved change(s)",
   "calibration.save.reasonPlaceholder": "Reason for this change (kept in the history)",
