@@ -190,10 +190,30 @@ export interface CalibrationRevision {
   changes_truncated?: boolean;
 }
 
+/** A finding in an imported file; `line` is the 1-based line of a calibration CSV (0 = the file as a whole). */
+export interface CalibrationFileIssue {
+  line: number;
+  code: string;
+  message: string;
+  parameter_key?: string;
+}
+
+/** What the server read from a calibration CSV (the Export CSV format), next to the database's dry-run counts. */
+export interface CalibrationCsvSummary {
+  rows: number;
+  values: number;
+  skipped_empty: number;
+  delimiter: "," | ";" | "\t";
+  warnings: CalibrationFileIssue[];
+  file_equipment_id: number | null;
+  file_type: CalibrationEquipmentType | null;
+  file_revision: number | null;
+}
+
 export interface CalibrationImportPreview {
   ok: true;
   dry_run?: boolean;
-  format: "machine-data" | "registry";
+  format: "machine-data" | "registry" | "csv";
   lines: number;
   skipped_binary: number;
   matched: number;
@@ -201,9 +221,11 @@ export interface CalibrationImportPreview {
   unmatched: string[];
   other_type_count: number;
   rejected_count: number;
-  rejected: Array<{ parameter_key: string; raw: string; message: string }>;
+  rejected: Array<{ parameter_key: string; raw: string; message: string; line?: number }>;
   warning_count: number;
-  warnings: Array<{ parameter_key: string; raw: string; message: string }>;
+  warnings: Array<{ parameter_key: string; raw: string; message: string; line?: number }>;
+  /** present when the file was a calibration CSV */
+  csv?: CalibrationCsvSummary;
   changed: number;
   unchanged: number;
   risky_changed: number;

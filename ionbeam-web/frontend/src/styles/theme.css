@@ -1659,18 +1659,9 @@ body {
   visibility: visible;
 }
 
-.scan-busy__spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid color-mix(in srgb, var(--c-accent) 28%, transparent);
-  border-top-color: var(--c-accent);
-  border-radius: 50%;
-  animation: spin 0.75s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+/* The busy indicator inside .scan-busy is the shared <LoadingSpinner> (assets/spinner.gif), the same animation the
+   CONFIGURATION > Admin tab uses while loading. */
+.scan-busy .loading-spinner { gap: 0; }
 
 .icon {
   display: inline-block;
@@ -6203,3 +6194,27 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .calib input[type="checkbox"], .calib input[type="checkbox"]::before, .calib-check { transition: none; }
 }
+
+/* ---------- Loading spinner (assets/spinner.gif): scanning, CONFIGURATION, canvas merge --------------------------------------------------------- */
+.loading-spinner { display: inline-flex; align-items: center; gap: 10px; color: var(--c-text-dim); font-size: 13px; }
+.loading-spinner--block { display: flex; justify-content: center; padding: 24px 0; width: 100%; }
+.loading-spinner--inline { gap: 6px; font-size: 12px; vertical-align: middle; }
+.loading-spinner__gif { display: block; flex: 0 0 auto; image-rendering: auto; user-select: none; }
+.calib__nav .loading-spinner--block { padding: 16px 0; }
+.calib-reloading { margin: 0 0 6px; }
+.btn .loading-spinner--inline { margin-right: 2px; }
+
+/* ---------- Calibration export: CSV button + export folder ---------------------------------------------------------------- */
+.calib-export { display: inline-flex; align-items: center; gap: 2px; }
+.calib-export__folder { max-width: 220px; }
+.calib-export__folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calib-export__clear { padding-left: 6px; padding-right: 6px; }
+
+/* ---------- Calibration import: validation findings ---------------------------------------------------------------------- */
+.calib-import__problems--invalid {
+  border: 1px solid color-mix(in srgb, var(--c-danger) 45%, var(--c-border));
+  border-radius: 6px; padding: 8px 10px; font-size: 12px;
+  background: color-mix(in srgb, var(--c-danger) 8%, transparent);
+}
+.calib-import__problems--invalid p { margin: 6px 0 0; }
+.calib-import__keys { display: flex; flex-wrap: wrap; gap: 4px 8px; }

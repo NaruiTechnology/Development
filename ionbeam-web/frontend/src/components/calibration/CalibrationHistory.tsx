@@ -6,6 +6,7 @@ import { CalibrationApiError, calibrationApi } from "../../lib/calibrationApi";
 import { formatValue, ROLE_SUPER_USER } from "../../lib/calibrationModel";
 import type { CalibrationEquipmentType, CalibrationRevision, CalibrationWriteResult } from "../../types/calibration";
 import { RiskAck } from "./RiskAck";
+import { LoadingSpinner } from "../LoadingSpinner";
 
 const PAGE = 25;
 
@@ -113,6 +114,7 @@ export function CalibrationHistory({
         <button type="button" className="btn btn--ghost" onClick={onClose}>{t("calibration.history.close")}</button>
       </header>
       {error && <p className="calib-row__error" role="alert">{error}</p>}
+      {loading && revisions.length === 0 && <LoadingSpinner label={t("calibration.history.loading")} />}
       {!loading && revisions.length === 0 && !error && <p className="calib-muted">{t("calibration.history.empty")}</p>}
       <ol className="calib-history__list">
         {revisions.map((rev) => (

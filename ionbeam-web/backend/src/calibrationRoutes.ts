@@ -8,7 +8,7 @@
  *   GET   /api/admin/iobeam/calibration/:equipmentId/:type/history[?parameter_key=...]      revision list
  *   GET   /api/admin/iobeam/calibration/:equipmentId/:type/history/:revision                one revision in full
  *   POST  /api/admin/iobeam/calibration/:equipmentId/:type/restore                          roll back to a revision (new revision)
- *   POST  /api/admin/iobeam/calibration/:equipmentId/:type/import                           vendor file: dry_run preview, then commit
+ *   POST  /api/admin/iobeam/calibration/:equipmentId/:type/import                           vendor file or calibration CSV: dry_run preview, then commit
  *   GET   /api/admin/iobeam/calibration/:equipmentId/:type/export.csv
  *   PATCH /api/admin/iobeam/calibration/definitions/:id                                     admin: name / describe a parameter
  *   POST  /api/admin/iobeam/calibration/catalog/reload                                      admin: re-run the catalog seed
@@ -38,7 +38,8 @@ import {
   type CalibrationQuery,
   type EquipmentCalibrationBundle,
 } from "./calibrationRepository";
-import { parseVendorFile } from "./calibrationVendorFile";
+import { CalibrationCsvError, isCalibrationCsv, parseCalibrationCsv, type ParsedCalibrationCsv } from "./calibrationCsvFile";
+import { parseVendorFile, type ParsedVendorFile } from "./calibrationVendorFile";
 
 export interface CalibrationRouteDeps {
   /** The signed-in account behind the request, or null. */
@@ -215,19 +216,30 @@ export function registerCalibrationRoutes(app: express.Express, deps: Calibratio
       const body = asObject(req.body);
       const content = typeof body.content === "string" ? body.content : "";
       if (!content.trim() || content.length > MAX_IMPORT_CHARS) {
-        throw new CalibrationRequestError("expected { file_name, content } with the text of a vendor file", 400, "bad_request");
+        throw new CalibrationRequestError("expected { file_name, content } with the text of a vendor file or calibration CSV", 400, "bad_request");
       }
-      let parsed;
+      const equipmentId = parseId(req.params.equipmentId, "equipment id");
+      const type = parseType(req.params.type);
+      const fileName = (optionalString(body.file_name) ?? "vendor file").slice(0, 300);
+
+      // A calibration CSV (the Export CSV format) is validated as a whole: any structural problem refuses the file, with
+      // every problem and its line number in errors[]. Vendor text files keep their line-based parsers.
+      let parsed: ParsedVendorFile | ParsedCalibrationCsv;
       try {
-        parsed = parseVendorFile(content);
+        parsed = isCalibrationCsv(fileName, content)
+          ? parseCalibrationCsv(content, { fileName, equipmentId, type })
+          : parseVendorFile(content);
       } catch (err) {
+        if (err instanceof CalibrationCsvError) {
+          throw new CalibrationRequestError(err.message, 422, "invalid_csv", err.issues, { total_errors: err.totalIssues });
+        }
         throw new CalibrationRequestError(err instanceof Error ? err.message : String(err), 422, "unrecognised_file");
       }
       const result = await importEquipmentCalibration({
-        equipment_id: parseId(req.params.equipmentId, "equipment id"),
-        equipment_type: parseType(req.params.type),
+        equipment_id: equipmentId,
+        equipment_type: type,
         profile_name: optionalString(body.profile_name),
-        file_name: (optionalString(body.file_name) ?? "vendor file").slice(0, 300),
+        file_name: fileName,
         items: parsed.items,
         dry_run: body.dry_run !== false, // preview unless the caller explicitly commits
         reason: optionalString(body.reason)?.slice(0, 500),
@@ -235,7 +247,11 @@ export function registerCalibrationRoutes(app: express.Express, deps: Calibratio
         actor_user_id: actor.id,
         actor_role: actor.role,
       });
-      res.json({ ...result, format: parsed.format, lines: parsed.lines, skipped_binary: parsed.skippedBinary });
+      if (parsed.format !== "csv") {
+        res.json({ ...result, format: parsed.format, lines: parsed.lines, skipped_binary: parsed.skippedBinary });
+        return;
+      }
+      res.json({ ...withCsvLines(result, parsed), format: "csv", lines: parsed.lines, skipped_binary: 0, csv: csvSummary(result, parsed) });
     }),
   );
 
@@ -337,6 +353,45 @@ function readWriteItem(raw: unknown): { parameter_key: string; value?: unknown; 
     ...(item.clear === true ? { clear: true } : { value: item.value }),
     ...(typeof item.notes === "string" ? { notes: item.notes.slice(0, 1000) } : {}),
     ...(item.verified === true ? { verified: true } : {}),
+  };
+}
+
+/** Point the database's per-parameter findings (rejected / warnings) at the line of the CSV they came from. */
+function withCsvLines<T extends object>(result: T, parsed: ParsedCalibrationCsv): T {
+  const addLine = (list: unknown) =>
+    Array.isArray(list)
+      ? list.map((entry) => {
+          const key = entry && typeof entry === "object" ? (entry as { parameter_key?: unknown }).parameter_key : undefined;
+          const line = typeof key === "string" ? parsed.lineOfKey.get(key) : undefined;
+          return line === undefined ? entry : { ...(entry as object), line };
+        })
+      : list;
+  const r = result as Record<string, unknown>;
+  return { ...result, rejected: addLine(r.rejected), warnings: addLine(r.warnings) };
+}
+
+function csvSummary(result: object, parsed: ParsedCalibrationCsv) {
+  const r = result as { matched?: number; unmatched_count?: number; other_type_count?: number };
+  const warnings = [...parsed.warnings];
+  if ((r.matched ?? 0) === 0 && (r.unmatched_count ?? 0) === parsed.items.length && (r.other_type_count ?? 0) === 0) {
+    // Nothing matched at all: either a foreign file, or a database whose import function predates CSV matching.
+    warnings.push({
+      line: 0,
+      code: "no_key_matched",
+      message:
+        "none of the parameter keys is known to this column's catalog. If the file was exported by this application, " +
+        "re-apply the admin database setup (CONFIGURATION > Admin > Configuration) so the database can match CSV keys.",
+    });
+  }
+  return {
+    rows: parsed.rows,
+    values: parsed.items.length,
+    skipped_empty: parsed.skippedEmpty,
+    delimiter: parsed.delimiter,
+    warnings,
+    file_equipment_id: parsed.fileEquipmentId,
+    file_type: parsed.fileType,
+    file_revision: parsed.fileRevision,
   };
 }
 

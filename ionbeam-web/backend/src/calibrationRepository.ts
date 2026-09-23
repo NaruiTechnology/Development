@@ -2,7 +2,11 @@ import fs from "node:fs";
 
 import { resolveSqlFile } from "./adminDbService";
 import { queryAdminStored, runAdminSqlScript } from "./adminDbRepository";
-import type { CalibrationImportItem } from "./calibrationVendorFile";
+import type { CalibrationCsvItem } from "./calibrationCsvFile";
+import type { CalibrationImportItem as VendorImportItem } from "./calibrationVendorFile";
+
+/** A line of a vendor file (matched by slot / registry path) or a row of a calibration CSV (matched by parameter_key). */
+export type CalibrationImportItem = VendorImportItem | CalibrationCsvItem;
 
 export type CalibrationEquipmentType = "FIB" | "SEM";
 export type CalibrationValueType = "number" | "integer" | "boolean" | "text" | "enum";

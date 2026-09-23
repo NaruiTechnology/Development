@@ -282,6 +282,32 @@ def test_importing_the_wrong_machine_data_file_is_refused(db, equipment):
     assert ok["matched"] == 1286 and ok["rejected_count"] == 0 and ok["warning_count"] == 2
 
 
+def test_import_calibration_csv_rows_by_parameter_key(db, equipment):
+    """Rows of a calibration CSV (Export CSV format) are matched by catalog key; the usual checks still apply."""
+    eq = equipment[0]
+    num = db.one("""select parameter_key from ionbeam_asset.calibration_parameter_definition
+                    where equipment_type='FIB' and is_active and value_type='number' and access_level='adjustable'
+                      and semantics_known and table_code is null and minimum_value is null and maximum_value is null
+                      and limit_min_key is null and limit_max_key is null order by id limit 1""")
+    num2 = db.one("""select parameter_key from ionbeam_asset.calibration_parameter_definition
+                     where equipment_type='FIB' and is_active and value_type in ('number','integer') and parameter_key <> %s
+                     order by id limit 1""", (num,))
+    sem_only = db.one("""select parameter_key from ionbeam_asset.calibration_parameter_definition s where s.equipment_type='SEM'
+                         and not exists (select 1 from ionbeam_asset.calibration_parameter_definition f
+                                         where f.equipment_type='FIB' and f.parameter_key=s.parameter_key) order by id limit 1""")
+    items = [dict(parameter_key=num, raw="1.25"), dict(parameter_key=num2, raw="abc"),
+             dict(parameter_key="NO_SUCH_KEY", raw="1"), dict(parameter_key=sem_only, raw="1")]
+    base = dict(equipment_id=eq, equipment_type="FIB", profile_name="csv-test", items=items, file_name="calibration.csv")
+    prev = db.call("fn_import_equipment_calibration", {**base, "actor_role": DEV, "dry_run": True})
+    assert prev["ok"] and prev["matched"] == 1 and prev["changed"] == 1
+    assert prev["rejected_count"] == 1 and prev["rejected"][0]["parameter_key"] == num2
+    assert prev["unmatched_count"] == 1 and prev["unmatched"] == ["NO_SUCH_KEY"]
+    assert prev["other_type_count"] == 1                                                                     # a SEM key in a FIB import
+    done = db.call("fn_import_equipment_calibration", {**base, "items": items[:1], "actor_role": DEV, "dry_run": False})
+    assert done["ok"] and done["changed"] == 1
+    assert val(get(db, eq, "FIB", profile_name="csv-test", keys=[num]), num) == 1.25
+
+
 def test_schema_files_are_idempotent(db, equipment):
     """The backend re-applies 001 + 003 in every process (ensureAdminSchema); nothing may break or be lost."""
     upsert(db, equipment[0], "FIB", [dict(parameter_key="IONF_WD_DEF", value=23)])

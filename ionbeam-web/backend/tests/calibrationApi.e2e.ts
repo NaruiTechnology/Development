@@ -119,6 +119,33 @@ async function main(): Promise<void> {
   assert.equal(csv.status, 200); assert.match(csv.headers.get("content-type") ?? "", /text\/csv/);
   assert.match(csv.text, /^parameter_key,vendor_name,category/);   // (fetch strips the BOM Excel needs) assert.ok(csv.text.split("\r\n").length > 20);
 
+  // ---- calibration CSV import: round trip of the export, validation, wrong column -------------
+  const exported = await call("GET", "/1/FIB/export.csv?keys=IONF_WD_DEF", 0);
+  const fileName = /filename="([^"]+)"/.exec(exported.headers.get("content-disposition") ?? "")?.[1] ?? "";
+  assert.match(fileName, /^calibration_1_FIB_r\d+\.csv$/);
+  const edited = exported.text.replace(",Working distance default,19,mm,", ",Working distance default,21,mm,");   // quoted category, $-notes stay
+  assert.notEqual(edited, exported.text, "the exported row was edited");
+  const csvPreview = await call("POST", "/1/FIB/import", 2, { file_name: fileName, content: edited, dry_run: true });
+  assert.equal(csvPreview.status, 200, csvPreview.text);
+  assert.equal(csvPreview.json.format, "csv");
+  assert.equal(csvPreview.json.matched, 1);
+  assert.equal(csvPreview.json.changed, 1);
+  assert.equal(csvPreview.json.changes[0].new, 21);
+  assert.equal(csvPreview.json.csv.file_equipment_id, 1);
+  const csvDone = await call("POST", "/1/FIB/import", 2, { file_name: fileName, content: edited, dry_run: false, reason: "csv import" });
+  assert.equal(csvDone.status, 200, csvDone.text);
+  assert.equal((await call("GET", "/1/FIB?keys=IONF_WD_DEF", 0)).json.values[0].value, 21);
+
+  const badCsv = await call("POST", "/1/FIB/import", 2, {
+    file_name: "edited.csv", content: "parameter_key,value\nIONF_WD_DEF,1,2\nIONF_WD_DEF,=A1\n", dry_run: true,
+  });
+  assert.equal(badCsv.status, 422); assert.equal(badCsv.json.code, "invalid_csv");
+  assert.deepEqual(badCsv.json.errors.map((e: any) => e.line), [2, 3]);
+  const wrongColumn = await call("POST", "/1/FIB/import", 2, { file_name: "calibration_1_SEM_r3.csv", content: edited, dry_run: true });
+  assert.equal(wrongColumn.status, 422); assert.equal(wrongColumn.json.errors[0].code, "wrong_type");
+  const rejectedRow = await call("POST", "/1/FIB/import", 2, { file_name: "x.csv", content: "parameter_key,value\nIONF_WD_DEF,abc\n", dry_run: true });
+  assert.equal(rejectedRow.status, 200); assert.equal(rejectedRow.json.rejected[0].line, 2);                 // database finding -> CSV line
+
   // ---- admin catalog edit ---------------------------------------------------------------------
   const did = (await call("GET", "/2/SEM?keys=MD_I0045", 0)).json.definitions[0].id;
   assert.equal((await call("PATCH", `/definitions/${did}`, 2, { display_name: "x" })).status, 403);

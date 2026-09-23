@@ -878,9 +878,10 @@ BEGIN
 END;
 $$;
 
--- Vendor machine-data import.  The backend parses the file; this function matches lines to catalog entries.
+-- Vendor machine-data / calibration CSV import.  The backend parses the file; this function matches lines to catalog entries.
 -- payload: {equipment_id, equipment_type, profile_name?, file_name, dry_run?, actor_user_id?, actor_role, reason?, acknowledge_risk?,
---           items:[{kind:'int'|'float', slot, raw, symbol?}  |  {path, raw}]}
+--           items:[{kind:'int'|'float', slot, raw, symbol?}  |  {path, raw}  |  {parameter_key, raw}]}
+-- {parameter_key, raw} items come from a calibration CSV (Export CSV format) and are matched by catalog key.
 -- Needs role >= 2 (developer / service). Lines with no catalog entry (credentials, debug flags, UI prefs ...) are
 -- counted and dropped - never stored. Values that do not fit the parameter type are listed under `rejected`.
 CREATE OR REPLACE FUNCTION ionbeam_asset.fn_import_equipment_calibration(p_payload jsonb)
@@ -927,7 +928,12 @@ BEGIN
     FOR it IN SELECT value FROM jsonb_array_elements(COALESCE(p_payload -> 'items', '[]'::jsonb))
     LOOP
         d := NULL;
-        IF it ? 'path' THEN
+        IF it ? 'parameter_key' THEN
+            -- a row of a calibration CSV (Export CSV format): matched by its catalog key, not by a vendor slot / path
+            ident := it ->> 'parameter_key';
+            SELECT * INTO d FROM ionbeam_asset.calibration_parameter_definition
+             WHERE equipment_type = et AND parameter_key = ident AND is_active LIMIT 1;
+        ELSIF it ? 'path' THEN
             ident := it ->> 'path';
             SELECT * INTO d FROM ionbeam_asset.calibration_parameter_definition
              WHERE equipment_type = et AND source_kind = 'reg' AND source_path = ident AND is_active LIMIT 1;
@@ -939,7 +945,8 @@ BEGIN
         IF d.id IS NULL THEN
             IF EXISTS (SELECT 1 FROM ionbeam_asset.calibration_parameter_definition o
                         WHERE o.equipment_type <> et AND o.is_active
-                          AND it ? 'path' AND o.source_kind = 'reg' AND o.source_path = ident) THEN
+                          AND ((it ? 'parameter_key' AND o.parameter_key = ident)
+                               OR (it ? 'path' AND NOT it ? 'parameter_key' AND o.source_kind = 'reg' AND o.source_path = ident))) THEN
                 -- a registry value that belongs to the other column (FIB vs SEM) of the same export. Machine-data slots are
                 -- NOT compared this way: icmd.TXT and md.TXT are different files that reuse the same slot numbers.
                 n_other := n_other + 1;
@@ -951,7 +958,7 @@ BEGIN
         END IF;
         -- wrong-file guard: icmd.TXT and md.TXT reuse the same slot numbers, so when the parser saw a vendor symbol
         -- it must be the symbol the catalog has for that slot
-        IF NOT it ? 'path' AND NULLIF(it ->> 'symbol', '') IS NOT NULL
+        IF NOT it ? 'path' AND NOT it ? 'parameter_key' AND NULLIF(it ->> 'symbol', '') IS NOT NULL
            AND (it ->> 'symbol') IS DISTINCT FROM d.vendor_name THEN
             n_rejected := n_rejected + 1;
             IF n_rejected <= 30 THEN

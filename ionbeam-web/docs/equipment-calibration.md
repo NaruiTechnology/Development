@@ -43,6 +43,26 @@ ignored, refused, risky), and only writes after confirmation. Lines are matched 
 file into a column is refused. A value outside the vendor's documented enum list (e.g. `IONI_DET_USED = 2`, documented 0/1)
 is imported as found, with a warning.
 
+## Calibration CSV (export / import)
+
+*Export CSV* writes `calibration_<equipment>_<FIB|SEM>_r<revision>.csv`. By default the browser downloads it; the folder
+button next to *Export CSV* lets the operator choose a folder on **their own computer** instead (File System Access API:
+Chrome / Edge over HTTPS or `localhost`). The choice is remembered per browser (IndexedDB); the browser asks once per
+session to allow writing. If writing is refused or fails, the file is downloaded as usual. The × button returns to downloads.
+
+*Import* also accepts that CSV. Only `parameter_key` and `value` are read (column order free; `,` `;` or tab separated;
+decimal commas accepted in `;` files). The file is validated as a whole by `backend/src/calibrationCsvFile.ts` and refused,
+with every problem and its line number, on: broken quoting, rows with the wrong number of cells, missing / duplicate
+columns, empty or malformed keys, formula-looking values (`=...`, `@...`), a key listed twice with different values, no
+values at all, binary content, more than 20,000 rows, or a file name of the other column (`..._SEM_...` into FIB).
+Warnings (import still possible): exported from other equipment, repeated identical rows, empty values (skipped - an import
+never clears a value), decimal commas, and a file exported at an older revision than the current one. Rows are then matched
+by `parameter_key` in `fn_import_equipment_calibration`, which applies the usual type / enum / limit / role / risk rules;
+its per-row findings are reported with the CSV line.
+
+Existing databases need the admin database setup re-applied once (CONFIGURATION > Admin > Configuration) to get the
+updated `fn_import_equipment_calibration`.
+
 ## Deployment
 
 * `IobeamAdmin/Sql/003_calibration_schema.sql` is applied automatically after `001_schema.sql` by

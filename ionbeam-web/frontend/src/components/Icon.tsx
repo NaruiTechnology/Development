@@ -49,6 +49,7 @@ type IconName =
   | "atom"
   | "tools"
   | "fileText"
+  | "folder"
   | "eye"
   | "sheet"
   | "trash"
@@ -314,6 +315,7 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
       <path d="M19 6l-1.5 14a2 2 0 0 1-2 1.8h-7a2 2 0 0 1-2-1.8L5 6" />
     </>
   ),
+  folder: <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" />,
   upload: <path d="M12 21V10m0 0l-4 4m4-4l4 4M5 5h14" />,
   zoomIn: (
     <>

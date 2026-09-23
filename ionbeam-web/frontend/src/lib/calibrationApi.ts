@@ -22,8 +22,10 @@ export class CalibrationApiError extends Error {
     message: string,
     readonly status: number,
     readonly code: string,
-    readonly errors: Array<{ parameter_key?: string; code: string; message: string }> = [],
+    readonly errors: Array<{ parameter_key?: string; code: string; message: string; line?: number }> = [],
     readonly currentRevision?: number,
+    /** how many problems the server found in total (errors[] may be capped) */
+    readonly totalErrors?: number,
   ) {
     super(message);
     this.name = "CalibrationApiError";
@@ -66,6 +68,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       String(data.code ?? "failed"),
       Array.isArray(data.errors) ? (data.errors as CalibrationApiError["errors"]) : [],
       typeof data.current_revision === "number" ? data.current_revision : undefined,
+      typeof data.total_errors === "number" ? data.total_errors : undefined,
     );
   }
   return data as T;

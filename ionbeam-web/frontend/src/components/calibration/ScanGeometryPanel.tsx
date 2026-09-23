@@ -42,6 +42,7 @@ import { fetchMagCalibration, saveMagCalibration } from "../../store/magCalibrat
 import { applyPersistedDimensionCalibration, setScanGeometry } from "../../store/scanSlice";
 import type { CalibrationEquipmentType } from "../../types/calibration";
 import { Icon } from "../Icon";
+import { LoadingSpinner } from "../LoadingSpinner";
 
 interface Props {
   equipmentId: number;
@@ -75,6 +76,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: "ok" | "error" | "warn"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
 
   // operator inputs (text so partially typed numbers survive)
   const [mag, setMag] = useState("1000");
@@ -98,6 +100,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
+    setLoadingData(true);
     dispatch(fetchMagCalibration());
     Promise.all([
       calibrationApi.bundle(equipmentId, type, { keys: geometryParameterKeys(type), limit: 50 }),
@@ -121,7 +124,8 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
           if (cfg.fit?.model) setModel(cfg.fit.model);
         }
       })
-      .catch((err) => !cancelled && setLoadError(err instanceof Error ? err.message : String(err)));
+      .catch((err) => !cancelled && setLoadError(err instanceof Error ? err.message : String(err)))
+      .finally(() => !cancelled && setLoadingData(false));
     return () => {
       cancelled = true;
     };
@@ -267,6 +271,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
         <button type="button" className="btn btn--ghost" onClick={onClose}>{t("calibration.history.close")}</button>
       </div>
       <p className="calib-muted">{t("geometry.intro")}</p>
+      {loadingData && <LoadingSpinner label={t("geometry.loading")} />}
       {loadError && <p className="calib-row__error" role="alert">{loadError}</p>}
       {notice && <p className={`calib-banner calib-banner--${notice.tone}`} role="status">{notice.text}</p>}
 

@@ -12,6 +12,7 @@
     "src/lib/scanGeometry.ts",
     "src/lib/roiGeometry.ts",
     "src/lib/calibrationModel.ts",
+    "src/lib/calibrationImportFile.ts",
     "src/types/calibration.ts",
     "src/lib/dimensionCalibrationPersistence.ts",
     "src/lib/roiWorkflow.ts",

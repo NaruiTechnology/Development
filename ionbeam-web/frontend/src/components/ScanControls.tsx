@@ -33,6 +33,7 @@ import {
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
+import { LoadingSpinner } from "./LoadingSpinner";
 import { ROIGrayActionVectorWedges } from "./ROIGrayActionVectorWedges";
 import { ROIRasterActionWedges } from "./ROIRasterActionWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
@@ -760,7 +761,7 @@ export function ScanControls({
               aria-hidden={!busy}
               title={t("scan.busy.title")}
             >
-              <span className="scan-busy__spinner" />
+              <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />
             </span>
           </div>
           <div className="scan-loop-controls__buttons scan-loop-controls__buttons--roi">
@@ -871,7 +872,7 @@ export function ScanControls({
           aria-hidden={!busy}
           title={t("scan.busy.title")}
         >
-          <span className="scan-busy__spinner" />
+          <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />
         </span>
       )}
       <div className={`scan-primary-controls${kind === "raster" ? " scan-primary-controls--raster" : ""}`}>

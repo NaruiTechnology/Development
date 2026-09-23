@@ -21,6 +21,17 @@ import {
   toWriteItems,
   type ParseResult,
 } from "../../lib/calibrationModel";
+import {
+  CALIBRATION_EXPORT_FOLDER,
+  chooseExportFolder,
+  clearExportFolder,
+  downloadBlob,
+  ensureFolderWritable,
+  folderPickerSupported,
+  loadExportFolder,
+  writeFileToFolder,
+  type ExportFolderHandle,
+} from "../../lib/exportFolder";
 import type {
   CalibrationBundle,
   CalibrationDefinition,
@@ -31,6 +42,7 @@ import type {
   EquipmentRecord,
 } from "../../types/calibration";
 import { Icon } from "../Icon";
+import { LoadingSpinner } from "../LoadingSpinner";
 import { CalibrationHistory } from "./CalibrationHistory";
 import { CalibrationImport } from "./CalibrationImport";
 import { CalibrationSaveHelp } from "./CalibrationSaveHelp";
@@ -73,6 +85,7 @@ export function CalibrationPanel() {
   const [bundle, setBundle] = useState<CalibrationBundle | null>(null);
   const [tableData, setTableData] = useState<CalibrationTableResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -89,6 +102,10 @@ export function CalibrationPanel() {
 
   const [mode, setMode] = useState<Mode>("values");
   const [historyKey, setHistoryKey] = useState<string | null>(null);
+
+  const folderSupported = useMemo(() => folderPickerSupported(), []);
+  const [exportFolder, setExportFolder] = useState<ExportFolderHandle | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const canEdit = role !== null && role >= ROLE_SUPER_USER;
   const canImport = role !== null && role >= ROLE_DEVELOPER;
@@ -113,6 +130,15 @@ export function CalibrationPanel() {
         setEquipmentId((prev) => prev ?? sorted[0]?.id ?? null);
       })
       .catch((err) => !cancelled && setBootError(err instanceof Error ? err.message : String(err)));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ---- remembered CSV export folder (per browser) ------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+    void loadExportFolder(CALIBRATION_EXPORT_FOLDER).then((handle) => !cancelled && setExportFolder(handle));
     return () => {
       cancelled = true;
     };
@@ -178,6 +204,7 @@ export function CalibrationPanel() {
   async function loadMore() {
     if (!bundle || equipmentId === null) return;
     setLoading(true);
+    setLoadingMore(true);
     try {
       const res = await calibrationApi.bundle(equipmentId, type, {
         group_code: selection.kind === "group" ? selection.code ?? undefined : undefined,
@@ -193,6 +220,7 @@ export function CalibrationPanel() {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }
 
@@ -303,23 +331,59 @@ export function CalibrationPanel() {
   }
 
   async function exportCsv() {
-    if (equipmentId === null) return;
+    if (equipmentId === null || exporting) return;
+    setExporting(true);
+    setNotice(null);
     try {
+      // Ask for write access first: the browser only prompts while the click is still "fresh".
+      const folder = exportFolder;
+      const writable = folder ? await ensureFolderWritable(folder) : false;
       const { blob, filename } = await calibrationApi.exportCsv(equipmentId, type);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (folder && writable) {
+        try {
+          await writeFileToFolder(folder, filename, blob);
+          setNotice({ tone: "success", text: t("calibration.export.savedToFolder", { file: filename, folder: folder.name }) });
+          return;
+        } catch (err) {
+          downloadBlob(blob, filename);
+          setNotice({
+            tone: "warning",
+            text: t("calibration.export.folderFailed", { folder: folder.name, error: err instanceof Error ? err.message : String(err) }),
+          });
+          return;
+        }
+      }
+      downloadBlob(blob, filename);
+      if (folder && !writable) {
+        setNotice({ tone: "warning", text: t("calibration.export.folderDenied", { folder: folder.name }) });
+      }
     } catch (err) {
       setNotice({ tone: "error", text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setExporting(false);
     }
+  }
+
+  async function pickExportFolder() {
+    try {
+      const handle = await chooseExportFolder(CALIBRATION_EXPORT_FOLDER, exportFolder);
+      if (!handle) return; // cancelled
+      setExportFolder(handle);
+      setNotice({ tone: "success", text: t("calibration.export.folderSet", { folder: handle.name }) });
+    } catch (err) {
+      setNotice({ tone: "error", text: t("calibration.export.folderPickFailed", { error: err instanceof Error ? err.message : String(err) }) });
+    }
+  }
+
+  async function resetExportFolder() {
+    await clearExportFolder(CALIBRATION_EXPORT_FOLDER);
+    setExportFolder(null);
+    setNotice({ tone: "success", text: t("calibration.export.folderCleared") });
   }
 
   // ---- render ---------------------------------------------------------------------------------
   if (bootError) return <p className="calib-row__error" role="alert">{bootError}</p>;
-  if (equipment.length === 0 && role === null) return <p className="calib-muted">{t("calibration.loading")}</p>;
+  if (equipment.length === 0 && role === null) return <LoadingSpinner label={t("calibration.loading")} />;
   if (equipment.length === 0) return <p className="calib-muted">{t("calibration.noEquipment")}</p>;
 
   const quality = groups?.quality;
@@ -392,9 +456,41 @@ export function CalibrationPanel() {
           <button type="button" className="btn btn--ghost" disabled={!canImport} title={canImport ? undefined : t("calibration.import.needsRole")} onClick={() => setMode(mode === "import" ? "values" : "import")} aria-pressed={mode === "import"}>
             <Icon name="upload" tone="accent" />{t("calibration.action.import")}
           </button>
-          <button type="button" className="btn btn--ghost" onClick={() => void exportCsv()}>
-            <Icon name="download" tone="accent" />{t("calibration.action.export")}
-          </button>
+          <span className="calib-export">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={exporting || equipmentId === null}
+              aria-busy={exporting}
+              title={exportFolder ? t("calibration.export.toFolderTitle", { folder: exportFolder.name }) : t("calibration.export.toDownloadsTitle")}
+              onClick={() => void exportCsv()}
+            >
+              {exporting ? <LoadingSpinner inline size={16} ariaLabel={t("calibration.export.exporting")} /> : <Icon name="download" tone="accent" />}
+              {t("calibration.action.export")}
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost calib-export__folder"
+              disabled={!folderSupported || exporting}
+              title={folderSupported ? t("calibration.export.chooseFolderTitle") : t("calibration.export.folderUnsupported")}
+              onClick={() => void pickExportFolder()}
+            >
+              <Icon name="folder" tone="accent" />
+              <span className="calib-export__folder-name">{exportFolder ? exportFolder.name : t("calibration.export.downloads")}</span>
+            </button>
+            {exportFolder && (
+              <button
+                type="button"
+                className="btn btn--ghost calib-export__clear"
+                disabled={exporting}
+                title={t("calibration.export.clearFolderTitle")}
+                aria-label={t("calibration.export.clearFolderTitle")}
+                onClick={() => void resetExportFolder()}
+              >
+                <Icon name="x" />
+              </button>
+            )}
+          </span>
         </div>
       </div>
 
@@ -443,7 +539,7 @@ export function CalibrationPanel() {
               }}
             />
           ) : (
-            <p className="calib-muted">{t("calibration.loading")}</p>
+            <LoadingSpinner label={t("calibration.loading")} />
           )}
         </aside>
 
@@ -480,6 +576,7 @@ export function CalibrationPanel() {
             <CalibrationImport
               equipmentId={equipmentId}
               type={type}
+              currentRevision={profile?.revision ?? null}
               onClose={() => setMode("values")}
               onImported={() => setReloadToken((n) => n + 1)}
             />
@@ -516,7 +613,10 @@ export function CalibrationPanel() {
                 </div>
               )}
               {loadError && <p className="calib-row__error" role="alert">{loadError}</p>}
-              {loading && !bundle && !tableData && <p className="calib-muted">{t("calibration.loading")}</p>}
+              {loading && !bundle && !tableData && <LoadingSpinner label={t("calibration.loading")} />}
+              {loading && !loadingMore && (bundle || tableData) && (
+                <LoadingSpinner className="calib-reloading" inline size={18} label={t("calibration.loading")} />
+              )}
 
               {tableData && (
                 <>
@@ -564,6 +664,7 @@ export function CalibrationPanel() {
                   ))}
                   {bundle.definitions.length < (bundle.total ?? 0) && (
                     <button type="button" className="btn btn--ghost calib-list__more" disabled={loading} onClick={() => void loadMore()}>
+                      {loadingMore && <LoadingSpinner inline size={16} ariaLabel={t("calibration.loading")} />}
                       {t("calibration.list.showing", { shown: fmt(bundle.definitions.length), total: fmt(bundle.total ?? 0) })} — {t("calibration.list.loadMore")}
                     </button>
                   )}

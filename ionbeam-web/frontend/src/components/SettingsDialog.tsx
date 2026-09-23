@@ -66,6 +66,7 @@ import {
   type EquipmentRow,
 } from "../lib/equipmentModel";
 import { Icon } from "./Icon";
+import { LoadingSpinner } from "./LoadingSpinner";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
@@ -382,7 +383,7 @@ function SettingsModalShell({
 
       <div className="modal__body settings-modal__body">
         {loading && draft === null ? (
-          <div className="settings-loading">{t("settings.loading")}</div>
+          <LoadingSpinner className="settings-loading" label={t("settings.loading")} />
         ) : draft === null ? (
           <div className="settings-loading">{t("settings.empty")}</div>
         ) : (
@@ -428,7 +429,7 @@ function SettingsModalShell({
               data-visible={busy || scanLocked ? "true" : "false"}
               aria-hidden={!busy}
             >
-              <span className="scan-busy__spinner" />
+              <LoadingSpinner inline size={20} ariaLabel={t("settings.admin.busy")} />
             </span>
 
             <button
@@ -2063,7 +2064,7 @@ function AdminTab({
           : "info";
 
   if (loading && draft === null) {
-    return <div className="settings-loading">{t("settings.admin.loading")}</div>;
+    return <LoadingSpinner className="settings-loading" label={t("settings.admin.loading")} />;
   }
 
   if (draft === null) {
@@ -2357,7 +2358,7 @@ function AdminTab({
             data-visible={busy ? "true" : "false"}
             aria-hidden={!busy}
           >
-            <span className="scan-busy__spinner" />
+            <LoadingSpinner inline size={20} ariaLabel={t("settings.admin.busy")} />
           </span>
           <button
             type="button"
@@ -2431,7 +2432,7 @@ function AdminTab({
           )}
 
           {ftpLoading && ftpDraft === null ? (
-            <div className="settings-loading">{t("settings.loading")}</div>
+            <LoadingSpinner className="settings-loading" label={t("settings.loading")} />
           ) : ftpDraft === null ? (
             <div className="settings-loading">{t("settings.empty")}</div>
           ) : (
@@ -2448,7 +2449,7 @@ function AdminTab({
               data-visible={ftpBusy ? "true" : "false"}
               aria-hidden={!ftpBusy}
             >
-              <span className="scan-busy__spinner" />
+              <LoadingSpinner inline size={20} ariaLabel={t("settings.admin.busy")} />
             </span>
             <button
               type="button"
@@ -2617,6 +2618,7 @@ function AllowedHostsTab({
 
       <h4 className="settings-form__group">{t("settings.admin.group.allowedHosts")}</h4>
       <p className="settings-form__hint">{t("settings.admin.allowedHosts.hint")}</p>
+      {loading && <LoadingSpinner label={t("settings.admin.allowedHosts.loading")} />}
 
       <div className="field-row">
         <div className="field" style={{ gridColumn: "1 / -1" }}>

@@ -28,6 +28,7 @@ import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { Icon } from "./Icon";
+import { LoadingSpinner } from "./LoadingSpinner";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 
@@ -850,7 +851,7 @@ export function ImageCanvas({
                   data-visible={mergeBusy ? "true" : "false"}
                   aria-hidden={!mergeBusy}
                 >
-                  <span className="scan-busy__spinner" />
+                  <LoadingSpinner inline size={20} ariaLabel={t("canvas.editor.merge.uploading")} />
                 </span>
                 <span className="spacer" />
                 <button
