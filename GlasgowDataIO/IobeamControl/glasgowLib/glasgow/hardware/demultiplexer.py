@@ -11,6 +11,14 @@ from .device import GlasgowDeviceError
 import logging
 logger = logging.getLogger(__name__)
 
+# Per-transfer FIFO messages were raised to INFO during USB bring-up. At scan
+# rates they cost tens of thousands of log records per frame on the host path
+# that must keep the FPGA fed, so they go back to upstream Glasgow's TRACE
+# level. Enable with logging.getLogger(...).setLevel(5) when debugging USB.
+_TRACE = 5
+if logging.getLevelName(_TRACE) != "TRACE":
+    logging.addLevelName(_TRACE, "TRACE")
+
 _max_packets_per_ep = 1024
 _packets_per_xfer   = 32
 _xfers_per_queue    = min(16, _max_packets_per_ep // _packets_per_xfer)
@@ -239,7 +247,7 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
         else:
             self._in_stalls += 1
             while len(self._in_buffer) < length:
-                self.logger.info("FIFO: need %d bytes", length - len(self._in_buffer))
+                self.logger.log(_TRACE, "FIFO: need %d bytes", length - len(self._in_buffer))
                 await self._in_tasks.wait_one()
 
         async with self._in_pushback:
@@ -256,7 +264,7 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
                 length -= len(chunk)
             result = memoryview(b"".join(chunks))
 
-        self.logger.info("FIFO: read <%s>", dump_hex(result))
+        self.logger.log(_TRACE, "FIFO: read <%s>", dump_hex(result))
         return result
 
     def _out_slice(self):
@@ -293,14 +301,14 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
                 self.logger.info("FIFO: write pushback")
                 await self._out_tasks.wait_one()
         await self._out_tasks.poll()
-        self.logger.info("FIFO: write <%s>", dump_hex(data))
+        self.logger.log(_TRACE, "FIFO: write <%s>", dump_hex(data))
         self._out_buffer.write(data)
         while (len(self._out_tasks) < _xfers_per_queue and
                len(self._out_buffer) >= self._out_threshold):
             self._out_tasks.submit(self._out_task(self._out_slice()))
 
     async def flush(self, wait=True):
-        self.logger.info("FIFO: flush")
+        self.logger.log(_TRACE, "FIFO: flush")
         if len(self._out_tasks) >= _xfers_per_queue:
             self._out_stalls += 1
         while len(self._out_tasks) >= _xfers_per_queue:
@@ -313,7 +321,7 @@ class DirectDemultiplexerInterface(AccessDemultiplexerInterface):
             self._out_inflight += len(data)
             self._out_tasks.submit(self._out_task(data))
         if wait:
-            self.logger.info("FIFO: wait for flush")
+            self.logger.log(_TRACE, "FIFO: wait for flush")
             if self._out_tasks:
                 self._out_stalls += 1
             while self._out_tasks:

@@ -23,7 +23,9 @@ AutomationPy.buildingblocks.scan_params.
 """
 
 import asyncio
+import math
 import struct
+import time
 
 # Import path: use the `GlasgowDataIO.IobeamControl.*` prefix consistently,
 # matching what the service and the original macros/__init__.py used.
@@ -40,6 +42,7 @@ from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
     BeamSelectCommand, ExternalCtrlCommand,
 )
 from GlasgowDataIO.IobeamControl.commands.structs import u16
+from GlasgowDataIO.IobeamControl.transfer.linkStats import LinkStats
 
 
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
@@ -168,6 +171,12 @@ class RasterScanCommand(BaseCommand):
 
         tokens = self._max_pipeline
         token_fut = asyncio.Future()
+        total_pixels = self._x_range.count * self._y_range.count
+        stats = LinkStats(
+            "raster", dwell=self._dwell,
+            beam_hz=getattr(self, "link_beam_hz", None),
+            expected_chunks=math.ceil(
+                total_pixels / max(1, math.ceil(latency / max(1, int(self._dwell))))))
 
         async def sender():
             nonlocal tokens
@@ -184,7 +193,9 @@ class RasterScanCommand(BaseCommand):
                 # Without this, stream.write() only buffers in the
                 # demultiplexer _out_buffer and the device-visible state
                 # falls out of sync with the token pacing.
+                t_flush = time.perf_counter()
                 await stream.flush()
+                stats.sent(time.perf_counter() - t_flush)
                 tokens -= 1
                 if self.abort.is_set():
                     break
@@ -201,7 +212,6 @@ class RasterScanCommand(BaseCommand):
             # The receive loop iterates _iter_chunks() and stops before
             # reading these padding pixels, so they sit harmlessly in the
             # host _in_buffer until teardown.
-            total_pixels = self._x_range.count * self._y_range.count
             ratio_term = (
                 total_pixels // self._padding_ratio_denominator
                 if self._padding_ratio_denominator > 0 else 0
@@ -237,16 +247,31 @@ class RasterScanCommand(BaseCommand):
         # Discard the FFFF + cookie reply.
         # TODO: assert against synchronization result
         cookie = await stream.read(4)
-        for commands, pixel_count in self._iter_chunks(latency):
-            tokens += 1
-            if tokens == 1:
-                token_fut.set_result(None)
-                token_fut = asyncio.Future()
-            if tokens == self._max_pipeline + 1:
-                if self.abort.is_set():
-                    break
-            self._logger.debug(f"recver: tokens={tokens}")
-            yield await self.recv_res(pixel_count, stream, self._output_mode)
+        outcome = "error"
+        try:
+            for commands, pixel_count in self._iter_chunks(latency):
+                tokens += 1
+                if tokens == 1:
+                    token_fut.set_result(None)
+                    token_fut = asyncio.Future()
+                if tokens == self._max_pipeline + 1:
+                    if self.abort.is_set():
+                        outcome = "aborted"
+                        break
+                self._logger.debug(f"recver: tokens={tokens}")
+                t_read = time.perf_counter()
+                res = await self.recv_res(pixel_count, stream, self._output_mode)
+                stats.received(time.perf_counter() - t_read, pixel_count)
+                t_yield = time.perf_counter()
+                yield res
+                stats.consumed(time.perf_counter() - t_yield)
+            else:
+                outcome = "ok"
+        except GeneratorExit:
+            outcome = "closed"
+            raise
+        finally:
+            self._logger.info(stats.summary(outcome))
         # Fly back to origin. This is a single hidden pixel emitted to
         # move the DAC back to the scan's starting position after the
         # frame finishes; it isn't part of the captured scan data and

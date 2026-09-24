@@ -319,7 +319,8 @@ def scenario_raster(mode, grid, roi, dwell, extra_pipeline=EXTRA_PIPELINE, expec
     image = make_image(grid)
     bench = Bench(mode, image, TIMING, extra_pipeline)
     conn = SimConnection(bench)
-    flat = asyncio.run(raster(conn, grid, roi, dwell))
+    # The gateware exports the 14-bit code left-aligned (code << 2), like OBI.
+    flat = asyncio.run(raster(conn, grid, roi, dwell)) >> 2
     x0, y0 = ROI_ORIGIN
     expected = image[y0:y0 + roi, x0:x0 + roi].flatten()   # row-major: X is the fast axis
     offset, frac = align(flat, expected)
@@ -347,7 +348,7 @@ def scenario_vector(mode, grid):
     points = [(cx * step, cy * step, 1) for cx, cy in cells]
     bench = Bench(mode, image, TIMING, EXTRA_PIPELINE)
     conn = SimConnection(bench)
-    flat = asyncio.run(vector(conn, points))
+    flat = asyncio.run(vector(conn, points)) >> 2
     expected = np.array([image[y // step][x // step] for x, y, _ in points], dtype=np.uint16)
     offset, frac = align(flat, expected)
     record(f"vector {mode} {len(points)} distinct points", offset == 0 and frac == 1.0 and len(np.unique(flat)) > 1,

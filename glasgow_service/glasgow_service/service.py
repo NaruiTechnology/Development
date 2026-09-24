@@ -43,6 +43,7 @@ from GlasgowDataIO.IobeamControl.macros.vector import (
 )
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, BeamType
+from GlasgowDataIO.IobeamControl.applet.adcTiming import AdcTiming
 from GlasgowDataIO.IobeamControl.transfer.glasgowStream import GlasgowConnection
 from GlasgowDataIO.IobeamControl.transfer.adcStream import AdcConnection
 
@@ -197,6 +198,59 @@ def _default_vector_iter(edge: int = 2048, dwell: int = 1) -> Iterable[Tuple[int
         for y_idx in range(edge):
             y = y_range.start + ((y_idx * y_range.step) >> 8)
             yield x, y, dwell
+
+
+# Host-link pacing.
+#
+# The macros send a scan as chunks and flush the USB OUT pipe after every
+# chunk. On the VirtualBox install each chunk costs milliseconds of host/USB
+# time (the scope showed ~9 ms flat steps; the 2026-09-23 vector scan
+# averaged ~51 ms wall time per chunk including init and dumps), while one
+# 8196-dwell chunk is only ~1.1 ms of beam time. The FPGA then executes a
+# burst, runs dry and parks the beam until the next chunk lands: the DAC
+# shows short ramps separated by flat steps (4 per 2048-point line at 513
+# points/chunk) instead of OBI's continuous sawtooth. Upstream OBI avoids
+# this by sending a frame as one chunk (latency=65536*65536).
+#
+# Whether the per-chunk cost is the OUT flush, IN reads or host processing is
+# not yet measured; the macros log a "[link]" summary at the end of every
+# scan that splits the time up (see transfer/linkStats.py).
+#
+# Each chunk must therefore carry more beam time than one flush costs. The
+# requested latency stays a lower bound; it is raised to cover
+# `minChunkBeamTimeMs` (rasterScan / vectorScan in streamData.json).
+FPGA_CLOCK_HZ                    = 48_000_000
+DEFAULT_MIN_CHUNK_BEAM_TIME_MS   = 100.0
+# Streamed vector points cost 6 bytes each on the OUT pipe; cap one chunk so
+# max_pipeline chunks in flight stay well under the ~1.5 MB where bulk writes
+# were seen to stall (see VectorScanCommand.transfer).
+VECTOR_MAX_CHUNK_POINTS          = 32_768
+
+
+def _command_dwell(cmd) -> int:
+    """Dwell the command will run with (raster commands store it; vector
+    commands carry it per point, so their effective default is used)."""
+    dwell = getattr(cmd, "_dwell", None)
+    if dwell is None:
+        dwell = getattr(cmd, "link_dwell", None)
+    return max(1, int(dwell if dwell is not None else 1))
+
+
+def _link_chunk_latency(requested: int, dwell: int, conversion_hz: float,
+                        min_chunk_ms: float, max_points: Optional[int] = None) -> int:
+    """Latency (sum of dwell values per chunk, the macros' unit) such that
+    one chunk keeps the FPGA busy for at least `min_chunk_ms`.
+
+    A pixel with dwell d takes d + 1 ADC conversions. `requested` is kept as
+    a lower bound so explicit larger values still win."""
+    requested = max(1, int(requested))
+    if min_chunk_ms <= 0 or conversion_hz <= 0:
+        return requested
+    dwell = max(0, int(dwell))
+    pixels = math.ceil((min_chunk_ms / 1000.0) * conversion_hz / (dwell + 1))
+    if max_points is not None:
+        pixels = min(pixels, int(max_points))
+    return max(requested, pixels * max(1, dwell))
 
 
 def _roi_bounds(roi) -> Optional[Tuple[int, int, int, int]]:
@@ -729,6 +783,12 @@ class DeviceService:
         # doesn't need to be migrated in lockstep.
         self._raster_params_defaults = RasterParams.from_json(self._raster_defaults)
         self._vector_params_defaults = VectorParams.from_json(self._vector_defaults)
+        try:
+            self._conversion_hz = FPGA_CLOCK_HZ / AdcTiming.from_action(action).period
+        except Exception as exc:  # malformed timing block: keep the requested latency
+            logger.warning("ADC timing unreadable (%s); host-link chunk pacing disabled, "
+                           "scans use the requested latency", exc)
+            self._conversion_hz = 0.0
 
         self._conn: Optional[GlasgowConnection] = None
         self._adc_conn: Optional[AdcConnection] = None
@@ -835,6 +895,12 @@ class DeviceService:
 
     def _activate_command(self, command) -> None:
         self._active_command = command
+        # Lets the macros' end-of-scan [link] summary estimate beam time.
+        if self._conversion_hz > 0:
+            try:
+                command.link_beam_hz = self._conversion_hz
+            except AttributeError:
+                pass
         if self._abort_requested:
             command.abort.set()
 
@@ -1001,6 +1067,34 @@ class DeviceService:
             points            = req.points,
         )
 
+    def _chunk_latency(self, kind: str, requested: int, cmd) -> int:
+        """Effective transfer latency for a hardware scan (see _link_chunk_latency).
+
+        ``cmd`` is the command actually being sent, not the request kind: a
+        horizontal_sawtooth vector request may have been routed to a
+        RasterScanCommand, and then the streamed-vector point cap must not
+        apply (the raster generator sends a few bytes per chunk)."""
+        dwell = _command_dwell(cmd)
+        # The DAC-ramp diagnostic is itself the waveform under test.  Splitting
+        # the 16,384-code sweep into host-link chunks inserts a USB/flush gap
+        # between ramp segments, which appears on a scope as a staircase or
+        # as a much-too-slow waveform.  Match upstream OBI's RampControl and
+        # keep the complete sweep in one FPGA command stream.
+        if kind == "dac_ramp":
+            return max(1, int(requested), 16384 * dwell)
+
+        streamed = isinstance(cmd, VectorScanCommand)
+        cfg = self._vector_defaults if kind == "vector" else self._raster_defaults
+        min_ms = float(cfg.get("minChunkBeamTimeMs", DEFAULT_MIN_CHUNK_BEAM_TIME_MS))
+        latency = _link_chunk_latency(
+            requested, dwell, self._conversion_hz, min_ms,
+            VECTOR_MAX_CHUNK_POINTS if streamed else None)
+        if latency != requested:
+            logger.info("[%s] chunk latency %d -> %d (>= %.0f ms beam time per host flush%s)",
+                        kind, requested, latency, min_ms,
+                        ", streamed-point cap" if streamed else "")
+        return latency
+
     def _adaptive_gray_feedback_config(
         self, req: "VectorRequest"
     ) -> Optional[AdaptiveGrayFeedbackConfig]:
@@ -1077,13 +1171,14 @@ class DeviceService:
         async with self._acquire("raster"):
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
+            latency = self._chunk_latency("raster", req.latency_bytes, cmd)
             self._activate_command(cmd)
             adc_monitor = _AdcPresenceMonitor(
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
             adc_presence_fault = False
             try:
                 async for chunk in conn.transfer_multiple(
-                        cmd, latency=req.latency_bytes):
+                        cmd, latency=latency):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
                     fault = adc_monitor.observe(chunk)
@@ -1112,7 +1207,7 @@ class DeviceService:
                         "chunks": captured,
                         "resolution": req.resolution,
                         "dwell": req.dwell,
-                        "latency_bytes": req.latency_bytes,
+                        "latency_bytes": latency,
                         "source": "stream",
                     })
 
@@ -1126,11 +1221,12 @@ class DeviceService:
         async with self._acquire("vector"):
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(req)
+            latency = self._chunk_latency("vector", req.latency_bytes, cmd)
             self._activate_command(cmd)
-            if req.pre_process:
-                cmd._pre_process_chunks(latency=req.latency_bytes)
+            if req.pre_process and hasattr(cmd, "_pre_process_chunks"):
+                cmd._pre_process_chunks(latency=latency)
             transfer_iter = conn.transfer_multiple(
-                cmd, latency=req.latency_bytes)
+                cmd, latency=latency)
             adc_monitor = _AdcPresenceMonitor(
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
             adc_presence_fault = False
@@ -1165,7 +1261,7 @@ class DeviceService:
                         self._set_last_scan({
                             "kind": "vector",
                             "chunks": captured,
-                            "latency_bytes": req.latency_bytes,
+                            "latency_bytes": latency,
                             "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                             "scan_path": req.scan_path.value,
                             "points": req.points,
@@ -1189,6 +1285,7 @@ class DeviceService:
         async with self._acquire("dac_ramp"):
             conn = await self._ensure_conn()
             cmd = self._build_dac_ramp_cmd(req)
+            latency = self._chunk_latency("dac_ramp", req.latency_bytes, cmd)
             self._activate_command(cmd)
             # Same disconnected-bus detection raster/vector already run:
             # a floating revC3 ADC bus reads as full scale forever, which
@@ -1201,7 +1298,7 @@ class DeviceService:
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
             try:
                 async for chunk in conn.transfer_multiple(
-                        cmd, latency=req.latency_bytes):
+                        cmd, latency=latency):
                     self._status.chunks_in_flight += 1
                     captured.append(chunk)
                     yield _sample_chunk_to_wire_bytes(chunk)
@@ -1220,7 +1317,7 @@ class DeviceService:
                         "chunks": captured,
                         "resolution": 16384,
                         "dwell": req.dwell,
-                        "latency_bytes": req.latency_bytes,
+                        "latency_bytes": latency,
                         "source": "stream",
                     })
 
@@ -1263,6 +1360,7 @@ class DeviceService:
         async with self._acquire("raster"):
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
+            latency = self._chunk_latency("raster", req.latency_bytes, cmd)
             # Log effective params (post-override) — what actually goes to
             # the macro — rather than just the raw request. Makes it easy
             # to confirm a streamData.json default landed where it should.
@@ -1278,7 +1376,7 @@ class DeviceService:
                 enabled=bool(req.adc_valid) and not _simulation_enabled(self._config))
             try:
                 async for chunk in conn.transfer_multiple(
-                        cmd, latency=req.latency_bytes):
+                        cmd, latency=latency):
                     chunks.append(chunk)
                     self._status.chunks_in_flight += 1
                     fault = adc_monitor.observe(chunk)
@@ -1292,7 +1390,7 @@ class DeviceService:
                 raise
             send_time = time.perf_counter() - t0
 
-        pixels_per_chunk = math.ceil(req.latency_bytes / req.dwell)
+        pixels_per_chunk = math.ceil(latency / _command_dwell(cmd))
         total_pixels     = req.resolution * req.resolution
         expected_chunks  = math.ceil(total_pixels / pixels_per_chunk)
         total_bytes      = sum(len(c) * 2 for c in chunks)
@@ -1304,7 +1402,7 @@ class DeviceService:
                 "chunks": chunks,
                 "resolution": req.resolution,
                 "dwell": req.dwell,
-                "latency_bytes": req.latency_bytes,
+                "latency_bytes": latency,
                 "source": "validated",
             })
 
@@ -1345,6 +1443,7 @@ class DeviceService:
         async with self._acquire("dac_ramp"):
             conn = await self._ensure_conn()
             cmd = self._build_dac_ramp_cmd(req)
+            latency = self._chunk_latency("dac_ramp", req.latency_bytes, cmd)
             logger.debug(
                 "[dac_ramp] axis=%s fixed_code=%d dwell=%d latency=%d cookie=%d",
                 req.axis.value, req.fixed_code, req.dwell, req.latency_bytes, req.cookie,
@@ -1354,7 +1453,7 @@ class DeviceService:
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
             try:
                 async for chunk in conn.transfer_multiple(
-                        cmd, latency=req.latency_bytes):
+                        cmd, latency=latency):
                     chunks.append(chunk)
                     self._status.chunks_in_flight += 1
                     fault = adc_monitor.observe(chunk)
@@ -1377,7 +1476,7 @@ class DeviceService:
                 "chunks": chunks,
                 "resolution": 16384,
                 "dwell": req.dwell,
-                "latency_bytes": req.latency_bytes,
+                "latency_bytes": latency,
                 "source": "validated",
             })
 
@@ -1426,11 +1525,12 @@ class DeviceService:
         async with self._acquire("vector"):
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(req)
+            latency = self._chunk_latency("vector", req.latency_bytes, cmd)
             adaptive_feedback = getattr(cmd, "_adaptive_gray_feedback", None)
 
-            if req.pre_process:
+            if req.pre_process and hasattr(cmd, "_pre_process_chunks"):
                 t0 = time.perf_counter()
-                cmd._pre_process_chunks(latency=req.latency_bytes)
+                cmd._pre_process_chunks(latency=latency)
                 process_time = time.perf_counter() - t0
                 logger.debug("[vector] pre-process %.4fs", process_time)
 
@@ -1448,7 +1548,7 @@ class DeviceService:
                 enabled=not _simulation_enabled(self._config))
             try:
                 async for chunk in conn.transfer_multiple(
-                        cmd, latency=req.latency_bytes):
+                        cmd, latency=latency):
                     chunks.append(chunk)
                     self._status.chunks_in_flight += 1
                     fault = adc_monitor.observe(chunk)
@@ -1468,7 +1568,7 @@ class DeviceService:
             self._set_last_scan({
                 "kind": "vector",
                 "chunks": chunks,
-                "latency_bytes": req.latency_bytes,
+                "latency_bytes": latency,
                 "dwell": req.dwell,
                 "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                 "scan_path": req.scan_path.value,
@@ -1570,13 +1670,52 @@ class DeviceService:
             external_control=req.external_control,
         )
 
-    def _build_vector_cmd(self, req: VectorRequest) -> VectorScanCommand:
+    def _build_vector_cmd(self, req: VectorRequest):
         """Same shape as raster: every macro tunable comes from the
-        effective params object."""
+        effective params object.
+
+        A default-pattern horizontal_sawtooth sweep is a plain X-fast raster
+        over the ROI, so it runs on the FPGA's raster generator, exactly like
+        upstream OBI images a frame: the host sends a few bytes per chunk
+        instead of 6 bytes per point, the gateware produces a continuous
+        sawtooth, and the sample order and DAC codes are identical to
+        _roi_vector_iter (same DACCodeRange arithmetic). Every other path
+        (custom points, triangle/vertical orders, adaptive feedback) still
+        streams points.
+        """
         params = self._effective_vector_params(req)
         adaptive_feedback = self._adaptive_gray_feedback_config(req)
         if adaptive_feedback is not None and params.dwell < 16:
             params = params.override(dwell=16)
+
+        ranges = None
+        if self._vector_runs_on_raster_generator(req, adaptive_feedback):
+            x0, x1, y0, y1 = _roi_bounds(req.roi) or (0, 16383, 0, 16383)
+            try:
+                ranges = (_dac_range_for_bounds(x0, x1, params.vector_resolution),
+                          _dac_range_for_bounds(y0, y1, params.vector_resolution))
+            except ValueError:
+                # Coarser than 256 codes per point: the raster generator's
+                # UQ8.8 step can't express it, so stream the points instead.
+                ranges = None
+        if ranges is not None:
+            raster = self._raster_params_defaults
+            logger.info("[vector] horizontal_sawtooth %dx%d on the FPGA raster generator",
+                        params.vector_resolution, params.vector_resolution)
+            return RasterScanCommand(
+                cookie=params.cookie,
+                x_range=ranges[0],
+                y_range=ranges[1],
+                dwell_time=params.dwell,
+                output_mode=self._parse_output_mode(params.output_mode),
+                beam_type=self._parse_beam_type(params.beam_type),
+                external_control=params.external_control,
+                frame_blank=False,
+                max_pipeline=raster.max_pipeline,
+                padding_min_pixels=raster.padding_min_pixels,
+                padding_ratio_denominator=raster.padding_ratio_denominator,
+                padding_dwell=raster.padding_dwell,
+            )
 
         if req.pattern is VectorPattern.custom:
             if req.points is None and not (
@@ -1616,7 +1755,7 @@ class DeviceService:
                 f"valid: {[m.name for m in BeamType]}"
             )
 
-        return VectorScanCommand(
+        cmd = VectorScanCommand(
             cookie=params.cookie,
             output_mode=OutputMode.SixteenBit if adaptive_feedback is not None else output_mode,
             beam_type=beam_type,
@@ -1629,6 +1768,33 @@ class DeviceService:
             drain_safety_factor=params.drain_safety_factor,
             sender_drain_timeout_s=params.sender_drain_timeout_s,
         )
+        cmd.link_dwell = params.dwell
+        return cmd
+
+    def _vector_runs_on_raster_generator(self, req: VectorRequest, adaptive_feedback) -> bool:
+        if not bool(self._vector_defaults.get("sawtoothOnRasterGenerator", True)):
+            return False
+        if adaptive_feedback is not None or req.scan_path is not VectorScanPath.horizontal_sawtooth:
+            return False
+        if req.pattern is VectorPattern.default:
+            return True
+        # custom without points = the production ROI-bitmap fallback, which
+        # scans the same ROI sweep (see below)
+        return req.pattern is VectorPattern.custom and req.points is None and req.roi is not None
+
+    @staticmethod
+    def _parse_output_mode(name: str) -> OutputMode:
+        try:
+            return OutputMode[name]
+        except KeyError:
+            raise ValueError(f"unknown output_mode {name!r}; valid: {[m.name for m in OutputMode]}")
+
+    @staticmethod
+    def _parse_beam_type(name: str) -> BeamType:
+        try:
+            return BeamType[name]
+        except KeyError:
+            raise ValueError(f"unknown beam_type {name!r}; valid: {[m.name for m in BeamType]}")
 
     # -------- on-demand download bytes (CSV / PNG figure) -----------------
 

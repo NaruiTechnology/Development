@@ -42,6 +42,7 @@
                     "enableEbeam": false,
                     "enableIbeam": true,
                     "rasterScan": {
+                        "minChunkBeamTimeMs": 100,
                         "pixels": 8192,
                         "frameBlank": false,
                         "beamType": "Ion",
@@ -51,6 +52,8 @@
                         "dwell": 16
                     },
                     "vectorScan": {
+                        "minChunkBeamTimeMs": 100,
+                        "sawtoothOnRasterGenerator": true,
                         "latency": 8196,
                         "adcLatency": 8,
                         "beamType": "Ion",
@@ -186,7 +189,7 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": true,
+    "IsProduction": false,
     "DumpData": true,
     "AdcTest": true
 }

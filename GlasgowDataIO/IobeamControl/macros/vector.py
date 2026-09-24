@@ -15,6 +15,7 @@ AutomationPy.buildingblocks.scan_params for the dataclass.
 import array
 import asyncio
 import struct
+import time
 from dataclasses import dataclass
 
 # Import path note: must match the prefix used by callers
@@ -29,6 +30,7 @@ from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
 )
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, CmdType, BeamType
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
+from GlasgowDataIO.IobeamControl.transfer.linkStats import LinkStats
 
 
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
@@ -447,6 +449,11 @@ class VectorScanCommand(BaseCommand):
 
         count_queue = asyncio.Queue()
         end_marker = object()
+        # Per-point dwell can vary; the service sets link_dwell to the nominal
+        # dwell so the summary can estimate beam time (None -> timings only).
+        stats = LinkStats("vector", dwell=getattr(self, "link_dwell", None),
+                          beam_hz=getattr(self, "link_beam_hz", None))
+        outcome = "error"
 
         async def sender():
             nonlocal tokens
@@ -469,7 +476,9 @@ class VectorScanCommand(BaseCommand):
                     # The token-based pacing then loses sync with the actual
                     # device-visible state, freezing exactly at
                     # max_pipeline+1 chunks.
+                    t_flush = time.perf_counter()
                     await stream.flush()
+                    stats.sent(time.perf_counter() - t_flush)
                     tokens -= 1
                     total_pixels += pixel_count
                     await count_queue.put(pixel_count)
@@ -539,11 +548,23 @@ class VectorScanCommand(BaseCommand):
                     token_fut = asyncio.Future()
                 if tokens == max_pipeline + 1:
                     if self.abort.is_set():
+                        outcome = "aborted"
                         break
                 self._logger.debug(f"recver: tokens={tokens}")
-                yield await self.recv_res(pixel_count, stream, self._output_mode)
+                t_read = time.perf_counter()
+                res = await self.recv_res(pixel_count, stream, self._output_mode)
+                stats.received(time.perf_counter() - t_read, pixel_count)
+                t_yield = time.perf_counter()
+                yield res
+                stats.consumed(time.perf_counter() - t_yield)
             receiver_complete = True
+            if outcome != "aborted":
+                outcome = "ok"
+        except GeneratorExit:
+            outcome = "closed"
+            raise
         finally:
+            self._logger.info(stats.summary(outcome))
             # Wait for the sender to finish its drain padding + final
             # flush before this generator returns.
             #
