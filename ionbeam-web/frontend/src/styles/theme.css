@@ -1031,6 +1031,17 @@ body {
   font-size: 12px;
 }
 
+.roi-calibration-card__source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--c-text-dim);
+}
+
+.roi-calibration-card__source--scanGeometry { color: var(--c-accent); }
+
 .roi-calibration-card__meta {
   display: grid;
   gap: 6px;

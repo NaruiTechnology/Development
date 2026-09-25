@@ -38,11 +38,13 @@ import {
 import { fetchScanGeometry, saveScanGeometry, type ScanGeometryState } from "../../lib/scanGeometryApi";
 import { useAppDispatch, useAppSelector } from "../../store";
 import { saveDimensionCalibration } from "../../store/dimensionCalibrationSlice";
+import { shortTimestamp, type DimensionCalibrationValues } from "../../lib/dimensionCalibrationPersistence";
 import { fetchMagCalibration, saveMagCalibration } from "../../store/magCalibrationSlice";
 import { applyPersistedDimensionCalibration, setScanGeometry } from "../../store/scanSlice";
 import type { CalibrationEquipmentType } from "../../types/calibration";
 import { Icon } from "../Icon";
 import { LoadingSpinner } from "../LoadingSpinner";
+import { ScanGeometryHelp } from "./ScanGeometryHelp";
 
 interface Props {
   equipmentId: number;
@@ -183,6 +185,12 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
 
   async function apply() {
     if ("error" in built || !canApply) return;
+    if (
+      dimension.source?.kind === "manual" &&
+      !window.confirm(t("geometry.overwriteManual"))
+    ) {
+      return;
+    }
     setBusy(true);
     setNotice(null);
     try {
@@ -220,7 +228,11 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
       clearBitmapSelectionCache();
       dispatch(setScanGeometry(toAppliedGeometry(geometry, profileRevision)));
       const bounds = dimensionBoundsFromGeometry(geometry);
-      const values = { ...dimension, ...bounds };
+      const values: DimensionCalibrationValues = {
+        ...dimension,
+        ...bounds,
+        source: { kind: "scanGeometry", equipment_id: equipmentId, equipment_type: type, profile_revision: profileRevision, applied_at: new Date().toISOString() },
+      };
       dispatch(saveDimensionCalibration(values));
       dispatch(applyPersistedDimensionCalibration(values));
       setNotice({ tone: "ok", text: t("geometry.applied") });
@@ -260,6 +272,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
     <section className="calib-geom">
       <div className="calib-geom__head">
         <strong>{t("geometry.title")}</strong>
+        <ScanGeometryHelp />
         {appliedHere ? (
           <span className={`calib-badge calib-badge--${stale ? "warn" : "ok"}`}>
             {stale ? t("geometry.status.stale", { revision: storedCfg?.profile_revision ?? 0 }) : t("geometry.status.applied")}
@@ -427,6 +440,17 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
       )}
 
       {/* 5. apply */}
+      {dimension.source && (
+        <p className="calib-muted">
+          {dimension.source.kind === "manual"
+            ? t("geometry.dimensionSource.manual", { when: shortTimestamp(dimension.source.set_at) })
+            : t("geometry.dimensionSource.scanGeometry", {
+                type: dimension.source.equipment_type,
+                revision: dimension.source.profile_revision ?? 0,
+                when: shortTimestamp(dimension.source.applied_at),
+              })}
+        </p>
+      )}
       <div className="calib-geom__apply">
         {corrected && (
           <label className="calib-check">

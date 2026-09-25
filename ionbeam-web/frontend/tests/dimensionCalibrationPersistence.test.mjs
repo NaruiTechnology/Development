@@ -31,3 +31,24 @@ test("invalid DIMENTION CAL storage is ignored", () => {
   assert.equal(parseDimensionCalibration(JSON.stringify({ ...calibration, scale_unit: "" })), null);
   assert.equal(parseDimensionCalibration(JSON.stringify({ ...calibration, y_origin: null })), null);
 });
+
+test("a manual source round-trips through serialize/parse", () => {
+  const withSource = { ...calibration, source: { kind: "manual", set_at: "2026-01-01T00:00:00Z" } };
+  assert.deepEqual(parseDimensionCalibration(serializeDimensionCalibration(withSource)), withSource);
+});
+
+test("a scanGeometry source round-trips through serialize/parse", () => {
+  const withSource = {
+    ...calibration,
+    source: { kind: "scanGeometry", equipment_id: 7, equipment_type: "FIB", profile_revision: 3, applied_at: "2026-01-01T00:00:00Z" },
+  };
+  assert.deepEqual(parseDimensionCalibration(serializeDimensionCalibration(withSource)), withSource);
+});
+
+test("a malformed source is dropped, not treated as invalid storage", () => {
+  const parsed = parseDimensionCalibration(JSON.stringify({ ...calibration, source: { kind: "manual" } }));
+  assert.ok(parsed);
+  assert.equal(parsed.source, undefined);
+  const parsed2 = parseDimensionCalibration(JSON.stringify({ ...calibration, source: { kind: "somethingElse" } }));
+  assert.equal(parsed2.source, undefined);
+});

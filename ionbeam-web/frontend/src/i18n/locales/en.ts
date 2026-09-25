@@ -569,6 +569,8 @@ export const en = {
   "help.resolution.aria": "What does the resolution field do?",
   "help.magCalibration.title": "Magnification calibration — HFOV mapping",
   "help.magCalibration.aria": "How does magnification calibration compute HFOV?",
+  "help.scanGeometry.title": "Scan geometry — world coordinates",
+  "help.scanGeometry.aria": "How does scan geometry map scans to world coordinates?",
   "help.latency.title": "Latency — chunk size on the USB pipeline",
   "help.latency.aria": "What does the latency field do?",
   "help.cookie.title": "Cookie — synchronization tag",

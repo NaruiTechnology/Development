@@ -648,4 +648,47 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
     </>
   ),
+  scanGeometry: () => (
+    <>
+      <p>
+        本面板把所选设备的校准档案（profile）数值与当前束流已测得的放大倍率校准结合，
+        将扫描映射为真实世界坐标（µm）。在点击<strong>应用到扫描</strong>之前，不会影响实际扫描。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>1 · 来自校准档案的数值。</strong>像素数、旋转偏移、Y/X 宽高比、束流倾角、
+        停束位置（spot park）以及厂商 dwell 基准值，均读取自 CONFIGURATION &gt; Admin &gt;
+        Calibration 中该设备与该列（FIB/SEM）的数据。显示为<em>未设置</em>的项会使用内置默认值——
+        点击旁边的<strong>编辑</strong>可为其填入真实的测量值。
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>放大倍率（Magnification）</strong>由显微镜本身设置，本软件并不控制它——请填入镜台当前实际显示的数值。</li>
+        <li><strong>HFOV 覆盖 / Pixels X / Pixels Y</strong> 仅针对本次操作点，覆盖校准档案或放大倍率校准原本给出的值。</li>
+        <li><strong>扫描旋转</strong>与<strong>台面 X/Y</strong>描述即将扫描的帧：其旋转角度，以及帧中心处的台面位置（µm）。</li>
+        <li><strong>倾角校正</strong>在台面朝向束流倾斜时补偿 Y 方向的比例——启用后填入台面倾角（度）。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>3 · 结果。</strong>该操作点下计算得到的扫描帧：像素尺寸、比例系数
+        （µm / DAC 码）、视场（FOV）、帧中心及其四个角点的世界坐标，以及旋转、剪切和帧时间。
+        只有当上方档案中的数值是真实校准值而非默认值时，这些结果才可信。
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>4 · 用基准点（fiducials）校正。</strong>对于已知真实世界位置的特征（网格线、
+        标记点、一次台面移动），填入它在图像中出现的位置（像素或 DAC）及其真实位置（µm）。
+        至少添加 3 个点（仿射拟合）或 2 个点（相似变换拟合，无剪切/独立缩放），并尽量分布在整个
+        视场内，然后点击<strong>拟合</strong>。残差列与预览图会显示每个点与拟合结果的偏差。
+      </div>
+
+      <p>
+        <strong>应用到扫描</strong>需要 SuperUser 或更高权限，会把结果写入{" "}
+        <code>streamData.json</code>，并让 ROI / 位图扫描路径改用这一经过校正的映射。
+        出现"过期"标记表示校准档案自应用后已产生新的修订版本——请检查后重新应用。
+        <strong>把缩放并入 HFOV</strong>（拟合后才会出现）会把拟合得到的缩放修正直接并入已保存的
+        放大倍率校准曲线，而不是单独保留为一次性校正，这样今后在该放大倍率下的扫描会直接使用修正后的值。
+      </p>
+    </>
+  ),
 };

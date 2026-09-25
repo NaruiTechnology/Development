@@ -36,7 +36,8 @@ export type HelpKey =
   | "vectorGrayLevelFilter"
   | "scanModes"
   | "magCalibration"
-  | "dacCheck";
+  | "dacCheck"
+  | "scanGeometry";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
   adcValid: () => (
@@ -801,6 +802,64 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         The chart is drawn on log-log axes because FOV normally changes
         approximately inversely with magnification. CSV import/export
         uses two data columns: magnification and FOV meters.
+      </p>
+    </>
+  ),
+  scanGeometry: () => (
+    <>
+      <p>
+        This maps a scan to real-world coordinates (µm) by combining the
+        selected equipment&apos;s calibration-profile values with the
+        measured magnification calibration for the current beam. Nothing
+        changes for actual scans until you press <strong>Apply to scans</strong>.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>1 · Values from the calibration profile.</strong> Pixel
+        count, rotation offset, Y/X aspect, beam tilt, spot park and the
+        vendor dwell reference, read from CONFIGURATION &gt; Admin &gt;
+        Calibration for this equipment and column. A value shown as{" "}
+        <em>not set</em> falls back to a built-in default — click{" "}
+        <strong>Edit</strong> next to it to give it a real, measured value.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Magnification</strong> is set on the instrument itself, not by this software — enter what the microscope is actually showing.</li>
+        <li><strong>HFOV override / Pixels X / Pixels Y</strong> replace what the profile or magnification calibration would otherwise supply for this operating point only.</li>
+        <li><strong>Scan rotation</strong> and <strong>Stage X/Y</strong> describe the frame you&apos;re about to scan: its rotation and the stage position at its centre, in µm.</li>
+        <li><strong>Tilt correction</strong> compensates the Y scale when the stage is tilted toward the beam (enter the stage tilt in degrees once enabled).</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>3 · Results.</strong> The computed scan frame for that
+        operating point: pixel size, scale factor (µm per DAC code), field
+        of view, frame centre and its four corners in world coordinates —
+        plus rotation, shear and frame time. This is the number to trust
+        once the profile above holds real, calibrated values rather than
+        defaults.
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>4 · Rectify with fiducials.</strong> For a feature whose
+        real-world position you know (a grid line, a marker, a stage
+        move), enter where it lands in the image — pixel or DAC — and its
+        true position in µm. Add at least 3 points (affine fit) or 2
+        (similarity fit, no shear/independent scale) spread across the
+        field, then press <strong>Fit</strong>. The residual column and
+        preview show how far each point still is from where the fit
+        predicts it.
+      </div>
+
+      <p>
+        <strong>Apply to scans</strong> needs SuperUser or higher, writes
+        the result to <code>streamData.json</code>, and switches the ROI /
+        bitmap scan paths to use this rectified mapping. A stale badge
+        means the calibration profile changed revision since this was
+        applied — review and re-apply. <strong>Fold scale into HFOV</strong>{" "}
+        (shown once a fit is applied) bakes any fitted scale correction
+        into the saved magnification-calibration curve instead of keeping
+        it as a separate correction, so future scans at this magnification
+        start from the corrected value directly.
       </p>
     </>
   ),
