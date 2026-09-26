@@ -17,6 +17,7 @@ import {
   getDimensionCalibrationFromDb,
   saveDimensionCalibrationToDb,
   type DimensionCalibrationInput,
+  type DimensionCalibrationRow,
 } from "./dimensionCalibrationRepository";
 
 export interface DimensionCalibrationRouteDeps {
@@ -36,6 +37,40 @@ const NUMERIC_FIELDS = [
   "viewport_y_end",
 ] as const;
 
+/**
+ * The DB row is flat (source_kind / source_equipment_type / source_profile_revision / source_at as
+ * separate columns); the frontend's DimensionCalibrationValues nests those under `source`. Without this,
+ * a GET silently drops the provenance tag (source ends up undefined) every time it's loaded fresh — the
+ * "Dimension Cal is currently ___" line in Scan geometry would go blank on every reload even though a
+ * value really is saved.
+ */
+function toWireFormat(row: DimensionCalibrationRow) {
+  const base = {
+    x_origin: row.x_origin,
+    x_end: row.x_end,
+    y_origin: row.y_origin,
+    y_end: row.y_end,
+    viewport_x_start: row.viewport_x_start,
+    viewport_x_end: row.viewport_x_end,
+    viewport_y_start: row.viewport_y_start,
+    viewport_y_end: row.viewport_y_end,
+    scale_unit: row.scale_unit,
+  };
+  if (row.source_kind === "manual") {
+    return { ...base, source: { kind: "manual" as const, set_at: row.source_at } };
+  }
+  return {
+    ...base,
+    source: {
+      kind: "scanGeometry" as const,
+      equipment_id: row.equipment_id,
+      equipment_type: row.source_equipment_type as "FIB" | "SEM",
+      profile_revision: row.source_profile_revision,
+      applied_at: row.source_at,
+    },
+  };
+}
+
 export function registerDimensionCalibrationRoutes(app: express.Express, deps: DimensionCalibrationRouteDeps): void {
   app.get(`${BASE}/:equipmentId`, async (req, res) => {
     try {
@@ -51,7 +86,7 @@ export function registerDimensionCalibrationRoutes(app: express.Express, deps: D
         return;
       }
       const row = await getDimensionCalibrationFromDb(equipmentId);
-      res.json({ ok: true, calibration: row });
+      res.json({ ok: true, calibration: row ? toWireFormat(row) : null });
     } catch (err) {
       deps.sendError(res, err);
     }
@@ -75,7 +110,7 @@ export function registerDimensionCalibrationRoutes(app: express.Express, deps: D
         return;
       }
       const row = await saveDimensionCalibrationToDb(input);
-      res.json({ ok: true, calibration: row });
+      res.json({ ok: true, calibration: toWireFormat(row) });
     } catch (err) {
       deps.sendError(res, err);
     }

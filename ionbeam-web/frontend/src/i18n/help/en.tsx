@@ -38,7 +38,8 @@ export type HelpKey =
   | "magCalibration"
   | "dacCheck"
   | "scanGeometry"
-  | "geometryFit";
+  | "geometryFit"
+  | "rectifyFiducials";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
   adcValid: () => (
@@ -902,6 +903,55 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         or two beyond the minimum, spread across the field rather than
         clustered, before trusting the residual column or the preview's
         red lines as a real measure of fit quality.
+      </p>
+    </>
+  ),
+  rectifyFiducials: () => (
+    <>
+      <p>
+        This gives a handful of points where you know both where they land
+        in a scan and their true real-world position, so the fit can solve
+        for rotation/shear error beyond what the calibration profile alone
+        gives you. It's entirely optional — sections 1–3 already give a
+        working, uncorrected frame without it.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>1 · Pick reference features with a known position.</strong>{" "}
+        Grid lines on a calibration standard, a marker you moved the stage
+        to a specific offset for, a stage move of a known distance —
+        something whose real-world (µm) position you're already certain
+        of from outside the system. That's the ground truth the fit checks
+        everything against.
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>2 · Fill in each row.</strong> <em>Measured in</em>: pixel
+        if you're reading the feature off a captured image (column/row in
+        pixels), or DAC if you already know its raw beam-position code
+        (0–16383) directly. <em>Column/X</em> and <em>Row/Y</em>: where
+        that feature actually appears. <em>World X/Y (µm)</em>: its true,
+        known position — your ground truth from step 1, not anything the
+        tool computes. A row only counts once both positions are filled
+        in; unchecking a row excludes it without deleting it.
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>3 · Add enough points, spread out.</strong> At least 3 for
+        an affine fit (independent X/Y scale, rotation and shear) or 2 for
+        a similarity fit (single scale + rotation, no shear — safer with
+        few points). Spread them across the frame: corners and edges
+        constrain the fit far better than points bunched together.
+      </div>
+
+      <p>
+        Press <strong>Fit</strong> to compute the correction and see it in
+        the preview and Residual column — this alone changes nothing for
+        actual scans. At the minimum point count the fit is exact (zero
+        residual) by construction, which isn't a quality signal; add a
+        point or two beyond the minimum before trusting the residuals.
+        Only <strong>Apply to scans</strong> makes it live, and will warn
+        first if it's about to replace a manual Dimension Cal measurement.
       </p>
     </>
   ),

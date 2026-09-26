@@ -6135,6 +6135,8 @@ body {
 .calib-geom__head { display: flex; align-items: center; gap: 10px; }
 .calib-geom__head .spacer, .calib-geom__apply .spacer { flex: 1 1 auto; }
 .calib-geom__h { margin: 8px 0 0; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--c-text); }
+.calib-geom__h-row { display: flex; align-items: center; gap: 8px; }
+.calib-geom__h-row .calib-geom__h { margin: 8px 0 0; }
 .calib-geom__table { border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-elev-1); }
 .calib-geom__tr {
   display: grid; grid-template-columns: minmax(160px, 1.3fr) minmax(120px, 1fr) minmax(80px, 0.7fr) auto;
@@ -6149,6 +6151,7 @@ body {
 .calib-geom__form label:not(.calib-check) { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--c-text-dim); }
 .calib-geom__results { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(200px, 0.9fr); gap: 12px; align-items: start; }
 .calib-geom__goto { margin-top: 10px; display: flex; }
+.calib-geom__import { margin-top: 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .calib-geom__grid { width: 100%; border-collapse: collapse; font-size: 12px; }
 .calib-geom__grid th, .calib-geom__grid td { padding: 3px 6px; border-bottom: 1px solid var(--c-border-soft); }
 .calib-geom__grid th { text-align: left; font-weight: 500; color: var(--c-text-dim); }

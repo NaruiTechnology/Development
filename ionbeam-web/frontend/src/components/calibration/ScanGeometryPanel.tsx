@@ -7,7 +7,7 @@
  * known world position) rectify the frame by least squares; "Apply to scans" stores the result in streamData.json and
  * switches the ROI / bitmap scan paths to the rectified world -> DAC mapping.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../../i18n";
 import { clearBitmapSelectionCache } from "../../lib/bitmapVector";
@@ -46,6 +46,7 @@ import { Icon } from "../Icon";
 import { LoadingSpinner } from "../LoadingSpinner";
 import { ScanGeometryHelp } from "./ScanGeometryHelp";
 import { GeometryFitHelp } from "./GeometryFitHelp";
+import { RectifyFiducialsHelp } from "./RectifyFiducialsHelp";
 import { GoToDimensionCalButton } from "./GoToDimensionCalButton";
 
 interface Props {
@@ -99,6 +100,36 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
   const [fit, setFit] = useState<FitResult | null>(null);
   const [fitError, setFitError] = useState<string | null>(null);
   const [foldScale, setFoldScale] = useState(false);
+
+  /**
+   * Shared by the auto-populate effect below and the "Import from Dimension Cal" button: Dimension
+   * Cal's X/Y bounds are a plain linear box (no rotation, no aspect concept), so HFOV / pixels /
+   * rotation=0 / stage centre translate over exactly. Vertical extent still follows this profile's
+   * Y/X aspect rather than Dimension Cal's own Y range — see geometry.importFromDimensionCal.note.
+   */
+  function importFromDimensionCal() {
+    const hfovUm = dimension.x_end - dimension.x_origin;
+    const pixelsXFromViewport = Math.round(dimension.viewport_x_end - dimension.viewport_x_start);
+    const pixelsYFromViewport = Math.round(dimension.viewport_y_end - dimension.viewport_y_start);
+    setHfov(String(hfovUm));
+    if (pixelsXFromViewport > 0) setPx(String(pixelsXFromViewport));
+    if (pixelsYFromViewport > 0) setPy(String(pixelsYFromViewport));
+    setScanRot("0");
+    setStageX(String((dimension.x_origin + dimension.x_end) / 2));
+    setStageY(String((dimension.y_origin + dimension.y_end) / 2));
+    setTiltOn(false);
+  }
+
+  // Auto-populate Operating point from Dimension Cal's current value the moment this panel opens (it
+  // mounts fresh each time "Scan geometry" is toggled on), so using either tool is reflected in the
+  // other without an extra click. Once only per mount — after that, edits here are the operator's own.
+  const autoImportedRef = useRef(false);
+  useEffect(() => {
+    if (autoImportedRef.current || !dimension.source) return;
+    autoImportedRef.current = true;
+    importFromDimensionCal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dimension]);
 
   // ---- load ------------------------------------------------------------------------------------
   useEffect(() => {
@@ -327,6 +358,18 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
         <label className="calib-check"><input type="checkbox" checked={tiltOn} onChange={(e) => setTiltOn(e.target.checked)} />{t("geometry.tilt", { beam: g4(resolved.inputs.tiltCorrection.beamTiltDeg) })}</label>
         {tiltOn && <label>{t("geometry.stageTilt")}<input className="input" inputMode="decimal" value={stageTilt} onChange={(e) => setStageTilt(e.target.value)} /></label>}
       </div>
+      <div className="calib-geom__import">
+        <button
+          type="button"
+          className="btn btn--ghost"
+          disabled={!dimension.source}
+          title={t("geometry.importFromDimensionCal.title")}
+          onClick={importFromDimensionCal}
+        >
+          <Icon name="download" tone="accent" />{t("geometry.importFromDimensionCal")}
+        </button>
+        <span className="calib-muted">{t("geometry.importFromDimensionCal.note")}</span>
+      </div>
       <p className="calib-muted">
         {t("geometry.sources", {
           hfov: sourceLabel(resolved.sources.hfov),
@@ -379,7 +422,10 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
       )}
 
       {/* 4. rectification */}
-      <h4 className="calib-geom__h">{t("geometry.section.fit")}</h4>
+      <div className="calib-geom__h-row">
+        <h4 className="calib-geom__h">{t("geometry.section.fit")}</h4>
+        <RectifyFiducialsHelp />
+      </div>
       <p className="calib-muted">{t("geometry.fitHelp")}</p>
       <div className="calib-geom__fid" role="table">
         <div className="calib-geom__fid-row calib-geom__fid-head" role="row">
@@ -474,6 +520,16 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
   );
 }
 
+function cornersRoughlyEqual(
+  a: Record<"topLeft" | "topRight" | "bottomRight" | "bottomLeft", Vec2>,
+  b: Record<"topLeft" | "topRight" | "bottomRight" | "bottomLeft", Vec2>
+): boolean {
+  const order = ["topLeft", "topRight", "bottomRight", "bottomLeft"] as const;
+  const span = Math.max(1e-9, Math.abs(a.topRight[0] - a.topLeft[0]));
+  const eps = span * 1e-4;
+  return order.every((k) => Math.abs(a[k][0] - b[k][0]) < eps && Math.abs(a[k][1] - b[k][1]) < eps);
+}
+
 function GeometryPreview(props: {
   nominal: Record<"topLeft" | "topRight" | "bottomRight" | "bottomLeft", Vec2>;
   rectified: Record<"topLeft" | "topRight" | "bottomRight" | "bottomLeft", Vec2>;
@@ -484,6 +540,7 @@ function GeometryPreview(props: {
   const { t } = useTranslation();
   const order = ["topLeft", "topRight", "bottomRight", "bottomLeft"] as const;
   const known = props.fiducials.filter((f) => f.enabled && Number.isFinite(f.worldX) && Number.isFinite(f.worldY));
+  const hasCorrection = known.length > 0 || !cornersRoughlyEqual(props.nominal, props.rectified);
   const all: Vec2[] = [...order.map((k) => props.nominal[k]), ...order.map((k) => props.rectified[k]), ...known.map((f) => [f.worldX, f.worldY] as Vec2)];
   const xs = all.map((p) => p[0]);
   const ys = all.map((p) => p[1]);
@@ -520,7 +577,9 @@ function GeometryPreview(props: {
           );
         })}
       </svg>
-      <figcaption className="calib-muted">{t("geometry.previewLegend", { factor: exaggerate })}</figcaption>
+      <figcaption className="calib-muted">
+        {hasCorrection ? t("geometry.previewLegend", { factor: exaggerate }) : t("geometry.previewLegendPending")}
+      </figcaption>
     </figure>
   );
 }
