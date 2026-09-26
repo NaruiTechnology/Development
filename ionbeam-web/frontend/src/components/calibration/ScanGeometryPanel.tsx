@@ -61,7 +61,12 @@ interface Props {
 
 const ROLE_ORDER: GeometryRole[] = ["pixelsX", "pixelsY", "scanWidth", "scanLines", "rotationOffsetDeg", "yxAspect", "photoImageHeightMm", "beamTiltDeg", "spotParkX", "spotParkY", "vendorDwell"];
 
-const g4 = (v: number) => (Number.isFinite(v) ? Number(v.toPrecision(6)).toString() : "—");
+const f3 = (v: number) => (Number.isFinite(v) ? v.toFixed(3) : "—");
+const displayValue = (value: unknown) => {
+  if (typeof value === "number") return f3(value);
+  if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) return f3(Number(value));
+  return String(value);
+};
 const numOr = (text: string, fallback: number) => (text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : fallback);
 const optNum = (text: string) => (text.trim() !== "" && Number.isFinite(Number(text)) ? Number(text) : null);
 let fidSeq = 0;
@@ -331,7 +336,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
             <div className="calib-geom__tr" role="row" key={r}>
               <span role="cell">{t(`geometry.role.${r}` as TranslationKey)}</span>
               <code role="cell" title={key}>{key.split(".").pop()}</code>
-              <span role="cell" className="calib-geom__num">{value === undefined || value === null || value === "" ? <span className="calib-muted">{t("geometry.notSet")}</span> : String(value)}</span>
+              <span role="cell" className="calib-geom__num">{value === undefined || value === null || value === "" ? <span className="calib-muted">{t("geometry.notSet")}</span> : displayValue(value)}</span>
               <span role="cell">
                 <button type="button" className="btn btn--ghost" onClick={() => onEditParameter(key)}>{t("geometry.edit")}</button>
               </span>
@@ -349,13 +354,13 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
       <h4 className="calib-geom__h">{t("geometry.section.operating")}</h4>
       <div className="calib-geom__form">
         <label>{t("geometry.mag")}<input className="input" inputMode="decimal" value={mag} onChange={(e) => setMag(e.target.value)} /></label>
-        <label>{t("geometry.hfovOverride")}<input className="input" inputMode="decimal" value={hfov} placeholder={g4(resolved.inputs.hfovUm)} onChange={(e) => setHfov(e.target.value)} /></label>
+        <label>{t("geometry.hfovOverride")}<input className="input" inputMode="decimal" value={hfov} placeholder={f3(resolved.inputs.hfovUm)} onChange={(e) => setHfov(e.target.value)} /></label>
         <label>{t("geometry.pixelsX")}<input className="input" inputMode="numeric" value={px} placeholder={String(resolved.inputs.pixelsX)} onChange={(e) => setPx(e.target.value)} /></label>
         <label>{t("geometry.pixelsY")}<input className="input" inputMode="numeric" value={py} placeholder={String(resolved.inputs.pixelsY)} onChange={(e) => setPy(e.target.value)} /></label>
         <label>{t("geometry.scanRotation")}<input className="input" inputMode="decimal" value={scanRot} onChange={(e) => setScanRot(e.target.value)} /></label>
         <label>{t("geometry.stageX")}<input className="input" inputMode="decimal" value={stageX} onChange={(e) => setStageX(e.target.value)} /></label>
         <label>{t("geometry.stageY")}<input className="input" inputMode="decimal" value={stageY} onChange={(e) => setStageY(e.target.value)} /></label>
-        <label className="calib-check"><input type="checkbox" checked={tiltOn} onChange={(e) => setTiltOn(e.target.checked)} />{t("geometry.tilt", { beam: g4(resolved.inputs.tiltCorrection.beamTiltDeg) })}</label>
+        <label className="calib-check"><input type="checkbox" checked={tiltOn} onChange={(e) => setTiltOn(e.target.checked)} />{t("geometry.tilt", { beam: f3(resolved.inputs.tiltCorrection.beamTiltDeg) })}</label>
         {tiltOn && <label>{t("geometry.stageTilt")}<input className="input" inputMode="decimal" value={stageTilt} onChange={(e) => setStageTilt(e.target.value)} /></label>}
       </div>
       <div className="calib-geom__import">
@@ -391,25 +396,25 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
                 <tr><th /><th>X</th><th>Y</th></tr>
               </thead>
               <tbody>
-                <tr><th>{t("geometry.r.pixels")}</th><td>{results.pixels[0]}</td><td>{results.pixels[1]}</td></tr>
-                <tr><th>{t("geometry.r.dacPerPixel")}</th><td>{g4(results.dacPerPixel[0])}</td><td>{g4(results.dacPerPixel[1])}</td></tr>
-                <tr><th>{t("geometry.r.scale")}</th><td>{g4(results.scaleUmPerCode[0] * 1e3)}</td><td>{g4(results.scaleUmPerCode[1] * 1e3)}</td></tr>
-                <tr><th>{t("geometry.r.pixelSize")}</th><td>{g4(results.pixelSizeNm[0])}</td><td>{g4(results.pixelSizeNm[1])}</td></tr>
-                <tr><th>{t("geometry.r.fov")}</th><td>{g4(results.fovUm[0])}</td><td>{g4(results.fovUm[1])}</td></tr>
-                <tr><th>{t("geometry.r.center")}</th><td>{g4(results.center[0])}</td><td>{g4(results.center[1])}</td></tr>
+                <tr><th>{t("geometry.r.pixels")}</th><td>{f3(results.pixels[0])}</td><td>{f3(results.pixels[1])}</td></tr>
+                <tr><th>{t("geometry.r.dacPerPixel")}</th><td>{f3(results.dacPerPixel[0])}</td><td>{f3(results.dacPerPixel[1])}</td></tr>
+                <tr><th>{t("geometry.r.scale")}</th><td>{f3(results.scaleUmPerCode[0] * 1e3)}</td><td>{f3(results.scaleUmPerCode[1] * 1e3)}</td></tr>
+                <tr><th>{t("geometry.r.pixelSize")}</th><td>{f3(results.pixelSizeNm[0])}</td><td>{f3(results.pixelSizeNm[1])}</td></tr>
+                <tr><th>{t("geometry.r.fov")}</th><td>{f3(results.fovUm[0])}</td><td>{f3(results.fovUm[1])}</td></tr>
+                <tr><th>{t("geometry.r.center")}</th><td>{f3(results.center[0])}</td><td>{f3(results.center[1])}</td></tr>
                 {results.spotParkWorld && (
-                  <tr><th>{t("geometry.r.spotPark")}</th><td>{g4(results.spotParkWorld[0])}</td><td>{g4(results.spotParkWorld[1])}</td></tr>
+                  <tr><th>{t("geometry.r.spotPark")}</th><td>{f3(results.spotParkWorld[0])}</td><td>{f3(results.spotParkWorld[1])}</td></tr>
                 )}
               </tbody>
             </table>
             <dl className="calib-geom__dl">
-              <dt>{t("geometry.r.rotation")}</dt><dd>{g4(results.rotationDeg)}°{results.mirrored ? ` · ${t("geometry.r.mirrored")}` : ""}</dd>
-              <dt>{t("geometry.r.shear")}</dt><dd>{g4(results.shear)}</dd>
-              <dt>{t("geometry.r.frameTime")}</dt><dd>{g4(results.frameSeconds)} s ({g4(results.pixelDwellNs)} ns / px)</dd>
+              <dt>{t("geometry.r.rotation")}</dt><dd>{f3(results.rotationDeg)}°{results.mirrored ? ` · ${t("geometry.r.mirrored")}` : ""}</dd>
+              <dt>{t("geometry.r.shear")}</dt><dd>{f3(results.shear)}</dd>
+              <dt>{t("geometry.r.frameTime")}</dt><dd>{f3(results.frameSeconds)} s ({f3(results.pixelDwellNs)} ns / px)</dd>
               <dt>{t("geometry.r.corners")}</dt>
               <dd className="calib-geom__corners">
                 {(["topLeft", "topRight", "bottomRight", "bottomLeft"] as const).map((k) => (
-                  <span key={k}>{t(`geometry.corner.${k}` as TranslationKey)} ({g4(results.corners[k][0])}, {g4(results.corners[k][1])})</span>
+                  <span key={k}>{t(`geometry.corner.${k}` as TranslationKey)} ({f3(results.corners[k][0])}, {f3(results.corners[k][1])})</span>
                 ))}
               </dd>
             </dl>
@@ -454,7 +459,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
               {cell(f.v, "v")}
               {cell(f.worldX, "worldX")}
               {cell(f.worldY, "worldY")}
-              <span className="calib-geom__num">{r ? `${g4(r.distance)} µm` : ""}</span>
+              <span className="calib-geom__num">{r ? `${f3(r.distance)} µm` : ""}</span>
               <button type="button" className="btn btn--ghost btn--icon" aria-label={t("geometry.fid.remove")} onClick={() => setFiducials((l) => l.filter((x) => x.id !== f.id))}>
                 <Icon name="trash" tone="accent" />
               </button>
@@ -477,14 +482,14 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
         <p className={`calib-banner calib-banner--${fit.maxUm > 3 * (results?.pixelSizeNm[0] ?? 0) / 1e3 && fit.points > 3 ? "warn" : "ok"}`}>
           {t("geometry.fitResult", {
             points: fit.points,
-            rms: g4(fit.rmsUm * 1e3),
-            max: g4(fit.maxUm * 1e3),
-            sx: g4((fit.change.scaleX - 1) * 100),
-            sy: g4((fit.change.scaleY - 1) * 100),
-            rot: g4(fit.change.rotationDeg),
-            shear: g4(fit.change.shear),
-            ox: g4(fit.change.offsetUm[0]),
-            oy: g4(fit.change.offsetUm[1]),
+            rms: f3(fit.rmsUm * 1e3),
+            max: f3(fit.maxUm * 1e3),
+            sx: f3((fit.change.scaleX - 1) * 100),
+            sy: f3((fit.change.scaleY - 1) * 100),
+            rot: f3(fit.change.rotationDeg),
+            shear: f3(fit.change.shear),
+            ox: f3(fit.change.offsetUm[0]),
+            oy: f3(fit.change.offsetUm[1]),
           })}
           {fit.points === (fit.model === "affine" ? 3 : 2) ? ` ${t("geometry.fitExact")}` : ""}
           {fit.change.mirrored ? ` ${t("geometry.fitMirrored")}` : ""}

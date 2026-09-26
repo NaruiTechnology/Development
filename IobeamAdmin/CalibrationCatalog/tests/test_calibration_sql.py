@@ -303,6 +303,9 @@ def test_import_calibration_csv_rows_by_parameter_key(db, equipment):
     assert prev["rejected_count"] == 1 and prev["rejected"][0]["parameter_key"] == num2
     assert prev["unmatched_count"] == 1 and prev["unmatched"] == ["NO_SUCH_KEY"]
     assert prev["other_type_count"] == 1                                                                     # a SEM key in a FIB import
+    refused = db.call("fn_import_equipment_calibration", {**base, "actor_role": DEV, "dry_run": False})
+    assert not refused["ok"] and refused["error"] == "validation_failed" and refused["rejected_count"] == 1
+    assert get(db, eq, "FIB", profile_name="csv-test", keys=[num])["values"] == []                          # no partial import
     done = db.call("fn_import_equipment_calibration", {**base, "items": items[:1], "actor_role": DEV, "dry_run": False})
     assert done["ok"] and done["changed"] == 1
     assert val(get(db, eq, "FIB", profile_name="csv-test", keys=[num]), num) == 1.25

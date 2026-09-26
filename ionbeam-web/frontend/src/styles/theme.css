@@ -5934,6 +5934,11 @@ body {
 .calib__field .select { min-width: 260px; max-width: 100%; }
 .calib__profile { font-size: 12px; line-height: 1.35; min-width: 150px; }
 .calib__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.calib__actions .btn[aria-pressed="true"] {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent) 18%, var(--c-bg-elev-2));
+  box-shadow: inset 0 -2px 0 var(--c-accent);
+}
 .calib-go-to-dimension { display: flex; align-items: center; gap: 8px; }
 
 .calib-seg { display: inline-flex; border: 1px solid var(--c-border-soft); border-radius: 6px; padding: 2px; background: var(--c-bg-elev-1); }

@@ -14,7 +14,7 @@
         "Password": "DWS_112233",
         "ConnectionString": "postgresql://deployworkspace@124.221.175.89:5432/ionbeam_admin_db",
         "SslMode": "",
-        "CommandTimeoutMs": 30000
+        "CommandTimeoutMs": 120000
     },
     "ROLE": {
         "AUDIT": 4,

@@ -41,14 +41,16 @@ vendor limits (`MIN`/`MAX` pairs; an unset `0/0` or inverted pair means *no limi
 ignored, refused, risky), and only writes after confirmation. Lines are matched by `(int|float, slot)` or registry path.
 `icmd.TXT` and `md.TXT` reuse slot numbers, so the vendor symbol on each line must equal the catalog's; importing the wrong
 file into a column is refused. A value outside the vendor's documented enum list (e.g. `IONI_DET_USED = 2`, documented 0/1)
-is imported as found, with a warning.
+is imported as found, with a warning. Recognised values that fail type, integer, enum or limit validation block the whole
+commit; valid rows are never silently imported as a partial subset.
 
 ## Calibration CSV (export / import)
 
-*Export CSV* writes `calibration_<equipment>_<FIB|SEM>_r<revision>.csv`. By default the browser downloads it; the folder
-button next to *Export CSV* lets the operator choose a folder on **their own computer** instead (File System Access API:
-Chrome / Edge over HTTPS or `localhost`). The choice is remembered per browser (IndexedDB); the browser asks once per
-session to allow writing. If writing is refused or fails, the file is downloaded as usual. The × button returns to downloads.
+*Export CSV* writes `calibration_<equipment>_<FIB|SEM>_r<revision>.csv`; by default the browser downloads it. Where the
+File System Access API is available, a separate *Choose export folder* button lets the operator choose a folder on
+**their own computer** instead (Chrome / Edge over HTTPS or `localhost`). Unsupported browsers show no extra destination
+control. The choice is remembered per browser (IndexedDB); the browser asks once per session to allow writing. If writing
+is refused or fails, the file is downloaded as usual. The × button returns to browser downloads.
 
 *Import* also accepts that CSV. Only `parameter_key` and `value` are read (column order free; `,` `;` or tab separated;
 decimal commas accepted in `;` files). The file is validated as a whole by `backend/src/calibrationCsvFile.ts` and refused,

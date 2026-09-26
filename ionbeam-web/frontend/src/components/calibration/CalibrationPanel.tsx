@@ -53,7 +53,7 @@ import { CalibrationTree, type TreeSelection } from "./CalibrationTree";
 import { ScanGeometryPanel } from "./ScanGeometryPanel";
 
 const PAGE = 100;
-type Mode = "values" | "history" | "import" | "geometry";
+type Mode = "values" | "history" | "import" | "geometry" | "export";
 type Notice = { tone: "success" | "error" | "warning"; text: string } | null;
 type RiskInfo = { semantics_known: boolean; param_class: CalibrationDefinition["param_class"]; access_level: CalibrationDefinition["access_level"]; assign_conf: CalibrationDefinition["assign_conf"] };
 
@@ -332,6 +332,7 @@ export function CalibrationPanel() {
 
   async function exportCsv() {
     if (equipmentId === null || exporting) return;
+    setMode("export");
     setExporting(true);
     setNotice(null);
     try {
@@ -365,6 +366,10 @@ export function CalibrationPanel() {
   }
 
   async function pickExportFolder() {
+    if (!folderSupported) {
+      setNotice({ tone: "warning", text: t("calibration.export.folderUnsupported") });
+      return;
+    }
     try {
       const handle = await chooseExportFolder(CALIBRATION_EXPORT_FOLDER, exportFolder);
       if (!handle) return; // cancelled
@@ -461,6 +466,7 @@ export function CalibrationPanel() {
               type="button"
               className="btn btn--ghost"
               disabled={exporting || equipmentId === null}
+              aria-pressed={mode === "export"}
               aria-busy={exporting}
               title={exportFolder ? t("calibration.export.toFolderTitle", { folder: exportFolder.name }) : t("calibration.export.toDownloadsTitle")}
               onClick={() => void exportCsv()}
@@ -468,16 +474,18 @@ export function CalibrationPanel() {
               {exporting ? <LoadingSpinner inline size={16} ariaLabel={t("calibration.export.exporting")} /> : <Icon name="download" tone="accent" />}
               {t("calibration.action.export")}
             </button>
-            <button
-              type="button"
-              className="btn btn--ghost calib-export__folder"
-              disabled={!folderSupported || exporting}
-              title={folderSupported ? t("calibration.export.chooseFolderTitle") : t("calibration.export.folderUnsupported")}
-              onClick={() => void pickExportFolder()}
-            >
-              <Icon name="folder" tone="accent" />
-              <span className="calib-export__folder-name">{exportFolder ? exportFolder.name : t("calibration.export.downloads")}</span>
-            </button>
+            {folderSupported && (
+              <button
+                type="button"
+                className="btn btn--ghost calib-export__folder"
+                disabled={exporting}
+                title={t("calibration.export.chooseFolderTitle")}
+                onClick={() => void pickExportFolder()}
+              >
+                <Icon name="folder" tone="accent" />
+                <span className="calib-export__folder-name">{exportFolder ? exportFolder.name : t("calibration.export.chooseFolder")}</span>
+              </button>
+            )}
             {exportFolder && (
               <button
                 type="button"
@@ -581,7 +589,7 @@ export function CalibrationPanel() {
               onImported={() => setReloadToken((n) => n + 1)}
             />
           )}
-          {mode === "values" && (
+          {(mode === "values" || mode === "export") && (
             <>
               {selection.kind === "group" && (
                 <div className="calib__toolbar">

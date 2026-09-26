@@ -107,7 +107,7 @@ export function CalibrationImport({
   }
 
   const risky = preview?.risky_changed ?? 0;
-  const canCommit = phase === "ready" && preview !== null && preview.changed > 0 && (risky === 0 || ack);
+  const canCommit = phase === "ready" && preview !== null && preview.changed > 0 && preview.rejected_count === 0 && (risky === 0 || ack);
   const csv = preview?.csv;
   const staleRevision =
     csv?.file_revision !== null && csv?.file_revision !== undefined && currentRevision !== null && currentRevision !== undefined
@@ -221,6 +221,7 @@ export function CalibrationImport({
                   <li key={r.parameter_key + r.raw}>{lineLabel(r.line)}<code>{r.parameter_key}</code> = {r.raw}: {r.message}</li>
                 ))}
               </ul>
+              <p className="calib-row__error">{t("calibration.import.blockedRejected")}</p>
             </div>
           )}
           {preview.warning_count > 0 && (

@@ -235,7 +235,7 @@ export function registerCalibrationRoutes(app: express.Express, deps: Calibratio
         }
         throw new CalibrationRequestError(err instanceof Error ? err.message : String(err), 422, "unrecognised_file");
       }
-      const result = await importEquipmentCalibration({
+      const payload = {
         equipment_id: equipmentId,
         equipment_type: type,
         profile_name: optionalString(body.profile_name),
@@ -246,7 +246,22 @@ export function registerCalibrationRoutes(app: express.Express, deps: Calibratio
         acknowledge_risk: body.acknowledge_risk === true,
         actor_user_id: actor.id,
         actor_role: actor.role,
-      });
+      };
+      // Never trust a client to perform the preview first. A commit is validated again server-side and refused as a
+      // whole when any recognised value is invalid; unmatched vendor-only settings remain intentionally ignored.
+      if (!payload.dry_run) {
+        const validation = await importEquipmentCalibration({ ...payload, dry_run: true });
+        if (validation.rejected_count > 0) {
+          throw new CalibrationRequestError(
+            `${validation.rejected_count} recognised value(s) failed validation; nothing was imported`,
+            422,
+            "validation_failed",
+            validation.rejected.map((item) => ({ code: "invalid_value", ...item })),
+            { total_errors: validation.rejected_count },
+          );
+        }
+      }
+      const result = await importEquipmentCalibration(payload);
       if (parsed.format !== "csv") {
         res.json({ ...result, format: parsed.format, lines: parsed.lines, skipped_binary: parsed.skippedBinary });
         return;

@@ -1023,6 +1023,15 @@ BEGIN
             'revision', preview -> 'revision');
     END IF;
 
+    -- A commit is all-or-nothing for recognised parameters. The dry run above reports every rejected value so the
+    -- operator can correct the source file first; never silently save only the valid subset.
+    IF n_rejected > 0 THEN
+        IF created THEN DELETE FROM ionbeam_asset.calibration_profile WHERE id = pid AND revision = 0; END IF;
+        RETURN jsonb_build_object('ok', false, 'error', 'validation_failed',
+            'message', format('%s recognised value(s) failed validation; nothing was imported', n_rejected),
+            'errors', rejected, 'rejected_count', n_rejected);
+    END IF;
+
     IF risky > 0 AND NOT COALESCE((p_payload ->> 'acknowledge_risk')::boolean, false) THEN
         IF created THEN DELETE FROM ionbeam_asset.calibration_profile WHERE id = pid AND revision = 0; END IF;
         RETURN jsonb_build_object('ok', false, 'error', 'risk_ack_required',
