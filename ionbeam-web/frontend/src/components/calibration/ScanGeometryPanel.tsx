@@ -45,6 +45,8 @@ import type { CalibrationEquipmentType } from "../../types/calibration";
 import { Icon } from "../Icon";
 import { LoadingSpinner } from "../LoadingSpinner";
 import { ScanGeometryHelp } from "./ScanGeometryHelp";
+import { GeometryFitHelp } from "./GeometryFitHelp";
+import { GoToDimensionCalButton } from "./GoToDimensionCalButton";
 
 interface Props {
   equipmentId: number;
@@ -370,6 +372,9 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
             </dl>
             <GeometryPreview nominal={nominalResults.corners} rectified={results.corners} fiducials={fiducials} fit={fit} geometry={"error" in built ? null : built.rectified} />
           </div>
+          <div className="calib-geom__goto">
+            <GoToDimensionCalButton equipmentId={equipmentId} type={type} role={role} />
+          </div>
         </>
       )}
 
@@ -418,6 +423,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
           <option value="similarity">{t("geometry.model.similarity")}</option>
         </select>
         <button type="button" className="btn btn--primary" onClick={runFit}><Icon name="target" />{t("geometry.fit")}</button>
+        <GeometryFitHelp />
         {corrected && <button type="button" className="btn btn--ghost" onClick={() => { setCorrection(NO_CORRECTION); setFit(null); }}>{t("geometry.resetCorrection")}</button>}
       </div>
       {fitError && <p className="calib-row__error" role="alert">{fitError}</p>}
@@ -484,7 +490,9 @@ function GeometryPreview(props: {
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   const span = Math.max(x1 - x0, y1 - y0, 1e-9);
   const pad = span * 0.08;
-  const vb = `${x0 - pad} ${y0 - pad} ${x1 - x0 + 2 * pad} ${y1 - y0 + 2 * pad}`;
+  const vbX = x0 - pad, vbY = y0 - pad, vbW = x1 - x0 + 2 * pad, vbH = y1 - y0 + 2 * pad;
+  const vb = `${vbX} ${vbY} ${vbW} ${vbH}`;
+  const gridRatios = [0, 0.25, 0.5, 0.75, 1]; // same 5 major divisions as Dimension Cal's canvas grid
   const poly = (c: typeof props.nominal) => order.map((k) => c[k].join(",")).join(" ");
   const sw = span / 250;
   const residual = new Map(props.fit?.residuals.map((r) => [r.id, r]) ?? []);
@@ -492,6 +500,13 @@ function GeometryPreview(props: {
   return (
     <figure className="calib-geom__preview">
       <svg viewBox={vb} role="img" aria-label={t("geometry.preview")}>
+        {/* Grid: same 5-division layout and colour as the Dimension Cal canvas (.canvas-axis-overlay__grid), for visual consistency between the two calibration tools. */}
+        {gridRatios.map((r) => (
+          <line key={`gx${r}`} x1={vbX + vbW * r} y1={vbY} x2={vbX + vbW * r} y2={vbY + vbH} stroke="rgba(95, 184, 255, 0.14)" strokeWidth={sw} />
+        ))}
+        {gridRatios.map((r) => (
+          <line key={`gy${r}`} x1={vbX} y1={vbY + vbH * r} x2={vbX + vbW} y2={vbY + vbH * r} stroke="rgba(95, 184, 255, 0.14)" strokeWidth={sw} />
+        ))}
         <polygon points={poly(props.nominal)} fill="none" stroke="currentColor" strokeOpacity={0.45} strokeWidth={sw} strokeDasharray={`${sw * 4} ${sw * 3}`} />
         <polygon points={poly(props.rectified)} fill="var(--c-accent)" fillOpacity={0.08} stroke="var(--c-accent)" strokeWidth={sw * 1.5} />
         <circle cx={props.rectified.topLeft[0]} cy={props.rectified.topLeft[1]} r={sw * 4} fill="var(--c-accent)" />

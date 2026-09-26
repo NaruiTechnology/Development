@@ -5934,6 +5934,7 @@ body {
 .calib__field .select { min-width: 260px; max-width: 100%; }
 .calib__profile { font-size: 12px; line-height: 1.35; min-width: 150px; }
 .calib__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.calib-go-to-dimension { display: flex; align-items: center; gap: 8px; }
 
 .calib-seg { display: inline-flex; border: 1px solid var(--c-border-soft); border-radius: 6px; padding: 2px; background: var(--c-bg-elev-1); }
 .calib-seg__btn {
@@ -6147,6 +6148,7 @@ body {
 .calib-geom__form { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 12px; align-items: end; }
 .calib-geom__form label:not(.calib-check) { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--c-text-dim); }
 .calib-geom__results { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(200px, 0.9fr); gap: 12px; align-items: start; }
+.calib-geom__goto { margin-top: 10px; display: flex; }
 .calib-geom__grid { width: 100%; border-collapse: collapse; font-size: 12px; }
 .calib-geom__grid th, .calib-geom__grid td { padding: 3px 6px; border-bottom: 1px solid var(--c-border-soft); }
 .calib-geom__grid th { text-align: left; font-weight: 500; color: var(--c-text-dim); }
@@ -6155,7 +6157,7 @@ body {
 .calib-geom__dl dt { color: var(--c-text-dim); }
 .calib-geom__dl dd { margin: 0; font-family: var(--font-mono); }
 .calib-geom__corners { display: flex; flex-direction: column; gap: 2px; }
-.calib-geom__preview { margin: 0; border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-elev-1); padding: 6px; }
+.calib-geom__preview { margin: 0; border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-bg-elev); padding: 6px; max-width: 220px; justify-self: start; }
 .calib-geom__preview svg { display: block; width: 100%; aspect-ratio: 1 / 1; color: var(--c-text-dim); }
 .calib-geom__fid { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; }
 .calib-geom__fid-row {

@@ -59,6 +59,7 @@ import {
 } from "./operationDataRepository";
 import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
 import { registerCalibrationRoutes } from "./calibrationRoutes";
+import { registerDimensionCalibrationRoutes } from "./dimensionCalibrationRoutes";
 import { normalizeScanGeometry, readScanGeometry, writeScanGeometry } from "./scanGeometryConfig";
 import {
   ConfigError,
@@ -430,6 +431,12 @@ registerCalibrationRoutes(app, {
   currentActor: (req) => currentAdminActor(req),
   sendError: sendConfigError,
   roles: { superUser: ROLE_SUPER_USER, developer: ROLE_DEVELOPER, admin: ROLE_ADMIN },
+});
+
+// Dimension Cal server-side setting (CONFIGURATION > Calibrate > DIMENTION CAL). See dimensionCalibrationRoutes.ts.
+registerDimensionCalibrationRoutes(app, {
+  currentActor: (req) => currentAdminActor(req),
+  sendError: sendConfigError,
 });
 
 app.get("/api/admin/iobeam/hosts", async (_req, res: express.Response<AllowedHostsResponse>) => {

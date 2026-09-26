@@ -37,7 +37,8 @@ export type HelpKey =
   | "scanModes"
   | "magCalibration"
   | "dacCheck"
-  | "scanGeometry";
+  | "scanGeometry"
+  | "geometryFit";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
   adcValid: () => (
@@ -839,6 +840,17 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         defaults.
       </div>
 
+      <p>
+        The small square next to the results plots that frame: a dashed
+        outline is the nominal (uncorrected) frame, the filled outline is
+        the rectified one, the dot marks DAC (0, 0), rings mark fiducials
+        you&apos;ve entered, and a red line from a ring is that
+        fiducial&apos;s residual — how far the fit is from matching it —
+        exaggerated ×20 so small errors are visible. With no fiducials or
+        fit yet, the two outlines coincide, so it's just a plain square —
+        that's expected, not an error.
+      </p>
+
       <div className="dwell-help__rule">
         <strong>4 · Rectify with fiducials.</strong> For a feature whose
         real-world position you know (a grid line, a marker, a stage
@@ -860,6 +872,36 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         into the saved magnification-calibration curve instead of keeping
         it as a separate correction, so future scans at this magnification
         start from the corrected value directly.
+      </p>
+    </>
+  ),
+  geometryFit: () => (
+    <>
+      <p>
+        Fitting computes the small correction — scale (X/Y), rotation, and
+        (for an affine fit) shear — that best lines up the nominal
+        (uncalibrated) frame with the fiducials you've entered: enabled
+        rows with both a pixel/DAC position and a known world position.
+        It's a least-squares fit, so it doesn't change anything by itself;
+        press <strong>Apply to scans</strong> afterwards to actually use it.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Affine vs. similarity.</strong> Affine solves for
+        independent X/Y scale plus shear — needs at least 3 points — and
+        fits real optical distortion best. Similarity only solves for a
+        single scale and rotation (no shear) — needs at least 2 — and is
+        the safer choice with few fiducials, since it can't "explain away"
+        noise as shear.
+      </div>
+
+      <p>
+        With the minimum number of points the fit is exact (zero
+        residual) by construction — that isn't a quality signal, it just
+        means there's nothing left to check the fit against. Add a point
+        or two beyond the minimum, spread across the field rather than
+        clustered, before trusting the residual column or the preview's
+        red lines as a real measure of fit quality.
       </p>
     </>
   ),

@@ -66,7 +66,8 @@ updated `fn_import_equipment_calibration`.
 ## Deployment
 
 * `IobeamAdmin/Sql/003_calibration_schema.sql` is applied automatically after `001_schema.sql` by
-  `applyAdminDatabaseSetup` (idempotent).
+  `applyAdminDatabaseSetup` (idempotent). So is `005_dimension_calibration_schema.sql` (Dimension Cal's
+  one-row-per-equipment table).
 * The catalog (`004_calibration_seed.sql`, generated) is loaded on first use, or explicitly with
   `npm run db:seed:calibration` (backend). Re-running keeps human-edited names. The admin route
   `POST /api/admin/iobeam/calibration/catalog/reload` does the same.
@@ -79,6 +80,11 @@ updated `fn_import_equipment_calibration`.
 `GET .../tables/:code`, `PUT .../values`, `GET .../history[/:revision]`, `POST .../restore`, `POST .../import`,
 `GET .../export.csv`, `PATCH definitions/:id`, `POST catalog/reload` - all under `/api/admin/iobeam/calibration/`.
 Failures are `{ ok:false, error, code, errors[] }` with 401 / 403 / 404 / 409 (`risk_ack_required`, `revision_conflict`) / 422.
+
+Dimension Cal itself (`dimensionCalibrationRoutes.ts`): `GET` / `PUT /api/admin/iobeam/dimension-calibration/:equipmentId`,
+`{ ok, calibration }` with `calibration: null` when nothing has been saved for that equipment yet. Any
+signed-in account may read or write it — no per-field role gate, matching the DIMENTION CAL wedge's own
+"Confirm" button.
 
 ## Tests
 
@@ -97,10 +103,10 @@ Without `CALIBRATION_DOCS_DIR` the tests that need the vendor files are skipped.
 * Server-side refusal messages are English.
 * `ROLE_AUDIT` (4) is numerically above Admin, so following the existing `role < ROLE_ADMIN` convention auditors can write.
 
-## Scan geometry (world coordinates)
+## Scan geometry (world coordinates), and Dimension Cal
 
-*Calibration > Scan geometry* turns the active profile into the scan frame of the selected machine / column and
-rectifies it, so ROI and bitmap scans address physical world positions (µm).
+*CONFIGURATION > Admin > Calibration > Scan geometry* turns the active profile into the scan frame of the
+selected machine / column and rectifies it, so ROI and bitmap scans address physical world positions (µm).
 
 ```
 world = stage + C · N · H · (DAC - 8191.5 - δ)
@@ -118,6 +124,23 @@ code `i · 16384 / N`. HFOV comes from the magnification calibration (log-log in
 else the vendor photo height `IONF_PHOTO_IMG_SIZE_Y / mag`, else a 127 mm reference. An unset `IONF_MAG_YX_ASPECT`
 (0) means 1. Tilt correction (off by default) stretches Y by `1 / cos(IONF_IBEAM_TILT - stage tilt)`. The spot-park
 registers are treated as 16-bit and shown as a world position only.
+
+The section-3 preview (`GeometryPreview`) only renders once there's something to plot — a fiducial, or a fit —
+since with neither, nominal and rectified frames are identical and it would just be an empty square
+(`geometry.previewEmpty` explains this in the UI; `cornersRoughlyEqual` is the check).
+
+**Dimension Cal** (CONFIGURATION > Calibrate > DIMENTION CAL) is the simpler, older, image-based way to set the
+same world-coordinate mapping: measure a real scanned image and enter what its edges are in µm. Both paths write
+to the same place (`store/dimensionCalibrationSlice.ts`, one row per equipment server-side — see below — plus
+`localStorage` for instant/offline use) and `lib/roiDac.ts` falls back to Dimension Cal's plain linear bounds
+whenever no rectified Scan geometry is applied. Each save is tagged with a `source` (`manual` or `scanGeometry`,
+with the equipment/type/revision that produced it) so Dimension Cal can show where its current numbers came
+from and warn before one source silently overwrites the other.
+
+*CONFIGURATION > Admin > Calibration > "Go to Dimension Cal"* is a shortcut alongside the full Scan geometry
+wedge for people who don't need fiducial fitting: it computes the same nominal (uncorrected) frame from the
+active profile and magnification calibration, saves it as Dimension Cal's starting values, and switches straight
+to the DIMENTION CAL tab so the operator can fine-tune or reconfirm it there as usual.
 
 C and δ do not depend on magnification, so one fit holds at other magnifications; optionally the isotropic part of the
 fitted scale is written into the magnification calibration (which restarts the scan service).

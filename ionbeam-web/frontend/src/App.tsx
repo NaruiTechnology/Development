@@ -26,7 +26,10 @@ import { readJsonResponse } from "./lib/readJsonResponse";
 import { shouldDisableScanPanel } from "./lib/vacuumPolicy";
 import { dimensionBoundsFromGeometry, geometryFromConfig, toAppliedGeometry } from "./lib/scanGeometry";
 import { fetchScanGeometry } from "./lib/scanGeometryApi";
+import { fetchDimensionCalibrationRemote } from "./lib/dimensionCalibrationApi";
+import { selectedEquipmentId } from "./lib/adminActivity";
 import { setScanGeometry } from "./store/scanSlice";
+import { saveDimensionCalibration } from "./store/dimensionCalibrationSlice";
 import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
 import { RasterParameters } from "./components/RasterParameters";
@@ -92,6 +95,7 @@ import {
   VECTOR_PATH,
   setDraft,
   writePath,
+  clearDimensionCalNavigationRequest,
 } from "./store/settingsSlice";
 import { SCAN_TYPE_COLORS, type ScanType } from "./types/scanType";
 import type { VacuumSystemStatus } from "./types/api";
@@ -160,6 +164,7 @@ export function App() {
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
   const settingsDraft = useAppSelector((s) => s.settings.draft);
+  const dimensionCalNavigationRequest = useAppSelector((s) => s.settings.dimensionCalNavigationRequest);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
   const [lastLiveScanImage, setLastLiveScanImage] = useState<{
     kind: Extract<ScanKind, "raster" | "vector">;
@@ -247,6 +252,35 @@ export function App() {
     clearBitmapSelectionCache();
     dispatch(applyPersistedDimensionCalibration(dimensionCalibration));
   }, [dimensionCalibration, dispatch, hasPersistedDimensionCalibration]);
+
+  // Dimension Cal also lives server-side, one row per equipment (see dimensionCalibrationApi.ts) so it's
+  // shared across browsers/operators instead of being stuck in whichever one last confirmed it. The local
+  // copy above applies instantly (works offline, no flash of defaults); if the backend has a row for the
+  // currently selected equipment, it supersedes the local copy once the fetch resolves.
+  const dimensionCalibrationRemoteSyncedRef = useRef(false);
+  useEffect(() => {
+    if (dimensionCalibrationRemoteSyncedRef.current) return;
+    dimensionCalibrationRemoteSyncedRef.current = true;
+    const equipmentId = selectedEquipmentId();
+    if (equipmentId === null) return;
+    fetchDimensionCalibrationRemote(equipmentId).then((remote) => {
+      if (!remote) return;
+      clearBitmapSelectionCache();
+      dispatch(saveDimensionCalibration(remote));
+      dispatch(applyPersistedDimensionCalibration(remote));
+    });
+  }, [dispatch]);
+
+  // CONFIGURATION > Admin > Calibration's "Go to Dimension Cal" shortcut dispatches closeDialog() +
+  // requestDimensionCalNavigation() together (it lives inside the settings modal's component tree, which
+  // has no direct line to this component's local tab state) — this is the other end of that handoff.
+  useEffect(() => {
+    if (dimensionCalNavigationRequest === 0) return;
+    if (route !== "control") navigateTo("control");
+    activateCalibrateSubTab("dimension");
+    dispatch(clearDimensionCalNavigationRequest());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dimensionCalNavigationRequest]);
 
   // Rectified scan geometry (Admin > Calibration > Scan geometry): when one is applied, ROI / bitmap scans map world
   // µm to DAC codes through it. Loaded once; on failure scans keep the linear ROI mapping.

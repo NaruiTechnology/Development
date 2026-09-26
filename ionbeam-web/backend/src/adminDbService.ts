@@ -116,10 +116,11 @@ export function pgConnectionFromOperationConfig(
 /**
  * Idempotent SQL that is loaded after 001_schema.sql (and the optional seed) on every admin database setup.
  * 003 adds the FIB / SEM calibration-parameter tables and stored functions (see calibrationRepository.ts).
+ * 005 adds the single-row-per-equipment Dimension Cal setting (see dimensionCalibrationRepository.ts).
  * The 2 MB parameter catalog itself is 004_calibration_seed.sql, loaded by `npm run db:seed:calibration`
  * or automatically the first time the calibration API is used (ensureCalibrationCatalog).
  */
-export const ADMIN_EXTRA_SCHEMA_FILES = ["003_calibration_schema.sql"];
+export const ADMIN_EXTRA_SCHEMA_FILES = ["003_calibration_schema.sql", "005_dimension_calibration_schema.sql"];
 
 export async function applyAdminDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {
   return applyDatabaseSetup(options, ["public", "iobeam_admin", "ionbeam_asset"], ADMIN_EXTRA_SCHEMA_FILES);

@@ -102,6 +102,13 @@ interface SettingsState {
   backendRestarting: boolean;
   /** "Backup created on first read" notice; consumed by the dialog once. */
   backupNotice: boolean;
+  /**
+   * Set by CONFIGURATION > Admin > Calibration's "Go to Dimension Cal" shortcut so App.tsx (which owns the
+   * main window's left-nav tab state, outside this dialog's component tree) can switch to Calibrate >
+   * DIMENTION CAL once the dialog closes. A counter, not a boolean, so a second click while the first
+   * navigation is still being processed isn't swallowed as a no-op change.
+   */
+  dimensionCalNavigationRequest: number;
 }
 
 export type SettingsTab =
@@ -128,6 +135,7 @@ const initialState: SettingsState = {
   lastRestart: null,
   backendRestarting: false,
   backupNotice: false,
+  dimensionCalNavigationRequest: 0,
 };
 
 /* -------- async thunks ------------------------------------------------- */
@@ -212,6 +220,12 @@ const slice = createSlice({
       s.backupNotice = false;
       s.lastRestart = null;
       s.backendRestarting = false;
+    },
+    requestDimensionCalNavigation(s) {
+      s.dimensionCalNavigationRequest += 1;
+    },
+    clearDimensionCalNavigationRequest(s) {
+      s.dimensionCalNavigationRequest = 0;
     },
     setActiveTab(s, a: PayloadAction<SettingsTab>) {
       s.activeTab = a.payload;
@@ -330,6 +344,8 @@ const slice = createSlice({
 export const {
   openDialog,
   closeDialog,
+  requestDimensionCalNavigation,
+  clearDimensionCalNavigationRequest,
   setActiveTab,
   setDraft,
   resetDraft,
