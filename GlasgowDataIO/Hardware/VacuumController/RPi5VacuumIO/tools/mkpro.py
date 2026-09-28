@@ -1,0 +1,44 @@
+import json, sys
+name = sys.argv[1]
+pro = {
+ "board": {"design_settings": {
+   "defaults": {"board_outline_line_width": 0.1, "copper_line_width": 0.2, "silk_line_width": 0.12,
+                "silk_text_size_h": 0.8, "silk_text_size_v": 0.8, "silk_text_thickness": 0.12},
+   "rules": {"min_clearance": 0.15, "min_track_width": 0.15, "min_via_diameter": 0.6,
+             "min_via_annular_width": 0.13, "min_through_hole_diameter": 0.3,
+             "min_hole_to_hole": 0.25, "min_copper_edge_clearance": 0.3,
+             "min_silk_clearance": 0.0, "min_hole_clearance": 0.25},
+   "track_widths": [0.0, 0.25, 0.5], "via_dimensions": [{"diameter": 0.0, "drill": 0.0}, {"diameter": 0.6, "drill": 0.3}],
+   "rule_severities": {"silk_overlap": "ignore", "silk_over_copper": "warning", "lib_footprint_issues": "ignore",
+                       "lib_footprint_mismatch": "ignore", "text_height": "ignore", "text_thickness": "ignore"}}},
+ "meta": {"filename": name + ".kicad_pro", "version": 1},
+ "net_settings": {
+   "classes": [
+     {"name": "Default", "clearance": 0.15, "track_width": 0.2, "via_diameter": 0.6, "via_drill": 0.3,
+      "diff_pair_width": 0.25, "diff_pair_gap": 0.2, "microvia_diameter": 0.3, "microvia_drill": 0.1,
+      "bus_width": 12, "line_style": 0, "wire_width": 6, "pcb_color": "rgba(0, 0, 0, 0.000)",
+      "schematic_color": "rgba(0, 0, 0, 0.000)"},
+     {"name": "Power", "clearance": 0.25, "track_width": 0.8, "via_diameter": 0.8, "via_drill": 0.4,
+      "diff_pair_width": 0.25, "diff_pair_gap": 0.2, "microvia_diameter": 0.3, "microvia_drill": 0.1,
+      "bus_width": 12, "line_style": 0, "wire_width": 6, "pcb_color": "rgba(0, 0, 0, 0.000)",
+      "schematic_color": "rgba(0, 0, 0, 0.000)"},
+     {"name": "Load", "clearance": 0.25, "track_width": 0.6, "via_diameter": 0.8, "via_drill": 0.4,
+      "diff_pair_width": 0.25, "diff_pair_gap": 0.2, "microvia_diameter": 0.3, "microvia_drill": 0.1,
+      "bus_width": 12, "line_style": 0, "wire_width": 6, "pcb_color": "rgba(0, 0, 0, 0.000)",
+      "schematic_color": "rgba(0, 0, 0, 0.000)"},
+     {"name": "Contact", "clearance": 1.0, "track_width": 1.0, "via_diameter": 1.2, "via_drill": 0.6,
+      "diff_pair_width": 0.25, "diff_pair_gap": 0.2, "microvia_diameter": 0.3, "microvia_drill": 0.1,
+      "bus_width": 12, "line_style": 0, "wire_width": 6, "pcb_color": "rgba(0, 0, 0, 0.000)",
+      "schematic_color": "rgba(0, 0, 0, 0.000)"}],
+   "meta": {"version": 3},
+   "netclass_assignments": None,
+   "netclass_patterns": [{"netclass": "Power", "pattern": "+24V*"},
+                         {"netclass": "Load", "pattern": "SOL_D*"}, {"netclass": "Load", "pattern": "RLY_V*"},
+                         {"netclass": "Contact", "pattern": "K*_COM"}, {"netclass": "Contact", "pattern": "K*_NO"},
+                         {"netclass": "Contact", "pattern": "K*_NC"}]},
+ "libraries": {"pinned_footprint_libs": [], "pinned_symbol_libs": []},
+ "schematic": {"legacy_lib_dir": "", "legacy_lib_list": []},
+ "sheets": [["", ""]],
+ "text_variables": {},
+}
+json.dump(pro, open(name + ".kicad_pro", "w"), indent=2)
