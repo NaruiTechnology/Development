@@ -29,6 +29,7 @@ import {
 import type { ROIRequest, VectorScanPath } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { markScanPerformanceCanvasReady } from "../lib/scanPerformance";
 import { apiUrl } from "../lib/backendUrl";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { Icon } from "./Icon";
@@ -368,7 +369,9 @@ export function ImageCanvas({
       const canvas = canvasRef.current;
       if (!canvas || canvas.width <= 0 || canvas.height <= 0) return;
       try {
-        emit(canvas.toDataURL("image/png"));
+        const image = canvas.toDataURL("image/png");
+        markScanPerformanceCanvasReady(kind);
+        emit(image);
       } catch {
         emit(null);
       }

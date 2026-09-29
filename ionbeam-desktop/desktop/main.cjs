@@ -104,6 +104,13 @@ async function start() {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
   });
   installNativeBridge(ipcMain, window, origin);
+  const rendererPerfLog = path.join(logDir, 'renderer-perf.log');
+  window.webContents.on('console-message', (...args) => {
+    const details = args[1];
+    const message = details && typeof details === 'object' ? details.message : args[2];
+    if (typeof message !== 'string' || !message.startsWith('[scan-perf]')) return;
+    fs.appendFile(rendererPerfLog, `${new Date().toISOString()} ${message}\n`, { mode: 0o600 }, () => {});
+  });
   window.setMenuBarVisibility(false);
   window.webContents.on('will-navigate', (event, url) => {
     if (new URL(url).pathname === '/desktop-open-web') {

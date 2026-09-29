@@ -51,6 +51,13 @@ import type { RootState } from "../store";
 import { registerScanActionStop } from "./scanActionRegistry";
 import { withScanAuthQuery } from "../lib/authIdentity";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import {
+  beginScanPerformance,
+  markScanPerformanceChunk,
+  markScanPerformanceClosed,
+  markScanPerformanceConnected,
+  markScanPerformanceControl,
+} from "../lib/scanPerformance";
 import { apiUrl } from "../lib/backendUrl";
 import { wsUrl } from "../lib/backendUrl";
 
@@ -129,6 +136,7 @@ export function useScanStream() {
         preserveFrame: options?.preserveFrame,
       }));
       dispatch(streamStarted());
+      beginScanPerformance("raster", req as unknown as Record<string, unknown>, scanTransport());
       const ws = openWs("/ws/scan/raster/stream");
       wsRef.current = ws;
       closureKindRef.current = null;
@@ -137,12 +145,14 @@ export function useScanStream() {
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
         if (wsRef.current !== ws) return;
+        markScanPerformanceConnected();
         ws.send(JSON.stringify(req));
       };
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;
         if (typeof ev.data !== "string") {
           const buf = ev.data as ArrayBuffer;
+          markScanPerformanceChunk(buf.byteLength);
           queuePendingSamples(
             pendingRasterRef.current,
             decodeScanSamples(buf, req.output_mode),
@@ -152,6 +162,7 @@ export function useScanStream() {
           return;
         }
         flushRasterSamples();
+        markScanPerformanceControl(ev.data);
         if (!handleRasterControlMessage(ev.data, dispatch, sawDoneRef)) {
           activeScanRef.current = null;
           ws.close(1002, "malformed control message");
@@ -164,6 +175,7 @@ export function useScanStream() {
       ws.onclose = (ev) => {
         if (wsRef.current !== ws) return;
         flushRasterSamples();
+        markScanPerformanceClosed(ev.code);
         finalize(
           closureKindRef.current,
           sawDoneRef.current,
@@ -209,6 +221,7 @@ export function useScanStream() {
         })
       );
       dispatch(streamStarted());
+      beginScanPerformance("vector", req as unknown as Record<string, unknown>, scanTransport());
       const ws = openWs("/ws/scan/vector/stream");
       wsRef.current = ws;
       closureKindRef.current = null;
@@ -217,6 +230,7 @@ export function useScanStream() {
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
         if (wsRef.current !== ws) return;
+        markScanPerformanceConnected();
         console.info("[scan/vector] ws-send", {
           preview: Boolean(req.preview),
           pattern: req.pattern,
@@ -233,6 +247,7 @@ export function useScanStream() {
         if (wsRef.current !== ws) return;
         if (typeof ev.data !== "string") {
           const buf = ev.data as ArrayBuffer;
+          markScanPerformanceChunk(buf.byteLength);
           queuePendingSamples(
             pendingVectorRef.current,
             decodeScanSamples(buf, req.output_mode),
@@ -242,6 +257,7 @@ export function useScanStream() {
           return;
         }
         flushVectorSamples();
+        markScanPerformanceControl(ev.data);
         const valid = handleVectorControlMessage(
           ev.data,
           dispatch,
@@ -259,6 +275,7 @@ export function useScanStream() {
       ws.onclose = (ev) => {
         if (wsRef.current !== ws) return;
         flushVectorSamples();
+        markScanPerformanceClosed(ev.code);
         void handleClose(
           ev,
           closureKindRef.current,
@@ -332,6 +349,10 @@ export function useScanStream() {
 
 function openWs(path: string): WebSocket {
   return new WebSocket(wsUrl(withScanAuthQuery(path)));
+}
+
+function scanTransport(): "websocket" | "desktop_native" {
+  return "ionbeamScanner" in window ? "desktop_native" : "websocket";
 }
 
 function stopExisting(ref: React.MutableRefObject<WebSocket | null>): void {

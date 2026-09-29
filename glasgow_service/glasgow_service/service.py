@@ -1164,6 +1164,7 @@ class DeviceService:
     # -------- streaming (for WebSocket) -----------------------------------
 
     async def raster_scan(self, req: RasterRequest, *, native_samples: bool = False):
+        transport = "desktop_native" if native_samples else "websocket"
         if self._hardware_free(req):
             async for wire in self._simulated_scan("raster", req, native_samples=native_samples):
                 yield wire
@@ -1174,7 +1175,9 @@ class DeviceService:
         # in memory anyway because the WebSocket frame keeps them until
         # the network layer flushes.
         captured: List = []
-        async with self._acquire("raster"):
+        scan_started = time.monotonic()
+        first_sample_logged = False
+        async with self._acquire("raster", transport=transport):
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
             latency = self._chunk_latency("raster", req.latency_bytes, cmd)
@@ -1186,6 +1189,10 @@ class DeviceService:
                 async for chunk in conn.transfer_multiple(
                         cmd, latency=latency):
                     self._status.chunks_in_flight += 1
+                    if not first_sample_logged:
+                        first_sample_logged = True
+                        logger.info("scan first-sample kind=raster transport=%s elapsed=%.3fs",
+                                    transport, time.monotonic() - scan_started)
                     captured.append(chunk)
                     fault = adc_monitor.observe(chunk)
                     if fault is not None:
@@ -1218,13 +1225,16 @@ class DeviceService:
                     })
 
     async def vector_scan(self, req: VectorRequest, *, native_samples: bool = False):
+        transport = "desktop_native" if native_samples else "websocket"
         if self._hardware_free(req):
             async for wire in self._simulated_scan("vector", req, native_samples=native_samples):
                 yield wire
             return
 
         captured: List = []
-        async with self._acquire("vector"):
+        scan_started = time.monotonic()
+        first_sample_logged = False
+        async with self._acquire("vector", transport=transport):
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(req)
             latency = self._chunk_latency("vector", req.latency_bytes, cmd)
@@ -1239,6 +1249,10 @@ class DeviceService:
             try:
                 async for chunk in transfer_iter:
                     self._status.chunks_in_flight += 1
+                    if not first_sample_logged:
+                        first_sample_logged = True
+                        logger.info("scan first-sample kind=vector transport=%s elapsed=%.3fs",
+                                    transport, time.monotonic() - scan_started)
                     captured.append(chunk)
                     fault = adc_monitor.observe(chunk)
                     if fault is not None:
@@ -2122,7 +2136,7 @@ class DeviceService:
 
     # -------- state lock --------------------------------------------------
 
-    def _acquire(self, kind: str):
+    def _acquire(self, kind: str, *, transport: str = "service"):
         svc = self
         class _Ctx:
             async def __aenter__(self):
@@ -2138,8 +2152,8 @@ class DeviceService:
                 svc._status.last_error = None
                 svc._status.chunks_in_flight = 0
                 self.started = time.monotonic()
-                logger.info("scan start kind=%s production=%s", kind,
-                            getattr(svc._config, "IsProduction", None))
+                logger.info("scan start kind=%s production=%s transport=%s", kind,
+                            getattr(svc._config, "IsProduction", None), transport)
                 return svc
             async def __aexit__(self, exc_type, exc, tb):
                 # A streaming client closing its WebSocket causes the async
@@ -2165,9 +2179,9 @@ class DeviceService:
                 svc._status.chunks_in_flight = 0
                 svc._lock.release()
                 logger.info("scan end kind=%s ok=%s cancelled=%s elapsed=%.3fs "
-                            "chunks=%d error=%s",
+                            "transport=%s chunks=%d error=%s",
                             kind, exc is None, cancelled, time.monotonic() - self.started,
-                            chunks, None if exc is None or cancelled
+                            transport, chunks, None if exc is None or cancelled
                             else f"{type(exc).__name__}: {exc}")
                 return False
         return _Ctx()
