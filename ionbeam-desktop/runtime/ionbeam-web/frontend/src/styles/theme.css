@@ -2834,6 +2834,13 @@ body {
   color: var(--c-text);
 }
 
+.level-wedge__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
 .level-wedge__auto {
   padding: 2px 6px;
   font-size: 11px;

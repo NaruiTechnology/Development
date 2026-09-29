@@ -19,6 +19,7 @@
 import { useCallback, useMemo, useRef } from "react";
 
 import { useTranslation } from "../i18n";
+import { HelpPopover } from "./HelpPopover";
 import {
   LEVEL_HISTOGRAM_BINS,
   OBI_FULL_SCALE,
@@ -246,16 +247,21 @@ export function LevelWedge({
         <span title={t("canvas.wedge.white")}>▲ {highCode}</span>
         <span title={t("canvas.wedge.black")}>▽ {lowCode}</span>
       </div>
-      <button
-        type="button"
-        className="level-wedge__auto"
-        aria-pressed={auto}
-        disabled={disabled}
-        title={t("canvas.wedge.autoTitle")}
-        onClick={onAuto}
-      >
-        {t("canvas.wedge.auto")}
-      </button>
+      <div className="level-wedge__actions">
+        <button
+          type="button"
+          className="level-wedge__auto"
+          aria-pressed={auto}
+          disabled={disabled}
+          title={t("canvas.wedge.autoTitle")}
+          onClick={onAuto}
+        >
+          {t("canvas.wedge.auto")}
+        </button>
+        <HelpPopover title={t("canvas.wedge.help.title")} ariaLabel={t("canvas.wedge.help.aria")}>
+          <p>{t("canvas.wedge.help.body")}</p>
+        </HelpPopover>
+      </div>
     </div>
   );
 }
