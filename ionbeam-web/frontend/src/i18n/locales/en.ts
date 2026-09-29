@@ -21,6 +21,7 @@
 
 export const en = {
   /* ===== app chrome ================================================ */
+  "header.desktop.label": "Scan",
   "app.documentTitle": "Ion Beam Technology — Control Panel",
   "app.brand.name": "Ion Beam Technology",
   "app.brand.tagline": "Beam Control Console",
@@ -619,6 +620,8 @@ export const en = {
   "header.reconnect.title": "Reconnect hardware services",
   "header.reconnect.aria": "Reconnect hardware services",
   "header.report.title": "Open account activity management report",
+  "header.dashboard.label": "Dashboard",
+  "header.dashboard.title": "Open account activity dashboard",
   "header.report.aria": "Open management report",
   "header.scan.title": "Return to the scan console",
   "header.scan.aria": "Open scan console",

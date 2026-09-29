@@ -8,6 +8,7 @@ ReDoc:        http://127.0.0.1:8765/redoc
 OpenAPI JSON: http://127.0.0.1:8765/openapi.json
 """
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
@@ -34,9 +35,16 @@ async def lifespan(app: FastAPI):
     logger.info("Glasgow config: %s", config_path)
     svc = DeviceService(str(config_path))
     await svc.start()
+    native = None
     try:
+        if os.environ.get("GLASGOW_DESKTOP_ENABLED") == "1":
+            from .desktop_native import NativeScanServer
+            native = NativeScanServer(svc)
+            await native.start()
         yield
     finally:
+        if native is not None:
+            await native.close()
         await svc.stop()
 
 

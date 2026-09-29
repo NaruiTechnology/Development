@@ -71,6 +71,8 @@ def main():
     parser.add_argument(
         '--mobility', action='store_true', dest='mobility',
         help="Deploy the mobility-only frontend variant")
+    parser.add_argument('--desktop', action='store_true', help='Install the native desktop scanner before starting local services')
+    parser.add_argument('--desktop-artifact', help='Path to desktop .deb (with adjacent .sha256)')
 
     args = parser.parse_args()
     jsonpath = args.jsonfile
@@ -92,6 +94,28 @@ def main():
         config.Deployment["IsProduction"] = True
     if args.mobility:
         config.Deployment["MobilityOnly"] = True
+    if args.desktop:
+        if args.production or args.mobility:
+            parser.error('--desktop is for a local Linux instrument workstation, not a remote production/mobility host')
+        import hashlib
+        artifact = os.path.abspath(os.path.expanduser(args.desktop_artifact or os.path.join(
+            os.path.dirname(__file__), 'ionbeam-desktop_1.0.0_amd64.deb')))
+        if not os.path.isfile(artifact) or not os.path.isfile(artifact + '.sha256'):
+            parser.error('Build with --desktop first; desktop .deb and checksum are required')
+        with open(artifact + '.sha256') as handle:
+            expected = handle.read().split()[0]
+        with open(artifact, 'rb') as handle:
+            actual = hashlib.file_digest(handle, 'sha256').hexdigest()
+        if actual != expected:
+            parser.error('Desktop package checksum mismatch')
+        config.Deployment['DesktopArtifact'] = artifact
+        for index, action in enumerate(config.Actions):
+            if 'manageLocalSystem' in action or 'launchGlasgowService' in action:
+                config.Actions.insert(index, {'installDesktopScanner': {
+                    'skip': False, 'transactionComplete': False, 'actionData': {}, 'timeout': 600}})
+                break
+        else:
+            parser.error('Desktop deployment requires a local service startup action')
 
     sudo = SudoCredentialKeepalive()
     try:

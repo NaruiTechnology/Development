@@ -1,0 +1,40 @@
+{
+  "name": "ionbeam-web-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node/TS proxy fronting glasgow_service for the Ion Beam Tech web UI.",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:mobility": "IONBEAM_MOBILITY_ONLY=1 tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/calibrationVendorFile.test.ts tests/calibrationCsvFile.test.ts tests/scanGeometryConfig.test.ts",
+    "db:migrate:update-date": "tsx src/scripts/applyUpdateDateMigration.ts",
+    "db:seed:calibration": "tsx src/scripts/seedCalibrationCatalog.ts",
+    "deploy": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json",
+    "deploy:local": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json",
+    "deploy:production": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --production",
+    "deploy:mobility": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --mobility",
+    "deploy:production-mobility": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --production --mobility"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^3.0.0",
+    "morgan": "^1.10.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^20.12.7",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

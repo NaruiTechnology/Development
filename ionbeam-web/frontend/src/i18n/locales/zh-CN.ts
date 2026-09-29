@@ -22,6 +22,9 @@ import type { TranslationTable } from "./en";
 
 export const zhCN: Partial<TranslationTable> = {
   /* ===== app chrome ================================================ */
+  "header.desktop.label": "扫描",
+  "header.dashboard.label": "仪表板",
+  "header.dashboard.title": "打开账户活动仪表板",
   "app.documentTitle": "Ion Beam Technology — 控制面板",
   "app.brand.name": "Ion Beam Technology",
   "app.brand.tagline": "束流控制台",

@@ -110,7 +110,7 @@ export function Header({
       setAuthOpen(false);
       return;
     }
-    if (activeView === "report" || signedInUser || authAutoOpenedRef.current) return;
+    if (signedInUser || authAutoOpenedRef.current) return;
     authAutoOpenedRef.current = true;
     setAuthOpen(true);
   }, [activeView, scanLocked, signedInUser]);
@@ -210,16 +210,16 @@ export function Header({
       <div className="app-header__utility-panel">
         <button
           type="button"
-          className="btn btn--ghost app-header__settings"
+          className="btn btn--ghost"
           onClick={() => {
             if (activeView === "report") onOpenScan();
             else onOpenReport();
           }}
-          aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
-          title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
-          disabled={headerActionDisabled}
+          title={t(activeView === "report" ? "header.scan.title" : "header.dashboard.title")}
+          aria-pressed={activeView === "report"}
         >
           <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
+          {t(activeView === "report" ? "header.desktop.label" : "header.dashboard.label")}
         </button>
         <button
           type="button"

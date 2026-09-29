@@ -1,0 +1,16 @@
+{
+  "name": "ionbeam-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ion Beam desktop controls with worker-based binary HTTP scan streaming",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "npm --prefix runtime/ionbeam-web/frontend run build && npm --prefix runtime/ionbeam-web/backend run build",
+    "test": "npm --prefix runtime/ionbeam-web/frontend test && node --test tests/*.test.cjs",
+    "package:linux": "python3 scripts/package_linux.py"
+  },
+  "devDependencies": {
+    "electron": "44.4.5"
+  }
+}

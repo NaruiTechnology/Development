@@ -1,0 +1,33 @@
+{
+  "name": "ionbeam-web-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "React/Redux/TS web client for Ion Beam Technology beam control.",
+  "scripts": {
+    "sync:allowed-hosts": "node scripts/sync-allowed-hosts.mjs",
+    "dev": "npm run sync:allowed-hosts && vite",
+    "dev:mobility": "npm run sync:allowed-hosts && VITE_MOBILITY_ONLY=1 vite",
+    "build": "tsc -b && vite build",
+    "build:mobility": "tsc -b && npm run sync:allowed-hosts && VITE_MOBILITY_ONLY=1 vite build",
+    "test": "npm run test:compile && node scripts/operational-tests.mjs",
+    "test:compile": "node scripts/clean-test-dist.mjs && tsc -p tsconfig.test.json",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "^2.2.3",
+    "ag-grid-community": "^36.2.0",
+    "ag-grid-react": "^36.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-redux": "^9.1.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^5.4.5",
+    "vite": "^8.0.13"
+  }
+}

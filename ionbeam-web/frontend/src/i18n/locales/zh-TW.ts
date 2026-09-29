@@ -31,6 +31,9 @@ import type { TranslationTable } from "./en";
 
 export const zhTW: Partial<TranslationTable> = {
   /* ===== app chrome ================================================ */
+  "header.desktop.label": "掃描",
+  "header.dashboard.label": "儀表板",
+  "header.dashboard.title": "開啟帳戶活動儀表板",
   "app.documentTitle": "Ion Beam Technology — 控制面板",
   "app.brand.name": "Ion Beam Technology",
   "app.brand.tagline": "束流控制台",

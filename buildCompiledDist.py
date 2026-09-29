@@ -7,6 +7,7 @@ import fnmatch
 import argparse
 import importlib.util
 import json
+import subprocess
 from datetime import datetime
 
 try:
@@ -33,6 +34,7 @@ EXCLUDE_PATTERNS = ['*.log']
 # listed in COPY_TREES are excluded here because they're handled wholesale
 # by copy_source_trees().
 SKIP_DIRS = {
+    'ionbeam-desktop',  # independent desktop artifact; do not duplicate its runtime snapshot
     '__pycache__',
     '.venv',
     '.git',
@@ -103,6 +105,7 @@ REQUIRED_DIST_MODULES = (
     'Development/GlasgowDataIO/IobeamControl/macros/vector',
     'Development/GlasgowDataIO/IobeamControl/transfer/linkStats',
     'Development/glasgow_service/glasgow_service/service',
+    'Development/glasgow_service/glasgow_service/desktop_native',
 )
 REQUIRED_DIST_FILES = (
     'Development/GlasgowDataIO/Json/streamData.json',
@@ -731,9 +734,23 @@ def main(argv=None, script_path=None):
                         help="Deliver raw python code (skip byte-compilation)", default=False)
     parser.add_argument('--verify', metavar='ZIP', dest='verify',
                         help="Verify an existing distribution archive and exit")
+    parser.add_argument('--desktop', action='store_true', help='Also build and include the Linux desktop scanner package')
+    parser.add_argument('--desktop-only', action='store_true', help='Build only the desktop scanner package')
+    parser.add_argument('--desktop-install-deps', action='store_true', help='Install locked desktop build dependencies')
     args = parser.parse_args(argv)
     script_path = script_path or __file__
     workspace = resolve_workspace(script_path)
+
+    if args.desktop or args.desktop_only:
+        command = [sys.executable, os.path.join(workspace, 'Development', 'Scripts', 'build-desktop.py')]
+        if args.desktop_install_deps:
+            command.append('--install-deps')
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as exc:
+            return exc.returncode
+        if args.desktop_only:
+            return 0
 
     if args.verify:
         try:
@@ -761,6 +778,11 @@ def main(argv=None, script_path=None):
         deploy_dir = os.path.join('.', 'Development', 'DeployWorkSpace',
                                   'Development', 'DistributionDeploy')
         workspace_dir = os.path.join('.', 'Development', 'DeployWorkSpace')
+        if args.desktop:
+            release = os.path.join(workspace, 'Development', 'ionbeam-desktop', 'release')
+            os.makedirs(deploy_dir, exist_ok=True)
+            for filename in ('ionbeam-desktop_1.0.0_amd64.deb', 'ionbeam-desktop_1.0.0_amd64.deb.sha256'):
+                shutil.copy2(os.path.join(release, filename), os.path.join(deploy_dir, filename))
         version_label = version_label_from_stream_data('.')
         workspace_archive_base = f"DeployWorkspace_{version_label}_{timestamp_label()}"
         final_archive = post_build_deploy(

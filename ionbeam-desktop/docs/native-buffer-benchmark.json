@@ -1,0 +1,28 @@
+{
+  "scope": "Sample representation preparation only. Excludes USB, IPC copies, Node, rendering, persistence and device timing. Not an OBI throughput comparison.",
+  "python": "3.14.4",
+  "trials_after_warmup": 20,
+  "results": [
+    {
+      "resolution": 512,
+      "median_ms": {
+        "web_big_endian_copy": 0.10043,
+        "native_buffer_view": 0.001472
+      }
+    },
+    {
+      "resolution": 1024,
+      "median_ms": {
+        "web_big_endian_copy": 0.771559,
+        "native_buffer_view": 0.004832
+      }
+    },
+    {
+      "resolution": 2048,
+      "median_ms": {
+        "web_big_endian_copy": 2.958258,
+        "native_buffer_view": 0.018061
+      }
+    }
+  ]
+}

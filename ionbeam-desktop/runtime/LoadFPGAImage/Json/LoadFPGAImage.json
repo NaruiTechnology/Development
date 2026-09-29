@@ -1,0 +1,128 @@
+{
+    "Header":{
+        "Aplication": "Dual Beam System"
+    },
+    "Equipment":{
+        "Vendor": "FEI Co",
+        "VendorAddress": "5350 NE Dawson Creek Drive, Hillsboro, OR, 97124, United States",
+        "Model": "",
+        "Config": {
+            "SampleFlatfor": {},
+            "E-Beam": {},
+            "I-Bean": {}
+        }
+    },
+    "Glasgow": { 
+        "Device0": {
+            "Id": "C3-20251207T145552Z",
+            "Port": {
+                "A": {
+                    "DefaultVol": 3.3,
+                    "0": {"Name": "x-EScan", "Direction": "Out", "Volt": 3.3},
+                    "1": {"Name": "y-EScan", "Direction": "Out", "Volt": 3.3},
+                    "2": {},
+                    "3": {},
+                    "4": {},
+                    "5": {},
+                    "6": {},
+                    "7": {}
+                },
+                "B": {
+                    "DefaultVol": 3.3,
+                    "0": {},
+                    "1": {},
+                    "2": {},
+                    "3": {},
+                    "4": {},
+                    "5": {},
+                    "6": {},
+                    "7": {}
+                }
+            }           
+        }
+    },     
+    "Actions":[
+        {
+            "connectDevice": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "glasgow run control-gpio -V {} --pins {}",
+                    "voltage": 3.3,
+                    "pins": "A0"
+                },
+                "timeout": 20.0
+            }
+        },
+        {
+            "buildFPGAPlan": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "./build.sh"
+                },
+                "timeout": 0.0,
+                "args": {
+                    "outputFiles": ["top.v", "top.json", "top.pcf", "top.asc", "top.bin"] 
+                }
+            }
+        },
+        {
+            "buildFPGAImage": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {                    
+                    "commandFormat": "yosys -p 'synth_ice40 -top top -json top.json' {}",
+                    "": "top.v"
+                },
+                "timeout": 10.0
+            }
+        },
+        {
+            "invokeNextpnr": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "nextpnr-ice40 --hx1k --package tq144 --json {} --pcf {} --asc {}",
+                    "json": "top.json",
+                    "pcf": "top.pcf",
+                    "asc": "top.asc"
+                },
+                "timeout": 2.0
+            }
+        },
+        {
+            "bitsStreamPackage": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "icepack {}",
+                    "": "top.asc top.bin"
+                },
+                "timeout": 2.0
+            }
+        },
+        {
+            "updateFPGAImage": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "glasgow run program-ice40-sram {}",
+                    "": "top.bin"
+                },
+                "timeout": 10.0
+            }
+        },
+        {
+            "flashFPGAfirmware": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "glasgow flash"
+                },
+                "timeout": 0.5
+            }
+        }
+    ],
+    "LogName": "LoadFPGAImage"
+}
