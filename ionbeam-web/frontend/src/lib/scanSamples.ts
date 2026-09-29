@@ -3,6 +3,24 @@
 export const OBI_SCAN_FULL_SCALE = 0xfffc;
 
 /**
+ * Map an OBI sample to display gray. Supplying a measured frame range gives
+ * the same live contrast behavior as OBI's histogram levels; omitting it
+ * retains the absolute 0..0xfffc mapping used by gray-selection controls.
+ */
+export function scaleScanSample(
+  value: number,
+  low = 0,
+  high = OBI_SCAN_FULL_SCALE,
+): number {
+  if (!Number.isFinite(low) || !Number.isFinite(high) || high <= low) {
+    low = 0;
+    high = OBI_SCAN_FULL_SCALE;
+  }
+  const clamped = Math.max(low, Math.min(high, value));
+  return Math.round(((clamped - low) * 255) / (high - low));
+}
+
+/**
  * Decode a WebSocket scan payload.
  *
  * SixteenBit is already big-endian uint16. EightBit contains the high byte of

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   clearROIImage,
@@ -28,7 +28,23 @@ import {
 } from "../lib/roiGeometry";
 import { useTranslation, type TranslationApi, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
+import { LevelWedge } from "./LevelWedge";
 import { NumberStepperInput } from "./NumberStepperField";
+import { useLevelSetting } from "../hooks/useLevelSetting";
+import {
+  AUTO_LEVELS,
+  ROI_GRAY_FULL_SCALE,
+  ROI_GRAY_SAMPLE_SCALE,
+  grayLevelLut,
+  type LevelHistogram,
+  type ResolvedLevels,
+} from "../lib/displayLevels";
+import {
+  ROI_LEVEL_KEY,
+  applyLevelsToCanvas,
+  measureGrayImage,
+  resolveRoiLevels,
+} from "../lib/grayImageLevels";
 
 type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
 type ROISelectionCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -84,6 +100,38 @@ export function ROIEditor({
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  // Untouched copy of the image at canvas size. The base canvas shows it
+  // stretched by the wedge levels, but gray-level selection, the live beam
+  // overlay and the captured scan image always work on these raw gray values.
+  const rawCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rawImageRef = useRef<HTMLImageElement | null>(null);
+  const [grayHist, setGrayHist] = useState<LevelHistogram | null>(null);
+  const [levelSetting, setLevelSetting] = useLevelSetting(ROI_LEVEL_KEY);
+  const levels = useMemo(() => resolveRoiLevels(grayHist, levelSetting), [grayHist, levelSetting]);
+  const lut = useMemo(() => grayLevelLut(levels), [levels]);
+  // Repaint at most once per animation frame while a wedge handle is dragged.
+  const pendingLevelRef = useRef<ResolvedLevels | null>(null);
+  const levelFrameRef = useRef<number | null>(null);
+  const handleWedgeChange = useCallback(
+    (next: ResolvedLevels) => {
+      pendingLevelRef.current = next;
+      if (levelFrameRef.current !== null) return;
+      levelFrameRef.current = window.requestAnimationFrame(() => {
+        levelFrameRef.current = null;
+        const pending = pendingLevelRef.current;
+        pendingLevelRef.current = null;
+        if (pending) setLevelSetting({ mode: "manual", low: pending.low, high: pending.high });
+      });
+    },
+    [setLevelSetting],
+  );
+  const handleWedgeAuto = useCallback(() => setLevelSetting(AUTO_LEVELS), [setLevelSetting]);
+  useEffect(
+    () => () => {
+      if (levelFrameRef.current !== null) window.cancelAnimationFrame(levelFrameRef.current);
+    },
+    [],
+  );
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const resizeCornerRef = useRef<ROISelectionCorner | null>(null);
   const resizeSelectionRef = useRef<ROIRequest | null>(null);
@@ -267,6 +315,7 @@ export function ROIEditor({
     chunksReceived,
     resizeTrace,
     calibrationLine,
+    lut,
   ]);
 
   useEffect(() => {
@@ -310,7 +359,9 @@ export function ROIEditor({
     if (capturedCompletedVectorRef.current === captureKey) return;
 
     const frame = window.requestAnimationFrame(() => {
-      const base = canvasRef.current;
+      // Capture the raw image, not the wedge-stretched display, so the stored
+      // scan image is never stretched twice.
+      const base = imageRef.current && rawCanvasRef.current ? rawCanvasRef.current : canvasRef.current;
       const mask = maskCanvasRef.current;
       const live = liveCanvasRef.current;
       if (!base || !mask || !live) return;
@@ -571,13 +622,29 @@ export function ROIEditor({
     ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
 
     const img = imageRef.current;
+    syncRawImage(img);
     if (img) {
       ctx.drawImage(img, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      applyLevelsToCanvas(canvas, levels);
     } else {
       ctx.fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
       ctx.fillRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
     }
 
+  }
+
+  /** Keep the raw copy and the wedge histogram in step with the current image. */
+  function syncRawImage(img: HTMLImageElement | null) {
+    if (rawImageRef.current === img) return;
+    rawImageRef.current = img;
+    if (!img) {
+      setGrayHist(null);
+      return;
+    }
+    const raw = rawCanvasRef.current ?? document.createElement("canvas");
+    rawCanvasRef.current = raw;
+    const measured = measureGrayImage(img, raw);
+    setGrayHist(measured ? measured.histogram : null);
   }
 
   function drawHighlightMask() {
@@ -620,9 +687,14 @@ export function ROIEditor({
         continue;
       }
 
-      const tinted = spotMode
-        ? tintBeamHitPixel(data[i], data[i + 1], data[i + 2])
-        : tintHighlighterPixel(data[i], data[i + 1], data[i + 2]);
+      // Selection above used the raw gray value; the tint is computed from the
+      // gray the operator sees (wedge-stretched) so it blends with the display.
+      const isGray = data[i] === data[i + 1] && data[i] === data[i + 2];
+      const shown = isGray ? lut[value] : value;
+      const sr = isGray ? shown : data[i];
+      const sg = isGray ? shown : data[i + 1];
+      const sb = isGray ? shown : data[i + 2];
+      const tinted = spotMode ? tintBeamHitPixel(sr, sg, sb) : tintHighlighterPixel(sr, sg, sb);
       data[i] = tinted.r;
       data[i + 1] = tinted.g;
       data[i + 2] = tinted.b;
@@ -661,7 +733,8 @@ export function ROIEditor({
     const worldYSpan = Math.max(1e-6, selection.y_end - selection.y_start);
     const pointXSpan = Math.max(1e-6, pointBounds.x1 - pointBounds.x0);
     const pointYSpan = Math.max(1e-6, pointBounds.y1 - pointBounds.y0);
-    const sourceCanvas = canvasRef.current;
+    // Beam-on decisions use the raw gray values, not the wedge-stretched display.
+    const sourceCanvas = imageRef.current && rawCanvasRef.current ? rawCanvasRef.current : canvasRef.current;
     const sourceCtx = sourceCanvas?.getContext("2d");
     if (!sourceCanvas || !sourceCtx) return;
     const sourceData = sourceCtx.getImageData(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE).data;
@@ -1230,6 +1303,7 @@ export function ROIEditor({
       )}
 
       {(variant === "canvas" || variant === "all") && (
+        <div className="canvas-stage roi-canvas-stage">
         <div ref={canvasWrapRef} className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}>
           <div className="roi-canvas-mode" aria-live="polite">
             {!roi.calibration_enabled && <span className="roi-source-pill">{roiModeLabel}</span>}
@@ -1645,6 +1719,17 @@ export function ROIEditor({
               <span>Spot beam-on pixels</span>
             </div>
           )}
+        </div>
+        <LevelWedge
+          histogram={grayHist}
+          levels={levels}
+          auto={levelSetting.mode === "auto"}
+          onChange={handleWedgeChange}
+          onAuto={handleWedgeAuto}
+          disabled={!grayHist || grayHist.total <= 0 || roi.calibration_enabled}
+          fullScale={ROI_GRAY_FULL_SCALE}
+          codeDivisor={ROI_GRAY_SAMPLE_SCALE}
+        />
         </div>
       )}
       {calibrationCorrection && (

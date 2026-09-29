@@ -6,7 +6,7 @@ import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField"
 import { ResolutionHelp } from "./ResolutionHelp";
 
 const RESOLUTION_OPTIONS: PresetNumberOption[] = [128, 256, 512, 1024, 2048].map((value) => ({ value }));
-const DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
+const DWELL_OPTIONS: PresetNumberOption[] = [0, 1, 3, 7, 15, 31, 63].map((value) => ({ value }));
 
 export function ROIRasterActionWedges({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
@@ -42,7 +42,7 @@ export function ROIRasterActionWedges({ disabled }: { disabled: boolean }) {
           }
           value={raster.dwell}
           options={DWELL_OPTIONS}
-          min={1}
+          min={0}
           max={65535}
           disabled={disabled}
           onChange={(value) => dispatch(updateRaster({ dwell: value }))}

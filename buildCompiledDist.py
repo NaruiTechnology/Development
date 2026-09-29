@@ -94,6 +94,14 @@ REQUIRED_DIST_MODULES = (
     'Development/GlasgowDataIO/IobeamControl/applet/adcTiming',
     'Development/GlasgowDataIO/IobeamControl/applet/iobeamDataSubtarget',
     'Development/GlasgowDataIO/IobeamControl/applet/commandExecutor',
+    # Scan path.  These carry the beam-unblank commands, the IN-endpoint flush
+    # (DAC staircase fix) and the [link] timing summary; a distribution built
+    # without any of them silently reverts to the blank-image / staircase
+    # behaviour, so their absence must fail the build and the deploy verifier.
+    'Development/GlasgowDataIO/IobeamControl/applet/DataStreamApplet',
+    'Development/GlasgowDataIO/IobeamControl/macros/raster',
+    'Development/GlasgowDataIO/IobeamControl/macros/vector',
+    'Development/GlasgowDataIO/IobeamControl/transfer/linkStats',
     'Development/glasgow_service/glasgow_service/service',
 )
 REQUIRED_DIST_FILES = (
@@ -240,7 +248,7 @@ def resolve_workspace(script_path):
     development = os.path.dirname(os.path.abspath(script_path))
     if os.path.basename(development) != 'Development':
         raise RuntimeError(
-            "buidCompiledDist.py must live in a directory named 'Development' "
+            "buildCompiledDist.py must live in a directory named 'Development' "
             "(found %s); archive paths are rooted at Development/." % development)
     return os.path.dirname(development)
 

@@ -454,9 +454,17 @@ class VectorScanCommand(BaseCommand):
         stats = LinkStats("vector", dwell=getattr(self, "link_dwell", None),
                           beam_hz=getattr(self, "link_beam_hz", None))
         outcome = "error"
+        summary_logged = False
+        sent_total = None      # set by the sender after the last real chunk
+
+        def emit_summary(result):
+            nonlocal summary_logged
+            if not summary_logged:
+                summary_logged = True
+                self._logger.info(stats.summary(result))
 
         async def sender():
-            nonlocal tokens
+            nonlocal tokens, sent_total
             total_pixels = 0
             try:
                 for commands, pixel_count in self._iter_chunks(latency):
@@ -485,6 +493,8 @@ class VectorScanCommand(BaseCommand):
                     if self.abort.is_set():
                         break
                     await asyncio.sleep(0)
+
+                sent_total = total_pixels
 
                 # ---------- pipeline-drain padding -----------------------------
                 # Mirrors RasterScanCommand.sender's tail. After the last real
@@ -528,6 +538,14 @@ class VectorScanCommand(BaseCommand):
 
         await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
         await ExternalCtrlCommand(enable=self._external_control).transfer(stream)
+        # The gateware resets with the beam BLANKED (blank_enable init=1).
+        # Points without an explicit blank flag (the default ROI sweeps) never
+        # send a BlankCommand, so without this the ion beam stays off and the
+        # ADC only sees its zero level.  OBI clients send this before every
+        # frame (opcode 0x52).  Points that carry explicit blank flags still
+        # override it inline from the first point on.
+        if self._beam_type != BeamType.NoBeam:
+            await BlankCommand(enable=False, inline=True).transfer(stream)
         await SynchronizeCommand(
             cookie=self._cookie, raster=False, output=self._output_mode,
         ).transfer(stream)
@@ -554,6 +572,10 @@ class VectorScanCommand(BaseCommand):
                 t_read = time.perf_counter()
                 res = await self.recv_res(pixel_count, stream, self._output_mode)
                 stats.received(time.perf_counter() - t_read, pixel_count)
+                if sent_total is not None and stats.pixels_recv >= sent_total:
+                    # Last chunk: log now; the consumer normally stops after
+                    # it, so `finally` may not run until GC/teardown.
+                    emit_summary("ok")
                 t_yield = time.perf_counter()
                 yield res
                 stats.consumed(time.perf_counter() - t_yield)
@@ -564,7 +586,7 @@ class VectorScanCommand(BaseCommand):
             outcome = "closed"
             raise
         finally:
-            self._logger.info(stats.summary(outcome))
+            emit_summary(outcome)
             # Wait for the sender to finish its drain padding + final
             # flush before this generator returns.
             #

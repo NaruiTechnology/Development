@@ -5,8 +5,10 @@ push samples back. When the host falls behind, the beam parks and the X DAC
 shows flat steps instead of a continuous sawtooth. There are three places the
 host can fall behind, and they need different fixes:
 
-* OUT  - the sender's per-chunk ``stream.flush()`` takes longer than one
-         chunk's beam time, so the command FIFO runs dry.
+* OUT  - the sender's write / pipeline-boundary flush takes longer than one
+         chunk's beam time, so the command FIFO runs dry.  (Like upstream OBI
+         the raster sender does not flush per RasterPixelRun; it flushes at
+         pipeline boundaries and at the end of the frame.)
 * IN   - USB IN transfers do not keep up with the sample rate, so the FPGA's
          output FIFO fills and backpressure stalls the scan.
 * host - the consumer of the macro's generator (websocket send, ADC monitor,

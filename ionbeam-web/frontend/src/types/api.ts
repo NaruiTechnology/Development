@@ -53,7 +53,7 @@ export interface VacuumSystemStatus {
 
 export interface RasterRequest {
   resolution: number;     // 1..2048
-  dwell: number;          // 1..65535
+  dwell: number;          // 0..65535; 0 is one ADC sample/pixel
   latency_bytes: number;  // >= 2
   frame_blank: boolean;
   cookie: number;         // 0..65535
@@ -132,7 +132,7 @@ export type DacRampAxis = "x" | "y";
 export interface DacRampRequest {
   axis: DacRampAxis;
   fixed_code: number;   // 0..16383
-  dwell: number;        // 1..65535
+  dwell: number;        // 0..65535; 0 is one ADC sample/pixel
   latency_bytes: number; // >= 2
   cookie: number;        // 0..65535
   beam_type: "NoBeam" | "Electron" | "Ion";

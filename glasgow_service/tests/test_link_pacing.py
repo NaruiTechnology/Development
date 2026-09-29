@@ -1,14 +1,61 @@
-"""Chunk sizing for slow host links and the raster-generator route for sawtooth vectors."""
+"""Chunk sizing and continuous raster command delivery."""
+import asyncio
 import unittest
 from pathlib import Path
 
 from glasgow_service.models import DacRampRequest, VectorPattern, VectorRequest, VectorScanPath
 from glasgow_service.service import DeviceService, _link_chunk_latency
+from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 from GlasgowDataIO.IobeamControl.macros import RasterScanCommand
 from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
 from GlasgowDataIO.IobeamControl.transfer.linkStats import LinkStats
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "GlasgowDataIO" / "Json" / "streamData.json"
+
+
+class _RecordingStream:
+    def __init__(self):
+        self.events = []
+
+    async def write(self, data):
+        self.events.append(("write", bytes(data)))
+
+    async def flush(self):
+        self.events.append(("flush", b""))
+
+    async def read(self, length):
+        # Real USB reads suspend, allowing the raster sender task to fill the
+        # OUT queue concurrently. Preserve that scheduling behavior here.
+        await asyncio.sleep(0)
+        return memoryview(bytes(length))
+
+
+class RasterCommandBatchingTest(unittest.TestCase):
+    def test_raster_runs_are_not_flushed_individually(self):
+        async def exercise():
+            stream = _RecordingStream()
+            cmd = RasterScanCommand(
+                x_range=DACCodeRange(start=0, count=4, step=256),
+                y_range=DACCodeRange(start=0, count=1, step=256),
+                dwell_time=1,
+                cookie=123,
+                padding_min_pixels=1,
+                padding_ratio_denominator=0,
+            )
+            async for _ in cmd.transfer(stream, latency=1):
+                pass
+            for _ in range(8):
+                await asyncio.sleep(0)
+            return stream.events
+
+        events = asyncio.run(exercise())
+        run_indexes = [
+            index for index, (kind, payload) in enumerate(events)
+            if kind == "write" and payload and payload[0] >> 4 == 0xC
+        ]
+        self.assertEqual(len(run_indexes), 4)
+        for index in run_indexes:
+            self.assertNotEqual(events[index + 1][0], "flush")
 
 
 class LinkChunkLatencyTest(unittest.TestCase):

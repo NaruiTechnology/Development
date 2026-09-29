@@ -41,8 +41,8 @@ test("revC3 timing responds to dwell and resolution", () => {
 
 test("dwell presets are 2^k - 1 so no sample is wasted by the power-of-two averager", () => {
   const options = revC3DwellPresetOptions();
-  assert.deepEqual(options.map((o) => o.value), [1, 3, 7, 15, 31, 63]);
-  assert.equal(options[0].label, "1 — 2 samples/pixel — 250.0 ns — 4.0 MPix/s");
+  assert.deepEqual(options.map((o) => o.value), [0, 1, 3, 7, 15, 31, 63]);
+  assert.equal(options[0].label, "0 — 1 samples/pixel — 125.0 ns — 8.0 MPix/s");
   for (const option of options) {
     const samples = option.value + 1;
     assert.ok(Number.isInteger(Math.log2(samples)), `${option.value} -> ${samples} samples`);

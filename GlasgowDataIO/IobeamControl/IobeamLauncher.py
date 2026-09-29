@@ -51,7 +51,7 @@ class IobeamLauncher:
             for p in actionConfig.get("ports", [])
             for n in p.get("pinList", [])
         ]
-        self._logger.info("IobeamLauncher: stream pins=%s", ",".join(pin_list) or "<none>")
+        self._logger.info("IobeamLauncher: legacy stream pins=%s", ",".join(pin_list) or "<none>")
         self._logger.info(
             "Scan acquisition: production=%s adc_half_period=%s adc_settle_cycles=%s "
             "adc_latch_cycles=%s bus_turnaround_cycles=%s dac_data_setup_cycles=%s "
@@ -113,6 +113,11 @@ class IobeamLauncher:
         target = GlasgowHardwareTarget(
             revision=device.revision, multiplexer_cls=DirectMultiplexer)
         applet.build(target, applet_args)
+        self._logger.info(
+            "launcher: claimed VIO port(s)=%s voltage=%s",
+            getattr(applet_args, "port_spec", "<none>"),
+            getattr(applet_args, "voltage", "<unchanged>"),
+        )
         plan = target.build_plan()
         self._logger.info("launcher: building bitstream %s", plan.bitstream_id.hex())
         image_programmed = await device.download_target(plan, reload=True)

@@ -93,12 +93,12 @@ export function DacRampPanel({ disabled }: { disabled: boolean }) {
           onValueChange={(next) => {
             const parsed = Number(next);
             if (Number.isFinite(parsed)) {
-              setDwell(Math.max(1, Math.min(65535, Math.round(parsed))));
+              setDwell(Math.max(0, Math.min(65535, Math.round(parsed))));
             }
           }}
           disabled={active || disabled}
           step={1}
-          min={1}
+          min={0}
           max={65535}
           inputMode="numeric"
           ariaLabel={t("dacRamp.dwell")}

@@ -1,6 +1,6 @@
 """End-to-end tests for the consolidated build -> verify -> deploy chain.
 
-They run the real ``buidCompiledDist.main`` on a small but realistic workspace
+They run the real ``buildCompiledDist.main`` on a small but realistic workspace
 (real builder, real manifest module, real workflow JSON, stub application
 modules) from different working directories, then attack the resulting archive
 in every way the deploy-side verifier must catch.
@@ -30,7 +30,7 @@ from workstates.unzipDistribution_state import unzipDistribution_state      # no
 from workstates.verifyDistribution_state import verifyDistribution_state    # noqa: E402
 from workthreads.DistributionDeployThread import DistributionDeployThread   # noqa: E402
 
-BUILDER_SOURCE = DEVELOPMENT / "buidCompiledDist.py"
+BUILDER_SOURCE = DEVELOPMENT / "buildCompiledDist.py"
 SLOT = Path("Development/DeployWorkSpace/Development/DistributionDeploy")
 
 
@@ -50,7 +50,7 @@ def make_workspace(base):
         "glasgow_service/pyproject.toml": DEVELOPMENT / "glasgow_service/pyproject.toml",
         "glasgow_service/deploy/setup-redis-sentinel.sh": DEVELOPMENT / "glasgow_service/deploy/setup-redis-sentinel.sh",
         "requirements.txt": DEVELOPMENT / "requirements.txt",
-        "buidCompiledDist.py": BUILDER_SOURCE,
+        "buildCompiledDist.py": BUILDER_SOURCE,
     }
     for rel, src in real.items():
         (dev / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -68,6 +68,10 @@ def make_workspace(base):
         "GlasgowDataIO/IobeamControl/applet/adcTiming.py": "TIMING = 1\n",
         "GlasgowDataIO/IobeamControl/applet/iobeamDataSubtarget.py": "SUBTARGET = 1\n",
         "GlasgowDataIO/IobeamControl/applet/commandExecutor.py": "EXECUTOR = 1\n",
+        "GlasgowDataIO/IobeamControl/applet/DataStreamApplet.py": "SCAN_PATH = 1\n",
+        "GlasgowDataIO/IobeamControl/macros/raster.py": "SCAN_PATH = 1\n",
+        "GlasgowDataIO/IobeamControl/macros/vector.py": "SCAN_PATH = 1\n",
+        "GlasgowDataIO/IobeamControl/transfer/linkStats.py": "SCAN_PATH = 1\n",
         "glasgow_service/glasgow_service/service.py": "SERVICE = 1\n",
         "Scripts/manage-local-system.sh": "#!/bin/sh\n",
         "Scripts/program-fpga-ram.py": "# programmer\n",
@@ -79,7 +83,7 @@ def make_workspace(base):
     unrelated = ws / "Unrelated"
     unrelated.mkdir()
     (unrelated / "secret.py").write_text("SECRET = 1\n")
-    return ws, dev / "buidCompiledDist.py"
+    return ws, dev / "buildCompiledDist.py"
 
 
 class BuilderEndToEndTests(unittest.TestCase):
@@ -163,7 +167,7 @@ class BuilderEndToEndTests(unittest.TestCase):
 
     def test_script_outside_a_development_directory_is_rejected(self):
         with self.assertRaises(RuntimeError):
-            self.builder.resolve_workspace(str(Path(self._tmp.name) / "notdev" / "buidCompiledDist.py"))
+            self.builder.resolve_workspace(str(Path(self._tmp.name) / "notdev" / "buildCompiledDist.py"))
 
 
 def rewrite(source, target, replace=None, drop=(), add=None):

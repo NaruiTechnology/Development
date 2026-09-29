@@ -54,7 +54,7 @@ class ScanConfigurationTest(unittest.TestCase):
         config = AutomationConfig(str(DEVELOPMENT / "GlasgowDataIO/Json/streamData.json"))
         args = configure_scan_args(config, GetStateConfigByName(config, "streamData")["actionData"],
                                    SimpleNamespace())
-        self.assertEqual(args.port_spec, "A")
+        self.assertEqual(args.port_spec, "AB")
         self.assertEqual([pin.number for pin in args.ebeam_scan_enable], [0, 1])
         self.assertEqual([pin.number for pin in args.ibeam_blank_enable], [4, 5])
         self.assertEqual([(pin.number, pin.invert) for pin in args.ibeam_blank], [(2, True), (3, False)])
@@ -145,8 +145,8 @@ class RuntimePowerTest(unittest.IsolatedAsyncioTestCase):
                    return_value=iface):
             await demux.claim_interface(applet, SimpleNamespace(_pipe_num=0), args,
                                         pull_high=args.beam_pull_high)
-        self.assertEqual(events, [("voltage", "A", 3.3),
-                                  ("pulls", "A", {2}, {0, 1, 3, 4, 5}), ("activate",)])
+        self.assertEqual(events, [("voltage", "AB", 3.3),
+                                  ("pulls", "AB", {2}, {0, 1, 3, 4, 5}), ("activate",)])
 
 
 if __name__ == "__main__":

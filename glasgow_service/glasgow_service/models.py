@@ -82,7 +82,7 @@ class VacuumSystemStatus(BaseModel):
 
 class RasterRequest(BaseModel):
     resolution:    int  = Field(512,   ge=1, le=2048, description="DAC range (NxN).")
-    dwell:         int  = Field(2,     ge=1, le=65535, description="A dwell of N averages N + 1 ADC samples (125 ns each with the current revC3 timing).")
+    dwell:         int  = Field(2,     ge=0, le=65535, description="A dwell of N averages N + 1 ADC samples (125 ns each with the current revC3 timing); 0 is the upstream OBI one-sample setting.")
     latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
     frame_blank:   bool = False
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
@@ -146,7 +146,7 @@ class DacRampRequest(BaseModel):
     axis:          DacRampAxis = DacRampAxis.x
     fixed_code:    int  = Field(8192, ge=0, le=16383,
                                  description="DAC code held on the non-swept axis.")
-    dwell:         int  = Field(500,  ge=1, le=65535,
+    dwell:         int  = Field(500,  ge=0, le=65535,
                                  description="ADC cycles per DAC code (OBI RampControl default: 500).")
     latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
@@ -193,7 +193,7 @@ class VectorFeedbackMode(str, Enum):
 class VectorPoint(BaseModel):
     x: int = Field(..., ge=0, le=16383)
     y: int = Field(..., ge=0, le=16383)
-    dwell: int = Field(..., ge=1, le=65535)
+    dwell: int = Field(..., ge=0, le=65535)
     blank: Optional[bool] = None
     passIndex: Optional[int] = Field(None, ge=1, le=2)
 
@@ -260,7 +260,7 @@ class VectorRequest(BaseModel):
     )
     dwell:          int  = Field(
         1,
-        ge=1,
+        ge=0,
         le=65535,
         description="Default-pattern dwell: N averages N + 1 ADC samples (125 ns each with the current revC3 timing). Ignored when pattern=custom.",
     )

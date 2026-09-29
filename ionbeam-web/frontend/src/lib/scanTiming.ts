@@ -73,7 +73,7 @@ export function estimateRevC3ScanTiming(
  * 15, ... give 2, 4, 8, 16, ... samples with none wasted.
  */
 export function revC3DwellPresetOptions(
-  values: readonly number[] = [1, 3, 7, 15, 31, 63],
+  values: readonly number[] = [0, 1, 3, 7, 15, 31, 63],
   adcHalfPeriod = GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES,
 ): DwellPresetOption[] {
   return values.map((value) => {

@@ -36,13 +36,13 @@ Run the builder. It finds its workspace from its own location, so the current
 directory does not matter:
 
 ```bash
-python3 Development/buidCompiledDist.py
+python3 Development/buildCompiledDist.py
 ```
 
 For an internal diagnostic package containing raw Python instead of bytecode:
 
 ```bash
-python3 Development/buidCompiledDist.py --raw
+python3 Development/buildCompiledDist.py --raw
 ```
 
 The builder validates that every required module and file is present, writes

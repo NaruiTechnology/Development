@@ -403,6 +403,12 @@ def _raster_image_from_chunks(chunks, res, dwell, adc_latency):
     return img
 
 
+# Figure auto-levels trim this share of pixels at each end (matches the web
+# wedge's automatic levels).
+_FIGURE_CLIP_LO_PCT = 0.5
+_FIGURE_CLIP_HI_PCT = 99.5
+
+
 def _percentile_clip_uint16(values, lo_pct: float = 1.0, hi_pct: float = 99.0):
     """Return (lo, hi) cut-off values for percentile-based display
     auto-leveling. Pure helper, used by the matplotlib figure renderer
@@ -1958,7 +1964,7 @@ class DeviceService:
                 ax.set_title(f"{last['kind'].title()} scan: extracted ROI source")
                 ax.set_xlabel("X (DAC code)" if bounds is not None else "X (pixels)")
                 ax.set_ylabel("Y (DAC code)" if bounds is not None else "Y (pixels)")
-                fig.colorbar(im, ax=ax, label="ADC sample (8-bit)")
+                fig.colorbar(im, ax=ax, label="ADC sample (14-bit code << 2)")
         elif last["kind"] == "raster":
             res = last["resolution"]
             dwell = int(last.get("dwell") or self._raster_defaults.get("dwell") or 0)
@@ -1966,13 +1972,13 @@ class DeviceService:
             img = _raster_image_from_chunks(last["chunks"], res, dwell, adc_latency)
 
             fig, ax = plt.subplots(figsize=(6, 6))
-            if view == "texture":
-                vmin, vmax = _percentile_clip_uint16(img)
-                im = ax.imshow(img, cmap="gray", interpolation="nearest",
-                               aspect="equal", vmin=vmin, vmax=vmax)
-            else:
-                im = ax.imshow(img >> 8, cmap="gray", interpolation="nearest",
-                               aspect="equal", vmin=0, vmax=255)
+            # Stretch to the data (trimming dropout / hot pixels) in both views.
+            # The old figure view used a fixed 0..255 window on ``img >> 8``,
+            # which squeezed a detector signal living in ~0x8000..0xb000 into a
+            # washed-out gray band.
+            vmin, vmax = _percentile_clip_uint16(img, _FIGURE_CLIP_LO_PCT, _FIGURE_CLIP_HI_PCT)
+            im = ax.imshow(img, cmap="gray", interpolation="nearest",
+                           aspect="equal", vmin=vmin, vmax=vmax)
             if view == "texture":
                 ax.set_axis_off()
                 fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
@@ -1980,7 +1986,7 @@ class DeviceService:
                 ax.set_title(f"Raster scan: {res}x{res}")
                 ax.set_xlabel("X (pixels)")
                 ax.set_ylabel("Y (pixels)")
-                fig.colorbar(im, ax=ax, label="ADC sample (8-bit)")
+                fig.colorbar(im, ax=ax, label="ADC sample (14-bit code << 2)")
         else:
             # ---------- vector ----------------------------------------
             DAC_RANGE = 16384
@@ -2035,15 +2041,10 @@ class DeviceService:
                              count=len(iter_list))
             ys = np.fromiter((p[1] for p in iter_list), dtype="float32",
                              count=len(iter_list))
-            cs = (samples >> 8).astype("uint8")
+            cs = samples
             fig, ax = plt.subplots(figsize=(6, 6))
-            if view == "texture":
-                cs = samples
-                vmin, vmax = _percentile_clip_uint16(samples)
-                marker_size = 8
-            else:
-                vmin, vmax = 0, 255
-                marker_size = 2
+            vmin, vmax = _percentile_clip_uint16(samples, _FIGURE_CLIP_LO_PCT, _FIGURE_CLIP_HI_PCT)
+            marker_size = 8 if view == "texture" else 2
             im = ax.scatter(xs, ys, c=cs, cmap="gray", s=marker_size,
                             vmin=vmin, vmax=vmax, marker="s")
             bounds = _roi_bounds(last.get("roi"))
@@ -2062,7 +2063,7 @@ class DeviceService:
                 ax.set_title(f"Vector scan: {len(iter_list)} points")
                 ax.set_xlabel("X (DAC code)")
                 ax.set_ylabel("Y (DAC code)")
-                fig.colorbar(im, ax=ax, label="ADC sample (8-bit)")
+                fig.colorbar(im, ax=ax, label="ADC sample (14-bit code << 2)")
 
         out = io.BytesIO()
         if view != "texture":

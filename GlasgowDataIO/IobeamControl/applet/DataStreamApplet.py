@@ -49,6 +49,9 @@ from GlasgowDataIO.IobeamControl.applet.iobeamDataSubtarget import _ZERO_FILL
 import AutomationPy.buildingblocks.utils as util
 
 
+IN_FIFO_DEPTH = 2048
+
+
 class DataStreamApplet(GlasgowApplet):
     required_revision = "C3"
     help              = "IobeamTech ADC data stream Applet"
@@ -217,7 +220,12 @@ class DataStreamApplet(GlasgowApplet):
 
         # Claim FIFOs ONCE here.
         out_fifo = iface.get_out_fifo()
-        in_fifo  = iface.get_in_fifo()
+        # auto_flush=False: `flush` is driven by IobeamDataSubtarget (executor
+        # flush + idle timeout).  With Glasgow's default (auto_flush=True) every
+        # FIFO drain commits a few-byte USB packet, which throttles a scan to
+        # one host transfer per FIFO-full and shows up as a DAC staircase.
+        # Depth 2048 (4 BRAM) rides out host-side scheduling jitter.
+        in_fifo  = iface.get_in_fifo(depth=IN_FIFO_DEPTH, auto_flush=False)
 
         ports = iface.get_port_group(**{name: getattr(args, name) for name in BEAM_PORTS})
 

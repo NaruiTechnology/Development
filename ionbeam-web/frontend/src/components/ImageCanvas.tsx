@@ -1,10 +1,14 @@
 /**
  * Renders the raster grayscale frame or vector ADC image onto a canvas.
  *
- * Raster and vector scans are stored as flat Uint16Array buffers and
- * rendered as fixed-range grayscale. The hardware returns OBI-compatible
- * left-aligned 14-bit ADC samples in a Uint16Array, so display scaling is
- * performed against 0..0xfffc rather than the per-frame range.
+ * Raster and vector scans are stored as flat Uint16Array buffers. The
+ * hardware returns OBI-compatible left-aligned 14-bit ADC samples in a
+ * Uint16Array. A real detector signal uses only a small slice of that range,
+ * so the image is drawn through black/white display levels, exactly like
+ * OBI's histogram + gradient "wedge": automatic by default (darkest and
+ * brightest 0.5 % of pixels trimmed) or set by dragging the wedge that sits
+ * to the right of the canvas. Gray-selection controls still use the absolute
+ * 0..0xfffc scale.
  *
  * For raster the buffer is populated row-major as the FPGA emits samples.
  * For vector default, samples arrive x-major/y-inner and are painted back
@@ -31,9 +35,19 @@ import { Icon } from "./Icon";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
+import { scaleScanSample } from "../lib/scanSamples";
+import {
+  AUTO_LEVELS,
+  buildHistogram,
+  levelGray,
+  resolveLevels,
+  type LevelHistogram,
+  type LevelSetting,
+  type ResolvedLevels,
+} from "../lib/displayLevels";
+import { LevelWedge } from "./LevelWedge";
 
 const DAC_RANGE = 2048;
-const ADC_FULL_SCALE = 0xfffc;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
 const ROI_ACTION_BLANK_COLOR = { r: 97, g: 0, b: 0 };
 const ROI_ACTION_HIGHLIGHT_COLOR = { r: 253, g: 224, b: 71 };
@@ -42,7 +56,15 @@ interface PaintStats {
   min: number;
   max: number;
   populated: number;
+  /** Histogram of the painted samples and the black/white levels applied. */
+  histogram?: LevelHistogram;
+  low?: number;
+  high?: number;
 }
+
+// Display levels are an operator setting, like OBI's wedge: they survive a
+// new scan and a remount of the panel, per scan kind.
+const levelMemory: Partial<Record<string, LevelSetting>> = {};
 
 type AnnotationTool = "highlight" | "comment" | "rectangle" | "circle";
 type LineStyle = "solid" | "dashed" | "dotted";
@@ -121,6 +143,36 @@ export function ImageCanvas({
   const frameRef = useRef<HTMLDivElement | null>(null);
   const annotationSeqRef = useRef(0);
   const [stats, setStats] = useState<PaintStats>({ min: 0, max: 0, populated: 0 });
+  const [levelSetting, setLevelSettingState] = useState<LevelSetting>(
+    () => levelMemory[kind] ?? AUTO_LEVELS,
+  );
+  const pendingLevelRef = useRef<LevelSetting | null>(null);
+  const levelFrameRef = useRef<number | null>(null);
+  // Repaint at most once per animation frame while a wedge handle is dragged.
+  const applyLevelSetting = useCallback(
+    (next: LevelSetting) => {
+      levelMemory[kind] = next;
+      pendingLevelRef.current = next;
+      if (levelFrameRef.current !== null) return;
+      levelFrameRef.current = window.requestAnimationFrame(() => {
+        levelFrameRef.current = null;
+        if (pendingLevelRef.current) setLevelSettingState(pendingLevelRef.current);
+        pendingLevelRef.current = null;
+      });
+    },
+    [kind],
+  );
+  useEffect(
+    () => () => {
+      if (levelFrameRef.current !== null) window.cancelAnimationFrame(levelFrameRef.current);
+    },
+    [],
+  );
+  const handleWedgeChange = useCallback(
+    (levels: ResolvedLevels) => applyLevelSetting({ mode: "manual", low: levels.low, high: levels.high }),
+    [applyLevelSetting],
+  );
+  const handleWedgeAuto = useCallback(() => applyLevelSetting(AUTO_LEVELS), [applyLevelSetting]);
   const [serverFigureUrl, setServerFigureUrl] = useState<string | null>(null);
   const [serverFigureBusy, setServerFigureBusy] = useState(false);
   const [serverFigureError, setServerFigureError] = useState<string | null>(null);
@@ -237,7 +289,7 @@ export function ImageCanvas({
     if (!canvas) return;
 
     if (kind === "raster") {
-      const s = paintGrayscale(canvas, frame, resolution, cursor);
+      const s = paintGrayscale(canvas, frame, resolution, cursor, levelSetting);
       setStats(s);
     } else if (kind === "vector" && vectorSource !== "vector") {
       clearCanvas(canvas);
@@ -252,6 +304,7 @@ export function ImageCanvas({
         vectorGraySpotSelection,
         vectorGraySpotSkipped,
         vectorGraySpotColor,
+        levelSetting,
       );
       setStats(s);
     } else if (kind === "vector" && vectorPattern === "default") {
@@ -264,6 +317,7 @@ export function ImageCanvas({
         vectorGraySpotSelection,
         vectorGraySpotSkipped,
         vectorGraySpotColor,
+        levelSetting,
       );
       setStats(s);
     } else if (kind === "vector" && vectorCustomRenderPoints) {
@@ -276,10 +330,11 @@ export function ImageCanvas({
         vectorCustomBlankMask,
         vectorCustomSpotMask,
         vectorGraySpotColor,
+        levelSetting,
       );
       setStats(s);
     } else {
-      const s = paintGrayscale(canvas, vectorImage, vectorEdge, vectorCursor);
+      const s = paintGrayscale(canvas, vectorImage, vectorEdge, vectorCursor, levelSetting);
       setStats(s);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -290,6 +345,7 @@ export function ImageCanvas({
     theme,
     vectorGraySpotSelection,
     vectorGraySpotSkipped,
+    levelSetting,
   ]);
 
   useEffect(() => {
@@ -357,8 +413,10 @@ export function ImageCanvas({
     }
   }, [kind]);
 
+  // The paint effect above already refreshes `stats` (and the wedge histogram)
+  // whenever `kind` changes; resetting them here would run after it and blank
+  // the wedge on mount.
   useEffect(() => {
-    setStats({ min: 0, max: 0, populated: 0 });
     clearEditorState(true);
   }, [kind, clearEditorState]);
 
@@ -929,6 +987,7 @@ export function ImageCanvas({
         </div>
       )}
 
+      <div className="canvas-stage">
       <div
         ref={frameRef}
         className="canvas-frame"
@@ -1153,6 +1212,15 @@ export function ImageCanvas({
               )}
             </div>
           )}
+      </div>
+      <LevelWedge
+        histogram={stats.histogram ?? null}
+        levels={{ low: stats.low ?? 0, high: stats.high ?? 0xfffc }}
+        auto={levelSetting.mode === "auto"}
+        onChange={handleWedgeChange}
+        onAuto={handleWedgeAuto}
+        disabled={!stats.histogram || stats.histogram.total <= 0 || Boolean(displayedFigureUrl)}
+      />
       </div>
 
       {showServerFigure && !serverFigureUrl && !mergedFigureUrl && (
@@ -1684,7 +1752,8 @@ function paintGrayscale(
   canvas: HTMLCanvasElement,
   buf: Uint16Array,
   edge: number,
-  populated: number
+  populated: number,
+  setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
     canvas.width = edge;
@@ -1707,13 +1776,18 @@ function paintGrayscale(
     hi = 0;
   }
 
+  const histogram = buildHistogram(lo, hi, limit, (visit) => {
+    for (let i = 0; i < limit; i++) visit(buf[i]);
+  });
+  const { low, high } = resolveLevels(histogram, setting);
+
   const img = ctx.createImageData(edge, edge);
   const data = img.data;
 
   const totalPx = edge * edge;
   const reg = limit < totalPx ? limit : totalPx;
   for (let i = 0; i < reg; i++) {
-    const g = scaleSample(buf[i]);
+    const g = levelGray(buf[i], low, high);
     const p = i * 4;
     data[p + 0] = g;
     data[p + 1] = g;
@@ -1728,7 +1802,7 @@ function paintGrayscale(
   }
   ctx.putImageData(img, 0, 0);
 
-  return { min: lo, max: hi, populated: limit };
+  return { min: lo, max: hi, populated: limit, histogram, low, high };
 }
 
 function paintVectorDefault(
@@ -1740,6 +1814,7 @@ function paintVectorDefault(
   graySpotSelection: GrayScaleSelection = null,
   graySpotSkipped: boolean | null = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
+  setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
     canvas.width = edge;
@@ -1749,7 +1824,7 @@ function paintVectorDefault(
   if (!ctx) return { min: 0, max: 0, populated: 0 };
 
   const limit = Math.min(populated, buf.length);
-  const range = vectorDefaultRange(buf, edge, limit, scanPath);
+  const range = vectorDefaultRange(buf, edge, limit, scanPath, setting);
   const img = ctx.createImageData(edge, edge);
   const data = img.data;
 
@@ -1758,7 +1833,7 @@ function paintVectorDefault(
     if (!pixel) break;
     const idx = pixel.y * edge + pixel.x;
     const sample = buf[idx];
-    const g = scaleSample(sample);
+    const g = levelGray(sample, range.low ?? 0, range.high ?? 0xfffc);
     const p = idx * 4;
     if (sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped)) {
       paintSpotPixel(data, p, graySpotColor);
@@ -1783,6 +1858,7 @@ function paintVectorCustom(
   blankMask: Uint8Array | null,
   spotMask: Uint8Array | null,
   graySpotColor: { r: number; g: number; b: number },
+  setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
     canvas.width = edge;
@@ -1809,6 +1885,16 @@ function paintVectorCustom(
     lo = 0;
     hi = 0;
   }
+  const histogram = buildHistogram(lo, hi, visible, (visit) => {
+    for (let i = 0; i < limit; i++) {
+      if (blankMask?.[i] === 1) continue;
+      const x = points[2 * i] | 0;
+      const y = points[2 * i + 1] | 0;
+      if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
+      visit(buf[y * edge + x]);
+    }
+  });
+  const { low, high } = resolveLevels(histogram, setting);
 
   const img = ctx.createImageData(edge, edge);
   const data = img.data;
@@ -1817,7 +1903,7 @@ function paintVectorCustom(
     const y = points[2 * i + 1] | 0;
     if (x < 0 || x >= edge || y < 0 || y >= edge) continue;
     const idx = y * edge + x;
-    const g = scaleSample(buf[idx]);
+    const g = levelGray(buf[idx], low, high);
     const p = idx * 4;
     if (blankMask?.[i] === 1) {
       paintSpotPixel(data, p, ROI_ACTION_BLANK_COLOR);
@@ -1847,7 +1933,7 @@ function paintVectorCustom(
   }
 
   ctx.putImageData(img, 0, 0);
-  return { min: lo, max: hi, populated: limit };
+  return { min: lo, max: hi, populated: limit, histogram, low, high };
 }
 
 function paintVectorDefaultBlockFill(
@@ -1859,6 +1945,7 @@ function paintVectorDefaultBlockFill(
   graySpotSelection: GrayScaleSelection = null,
   graySpotSkipped: boolean | null = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
+  setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
   const nativeSize = DAC_RANGE;
   if (canvas.width !== nativeSize || canvas.height !== nativeSize) {
@@ -1870,7 +1957,7 @@ function paintVectorDefaultBlockFill(
 
   const limit = Math.min(populated, buf.length);
 
-  const range = vectorDefaultRange(buf, edge, limit, scanPath);
+  const range = vectorDefaultRange(buf, edge, limit, scanPath, setting);
 
   const img = ctx.createImageData(nativeSize, nativeSize);
   const data = img.data;
@@ -1889,7 +1976,7 @@ function paintVectorDefaultBlockFill(
     const cellRow = pixel.y;
     const cellIdx = cellRow * edge + cellCol;
     const sample = buf[cellIdx];
-    const g = scaleSample(sample);
+    const g = levelGray(sample, range.low ?? 0, range.high ?? 0xfffc);
     const isSpot = sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped);
     const baseY = Math.floor((cellRow * nativeSize) / edge);
     const nextY = Math.floor(((cellRow + 1) * nativeSize) / edge);
@@ -1923,26 +2010,32 @@ function vectorDefaultRange(
   edge: number,
   limit: number,
   scanPath: VectorScanPath,
+  setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
   let lo = 65535;
   let hi = 0;
+  let counted = 0;
   for (let i = 0; i < limit; i++) {
     const pixel = vectorScanSamplePixel(i, edge, scanPath);
     if (!pixel) break;
     const v = buf[pixel.y * edge + pixel.x];
     if (v < lo) lo = v;
     if (v > hi) hi = v;
+    counted++;
   }
-  if (limit === 0) {
+  if (counted === 0) {
     lo = 0;
     hi = 0;
   }
-  return { min: lo, max: hi, populated: limit };
-}
-
-function scaleSample(value: number): number {
-  const clamped = Math.max(0, Math.min(ADC_FULL_SCALE, value));
-  return Math.round((clamped * 255) / ADC_FULL_SCALE);
+  const histogram = buildHistogram(lo, hi, counted, (visit) => {
+    for (let i = 0; i < counted; i++) {
+      const pixel = vectorScanSamplePixel(i, edge, scanPath);
+      if (!pixel) break;
+      visit(buf[pixel.y * edge + pixel.x]);
+    }
+  });
+  const { low, high } = resolveLevels(histogram, setting);
+  return { min: lo, max: hi, populated: limit, histogram, low, high };
 }
 
 function sampleInGraySelectionToFilter(
@@ -1951,7 +2044,7 @@ function sampleInGraySelectionToFilter(
   skipped: boolean | null,
 ): boolean {
   if (!selection) return false;
-  const selected = grayScaleSelectionContains(selection, scaleSample(sample));
+  const selected = grayScaleSelectionContains(selection, scaleScanSample(sample));
   return skipped === false ? !selected : selected;
 }
 

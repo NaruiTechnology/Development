@@ -12,7 +12,7 @@ Both the installed and source `streamData.json` files specify G3, output directi
 
 The current systemd unit points to **Operations source**, not `IobeamPlatform`, subject to its optional environment-file overrides. No claim is made that the currently running process loads the broken installed copy. The September 9 uploaded log explicitly came from `IobeamPlatform`; its earlier timestamp means that capture cannot be attributed to the presently inspected September 11 bytecode. The no-activity timeout is consistent with this missing-FSM behavior, but matching its historical build requires the original build inputs.
 
-Found and corrected a separate packaging risk in `buidCompiledDist.py`: it previously flattened every `*.cpython-*.pyc` cache into a common filename, allowing different interpreter caches to overwrite each other, and ignored `compileall` failure. It now compiles each selected `.py` directly into the destination `.pyc` with errors raised. This removes stale/orphan cache selection; it does not prove which process originally produced the installed stub.
+Found and corrected a separate packaging risk in `buildCompiledDist.py`: it previously flattened every `*.cpython-*.pyc` cache into a common filename, allowing different interpreter caches to overwrite each other, and ignored `compileall` failure. It now compiles each selected `.py` directly into the destination `.pyc` with errors raised. This removes stale/orphan cache selection; it does not prove which process originally produced the installed stub.
 
 All six distribution tests pass, including two new archive-level regressions: stale/multiple-interpreter/orphan caches cannot replace selected source, and invalid source stops archive creation instead of shipping cached code.
 

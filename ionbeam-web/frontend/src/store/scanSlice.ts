@@ -221,7 +221,7 @@ function vectorScanPathDefault(value: unknown, fallback: VectorScanPath): Vector
 }
 
 function dwellDefault(value: unknown, fallback: number): number {
-  return Math.max(16, numberDefault(value, fallback));
+  return Math.max(0, numberDefault(value, fallback));
 }
 
 function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {

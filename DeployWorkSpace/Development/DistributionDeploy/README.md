@@ -24,7 +24,7 @@ The target environment is **Ubuntu 24.04 or newer**.
 ```
    (developer host)                       (deploy host: Ubuntu 24.04+)
    ┌─────────────────┐                    ┌──────────────────────────┐
-   │ buidCompiledDist│  builds            │ unzip dist_app.zip       │
+   │ buildCompiledDist│ builds            │ unzip dist_app.zip       │
    │      .py        │ ─────────►  ─────► │ pip -r every             │
    │                 │   dist_app         │   requirements.txt       │
    │ source tree     │   .zip             │ python -m venv .venv     │
@@ -42,7 +42,7 @@ The target environment is **Ubuntu 24.04 or newer**.
                                           └──────────────────────────┘
 ```
 
-Stage 1 — `Development/buidCompiledDist.py` (it lives in `Development/`, not in
+Stage 1 — `Development/buildCompiledDist.py` (it lives in `Development/`, not in
 this folder) — runs on the source host from any directory, because it locates its
 workspace from its own path. It produces the application archive and the versioned
 handoff archive, and writes a verified `dist_manifest.json` into the application
@@ -190,7 +190,7 @@ builder and the deployer cannot disagree.
 Check an archive at any time without deploying it:
 
 ```bash
-python3 Development/buidCompiledDist.py --verify path/to/dist_app.zip
+python3 Development/buildCompiledDist.py --verify path/to/dist_app.zip
 ```
 
 `Deployment.RequireDistributionManifest` (default `true`) can be set to `false`
@@ -207,8 +207,8 @@ matches the deploy host's (Ubuntu 24.04 ships 3.12), or use `--raw`.
 ### Build only:
 
 ```bash
-python3 /path/to/Operations/Development/buidCompiledDist.py
-python3 Development/buidCompiledDist.py --raw
+python3 /path/to/Operations/Development/buildCompiledDist.py
+python3 Development/buildCompiledDist.py --raw
 ```
 
 #### Compile modes
@@ -222,7 +222,7 @@ Files matching `DEFAULT_KEEP_PY` (or `--keep-py PATTERN`) are copied
 verbatim instead of compiled, so they remain directly invokable with
 `python3 <file>`:
 
-* `buidCompiledDist.py` (this script — needed if the deploy host re-builds)
+* `buildCompiledDist.py` (this script — needed if the deploy host re-builds)
 * `*App.py` (project entry-point convention: `loadFPGAImageApp.py`,
   `distributionDeployApp.py`)
 * `setup.py`, `__main__.py`

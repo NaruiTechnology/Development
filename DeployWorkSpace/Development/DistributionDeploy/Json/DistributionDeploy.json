@@ -3,7 +3,7 @@
         "Application": "Project Distribution Deploy",
         "TargetEnv": "Ubuntu 24.04 or newer",
         "Version": "1.0.0",
-        "Description": "Verifies and deploys the prebuilt dist_app.zip (built on the source host by Development/buidCompiledDist.py), then bootstraps an Ubuntu host with all toolchains, the Glasgow service, and the ionbeam-web app."
+        "Description": "Verifies and deploys the prebuilt dist_app.zip (built on the source host by Development/buildCompiledDist.py), then bootstraps an Ubuntu host with all toolchains, the Glasgow service, and the ionbeam-web app."
     },
     "Deployment": {
         "SourceRoot": "Development/DistributionDeploy",
@@ -177,6 +177,24 @@
                     "stopOnError": true
                 },
                 "timeout": 900.0
+            }
+        },
+        {
+            "verifyFpgaToolchain": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "venvActivate": ".venv/bin/activate",
+                    "pythonPath": [
+                        "Development"
+                    ],
+                    "tools": [
+                        "yosys",
+                        "nextpnr-ice40",
+                        "icepack"
+                    ]
+                },
+                "timeout": 120.0
             }
         },
         {

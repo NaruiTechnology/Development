@@ -172,7 +172,7 @@ export function VectorParameters({
               }
               value={v.dwell}
           options={vectorDwellOptions}
-              min={1}
+              min={grayLevelFilterActive ? 2 : 0}
               max={65535}
               disabled={disabled}
               normalizeValue={(value) => grayLevelFilterActive ? Math.max(2, value) : value}

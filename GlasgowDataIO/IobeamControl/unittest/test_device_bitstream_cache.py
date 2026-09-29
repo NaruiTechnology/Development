@@ -1,8 +1,30 @@
 import unittest
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import GlasgowDevice
+from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.build_plan import GlasgowBuildPlan
+
+
+class BuildPlanToolchainEnvironmentTestCase(unittest.TestCase):
+    def test_selected_toolchain_overrides_bare_build_plan_commands(self):
+        inner = SimpleNamespace(
+            files={
+                "build": "#!/bin/sh\nprintf '%s' \"$NEXTPNR_ICE40\" > top.bin\n",
+            },
+            script="build",
+            env_vars={"NEXTPNR_ICE40": "nextpnr-ice40"},
+        )
+        toolchain = SimpleNamespace(
+            identifier=b"packaged-toolchain",
+            env_vars={"NEXTPNR_ICE40": "/packaged/bin/yowasp-nextpnr-ice40"},
+        )
+        plan = GlasgowBuildPlan(inner, toolchain)
+        with tempfile.TemporaryDirectory() as directory:
+            bitstream, _output = plan.execute(Path(directory), debug=True)
+        self.assertEqual(bitstream, b"/packaged/bin/yowasp-nextpnr-ice40")
 
 
 class DownloadTargetCacheTestCase(unittest.IsolatedAsyncioTestCase):

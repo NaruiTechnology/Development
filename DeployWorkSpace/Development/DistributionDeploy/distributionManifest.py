@@ -1,6 +1,6 @@
 """Distribution manifest: the single producer *and* verifier.
 
-The builder (``Development/buidCompiledDist.py``) writes ``dist_manifest.json``
+The builder (``Development/buildCompiledDist.py``) writes ``dist_manifest.json``
 into the archive; the deploy workflow verifies it before it stops or deletes
 anything, and again after extraction. Both sides use this one file, so they
 cannot disagree about the format. Standard library only, so it runs on a bare
@@ -170,7 +170,7 @@ def load_manifest(archive):
     except KeyError:
         raise ManifestError(
             "archive has no %s; it was not produced by the current builder. "
-            "Rebuild it with Development/buidCompiledDist.py." % MANIFEST_NAME)
+            "Rebuild it with Development/buildCompiledDist.py." % MANIFEST_NAME)
     try:
         return json.loads(raw.decode("utf-8"))
     except ValueError as exc:

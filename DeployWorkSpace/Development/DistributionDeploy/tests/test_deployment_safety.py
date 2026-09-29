@@ -205,7 +205,7 @@ class WorkflowContractTests(unittest.TestCase):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
         actions = {name: cfg for item in payload["Actions"] for name, cfg in item.items()}
         self.assertFalse(actions["manageLocalSystem"]["skip"])
-        self.assertTrue(actions["setupGlasgow"]["skip"])
+        self.assertFalse(actions["setupGlasgow"]["skip"])
         self.assertTrue(actions["programFpgaRam"]["skip"])
         for legacy in (
             "launchGlasgowService",
@@ -278,7 +278,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIsNone(thread._workflowError)
 
     def test_builder_packages_system_manager_and_templates(self):
-        builder_path = ROOT.parents[2] / "buidCompiledDist.py"
+        builder_path = ROOT.parents[2] / "buildCompiledDist.py"
         spec = importlib.util.spec_from_file_location("distribution_builder", builder_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -288,7 +288,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("*.rules", module.ASSET_PATTERNS)
 
     def test_builder_makes_every_shell_script_executable(self):
-        builder_path = ROOT.parents[2] / "buidCompiledDist.py"
+        builder_path = ROOT.parents[2] / "buildCompiledDist.py"
         spec = importlib.util.spec_from_file_location("distribution_builder", builder_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -307,7 +307,7 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertTrue(second.stat().st_mode & 0o111)
 
     def test_builder_prefers_development_scripts_over_stale_workspace_scripts(self):
-        builder_path = ROOT.parents[2] / "buidCompiledDist.py"
+        builder_path = ROOT.parents[2] / "buildCompiledDist.py"
         spec = importlib.util.spec_from_file_location("distribution_builder", builder_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

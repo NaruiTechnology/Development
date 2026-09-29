@@ -12,7 +12,7 @@ DEVELOPMENT_ROOT = Path(__file__).parents[2]
 
 
 def load_distribution_builder():
-    path = DEVELOPMENT_ROOT / "buidCompiledDist.py"
+    path = DEVELOPMENT_ROOT / "buildCompiledDist.py"
     spec = importlib.util.spec_from_file_location("iobeam_distribution_builder", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

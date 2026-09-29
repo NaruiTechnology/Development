@@ -30,7 +30,17 @@ def configure_scan_args(config, action, args):
                 raise ValueError(f"{beam}.{role}: use explicit A/B pin strings, e.g. A2#,A3")
             modern[f"{local}_{role}"] = list(GlasgowPin.parse(spec))
 
-    port_spec = "".join(sorted({str(pin.port) for pins in modern.values() for pin in pins}))
+    claimed_ports = {str(pin.port) for pins in modern.values() for pin in pins}
+    # The OBI analog interface uses both Glasgow VIO rails even when the
+    # microscope-control pins happen to live entirely on port A. The shared
+    # ADC/DAC bus is added as raw FPGA resources later, so the legacy
+    # multiplexer cannot infer its VIO dependency from the beam PinArguments.
+    # Upstream OBI consequently claims and powers A+B explicitly. Do the same
+    # for a physical scan; otherwise port B is only alive when some previous
+    # process happened to leave it powered.
+    if bool(getattr(config, "IsProduction", False)) and action.get("pins"):
+        claimed_ports.update(("A", "B"))
+    port_spec = "".join(sorted(claimed_ports))
     seen = set()
     for name, pins in modern.items():
         if not 1 <= len(pins) <= 2:

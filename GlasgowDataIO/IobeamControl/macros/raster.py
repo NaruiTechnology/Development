@@ -9,9 +9,12 @@ and the raster unit test imported via `from macros import RasterScanCommand`
 one). Bug fixes to one silently didn't apply to the other.
 
 This file is now the single canonical definition. macros/__init__.py
-re-exports it. The behavior matches the previous __init__.py version
-(per-chunk flush + pipeline-drain padding) since that's what the service
-and the wet-run test were actually exercising.
+re-exports it. The pipeline-drain padding tail of the previous __init__.py version is kept.
+The per-chunk `stream.flush()` is NOT: the sender now batches RasterPixelRun
+commands like upstream OBI and flushes only at pipeline boundaries
+(FlushCommand when tokens run out) and at finalization, because a flush per
+run put the USB round trip on the scan's critical path and could empty the
+FPGA command FIFO (DAC plateau).
 
 All values that used to be hardcoded in the sender — MAX_PIPELINE, the
 padding floor / ratio, the padding pixel's dwell time — are now
@@ -145,25 +148,39 @@ class RasterScanCommand(BaseCommand):
             cmd = RasterPixelRunCommand(dwell_time=self._dwell, length=pixel_count - 1)
             commands.extend(bytes(cmd))
 
-        pixel_count = 0
-        total_dwell = 0
-        for n in range(self._x_range.count * self._y_range.count):
-            pixel_count += 1
-            total_dwell += self._dwell
-            if total_dwell >= latency:
-                append_command(pixel_count)
-                # blank at the end of the last pixel
-                if (self.frame_blank
-                        and n + 1 == self._x_range.count * self._y_range.count):
-                    commands.extend(bytes(BlankCommand(enable=True, inline=False)))
-                yield (commands, pixel_count)
-                commands = bytearray()
-                pixel_count = 0
-                total_dwell = 0
+        # Chunk boundaries are computed arithmetically.  This used to be a
+        # per-pixel Python loop, run once by the sender and once by the
+        # receiver: for a 2048x2048 frame that is ~8 million iterations, and
+        # one chunk at a short dwell is a several-hundred-thousand-iteration
+        # slice that blocks the asyncio loop (and with it USB IN servicing)
+        # for tens of ms - a stall that grows with resolution and shrinks
+        # with dwell, i.e. exactly the settings-dependent plateau OBI does
+        # not have.  The output is identical to the loop it replaces: a chunk
+        # ends at the first pixel where the running dwell sum reaches
+        # `latency`; with dwell 0 the sum never grows, so the frame is one
+        # chunk (unless latency <= 0).
+        total = self._x_range.count * self._y_range.count
+        dwell = int(self._dwell)
+        latency = int(latency)
+        if dwell > 0:
+            per_chunk = max(1, -(-latency // dwell))
+        else:
+            per_chunk = 1 if latency <= 0 else None
 
-        if pixel_count > 0:
-            append_command(pixel_count)
-            yield (commands, pixel_count)
+        done = 0
+        if per_chunk is not None:
+            while total - done >= per_chunk:
+                done += per_chunk
+                append_command(per_chunk)
+                # blank at the end of the last pixel
+                if self.frame_blank and done == total:
+                    commands.extend(bytes(BlankCommand(enable=True, inline=False)))
+                yield (commands, per_chunk)
+                commands = bytearray()
+
+        if total - done > 0:
+            append_command(total - done)
+            yield (commands, total - done)
 
     @BaseCommand.log_transfer
     async def transfer(self, stream, *, latency: int = 65536 * 65536):
@@ -182,20 +199,28 @@ class RasterScanCommand(BaseCommand):
             nonlocal tokens
             for commands, pixel_count in self._iter_chunks(latency):
                 self._logger.debug(f"sender: tokens={tokens}")
+                flush_s = 0.0
                 if tokens == 0:
+                    # Pipeline boundary: push everything written so far to the
+                    # device (FlushCommand also commits the IN FIFO tail),
+                    # then wait for the receiver to return a token.
+                    t_flush = time.perf_counter()
                     await FlushCommand().transfer(stream)
+                    flush_s = time.perf_counter() - t_flush
                     await token_fut
                 if self.frame_blank and self.abort.is_set():
                     # go to a blanked state after an aborted frame
                     commands.extend(bytes(BlankCommand(enable=True, inline=False)))
+                # Batch like upstream OBI: write the RasterPixelRun and do NOT
+                # flush USB per run.  Flushing (and waiting on) every run made
+                # the host round-trip part of the scan's critical path, and any
+                # hiccup emptied the FPGA command FIFO, parking the DAC at its
+                # last value (a plateau on the scope).  Commands reach the
+                # device when the demultiplexer's OUT threshold is crossed, at
+                # the pipeline boundary above, and at finalization below.
+                t_write = time.perf_counter()
                 await stream.write(commands)
-                # Per-chunk flush — must match the vector macro's sender.
-                # Without this, stream.write() only buffers in the
-                # demultiplexer _out_buffer and the device-visible state
-                # falls out of sync with the token pacing.
-                t_flush = time.perf_counter()
-                await stream.flush()
-                stats.sent(time.perf_counter() - t_flush)
+                stats.sent(flush_s + time.perf_counter() - t_write)
                 tokens -= 1
                 if self.abort.is_set():
                     break
@@ -236,6 +261,14 @@ class RasterScanCommand(BaseCommand):
 
         await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
         await ExternalCtrlCommand(enable=self._external_control).transfer(stream)
+        # The gateware resets with the beam BLANKED (blank_enable init=1) and
+        # nothing else unblanks it on this path, so without this command the
+        # ion beam never turns on and the ADC only sees its zero level (flat
+        # gray image).  Upstream OBI clients send exactly this before every
+        # frame (frame_buffer.py / OBI client: BlankCommand(enable=False,
+        # inline=True), opcode 0x52).  It takes effect with the first pixel.
+        if self._beam_type != BeamType.NoBeam:
+            await BlankCommand(enable=False, inline=True).transfer(stream)
         await SynchronizeCommand(
             cookie=self._cookie, raster=True, output=self._output_mode,
         ).transfer(stream)
@@ -248,6 +281,14 @@ class RasterScanCommand(BaseCommand):
         # TODO: assert against synchronization result
         cookie = await stream.read(4)
         outcome = "error"
+        summary_logged = False
+
+        def emit_summary(result):
+            nonlocal summary_logged
+            if not summary_logged:
+                summary_logged = True
+                self._logger.info(stats.summary(result))
+
         try:
             for commands, pixel_count in self._iter_chunks(latency):
                 tokens += 1
@@ -262,6 +303,11 @@ class RasterScanCommand(BaseCommand):
                 t_read = time.perf_counter()
                 res = await self.recv_res(pixel_count, stream, self._output_mode)
                 stats.received(time.perf_counter() - t_read, pixel_count)
+                if stats.pixels_recv >= total_pixels:
+                    # Last chunk: log now.  The consumer normally stops
+                    # iterating after it, so code after the final `yield`
+                    # (including `finally`) may not run until GC/teardown.
+                    emit_summary("ok")
                 t_yield = time.perf_counter()
                 yield res
                 stats.consumed(time.perf_counter() - t_yield)
@@ -271,7 +317,7 @@ class RasterScanCommand(BaseCommand):
             outcome = "closed"
             raise
         finally:
-            self._logger.info(stats.summary(outcome))
+            emit_summary(outcome)
         # Fly back to origin. This is a single hidden pixel emitted to
         # move the DAC back to the scan's starting position after the
         # frame finishes; it isn't part of the captured scan data and

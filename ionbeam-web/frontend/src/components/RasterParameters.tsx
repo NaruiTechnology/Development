@@ -4,7 +4,7 @@
  *
  * Bounds match the Pydantic field validators:
  *   resolution    1..2048
- *   dwell         1..65535
+ *   dwell         0..65535 (0 is the upstream OBI one-sample setting)
  *   latency_bytes >= 2
  *
  * Every parameter has an inline "?" help button next to its label,
@@ -96,7 +96,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
           }
           value={r.dwell}
           options={dwellPresets}
-          min={1}
+          min={0}
           max={65535}
           disabled={disabled}
           onChange={(v) => dispatch(updateRaster({ dwell: v }))}

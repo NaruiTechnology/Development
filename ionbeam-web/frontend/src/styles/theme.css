@@ -2659,6 +2659,206 @@ body {
   -webkit-user-drag: none;
 }
 
+/* Canvas + level wedge (histogram / black-white levels) side by side.
+   The frame keeps its square aspect; the wedge stretches to the same height. */
+.canvas-stage {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.canvas-stage > .canvas-frame {
+  flex: 1 1 0;
+  width: auto;
+  max-width: 768px;
+  margin-inline: 0;
+  align-self: flex-start;
+}
+
+/* ROI canvas: same arrangement, the square wrap sizes itself from the free width. */
+.canvas-stage > .roi-canvas-wrap {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.level-wedge {
+  --wedge-w: 96px;
+  flex: 0 0 var(--wedge-w);
+  width: var(--wedge-w);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  color: var(--c-text-dim);
+  font-size: 11px;
+  user-select: none;
+}
+
+.level-wedge[data-disabled="true"] {
+  opacity: 0.55;
+}
+
+.level-wedge__plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 160px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  column-gap: 4px;
+}
+
+.level-wedge__axis {
+  position: relative;
+  border-right: 1px solid var(--c-border);
+}
+
+.level-wedge__tick {
+  position: absolute;
+  right: 4px;
+  transform: translateY(50%);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-muted);
+}
+
+.level-wedge__tick::after {
+  content: "";
+  position: absolute;
+  left: calc(100% + 1px);
+  top: 50%;
+  width: 3px;
+  border-top: 1px solid var(--c-border);
+}
+
+.level-wedge__hist-and-bar {
+  position: relative;
+  min-width: 0;
+  padding-right: 14px; /* room for the handle triangles */
+}
+
+.level-wedge__hist {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(100% - 14px - 22px);
+  height: 100%;
+}
+
+.level-wedge__hist path {
+  fill: var(--c-accent, #5aa9ff);
+  fill-opacity: 0.85;
+}
+
+.level-wedge__bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 14px;
+  width: 22px;
+  border: 1px solid var(--c-border);
+  background: #000;
+  overflow: hidden;
+}
+
+.level-wedge__gradient {
+  position: absolute;
+  inset: 0;
+}
+
+.level-wedge__region {
+  position: absolute;
+  right: 14px;
+  width: 22px;
+  cursor: ns-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.level-wedge__line {
+  position: absolute;
+  left: 0;
+  right: 14px;
+  height: 0;
+  border-top: 1px solid var(--c-warn);
+  pointer-events: none;
+}
+
+.level-wedge__handle {
+  position: absolute;
+  right: 0;
+  width: 14px;
+  height: 16px;
+  transform: translateY(50%);
+  cursor: ns-resize;
+  touch-action: none;
+  outline: none;
+}
+
+/* Triangles pointing at the bar, like pyqtgraph's level markers. */
+.level-wedge__handle::before {
+  content: "";
+  position: absolute;
+  inset: 2px 0 2px 0;
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+  background: var(--c-warn);
+}
+
+.level-wedge__handle::after {
+  content: "";
+  position: absolute;
+  inset: 4px 2px 4px 3px;
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+
+.level-wedge__handle--high::after {
+  background: #fff;
+}
+
+.level-wedge__handle--low::after {
+  background: #000;
+}
+
+.level-wedge__handle:focus-visible::before {
+  background: var(--c-accent-hot);
+}
+
+.level-wedge__readout {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text);
+}
+
+.level-wedge__auto {
+  padding: 2px 6px;
+  font-size: 11px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm, 4px);
+  background: transparent;
+  color: var(--c-text-dim);
+  cursor: pointer;
+}
+
+.level-wedge__auto[aria-pressed="true"] {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+.level-wedge__auto:disabled {
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .level-wedge {
+    --wedge-w: 78px;
+  }
+}
+
 .canvas-scan-path-overlay {
   position: absolute;
   inset: 0;

@@ -74,7 +74,7 @@ import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
 
 const RASTER_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
 const VECTOR_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
-const DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
+const DWELL_OPTIONS: PresetNumberOption[] = [0, 1, 3, 7, 15, 31, 63].map((value) => ({ value }));
 
 export function SettingsDialog({
   targetAccountId = null,
@@ -846,7 +846,7 @@ function RasterTab({ draft }: { draft: unknown }) {
           label={<FieldLabel label={t("settings.raster.dwell")} help={<SettingsHelp topic="rasterDwell" />} />}
           value={dwell}
           options={DWELL_OPTIONS}
-          min={1}
+          min={0}
           max={65535}
           disabled={false}
           onChange={(v) => set([...RASTER_PATH, "dwell"], v)}
@@ -909,7 +909,7 @@ function VectorTab({ draft }: { draft: unknown }) {
           label={<FieldLabel label={t("settings.vector.dwell")} help={<SettingsHelp topic="vectorDwell" />} />}
           value={dwell}
           options={DWELL_OPTIONS}
-          min={1}
+          min={0}
           max={65535}
           disabled={false}
           onChange={(v) => set([...VECTOR_PATH, "dwell"], v)}

@@ -69,6 +69,12 @@ _BUS_STROBES = (
 _ZERO_FILL = ("__iobeam_zero_fill_sentinel__",)
 
 
+# Idle time (sync cycles, 48 MHz -> ~21 us) after which a partial IN packet is
+# committed.  Must stay well above the byte-to-byte gap of the fastest stream
+# (2 bytes per 17 samples * 6 cycles = ~51 cycles per byte at dwell 16).
+IN_FLUSH_IDLE_CYCLES = 1024
+
+
 class IobeamDataSubtarget(Elaboratable):
     def __init__(self, *, ports, out_fifo, in_fifo, led=None, control=None,
                  data=None,
@@ -186,6 +192,33 @@ class IobeamDataSubtarget(Elaboratable):
             self.in_fifo.w_en.eq(serializer.usb_stream.valid & run_enable),
             serializer.usb_stream.ready.eq(self.in_fifo.w_rdy & run_enable),
         ]
+
+        # IN packet boundaries.  The FX2 crossbar treats `flush` as a LEVEL:
+        # while it is high and the FPGA-side FIFO is empty, any incomplete
+        # packet is committed as-is (PKTEND).  Glasgow's default
+        # (auto_flush=True) holds it high permanently, so a scan producing
+        # 2 bytes every ~2 us commits a few-byte packet each time the FIFO
+        # drains.  Every short packet also ends the host's 16 KB bulk IN
+        # transfer, so the host pays one libusb callback + asyncio round trip
+        # per FIFO-full of data (~1.9 ms per 512 B in the VM) and the FPGA
+        # output FIFO backs up: the beam parks and the DAC shows a staircase
+        # instead of a continuous ramp.  Upstream OBI drives `flush` only
+        # from the executor (Synchronize / Abort / Flush commands) so packets
+        # stay full-size (512 B) while streaming.
+        #
+        # We do the same, plus an idle timeout so a lone result (adaptive
+        # single-pixel reads, or data still in the pipeline when the
+        # executor's flush pulse passed) is committed shortly after the
+        # stream stops.  At the scan rates in use the gap between bytes is
+        # far below the timeout, so streaming never trips it.
+        if hasattr(self.in_fifo, "flush"):
+            idle = Signal(range(IN_FLUSH_IDLE_CYCLES + 1))
+            with m.If(self.in_fifo.w_en & self.in_fifo.w_rdy):
+                m.d.sync += idle.eq(0)
+            with m.Elif(idle != IN_FLUSH_IDLE_CYCLES):
+                m.d.sync += idle.eq(idle + 1)
+            m.d.comb += self.in_fifo.flush.eq(
+                executor.flush | (idle == IN_FLUSH_IDLE_CYCLES))
 
         # ------------------------------------------------------------------ #
         # Resources: built dynamically from pin_config

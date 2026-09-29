@@ -125,6 +125,11 @@ class GlasgowBuildPlan:
             # reachable via its env var and not installed system-wide.
             build_env = dict(os.environ)
             build_env.update(self._inner.env_vars)
+            # The selected Glasgow Toolchain is authoritative. Some Amaranth
+            # BuildPlan versions expose fallback variables containing bare
+            # executable names; allowing those to win makes a clean host fail
+            # while a host with a cached bitstream appears healthy.
+            build_env.update(self._toolchain.env_vars)
             proc = subprocess.run(
                 [f"./{script_name}"],
                 cwd=build_dir,
