@@ -14,7 +14,7 @@
  *    atomically (write-to-tmp then rename) so a partial write can't
  *    leave the service with a corrupt JSON.
  *  - Restore from the backup (file copy, same atomic pattern).
- *  - Run the configured restart command after each write so the
+ *  - Run the configured restart command after changed writes so the
  *    FastAPI service re-reads the file. The command and its working
  *    directory are configurable; output is captured and surfaced to
  *    the caller so dialog failures are debuggable.
@@ -33,7 +33,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { exec } from "node:child_process";
-import { promisify } from "node:util";
+import { isDeepStrictEqual, promisify } from "node:util";
 
 import { config } from "./config";
 
@@ -64,6 +64,8 @@ export interface ConfigInfo {
 export interface RestartResult {
   ok: boolean;
   command: string;
+  skipped?: boolean;
+  reason?: string;
   /** stdout from the restart command, truncated for safety. */
   stdout?: string;
   /** stderr from the restart command, truncated for safety. */
@@ -178,6 +180,11 @@ export async function writeConfig(data: unknown): Promise<void> {
   await writeJsonConfig(config.configPath, data, true);
 }
 
+/** Write streamData.json only when its parsed contents actually change. */
+export async function writeConfigIfChanged(data: unknown): Promise<boolean> {
+  return writeJsonConfig(config.configPath, data, true, true);
+}
+
 export async function writeAdminConfig(data: unknown): Promise<void> {
   await writeJsonConfig(config.adminConfigPath, data, false);
 }
@@ -185,8 +192,9 @@ export async function writeAdminConfig(data: unknown): Promise<void> {
 async function writeJsonConfig(
   configPath: string,
   data: unknown,
-  useStrictMode: boolean
-): Promise<void> {
+  useStrictMode: boolean,
+  skipIfUnchanged = false,
+): Promise<boolean> {
   if (useStrictMode) {
     validateAdcTiming(data);
   }
@@ -215,7 +223,30 @@ async function writeJsonConfig(
     await fsp.mkdir(path.dirname(configPath), { recursive: true });
   }
 
+  if (skipIfUnchanged && await configFileMatches(configPath, data)) {
+    return false;
+  }
+
   await atomicWrite(configPath, serialized);
+  return true;
+}
+
+async function configFileMatches(configPath: string, data: unknown): Promise<boolean> {
+  let raw: string;
+  try {
+    raw = await fsp.readFile(configPath, "utf8");
+  } catch (err: any) {
+    if (err.code === "ENOENT") return false;
+    throw new ConfigError(`failed to read config file ${configPath}: ${err.message}`, 500);
+  }
+
+  try {
+    return isDeepStrictEqual(JSON.parse(raw), data);
+  } catch {
+    // Preserve the repair path for malformed live JSON: a valid submitted
+    // document replaces it, then the service restart can recover.
+    return false;
+  }
 }
 
 function validateAdcTiming(data: unknown): void {
@@ -268,15 +299,18 @@ function asRecord(value: unknown): Record<string, unknown> | null {
  * if the backup is missing (the UI should keep the button disabled in
  * that case, but the check is defensive against a stale page state).
  */
-export async function restoreFromBackup(): Promise<void> {
-  await restoreConfigFileFromBackup(config.configPath);
+export async function restoreFromBackup(): Promise<boolean> {
+  return restoreConfigFileFromBackup(config.configPath, true);
 }
 
 export async function restoreAdminFromBackup(): Promise<void> {
   await restoreConfigFileFromBackup(config.adminConfigPath);
 }
 
-async function restoreConfigFileFromBackup(configPath: string): Promise<void> {
+async function restoreConfigFileFromBackup(
+  configPath: string,
+  skipIfUnchanged = false,
+): Promise<boolean> {
   const backupPath = backupPathFor(configPath);
 
   let raw: string;
@@ -298,8 +332,9 @@ async function restoreConfigFileFromBackup(configPath: string): Promise<void> {
   // Validate the backup is still parseable. If somebody hand-edited the
   // _default.json into something invalid, restoring it would just break
   // the service — better to bail with a clear error.
+  let restoredData: unknown;
   try {
-    JSON.parse(raw);
+    restoredData = JSON.parse(raw);
   } catch (err: any) {
     throw new ConfigError(
       `backup file is not valid JSON: ${err.message}`,
@@ -307,7 +342,12 @@ async function restoreConfigFileFromBackup(configPath: string): Promise<void> {
     );
   }
 
+  if (skipIfUnchanged && await configFileMatches(configPath, restoredData)) {
+    return false;
+  }
+
   await atomicWrite(configPath, raw);
+  return true;
 }
 
 /**

@@ -48,6 +48,8 @@ export interface SettingsConfigInfo {
 export interface RestartResult {
   ok: boolean;
   command: string;
+  skipped?: boolean;
+  reason?: string;
   stdout?: string;
   stderr?: string;
   error?: string;

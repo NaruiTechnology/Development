@@ -399,7 +399,9 @@ function SettingsModalShell({
           tone={lastRestart.ok ? "success" : "error"}
           message={
             lastRestart.ok
-              ? t("settings.restart.ok", { command: lastRestart.command })
+              ? lastRestart.skipped
+                ? t("settings.restart.skipped")
+                : t("settings.restart.ok", { command: lastRestart.command })
               : t("settings.restart.fail", {
                   command: lastRestart.command,
                   detail: lastRestart.error || lastRestart.stderr || "",

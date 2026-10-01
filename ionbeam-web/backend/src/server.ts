@@ -71,6 +71,7 @@ import {
   restoreFromBackup,
   writeAdminConfig,
   writeConfig,
+  writeConfigIfChanged,
 } from "./configManager";
 import {
   scanArtifactBytesFromBody,
@@ -339,7 +340,11 @@ app.post("/api/admin/config", async (req, res) => {
 
   try {
     await authorizeStreamConfigSave(req, data);
-    await writeConfig(data);
+    const changed = await writeConfigIfChanged(data);
+    if (!changed) {
+      respondRestartSkipped(res, "Configuration is unchanged.");
+      return;
+    }
   } catch (err) {
     sendConfigError(res, err);
     return;
@@ -351,7 +356,11 @@ app.post("/api/admin/config", async (req, res) => {
 app.post("/api/admin/config/restore", async (_req, res) => {
   try {
     await requireAdminPrivilege(_req, "only Admin or Auditor accounts can restore stream configuration");
-    await restoreFromBackup();
+    const changed = await restoreFromBackup();
+    if (!changed) {
+      respondRestartSkipped(res, "Configuration already matches the default backup.");
+      return;
+    }
   } catch (err) {
     sendConfigError(res, err);
     return;
@@ -2759,6 +2768,17 @@ async function restartServicesAndRespond(
   const backendRestart = planBackendRestart(restart.ok);
   res.json({ ok: true, restart, backend_restart: backendRestart });
   scheduleBackendRestartAfterResponse(res, backendRestart);
+}
+
+function respondRestartSkipped(
+  res: express.Response<RestartServicesResponse>,
+  reason: string,
+): void {
+  res.json({
+    ok: true,
+    restart: { ok: true, command: config.restartCmd, skipped: true, reason },
+    backend_restart: { ok: true, scheduled: false, mode: "disabled" },
+  });
 }
 
 function scheduleBackendRestartAfterResponse(
