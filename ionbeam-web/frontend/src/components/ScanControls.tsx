@@ -116,6 +116,7 @@ export function ScanControls({
   const preview = useAppSelector((s) => s.scan.preview);
   const roiState = useAppSelector((s) => s.scan.roi);
   const defaults = useAppSelector((s) => s.status.defaults);
+  const sessionSimulation = useAppSelector((s) => s.status.sessionSimulation);
   const settingsSaving = useAppSelector((s) => s.settings.saving);
   const backendRestarting = useAppSelector((s) => s.settings.backendRestarting);
   const roiGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
@@ -528,7 +529,11 @@ export function ScanControls({
             grayScaleSkipped: null,
           }
         );
-        const promise = dispatch(runRasterValidated({ ...req, preview }));
+        const promise = dispatch(runRasterValidated({
+          ...req,
+          preview,
+          ...(sessionSimulation ? { simulation: sessionSimulation } : {}),
+        }));
         const unregister = registerScanActionStop(() => {
           promise.abort();
           dispatch(streamReset());
@@ -546,7 +551,11 @@ export function ScanControls({
           req,
           resolveVectorBranch(req),
         );
-        const promise = dispatch(runVectorValidated({ ...req, preview }));
+        const promise = dispatch(runVectorValidated({
+          ...req,
+          preview,
+          ...(sessionSimulation ? { simulation: sessionSimulation } : {}),
+        }));
         const unregister = registerScanActionStop(() => {
           promise.abort();
           dispatch(streamReset());

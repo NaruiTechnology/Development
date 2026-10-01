@@ -68,6 +68,8 @@ export interface RasterRequest {
   /** Browser-provided grayscale crop for simulation-only raster scans.
    *  Production hardware ignores it and uses the DAC ROI normally. */
   simulation_bitmap?: SimulationBitmap | null;
+  /** Browser-session simulator settings. Used only for non-production scans. */
+  simulation?: Record<string, unknown>;
 }
 
 export type VectorPattern = "default" | "custom";
@@ -120,6 +122,8 @@ export interface VectorRequest {
   /** Browser-provided grayscale crop for simulation-only vector scans.
    *  Production hardware ignores it and uses the DAC points normally. */
   simulation_bitmap?: SimulationBitmap | null;
+  /** Browser-session simulator settings. Used only for non-production scans. */
+  simulation?: Record<string, unknown>;
 }
 
 export type DacRampAxis = "x" | "y";

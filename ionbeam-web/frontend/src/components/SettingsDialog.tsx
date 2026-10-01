@@ -18,18 +18,26 @@
  *   (a) reconciling three local drafts on save (error-prone), or
  *   (b) pushing each per-field change up to settingsSlice immediately
  *       (what we do here).
- * (b) is simpler: every input dispatches `setDraft(writePath(...))`
+ * (b) is simpler: persisted inputs dispatch `setDraft(writePath(...))`
  * with an immutably updated copy, and the dialog reads `draft` for
- * every render. The Redux DevTools timeline becomes the edit history
- * for free.
+ * every render. Session-only image transforms and Simulation values stay in
+ * local modal state until Update is clicked. The Redux DevTools timeline
+ * becomes the edit history for persisted fields for free.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
-import { clearLastResult, clearROIImage, clearROISelection, setStreamTransforms, streamReset } from "../store/scanSlice";
+import {
+  clearLastResult,
+  clearROIImage,
+  clearROISelection,
+  setStreamTransforms,
+  streamReset,
+  type StreamTransforms,
+} from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
-import { fetchDefaultsMetadata, previewConfigDefaults } from "../store/statusSlice";
+import { fetchDefaultsMetadata, previewConfigDefaults, setSessionSimulation } from "../store/statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
@@ -91,37 +99,14 @@ export function SettingsDialog({
 }) {
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.settings.dialogOpen);
-  const { source, draft } = useAppSelector((s) => s.settings);
-  const activeTransforms = useAppSelector((s) => s.scan.streamTransforms);
 
   useEffect(() => {
     if (!open) return;
     dispatch(fetchSettingsConfig());
   }, [dispatch, open]);
 
-  // Preview transform edits on the image and Descartes axes immediately.
-  // When the dialog closes without saving, restore the persisted values.
-  useEffect(() => {
-    const config = open ? (draft ?? source) : source;
-    if (config == null) return;
-    const transforms = readPath(config, [...ACTION_DATA_PATH, "transforms"]);
-    const nextTransforms = {
-      xflip: readPath(transforms, ["xflip"]) === true,
-      yflip: readPath(transforms, ["yflip"]) === true,
-      rotate90: readPath(transforms, ["rotate90"]) === true,
-    };
-    if (
-      activeTransforms.xflip !== nextTransforms.xflip ||
-      activeTransforms.yflip !== nextTransforms.yflip ||
-      activeTransforms.rotate90 !== nextTransforms.rotate90
-    ) {
-      dispatch(setStreamTransforms(nextTransforms));
-    }
-  }, [dispatch, open, draft, source, activeTransforms]);
-
-  // Scroll lock while the settings modal is open. The dialog closes
-  // only from the explicit header close button so restart results stay
-  // visible until the operator dismisses them.
+  // Scroll lock while the settings modal is open. Persisted updates keep the
+  // dialog open for restart results; session-only updates close it.
   useEffect(() => {
     if (!open) return;
 
@@ -186,6 +171,16 @@ function simulationImageChanged(before: unknown, after: unknown): boolean {
   return simulationImageSignature(before) !== simulationImageSignature(after);
 }
 
+function simulationRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function sessionSimulationSignature(value: Record<string, unknown>): string {
+  return JSON.stringify(value);
+}
+
 /* -------- modal shell -------------------------------------------------- */
 
 function SettingsModalShell({
@@ -217,6 +212,9 @@ function SettingsModalShell({
     backupNotice,
   } = useAppSelector((s) => s.settings);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
+  const activeTransforms = useAppSelector((s) => s.scan.streamTransforms);
+  const appliedSessionSimulation = useAppSelector((s) => s.status.sessionSimulation);
+  const defaultSimulation = useAppSelector((s) => s.status.defaults?.simulation ?? null);
 
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const titleIdRef = useRef(
@@ -248,9 +246,30 @@ function SettingsModalShell({
   const [confirmDefault, setConfirmDefault] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
+  // Image orientation is a browser-session control. Keep its pending values
+  // outside the streamData draft so Update never persists or restarts for it.
+  const [sessionTransforms, setSessionTransforms] = useState<StreamTransforms>(() => ({
+    ...activeTransforms,
+  }));
+  // Null means untouched: until the operator edits Simulation, follow the
+  // latest active/default block instead of freezing an early loading value.
+  const [sessionSimulationDraft, setSessionSimulationDraft] = useState<Record<string, unknown> | null>(null);
+
+  const configuredSimulation = simulationRecord(readPath(source, SIMULATION_PATH));
+  const activeSimulation = appliedSessionSimulation ?? defaultSimulation ?? configuredSimulation ?? {};
+  const pendingSimulation = sessionSimulationDraft ?? activeSimulation;
 
   const busy = loading || saving || restoring;
   const adcTimingValid = draft === null || validAdcTiming(draft);
+  const configChanged = draft !== null && draft !== source;
+  const sessionTransformsChanged =
+    sessionTransforms.xflip !== activeTransforms.xflip ||
+    sessionTransforms.yflip !== activeTransforms.yflip ||
+    sessionTransforms.rotate90 !== activeTransforms.rotate90;
+  const sessionSimulationChanged =
+    sessionSimulationDraft !== null &&
+    sessionSimulationSignature(pendingSimulation) !== sessionSimulationSignature(activeSimulation);
+  const sessionOnlyChanged = sessionTransformsChanged || sessionSimulationChanged;
   const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const canEditFtp = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const visibleTabs: SettingsTab[] = mobilityMode
@@ -283,6 +302,23 @@ function SettingsModalShell({
     dispatch(setActiveTab(tab));
   }
 
+  function applySessionSettings() {
+    if (sessionTransformsChanged) dispatch(setStreamTransforms(sessionTransforms));
+    if (sessionSimulationChanged) dispatch(setSessionSimulation(pendingSimulation));
+    if (sessionSimulationChanged) resetROIPreview(dispatch);
+    else if (sessionTransformsChanged) resetPartialROISelection(dispatch);
+  }
+
+  function onUpdate() {
+    if (configChanged) {
+      setConfirmSave(true);
+      return;
+    }
+    if (!sessionOnlyChanged) return;
+    applySessionSettings();
+    dispatch(closeDialog());
+  }
+
   async function onConfirmSave() {
     if (draft === null) return;
     if (!validAdcTiming(draft)) {
@@ -294,12 +330,7 @@ function SettingsModalShell({
     const imageChanged = simulationImageChanged(source, draft);
     const result = await dispatch(saveSettingsConfig(draft));
     if (saveSettingsConfig.fulfilled.match(result)) {
-      const transforms = readPath(draft, [...ACTION_DATA_PATH, "transforms"]);
-      dispatch(setStreamTransforms({
-        xflip: readPath(transforms, ["xflip"]) === true,
-        yflip: readPath(transforms, ["yflip"]) === true,
-        rotate90: readPath(transforms, ["rotate90"]) === true,
-      }));
+      if (sessionOnlyChanged) applySessionSettings();
       if (imageChanged) {
         resetROIPreview(dispatch);
       } else {
@@ -310,6 +341,7 @@ function SettingsModalShell({
       if (await refreshDefaultsForSettings(dispatch)) {
         dispatch(setBackendRestarting(false));
       }
+      if (sessionOnlyChanged) dispatch(closeDialog());
     }
     // The restart result is surfaced via `lastRestart`; we don't
     // auto-close the dialog so the operator can see whether it
@@ -437,6 +469,10 @@ function SettingsModalShell({
           mobilityMode={mobilityMode}
           canEditPins={canEditPins}
           canEditFtp={canEditFtp}
+          sessionTransforms={sessionTransforms}
+          onSessionTransformsChange={setSessionTransforms}
+          sessionSimulation={pendingSimulation}
+          onSessionSimulationChange={setSessionSimulationDraft}
         />
         )}
       </div>
@@ -498,9 +534,13 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || scanLocked || draft === null || draft === source || !adcTimingValid}
-              onClick={() => setConfirmSave(true)}
-              title={t("settings.btn.saveAs.title")}
+              disabled={busy || scanLocked || draft === null || (!configChanged && !sessionOnlyChanged) || !adcTimingValid}
+              onClick={onUpdate}
+              title={
+                configChanged
+                  ? t("settings.btn.saveAs.title")
+                  : t("settings.btn.sessionOnly.title")
+              }
             >
               <Icon name="download" />
               {t("settings.btn.saveAs")}
@@ -560,6 +600,10 @@ function SettingsTabBody({
   mobilityMode,
   canEditPins,
   canEditFtp,
+  sessionTransforms,
+  onSessionTransformsChange,
+  sessionSimulation,
+  onSessionSimulationChange,
 }: {
   tab: SettingsTab;
   draft: unknown;
@@ -570,10 +614,20 @@ function SettingsTabBody({
   mobilityMode: boolean;
   canEditPins: boolean;
   canEditFtp: boolean;
+  sessionTransforms: StreamTransforms;
+  onSessionTransformsChange: (transforms: StreamTransforms) => void;
+  sessionSimulation: Record<string, unknown>;
+  onSessionSimulationChange: (simulation: Record<string, unknown>) => void;
 }) {
   switch (tab) {
     case "general":
-      return <GeneralTab draft={draft} />;
+      return (
+        <GeneralTab
+          draft={draft}
+          sessionTransforms={sessionTransforms}
+          onSessionTransformsChange={onSessionTransformsChange}
+        />
+      );
     case "raster":
       return <RasterTab draft={draft} />;
     case "vector":
@@ -581,7 +635,12 @@ function SettingsTabBody({
     case "pins":
       return <PinsTab draft={draft} disabled={!canEditPins} />;
     case "simulation":
-      return <SimulationTab draft={draft} />;
+      return (
+        <SimulationTab
+          simulation={sessionSimulation}
+          onSimulationChange={onSessionSimulationChange}
+        />
+      );
     case "ftp":
       return <FtpTab draft={draft} disabled={!canEditFtp} />;
     case "admin":
@@ -599,19 +658,24 @@ function SettingsTabBody({
 
 /* General tab: top-level flags plus the basic actionData scalars that
  * aren't raster- or vector-specific. */
-function GeneralTab({ draft }: { draft: unknown }) {
+function GeneralTab({
+  draft,
+  sessionTransforms,
+  onSessionTransformsChange,
+}: {
+  draft: unknown;
+  sessionTransforms: StreamTransforms;
+  onSessionTransformsChange: (transforms: StreamTransforms) => void;
+}) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
-  const transformsPath = [...ACTION_DATA_PATH, "transforms"] as const;
 
   // Top-level scalars.
   const version = stringField(draft, ["Version"], "");
   const logName = stringField(draft, ["LogName"], "");
   const verbose = boolField(draft, ["Verbose"], false);
   const isProduction = boolField(draft, ["IsProduction"], false);
-  const xflip = boolField(draft, [...transformsPath, "xflip"], false);
-  const yflip = boolField(draft, [...transformsPath, "yflip"], false);
-  const rotate90 = boolField(draft, [...transformsPath, "rotate90"], false);
+  const { xflip, yflip, rotate90 } = sessionTransforms;
   const dumpData = boolField(draft, ["DumpData"], false);
 
   // Glasgow / Device0 id.
@@ -648,19 +712,7 @@ function GeneralTab({ draft }: { draft: unknown }) {
   }
 
   function setTransform(name: "xflip" | "yflip" | "rotate90", value: boolean) {
-    const current = readPath(draft, transformsPath);
-    const transforms = {
-      ...(current && typeof current === "object" ? current as Record<string, unknown> : {}),
-      [name]: value,
-    };
-    let next = writePath(draft, transformsPath, transforms);
-
-    // Keep the legacy root-level copy in sync when this config has one.
-    const legacyTransforms = readPath(draft, ["transforms"]);
-    if (legacyTransforms && typeof legacyTransforms === "object") {
-      next = writePath(next, ["transforms"], transforms);
-    }
-    dispatch(setDraft(next));
+    onSessionTransformsChange({ ...sessionTransforms, [name]: value });
   }
 
   function setHardwareTiming(
@@ -1218,24 +1270,29 @@ interface ControlSubsignal {
  * understands the legacy shape, so writing back the new shape is a
  * one-way migration without breaking older configs in the wild.
  * --------------------------------------------------------------------- */
-function SimulationTab({ draft }: { draft: unknown }) {
-  const dispatch = useAppDispatch();
+function SimulationTab({
+  simulation,
+  onSimulationChange,
+}: {
+  simulation: Record<string, unknown>;
+  onSimulationChange: (simulation: Record<string, unknown>) => void;
+}) {
   const { t } = useTranslation();
 
-  const enabled = boolField(draft, [...SIMULATION_PATH, "enabled"], true);
-  const mode = stringField(draft, [...SIMULATION_PATH, "mode"], "image");
+  const enabled = boolField(simulation, ["enabled"], true);
+  const mode = stringField(simulation, ["mode"], "image");
   const imageResolution = numberField(
-    draft, [...SIMULATION_PATH, "imageResolution"], 64
+    simulation, ["imageResolution"], 64
   );
-  const source = stringField(draft, [...SIMULATION_PATH, "source"], "pattern");
+  const source = stringField(simulation, ["source"], "pattern");
   const patternKind = stringField(
-    draft, [...SIMULATION_PATH, "patternKind"], "bullseye"
+    simulation, ["patternKind"], "bullseye"
   );
-  const invert = boolField(draft, [...SIMULATION_PATH, "invert"], false);
-  const seed = numberField(draft, [...SIMULATION_PATH, "seed"], 0);
+  const invert = boolField(simulation, ["invert"], false);
+  const seed = numberField(simulation, ["seed"], 0);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
-    dispatch(setDraft(writePath(draft, p, v)));
+    onSimulationChange(writePath(simulation, p, v) as Record<string, unknown>);
   }
 
   // Two derived gates. `imageMode` controls whether the source picker
@@ -1253,7 +1310,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
           label={t("settings.simulation.enabled")}
           help={<SettingsHelp topic="simulationEnabled" />}
           value={enabled}
-          onChange={(v) => set([...SIMULATION_PATH, "enabled"], v)}
+          onChange={(v) => set(["enabled"], v)}
         />
       </div>
 
@@ -1263,7 +1320,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
           <select
             className="select"
             value={mode}
-            onChange={(e) => set([...SIMULATION_PATH, "mode"], e.target.value)}
+            onChange={(e) => set(["mode"], e.target.value)}
           >
             <option value="image">{t("settings.simulation.mode.image")}</option>
             <option value="zeros">{t("settings.simulation.mode.zeros")}</option>
@@ -1274,7 +1331,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
           label={t("settings.simulation.imageResolution")}
           help={<SettingsHelp topic="simulationResolution" />}
           value={imageResolution}
-          onChange={(v) => set([...SIMULATION_PATH, "imageResolution"], v)}
+          onChange={(v) => set(["imageResolution"], v)}
         />
       </div>
 
@@ -1290,7 +1347,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
             className="select"
             value={source}
             disabled={!imageMode}
-            onChange={(e) => set([...SIMULATION_PATH, "source"], e.target.value)}
+            onChange={(e) => set(["source"], e.target.value)}
           >
             <option value="pattern">{t("settings.simulation.source.pattern")}</option>
             <option value="file">{t("settings.simulation.source.file")}</option>
@@ -1307,7 +1364,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
               className="select"
               value={patternKind}
               onChange={(e) =>
-                set([...SIMULATION_PATH, "patternKind"], e.target.value)
+                set(["patternKind"], e.target.value)
               }
             >
               <option value="ramp">{t("settings.simulation.patternKind.ramp")}</option>
@@ -1325,7 +1382,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
             label={t("settings.simulation.invert")}
             help={<SettingsHelp topic="simulationInvert" />}
             value={invert}
-            onChange={(v) => set([...SIMULATION_PATH, "invert"], v)}
+            onChange={(v) => set(["invert"], v)}
           />
         </div>
       )}
@@ -1336,7 +1393,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
             label={t("settings.simulation.seed")}
             help={<SettingsHelp topic="simulationSeed" />}
             value={seed}
-            onChange={(v) => set([...SIMULATION_PATH, "seed"], v)}
+            onChange={(v) => set(["seed"], v)}
           />
         </div>
       )}

@@ -25,6 +25,7 @@ import {
   updateROI,
   type ScanKind,
   type ROIState,
+  type StreamTransforms,
   type VectorRenderMode,
 } from "../store/scanSlice";
 import type { ROIRequest, VectorScanPath } from "../types/api";
@@ -71,7 +72,6 @@ const levelMemory: Partial<Record<string, LevelSetting>> = {};
 // Everything a painter needs to redraw a scan. The live canvas paints from a
 // snapshot that references the store buffers; an archived scan keeps a copy
 // so a "Previous scan" pane can be repainted through its own level wedge.
-type StreamTransforms = Parameters<typeof orientCanvas>[1];
 type GrayColor = { r: number; g: number; b: number };
 type PaintSnapshot =
   | { mode: "clear"; transforms: StreamTransforms }
@@ -121,6 +121,10 @@ function rememberArchivedPaint(imageUrl: string, snapshot: PaintSnapshot): void 
 // (e.g. after a resolution change) is never mistaken for a scan result.
 const scanSequenceMemory: Partial<Record<string, number>> = {};
 const runBufferMemory: Partial<Record<string, Uint16Array>> = {};
+// A completed scan keeps the orientation that was active when that run
+// started. Session transform changes therefore affect the next scan without
+// repainting any already-rendered multi-scan pane.
+const runTransformsMemory: Partial<Record<string, StreamTransforms>> = {};
 
 type AnnotationTool = "highlight" | "comment" | "rectangle" | "circle";
 type LineStyle = "solid" | "dashed" | "dotted";
@@ -385,15 +389,40 @@ export function ImageCanvas({
       ? DAC_RANGE % viewVectorEdge === 0
       : true;
 
+  // Capture run identity, buffer, and orientation before the paint effect.
+  // React runs effects in declaration order, so the first frame of a new run
+  // already uses the transform snapshot that belongs to that run.
+  const previousPhaseRef = useRef(phase);
+  useEffect(() => {
+    if (kind !== "raster" && kind !== "vector") return;
+    if (phase === "running" || phase === "stopping") {
+      const wasRunning = previousPhaseRef.current === "running" || previousPhaseRef.current === "stopping";
+      if (!wasRunning) {
+        scanSequenceMemory[kind] = (scanSequenceMemory[kind] ?? 0) + 1;
+        runTransformsMemory[kind] = { ...streamTransforms };
+      }
+      runBufferMemory[kind] = kind === "raster" ? frame : vectorImage;
+    }
+    previousPhaseRef.current = phase;
+  }, [kind, phase, revision, frame, vectorImage, streamTransforms]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const liveBuffer = kind === "raster" ? frame : vectorImage;
+    const belongsToCapturedRun =
+      (phase === "running" || phase === "stopping" || phase === "completed") &&
+      runBufferMemory[kind] === liveBuffer;
+    const paintTransforms = belongsToCapturedRun
+      ? runTransformsMemory[kind] ?? streamTransforms
+      : streamTransforms;
+
     let snapshot: PaintSnapshot;
     if (kind === "raster") {
-      snapshot = { mode: "grayscale", buf: frame, edge: resolution, populated: cursor, transforms: streamTransforms };
+      snapshot = { mode: "grayscale", buf: frame, edge: resolution, populated: cursor, transforms: paintTransforms };
     } else if (kind === "vector" && vectorSource !== "vector") {
-      snapshot = { mode: "clear", transforms: streamTransforms };
+      snapshot = { mode: "clear", transforms: paintTransforms };
     } else if (kind === "vector" && vectorPattern === "default") {
       snapshot = {
         mode: renderMode === "native" && vectorEdge < DAC_RANGE ? "vectorBlock" : "vectorDefault",
@@ -404,7 +433,7 @@ export function ImageCanvas({
         graySelection: vectorGraySpotSelection,
         graySkipped: vectorGraySpotSkipped,
         grayColor: vectorGraySpotColor,
-        transforms: streamTransforms,
+        transforms: paintTransforms,
       };
     } else if (kind === "vector" && vectorCustomRenderPoints) {
       snapshot = {
@@ -416,10 +445,10 @@ export function ImageCanvas({
         blankMask: vectorCustomBlankMask,
         spotMask: vectorCustomSpotMask,
         grayColor: vectorGraySpotColor,
-        transforms: streamTransforms,
+        transforms: paintTransforms,
       };
     } else {
-      snapshot = { mode: "grayscale", buf: vectorImage, edge: vectorEdge, populated: vectorCursor, transforms: streamTransforms };
+      snapshot = { mode: "grayscale", buf: vectorImage, edge: vectorEdge, populated: vectorCursor, transforms: paintTransforms };
     }
     liveSnapshotRef.current = snapshot;
     setStats(paintSnapshot(canvas, snapshot, levelSetting));
@@ -434,19 +463,6 @@ export function ImageCanvas({
     levelSetting,
     streamTransforms,
   ]);
-
-  // Count scan runs and remember which buffer the running scan writes into.
-  // Declared before the capture effect so both see the same run on completion.
-  const previousPhaseRef = useRef(phase);
-  useEffect(() => {
-    if (kind !== "raster" && kind !== "vector") return;
-    if (phase === "running" || phase === "stopping") {
-      const wasRunning = previousPhaseRef.current === "running" || previousPhaseRef.current === "stopping";
-      if (!wasRunning) scanSequenceMemory[kind] = (scanSequenceMemory[kind] ?? 0) + 1;
-      runBufferMemory[kind] = kind === "raster" ? frame : vectorImage;
-    }
-    previousPhaseRef.current = phase;
-  }, [kind, phase, revision, frame, vectorImage]);
 
   useEffect(() => {
     if (!onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;

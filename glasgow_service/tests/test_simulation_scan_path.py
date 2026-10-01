@@ -254,6 +254,40 @@ def test_zeros_and_loopback_modes(mode):
         assert np.array_equal(got[0], got[5])
 
 
+def test_request_simulation_override_is_local_to_that_scan():
+    svc = make_service()
+    req = RasterRequest(
+        resolution=128,
+        dwell=2,
+        latency_bytes=4096,
+        simulation={"enabled": True, "mode": "zeros", "chunkIntervalMs": 0},
+    )
+
+    overridden = samples(collect(svc, "raster", req))
+    following_default = samples(collect(svc, "raster", RasterRequest(
+        resolution=128, dwell=2, latency_bytes=4096)))
+
+    assert not overridden.any()
+    assert following_default.any()
+    assert svc._simulation_defaults == RANDOM_SOURCE
+
+
+def test_request_can_disable_simulation_without_changing_defaults():
+    conn = FakeConnection()
+    svc = make_service(connection=conn)
+    req = RasterRequest(
+        resolution=128,
+        dwell=2,
+        latency_bytes=64,
+        simulation={"enabled": False},
+    )
+
+    collect(svc, "raster", req)
+
+    assert conn.calls == ["RasterScanCommand"]
+    assert svc._simulation_defaults == RANDOM_SOURCE
+
+
 def test_browser_bitmap_scan_is_hardware_free_and_streams():
     svc = make_service()
     bitmap = SimulationBitmap(width=2, height=2, pixels=[0, 85, 170, 255])

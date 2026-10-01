@@ -716,6 +716,7 @@ export const en = {
    * name to avoid churning every translation entry's identifier. */
   "settings.btn.saveAs": "Update",
   "settings.btn.saveAs.title": "Write the edited configuration to streamData.json and restart the service if its values change",
+  "settings.btn.sessionOnly.title": "Apply session-only settings without saving configuration or restarting services",
   "settings.btn.default": "Default",
   "settings.btn.default.title": "Restore streamData.json from the backup and restart the service if its values change",
   "settings.btn.default.title.noBackup": "No backup file present - Default is only available once a backup has been created",

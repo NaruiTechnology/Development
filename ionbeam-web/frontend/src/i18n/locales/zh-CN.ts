@@ -617,6 +617,7 @@ export const zhCN: Partial<TranslationTable> = {
   "settings.tabs.admin": "管理",
   "settings.btn.saveAs": "更新",
   "settings.btn.saveAs.title": "将编辑后的配置写入 streamData.json；配置值发生变化时重启服务",
+  "settings.btn.sessionOnly.title": "仅将设置应用于当前浏览器会话，不保存配置或重启服务",
   "settings.btn.default": "默认值",
   "settings.btn.default.title": "使用备份还原 streamData.json；配置值发生变化时重启服务",
   "settings.btn.default.title.noBackup": "不存在备份文件 - 默认值按钮仅在备份创建后可用",

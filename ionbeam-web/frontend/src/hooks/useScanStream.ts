@@ -96,6 +96,7 @@ export function useScanStream() {
     const n = Number(raw);
     return Number.isFinite(n) ? n : 0;
   });
+  const sessionSimulation = useAppSelector((s: RootState) => s.status.sessionSimulation);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const chunksReceivedRef = useRef(chunksReceived);
@@ -127,6 +128,7 @@ export function useScanStream() {
 
   const startRaster = useCallback(
     (req: RasterRequest, options?: { preserveFrame?: boolean }) => {
+      if (sessionSimulation) req = { ...req, simulation: sessionSimulation };
       stopExisting(wsRef);
       discardPendingSamples(pendingRasterRef.current);
       activeScanRef.current = { kind: "raster", req };
@@ -187,11 +189,12 @@ export function useScanStream() {
         wsRef.current = null;
       };
     },
-    [dispatch, flushRasterSamples]
+    [dispatch, flushRasterSamples, sessionSimulation]
   );
 
   const startVector = useCallback(
     (req: VectorRequest) => {
+      if (sessionSimulation) req = { ...req, simulation: sessionSimulation };
       stopExisting(wsRef);
       discardPendingSamples(pendingVectorRef.current);
       activeScanRef.current = { kind: "vector", req };
@@ -293,7 +296,7 @@ export function useScanStream() {
         wsRef.current = null;
       };
     },
-    [dispatch, flushVectorSamples, vectorLineShiftPerXRow]
+    [dispatch, flushVectorSamples, sessionSimulation, vectorLineShiftPerXRow]
   );
 
   const stop = useCallback(() => {

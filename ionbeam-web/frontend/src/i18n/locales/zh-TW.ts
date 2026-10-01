@@ -623,6 +623,7 @@ export const zhTW: Partial<TranslationTable> = {
   "settings.tabs.admin": "管理",
   "settings.btn.saveAs": "更新",
   "settings.btn.saveAs.title": "將編輯後的設定寫入 streamData.json；設定值變更時重新啟動服務",
+  "settings.btn.sessionOnly.title": "僅將設定套用於目前瀏覽器工作階段，不儲存設定或重新啟動服務",
   "settings.btn.default": "預設值",
   "settings.btn.default.title": "以備份還原 streamData.json；設定值變更時重新啟動服務",
   "settings.btn.default.title.noBackup": "備份檔案不存在 - 預設值按鈕僅在備份建立後可用",

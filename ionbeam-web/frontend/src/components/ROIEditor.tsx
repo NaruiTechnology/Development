@@ -63,6 +63,15 @@ const UNITS = [
 const ROI_DRAG_THRESHOLD = 8;
 const ROI_CORNER_DRAG_THRESHOLD = 18;
 
+function composeOverlayCounterTransform(
+  counterTransform: string,
+  baseTransform = "",
+): string {
+  const counter = counterTransform === "none" ? "" : counterTransform.trim();
+  const base = baseTransform.trim();
+  return [counter, base].filter(Boolean).join(" ") || "none";
+}
+
 export function ROIEditor({
   disabled,
   variant = "all",
@@ -98,11 +107,14 @@ export function ROIEditor({
     streamTransforms.yflip ? "scaleY(-1)" : "",
     streamTransforms.rotate90 ? "rotate(90deg)" : "",
   ].filter(Boolean).join(" ");
-  const sx = streamTransforms.xflip ? -1 : 1;
-  const sy = streamTransforms.yflip ? -1 : 1;
-  const axisTextCounterTransform = streamTransforms.rotate90
-    ? `matrix(0, ${-sx}, ${sy}, 0, 0, 0)`
-    : `matrix(${sx}, 0, 0, ${sy}, 0, 0)`;
+  // Keep the axis notation upright while the canvas is flipped or rotated.
+  // Derive the inverse from the exact CSS transform string so the text stays
+  // correct for every combination and transform order.
+  const axisTextCounterTransform = canvasOrientation
+    ? new DOMMatrix(canvasOrientation).inverse().toString()
+    : "none";
+  const uprightOverlayTransform = (baseTransform = "") =>
+    composeOverlayCounterTransform(axisTextCounterTransform, baseTransform);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1573,7 +1585,11 @@ export function ROIEditor({
             return (
               <div
                 className="calibration-line-readout"
-                style={{ left: `${left}%`, top: `${top}%` }}
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  transform: uprightOverlayTransform("translate(-50%, -115%)"),
+                }}
                 aria-live="polite"
               >
                 <span>X1: {formatDimensionValue(x1, roi.scale_unit)} | Y1: {formatDimensionValue(y1, roi.scale_unit)}</span>
@@ -1600,7 +1616,10 @@ export function ROIEditor({
                 />
                 <span
                   className="roi-calibration-handle-value roi-calibration-handle-value--top-start"
-                  style={{ left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%` }}
+                  style={{
+                    left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%`,
+                    transform: uprightOverlayTransform("translate(8px, 16px)"),
+                  }}
                 >
                   {formatDimensionValue(calibrationXValueAt(roi, draftBounds.left), roi.scale_unit)}
                 </span>
@@ -1616,7 +1635,10 @@ export function ROIEditor({
                 />
                 <span
                   className="roi-calibration-handle-value roi-calibration-handle-value--top-end"
-                  style={{ left: `${draftBounds.right / ROI_CANVAS_EDGE * 100}%` }}
+                  style={{
+                    left: `${draftBounds.right / ROI_CANVAS_EDGE * 100}%`,
+                    transform: uprightOverlayTransform("translate(-100%, 16px)"),
+                  }}
                 >
                   {formatDimensionValue(calibrationXValueAt(roi, draftBounds.right), roi.scale_unit)}
                 </span>
@@ -1638,7 +1660,10 @@ export function ROIEditor({
                 />
                 <span
                   className="roi-calibration-handle-value roi-calibration-handle-value--left-start"
-                  style={{ top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%` }}
+                  style={{
+                    top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%`,
+                    transform: uprightOverlayTransform("translate(16px, -50%)"),
+                  }}
                 >
                   {formatDimensionValue(calibrationYValueAt(roi, draftBounds.top), roi.scale_unit)}
                 </span>
@@ -1654,7 +1679,10 @@ export function ROIEditor({
                 />
                 <span
                   className="roi-calibration-handle-value roi-calibration-handle-value--left-end"
-                  style={{ top: `${draftBounds.bottom / ROI_CANVAS_EDGE * 100}%` }}
+                  style={{
+                    top: `${draftBounds.bottom / ROI_CANVAS_EDGE * 100}%`,
+                    transform: uprightOverlayTransform("translate(16px, -100%)"),
+                  }}
                 >
                   {formatDimensionValue(calibrationYValueAt(roi, draftBounds.bottom), roi.scale_unit)}
                 </span>
@@ -1664,6 +1692,7 @@ export function ROIEditor({
                 style={{
                   left: `${(draftBounds.left + draftBounds.width / 2) / ROI_CANVAS_EDGE * 100}%`,
                   top: `${(draftBounds.top + 8) / ROI_CANVAS_EDGE * 100}%`,
+                  transform: uprightOverlayTransform("translate(-50%, 0)"),
                 }}
               >
                 {formatAxisSpanLabel(
@@ -1677,6 +1706,7 @@ export function ROIEditor({
                 style={{
                   left: `${Math.max(0, draftBounds.left - 2) / ROI_CANVAS_EDGE * 100}%`,
                   top: `${(draftBounds.top + draftBounds.height / 2) / ROI_CANVAS_EDGE * 100}%`,
+                  transform: uprightOverlayTransform("translate(-100%, -50%) rotate(-90deg)"),
                 }}
               >
                 {formatAxisSpanLabel(
@@ -2152,7 +2182,10 @@ function ROIAxisOverlay({ roi, textCounterTransform }: { roi: ROIState; textCoun
           className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
           style={{
             left: `${tick.ratio * 100}%`,
-            transform: `translateX(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"}) ${textCounterTransform}`,
+            transform: composeOverlayCounterTransform(
+              textCounterTransform,
+              `translateX(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"})`,
+            ),
           }}
         >
           {tick.xLabel}
@@ -2164,7 +2197,10 @@ function ROIAxisOverlay({ roi, textCounterTransform }: { roi: ROIState; textCoun
           className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
           style={{
             top: `${tick.ratio * 100}%`,
-            transform: `translateY(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"}) ${textCounterTransform}`,
+            transform: composeOverlayCounterTransform(
+              textCounterTransform,
+              `translateY(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"})`,
+            ),
           }}
         >
           {tick.yLabel}
@@ -2271,7 +2307,10 @@ function ROICalibrationAxisOverlay({
           style={{
             left: tick.x,
             top: "16px",
-            transform: `translateX(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"}) ${textCounterTransform}`,
+            transform: composeOverlayCounterTransform(
+              textCounterTransform,
+              `translateX(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"})`,
+            ),
           }}
         >
           {tick.xLabel}
@@ -2284,7 +2323,10 @@ function ROICalibrationAxisOverlay({
           style={{
             left: "14px",
             top: tick.y,
-            transform: `translateY(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"}) ${textCounterTransform}`,
+            transform: composeOverlayCounterTransform(
+              textCounterTransform,
+              `translateY(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"})`,
+            ),
           }}
         >
           {tick.yLabel}

@@ -106,6 +106,10 @@ class RasterRequest(BaseModel):
             "Ignored for production hardware."
         ),
     )
+    simulation: Optional[dict] = Field(
+        default=None,
+        description="Browser-session simulation override. Ignored in production mode.",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -296,6 +300,10 @@ class VectorRequest(BaseModel):
             "Optional browser-provided grayscale crop for simulation-only vector scans. "
             "Ignored for production hardware."
         ),
+    )
+    simulation: Optional[dict] = Field(
+        default=None,
+        description="Browser-session simulation override. Ignored in production mode.",
     )
 
     @field_validator("vector_resolution")

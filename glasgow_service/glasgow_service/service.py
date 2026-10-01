@@ -1013,11 +1013,17 @@ class DeviceService:
             return False
         if getattr(req, "simulation_bitmap", None) is not None:
             return True
-        return bool(self._simulation_defaults.get("enabled", True))
+        return bool(self._simulation_settings(req).get("enabled", True))
+
+    def _simulation_settings(self, req) -> dict:
+        """Resolve a request-scoped browser override without mutating service defaults."""
+        override = getattr(req, "simulation", None)
+        return dict(override) if isinstance(override, dict) else self._simulation_defaults
 
     async def _simulated_chunks(self, kind: str, req, command, *, pace: bool):
         """Stand-in for ``conn.transfer_multiple(cmd)`` that needs no device."""
-        interval = _simulation_chunk_interval(self._simulation_defaults) if pace else 0.0
+        simulation = self._simulation_settings(req)
+        interval = _simulation_chunk_interval(simulation) if pace else 0.0
         build_bitmap = _bitmap_raster_chunks if kind == "raster" else _bitmap_vector_chunks
         # Building a bitmap frame is pure Python; keep it off the event loop.
         transforms = self._action_defaults.get("transforms", {}) or {}
@@ -1026,11 +1032,11 @@ class DeviceService:
             source = _paced_chunks(bitmap_chunks, abort=command.abort, interval=interval)
         elif kind == "raster":
             source = _simulated_raster_chunks(
-                req, self._simulation_defaults, abort=command.abort, interval=interval,
+                req, simulation, abort=command.abort, interval=interval,
                 transforms=transforms)
         else:
             source = _simulated_vector_chunks(
-                req, self._simulation_defaults, abort=command.abort, interval=interval,
+                req, simulation, abort=command.abort, interval=interval,
                 transforms=transforms)
         async for chunk in source:
             yield chunk
