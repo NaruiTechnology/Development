@@ -81,11 +81,13 @@ export function SettingsDialog({
   targetLogin = null,
   mobilityMode = false,
   scanLocked = false,
+  vectorGrayLevelsEnabled = false,
 }: {
   targetAccountId?: number | null;
   targetLogin?: string | null;
   mobilityMode?: boolean;
   scanLocked?: boolean;
+  vectorGrayLevelsEnabled?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.settings.dialogOpen);
@@ -140,6 +142,7 @@ export function SettingsDialog({
         targetLogin={targetLogin}
         mobilityMode={mobilityMode}
         scanLocked={scanLocked}
+        vectorGrayLevelsEnabled={vectorGrayLevelsEnabled}
       />
     </div>
   );
@@ -160,11 +163,11 @@ function resetROIPreview(dispatch: AppDispatch) {
   dispatch(clearROIImage());
 }
 
-function resetScanImages(dispatch: AppDispatch, rasterResolution: number) {
+function resetScanImages(dispatch: AppDispatch, rasterResolution: number, preserveVectorImage: boolean) {
   dispatch(streamReset());
   dispatch(clearLastResult());
   dispatch(resetRaster({ resolution: rasterResolution }));
-  dispatch(resetVector());
+  if (!preserveVectorImage) dispatch(resetVector());
 }
 
 function simulationImageSignature(config: unknown): string {
@@ -190,11 +193,13 @@ function SettingsModalShell({
   targetLogin,
   mobilityMode,
   scanLocked,
+  vectorGrayLevelsEnabled,
 }: {
   targetAccountId: number | null;
   targetLogin: string | null;
   mobilityMode: boolean;
   scanLocked: boolean;
+  vectorGrayLevelsEnabled: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -300,7 +305,7 @@ function SettingsModalShell({
       } else {
         resetPartialROISelection(dispatch);
       }
-      resetScanImages(dispatch, rasterResolution);
+      resetScanImages(dispatch, rasterResolution, vectorGrayLevelsEnabled);
       dispatch(previewConfigDefaults(configDefaultsPreview(draft)));
       if (await refreshDefaultsForSettings(dispatch)) {
         dispatch(setBackendRestarting(false));
@@ -315,7 +320,7 @@ function SettingsModalShell({
     setConfirmDefault(false);
     const result = await dispatch(restoreSettingsConfig());
     if (restoreSettingsConfig.fulfilled.match(result)) {
-      resetScanImages(dispatch, rasterResolution);
+      resetScanImages(dispatch, rasterResolution, vectorGrayLevelsEnabled);
       // Pull the restored values back into the dialog so the tabs
       // show the freshly-installed defaults instead of the pre-restore
       // draft.

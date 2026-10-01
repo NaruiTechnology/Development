@@ -91,11 +91,7 @@ import { useTranslation } from "./i18n";
 import { scanAuthHeaders } from "./lib/authIdentity";
 import {
   openDialog as openSettingsDialog,
-  readPath,
   setActiveTab,
-  VECTOR_PATH,
-  setDraft,
-  writePath,
   clearDimensionCalNavigationRequest,
 } from "./store/settingsSlice";
 import { SCAN_TYPE_COLORS, type ScanType } from "./types/scanType";
@@ -168,7 +164,6 @@ export function App() {
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
-  const settingsDraft = useAppSelector((s) => s.settings.draft);
   const dimensionCalNavigationRequest = useAppSelector((s) => s.settings.dimensionCalNavigationRequest);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
   const [lastLiveScanImage, setLastLiveScanImage] = useState<{
@@ -1011,19 +1006,9 @@ export function App() {
   }, [dispatch]);
 
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
-    if (settingsDraft !== null) {
-      dispatch(setDraft(writePath(settingsDraft, [...VECTOR_PATH, "PixelFallbackBlank"], checked)));
-    }
     setVectorGrayRangeCommitCount(0);
     applyVectorGrayLevelsToggle(checked);
-  }, [applyVectorGrayLevelsToggle, dispatch, settingsDraft]);
-
-  useEffect(() => {
-    if (settingsDraft === null) return;
-    const nextEnabled = readPath(settingsDraft, [...VECTOR_PATH, "PixelFallbackBlank"]) === true;
-    if (nextEnabled === vectorGrayLevelsEnabled) return;
-    applyVectorGrayLevelsToggle(nextEnabled);
-  }, [applyVectorGrayLevelsToggle, settingsDraft, vectorGrayLevelsEnabled]);
+  }, [applyVectorGrayLevelsToggle]);
 
   useEffect(() => {
     if (!vectorGrayLevelsEnabled || vectorLatencyBytes >= 8196) return;
@@ -1679,7 +1664,11 @@ export function App() {
       </main>
       )}
 
-      <SettingsDialog targetAccountId={settingsTarget.accountId} targetLogin={settingsTarget.login} />
+      <SettingsDialog
+        targetAccountId={settingsTarget.accountId}
+        targetLogin={settingsTarget.login}
+        vectorGrayLevelsEnabled={vectorGrayLevelsEnabled}
+      />
       {vacuumEnabled && (
         <VacuumDashboard
           open={route === "vacuum"}
