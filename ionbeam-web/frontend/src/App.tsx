@@ -46,6 +46,7 @@ import { NumberStepperInput } from "./components/NumberStepperField";
 import { VectorGrayLevelHelp } from "./components/VectorGrayLevelHelp";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
+import { HelpPopover } from "./components/HelpPopover";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
 import { VacuumDashboard } from "./components/VacuumDashboard";
@@ -140,6 +141,10 @@ export function App() {
   const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
+  // "<kind>:<scanId>" of the scan whose image currently occupies the target pane.
+  const completedImageRecordedScanRef = useRef<string | null>(null);
+  // Latest image of that scan, so later images of the same scan can replace it.
+  const completedImageRecordedUrlRef = useRef<string | null>(null);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const adcTestEnabled = useAppSelector((s) => s.status.defaults?.adc_test !== false);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
@@ -170,6 +175,13 @@ export function App() {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
+  const [imagePanelLayout, setImagePanelLayout] = useState<1 | 2 | 3 | 4>(1);
+  const [, setCompletedImageHistory] = useState<
+    Record<"raster" | "vector", string[]>
+  >({ raster: [], vector: [] });
+  const [imagePanelSlots, setImagePanelSlots] = useState<
+    Record<"raster" | "vector", Array<string | null>>
+  >({ raster: [], vector: [] });
   const suppressedROIScanImageUrlRef = useRef<string | null>(null);
   const previousROIImageRef = useRef({
     imageDataUrl: roiState.imageDataUrl,
@@ -776,7 +788,7 @@ export function App() {
   }, [activeROIScanImageUrl, dispatch, kind, phase, roiState.imageDataUrl, roiState.imageKind, roiState.scanImageDataUrl, t]);
 
   const handleRenderedImageChange = useCallback(
-    (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
+    (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null, scanId: number) => {
       if (
         kind === "roi" &&
         scanKind === "vector" &&
@@ -801,6 +813,48 @@ export function App() {
         }
         return;
       }
+      if (imageUrl) {
+        // A later image of the same scan (final chunks, a re-render) replaces
+        // that scan's entry; only a new scan pushes the previous result into
+        // a "Previous scan" pane.
+        const scanKey = `${scanKind}:${scanId}`;
+        const sameScan = completedImageRecordedScanRef.current === scanKey;
+        const previousScanImage = completedImageRecordedUrlRef.current;
+        completedImageRecordedScanRef.current = scanKey;
+        completedImageRecordedUrlRef.current = imageUrl;
+        setCompletedImageHistory((current) => {
+          const earlier = sameScan ? current[scanKind].slice(1) : current[scanKind];
+          return {
+            ...current,
+            [scanKind]: [imageUrl, ...earlier.filter((item) => item !== imageUrl)].slice(0, 4),
+          };
+        });
+        if (imagePanelLayout > 1 && sameScan) {
+          // Same scan, newer image: update it in whichever pane shows it now.
+          setImagePanelSlots((current) => ({
+            ...current,
+            [scanKind]: current[scanKind].map((item) => (item === previousScanImage ? imageUrl : item)),
+          }));
+        } else if (imagePanelLayout > 1) {
+          // After the split, each completed scan opens the next empty pane
+          // automatically: scan 2 opens pane 3, scan 3 opens pane 4.
+          const nextLayout = imagePanelLayout === 2 ? 3 : imagePanelLayout === 3 ? 4 : null;
+          setImagePanelSlots((current) => {
+            const slots = [...current[scanKind]];
+            while (slots.length < imagePanelLayout) slots.push(null);
+            const targetIndex = imagePanelLayout - 1;
+            const priorTarget = slots[targetIndex];
+            if (priorTarget && priorTarget !== imageUrl) {
+              const archiveIndex = slots.findIndex((item, index) => index < targetIndex && item === null);
+              slots[archiveIndex >= 0 ? archiveIndex : 0] = priorTarget;
+            }
+            slots[targetIndex] = imageUrl;
+            if (nextLayout) slots[nextLayout - 1] = null;
+            return { ...current, [scanKind]: slots.slice(0, nextLayout ?? imagePanelLayout) };
+          });
+          if (nextLayout) setImagePanelLayout(nextLayout);
+        }
+      }
       setLastLiveScanImage((current) => {
         if (!imageUrl) return current?.kind === scanKind ? null : current;
         if (current?.kind === scanKind && current.imageUrl === imageUrl) {
@@ -814,15 +868,52 @@ export function App() {
       kind,
       roiActionCanvasVisible,
       roiActionGrayFilterActive,
+      imagePanelLayout,
       t,
     ]
   );
+
+  // Image the current target pane is showing right now. It must come from the
+  // live canvas: an older scan kept in the history does not count once the
+  // live image has been cleared (new scan started, resolution changed, reload).
+  // Panes are only added while the target shows a scan, so an empty pane is
+  // never pushed into the history.
+  const liveScanImage =
+    lastLiveScanImage && lastLiveScanImage.kind === kind ? lastLiveScanImage.imageUrl : null;
+  const currentTargetImage =
+    (kind === "raster" || kind === "vector") && liveScanImage
+      ? imagePanelLayout === 1
+        ? liveScanImage
+        : imagePanelSlots[kind][imagePanelLayout - 1] ?? null
+      : null;
+  // Keep the split button visible for raster/vector scans; it becomes enabled
+  // as soon as the live target contains an image to preserve in the first pane.
+  const showSplitButton = kind === "raster" || kind === "vector";
+  const canSplitImagePanel = imagePanelLayout === 1 && currentTargetImage !== null;
+
+  const splitImagePanel = useCallback(() => {
+    if (!canSplitImagePanel || (kind !== "raster" && kind !== "vector")) return;
+    // Pane 1 keeps the first scan; pane 2 is the empty target for the next scan.
+    setImagePanelSlots((current) => ({ ...current, [kind]: [currentTargetImage, null] }));
+    setImagePanelLayout(2);
+  }, [canSplitImagePanel, currentTargetImage, kind]);
 
   const handleMergedFigureChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
       setMergedFigureByKind((current) =>
         current[scanKind] === imageUrl ? current : { ...current, [scanKind]: imageUrl }
       );
+    },
+    []
+  );
+
+  const handleImagePaneChange = useCallback(
+    (scanKind: Extract<ScanKind, "raster" | "vector">, pane: number, imageUrl: string) => {
+      setImagePanelSlots((current) => {
+        const slots = [...current[scanKind]];
+        slots[pane] = imageUrl;
+        return { ...current, [scanKind]: slots };
+      });
     },
     []
   );
@@ -1027,7 +1118,15 @@ export function App() {
     selectKind("mag");
   }
 
+  // Clicking the Scan, Raster or Vector tab closes the split image panes and
+  // returns to a single pane; the tab then opens as usual.
+  function closeImagePanelSplit() {
+    setImagePanelLayout(1);
+    setImagePanelSlots({ raster: [], vector: [] });
+  }
+
   function activateScanTopTab() {
+    closeImagePanelSplit();
     setActiveTopTab("scan");
     activateScanSubTab(scanSubTab);
   }
@@ -1199,7 +1298,10 @@ export function App() {
                   className="tab tab--sub"
                   aria-selected={scanSubTab === "raster"}
                   disabled={rasterVectorTabsDisabled}
-                  onClick={() => activateScanSubTab("raster")}
+                  onClick={() => {
+                    closeImagePanelSplit();
+                    activateScanSubTab("raster");
+                  }}
                 >
                   <Icon name="grid" tone="tab" />
                   {t("tabs.raster")}
@@ -1209,7 +1311,10 @@ export function App() {
                   className="tab tab--sub"
                   aria-selected={scanSubTab === "vector"}
                   disabled={rasterVectorTabsDisabled}
-                  onClick={() => activateScanSubTab("vector")}
+                  onClick={() => {
+                    closeImagePanelSplit();
+                    activateScanSubTab("vector");
+                  }}
                 >
                   <Icon name="route" tone="tab" />
                   {t("tabs.vector")}
@@ -1487,6 +1592,35 @@ export function App() {
                     )}
                   </div>}
                 </div>
+                {activeTopTab === "scan" && showSplitButton && (
+                  <button
+                    type="button"
+                    className="card__collapse-btn image-panel-card__layout-button"
+                    aria-label={t("canvas.layout.cycle", { count: imagePanelLayout })}
+                    aria-pressed={imagePanelLayout > 1}
+                    aria-controls="image-panel-grid"
+                    disabled={scanActive || !canSplitImagePanel}
+                    title={t("canvas.layout.cycle", { count: imagePanelLayout })}
+                    onClick={splitImagePanel}
+                  >
+                    <span className="image-panel-card__layout-icon" aria-hidden="true">
+                      <img src="/4-Quadrant.png" alt="" />
+                      <svg viewBox="0 0 64 64" focusable="false">
+                        <path d="M42 11 18 37h27M41 12v42" />
+                      </svg>
+                    </span>
+                  </button>
+                )}
+                {activeTopTab === "scan" && (kind === "raster" || kind === "vector") && (
+                  <span className="image-panel-card__layout-help">
+                    <HelpPopover
+                      title={t("canvas.layout.help.title")}
+                      ariaLabel={t("canvas.layout.help.aria")}
+                    >
+                      <p>{t("canvas.layout.help.body")}</p>
+                    </HelpPopover>
+                  </span>
+                )}
             </div>
             <div className="card__body">
                 {activeTopTab === "adcTest" ? (
@@ -1515,12 +1649,15 @@ export function App() {
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
               ) : (
-                <ImageCanvas
-                  kind={kind as ScanKind}
-                  onRenderedImageChange={handleRenderedImageChange}
-                  onMergedFigureChange={handleMergedFigureChange}
+                  <ImageCanvas
+                    kind={kind as ScanKind}
+                    onRenderedImageChange={handleRenderedImageChange}
+                    onMergedFigureChange={handleMergedFigureChange}
+                    onPaneImageChange={handleImagePaneChange}
                   vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
                   vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                  imageLayout={imagePanelLayout}
+                  imageSlots={imagePanelSlots[kind as "raster" | "vector"]}
                 />
               )}
             </div>

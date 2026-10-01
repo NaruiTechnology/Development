@@ -403,7 +403,8 @@ body {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  width: 100%;
+  width: auto;
+  flex: 1 1 auto;
 }
 
 .image-panel-card__header--scan-path .image-panel-card__header-main {
@@ -429,6 +430,67 @@ body {
 
 .image-panel-card__toolbar-slot:empty {
   display: none;
+}
+
+.image-panel-card__layout-button {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  width: 304px;
+  height: 304px;
+  padding: 1px;
+  border-color: var(--c-border);
+  background: var(--c-bg-elev);
+  color: var(--c-text);
+  opacity: 1;
+}
+
+.image-panel-card__layout-button:disabled {
+  opacity: 0.78;
+  cursor: not-allowed;
+}
+
+.image-panel-card__layout-button:hover:not(:disabled) {
+  border-color: var(--c-accent);
+  background: var(--c-btn-hover);
+}
+
+.image-panel-card__layout-icon {
+  position: relative;
+  display: block;
+  width: 300px;
+  height: 300px;
+}
+
+.image-panel-card__layout-icon img,
+.image-panel-card__layout-icon svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.image-panel-card__layout-icon svg {
+  overflow: visible;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.image-panel-card__layout-help {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: -5px;
+}
+
+.image-panel-card__layout-help .help-btn .icon {
+  width: 14px;
+  height: 14px;
 }
 
 .image-panel-card__header-action {
@@ -995,6 +1057,172 @@ body {
 .image-panel-card .canvas-frame {
   width: 100%;
   max-width: none;
+}
+
+.image-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.image-panel-grid--1 {
+  display: block;
+}
+
+.image-panel-grid__tile,
+.image-panel-grid__target {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-bg-elev);
+}
+
+.image-panel-grid__tile,
+.image-panel-grid__target {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.image-panel-grid__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  color: var(--c-text-dim);
+  font-size: 11px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.image-panel-grid__tile[data-selected="true"],
+.image-panel-grid__target[data-selected="true"] {
+  border-color: var(--c-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-accent) 55%, transparent), 0 0 0 1px color-mix(in srgb, var(--c-accent) 25%, transparent);
+}
+
+.image-panel-grid__image {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.image-panel-grid__visual {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+}
+
+.image-panel-grid__content {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.image-panel-grid__content > .image-panel-grid__visual {
+  flex: 1 1 0;
+  width: auto;
+}
+
+.image-panel-grid__brightness {
+  display: flex;
+  flex: 0 0 var(--wedge-w, 96px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--c-text-dim);
+  font-size: 10px;
+  user-select: none;
+}
+
+.image-panel-grid__brightness input[type="range"] {
+  width: 100px;
+  height: 22px;
+  margin: 38px -38px;
+  transform: rotate(-90deg);
+  accent-color: var(--c-accent);
+  cursor: ew-resize;
+}
+
+.image-panel-grid__brightness output {
+  font: 10px ui-monospace, monospace;
+}
+
+.image-panel-grid__visual > .image-panel-grid__empty {
+  width: 100%;
+  height: 100%;
+}
+
+.image-panel-grid__target-visual {
+  width: auto;
+}
+
+.image-panel-grid__grid-toggle {
+  flex: 0 0 auto;
+  gap: 6px;
+  margin: 0;
+  font-size: 10px;
+}
+
+.image-panel-grid__empty {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  place-items: center;
+  color: var(--c-text-dim);
+  font-size: 12px;
+}
+
+.image-panel-grid__target-image {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+}
+
+.image-panel-grid__target-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+}
+
+.image-panel-grid__target > * {
+  min-width: 0;
+}
+
+.image-panel-grid--1 > .image-panel-grid__target {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* A freshly added target pane keeps its full stage (axes, grid, level wedge,
+   tools) but shows no image until the next scan. Only the image layers are
+   hidden; the canvas stays mounted so the next completed scan can still be
+   captured from it. */
+.canvas-stage--parked .canvas-frame canvas,
+.canvas-stage--parked .canvas-frame .server-figure {
+  visibility: hidden;
 }
 
 .roi-preview-column {
@@ -2659,6 +2887,11 @@ body {
   -webkit-user-drag: none;
 }
 
+.canvas-frame > canvas:first-child,
+.canvas-frame > .server-figure {
+  filter: brightness(1.15);
+}
+
 /* Canvas + level wedge (histogram / black-white levels) side by side.
    The frame keeps its square aspect; the wedge stretches to the same height. */
 .canvas-stage {
@@ -3240,7 +3473,7 @@ body {
 .canvas-editor-layer {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 20;
   cursor: crosshair;
 }
 

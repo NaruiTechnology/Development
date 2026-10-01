@@ -37,6 +37,7 @@ type IconName =
   | "pause"
   | "play"
   | "plus"
+  | "quad"
   | "refresh"
   | "rectangleTool"
   | "route"
@@ -227,6 +228,14 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
   ),
   play: <path d="M6 4l14 8-14 8V4z" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  quad: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1" />
+    </>
+  ),
   refresh: (
     <>
       <path d="M20 4v6h-6" />

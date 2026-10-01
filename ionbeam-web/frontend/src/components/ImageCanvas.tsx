@@ -15,7 +15,7 @@
  * to their actual populated cells. For vector custom, only requested
  * point coordinates are painted; unpopulated cells stay transparent.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
@@ -67,6 +67,60 @@ interface PaintStats {
 // Display levels are an operator setting, like OBI's wedge: they survive a
 // new scan and a remount of the panel, per scan kind.
 const levelMemory: Partial<Record<string, LevelSetting>> = {};
+
+// Everything a painter needs to redraw a scan. The live canvas paints from a
+// snapshot that references the store buffers; an archived scan keeps a copy
+// so a "Previous scan" pane can be repainted through its own level wedge.
+type StreamTransforms = Parameters<typeof orientCanvas>[1];
+type GrayColor = { r: number; g: number; b: number };
+type PaintSnapshot =
+  | { mode: "clear"; transforms: StreamTransforms }
+  | { mode: "grayscale"; buf: Uint16Array; edge: number; populated: number; transforms: StreamTransforms }
+  | {
+      mode: "vectorDefault" | "vectorBlock";
+      buf: Uint16Array;
+      edge: number;
+      populated: number;
+      scanPath: VectorScanPath;
+      graySelection: GrayScaleSelection;
+      graySkipped: boolean | null;
+      grayColor: GrayColor;
+      transforms: StreamTransforms;
+    }
+  | {
+      mode: "vectorCustom";
+      buf: Uint16Array;
+      edge: number;
+      points: Float32Array;
+      populated: number;
+      blankMask: Uint8Array | null;
+      spotMask: Uint8Array | null;
+      grayColor: GrayColor;
+      transforms: StreamTransforms;
+    };
+
+// Raw data of captured scans, keyed by the image URL that App stores in the
+// pane slots. Bounded so old scans do not pile up; an evicted entry falls back
+// to showing the stored picture with a plain brightness slider.
+const ARCHIVED_PAINT_LIMIT = 12;
+const archivedPaints = new Map<string, PaintSnapshot>();
+
+function rememberArchivedPaint(imageUrl: string, snapshot: PaintSnapshot): void {
+  archivedPaints.delete(imageUrl);
+  archivedPaints.set(imageUrl, copyPaintSnapshot(snapshot));
+  while (archivedPaints.size > ARCHIVED_PAINT_LIMIT) {
+    const oldest = archivedPaints.keys().next().value;
+    if (oldest === undefined) break;
+    archivedPaints.delete(oldest);
+  }
+}
+
+// Per scan kind: a counter that advances each time a scan starts running, and
+// the image buffer that scan was writing into. A completed image is archived
+// only when it was painted from that buffer, so a buffer reset between scans
+// (e.g. after a resolution change) is never mistaken for a scan result.
+const scanSequenceMemory: Partial<Record<string, number>> = {};
+const runBufferMemory: Partial<Record<string, Uint16Array>> = {};
 
 type AnnotationTool = "highlight" | "comment" | "rectangle" | "circle";
 type LineStyle = "solid" | "dashed" | "dotted";
@@ -129,20 +183,29 @@ export function ImageCanvas({
   kind,
   onRenderedImageChange,
   onMergedFigureChange,
+  onPaneImageChange,
   vectorGrayScaleSelection = null,
   vectorGrayScaleSkipped = null,
+  imageLayout = 1,
+  imageSlots = [],
 }: {
   kind: ScanKind;
-  onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
+  /** `scanId` is the same for every image of one scan run and changes when a new scan starts. */
+  onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null, scanId: number) => void;
   onMergedFigureChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
+  onPaneImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, pane: number, imageUrl: string) => void;
   vectorGrayScaleSelection?: [number, number] | null;
   vectorGrayScaleSkipped?: boolean | null;
+  imageLayout?: 1 | 2 | 3 | 4;
+  imageSlots?: Array<string | null>;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const archivedPaneFramesRef = useRef<Map<number, HTMLDivElement>>(new Map());
+  const liveSnapshotRef = useRef<PaintSnapshot | null>(null);
   const annotationSeqRef = useRef(0);
   const [stats, setStats] = useState<PaintStats>({ min: 0, max: 0, populated: 0 });
   const [levelSetting, setLevelSettingState] = useState<LevelSetting>(
@@ -182,7 +245,21 @@ export function ImageCanvas({
   const [strokeColor, setStrokeColor] = useState("lawngreen");
   const [lineStyle, setLineStyle] = useState<LineStyle>("solid");
   const [lineWidth, setLineWidth] = useState(0.5);
-  const [annotations, setAnnotations] = useState<CanvasAnnotation[]>([]);
+  const [selectedPane, setSelectedPane] = useState(Math.max(0, imageLayout - 1));
+  const selectedPaneRef = useRef(selectedPane);
+  selectedPaneRef.current = selectedPane;
+  const imageLayoutRef = useRef(imageLayout);
+  imageLayoutRef.current = imageLayout;
+  const [annotationsByPane, setAnnotationsByPane] = useState<Record<number, CanvasAnnotation[]>>({});
+  const annotations = annotationsByPane[selectedPane] ?? [];
+  const setAnnotations = useCallback((next: CanvasAnnotation[] | ((current: CanvasAnnotation[]) => CanvasAnnotation[])) => {
+    const pane = selectedPaneRef.current;
+    setAnnotationsByPane((current) => {
+      const paneAnnotations = current[pane] ?? [];
+      const nextAnnotations = typeof next === "function" ? next(paneAnnotations) : next;
+      return { ...current, [pane]: nextAnnotations };
+    });
+  }, []);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [draftShape, setDraftShape] = useState<DraftShape | null>(null);
   const [commentDraft, setCommentDraft] = useState<CommentDraft | null>(null);
@@ -193,9 +270,19 @@ export function ImageCanvas({
   const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const targetPane = Math.max(0, imageLayout - 1);
+    setSelectedPane(targetPane);
+    selectedPaneRef.current = targetPane;
+    setSelectedAnnotationId(null);
+    setDraftShape(null);
+    setCommentDraft(null);
+    setContextMenu(null);
+  }, [imageLayout]);
   const lastRenderedImageEmitRef = useRef<{
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string | null;
+    revision: number;
   } | null>(null);
   const onRenderedImageChangeRef = useRef(onRenderedImageChange);
   const onMergedFigureChangeRef = useRef(onMergedFigureChange);
@@ -245,9 +332,13 @@ export function ImageCanvas({
   const visibleVectorCursor = kind === "vector" && vectorSource !== "vector" ? 0 : vectorCursor;
   const hasRenderedCanvasImage =
     hasPaintedCanvasImage || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
-  const editorEnabled = phase === "completed" && hasRenderedCanvasImage;
-  const toolbarVisible = phase === "completed";
-  const editorToolbarVisible = toolbarVisible && hasRenderedCanvasImage;
+  const selectedPaneHasImage = selectedPane < imageLayout - 1 && Boolean(imageSlots[selectedPane]);
+  const editorEnabled = selectedPaneHasImage || (phase === "completed" && hasRenderedCanvasImage);
+  const toolbarVisible = editorEnabled;
+  // A target pane added by the layout button stays empty until a scan fills it.
+  const targetParked =
+    imageLayout > 1 && phase !== "running" && phase !== "stopping" && !imageSlots[imageLayout - 1];
+  const editorToolbarVisible = toolbarVisible;
   const showCalibratedAxes = kind !== "roi";
   const showGrid =
     kind === "raster"
@@ -255,6 +346,13 @@ export function ImageCanvas({
       : kind === "vector"
         ? roi.vector_show_grid
         : roi.show_grid;
+  const [paneGridVisibility, setPaneGridVisibility] = useState<boolean[]>(() => Array(4).fill(showGrid));
+  useEffect(() => {
+    setPaneGridVisibility(Array(4).fill(showGrid));
+  }, [showGrid, kind]);
+  const setPaneGrid = (index: number, visible: boolean) => {
+    setPaneGridVisibility((current) => current.map((value, pane) => pane === index ? visible : value));
+  };
   const showScanPath =
     kind === "vector" && vectorPattern === "default" && roi.vector_show_scan_path;
 
@@ -291,56 +389,40 @@ export function ImageCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    let snapshot: PaintSnapshot;
     if (kind === "raster") {
-      const s = paintGrayscale(canvas, frame, resolution, cursor, levelSetting);
-      setStats(s);
+      snapshot = { mode: "grayscale", buf: frame, edge: resolution, populated: cursor, transforms: streamTransforms };
     } else if (kind === "vector" && vectorSource !== "vector") {
-      clearCanvas(canvas);
-      setStats({ min: 0, max: 0, populated: 0 });
-    } else if (kind === "vector" && vectorPattern === "default" && renderMode === "native" && vectorEdge < DAC_RANGE) {
-      const s = paintVectorDefaultBlockFill(
-        canvas,
-        vectorImage,
-        vectorEdge,
-        vectorCursor,
-        vectorScanPath,
-        vectorGraySpotSelection,
-        vectorGraySpotSkipped,
-        vectorGraySpotColor,
-        levelSetting,
-      );
-      setStats(s);
+      snapshot = { mode: "clear", transforms: streamTransforms };
     } else if (kind === "vector" && vectorPattern === "default") {
-      const s = paintVectorDefault(
-        canvas,
-        vectorImage,
-        vectorEdge,
-        vectorCursor,
-        vectorScanPath,
-        vectorGraySpotSelection,
-        vectorGraySpotSkipped,
-        vectorGraySpotColor,
-        levelSetting,
-      );
-      setStats(s);
+      snapshot = {
+        mode: renderMode === "native" && vectorEdge < DAC_RANGE ? "vectorBlock" : "vectorDefault",
+        buf: vectorImage,
+        edge: vectorEdge,
+        populated: vectorCursor,
+        scanPath: vectorScanPath,
+        graySelection: vectorGraySpotSelection,
+        graySkipped: vectorGraySpotSkipped,
+        grayColor: vectorGraySpotColor,
+        transforms: streamTransforms,
+      };
     } else if (kind === "vector" && vectorCustomRenderPoints) {
-      const s = paintVectorCustom(
-        canvas,
-        vectorImage,
-        vectorEdge,
-        vectorCustomRenderPoints,
-        vectorCursor,
-        vectorCustomBlankMask,
-        vectorCustomSpotMask,
-        vectorGraySpotColor,
-        levelSetting,
-      );
-      setStats(s);
+      snapshot = {
+        mode: "vectorCustom",
+        buf: vectorImage,
+        edge: vectorEdge,
+        points: vectorCustomRenderPoints,
+        populated: vectorCursor,
+        blankMask: vectorCustomBlankMask,
+        spotMask: vectorCustomSpotMask,
+        grayColor: vectorGraySpotColor,
+        transforms: streamTransforms,
+      };
     } else {
-      const s = paintGrayscale(canvas, vectorImage, vectorEdge, vectorCursor, levelSetting);
-      setStats(s);
+      snapshot = { mode: "grayscale", buf: vectorImage, edge: vectorEdge, populated: vectorCursor, transforms: streamTransforms };
     }
-    orientCanvas(canvas, streamTransforms);
+    liveSnapshotRef.current = snapshot;
+    setStats(paintSnapshot(canvas, snapshot, levelSetting));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     revision,
@@ -353,21 +435,41 @@ export function ImageCanvas({
     streamTransforms,
   ]);
 
+  // Count scan runs and remember which buffer the running scan writes into.
+  // Declared before the capture effect so both see the same run on completion.
+  const previousPhaseRef = useRef(phase);
+  useEffect(() => {
+    if (kind !== "raster" && kind !== "vector") return;
+    if (phase === "running" || phase === "stopping") {
+      const wasRunning = previousPhaseRef.current === "running" || previousPhaseRef.current === "stopping";
+      if (!wasRunning) scanSequenceMemory[kind] = (scanSequenceMemory[kind] ?? 0) + 1;
+      runBufferMemory[kind] = kind === "raster" ? frame : vectorImage;
+    }
+    previousPhaseRef.current = phase;
+  }, [kind, phase, revision, frame, vectorImage]);
+
   useEffect(() => {
     if (!onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
+    const scanId = scanSequenceMemory[kind] ?? 0;
 
     const emit = (imageUrl: string | null) => {
       const previous = lastRenderedImageEmitRef.current;
-      if (previous?.kind === kind && previous.imageUrl === imageUrl) return;
-      lastRenderedImageEmitRef.current = { kind, imageUrl };
-      onRenderedImageChangeRef.current?.(kind, imageUrl);
+      if (previous?.kind === kind && previous.imageUrl === imageUrl && previous.revision === revision) return;
+      lastRenderedImageEmitRef.current = { kind, imageUrl, revision };
+      onRenderedImageChangeRef.current?.(kind, imageUrl, scanId);
     };
 
+    // Use the image-buffer revision as well as its URL: two different scans
+    // can render identical pixels but must still be archived separately.
     if (!hasLiveCanvasData) {
       emit(null);
       return;
     }
     if (phase !== "completed") return;
+    // Only a buffer the last scan actually ran into is a scan result.
+    const liveBuffer = kind === "raster" ? frame : vectorImage;
+    const runBuffer = runBufferMemory[kind];
+    if (!runBuffer || runBuffer !== liveBuffer) return;
 
     const handle = window.requestAnimationFrame(() => {
       const canvas = canvasRef.current;
@@ -375,6 +477,8 @@ export function ImageCanvas({
       try {
         const image = canvas.toDataURL("image/png");
         markScanPerformanceCanvasReady(kind);
+        const snapshot = liveSnapshotRef.current;
+        if (snapshot) rememberArchivedPaint(image, snapshot);
         emit(image);
       } catch {
         emit(null);
@@ -397,16 +501,19 @@ export function ImageCanvas({
   const clearEditorState = useCallback(
     (notifyMerged = true) => {
       annotationSeqRef.current = 0;
-      setAnnotations([]);
+      const targetSelected = selectedPaneRef.current === imageLayoutRef.current - 1;
+      if (targetSelected) {
+        setAnnotations([]);
+        setMergedFigureUrl(null);
+      }
       setSelectedAnnotationId(null);
       setDraftShape(null);
       setCommentDraft(null);
       setContextMenu(null);
-      setMergedFigureUrl(null);
       setMergeConfirmOpen(false);
       setMergeBusy(false);
       setEditorError(null);
-      if (notifyMerged && (kind === "raster" || kind === "vector")) {
+      if (notifyMerged && selectedPaneRef.current === imageLayoutRef.current - 1 && (kind === "raster" || kind === "vector")) {
         onMergedFigureChangeRef.current?.(kind, null);
       }
     },
@@ -414,6 +521,7 @@ export function ImageCanvas({
   );
 
   const invalidateMergedFigure = useCallback(() => {
+    if (selectedPaneRef.current !== imageLayoutRef.current - 1) return;
     setMergedFigureUrl(null);
     if (kind === "raster" || kind === "vector") {
       onMergedFigureChangeRef.current?.(kind, null);
@@ -578,8 +686,24 @@ export function ImageCanvas({
     return `annotation-${annotationSeqRef.current}`;
   }
 
+  function getSelectedPaneFrame(): HTMLDivElement | null {
+    const pane = selectedPaneRef.current;
+    if (pane === imageLayoutRef.current - 1) return frameRef.current;
+    return archivedPaneFramesRef.current.get(pane) ?? null;
+  }
+
+  function selectPane(pane: number) {
+    if (pane === selectedPaneRef.current) return;
+    selectedPaneRef.current = pane;
+    setSelectedPane(pane);
+    setSelectedAnnotationId(null);
+    setDraftShape(null);
+    setCommentDraft(null);
+    setContextMenu(null);
+  }
+
   function toRelativePoint(clientX: number, clientY: number): { x: number; y: number } | null {
-    const frame = frameRef.current;
+    const frame = getSelectedPaneFrame();
     if (!frame) return null;
     const rect = frame.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
@@ -601,7 +725,7 @@ export function ImageCanvas({
     event.preventDefault();
     event.stopPropagation();
     setSelectedAnnotationId(annotationId);
-    const frame = frameRef.current;
+    const frame = getSelectedPaneFrame();
     if (!frame) return;
     const rect = frame.getBoundingClientRect();
     setContextMenu({
@@ -741,6 +865,8 @@ export function ImageCanvas({
 
   async function mergeAnnotationsIntoImage() {
     if (!annotations.length) return;
+    const mergePane = selectedPane;
+    const archivedImageUrl = mergePane < imageLayout - 1 ? imageSlots[mergePane] ?? null : null;
     setMergeBusy(true);
     try {
       const sourceCanvas = canvasRef.current;
@@ -748,8 +874,8 @@ export function ImageCanvas({
       const ctx = exportCanvas.getContext("2d");
       if (!ctx) throw new Error(t("canvas.editor.merge.error"));
 
-      if (displayedFigureUrl) {
-        const image = await loadImage(displayedFigureUrl);
+      if (archivedImageUrl || displayedFigureUrl) {
+        const image = await loadImage(archivedImageUrl ?? displayedFigureUrl!);
         exportCanvas.width = image.naturalWidth || image.width;
         exportCanvas.height = image.naturalHeight || image.height;
         ctx.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
@@ -763,12 +889,16 @@ export function ImageCanvas({
 
       drawCanvasAnnotations(ctx, annotations, exportCanvas.width, exportCanvas.height);
       const mergedUrl = exportCanvas.toDataURL("image/png");
-      setMergedFigureUrl(mergedUrl);
+      if (archivedImageUrl && (kind === "raster" || kind === "vector")) {
+        onPaneImageChange?.(kind, mergePane, mergedUrl);
+      } else {
+        setMergedFigureUrl(mergedUrl);
+      }
       setAnnotations([]);
       setCommentDraft(null);
       setContextMenu(null);
       setEditorError(null);
-      if (kind === "raster" || kind === "vector") {
+      if (!archivedImageUrl && (kind === "raster" || kind === "vector")) {
         onMergedFigureChangeRef.current?.(kind, mergedUrl);
         await uploadMergedFigure(kind, mergedUrl, mergedFigureFilename);
       }
@@ -878,6 +1008,65 @@ export function ImageCanvas({
           </span>
         </div>
       ) : null;
+
+  const archivedEditorLayer = selectedPaneHasImage && editorEnabled ? (
+    <div
+      className="canvas-editor-layer"
+      data-tool={activeTool}
+      onPointerDown={handleEditorPointerDown}
+      onPointerMove={handleEditorPointerMove}
+      onPointerUp={handleEditorPointerUp}
+      onClick={handleEditorSurfaceClick}
+    >
+      {annotations.map((annotation, index) => annotation.kind === "rectangle" || annotation.kind === "circle" ? (
+        <div
+          key={annotation.id}
+          role="button"
+          tabIndex={0}
+          className={`canvas-editor__shape canvas-editor__shape--${annotation.kind}`}
+          data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
+          style={shapeStyle(annotation)}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => { event.stopPropagation(); setSelectedAnnotationId(annotation.id); }}
+          onContextMenu={(event) => openContextMenu(event, annotation.id)}
+        />
+      ) : (
+        <button
+          key={annotation.id}
+          type="button"
+          className={`canvas-editor__annotation canvas-editor__annotation--${annotation.kind}`}
+          data-selected={selectedAnnotationId === annotation.id ? "true" : "false"}
+          style={{ left: `${annotation.x * 100}%`, top: `${annotation.y * 100}%` }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => { event.stopPropagation(); setSelectedAnnotationId(annotation.id); }}
+          onContextMenu={(event) => openContextMenu(event, annotation.id)}
+          title={annotation.kind === "comment" ? annotation.text : t("canvas.editor.tool.highlight")}
+        >
+          <span className="canvas-editor__annotation-index" style={{ borderColor: annotation.strokeColor, background: alphaColor(annotation.strokeColor, annotation.kind === "comment" ? 0.92 : 0.24) }}>
+            {index + 1}
+          </span>
+          {annotation.kind === "comment" && annotation.text && <span className="canvas-editor__label">{annotation.text}</span>}
+        </button>
+      ))}
+      {draftShape && <div className={`canvas-editor__shape canvas-editor__shape--${draftShape.kind} canvas-editor__shape--draft`} style={shapeStyle(draftShape)} />}
+      {commentDraft && (
+        <form className="canvas-editor__draft" style={{ left: `${commentDraft.x * 100}%`, top: `${commentDraft.y * 100}%` }} onClick={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); saveCommentDraft(); }}>
+          <input autoFocus className="input" value={commentDraft.text} placeholder={t("canvas.editor.comment.placeholder")} onChange={(event) => setCommentDraft((current) => current ? { ...current, text: event.target.value } : current)} />
+          <div className="button-row">
+            <button type="submit" className="btn btn--ghost">{t("canvas.editor.comment.save")}</button>
+            <button type="button" className="btn btn--ghost" onClick={() => setCommentDraft(null)}>{t("canvas.editor.comment.cancel")}</button>
+          </div>
+        </form>
+      )}
+      {contextMenu && (
+        <div className="canvas-editor__menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+          <button type="button" className="canvas-editor__menu-item" disabled={!annotations.length} onClick={undoLastAnnotation}>{t("canvas.editor.context.undo")}</button>
+          <button type="button" className="canvas-editor__menu-item" disabled={!contextTargetId} onClick={() => removeAnnotation(contextTargetId)}>{t("canvas.editor.context.remove")}</button>
+          <button type="button" className="canvas-editor__menu-item" disabled={!annotations.length} onClick={() => { setAnnotations([]); setSelectedAnnotationId(null); setDraftShape(null); setCommentDraft(null); setContextMenu(null); }}>{t("canvas.editor.context.clear")}</button>
+        </div>
+      )}
+    </div>
+  ) : null;
 
   return (
     <div>
@@ -994,12 +1183,65 @@ export function ImageCanvas({
         </div>
       )}
 
-      <div className="canvas-stage">
+      <div id="image-panel-grid" className={`image-panel-grid image-panel-grid--${imageLayout}`}>
+      {Array.from({ length: imageLayout - 1 }, (_, index) => {
+        const imageUrl = imageSlots[index] ?? null;
+        return (
+          <div
+            className="image-panel-grid__tile"
+            data-selected={selectedPane === index ? "true" : "false"}
+            key={`history-${index}`}
+            onClick={() => selectPane(index)}
+          >
+            <div className="image-panel-grid__label">
+              <span>{t("canvas.layout.previous", { number: index + 1 })}</span>
+              {showCalibratedAxes && <label className="checkbox vacuum-switch app-switch image-panel-grid__grid-toggle">
+                <input type="checkbox" checked={paneGridVisibility[index]} onChange={(event) => setPaneGrid(index, event.target.checked)} />
+                <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+                {t("roi.showGrid")}
+              </label>}
+            </div>
+            {imageUrl ? (
+              <ArchivedScanDisplay
+                key={imageUrl}
+                kind={kind}
+                imageUrl={imageUrl}
+                alt={t("canvas.layout.previous", { number: index + 1 })}
+                roi={roi}
+                showGrid={paneGridVisibility[index]}
+                showAxes={showCalibratedAxes}
+                t={t}
+                onFrameRef={(node) => {
+                  if (node) archivedPaneFramesRef.current.set(index, node);
+                  else archivedPaneFramesRef.current.delete(index);
+                }}
+                editorLayer={selectedPane === index ? archivedEditorLayer : null}
+              />
+            ) : (
+              <div className="image-panel-grid__visual image-panel-grid__empty">{t("canvas.layout.empty", { number: index + 1 })}</div>
+            )}
+          </div>
+        );
+      })}
+      <div
+        className={`image-panel-grid__target${imageLayout === 1 ? " image-panel-grid__target--single" : " image-panel-grid__target--active"}`}
+        data-selected={selectedPane === imageLayout - 1 ? "true" : "false"}
+        onClick={() => selectPane(imageLayout - 1)}
+      >
+        {imageLayout > 1 && <div className="image-panel-grid__label">
+          <span />
+          {showCalibratedAxes && <label className="checkbox vacuum-switch app-switch image-panel-grid__grid-toggle">
+            <input type="checkbox" checked={paneGridVisibility[imageLayout - 1]} onChange={(event) => setPaneGrid(imageLayout - 1, event.target.checked)} />
+            <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+            {t("roi.showGrid")}
+          </label>}
+        </div>}
+          <div className={`canvas-stage${targetParked ? " canvas-stage--parked" : ""}`}>
       <div
         ref={frameRef}
         className="canvas-frame"
         onContextMenu={(event) => {
-          if (editorEnabled) openContextMenu(event, null);
+          if (editorEnabled && selectedPane === imageLayout - 1) openContextMenu(event, null);
         }}
       >
           <canvas
@@ -1011,7 +1253,7 @@ export function ImageCanvas({
               display: displayedFigureUrl ? "none" : undefined,
             }}
           />
-          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
+          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[imageLayout - 1]} t={t} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
@@ -1030,7 +1272,7 @@ export function ImageCanvas({
               aria-label={t("vector.displayScanPath")}
             />
           )}
-          {editorEnabled && (
+          {editorEnabled && selectedPane === imageLayout - 1 && (
             <div
               className="canvas-editor-layer"
               data-tool={activeTool}
@@ -1220,14 +1462,34 @@ export function ImageCanvas({
             </div>
           )}
       </div>
-      <LevelWedge
-        histogram={stats.histogram ?? null}
-        levels={{ low: stats.low ?? 0, high: stats.high ?? 0xfffc }}
-        auto={levelSetting.mode === "auto"}
-        onChange={handleWedgeChange}
-        onAuto={handleWedgeAuto}
-        disabled={!stats.histogram || stats.histogram.total <= 0 || Boolean(displayedFigureUrl)}
-      />
+      {targetParked ? (
+        // Nothing to level yet: an empty target pane shows the same plain
+        // brightness control as the empty "Previous scan" panes.
+        <label className="image-panel-grid__brightness">
+          <span>{t("canvas.brightness")}</span>
+          <input
+            type="range"
+            min={25}
+            max={200}
+            value={100}
+            disabled
+            aria-label={t("canvas.brightness")}
+            onChange={() => undefined}
+          />
+          <output>100%</output>
+        </label>
+      ) : (
+        <LevelWedge
+          histogram={stats.histogram ?? null}
+          levels={{ low: stats.low ?? 0, high: stats.high ?? 0xfffc }}
+          auto={levelSetting.mode === "auto"}
+          onChange={handleWedgeChange}
+          onAuto={handleWedgeAuto}
+          disabled={!stats.histogram || stats.histogram.total <= 0 || Boolean(displayedFigureUrl)}
+        />
+      )}
+          </div>
+      </div>
       </div>
 
       {showServerFigure && !serverFigureUrl && !mergedFigureUrl && (
@@ -1558,8 +1820,8 @@ function LiveAxisOverlay({
             return (
             <div
               key={`grid-y-${tick.key}`}
-              className={`canvas-axis-overlay__grid canvas-axis-overlay__grid--${yAxisVertical ? "x" : "y"}`}
-              style={yAxisVertical ? { left: pct(point.x) } : { top: pct(point.y) }}
+              className={`canvas-axis-overlay__grid canvas-axis-overlay__grid--${yAxisVertical ? "y" : "x"}`}
+              style={yAxisVertical ? { top: pct(point.y) } : { left: pct(point.x) }}
             />
           );})}
         </>
@@ -1626,6 +1888,104 @@ function LiveAxisOverlay({
         })}
       </span>;
       })}
+    </div>
+  );
+}
+
+function ArchivedScanDisplay({
+  kind,
+  imageUrl,
+  alt,
+  roi,
+  showGrid,
+  showAxes,
+  t,
+  target = false,
+  onFrameRef,
+  editorLayer,
+}: {
+  kind: ScanKind;
+  imageUrl: string;
+  alt: string;
+  roi: ROIState;
+  showGrid: boolean;
+  showAxes: boolean;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  target?: boolean;
+  onFrameRef: (node: HTMLDivElement | null) => void;
+  editorLayer: ReactNode;
+}) {
+  const snapshot = archivedPaints.get(imageUrl) ?? null;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Start from the levels the live image was shown with, then keep this
+  // pane's own levels: adjusting it never touches the live wedge.
+  const [levelSetting, setLevelSetting] = useState<LevelSetting>(() => levelMemory[kind] ?? AUTO_LEVELS);
+  const [stats, setStats] = useState<PaintStats>({ min: 0, max: 0, populated: 0 });
+  const [brightness, setBrightness] = useState(120);
+  const pendingLevelRef = useRef<LevelSetting | null>(null);
+  const levelFrameRef = useRef<number | null>(null);
+  const applyLevelSetting = useCallback((next: LevelSetting) => {
+    pendingLevelRef.current = next;
+    if (levelFrameRef.current !== null) return;
+    levelFrameRef.current = window.requestAnimationFrame(() => {
+      levelFrameRef.current = null;
+      if (pendingLevelRef.current) setLevelSetting(pendingLevelRef.current);
+      pendingLevelRef.current = null;
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      if (levelFrameRef.current !== null) window.cancelAnimationFrame(levelFrameRef.current);
+    },
+    [],
+  );
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !snapshot) return;
+    setStats(paintSnapshot(canvas, snapshot, levelSetting));
+  }, [snapshot, levelSetting]);
+
+  if (snapshot) {
+    return (
+      <div className="canvas-stage image-panel-grid__archived-stage">
+        <div className="canvas-frame" ref={onFrameRef}>
+          <canvas ref={canvasRef} aria-label={alt} onDragStart={(event) => event.preventDefault()} />
+          {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
+          {editorLayer}
+        </div>
+        <LevelWedge
+          histogram={stats.histogram ?? null}
+          levels={{ low: stats.low ?? 0, high: stats.high ?? 0xfffc }}
+          auto={levelSetting.mode === "auto"}
+          onChange={(levels) => applyLevelSetting({ mode: "manual", low: levels.low, high: levels.high })}
+          onAuto={() => applyLevelSetting(AUTO_LEVELS)}
+          disabled={!stats.histogram || stats.histogram.total <= 0}
+        />
+      </div>
+    );
+  }
+
+  // Raw data no longer cached (captured before this version, or evicted):
+  // show the stored picture with a plain brightness control.
+  return (
+    <div className={`image-panel-grid__content${target ? " image-panel-grid__content--target" : ""}`}>
+      <div className={`image-panel-grid__visual${target ? " image-panel-grid__target-visual" : ""}`} ref={onFrameRef}>
+        <img className="image-panel-grid__image image-panel-grid__archived-image" src={imageUrl} alt={alt} style={{ filter: `brightness(${brightness}%)` }} />
+        {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
+        {editorLayer}
+      </div>
+      <label className="image-panel-grid__brightness">
+        <span>{t("canvas.brightness")}</span>
+        <input
+          type="range"
+          min={25}
+          max={200}
+          value={brightness}
+          aria-label={t("canvas.brightness")}
+          onChange={(event) => setBrightness(Number(event.target.value))}
+        />
+        <output>{brightness}%</output>
+      </label>
     </div>
   );
 }
@@ -1814,6 +2174,80 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /* -------- painters ----------------------------------------------------- */
+
+function paintSnapshot(canvas: HTMLCanvasElement, snapshot: PaintSnapshot, setting: LevelSetting): PaintStats {
+  let stats: PaintStats;
+  switch (snapshot.mode) {
+    case "clear":
+      clearCanvas(canvas);
+      stats = { min: 0, max: 0, populated: 0 };
+      break;
+    case "grayscale":
+      stats = paintGrayscale(canvas, snapshot.buf, snapshot.edge, snapshot.populated, setting);
+      break;
+    case "vectorBlock":
+      stats = paintVectorDefaultBlockFill(
+        canvas,
+        snapshot.buf,
+        snapshot.edge,
+        snapshot.populated,
+        snapshot.scanPath,
+        snapshot.graySelection,
+        snapshot.graySkipped,
+        snapshot.grayColor,
+        setting,
+      );
+      break;
+    case "vectorDefault":
+      stats = paintVectorDefault(
+        canvas,
+        snapshot.buf,
+        snapshot.edge,
+        snapshot.populated,
+        snapshot.scanPath,
+        snapshot.graySelection,
+        snapshot.graySkipped,
+        snapshot.grayColor,
+        setting,
+      );
+      break;
+    case "vectorCustom":
+      stats = paintVectorCustom(
+        canvas,
+        snapshot.buf,
+        snapshot.edge,
+        snapshot.points,
+        snapshot.populated,
+        snapshot.blankMask,
+        snapshot.spotMask,
+        snapshot.grayColor,
+        setting,
+      );
+      break;
+  }
+  orientCanvas(canvas, snapshot.transforms);
+  return stats;
+}
+
+// The store reuses its buffers for the next scan, so an archive needs its own copy.
+function copyPaintSnapshot(snapshot: PaintSnapshot): PaintSnapshot {
+  switch (snapshot.mode) {
+    case "clear":
+      return { ...snapshot };
+    case "grayscale":
+    case "vectorDefault":
+    case "vectorBlock":
+      return { ...snapshot, buf: snapshot.buf.slice() };
+    case "vectorCustom":
+      return {
+        ...snapshot,
+        buf: snapshot.buf.slice(),
+        points: snapshot.points.slice(),
+        blankMask: snapshot.blankMask ? snapshot.blankMask.slice() : null,
+        spotMask: snapshot.spotMask ? snapshot.spotMask.slice() : null,
+      };
+  }
+}
 
 function paintGrayscale(
   canvas: HTMLCanvasElement,

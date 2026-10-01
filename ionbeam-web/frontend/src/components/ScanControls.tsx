@@ -34,8 +34,7 @@ import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
 import { LoadingSpinner } from "./LoadingSpinner";
-import { ROIGrayActionVectorWedges } from "./ROIGrayActionVectorWedges";
-import { ROIRasterActionWedges } from "./ROIRasterActionWedges";
+import { ROIActionWedges } from "./ROIActionWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
@@ -752,19 +751,13 @@ export function ScanControls({
             </select>
           </label>
         </div>
-        {showRoiGrayControls && (
-          <div className="scan-loop-controls__roi-wedges">
-            <ROIGrayActionVectorWedges
-              active={showRoiGrayControls}
-              disabled={controlsDisabled || roiEbeamDisabled}
-            />
-          </div>
-        )}
-        {!showRoiGrayControls && (
-          <div className="scan-loop-controls__roi-wedges">
-            <ROIRasterActionWedges disabled={controlsDisabled || roiEbeamDisabled} />
-          </div>
-        )}
+        <div className="scan-loop-controls__roi-wedges">
+          <ROIActionWedges
+            mode={showRoiGrayControls ? "vector" : "raster"}
+            active={showRoiGrayControls}
+            disabled={controlsDisabled || roiEbeamDisabled}
+          />
+        </div>
         <div className="scan-loop-controls">
           <div className="scan-loop-controls__preview">
             <label
