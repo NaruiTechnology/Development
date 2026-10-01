@@ -46,7 +46,6 @@ import { NumberStepperInput } from "./components/NumberStepperField";
 import { VectorGrayLevelHelp } from "./components/VectorGrayLevelHelp";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
-import { HelpPopover } from "./components/HelpPopover";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
 import { VacuumDashboard } from "./components/VacuumDashboard";
@@ -1580,7 +1579,7 @@ export function App() {
                 {activeTopTab === "scan" && showSplitButton && (
                   <button
                     type="button"
-                    className="card__collapse-btn image-panel-card__layout-button"
+                    className="btn btn--primary image-panel-card__layout-button"
                     aria-label={t("canvas.layout.cycle", { count: imagePanelLayout })}
                     aria-pressed={imagePanelLayout > 1}
                     aria-controls="image-panel-grid"
@@ -1588,23 +1587,9 @@ export function App() {
                     title={t("canvas.layout.cycle", { count: imagePanelLayout })}
                     onClick={splitImagePanel}
                   >
-                    <span className="image-panel-card__layout-icon" aria-hidden="true">
-                      <img src="/4-Quadrant.png" alt="" />
-                      <svg viewBox="0 0 64 64" focusable="false">
-                        <path d="M42 11 18 37h27M41 12v42" />
-                      </svg>
-                    </span>
+                    <Icon name="quad" tone="accent" />
+                    <span>{t("canvas.layout.splitScreen")}</span>
                   </button>
-                )}
-                {activeTopTab === "scan" && (kind === "raster" || kind === "vector") && (
-                  <span className="image-panel-card__layout-help">
-                    <HelpPopover
-                      title={t("canvas.layout.help.title")}
-                      ariaLabel={t("canvas.layout.help.aria")}
-                    >
-                      <p>{t("canvas.layout.help.body")}</p>
-                    </HelpPopover>
-                  </span>
                 )}
             </div>
             <div className="card__body">

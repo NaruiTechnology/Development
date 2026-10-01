@@ -122,6 +122,7 @@ export const zhCN: Partial<TranslationTable> = {
   "card.runReport": "运行报告",
   "card.rasterImage": "光栅图像",
   "canvas.layout.cycle": "切换图像布局（当前 {count} 个面板）",
+  "canvas.layout.splitScreen": "分屏",
   "canvas.layout.help.title": "多扫描窗口",
   "canvas.layout.help.aria": "多扫描窗口帮助",
   "canvas.layout.help.body": "点击按钮可在一个、两个和四个窗口之间循环切换。高亮窗口是当前扫描目标。扫描完成后，图像会保留在该窗口；空间允许时，先前的扫描图像会保留在其他窗口。",

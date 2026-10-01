@@ -141,6 +141,7 @@ export const en = {
   "card.runReport": "Run report",
   "card.rasterImage": "Raster image",
   "canvas.layout.cycle": "Change image layout (currently {count} panels)",
+  "canvas.layout.splitScreen": "Split screen",
   "canvas.layout.help.title": "Multi-scan windows",
   "canvas.layout.help.aria": "Help for multi-scan windows",
   "canvas.layout.help.body": "Cycle the image panel through one, two, and four windows. The highlighted window is the current scan target. When a scan finishes, its image stays in that window and earlier scans remain in the other windows when space allows.",

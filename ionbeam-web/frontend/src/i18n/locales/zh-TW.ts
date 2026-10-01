@@ -131,6 +131,7 @@ export const zhTW: Partial<TranslationTable> = {
   "card.runReport": "執行報告",
   "card.rasterImage": "光柵影像",
   "canvas.layout.cycle": "切換影像版面（目前 {count} 個面板）",
+  "canvas.layout.splitScreen": "分割畫面",
   "canvas.layout.help.title": "多重掃描視窗",
   "canvas.layout.help.aria": "多重掃描視窗說明",
   "canvas.layout.help.body": "按下按鈕可在一個、兩個與四個視窗之間循環切換。反白視窗是目前的掃描目標。掃描完成後，影像會保留在該視窗；空間允許時，先前的掃描影像會保留在其他視窗。",
