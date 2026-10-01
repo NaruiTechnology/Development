@@ -136,7 +136,7 @@ export function useScanStream() {
         preserveFrame: options?.preserveFrame,
       }));
       dispatch(streamStarted());
-      beginScanPerformance("raster", req as unknown as Record<string, unknown>, scanTransport());
+      beginScanPerformance("raster", req as unknown as Record<string, unknown>, "websocket");
       const ws = openWs("/ws/scan/raster/stream");
       wsRef.current = ws;
       closureKindRef.current = null;
@@ -221,7 +221,7 @@ export function useScanStream() {
         })
       );
       dispatch(streamStarted());
-      beginScanPerformance("vector", req as unknown as Record<string, unknown>, scanTransport());
+      beginScanPerformance("vector", req as unknown as Record<string, unknown>, "websocket");
       const ws = openWs("/ws/scan/vector/stream");
       wsRef.current = ws;
       closureKindRef.current = null;
@@ -349,10 +349,6 @@ export function useScanStream() {
 
 function openWs(path: string): WebSocket {
   return new WebSocket(wsUrl(withScanAuthQuery(path)));
-}
-
-function scanTransport(): "websocket" | "desktop_native" {
-  return "ionbeamScanner" in window ? "desktop_native" : "websocket";
 }
 
 function stopExisting(ref: React.MutableRefObject<WebSocket | null>): void {

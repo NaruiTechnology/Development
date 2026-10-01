@@ -27,7 +27,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
-import { clearLastResult, clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
+import { clearLastResult, clearROIImage, clearROISelection, setStreamTransforms, streamReset } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
 import { fetchDefaultsMetadata, previewConfigDefaults } from "../store/statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
@@ -89,11 +89,33 @@ export function SettingsDialog({
 }) {
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.settings.dialogOpen);
+  const { source, draft } = useAppSelector((s) => s.settings);
+  const activeTransforms = useAppSelector((s) => s.scan.streamTransforms);
 
   useEffect(() => {
     if (!open) return;
     dispatch(fetchSettingsConfig());
   }, [dispatch, open]);
+
+  // Preview transform edits on the image and Descartes axes immediately.
+  // When the dialog closes without saving, restore the persisted values.
+  useEffect(() => {
+    const config = open ? (draft ?? source) : source;
+    if (config == null) return;
+    const transforms = readPath(config, [...ACTION_DATA_PATH, "transforms"]);
+    const nextTransforms = {
+      xflip: readPath(transforms, ["xflip"]) === true,
+      yflip: readPath(transforms, ["yflip"]) === true,
+      rotate90: readPath(transforms, ["rotate90"]) === true,
+    };
+    if (
+      activeTransforms.xflip !== nextTransforms.xflip ||
+      activeTransforms.yflip !== nextTransforms.yflip ||
+      activeTransforms.rotate90 !== nextTransforms.rotate90
+    ) {
+      dispatch(setStreamTransforms(nextTransforms));
+    }
+  }, [dispatch, open, draft, source, activeTransforms]);
 
   // Scroll lock while the settings modal is open. The dialog closes
   // only from the explicit header close button so restart results stay
@@ -190,6 +212,7 @@ function SettingsModalShell({
     backupNotice,
   } = useAppSelector((s) => s.settings);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
+
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const titleIdRef = useRef(
     `settings-modal-title-${Math.random().toString(36).slice(2, 9)}`,
@@ -266,6 +289,12 @@ function SettingsModalShell({
     const imageChanged = simulationImageChanged(source, draft);
     const result = await dispatch(saveSettingsConfig(draft));
     if (saveSettingsConfig.fulfilled.match(result)) {
+      const transforms = readPath(draft, [...ACTION_DATA_PATH, "transforms"]);
+      dispatch(setStreamTransforms({
+        xflip: readPath(transforms, ["xflip"]) === true,
+        yflip: readPath(transforms, ["yflip"]) === true,
+        rotate90: readPath(transforms, ["rotate90"]) === true,
+      }));
       if (imageChanged) {
         resetROIPreview(dispatch);
       } else {
@@ -566,12 +595,16 @@ function SettingsTabBody({
 function GeneralTab({ draft }: { draft: unknown }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
+  const transformsPath = [...ACTION_DATA_PATH, "transforms"] as const;
 
   // Top-level scalars.
   const version = stringField(draft, ["Version"], "");
   const logName = stringField(draft, ["LogName"], "");
   const verbose = boolField(draft, ["Verbose"], false);
   const isProduction = boolField(draft, ["IsProduction"], false);
+  const xflip = boolField(draft, [...transformsPath, "xflip"], false);
+  const yflip = boolField(draft, [...transformsPath, "yflip"], false);
+  const rotate90 = boolField(draft, [...transformsPath, "rotate90"], false);
   const dumpData = boolField(draft, ["DumpData"], false);
 
   // Glasgow / Device0 id.
@@ -605,6 +638,22 @@ function GeneralTab({ draft }: { draft: unknown }) {
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
+  }
+
+  function setTransform(name: "xflip" | "yflip" | "rotate90", value: boolean) {
+    const current = readPath(draft, transformsPath);
+    const transforms = {
+      ...(current && typeof current === "object" ? current as Record<string, unknown> : {}),
+      [name]: value,
+    };
+    let next = writePath(draft, transformsPath, transforms);
+
+    // Keep the legacy root-level copy in sync when this config has one.
+    const legacyTransforms = readPath(draft, ["transforms"]);
+    if (legacyTransforms && typeof legacyTransforms === "object") {
+      next = writePath(next, ["transforms"], transforms);
+    }
+    dispatch(setDraft(next));
   }
 
   function setHardwareTiming(
@@ -666,14 +715,29 @@ function GeneralTab({ draft }: { draft: unknown }) {
 
       <div className="settings-flags">
         <CheckboxField
+          label={t("settings.general.isProduction")}
+          value={isProduction}
+          onChange={(v) => set(["IsProduction"], v)}
+        />
+        <CheckboxField
           label={t("settings.general.verbose")}
           value={verbose}
           onChange={(v) => set(["Verbose"], v)}
         />
         <CheckboxField
-          label={t("settings.general.isProduction")}
-          value={isProduction}
-          onChange={(v) => set(["IsProduction"], v)}
+          label={t("settings.general.xflip")}
+          value={xflip}
+          onChange={(v) => setTransform("xflip", v)}
+        />
+        <CheckboxField
+          label={t("settings.general.yflip")}
+          value={yflip}
+          onChange={(v) => setTransform("yflip", v)}
+        />
+        <CheckboxField
+          label={t("settings.general.rotate90")}
+          value={rotate90}
+          onChange={(v) => setTransform("rotate90", v)}
         />
         <CheckboxField
           label={t("settings.general.dumpData")}

@@ -7,7 +7,6 @@ import fnmatch
 import argparse
 import importlib.util
 import json
-import subprocess
 from datetime import datetime
 
 try:
@@ -34,7 +33,6 @@ EXCLUDE_PATTERNS = ['*.log']
 # listed in COPY_TREES are excluded here because they're handled wholesale
 # by copy_source_trees().
 SKIP_DIRS = {
-    'ionbeam-desktop',  # independent desktop artifact; do not duplicate its runtime snapshot
     '__pycache__',
     '.venv',
     '.git',
@@ -78,6 +76,16 @@ TREE_COPY_IGNORE = (
     '*.log',
 )
 
+# Non-Python data inside Python packages. The per-file pass above only packages
+# .py sources (as .pyc) plus ASSET_PATTERNS, so package data (icons, images,
+# translation tables) is copied here, without any .py source.
+PACKAGE_DATA_TREES = [
+    os.path.join('Development', 'ionbeam-native', 'ionbeam_native', 'resources'),
+    os.path.join('Development', 'ionbeam-native', 'ionbeam_native', 'i18n'),
+    os.path.join('Development', 'ionbeam-native', 'docs'),
+]
+PACKAGE_DATA_IGNORE = ('*.py', '*.pyc', '__pycache__', '*.log')
+
 STREAM_DATA_JSON = os.path.join(
     'Development', 'GlasgowDataIO', 'Json', 'streamData.json')
 
@@ -105,7 +113,14 @@ REQUIRED_DIST_MODULES = (
     'Development/GlasgowDataIO/IobeamControl/macros/vector',
     'Development/GlasgowDataIO/IobeamControl/transfer/linkStats',
     'Development/glasgow_service/glasgow_service/service',
-    'Development/glasgow_service/glasgow_service/desktop_native',
+    'Development/glasgow_service/glasgow_service/device_lock',
+    # Native desktop client (ionbeam-native): entry point, persistent Glasgow
+    # session and main window. Installed by the installIonbeamNative action.
+    'Development/ionbeam-native/ionbeam_native/__main__',
+    'Development/ionbeam-native/ionbeam_native/engine/engine',
+    'Development/ionbeam-native/ionbeam_native/engine/persistent',
+    'Development/ionbeam-native/ionbeam_native/ui/main_window',
+    'Development/ionbeam-native/scripts/smoke',
 )
 REQUIRED_DIST_FILES = (
     'Development/GlasgowDataIO/Json/streamData.json',
@@ -114,6 +129,10 @@ REQUIRED_DIST_FILES = (
     'Development/ionbeam-web/backend/package.json',
     'Development/glasgow_service/requirements.txt',
     'Development/requirements.txt',
+    'Development/ionbeam-native/requirements.txt',
+    'Development/ionbeam-native/scripts/install_linux.sh',
+    'Development/ionbeam-native/ionbeam_native/i18n/data/en.json',
+    'Development/ionbeam-native/ionbeam_native/resources/images/brand-logo.png',
 )
 
 
@@ -403,6 +422,19 @@ def _tree_copy_ignore_for(rel_tree):
     return shutil.ignore_patterns(*base_ignore)
 
 
+def copy_package_data(src_dir, dist_dir, trees):
+    """Copy package data trees (no Python sources) into dist_dir."""
+    for rel_tree in trees:
+        src_tree = os.path.join(src_dir, rel_tree)
+        if not os.path.isdir(src_tree):
+            print(f"Package data tree [{rel_tree}] not found (skipping).")
+            continue
+        shutil.copytree(src_tree, os.path.join(dist_dir, rel_tree),
+                        ignore=shutil.ignore_patterns(*PACKAGE_DATA_IGNORE),
+                        dirs_exist_ok=True)
+        print(f"Copied package data: {rel_tree}")
+
+
 def copy_preserved_files(src_dir, dist_dir, file_pairs):
     """Copy specific files that are intentionally excluded from tree ignores."""
     for rel_src, rel_dst in file_pairs:
@@ -567,8 +599,9 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False, package_roots=None
             shutil.copytree(sql_src, sql_dist, dirs_exist_ok=True)
             print(f"Copied SQL folder: {sx}")
 
-    # 5. Copy assets (includes README.md)
+    # 5. Copy assets (includes README.md) and package data
     copy_matching_assets(src_dir, dist_dir, ASSET_PATTERNS, package_roots)
+    copy_package_data(src_dir, dist_dir, PACKAGE_DATA_TREES)
 
     # The script must retain Development/Scripts depth so its ../.. root
     # discovery resolves to DeployRoot.
@@ -734,23 +767,9 @@ def main(argv=None, script_path=None):
                         help="Deliver raw python code (skip byte-compilation)", default=False)
     parser.add_argument('--verify', metavar='ZIP', dest='verify',
                         help="Verify an existing distribution archive and exit")
-    parser.add_argument('--desktop', action='store_true', help='Also build and include the Linux desktop scanner package')
-    parser.add_argument('--desktop-only', action='store_true', help='Build only the desktop scanner package')
-    parser.add_argument('--desktop-install-deps', action='store_true', help='Install locked desktop build dependencies')
     args = parser.parse_args(argv)
     script_path = script_path or __file__
     workspace = resolve_workspace(script_path)
-
-    if args.desktop or args.desktop_only:
-        command = [sys.executable, os.path.join(workspace, 'Development', 'Scripts', 'build-desktop.py')]
-        if args.desktop_install_deps:
-            command.append('--install-deps')
-        try:
-            subprocess.run(command, check=True)
-        except subprocess.CalledProcessError as exc:
-            return exc.returncode
-        if args.desktop_only:
-            return 0
 
     if args.verify:
         try:
@@ -778,11 +797,6 @@ def main(argv=None, script_path=None):
         deploy_dir = os.path.join('.', 'Development', 'DeployWorkSpace',
                                   'Development', 'DistributionDeploy')
         workspace_dir = os.path.join('.', 'Development', 'DeployWorkSpace')
-        if args.desktop:
-            release = os.path.join(workspace, 'Development', 'ionbeam-desktop', 'release')
-            os.makedirs(deploy_dir, exist_ok=True)
-            for filename in ('ionbeam-desktop_1.0.0_amd64.deb', 'ionbeam-desktop_1.0.0_amd64.deb.sha256'):
-                shutil.copy2(os.path.join(release, filename), os.path.join(deploy_dir, filename))
         version_label = version_label_from_stream_data('.')
         workspace_archive_base = f"DeployWorkspace_{version_label}_{timestamp_label()}"
         final_archive = post_build_deploy(

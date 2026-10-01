@@ -28,6 +28,11 @@ export type ScanPhase =
   | "error";
 
 export type VectorRenderMode = "native" | "decimated";
+export interface StreamTransforms {
+  xflip: boolean;
+  yflip: boolean;
+  rotate90: boolean;
+}
 const ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY = "ionbeam.roiGrayScaleStepDelta";
 
 interface ScanState {
@@ -64,6 +69,8 @@ interface ScanState {
    *  persisted to localStorage — because the right choice depends on the
    *  current scan, not a long-term preference. */
   vectorRenderMode: VectorRenderMode;
+  /** Orientation applied to live and exported scan images. */
+  streamTransforms: StreamTransforms;
 }
 
 export interface ROIState {
@@ -185,6 +192,7 @@ const initialState: ScanState = {
   roiGrayScaleSkipped: null,
   roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
   vectorRenderMode: "decimated",
+  streamTransforms: { xflip: false, yflip: false, rotate90: false },
 };
 
 function numberDefault(value: unknown, fallback: number): number {
@@ -481,6 +489,13 @@ const slice = createSlice({
     updateBeamEnergyEv(s, a: PayloadAction<number>) {
       s.beamEnergyEv = floatDefault(a.payload, s.beamEnergyEv);
     },
+    setStreamTransforms(s, a: PayloadAction<StreamTransforms>) {
+      s.streamTransforms = {
+        xflip: a.payload.xflip === true,
+        yflip: a.payload.yflip === true,
+        rotate90: a.payload.rotate90 === true,
+      };
+    },
     updateROI(s, a: PayloadAction<Partial<ROIState>>) {
       s.roi = { ...s.roi, ...normalizeROIPatch(a.payload, s.roi) };
       if (calibrationPatchTouchesConfirmedMapping(a.payload)) {
@@ -751,6 +766,7 @@ export const {
   updateVector,
   setPreview,
   updateBeamEnergyEv,
+  setStreamTransforms,
   updateROI,
   beginROICalibration,
   beginDimensionCalibration,

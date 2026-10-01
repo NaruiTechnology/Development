@@ -53,12 +53,12 @@ class BaseCommand(metaclass=ABCMeta):
 
         if output_mode == OutputMode.SixteenBit:
             want_bytes = pixel_count * 2
-            print(f"[recv_res] requesting {want_bytes} bytes (SixteenBit, pixel_count={pixel_count})", flush=True)
+            self._logger.debug(f"[recv_res] requesting {want_bytes} bytes (SixteenBit, pixel_count={pixel_count})")
             try:
                 raw = await stream.read(want_bytes)
-                print(f"[recv_res] got {len(raw)} bytes", flush=True)
+                self._logger.debug(f"[recv_res] got {len(raw)} bytes")
             except Exception as e:
-                print(f"[recv_res] EXCEPTION: {type(e).__name__}: {e}", flush=True)
+                self._logger.debug(f"[recv_res] EXCEPTION: {type(e).__name__}: {e}")
                 raise
             res = array.array('H', bytes(raw))
             if not BIG_ENDIAN:
@@ -68,12 +68,12 @@ class BaseCommand(metaclass=ABCMeta):
 
         if output_mode == OutputMode.EightBit:
             want_bytes = pixel_count
-            print(f"[recv_res] requesting {want_bytes} bytes (EightBit, pixel_count={pixel_count})", flush=True)
+            self._logger.debug(f"[recv_res] requesting {want_bytes} bytes (EightBit, pixel_count={pixel_count})")
             try:
                 raw = await stream.read(want_bytes)
-                print(f"[recv_res] got {len(raw)} bytes", flush=True)
+                self._logger.debug(f"[recv_res] got {len(raw)} bytes")
             except Exception as e:
-                print(f"[recv_res] EXCEPTION: {type(e).__name__}: {e}", flush=True)
+                self._logger.debug(f"[recv_res] EXCEPTION: {type(e).__name__}: {e}")
                 raise
             res = array.array('B', raw)
             await asyncio.sleep(0)

@@ -1,0 +1,19 @@
+import type { FrameworkOverridesIncomingSource } from 'ag-stack';
+import type { IFrameworkOverrides } from './interfaces/iFrameworkOverrides';
+/**
+ * The base frameworks, eg React & Angular, override this bean with implementations specific to their requirement.
+ * @internal AG_GRID_INTERNAL - Not for public use. Can change / be removed at any time.
+ */
+export declare class VanillaFrameworkOverrides implements IFrameworkOverrides {
+    private readonly frameworkName;
+    readonly renderingEngine: 'vanilla' | 'react';
+    readonly batchFrameworkComps: boolean;
+    readonly usesAgGridProvider: boolean | undefined;
+    private readonly baseDocLink;
+    constructor(frameworkName?: 'javascript' | 'angular' | 'react' | 'vue');
+    wrapIncoming: <T>(callback: () => T, source?: FrameworkOverridesIncomingSource) => T;
+    wrapOutgoing: <T>(callback: () => T) => T;
+    frameworkComponent(_: string): any;
+    isFrameworkComponent(_: any): boolean;
+    getDocLink(path?: string): string;
+}

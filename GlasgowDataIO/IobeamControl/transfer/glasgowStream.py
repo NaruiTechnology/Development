@@ -59,7 +59,7 @@ class GlasgowStream(Stream):
             data = await self.lower.read(length)
             after = len(self.lower._in_buffer)
             got = len(data) if data is not None else 0
-            print(f"[GlasgowStream.read] returned={got}  in_buffer_after={after}", flush=True)
+            self._logger.debug(f"[GlasgowStream.read] returned={got}  in_buffer_after={after}")
             return data
         except Exception as e:
             after = len(self.lower._in_buffer)

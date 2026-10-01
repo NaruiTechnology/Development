@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ionbeam-native"
+dynamic = ["version"]
+description = "Ion Beam native desktop client: in-process acquisition with a persistent Glasgow session"
+requires-python = ">=3.10"
+# Runtime pins live in requirements.txt (install scripts use it). The app
+# imports GlasgowDataIO, AutomationPy and glasgow_service from the Development
+# checkout, so install it editable from inside that checkout.
+dependencies = []
+
+[project.gui-scripts]
+ionbeam-native = "ionbeam_native.__main__:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "ionbeam_native.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["ionbeam_native*"]
+
+[tool.setuptools.package-data]
+ionbeam_native = ["resources/icons/*", "resources/images/*", "i18n/data/*.json", "i18n/native_strings.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

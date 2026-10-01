@@ -73,6 +73,7 @@ import {
   writeConfig,
 } from "./configManager";
 import {
+  scanArtifactBytesFromBody,
   uploadMergedFigureToConfiguredFtp,
   uploadScanArtifactsToConfiguredFtp,
   testConfiguredFtpConnection,
@@ -1065,12 +1066,17 @@ app.post("/api/admin/iobeam/operation/output-data", async (req, res) => {
       return;
     }
 
+    // Optional artifact bytes (native desktop app): never persist them in the
+    // operation record, only hand them to the FTP upload.
+    const artifacts = scanArtifactBytesFromBody((body as { artifacts?: unknown } | null)?.artifacts);
+    const recordBody = body ? { ...(body as Record<string, unknown>) } : null;
+    if (recordBody) delete recordBody.artifacts;
     const output = await recordOperationScanOutput(
       kind,
       activityId,
-      body as Record<string, unknown> | null,
-      jsonObjectOrSelf(body?.scan_result, body),
-      normalizeInteger(body?.chunks, 0),
+      recordBody,
+      jsonObjectOrSelf(recordBody?.scan_result, recordBody),
+      normalizeInteger(recordBody?.chunks, 0),
     );
 
     res.json({
@@ -1083,7 +1089,7 @@ app.post("/api/admin/iobeam/operation/output-data", async (req, res) => {
     void uploadScanArtifactsToConfiguredFtp(kind, {
       csvFilename: output.csvFilename,
       imageFilename: output.imageFilename,
-    }).catch((err) => {
+    }, false, artifacts).catch((err) => {
       console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
     });
   } catch (err) {

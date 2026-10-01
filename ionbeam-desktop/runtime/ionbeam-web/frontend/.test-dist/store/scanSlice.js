@@ -1,0 +1,569 @@
+import { createAsyncThunk, createSlice, } from "@reduxjs/toolkit";
+import { normalizeGrayScaleSelection } from "../lib/grayScaleSelection";
+import { fetchDefaults } from "./statusSlice";
+import { scanAuthHeaders } from "../lib/authIdentity";
+import { apiUrl } from "../lib/backendUrl";
+import { readJsonResponse } from "../lib/readJsonResponse";
+const ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY = "ionbeam.roiGrayScaleStepDelta";
+const defaultRaster = {
+    resolution: 512,
+    dwell: 16,
+    latency_bytes: 16384,
+    frame_blank: false,
+    cookie: 123,
+    output_mode: "SixteenBit",
+    adc_valid: true,
+    do_validate: true,
+};
+const defaultVector = {
+    pattern: "default",
+    // horizontal_sawtooth: X is the fast/inner axis, matching a reference
+    // OBI DAC capture. The previous default, vertical_raster, makes X the
+    // slow/outer axis, which reads as a staircase on a scope even though
+    // the DAC is fine — see glasgow_service's /scan/dac_ramp/run for a
+    // dedicated single-axis linearity check.
+    scan_path: "horizontal_sawtooth",
+    points: null,
+    vector_resolution: 2048,
+    dwell: 16,
+    latency_bytes: 8196,
+    output_mode: "SixteenBit",
+    adc_valid: true,
+    cookie: 123,
+    pre_process: true,
+    do_validate: true,
+};
+const initialState = {
+    kind: "roi",
+    phase: "idle",
+    bytesReceived: 0,
+    chunksReceived: 0,
+    lastResult: null,
+    lastOutput: null,
+    errorMessage: null,
+    raster: defaultRaster,
+    vector: defaultVector,
+    preview: true,
+    roi: {
+        x_origin: 0,
+        x_end: 100,
+        y_origin: 0,
+        y_end: 100,
+        viewport_x_start: 0,
+        viewport_x_end: 640,
+        viewport_y_start: 0,
+        viewport_y_end: 640,
+        calibration_enabled: false,
+        calibration_x_origin: 0,
+        calibration_x_end: 100,
+        calibration_y_origin: 0,
+        calibration_y_end: 100,
+        calibration_viewport_x_start: 0,
+        calibration_viewport_x_end: 640,
+        calibration_viewport_y_start: 0,
+        calibration_viewport_y_end: 640,
+        calibration_confirmed: false,
+        x_scale_length: 100,
+        y_scale_length: 100,
+        scale_unit: "um",
+        show_grid: true,
+        raster_show_grid: true,
+        vector_show_grid: true,
+        vector_show_scan_path: false,
+        selection: null,
+        imageName: "No image selected",
+        imageDataUrl: null,
+        imageKind: "none",
+        imageBounds: null,
+        scanImageDataUrl: null,
+    },
+    beamEnergyEv: 1000.0,
+    roiGrayScaleSelection: null,
+    roiGrayScaleSkipped: null,
+    roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
+    vectorRenderMode: "decimated",
+};
+function numberDefault(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+function floatDefault(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+function booleanDefault(value, fallback) {
+    if (typeof value === "boolean")
+        return value;
+    if (typeof value === "number")
+        return value !== 0;
+    if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (["true", "1", "yes", "on"].includes(normalized))
+            return true;
+        if (["false", "0", "no", "off", ""].includes(normalized))
+            return false;
+    }
+    return fallback;
+}
+function vectorScanPathDefault(value, fallback) {
+    switch (value) {
+        case "vertical_raster":
+        case "vertical_serpentine":
+        case "horizontal_sawtooth":
+        case "horizontal_triangle":
+            return value;
+        default:
+            return fallback;
+    }
+}
+function dwellDefault(value, fallback) {
+    return Math.max(0, numberDefault(value, fallback));
+}
+function applyServerDefaults(state, defaults) {
+    // Prefer the normalized snake_case `raster_params` / `vector_params`
+    // blocks if the server sent them — they map 1:1 to the request shapes
+    // and don't need any field-name translation. Fall back to the legacy
+    // camelCase `raster` / `vector` blocks for older servers.
+    const rasterParams = (defaults.raster_params ?? {});
+    const vectorParams = (defaults.vector_params ?? {});
+    const raster = defaults.raster ?? {};
+    const vector = defaults.vector ?? {};
+    // Raster: prefer normalized, then legacy `raster` block with the old
+    // translation rules (frameBlank → frame_blank, pixels*2 → latency_bytes).
+    const rasterLatency = rasterParams.latency_bytes ??
+        raster.latency_bytes ??
+        raster.latency ??
+        (raster.pixels !== undefined ? numberDefault(raster.pixels, 8192) * 2 : undefined);
+    state.raster = {
+        ...state.raster,
+        resolution: numberDefault(rasterParams.resolution ?? raster.resolution, state.raster.resolution),
+        dwell: dwellDefault(rasterParams.dwell ?? raster.dwell, state.raster.dwell),
+        latency_bytes: numberDefault(rasterLatency, state.raster.latency_bytes),
+        frame_blank: booleanDefault(rasterParams.frame_blank ??
+            raster.frame_blank ??
+            raster.frameBlank, state.raster.frame_blank),
+        do_validate: booleanDefault(rasterParams.do_validate ??
+            raster.do_validate ??
+            raster.doValidate, state.raster.do_validate),
+        adc_valid: booleanDefault(rasterParams.adc_valid ?? raster.adc_valid ?? raster.adcValid, state.raster.adc_valid),
+        output_mode: "SixteenBit",
+    };
+    state.vector = {
+        ...state.vector,
+        scan_path: vectorScanPathDefault(vectorParams.scan_path, state.vector.scan_path),
+        vector_resolution: numberDefault(vectorParams.vector_resolution ??
+            vector.vector_resolution ??
+            vector.vectorResolution, state.vector.vector_resolution),
+        dwell: dwellDefault(vectorParams.dwell ?? vector.dwell, state.vector.dwell),
+        latency_bytes: numberDefault(vectorParams.latency_bytes ?? vector.latency_bytes ?? vector.latency, state.vector.latency_bytes),
+        output_mode: "SixteenBit",
+        adc_valid: booleanDefault(vectorParams.adc_valid ?? vector.adc_valid ?? vector.adcValid, state.vector.adc_valid),
+        pre_process: booleanDefault(vectorParams.pre_process ??
+            vector.pre_process ??
+            vector.preProcess, state.vector.pre_process),
+        do_validate: booleanDefault(vectorParams.do_validate ??
+            vector.do_validate ??
+            vector.doValidate, state.vector.do_validate),
+    };
+}
+function normalizeRasterPatch(patch, current) {
+    return {
+        ...patch,
+        ...(Object.prototype.hasOwnProperty.call(patch, "frame_blank")
+            ? { frame_blank: booleanDefault(patch.frame_blank, current.frame_blank) }
+            : {}),
+        ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
+            ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
+            : {}),
+        ...(Object.prototype.hasOwnProperty.call(patch, "adc_valid")
+            ? { adc_valid: booleanDefault(patch.adc_valid, current.adc_valid) }
+            : {}),
+    };
+}
+function normalizeVectorPatch(patch, current) {
+    return {
+        ...patch,
+        ...(Object.prototype.hasOwnProperty.call(patch, "pre_process")
+            ? { pre_process: booleanDefault(patch.pre_process, current.pre_process) }
+            : {}),
+        ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
+            ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
+            : {}),
+        ...(Object.prototype.hasOwnProperty.call(patch, "adc_valid")
+            ? { adc_valid: booleanDefault(patch.adc_valid, current.adc_valid) }
+            : {}),
+    };
+}
+function normalizeROIPatch(patch, current) {
+    return {
+        ...patch,
+        ...(Object.prototype.hasOwnProperty.call(patch, "show_grid")
+            ? { show_grid: booleanDefault(patch.show_grid, current.show_grid) }
+            : {}),
+        ...(Object.prototype.hasOwnProperty.call(patch, "raster_show_grid")
+            ? { raster_show_grid: booleanDefault(patch.raster_show_grid, current.raster_show_grid) }
+            : {}),
+        ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_grid")
+            ? { vector_show_grid: booleanDefault(patch.vector_show_grid, current.vector_show_grid) }
+            : {}),
+        ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_scan_path")
+            ? {
+                vector_show_scan_path: booleanDefault(patch.vector_show_scan_path, current.vector_show_scan_path),
+            }
+            : {}),
+    };
+}
+function calibrationPatchTouchesConfirmedMapping(patch) {
+    return [
+        "x_origin",
+        "x_end",
+        "y_origin",
+        "y_end",
+        "viewport_x_start",
+        "viewport_x_end",
+        "viewport_y_start",
+        "viewport_y_end",
+        "calibration_x_origin",
+        "calibration_x_end",
+        "calibration_y_origin",
+        "calibration_y_end",
+        "calibration_viewport_x_start",
+        "calibration_viewport_x_end",
+        "calibration_viewport_y_start",
+        "calibration_viewport_y_end",
+    ].some((key) => Object.prototype.hasOwnProperty.call(patch, key));
+}
+function clampGrayScaleStepDelta(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n))
+        return 10;
+    return Math.max(1, Math.min(255, Math.round(n)));
+}
+function loadInitialGrayScaleStepDelta() {
+    if (typeof window === "undefined")
+        return 10;
+    try {
+        return clampGrayScaleStepDelta(window.localStorage.getItem(ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY));
+    }
+    catch {
+        return 10;
+    }
+}
+export function persistGrayScaleStepDelta(stepDelta) {
+    try {
+        if (typeof window !== "undefined") {
+            window.localStorage.setItem(ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY, String(clampGrayScaleStepDelta(stepDelta)));
+        }
+    }
+    catch {
+        /* localStorage may be disabled */
+    }
+}
+/* -------- blocking REST runs ------------------------------------------- */
+export const runRasterValidated = createAsyncThunk("scan/runRasterValidated", async (req, { signal }) => {
+    const r = await fetch(apiUrl("/api/scan/raster/run"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+        body: JSON.stringify(req),
+        signal,
+    });
+    if (!r.ok)
+        throw new Error(await scanRunErrorMessage(r, "raster run"));
+    return await readJsonResponse(r, "raster run");
+});
+export const runVectorValidated = createAsyncThunk("scan/runVectorValidated", async (req, { signal }) => {
+    const r = await fetch(apiUrl("/api/scan/vector/run"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+        body: JSON.stringify(req),
+        signal,
+    });
+    if (!r.ok)
+        throw new Error(await scanRunErrorMessage(r, "vector run"));
+    return await readJsonResponse(r, "vector run");
+});
+async function scanRunErrorMessage(response, prefix) {
+    const text = await response.text();
+    try {
+        const data = JSON.parse(text);
+        const message = typeof data.error === "string" ? data.error : typeof data.message === "string" ? data.message : "";
+        if (message)
+            return message;
+    }
+    catch {
+        /* fall through to HTTP detail */
+    }
+    return `${prefix}: HTTP ${response.status}${text ? ` ${text}` : ""}`;
+}
+const slice = createSlice({
+    name: "scan",
+    initialState,
+    reducers: {
+        setKind(s, a) {
+            s.kind = a.payload;
+        },
+        updateRaster(s, a) {
+            s.raster = { ...s.raster, ...normalizeRasterPatch(a.payload, s.raster) };
+        },
+        updateVector(s, a) {
+            s.vector = { ...s.vector, ...normalizeVectorPatch(a.payload, s.vector) };
+        },
+        setPreview(s, a) {
+            s.preview = Boolean(a.payload);
+        },
+        updateBeamEnergyEv(s, a) {
+            s.beamEnergyEv = floatDefault(a.payload, s.beamEnergyEv);
+        },
+        updateROI(s, a) {
+            s.roi = { ...s.roi, ...normalizeROIPatch(a.payload, s.roi) };
+            if (calibrationPatchTouchesConfirmedMapping(a.payload)) {
+                s.roi.calibration_confirmed = false;
+            }
+            if ("selection" in a.payload) {
+                s.raster.roi = a.payload.selection ?? null;
+                s.vector.roi = a.payload.selection ?? null;
+                if (a.payload.selection) {
+                    s.roi.vector_show_scan_path = true;
+                }
+            }
+        },
+        setScanGeometry(s, a) {
+            s.roi.scanGeometry = a.payload && a.payload.enabled ? a.payload : null;
+            // A selection made under the previous mapping would now point somewhere else.
+            s.roi.selection = null;
+            s.raster.roi = null;
+            s.vector.roi = null;
+        },
+        beginROICalibration(s) {
+            s.roi.calibration_enabled = true;
+            s.roi.calibration_confirmed = false;
+            s.roi.calibration_x_origin = s.roi.x_origin;
+            s.roi.calibration_x_end = s.roi.x_end;
+            s.roi.calibration_y_origin = s.roi.y_origin;
+            s.roi.calibration_y_end = s.roi.y_end;
+            s.roi.calibration_viewport_x_start = s.roi.viewport_x_start;
+            s.roi.calibration_viewport_x_end = s.roi.viewport_x_end;
+            s.roi.calibration_viewport_y_start = s.roi.viewport_y_start;
+            s.roi.calibration_viewport_y_end = s.roi.viewport_y_end;
+        },
+        beginDimensionCalibration(s, a) {
+            s.roi.calibration_enabled = true;
+            s.roi.calibration_confirmed = false;
+            s.roi.calibration_x_origin = a.payload.x_origin;
+            s.roi.calibration_x_end = a.payload.x_end;
+            s.roi.calibration_y_origin = a.payload.y_origin;
+            s.roi.calibration_y_end = a.payload.y_end;
+            s.roi.calibration_viewport_x_start = a.payload.viewport_x_start;
+            s.roi.calibration_viewport_x_end = a.payload.viewport_x_end;
+            s.roi.calibration_viewport_y_start = a.payload.viewport_y_start;
+            s.roi.calibration_viewport_y_end = a.payload.viewport_y_end;
+            s.roi.scale_unit = a.payload.scale_unit;
+        },
+        applyPersistedDimensionCalibration(s, a) {
+            const values = a.payload;
+            s.roi.calibration_enabled = true;
+            s.roi.calibration_x_origin = values.x_origin;
+            s.roi.calibration_x_end = values.x_end;
+            s.roi.calibration_y_origin = values.y_origin;
+            s.roi.calibration_y_end = values.y_end;
+            s.roi.calibration_viewport_x_start = values.viewport_x_start;
+            s.roi.calibration_viewport_x_end = values.viewport_x_end;
+            s.roi.calibration_viewport_y_start = values.viewport_y_start;
+            s.roi.calibration_viewport_y_end = values.viewport_y_end;
+            s.roi.x_origin = values.x_origin;
+            s.roi.x_end = values.x_end;
+            s.roi.y_origin = values.y_origin;
+            s.roi.y_end = values.y_end;
+            // Match the manual Confirm transition: the entered dimensions become
+            // the full active canvas mapping, while the saved wedge positions stay
+            // available in the calibration draft for later refinement.
+            s.roi.viewport_x_start = 0;
+            s.roi.viewport_x_end = 640;
+            s.roi.viewport_y_start = 0;
+            s.roi.viewport_y_end = 640;
+            s.roi.scale_unit = values.scale_unit;
+            s.roi.calibration_confirmed = true;
+            s.roi.selection = null;
+            s.raster.roi = null;
+            s.vector.roi = null;
+        },
+        restorePersistedDimensionCalibration(s, a) {
+            const values = a.payload;
+            s.roi.calibration_enabled = false;
+            s.roi.calibration_x_origin = values.x_origin;
+            s.roi.calibration_x_end = values.x_end;
+            s.roi.calibration_y_origin = values.y_origin;
+            s.roi.calibration_y_end = values.y_end;
+            s.roi.calibration_viewport_x_start = values.viewport_x_start;
+            s.roi.calibration_viewport_x_end = values.viewport_x_end;
+            s.roi.calibration_viewport_y_start = values.viewport_y_start;
+            s.roi.calibration_viewport_y_end = values.viewport_y_end;
+            s.roi.x_origin = values.x_origin;
+            s.roi.x_end = values.x_end;
+            s.roi.y_origin = values.y_origin;
+            s.roi.y_end = values.y_end;
+            s.roi.viewport_x_start = 0;
+            s.roi.viewport_x_end = 640;
+            s.roi.viewport_y_start = 0;
+            s.roi.viewport_y_end = 640;
+            s.roi.scale_unit = values.scale_unit;
+            s.roi.calibration_confirmed = true;
+            s.roi.selection = null;
+            s.raster.roi = null;
+            s.vector.roi = null;
+        },
+        setROIGrayScaleSelection(s, a) {
+            s.roiGrayScaleSelection = normalizeGrayScaleSelection(a.payload.selection);
+            if (a.payload.selection === null) {
+                s.roiGrayScaleSkipped = null;
+            }
+            else if (Object.prototype.hasOwnProperty.call(a.payload, "isSkipped")) {
+                s.roiGrayScaleSkipped = a.payload.isSkipped === null ? null : Boolean(a.payload.isSkipped);
+            }
+            if (a.payload.stepDelta !== undefined) {
+                s.roiGrayScaleStepDelta = clampGrayScaleStepDelta(a.payload.stepDelta);
+            }
+        },
+        confirmROICalibration(s) {
+            s.roi.x_origin = s.roi.calibration_x_origin;
+            s.roi.x_end = s.roi.calibration_x_end;
+            s.roi.y_origin = s.roi.calibration_y_origin;
+            s.roi.y_end = s.roi.calibration_y_end;
+            // Commit the measured dimensions but keep calibration mode open so
+            // the operator can review or refine the setup before leaving it.
+            s.roi.viewport_x_start = 0;
+            s.roi.viewport_x_end = 640;
+            s.roi.viewport_y_start = 0;
+            s.roi.viewport_y_end = 640;
+            s.roi.calibration_confirmed = true;
+            s.roi.selection = null;
+            s.raster.roi = null;
+            s.vector.roi = null;
+        },
+        clearROIImage(s) {
+            s.roi.imageName = "No image selected";
+            s.roi.imageDataUrl = null;
+            s.roi.imageKind = "none";
+            s.roi.imageBounds = null;
+        },
+        clearROIScanImage(s) {
+            s.roi.scanImageDataUrl = null;
+        },
+        clearROISelection(s) {
+            s.roi.selection = null;
+            s.raster.roi = null;
+            s.vector.roi = null;
+            s.roiGrayScaleSelection = null;
+            s.roiGrayScaleSkipped = null;
+            s.roi.scanImageDataUrl = null;
+        },
+        clearLastResult(s) {
+            s.lastResult = null;
+        },
+        clearLastOutput(s) {
+            s.lastOutput = null;
+        },
+        setVectorRenderMode(s, a) {
+            s.vectorRenderMode = a.payload;
+        },
+        /** Live-stream lifecycle markers. The actual WS lives in a hook. */
+        streamStarted(s) {
+            s.phase = "running";
+            s.bytesReceived = 0;
+            s.chunksReceived = 0;
+            s.lastResult = null;
+            s.lastOutput = null;
+            s.errorMessage = null;
+        },
+        streamProgress(s, a) {
+            s.bytesReceived += a.payload.bytes;
+            s.chunksReceived += a.payload.chunks;
+        },
+        streamStopping(s) {
+            s.phase = "stopping";
+        },
+        streamCompleted(s, a) {
+            s.phase = "completed";
+            if (a.payload?.chunks !== undefined)
+                s.chunksReceived = a.payload.chunks;
+            if (a.payload?.kind) {
+                s.lastOutput = {
+                    kind: a.payload.kind,
+                    csv_filename: a.payload.csv_filename ?? null,
+                    image_filename: a.payload.image_filename ?? null,
+                };
+            }
+        },
+        streamErrored(s, a) {
+            s.phase = "error";
+            s.errorMessage = a.payload;
+        },
+        streamReset(s) {
+            s.phase = "idle";
+            s.bytesReceived = 0;
+            s.chunksReceived = 0;
+            s.errorMessage = null;
+            s.lastOutput = null;
+        },
+    },
+    extraReducers: (b) => {
+        b.addCase(runRasterValidated.pending, (s) => {
+            s.phase = "running";
+            s.bytesReceived = 0;
+            s.chunksReceived = 0;
+            s.lastResult = null;
+            s.lastOutput = null;
+            s.errorMessage = null;
+        });
+        b.addCase(runRasterValidated.fulfilled, (s, a) => {
+            s.phase = "completed";
+            s.lastResult = a.payload;
+            s.lastOutput = {
+                kind: "raster",
+                csv_filename: a.payload.csv_filename ?? null,
+                image_filename: a.payload.image_filename ?? null,
+            };
+        });
+        b.addCase(runRasterValidated.rejected, (s, a) => {
+            if (a.meta.aborted) {
+                s.phase = "idle";
+                s.errorMessage = null;
+                return;
+            }
+            s.phase = "error";
+            s.errorMessage = a.error.message ?? "raster run failed";
+        });
+        b.addCase(runVectorValidated.pending, (s) => {
+            s.phase = "running";
+            s.bytesReceived = 0;
+            s.chunksReceived = 0;
+            s.lastResult = null;
+            s.lastOutput = null;
+            s.errorMessage = null;
+        });
+        b.addCase(runVectorValidated.fulfilled, (s, a) => {
+            s.phase = "completed";
+            s.lastResult = a.payload;
+            s.lastOutput = {
+                kind: "vector",
+                csv_filename: a.payload.csv_filename ?? null,
+                image_filename: a.payload.image_filename ?? null,
+            };
+        });
+        b.addCase(runVectorValidated.rejected, (s, a) => {
+            if (a.meta.aborted) {
+                s.phase = "idle";
+                s.errorMessage = null;
+                return;
+            }
+            s.phase = "error";
+            s.errorMessage = a.error.message ?? "vector run failed";
+        });
+        b.addCase(fetchDefaults.fulfilled, (s, a) => {
+            applyServerDefaults(s, a.payload);
+            s.beamEnergyEv = floatDefault(a.payload.ev, s.beamEnergyEv);
+        });
+    },
+});
+export const { setKind, updateRaster, updateVector, setPreview, updateBeamEnergyEv, updateROI, beginROICalibration, beginDimensionCalibration, setScanGeometry, applyPersistedDimensionCalibration, restorePersistedDimensionCalibration, confirmROICalibration, clearROIImage, clearROIScanImage, clearROISelection, setROIGrayScaleSelection, clearLastResult, clearLastOutput, setVectorRenderMode, streamStarted, streamProgress, streamStopping, streamCompleted, streamErrored, streamReset, } = slice.actions;
+export default slice.reducer;

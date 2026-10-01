@@ -1,0 +1,27 @@
+# Ion Beam native desktop app runtime (Python >= 3.10).
+# Versions match the Operations stack pins in Development/requirements.txt.
+# GlasgowDataIO (with the vendored Glasgow toolkit) and glasgow_service are
+# imported from the Development checkout, not installed from PyPI.
+
+# UI
+PyQt6==6.11.0
+# acquisition (vendored Glasgow toolkit + gateware build)
+amaranth==0.5.8
+libusb1==3.3.1
+pyusb==1.3.1
+fx2==0.13
+pyvcd==0.4.1
+platformdirs==4.9.6
+packaging==26.1
+yowasp-yosys==0.64.0.0.post1131
+yowasp-nextpnr-ice40==0.10.0.0.post753
+# glasgow_service models / service code
+pydantic==2.13.5
+fastapi==0.141.1
+redis==7.4.1
+gpiozero==2.0.1.post3
+# data, artifacts and control-plane client
+numpy==2.4.4
+matplotlib==3.10.8
+pillow==12.2.0
+httpx==0.28.1

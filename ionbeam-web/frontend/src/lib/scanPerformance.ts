@@ -1,7 +1,7 @@
 type ScanPerformance = {
   id: string;
   kind: string;
-  transport: "websocket" | "desktop_native";
+  transport: "websocket";
   startedAt: number;
   startedIso: string;
   firstSampleAt: number | null;

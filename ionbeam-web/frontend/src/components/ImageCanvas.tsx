@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
+import { orientCanvas } from "../lib/canvasOrientation";
 import {
   setVectorRenderMode,
   updateROI,
@@ -226,6 +227,7 @@ export function ImageCanvas({
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roi = useAppSelector((s) => s.scan.roi);
   const theme = useAppSelector((s) => s.theme.theme);
+  const streamTransforms = useAppSelector((s) => s.scan.streamTransforms);
 
   const phase = useAppSelector((s) => s.scan.phase);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
@@ -338,6 +340,7 @@ export function ImageCanvas({
       const s = paintGrayscale(canvas, vectorImage, vectorEdge, vectorCursor, levelSetting);
       setStats(s);
     }
+    orientCanvas(canvas, streamTransforms);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     revision,
@@ -347,6 +350,7 @@ export function ImageCanvas({
     vectorGraySpotSelection,
     vectorGraySpotSkipped,
     levelSetting,
+    streamTransforms,
   ]);
 
   useEffect(() => {
@@ -378,7 +382,7 @@ export function ImageCanvas({
     });
 
     return () => window.cancelAnimationFrame(handle);
-  }, [kind, phase, revision, renderMode, cursor, vectorCursor, hasLiveCanvasData]);
+  }, [kind, phase, revision, renderMode, cursor, vectorCursor, hasLiveCanvasData, streamTransforms]);
 
   useEffect(() => {
     const filename =
@@ -503,7 +507,7 @@ export function ImageCanvas({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [showServerFigure, kind, renderMode, chunksReceived]);
+  }, [showServerFigure, kind, renderMode, chunksReceived, streamTransforms]);
 
   const totalRasterPx = resolution * resolution;
   const totalVectorSamples =
@@ -1477,6 +1481,51 @@ function LiveAxisOverlay({
   showGrid: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }) {
+  const transforms = useAppSelector((s) => s.scan.streamTransforms);
+  const transformPoint = (x: number, y: number) => {
+    if (transforms.rotate90) [x, y] = [1 - y, x];
+    if (transforms.xflip) x = 1 - x;
+    if (transforms.yflip) y = 1 - y;
+    return { x, y };
+  };
+  const pct = (value: number) => `${value * 100}%`;
+  const xAxisStart = transformPoint(0, 0);
+  const xAxisEnd = transformPoint(1, 0);
+  const yAxisStart = transformPoint(0, 0);
+  const yAxisEnd = transformPoint(0, 1);
+  const xAxisVertical = Math.abs(xAxisStart.x - xAxisEnd.x) < 0.5;
+  const yAxisVertical = Math.abs(yAxisStart.x - yAxisEnd.x) < 0.5;
+  const axisStyle = (vertical: boolean, point: { x: number; y: number }) => vertical
+    ? { left: pct(point.x), top: 0, bottom: 0 }
+    : { left: 0, right: 0, top: pct(point.y) };
+  const tickPosition = (vertical: boolean, point: { x: number; y: number }) => vertical
+    ? { top: pct(point.y), left: pct(point.x) }
+    : { left: pct(point.x), top: pct(point.y) };
+  const tickClass = (vertical: boolean) => vertical ? "--y" : "--x";
+  const inwardTickTransform = (vertical: boolean, point: { x: number; y: number }) => {
+    if (vertical) return `translate(${point.x > 0.5 ? "-100%" : "0"}, -0.5px)`;
+    return `translate(-0.5px, ${point.y > 0.5 ? "-100%" : "0"})`;
+  };
+  const xAxisPoint = (ratio: number) => transformPoint(ratio, 0);
+  const yAxisPoint = (ratio: number) => transformPoint(0, ratio);
+  const valueStyle = (vertical: boolean, point: { x: number; y: number }) => {
+    if (vertical) {
+      const atTop = point.y < 0.05;
+      const atBottom = point.y > 0.95;
+      const onRight = point.x > 0.5;
+      const xOffset = onRight ? `calc(${pct(point.x)} - 14px)` : `calc(${pct(point.x)} + 14px)`;
+      const xAlign = onRight ? "-100%" : "0";
+      const yAlign = atTop ? "0" : atBottom ? "-100%" : "-50%";
+      return { left: xOffset, top: pct(point.y), transform: `translate(${xAlign}, ${yAlign})` };
+    }
+
+    const atLeft = point.x < 0.05;
+    const atRight = point.x > 0.95;
+    const onBottom = point.y > 0.5;
+    const xAlign = atLeft ? "0" : atRight ? "-100%" : "-50%";
+    const top = onBottom ? `calc(${pct(point.y)} - 16px)` : `calc(${pct(point.y)} + 16px)`;
+    return { left: pct(point.x), top, transform: `translateX(${xAlign})` };
+  };
   const minorTicks = 20;
   const majorEvery = 5;
   const ticks = Array.from({ length: minorTicks + 1 }, (_, i) => {
@@ -1484,7 +1533,6 @@ function LiveAxisOverlay({
     return {
       key: i,
       ratio,
-      percent: `${ratio * 100}%`,
       major: i % majorEvery === 0,
       xLabel: formatOneDecimal(roi.x_origin + (roi.x_end - roi.x_origin) * ratio),
       yLabel: formatOneDecimal(roi.y_origin + (roi.y_end - roi.y_origin) * ratio),
@@ -1496,72 +1544,88 @@ function LiveAxisOverlay({
     <div className="canvas-axis-overlay" aria-hidden="true">
       {showGrid && (
         <>
-          {ticks.filter((tick) => tick.major).map((tick) => (
+          {ticks.filter((tick) => tick.major).map((tick) => {
+            const point = xAxisPoint(tick.ratio);
+            return (
             <div
               key={`grid-x-${tick.key}`}
-              className="canvas-axis-overlay__grid canvas-axis-overlay__grid--x"
-              style={{ left: tick.percent }}
+              className={`canvas-axis-overlay__grid canvas-axis-overlay__grid--${xAxisVertical ? "y" : "x"}`}
+              style={xAxisVertical ? { top: pct(point.y) } : { left: pct(point.x) }}
             />
-          ))}
-          {ticks.filter((tick) => tick.major).map((tick) => (
+          );})}
+          {ticks.filter((tick) => tick.major).map((tick) => {
+            const point = yAxisPoint(tick.ratio);
+            return (
             <div
               key={`grid-y-${tick.key}`}
-              className="canvas-axis-overlay__grid canvas-axis-overlay__grid--y"
-              style={{ top: tick.percent }}
+              className={`canvas-axis-overlay__grid canvas-axis-overlay__grid--${yAxisVertical ? "x" : "y"}`}
+              style={yAxisVertical ? { left: pct(point.x) } : { top: pct(point.y) }}
             />
-          ))}
+          );})}
         </>
       )}
-      <div className="canvas-axis-overlay__axis canvas-axis-overlay__axis--x" />
-      <div className="canvas-axis-overlay__axis canvas-axis-overlay__axis--y" />
-      {ticks.map((tick) => (
+      <div className={`canvas-axis-overlay__axis canvas-axis-overlay__axis--${xAxisVertical ? "y" : "x"}`} style={axisStyle(xAxisVertical, xAxisStart)} />
+      <div className={`canvas-axis-overlay__axis canvas-axis-overlay__axis--${yAxisVertical ? "y" : "x"}`} style={axisStyle(yAxisVertical, yAxisStart)} />
+      {ticks.map((tick) => {
+        const point = xAxisPoint(tick.ratio);
+        return (
         <div
           key={`x-${tick.key}`}
-          className={`canvas-axis-overlay__tick canvas-axis-overlay__tick--x${
+          className={`canvas-axis-overlay__tick canvas-axis-overlay__tick${tickClass(xAxisVertical)}${
             tick.major ? " canvas-axis-overlay__tick--major" : ""
           }`}
-          style={{ left: tick.percent }}
+          style={{ ...tickPosition(xAxisVertical, point), transform: inwardTickTransform(xAxisVertical, xAxisStart) }}
         />
-      ))}
-      {ticks.map((tick) => (
+      );})}
+      {ticks.map((tick) => {
+        const point = yAxisPoint(tick.ratio);
+        return (
         <div
           key={`y-${tick.key}`}
-          className={`canvas-axis-overlay__tick canvas-axis-overlay__tick--y${
+          className={`canvas-axis-overlay__tick canvas-axis-overlay__tick${tickClass(yAxisVertical)}${
             tick.major ? " canvas-axis-overlay__tick--major" : ""
           }`}
-          style={{ top: tick.percent }}
+          style={{ ...tickPosition(yAxisVertical, point), transform: inwardTickTransform(yAxisVertical, yAxisStart) }}
         />
-      ))}
-      {ticks.filter((tick) => tick.major).map((tick) => (
+      );})}
+      {ticks.filter((tick) => tick.major).map((tick) => {
+        const point = xAxisPoint(tick.ratio);
+        return (
         <span
           key={`xl-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
-          style={{ left: tick.percent }}
+          style={valueStyle(xAxisVertical, point)}
         >
           {tick.xLabel}
         </span>
-      ))}
-      {ticks.filter((tick) => tick.major).map((tick) => (
+      );})}
+      {ticks.filter((tick) => tick.major).map((tick) => {
+        const point = yAxisPoint(tick.ratio);
+        return (
         <span
           key={`yl-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
-          style={{ top: tick.percent }}
+          style={valueStyle(yAxisVertical, point)}
         >
           {tick.yLabel}
         </span>
-      ))}
-      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--start">
-        {t("roi.canvas.start", {
+      );})}
+      {([[[0, 0], "start"], [[1, 1], "end"]] as const).map(([[x, y], name]) => {
+        const point = transformPoint(x, y);
+        return <span
+        key={name}
+        className={`canvas-axis-overlay__label canvas-axis-overlay__label--${name}`}
+        style={{ left: pct(point.x), top: pct(point.y), transform: `translate(${point.x > 0.5 ? "-100%" : "0"}, ${point.y > 0.5 ? "-100%" : "0"})` }}
+      >
+        {name === "start" ? t("roi.canvas.start", {
           point: `(${formatOneDecimal(roi.x_origin)}, ${formatOneDecimal(roi.y_origin)})`,
           unit,
-        })}
-      </span>
-      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end">
-        {t("roi.canvas.end", {
+        }) : t("roi.canvas.end", {
           point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
           unit,
         })}
-      </span>
+      </span>;
+      })}
     </div>
   );
 }

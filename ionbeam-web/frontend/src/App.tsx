@@ -28,7 +28,7 @@ import { dimensionBoundsFromGeometry, geometryFromConfig, toAppliedGeometry } fr
 import { fetchScanGeometry } from "./lib/scanGeometryApi";
 import { fetchDimensionCalibrationRemote } from "./lib/dimensionCalibrationApi";
 import { selectedEquipmentId } from "./lib/adminActivity";
-import { setScanGeometry } from "./store/scanSlice";
+import { setScanGeometry, setStreamTransforms } from "./store/scanSlice";
 import { saveDimensionCalibration } from "./store/dimensionCalibrationSlice";
 import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
@@ -289,7 +289,12 @@ export function App() {
     if (scanGeometryLoadedRef.current) return;
     scanGeometryLoadedRef.current = true;
     fetchScanGeometry()
-      .then(({ config }) => {
+      .then(({ config, stream }) => {
+        dispatch(setStreamTransforms({
+          xflip: stream.transforms?.xflip === true,
+          yflip: stream.transforms?.yflip === true,
+          rotate90: stream.transforms?.rotate90 === true,
+        }));
         if (!config?.enabled) return;
         const geometry = geometryFromConfig(config);
         clearBitmapSelectionCache();

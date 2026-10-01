@@ -76,6 +76,16 @@ def make_workspace(base):
         "Scripts/manage-local-system.sh": "#!/bin/sh\n",
         "Scripts/program-fpga-ram.py": "# programmer\n",
         "ionbeam-web/backend/package.json": '{"name": "backend"}',
+        "glasgow_service/glasgow_service/device_lock.py": "LOCK = 1\n",
+        "ionbeam-native/ionbeam_native/__main__.py": "NATIVE = 1\n",
+        "ionbeam-native/ionbeam_native/engine/engine.py": "ENGINE = 1\n",
+        "ionbeam-native/ionbeam_native/engine/persistent.py": "SESSION = 1\n",
+        "ionbeam-native/ionbeam_native/ui/main_window.py": "WINDOW = 1\n",
+        "ionbeam-native/ionbeam_native/i18n/data/en.json": "{}",
+        "ionbeam-native/ionbeam_native/resources/images/brand-logo.png": "png",
+        "ionbeam-native/scripts/smoke.py": "SMOKE = 1\n",
+        "ionbeam-native/scripts/install_linux.sh": "#!/bin/sh\n",
+        "ionbeam-native/requirements.txt": "PyQt6\n",
     }
     for rel, text in stubs.items():
         (dev / rel).parent.mkdir(parents=True, exist_ok=True)

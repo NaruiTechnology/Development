@@ -1,0 +1,8 @@
+{
+  "name": "ionbeam-native-parity",
+  "private": true,
+  "type": "module",
+  "description": "Regenerates web_cases.json from the web frontend sources (npm ci && npm run generate)",
+  "scripts": { "generate": "node generate.mjs" },
+  "devDependencies": { "esbuild": "0.23.1" }
+}

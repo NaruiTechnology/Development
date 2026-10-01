@@ -1,0 +1,14 @@
+{
+  "name": "ionbeam-native-i18n-extract",
+  "private": true,
+  "description": "Regenerates ionbeam_native/i18n/data/*.json from the web frontend's translation tables and help bodies.",
+  "type": "module",
+  "scripts": {
+    "extract": "node extract_i18n.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

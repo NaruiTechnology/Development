@@ -20,6 +20,16 @@ interface ScanArtifactUpload {
   imageFilename: string;
 }
 
+/**
+ * Artifact bytes supplied by the caller. The native desktop app acquires in
+ * its own process, so glasgow_service's /scan/last/* holds a different (stale)
+ * scan; it sends the CSV/PNG it rendered for this scan instead.
+ */
+export interface ScanArtifactBytes {
+  csv: Buffer;
+  image: Buffer;
+}
+
 export interface FtpConnectionResult {
   enabled: boolean;
   reachable: boolean;
@@ -32,6 +42,7 @@ export async function uploadScanArtifactsToConfiguredFtp(
   kind: "raster" | "vector",
   filenames: ScanArtifactUpload,
   preview = false,
+  artifacts: ScanArtifactBytes | null = null,
 ): Promise<void> {
   if (preview) {
     console.warn(`[ftp-upload] skipping ${kind} scan upload: preview mode`);
@@ -47,15 +58,29 @@ export async function uploadScanArtifactsToConfiguredFtp(
     return;
   }
 
-  const csvBuffer = await fetchArtifactWithRetry("/scan/last/csv");
+  const csvBuffer = artifacts?.csv ?? await fetchArtifactWithRetry("/scan/last/csv");
   await uploadBufferWithCurl(ftp, "csv", filenames.csvFilename, csvBuffer);
 
   const figurePath =
     kind === "vector"
       ? "/scan/last/figure?render=decimated"
       : "/scan/last/figure";
-  const imageBuffer = await fetchArtifactWithRetry(figurePath);
+  const imageBuffer = artifacts?.image ?? await fetchArtifactWithRetry(figurePath);
   await uploadBufferWithCurl(ftp, "img", filenames.imageFilename, imageBuffer);
+}
+
+/**
+ * Decode optional `artifacts: { csv_base64, image_base64 }` from a request
+ * body. Returns null (fall back to fetching from glasgow_service) when absent
+ * or incomplete.
+ */
+export function scanArtifactBytesFromBody(value: unknown): ScanArtifactBytes | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const csv = typeof record.csv_base64 === "string" ? Buffer.from(record.csv_base64, "base64") : null;
+  const image = typeof record.image_base64 === "string" ? Buffer.from(record.image_base64, "base64") : null;
+  if (!csv || !image || csv.length === 0 || image.length === 0) return null;
+  return { csv, image };
 }
 
 export async function uploadMergedFigureToConfiguredFtp(

@@ -25,7 +25,7 @@
                     },
                     "transforms": {
                         "xflip": false,
-                        "yflip": false,
+                        "yflip": true,
                         "rotate90": false
                     },
                     "timings": {
@@ -189,7 +189,12 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": true,
+    "IsProduction": false,
     "DumpData": true,
-    "AdcTest": true
+    "AdcTest": true,
+    "transforms": {
+        "xflip": false,
+        "yflip": true,
+        "rotate90": false
+    }
 }

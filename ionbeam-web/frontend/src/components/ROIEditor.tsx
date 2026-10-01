@@ -92,6 +92,17 @@ export function ROIEditor({
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
+  const streamTransforms = useAppSelector((s) => s.scan.streamTransforms);
+  const canvasOrientation = [
+    streamTransforms.xflip ? "scaleX(-1)" : "",
+    streamTransforms.yflip ? "scaleY(-1)" : "",
+    streamTransforms.rotate90 ? "rotate(90deg)" : "",
+  ].filter(Boolean).join(" ");
+  const sx = streamTransforms.xflip ? -1 : 1;
+  const sy = streamTransforms.yflip ? -1 : 1;
+  const axisTextCounterTransform = streamTransforms.rotate90
+    ? `matrix(0, ${-sx}, ${sy}, 0, 0, 0)`
+    : `matrix(${sx}, 0, 0, ${sy}, 0, 0)`;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -453,6 +464,13 @@ export function ROIEditor({
       x: clampViewportCoordinate(((clientX - r.left) / r.width) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
       y: clampViewportCoordinate(((clientY - r.top) / r.height) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
     };
+    // Pointer coordinates arrive in the oriented display space. Convert them
+    // back to the image's source space before mapping to ROI/world coordinates.
+    if (streamTransforms.xflip) raw.x = ROI_CANVAS_EDGE - raw.x;
+    if (streamTransforms.yflip) raw.y = ROI_CANVAS_EDGE - raw.y;
+    if (streamTransforms.rotate90) {
+      [raw.x, raw.y] = [raw.y, ROI_CANVAS_EDGE - raw.x];
+    }
     return clampToSelection ? clampCanvasPointToViewport(raw, viewportBounds(roi)) : raw;
   }
 
@@ -1304,7 +1322,11 @@ export function ROIEditor({
 
       {(variant === "canvas" || variant === "all") && (
         <div className="canvas-stage roi-canvas-stage">
-        <div ref={canvasWrapRef} className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}>
+        <div
+          ref={canvasWrapRef}
+          className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}
+          style={canvasOrientation ? { transform: canvasOrientation, transformOrigin: "center" } : undefined}
+        >
           <div className="roi-canvas-mode" aria-live="polite">
             {!roi.calibration_enabled && <span className="roi-source-pill">{roiModeLabel}</span>}
           </div>
@@ -1533,9 +1555,9 @@ export function ROIEditor({
               aria-hidden="true"
             />
           )}
-          {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} />}
+          {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} textCounterTransform={axisTextCounterTransform} />}
           {roi.calibration_enabled && (
-            <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} />
+            <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} textCounterTransform={axisTextCounterTransform} />
           )}
           {roi.calibration_enabled && calibrationLine && (() => {
             const startWorld = calibrationWorldPoint(calibrationLine.start);
@@ -2109,7 +2131,7 @@ function drawScale(
   ctx.restore();
 }
 
-function ROIAxisOverlay({ roi }: { roi: ROIState }) {
+function ROIAxisOverlay({ roi, textCounterTransform }: { roi: ROIState; textCounterTransform: string }) {
   const { t } = useTranslation();
   const ticks = Array.from({ length: 21 }, (_, i) => {
     const ratio = i / 20;
@@ -2128,7 +2150,10 @@ function ROIAxisOverlay({ roi }: { roi: ROIState }) {
         <span
           key={`x-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
-          style={{ left: `${tick.ratio * 100}%` }}
+          style={{
+            left: `${tick.ratio * 100}%`,
+            transform: `translateX(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"}) ${textCounterTransform}`,
+          }}
         >
           {tick.xLabel}
         </span>
@@ -2137,18 +2162,21 @@ function ROIAxisOverlay({ roi }: { roi: ROIState }) {
         <span
           key={`y-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
-          style={{ top: `${tick.ratio * 100}%` }}
+          style={{
+            top: `${tick.ratio * 100}%`,
+            transform: `translateY(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"}) ${textCounterTransform}`,
+          }}
         >
           {tick.yLabel}
         </span>
       ))}
-      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--start">
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--start" style={{ transform: textCounterTransform }}>
         {t("roi.canvas.start", {
           point: `(${formatOneDecimal(roi.x_origin)}, ${formatOneDecimal(roi.y_origin)})`,
           unit: unitLabel(roi.scale_unit),
         })}
       </span>
-      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end">
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end" style={{ transform: textCounterTransform }}>
         {t("roi.canvas.end", {
           point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
           unit: unitLabel(roi.scale_unit),
@@ -2161,9 +2189,11 @@ function ROIAxisOverlay({ roi }: { roi: ROIState }) {
 function ROICalibrationAxisOverlay({
   roi,
   showGrid,
+  textCounterTransform,
 }: {
   roi: ROIState;
   showGrid: boolean;
+  textCounterTransform: string;
 }) {
   const { t } = useTranslation();
   const draftBounds = viewportBounds(roi, "draft");
@@ -2238,7 +2268,11 @@ function ROICalibrationAxisOverlay({
         <span
           key={`x-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
-          style={{ left: tick.x, top: "16px" }}
+          style={{
+            left: tick.x,
+            top: "16px",
+            transform: `translateX(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"}) ${textCounterTransform}`,
+          }}
         >
           {tick.xLabel}
         </span>
@@ -2247,7 +2281,11 @@ function ROICalibrationAxisOverlay({
         <span
           key={`y-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
-          style={{ left: "14px", top: tick.y }}
+          style={{
+            left: "14px",
+            top: tick.y,
+            transform: `translateY(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"}) ${textCounterTransform}`,
+          }}
         >
           {tick.yLabel}
         </span>
@@ -2259,6 +2297,7 @@ function ROICalibrationAxisOverlay({
           top: "12px",
           right: "auto",
           bottom: "auto",
+          transform: textCounterTransform,
         }}
       >
         {t("roi.canvas.start", {
@@ -2273,7 +2312,7 @@ function ROICalibrationAxisOverlay({
           top: "34px",
           right: "auto",
           bottom: "auto",
-          transform: "none",
+          transform: textCounterTransform,
         }}
       >
         {t("roi.canvas.end", {

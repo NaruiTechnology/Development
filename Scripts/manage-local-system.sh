@@ -16,7 +16,6 @@ SBC_UNIT="sbc-vacuum.service"
 BACKEND_UNIT="ionbeam-web-backend.service"
 FRONTEND_UNIT="ionbeam-web-frontend.service"
 POLKIT_RULE="60-ionbeam-glasgow-restart.rules"
-GLASGOW_DESKTOP_DROPIN="/etc/systemd/system/${GLASGOW_UNIT}.d/desktop-scanner.conf"
 BACKEND_ROOT="${OPERATIONS_ROOT}/Development/ionbeam-web/backend"
 FRONTEND_ROOT="${OPERATIONS_ROOT}/Development/ionbeam-web/frontend"
 LOG_DIR="${OPERATIONS_LOG_DIR:-${OPERATIONS_ROOT}/logs}"
@@ -131,15 +130,6 @@ install_units() {
   render "${DEPLOY_DIR}/sbc-vacuum.local.service.in" >"${temp_dir}/${SBC_UNIT}"
   render "${DEPLOY_DIR}/ionbeam-web-backend.local.service.in" >"${temp_dir}/${BACKEND_UNIT}"
   render "${DEPLOY_DIR}/ionbeam-web-frontend.local.service.in" >"${temp_dir}/${FRONTEND_UNIT}"
-
-  # Keep the native scan socket enabled across every local-stack reinstall or
-  # restart once the desktop package has been installed. The package's own
-  # deployment step also writes this drop-in before service startup.
-  if command -v ionbeam-desktop >/dev/null 2>&1; then
-    printf '[Service]\nEnvironment=GLASGOW_DESKTOP_ENABLED=1\n' >"${temp_dir}/desktop-scanner.conf"
-    sudo_cmd install -d -m 0755 "$(dirname -- "${GLASGOW_DESKTOP_DROPIN}")"
-    sudo_cmd install -m 0644 "${temp_dir}/desktop-scanner.conf" "${GLASGOW_DESKTOP_DROPIN}"
-  fi
 
   if [[ ! -f /etc/vacuum-executor.env ]]; then
     sed "s|@SBC_URL@|http://127.0.0.1:8766|g" \

@@ -110,11 +110,20 @@ The workflow now:
    identity (`version= commit= built= mode= python=`).
 4. Creates the deployment virtual environment.
 5. Installs Python, Node, PostgreSQL, Glasgow, and optional Pi GPIO runtime.
+   The Python step also installs `Development/ionbeam-native/requirements.txt`
+   (the native desktop client) and checks that `PyQt6` imports.
 6. Creates and secures the backend `.env` as mode `0600`.
 7. Installs the local Redis/Sentinel smoke-test topology.
-8. Calls `Scripts/manage-local-system.sh restart`.
-9. Verifies Glasgow (`8765`), SBC vacuum (`8766`), executor (`8780`), backend
-   (`4000`), frontend (`5173`), and administrative API endpoints.
+8. `installIonbeamNative`: installs the Qt runtime libraries (apt), then runs
+   `Development/ionbeam-native/scripts/install_linux.sh --venv .venv --skip-pip`
+   for the deploying user: `~/.local/bin/ionbeam-native` launcher, an
+   applications-menu entry, and a smoke test that starts the app offscreen
+   against its built-in Glasgow emulator (no hardware is touched). Skipped on
+   production (remote) hosts. `desktopEntry` / `runSmokeTest` in the action's
+   `actionData` turn those parts off.
+9. Calls `Scripts/manage-local-system.sh restart`.
+10. Verifies Glasgow (`8765`), SBC vacuum (`8766`), executor (`8780`), backend
+    (`4000`), frontend (`5173`), and administrative API endpoints.
 
 Any missing workstate, failed command, or failed readiness check now makes
 `distributionDeployApp.py` exit nonzero.
@@ -136,6 +145,11 @@ Open the UI at:
 ```text
 http://127.0.0.1:5173/control
 ```
+
+Start the native desktop client from the applications menu (**Ion Beam
+(native)**) or with `ionbeam-native`; it uses the same backend and shares the
+Glasgow with the web stack through a device lock. See
+`Development/ionbeam-native/docs/RUNBOOK.md`.
 
 Do not run additional `npm run dev` or Uvicorn commands. The backend, frontend,
 Glasgow, and vacuum processes are already supervised by systemd.

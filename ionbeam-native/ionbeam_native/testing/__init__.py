@@ -1,0 +1,1 @@
+"""Test doubles (Glasgow emulator)."""

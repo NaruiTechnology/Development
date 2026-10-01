@@ -37,6 +37,8 @@ import time
 from pathlib import Path
 from typing import AsyncIterator, Iterable, List, Optional, Tuple
 
+import numpy as np
+
 from GlasgowDataIO.IobeamControl.macros import RasterScanCommand
 from GlasgowDataIO.IobeamControl.macros.vector import (
     AdaptiveGrayFeedbackConfig, VectorScanCommand,
@@ -56,6 +58,7 @@ from AutomationPy.buildingblocks.automation_log import AutomationLog
 # request → params.override(...) → macro.
 from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
+from .device_lock import DeviceHeld, DeviceLock
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
     DacRampRequest, DacRampAxis,
@@ -95,6 +98,46 @@ def _obi_aligned_np(raw14):
 
 _ADC_PRESENCE_MIN_SAMPLES = 256
 _ADC_DIAGNOSTIC_UNIQUE_LIMIT = 64
+_ADC_FULL_SCALE_ARRAY = np.array(sorted(_ADC_FULL_SCALE_VALUES), dtype=np.int64)
+
+
+def _chunk_as_array(chunk) -> "np.ndarray":
+    """Numeric view of a sample chunk (array('H'/'B'), bytes, ndarray or list)."""
+    if isinstance(chunk, (bytes, bytearray, memoryview)):
+        return np.frombuffer(chunk, dtype=np.uint8)
+    return np.asarray(chunk)
+
+
+def _prefix_blocks(size: int, first: int = 4096):
+    """Yield growing [start, stop) blocks covering 0..size (4 Ki, 8 Ki, 16 Ki, ...)."""
+    start, width = 0, first
+    while start < size:
+        stop = min(size, start + width)
+        yield start, stop
+        start, width = stop, width * 2
+
+
+def _leading_full_scale_run(values: "np.ndarray") -> int:
+    """Length of the leading run of full-scale samples (examines only what it needs)."""
+    for start, stop in _prefix_blocks(values.size):
+        block = values[start:stop]
+        non_full = np.flatnonzero(~np.isin(block, _ADC_FULL_SCALE_ARRAY))
+        if non_full.size:
+            return start + int(non_full[0])
+    return int(values.size)
+
+
+def _collect_first_distinct(values: "np.ndarray", seen: set, limit: int) -> None:
+    """Add distinct values to ``seen`` in first-occurrence order until it holds ``limit``."""
+    for start, stop in _prefix_blocks(values.size, first=256):
+        block = values[start:stop]
+        distinct, first_index = np.unique(block, return_index=True)
+        for value in distinct[np.argsort(first_index, kind="stable")]:
+            if len(seen) >= limit:
+                return
+            seen.add(int(value))
+        if len(seen) >= limit:
+            return
 
 
 class _AdcPresenceMonitor:
@@ -113,39 +156,55 @@ class _AdcPresenceMonitor:
         self.unique_values = set()
 
     def observe(self, chunk) -> Optional[str]:
+        """Update diagnostics with ``chunk``; return a fault message on the
+        disconnected-bus signature.
+
+        Vectorised with numpy. The previous per-sample Python loop ran on the
+        event loop that also services USB, costing ~0.27 us per sample
+        (~1.1 s per 2048x2048 frame), which stalled the FPGA FIFO. The results
+        are identical to that loop, including the early return: when the fault
+        fires mid-chunk, only the samples up to and including the one that
+        completed the full-scale run are counted.
+        """
         if not self.enabled:
             return None
-        for sample in chunk:
-            value = int(sample)
-            self.sample_count += 1
-            self.minimum = value if self.minimum is None else min(self.minimum, value)
-            self.maximum = value if self.maximum is None else max(self.maximum, value)
-            if len(self.first_samples) < 8:
-                self.first_samples.append(value)
-            if len(self.unique_values) < _ADC_DIAGNOSTIC_UNIQUE_LIMIT:
-                self.unique_values.add(value)
+        values = _chunk_as_array(chunk)
+        if values.size == 0:
+            return None
 
-            # Presence detection stops after the first non-full-scale sample,
-            # but diagnostics continue for the rest of the scan.
-            if self.conclusive:
-                continue
-            if value not in _ADC_FULL_SCALE_VALUES:
-                # Presence is established for this scan. Do no more work on
-                # later chunks and do not mistake ordinary clipped regions
-                # for a disconnected bus.
+        fault = None
+        if not self.conclusive:
+            leading = _leading_full_scale_run(values)
+            needed = self.minimum_samples - self.full_scale_samples
+            if leading >= needed:
+                # The run of full-scale samples reaches the threshold inside
+                # this chunk: the loop returned right after that sample.
+                values = values[:needed]
+                self.full_scale_samples += needed
                 self.conclusive = True
+                fault = (
+                    "ADC/subtarget presence check failed: the first "
+                    f"{self.full_scale_samples} returned samples were all full "
+                    "scale (0xfffc/0x3fff/0xff). This establishes constant "
+                    "full-scale data, not its cause; check scan capture timing "
+                    "and compare with an independent ADC capture."
+                )
             else:
-                self.full_scale_samples += 1
-                if self.full_scale_samples >= self.minimum_samples:
+                self.full_scale_samples += leading
+                if leading < values.size:
+                    # Presence is established for this scan; later chunks and
+                    # ordinary clipped regions are not re-examined.
                     self.conclusive = True
-                    return (
-                        "ADC/subtarget presence check failed: the first "
-                        f"{self.full_scale_samples} returned samples were all full "
-                        "scale (0xfffc/0x3fff/0xff). This establishes constant "
-                        "full-scale data, not its cause; check scan capture timing "
-                        "and compare with an independent ADC capture."
-                    )
-        return None
+
+        self.sample_count += int(values.size)
+        low, high = int(values.min()), int(values.max())
+        self.minimum = low if self.minimum is None else min(self.minimum, low)
+        self.maximum = high if self.maximum is None else max(self.maximum, high)
+        if len(self.first_samples) < 8:
+            self.first_samples.extend(int(v) for v in values[:8 - len(self.first_samples)])
+        if len(self.unique_values) < _ADC_DIAGNOSTIC_UNIQUE_LIMIT:
+            _collect_first_distinct(values, self.unique_values, _ADC_DIAGNOSTIC_UNIQUE_LIMIT)
+        return fault
 
     def summary(self) -> Optional[str]:
         if not self.enabled or not self.sample_count:
@@ -464,16 +523,15 @@ def _bitmap_sample(bitmap, x_norm: float, y_norm: float) -> int:
     return _bitmap_pixel_sample(bitmap.pixels[y * bitmap.width + x], None)
 
 
-def _bitmap_sample_point(bitmap, roi, x: int, y: int) -> int:
+def _bitmap_sample_point(bitmap, roi, x: int, y: int, transforms=None) -> int:
     if roi is None:
-        return _bitmap_sample(bitmap, x / 0x3FFF, y / 0x3FFF)
-    x0, x1 = sorted((int(roi.x_start), int(roi.x_end)))
-    y0, y1 = sorted((int(roi.y_start), int(roi.y_end)))
-    return _bitmap_sample(
-        bitmap,
-        (int(x) - x0) / max(1, x1 - x0),
-        (int(y) - y0) / max(1, y1 - y0),
-    )
+        x_norm, y_norm = x / 0x3FFF, y / 0x3FFF
+    else:
+        x0, x1 = sorted((int(roi.x_start), int(roi.x_end)))
+        y0, y1 = sorted((int(roi.y_start), int(roi.y_end)))
+        x_norm = (int(x) - x0) / max(1, x1 - x0)
+        y_norm = (int(y) - y0) / max(1, y1 - y0)
+    return _bitmap_sample(bitmap, x_norm, y_norm)
 
 
 def _bitmap_pixel_value(pixel) -> int:
@@ -542,7 +600,7 @@ def _bitmap_pixel_at(bitmap, x_norm: float, y_norm: float):
     return bitmap.pixels[y * bitmap.width + x]
 
 
-def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
+def _bitmap_raster_chunks(req: RasterRequest, transforms=None) -> Optional[List[array.array]]:
     bitmap = getattr(req, "simulation_bitmap", None)
     if bitmap is None or not bitmap.pixels:
         return None
@@ -557,11 +615,9 @@ def _bitmap_raster_chunks(req: RasterRequest) -> Optional[List[array.array]]:
         for idx in range(start, min(start + pixels_per_chunk, total)):
             x = idx % req.resolution
             y = idx // req.resolution
-            px = _bitmap_pixel_at(
-                bitmap,
-                0.0 if req.resolution <= 1 else x / (req.resolution - 1),
-                0.0 if req.resolution <= 1 else y / (req.resolution - 1),
-            )
+            x_norm = 0.0 if req.resolution <= 1 else x / (req.resolution - 1)
+            y_norm = 0.0 if req.resolution <= 1 else y / (req.resolution - 1)
+            px = _bitmap_pixel_at(bitmap, x_norm, y_norm)
             samples.append(_obi_aligned_int(_bitmap_pixel_sample(px, bitmap_mode)))
         chunks.append(samples)
     return chunks
@@ -645,7 +701,7 @@ async def _paced_chunks(chunks, *, abort, interval: float):
 
 
 async def _simulated_raster_chunks(req: RasterRequest, simulation: dict, *,
-                                   abort, interval: float):
+                                   abort, interval: float, transforms=None):
     """Raster stream for the configured simulation source: X fast, one row per line."""
     import numpy as np
     sampler = await asyncio.to_thread(_simulation_sampler, simulation)
@@ -666,7 +722,7 @@ async def _simulated_raster_chunks(req: RasterRequest, simulation: dict, *,
 
 
 async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
-                                   abort, interval: float):
+                                   abort, interval: float, transforms=None):
     """Vector stream for the configured simulation source: one sample per point."""
     import numpy as np
     sampler = await asyncio.to_thread(_simulation_sampler, simulation)
@@ -709,7 +765,7 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
             yield build()
 
 
-def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
+def _bitmap_vector_chunks(req: VectorRequest, transforms=None) -> Optional[List[array.array]]:
     bitmap = getattr(req, "simulation_bitmap", None)
     if bitmap is None or not bitmap.pixels:
         return None
@@ -727,7 +783,8 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
 
     if req.pattern is VectorPattern.custom and req.points:
         iter_points = iter(req.points)
-        sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(bitmap, req.roi, x, y)
+        sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(
+            bitmap, req.roi, x, y, transforms)
     elif req.pattern is VectorPattern.custom:
         def generated_points():
             for idx in range(bitmap.width * bitmap.height):
@@ -735,16 +792,18 @@ def _bitmap_vector_chunks(req: VectorRequest) -> Optional[List[array.array]]:
                 y = idx % bitmap.height
                 yield x, y, req.dwell, False
         iter_points = generated_points()
-        sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample(
-            bitmap,
-            0.0 if bitmap.width <= 1 else x / (bitmap.width - 1),
-            0.0 if bitmap.height <= 1 else y / (bitmap.height - 1),
-        )
+        def sample_value(x, y, blank):
+            if blank:
+                return 0
+            x_norm = 0.0 if bitmap.width <= 1 else x / (bitmap.width - 1)
+            y_norm = 0.0 if bitmap.height <= 1 else y / (bitmap.height - 1)
+            return _bitmap_sample(bitmap, x_norm, y_norm)
     else:
         iter_points = _roi_vector_iter(
             req.vector_resolution, req.roi, dwell=req.dwell, scan_path=req.scan_path
         )
-        sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(bitmap, req.roi, x, y)
+        sample_value = lambda x, y, blank: 0 if blank else _bitmap_sample_point(
+            bitmap, req.roi, x, y, transforms)
 
     for point in iter_points:
         x, y, dwell, blank, _pass_index = _normalize_vector_point(point)
@@ -798,6 +857,9 @@ class DeviceService:
 
         self._conn: Optional[GlasgowConnection] = None
         self._adc_conn: Optional[AdcConnection] = None
+        # Cross-process USB ownership (see device_lock.py): the native desktop
+        # app and this service must not claim the Glasgow at the same time.
+        # Created lazily by the _device_lock property.
         self._active_command = None
         self._abort_requested = False
         self._lock = asyncio.Lock()
@@ -811,6 +873,30 @@ class DeviceService:
         self._last: Optional[dict] = None
 
     # -------- lifecycle ---------------------------------------------------
+
+    def _device_lock_owner(self) -> str:
+        return "glasgow_service (web UI)"
+
+    @property
+    def _device_lock(self) -> DeviceLock:
+        lock = self.__dict__.get("_device_lock_obj")
+        if lock is None:
+            lock = self.__dict__["_device_lock_obj"] = DeviceLock(self._device_lock_owner())
+        return lock
+
+    def _claim_device(self) -> None:
+        """Take cross-process ownership of the Glasgow before opening USB."""
+        try:
+            self._device_lock.acquire()
+        except DeviceHeld as exc:
+            raise DeviceNotReady(
+                f"{exc}. Close the scan in that application (or release the device "
+                "there) and try again.") from None
+
+    def _release_device_if_idle(self) -> None:
+        conn = getattr(self, "_conn", None)
+        if (conn is None or not conn.connected) and getattr(self, "_adc_conn", None) is None:
+            self._device_lock.release()
 
     async def start(self) -> None:
         """No hardware action. Connection is opened lazily on first scan."""
@@ -826,6 +912,7 @@ class DeviceService:
         if self._conn is not None:
             await self._conn._hard_close()
             self._conn = None
+        self._device_lock.release()
         self._status.state = DeviceState.DISCONNECTED
         logger.debug("service stopped (connection reference dropped)")
         logger.info("service stopped (connection reference dropped)")
@@ -839,6 +926,7 @@ class DeviceService:
             if self._conn is not None:
                 await self._conn._hard_close()
                 self._conn = None
+            self._device_lock.release()
             self._status.state = DeviceState.IDLE
             self._status.last_error = None
         logger.debug("connection dropped; next scan will reconnect")
@@ -869,6 +957,7 @@ class DeviceService:
             if self._conn is not None:
                 await self._conn._hard_close()
                 self._conn = None
+            self._claim_device()
 
             conn = AdcConnection(
                 self._config,
@@ -898,6 +987,7 @@ class DeviceService:
                     await conn.close()
                 finally:
                     self._adc_conn = None
+                    self._release_device_if_idle()
 
     def _activate_command(self, command) -> None:
         self._active_command = command
@@ -930,15 +1020,18 @@ class DeviceService:
         interval = _simulation_chunk_interval(self._simulation_defaults) if pace else 0.0
         build_bitmap = _bitmap_raster_chunks if kind == "raster" else _bitmap_vector_chunks
         # Building a bitmap frame is pure Python; keep it off the event loop.
-        bitmap_chunks = await asyncio.to_thread(build_bitmap, req)
+        transforms = self._action_defaults.get("transforms", {}) or {}
+        bitmap_chunks = await asyncio.to_thread(build_bitmap, req, transforms)
         if bitmap_chunks is not None:
             source = _paced_chunks(bitmap_chunks, abort=command.abort, interval=interval)
         elif kind == "raster":
             source = _simulated_raster_chunks(
-                req, self._simulation_defaults, abort=command.abort, interval=interval)
+                req, self._simulation_defaults, abort=command.abort, interval=interval,
+                transforms=transforms)
         else:
             source = _simulated_vector_chunks(
-                req, self._simulation_defaults, abort=command.abort, interval=interval)
+                req, self._simulation_defaults, abort=command.abort, interval=interval,
+                transforms=transforms)
         async for chunk in source:
             yield chunk
 
@@ -1134,6 +1227,7 @@ class DeviceService:
             return self._conn
 
         logger.debug("opening Glasgow connection")
+        self._claim_device()
         self._status.state = DeviceState.CONNECTING
         try:
             self._conn = GlasgowConnection(self._config)
@@ -1164,7 +1258,7 @@ class DeviceService:
     # -------- streaming (for WebSocket) -----------------------------------
 
     async def raster_scan(self, req: RasterRequest, *, native_samples: bool = False):
-        transport = "desktop_native" if native_samples else "websocket"
+        transport = "in_process" if native_samples else "websocket"
         if self._hardware_free(req):
             async for wire in self._simulated_scan("raster", req, native_samples=native_samples):
                 yield wire
@@ -1225,7 +1319,7 @@ class DeviceService:
                     })
 
     async def vector_scan(self, req: VectorRequest, *, native_samples: bool = False):
-        transport = "desktop_native" if native_samples else "websocket"
+        transport = "in_process" if native_samples else "websocket"
         if self._hardware_free(req):
             async for wire in self._simulated_scan("vector", req, native_samples=native_samples):
                 yield wire
@@ -1944,6 +2038,32 @@ class DeviceService:
         import matplotlib.pyplot as plt
 
         last = self._last
+        transforms = self._action_defaults.get("transforms", {}) or {}
+        xflip = transforms.get("xflip") is True
+        yflip = transforms.get("yflip") is True
+        rotate90 = transforms.get("rotate90") is True
+
+        def orient_image(image):
+            if rotate90:
+                image = np.rot90(image, k=3)
+            if xflip:
+                image = np.fliplr(image)
+            if yflip:
+                image = np.flipud(image)
+            return image
+
+        def orient_bounds(bounds):
+            if bounds is None:
+                return None
+            x0, x1, y0, y1 = bounds
+            if rotate90:
+                x0, x1, y0, y1 = 16384 - y1, 16384 - y0, x0, x1
+            if xflip:
+                x0, x1 = 16384 - x1, 16384 - x0
+            if yflip:
+                y0, y1 = 16384 - y1, 16384 - y0
+            return x0, x1, y0, y1
+
         simulation_bitmap = last.get("simulation_bitmap")
         if simulation_bitmap is not None and getattr(simulation_bitmap, "pixels", None):
             flat = np.asarray([_bitmap_pixel_value(px) for px in simulation_bitmap.pixels], dtype=np.uint16)
@@ -1953,6 +2073,7 @@ class DeviceService:
                 int(simulation_bitmap.height),
                 int(simulation_bitmap.width),
             ) * 256
+            img = orient_image(img)
             fig, ax = plt.subplots(figsize=(6, 6))
             vmin, vmax = _percentile_clip_uint16(img)
             if view == "texture":
@@ -1961,7 +2082,7 @@ class DeviceService:
                 ax.set_axis_off()
                 fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
             else:
-                bounds = _roi_bounds(last.get("roi"))
+                bounds = orient_bounds(_roi_bounds(last.get("roi")))
                 extent = None
                 if bounds is not None:
                     x0, x1, y0, y1 = bounds
@@ -1984,6 +2105,7 @@ class DeviceService:
             dwell = int(last.get("dwell") or self._raster_defaults.get("dwell") or 0)
             adc_latency = int(self._raster_defaults.get("adcLatency", 8))
             img = _raster_image_from_chunks(last["chunks"], res, dwell, adc_latency)
+            img = orient_image(img)
 
             fig, ax = plt.subplots(figsize=(6, 6))
             # Stretch to the data (trimming dropout / hot pixels) in both views.
@@ -2055,13 +2177,19 @@ class DeviceService:
                              count=len(iter_list))
             ys = np.fromiter((p[1] for p in iter_list), dtype="float32",
                              count=len(iter_list))
+            if rotate90:
+                xs, ys = ys.copy(), xs.copy()
+            if xflip:
+                xs = 16383 - xs
+            if yflip:
+                ys = 16383 - ys
             cs = samples
             fig, ax = plt.subplots(figsize=(6, 6))
             vmin, vmax = _percentile_clip_uint16(samples, _FIGURE_CLIP_LO_PCT, _FIGURE_CLIP_HI_PCT)
             marker_size = 8 if view == "texture" else 2
             im = ax.scatter(xs, ys, c=cs, cmap="gray", s=marker_size,
                             vmin=vmin, vmax=vmax, marker="s")
-            bounds = _roi_bounds(last.get("roi"))
+            bounds = orient_bounds(_roi_bounds(last.get("roi")))
             if view == "texture" and bounds is not None:
                 x0, x1, y0, y1 = bounds
                 ax.set_xlim(x0, x1)
@@ -2177,6 +2305,7 @@ class DeviceService:
                     svc._status.state = DeviceState.IDLE
                 chunks = svc._status.chunks_in_flight
                 svc._status.chunks_in_flight = 0
+                svc._release_device_if_idle()
                 svc._lock.release()
                 logger.info("scan end kind=%s ok=%s cancelled=%s elapsed=%.3fs "
                             "transport=%s chunks=%d error=%s",

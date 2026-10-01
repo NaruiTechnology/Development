@@ -106,20 +106,21 @@
                     "root": "Development",
                     "requirementsName": "requirements.txt",
                     "extraRequirements": [
-                        "glasgow_service/requirements.txt"
+                        "glasgow_service/requirements.txt",
+                        "ionbeam-native/requirements.txt"
                     ],
                     "venvDir": ".venv",
                     "skipPrivateGitEditable": true,
                     "editableInstall": true,
                     "editableTarget": ".",
-                    "verifyImports": ["amaranth", "gpiozero", "httpx", "redis", "uvicorn"],
+                    "verifyImports": ["amaranth", "gpiozero", "httpx", "redis", "uvicorn", "numpy", "PyQt6.QtCore"],
                     "requiredExecutables": {
                         "uvicorn": "uvicorn[standard]>=0.27"
                     },
                     "stopOnError": true,
                     "useBreakSystemPackages": true
                 },
-                "timeout": 600.0
+                "timeout": 1200.0
             }
         },
 
@@ -445,6 +446,20 @@
                     "script": "Development/glasgow_service/deploy/setup-redis-sentinel.sh"
                 },
                 "timeout": 600.0
+            }
+        },
+        {
+            "installIonbeamNative": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "installer": "Development/ionbeam-native/scripts/install_linux.sh",
+                    "venvDir": ".venv",
+                    "aptPackages": ["libegl1", "libgl1", "libxkbcommon0", "libxkbcommon-x11-0", "libfontconfig1", "libdbus-1-3", "libxcb-cursor0", "libxcb-icccm4", "libxcb-keysyms1", "libxcb-shape0"],
+                    "desktopEntry": true,
+                    "runSmokeTest": true
+                },
+                "timeout": 900.0
             }
         },
         {
