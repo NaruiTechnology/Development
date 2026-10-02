@@ -846,11 +846,32 @@ body {
   margin-left: 4px;
 }
 
+/* Gray level filter: amber (the theme's warning colour, like Preview). */
+.card__header .vector-gray-level-toggle {
+  color: var(--c-warn);
+}
+
+.card__header .vector-gray-level-toggle input:checked + .vacuum-switch__track {
+  border-color: color-mix(in srgb, var(--c-warn) 78%, white);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 48%),
+    linear-gradient(135deg, color-mix(in srgb, var(--c-warn) 38%, transparent), color-mix(in srgb, var(--c-warn) 12%, transparent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 0 10px color-mix(in srgb, var(--c-warn) 45%, transparent);
+}
+
+.card__header .vector-gray-level-toggle input:checked + .vacuum-switch__track .vacuum-switch__thumb {
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.92), transparent 24%),
+    linear-gradient(145deg, color-mix(in srgb, var(--c-warn) 70%, white), color-mix(in srgb, var(--c-warn) 80%, transparent));
+}
+
 .vector-gray-level-toggle .help-btn {
   width: 14px;
   height: 14px;
   font-size: 12px;
-  color: #ff5f5f;
+  color: var(--c-warn);
 }
 
 .vector-gray-level-toggle .help-btn .icon {
@@ -860,8 +881,8 @@ body {
 
 .vector-gray-level-toggle .help-btn:hover,
 .vector-gray-level-toggle .help-btn:focus-visible {
-  color: #ff8080;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #ff5f5f 34%, transparent);
+  color: color-mix(in srgb, var(--c-warn) 80%, white);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-warn) 34%, transparent);
 }
 
 .vector-gray-levels__panel {
