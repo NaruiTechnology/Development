@@ -1036,11 +1036,11 @@ export function App() {
 
   const applyVectorGrayLevelsToggle = useCallback((checked: boolean) => {
     setVectorGrayLevelsEnabled(checked);
+    // The operator's range and Spot/Skip choice survive toggling the filter
+    // off and on: scan requests only carry them while the filter is enabled,
+    // so nothing is reset here. Skip is only the default for a first use.
     if (checked) {
-      const defaultRange: [number, number] = [0, 255];
-      const nextSkipped = true;
-      setVectorGrayRange(defaultRange);
-      setVectorGrayScaleSkipped(nextSkipped);
+      setVectorGrayScaleSkipped((current) => current ?? true);
       // Adaptive feedback visits each coordinate twice (probe + action), so
       // starting it at the normal 2048 edge can leave the live canvas showing
       // only its first scan line for a long time. Initialize the filtered
@@ -1051,10 +1051,7 @@ export function App() {
         pattern: "default",
         points: null,
       }));
-      return;
     }
-    setVectorGrayRange([0, 255]);
-    setVectorGrayScaleSkipped(null);
   }, [dispatch]);
 
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
@@ -1223,6 +1220,57 @@ export function App() {
       : roiState.calibration_enabled
       ? "card.calibration"
       : "card.selectROI";
+
+  // Raster and vector put the toolbar slot (gray level filter slider and
+  // Select, or the annotation toolbox) and the Split button on a second
+  // header row below the switches; ROI keeps its own header grid.
+  const headerSecondRow =
+    activeTopTab !== "adcTest" && (kind === "raster" || kind === "vector");
+  const toolbarSlot = (
+    <div
+      id="image-panel-toolbar-slot"
+      className={`card__header-toolbar-slot image-panel-card__toolbar-slot${kind === "vector" ? " image-panel-card__toolbar-slot--vector" : ""}`}
+    >
+      {kind === "vector" ? (
+        // Always shown on the vector tab; disabled while the Gray level
+        // filter switch is off.
+        <VectorGrayLevelSelector
+          enabled={vectorGrayLevelsEnabled}
+          range={vectorGrayRange}
+          disabled={panelDisabled || !vectorGrayLevelsEnabled}
+          onRangeChange={handleVectorGrayRangeChange}
+          onRangeCommit={handleVectorGrayRangeSelect}
+          onSelect={handleVectorGrayRangeSelect}
+        />
+      ) : showGraySpectrum &&
+        !(kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive) ? (
+        <GrayScaleSpectrum
+          selectedGrayScale={displayedROIGrayScaleSelection}
+          selectionAnchor={pendingGrayScaleAnchor}
+          levels={grayScaleLevels}
+          stepDelta={grayScaleStepDelta}
+          sourceLabel={grayScaleSourceLabel}
+          scopeNote={grayScaleScopeNote}
+          onSelect={handleGrayScaleSelect}
+          onStepDeltaChange={handleGrayScaleStepDeltaChange}
+        />
+      ) : null}
+      {shouldShowROIGrayScaleClear({
+        kind,
+        hasConfirmedGrayRange: committedGrayScaleSelection !== null,
+      }) && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+        <button
+          type="button"
+          className="btn btn--ghost image-panel-card__header-action"
+          disabled={panelDisabled}
+          onClick={handleClearROIGrayScaleValues}
+          title={t("scan.clear")}
+        >
+          {t("scan.clear")}
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="app-shell">
@@ -1564,7 +1612,7 @@ export function App() {
         {/* right column */}
         <section>
             <div className="card image-panel-card">
-              <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}`}>
+              <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}${headerSecondRow ? " image-panel-card__header--two-row" : ""}`}>
                 <div className="image-panel-card__header-main">
                   <span className="card__title">{t(
                     activeTopTab === "adcTest"
@@ -1588,76 +1636,40 @@ export function App() {
                       <VectorGrayLevelHelp />
                     </label>
                   )}
-                  {activeTopTab !== "adcTest" && <div
-                    id="image-panel-toolbar-slot"
-                    className={`card__header-toolbar-slot image-panel-card__toolbar-slot${kind === "vector" ? " image-panel-card__toolbar-slot--vector" : ""}`}
-                  >
-                    {kind === "vector" ? (
-                      vectorGrayLevelsEnabled && (
-                        <VectorGrayLevelSelector
-                          enabled={vectorGrayLevelsEnabled}
-                          range={vectorGrayRange}
-                          disabled={panelDisabled}
-                          onRangeChange={handleVectorGrayRangeChange}
-                          onRangeCommit={handleVectorGrayRangeSelect}
-                          onSelect={handleVectorGrayRangeSelect}
-                        />
-                      )
-                    ) : showGraySpectrum &&
-                      !(kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive) ? (
-                      <GrayScaleSpectrum
-                        selectedGrayScale={displayedROIGrayScaleSelection}
-                        selectionAnchor={pendingGrayScaleAnchor}
-                        levels={grayScaleLevels}
-                        stepDelta={grayScaleStepDelta}
-                        sourceLabel={grayScaleSourceLabel}
-                        scopeNote={grayScaleScopeNote}
-                        onSelect={handleGrayScaleSelect}
-                        onStepDeltaChange={handleGrayScaleStepDeltaChange}
-                      />
-                    ) : null}
-                    {shouldShowROIGrayScaleClear({
-                      kind,
-                      hasConfirmedGrayRange: committedGrayScaleSelection !== null,
-                    }) && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+                  {activeTopTab !== "adcTest" && !headerSecondRow && toolbarSlot}
+                </div>
+                {activeTopTab === "scan" && showSplitButton && imagePanelSplitActive && (
+                  <label className="checkbox vacuum-switch app-switch image-panel-card__layout-lock">
+                    <input
+                      type="checkbox"
+                      checked={imagePanelLocked}
+                      disabled={scanActive}
+                      onChange={(event) => setImagePanelLocked(event.target.checked)}
+                    />
+                    <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+                    {t("canvas.layout.lock")}
+                  </label>
+                )}
+                {headerSecondRow && (
+                  // Second header row, below the switches: the gray level
+                  // filter slider + Select (vector), the annotation toolbox,
+                  // and the Split button.
+                  <div className="image-panel-card__header-row">
+                    {toolbarSlot}
+                    {activeTopTab === "scan" && showSplitButton && (
                       <button
                         type="button"
-                        className="btn btn--ghost image-panel-card__header-action"
-                        disabled={panelDisabled}
-                        onClick={handleClearROIGrayScaleValues}
-                        title={t("scan.clear")}
+                        className="btn btn--primary image-panel-card__layout-button"
+                        aria-label={t("canvas.layout.cycle", { count: imagePanelLayout })}
+                        aria-pressed={imagePanelLayout > 1}
+                        aria-controls="image-panel-grid"
+                        disabled={scanActive || !canSplitImagePanel}
+                        title={t("canvas.layout.cycle", { count: imagePanelLayout })}
+                        onClick={splitImagePanel}
                       >
-                        {t("scan.clear")}
+                        <Icon name="quad" tone="accent" />
+                        <span>{t("canvas.layout.splitScreen")}</span>
                       </button>
-                    )}
-                  </div>}
-                </div>
-                {activeTopTab === "scan" && showSplitButton && (
-                  <div className="image-panel-card__layout-actions">
-                    <button
-                      type="button"
-                      className="btn btn--primary image-panel-card__layout-button"
-                      aria-label={t("canvas.layout.cycle", { count: imagePanelLayout })}
-                      aria-pressed={imagePanelLayout > 1}
-                      aria-controls="image-panel-grid"
-                      disabled={scanActive || !canSplitImagePanel}
-                      title={t("canvas.layout.cycle", { count: imagePanelLayout })}
-                      onClick={splitImagePanel}
-                    >
-                      <Icon name="quad" tone="accent" />
-                      <span>{t("canvas.layout.splitScreen")}</span>
-                    </button>
-                    {imagePanelSplitActive && (
-                      <label className="checkbox vacuum-switch app-switch image-panel-card__layout-lock">
-                        <input
-                          type="checkbox"
-                          checked={imagePanelLocked}
-                          disabled={scanActive}
-                          onChange={(event) => setImagePanelLocked(event.target.checked)}
-                        />
-                        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-                        {t("canvas.layout.lock")}
-                      </label>
                     )}
                   </div>
                 )}
@@ -1922,8 +1934,7 @@ function VectorGrayLevelSelector({
   }
 
   return (
-    <div className="vector-gray-levels">
-      {enabled && (
+    <div className={`vector-gray-levels${enabled ? "" : " vector-gray-levels--off"}`} aria-disabled={disabled}>
         <div className="vector-gray-levels__panel">
           <div className="vector-gray-levels__actions">
             <div className="vector-gray-levels__slider-shell">
@@ -1995,7 +2006,6 @@ function VectorGrayLevelSelector({
             </button>
           </div>
         </div>
-      )}
     </div>
   );
 }

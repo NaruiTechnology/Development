@@ -432,11 +432,55 @@ body {
   display: none;
 }
 
-.image-panel-card__layout-actions {
+/* Raster / vector: switches on the first row, then a second row with the
+   toolbar slot (gray level filter slider + Select, or the annotation
+   toolbox) and the Split button. */
+.image-panel-card__header--two-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.image-panel-card__header--two-row .image-panel-card__header-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+/* Title on the left; the switches flow to the right end of the row. */
+.image-panel-card__header--two-row .image-panel-card__header-main > .card__title {
+  margin-right: auto;
+}
+
+.image-panel-card__header--two-row .image-panel-card__header-main {
+  justify-content: flex-end;
+}
+
+.image-panel-card__header--two-row .image-panel-card__layout-lock {
+  flex: 0 0 auto;
+}
+
+.image-panel-card__header-row {
+  flex: 1 0 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.image-panel-card__header-row > .image-panel-card__toolbar-slot {
+  flex: 1 1 auto;
+  width: auto;
+  margin-left: 0;
+}
+
+.image-panel-card__header-row > .image-panel-card__layout-button {
+  margin-left: auto;
+}
+
+/* Nothing to show on the second row (no slider, toolbox or Split). */
+.image-panel-card__header-row:not(:has(> button)):has(> .card__header-toolbar-slot:empty) {
+  display: none;
 }
 
 .image-panel-card__layout-button {
@@ -756,6 +800,17 @@ body {
   width: 100%;
   padding: 2px 0;
   white-space: nowrap;
+}
+
+/* Gray level filter switch off: the slider and Select stay visible but
+   dimmed and inactive. */
+.vector-gray-levels--off .vector-gray-levels__slider-shell {
+  opacity: 0.45;
+  filter: grayscale(0.85);
+}
+
+.vector-gray-levels--off .vector-gray-levels__range {
+  cursor: not-allowed;
 }
 
 .vector-gray-level-toggle {
