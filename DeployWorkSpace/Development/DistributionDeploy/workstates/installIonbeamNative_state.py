@@ -88,21 +88,36 @@ class installIonbeamNative_state(distributionDeploy_state):
         if await self._run(verify, 30.0):
             self.info("[{}] Qt runtime libraries already installed".format(type(self).__name__))
             return True
+        # The host's dpkg/apt state may already be broken by an earlier,
+        # unrelated install (interrupted dpkg run, a .deb installed without its
+        # dependencies, ...). apt then refuses *any* install with
+        # "Unmet dependencies. Try 'apt --fix-broken install' with no packages".
+        # Repair that state first so this step does not depend on what ran
+        # before it (installRedisSentinel only repairs when it installs).
+        apt = ("sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 "
+               "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold")
         command = (
             "sudo -n true || {{ echo 'workflow sudo credential is unavailable' >&2; exit 1; }}; "
+            "sudo DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold --configure -a && "
             "sudo apt-get -o DPkg::Lock::Timeout=600 update && "
-            "sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 "
-            "-o Dpkg::Options::=--force-confold "
-            "install -y --no-install-recommends {packages} && "
+            "{apt} --fix-broken install -y && "
+            "{apt} install -y --no-install-recommends {packages} && "
             "{verify}"
-        ).format(packages=packageArgs, verify=verify)
+        ).format(apt=apt, packages=packageArgs, verify=verify)
         self.info("[{}] installing Qt runtime libraries: {}"
                   .format(type(self).__name__, ", ".join(packages)))
         ok = await self._run(command, timeout)
         if not ok:
-            self.error("[{}] Qt runtime library installation failed\n{}".format(
-                type(self).__name__,
-                self._stderr.decode(errors="replace") if self._stderr else "<no stderr>"))
+            # apt prints the actual unmet-dependency list on stdout; stderr only
+            # carries the one-line "E: Unmet dependencies" summary.
+            stdout = self._stdout.decode(errors="replace") if self._stdout else ""
+            self.error("[{}] Qt runtime library installation failed\nstderr:\n{}\nstdout (tail):\n{}"
+                       "\nDiagnose on the host with: sudo apt-get --fix-broken install; "
+                       "apt-mark showhold; apt-cache policy {}".format(
+                           type(self).__name__,
+                           self._stderr.decode(errors="replace") if self._stderr else "<no stderr>",
+                           "\n".join(stdout.splitlines()[-40:]) or "<no stdout>",
+                           packageArgs))
         return ok
 
     async def _run(self, command, timeout):

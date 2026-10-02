@@ -119,6 +119,37 @@ class InstallStateTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("apt-get", commands[0])
             self.assertTrue(commands[1].endswith("--skip-pip --no-desktop-entry --skip-smoke"))
 
+    async def test_apt_install_repairs_broken_dpkg_state_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._layout(root)
+            state = self._state(root, {"aptPackages": ["libxcb-cursor0"]})
+            # dpkg check fails -> apt path; apt + installer succeed
+            state.commandAsyncio = AsyncMock(side_effect=[False, True, True])
+            await state.DoWork()
+            self.assertTrue(state._success)
+            apt = state.commandAsyncio.call_args_list[1].args[0]
+            configure = apt.index("dpkg --force-confdef --force-confold --configure -a")
+            fix = apt.index("--fix-broken install -y")
+            install = apt.index("install -y --no-install-recommends")
+            self.assertLess(configure, fix)
+            self.assertLess(fix, install)
+
+    async def test_apt_failure_fails_the_state_and_logs_stdout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._layout(root)
+            state = self._state(root, {"aptPackages": ["libxcb-cursor0"]})
+            state.commandAsyncio = AsyncMock(side_effect=[False, False])
+            errors = []
+            state.error = errors.append
+            state._stdout = b"The following packages have unmet dependencies:\n libgl1 : Depends: x"
+            state._stderr = b"E: Unmet dependencies."
+            await state.DoWork()
+            self.assertFalse(state._success)
+            self.assertEqual(state.commandAsyncio.call_count, 2)   # installer never runs
+            self.assertIn("libgl1 : Depends", errors[-1])
+
     async def test_failure_and_missing_inputs_fail_the_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
