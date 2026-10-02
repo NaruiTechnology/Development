@@ -144,7 +144,7 @@ const defaultVector: VectorRequest = {
 };
 
 const initialState: ScanState = {
-  kind: "roi",
+  kind: "vector",
   phase: "idle",
   bytesReceived: 0,
   chunksReceived: 0,

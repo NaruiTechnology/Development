@@ -34,3 +34,28 @@ test("unlocked multi-scan keeps advancing to an empty target pane", () => {
     selectedPane: 2,
   });
 });
+
+test("locked multi-scan into the newest pane opens the next empty pane", () => {
+  assert.deepEqual(
+    placeCompletedScan({ slots: ["scan-1", null], layout: 2, selectedPane: 1, locked: true, imageUrl: "scan-2" }),
+    { slots: ["scan-1", "scan-2", null], layout: 3, selectedPane: 2 },
+  );
+  assert.deepEqual(
+    placeCompletedScan({ slots: ["scan-1", "scan-2", null], layout: 3, selectedPane: 2, locked: true, imageUrl: "scan-3" }),
+    { slots: ["scan-1", "scan-2", "scan-3", null], layout: 4, selectedPane: 3 },
+  );
+});
+
+test("locked multi-scan stops growing at four panes", () => {
+  assert.deepEqual(
+    placeCompletedScan({ slots: ["scan-1", "scan-2", "scan-3", null], layout: 4, selectedPane: 3, locked: true, imageUrl: "scan-4" }),
+    { slots: ["scan-1", "scan-2", "scan-3", "scan-4"], layout: 4, selectedPane: 3 },
+  );
+});
+
+test("locked re-scan of an older selected pane does not add a pane", () => {
+  assert.deepEqual(
+    placeCompletedScan({ slots: ["scan-1", "scan-2", null], layout: 3, selectedPane: 0, locked: true, imageUrl: "again" }),
+    { slots: ["again", "scan-2", null], layout: 3, selectedPane: 0 },
+  );
+});

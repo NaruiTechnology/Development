@@ -145,7 +145,7 @@ export const en = {
   "canvas.layout.lock": "Lock",
   "canvas.layout.help.title": "Multi-scan windows",
   "canvas.layout.help.aria": "Help for multi-scan windows",
-  "canvas.layout.help.body": "Split the image panel into multiple windows. With Lock on, the layout survives navigation and each new scan replaces the selected window. With Lock off, scans advance to an empty window when space allows.",
+  "canvas.layout.help.body": "Split the image panel into multiple windows. With Lock on, the layout survives navigation and a scan into the newest window opens the next empty window (up to four), and re-scanning an older window you select replaces only that window. With Lock off, scans advance to an empty window when space allows.",
   "canvas.layout.previous": "Previous scan {number}",
   "canvas.layout.empty": "Empty image panel {number}",
   "canvas.layout.target": "Current live scan target",

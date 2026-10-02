@@ -165,12 +165,21 @@ export function App() {
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
   const dimensionCalNavigationRequest = useAppSelector((s) => s.settings.dimensionCalNavigationRequest);
-  const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
+  const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("vector");
   const [lastLiveScanImage, setLastLiveScanImage] = useState<{
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
-  const [imagePanelLayout, setImagePanelLayout] = useState<ImagePanelLayout>(1);
+  // Each scan kind keeps its own pane layout: splitting the vector view must not
+  // open empty panes on the raster view (and vice versa). Once any view has
+  // been split, the other one splits itself after its first completed scan.
+  const [imagePanelLayoutByKind, setImagePanelLayoutByKind] = useState<
+    Record<"raster" | "vector", ImagePanelLayout>
+  >({ raster: 1, vector: 1 });
+  const imagePanelLayout: ImagePanelLayout =
+    kind === "raster" || kind === "vector" ? imagePanelLayoutByKind[kind] : 1;
+  const imagePanelSplitActive =
+    imagePanelLayoutByKind.raster > 1 || imagePanelLayoutByKind.vector > 1;
   const [imagePanelLocked, setImagePanelLocked] = useState(true);
   const [selectedImagePane, setSelectedImagePane] = useState<
     Record<"raster" | "vector", number>
@@ -244,14 +253,8 @@ export function App() {
   const showROICalibrationInControls = kind === "roi" && roiState.calibration_enabled;
   const showROIPreviewSideCardBase = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
   const isSignedIn = Boolean(signedInUser);
-  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>(
-    kind === "mag" || roiState.calibration_enabled || hasPersistedDimensionCalibration
-      ? "calibrate"
-      : "scan"
-  );
-  const [scanSubTab, setScanSubTab] = useState<ScanSubTab>(
-    kind === "raster" ? "raster" : kind === "vector" ? "vector" : "roi"
-  );
+  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>("scan");
+  const [scanSubTab, setScanSubTab] = useState<ScanSubTab>("vector");
   const [calibrateSubTab, setCalibrateSubTab] = useState<CalibrateSubTab>(
     kind === "mag" ? "mag" : "dimension"
   );
@@ -842,18 +845,27 @@ export function App() {
             [scanKind]: [imageUrl, ...earlier.filter((item) => item !== imageUrl)].slice(0, 4),
           };
         });
-        if (imagePanelLayout > 1 && sameScan) {
+        const scanKindLayout = imagePanelLayoutByKind[scanKind];
+        if (scanKindLayout > 1 && sameScan) {
           // Same scan, newer image: update it in whichever pane shows it now.
           setImagePanelSlots((current) => ({
             ...current,
             [scanKind]: current[scanKind].map((item) => (item === previousScanImage ? imageUrl : item)),
           }));
-        } else if (imagePanelLayout > 1) {
+        } else if (scanKindLayout === 1 && imagePanelSplitActive) {
+          // Split mode is on (another view was split) but this view has not
+          // been split yet: its first completed scan fills pane 1 and opens
+          // pane 2 as the empty target for the next scan.
+          setImagePanelSlots((current) => ({ ...current, [scanKind]: [imageUrl, null] }));
+          setImagePanelLayoutByKind((current) => ({ ...current, [scanKind]: 2 }));
+          setSelectedImagePane((current) => ({ ...current, [scanKind]: 1 }));
+          setScanTargetImagePane((current) => ({ ...current, [scanKind]: 1 }));
+        } else if (scanKindLayout > 1) {
           // After the split, each completed scan opens the next empty pane
           // automatically unless the operator locked the current layout.
           const placement = placeCompletedScan({
             slots: imagePanelSlots[scanKind],
-            layout: imagePanelLayout,
+            layout: scanKindLayout,
             selectedPane: scanTargetImagePane[scanKind],
             locked: imagePanelLocked,
             imageUrl,
@@ -862,7 +874,7 @@ export function App() {
             ...current,
             [scanKind]: placement.slots,
           }));
-          setImagePanelLayout(placement.layout);
+          setImagePanelLayoutByKind((current) => ({ ...current, [scanKind]: placement.layout }));
           setSelectedImagePane((current) => ({
             ...current,
             [scanKind]: placement.selectedPane,
@@ -886,9 +898,10 @@ export function App() {
       kind,
       roiActionCanvasVisible,
       roiActionGrayFilterActive,
-      imagePanelLayout,
+      imagePanelLayoutByKind,
       imagePanelLocked,
       imagePanelSlots,
+      imagePanelSplitActive,
       scanTargetImagePane,
       selectedImagePane,
       t,
@@ -917,7 +930,7 @@ export function App() {
     if (!canSplitImagePanel || (kind !== "raster" && kind !== "vector")) return;
     // Pane 1 keeps the first scan; pane 2 is the empty target for the next scan.
     setImagePanelSlots((current) => ({ ...current, [kind]: [currentTargetImage, null] }));
-    setImagePanelLayout(2);
+    setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
     setSelectedImagePane((current) => ({ ...current, [kind]: 1 }));
     setScanTargetImagePane((current) => ({ ...current, [kind]: 1 }));
   }, [canSplitImagePanel, currentTargetImage, kind]);
@@ -1145,7 +1158,7 @@ export function App() {
   // remains available while the operator visits another tab or route.
   function closeImagePanelSplit() {
     if (imagePanelLocked) return;
-    setImagePanelLayout(1);
+    setImagePanelLayoutByKind({ raster: 1, vector: 1 });
     setImagePanelSlots({ raster: [], vector: [] });
     setSelectedImagePane({ raster: 0, vector: 0 });
     setScanTargetImagePane({ raster: 0, vector: 0 });
@@ -1633,7 +1646,7 @@ export function App() {
                       <Icon name="quad" tone="accent" />
                       <span>{t("canvas.layout.splitScreen")}</span>
                     </button>
-                    {imagePanelLayout > 1 && (
+                    {imagePanelSplitActive && (
                       <label className="checkbox vacuum-switch app-switch image-panel-card__layout-lock">
                         <input
                           type="checkbox"

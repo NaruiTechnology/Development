@@ -126,7 +126,7 @@ export const zhCN: Partial<TranslationTable> = {
   "canvas.layout.lock": "锁定",
   "canvas.layout.help.title": "多扫描窗口",
   "canvas.layout.help.aria": "多扫描窗口帮助",
-  "canvas.layout.help.body": "将图像面板拆分为多个窗口。启用锁定后，切换页面仍会保留布局，每次新扫描会替换选中的窗口。关闭锁定后，在空间允许时扫描会前进到空窗口。",
+  "canvas.layout.help.body": "将图像面板拆分为多个窗口。启用锁定后，切换页面仍会保留布局，扫描到最新窗口后会自动打开下一个空窗口（最多四个）；选中较早的窗口再次扫描时只替换该窗口。关闭锁定后，在空间允许时扫描会前进到空窗口。",
   "canvas.layout.previous": "上一次扫描 {number}",
   "canvas.layout.empty": "空图像面板 {number}",
   "canvas.layout.target": "当前实时扫描目标",

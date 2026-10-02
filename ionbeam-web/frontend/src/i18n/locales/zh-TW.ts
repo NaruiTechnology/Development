@@ -135,7 +135,7 @@ export const zhTW: Partial<TranslationTable> = {
   "canvas.layout.lock": "鎖定",
   "canvas.layout.help.title": "多重掃描視窗",
   "canvas.layout.help.aria": "多重掃描視窗說明",
-  "canvas.layout.help.body": "將影像面板分割成多個視窗。啟用鎖定後，切換頁面仍會保留版面，每次新掃描會取代選取的視窗。關閉鎖定後，在空間允許時掃描會前進到空白視窗。",
+  "canvas.layout.help.body": "將影像面板分割成多個視窗。啟用鎖定後，切換頁面仍會保留版面，掃描到最新視窗後會自動開啟下一個空白視窗（最多四個）；選取較早的視窗再次掃描時只取代該視窗。關閉鎖定後，在空間允許時掃描會前進到空白視窗。",
   "canvas.layout.previous": "上一次掃描 {number}",
   "canvas.layout.empty": "空白影像面板 {number}",
   "canvas.layout.target": "目前即時掃描目標",

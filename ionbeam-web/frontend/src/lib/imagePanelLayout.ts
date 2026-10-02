@@ -29,6 +29,15 @@ export function placeCompletedScan({
   if (locked) {
     const targetPane = clampImagePane(selectedPane, layout);
     slots[targetPane] = imageUrl;
+    // A scan into the newest pane keeps the multi-scan sequence going: the
+    // next empty pane opens automatically (pane 3, then pane 4), the same as
+    // after the Split button. Re-scanning an older pane the operator selected
+    // only replaces that pane.
+    if (targetPane === layout - 1 && layout < 4) {
+      const nextLayout = (layout + 1) as ImagePanelLayout;
+      slots.push(null);
+      return { slots, layout: nextLayout, selectedPane: nextLayout - 1 };
+    }
     return { slots, layout, selectedPane: targetPane };
   }
 
