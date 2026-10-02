@@ -1080,7 +1080,7 @@ class DeviceService:
             finally:
                 self._deactivate_command(command)
                 # Like a real scan: keep whatever was captured, even if stopped.
-                self._set_last_scan(self._simulated_last_scan(kind, req, captured, "stream"))
+                self._set_last_scan(req, self._simulated_last_scan(kind, req, captured, "stream"))
 
     async def _simulated_run_chunks(self, kind: str, req) -> List:
         """All chunks of a blocking simulated scan (caller holds the device lock)."""
@@ -1315,7 +1315,7 @@ class DeviceService:
                 # snapshot whatever we got. Partial captures are still
                 # downloadable — better than nothing for a paused scan.
                 if not adc_presence_fault:
-                    self._set_last_scan({
+                    self._set_last_scan(req, {
                         "kind": "raster",
                         "chunks": captured,
                         "resolution": req.resolution,
@@ -1378,7 +1378,7 @@ class DeviceService:
                     # is the disconnected/full-scale signature. Partial
                     # operator-stopped captures remain downloadable.
                     if not adc_presence_fault:
-                        self._set_last_scan({
+                        self._set_last_scan(req, {
                             "kind": "vector",
                             "chunks": captured,
                             "latency_bytes": latency,
@@ -1432,7 +1432,7 @@ class DeviceService:
             finally:
                 self._deactivate_command(cmd)
                 if captured:
-                    self._set_last_scan({
+                    self._set_last_scan(req, {
                         "kind": "dac_ramp",
                         "chunks": captured,
                         "resolution": 16384,
@@ -1450,7 +1450,7 @@ class DeviceService:
                 pixels_per_chunk = math.ceil(req.latency_bytes / req.dwell)
                 total_pixels = req.resolution * req.resolution
                 expected_chunks = math.ceil(total_pixels / pixels_per_chunk)
-                self._set_last_scan({
+                self._set_last_scan(req, {
                     "kind": "raster",
                     "chunks": simulated_chunks,
                     "resolution": req.resolution,
@@ -1517,7 +1517,7 @@ class DeviceService:
 
         # Cache for /scan/last/csv and /scan/last/figure.
         if chunks:
-            self._set_last_scan({
+            self._set_last_scan(req, {
                 "kind": "raster",
                 "chunks": chunks,
                 "resolution": req.resolution,
@@ -1591,7 +1591,7 @@ class DeviceService:
 
         # Cache for /scan/last/csv and /scan/last/figure, same as raster/vector.
         if chunks:
-            self._set_last_scan({
+            self._set_last_scan(req, {
                 "kind": "dac_ramp",
                 "chunks": chunks,
                 "resolution": 16384,
@@ -1614,7 +1614,7 @@ class DeviceService:
         if self._hardware_free(req):
             async with self._acquire("vector"):
                 simulated_chunks = await self._simulated_run_chunks("vector", req)
-                self._set_last_scan({
+                self._set_last_scan(req, {
                     "kind": "vector",
                     "chunks": simulated_chunks,
                     "latency_bytes": req.latency_bytes,
@@ -1685,7 +1685,7 @@ class DeviceService:
         total_bytes = sum(len(c) * 2 for c in chunks)
 
         if chunks:
-            self._set_last_scan({
+            self._set_last_scan(req, {
                 "kind": "vector",
                 "chunks": chunks,
                 "latency_bytes": latency,
@@ -1918,9 +1918,97 @@ class DeviceService:
 
     # -------- on-demand download bytes (CSV / PNG figure) -----------------
 
-    def _set_last_scan(self, last: dict) -> None:
+    def _set_last_scan(self, req, last: dict) -> None:
+        # Record the parameters this scan actually ran with, so the DumpData
+        # files can carry them in their header (see last_dump_csv_bytes).
+        last.setdefault("scan_params", self._scan_param_header(req, last))
         self._last = last
         self._maybe_dump_last_outputs()
+
+    def _scan_param_header(self, req, last: dict) -> List[Tuple[str, str]]:
+        """Ordered (name, value) pairs describing the scan settings.
+
+        Plain strings only, so the list pickles into the desktop artifact
+        worker and is written verbatim into the CSV/PNG dump headers.
+        """
+        def enum_text(value) -> str:
+            return str(getattr(value, "value", value))
+
+        kind = last.get("kind", "")
+        params: List[Tuple[str, str]] = [
+            ("kind", kind),
+            ("written", time.strftime("%Y-%m-%d %H:%M:%S")),
+            ("source", str(last.get("source") or "")),
+        ]
+        if kind == "raster":
+            res = getattr(req, "resolution", None)
+            params.append(("resolution", f"{res}x{res}"))
+        elif kind == "vector":
+            pattern = enum_text(getattr(req, "pattern", ""))
+            params.append(("pattern", pattern))
+            if pattern == "default":
+                edge = getattr(req, "vector_resolution", None)
+                params.append(("resolution", f"{edge}x{edge}"))
+            params.append(("scan_path", enum_text(getattr(req, "scan_path", ""))))
+        elif kind == "dac_ramp":
+            params.append(("axis", enum_text(getattr(req, "axis", ""))))
+            params.append(("fixed_code", str(getattr(req, "fixed_code", ""))))
+
+        dwell = getattr(req, "dwell", None)
+        if dwell is not None:
+            dwell = int(dwell)
+            period_ns = (1e9 / self._conversion_hz) if getattr(self, "_conversion_hz", 0) else 125.0
+            params.append(("dwell", f"{dwell} (+1 = {dwell + 1} x {period_ns:.1f} ns = "
+                                    f"{(dwell + 1) * period_ns / 1000.0:.3f} us/pixel)"))
+        requested_latency = getattr(req, "latency_bytes", None)
+        effective_latency = last.get("latency_bytes", requested_latency)
+        if effective_latency is not None:
+            text = str(effective_latency)
+            if requested_latency is not None and requested_latency != effective_latency:
+                text += f" (requested {requested_latency})"
+            params.append(("latency_bytes", text))
+        for name in ("output_mode", "frame_blank", "adc_valid", "beam_type", "cookie"):
+            if hasattr(req, name):
+                params.append((name, str(getattr(req, name))))
+
+        if kind == "vector":
+            feedback = getattr(req, "feedback_mode", None)
+            if feedback is not None:
+                params.append(("feedback_mode", enum_text(feedback)))
+            gray_range = getattr(req, "gray_level_range", None)
+            if gray_range is not None:
+                lo, hi = gray_range
+                params.append(("gray_level_range", f"{lo}..{hi}"))
+                skipped = getattr(req, "gray_level_skipped", None)
+                if skipped is not None:
+                    params.append(("gray_level_mode", "skip" if skipped else "spot"))
+
+        roi = getattr(req, "roi", None)
+        if roi is not None:
+            params.append(("roi_dac", f"x {roi.x_start:g}..{roi.x_end:g}, y {roi.y_start:g}..{roi.y_end:g}"))
+        params.append(("chunks", str(len(last.get("chunks") or []))))
+        return [(name, value) for name, value in params if value != ""]
+
+    def last_scan_params(self) -> List[Tuple[str, str]]:
+        if not self._last:
+            return []
+        return [tuple(item) for item in (self._last.get("scan_params") or [])]
+
+    def last_dump_csv_bytes(self) -> bytes:
+        """DumpData CSV: the scan parameters as ``#`` comment lines, then
+        the same rows as :meth:`last_csv_bytes` (``numpy.loadtxt`` and most
+        CSV readers skip ``#`` lines by default)."""
+        header = "".join(f"# {name}: {value}\n" for name, value in self.last_scan_params())
+        return header.encode("utf-8") + self.last_csv_bytes()
+
+    def last_dump_png_bytes(self) -> bytes:
+        """DumpData PNG: the figure with the scan parameters stored as PNG
+        text chunks (visible in image viewers' metadata / ``identify -verbose``)."""
+        return self.last_figure_png(metadata={
+            "Title": f"Ion beam {self._last.get('kind', 'scan')} scan",
+            "Description": "; ".join(f"{name}={value}" for name, value in self.last_scan_params()),
+            **{f"scan.{name}": value for name, value in self.last_scan_params()},
+        })
 
     def _dump_filename(self, file_type: str, timestamp: str) -> str:
         if not self.has_last():
@@ -1948,7 +2036,7 @@ class DeviceService:
             output_dir = Path.home() / "Output"
             output_dir.mkdir(parents=True, exist_ok=True)
             csv_path = output_dir / self._dump_filename("csv", timestamp)
-            csv_path.write_bytes(self.last_csv_bytes())
+            csv_path.write_bytes(self.last_dump_csv_bytes())
             logger.info("wrote CSV dump: %s", csv_path)
         except Exception as exc:
             logger.warning("failed to write CSV dump: %s", exc)
@@ -1956,7 +2044,7 @@ class DeviceService:
             output_dir = Path.home() / "Output"
             output_dir.mkdir(parents=True, exist_ok=True)
             png_path = output_dir / self._dump_filename("png", timestamp)
-            png_path.write_bytes(self.last_figure_png())
+            png_path.write_bytes(self.last_dump_png_bytes())
             logger.info("wrote PNG dump: %s", png_path)
         except Exception as exc:
             logger.warning("failed to write PNG dump: %s", exc)
@@ -2017,7 +2105,8 @@ class DeviceService:
         return self._last_filename("png", time.strftime("%y%m%d_%H%M%S"))
 
     def last_figure_png(self, render_mode: str = "decimated",
-                        view: str = "figure") -> bytes:
+                        view: str = "figure",
+                        metadata: Optional[dict] = None) -> bytes:
         """Render the last scan as a publication-quality PNG using
         matplotlib. Mirrors the layout of the matplotlib figures the
         operator was generating manually before this endpoint existed.
@@ -2223,6 +2312,7 @@ class DeviceService:
             bbox_inches=None if view == "texture" else "tight",
             pad_inches=0 if view == "texture" else 0.1,
             transparent=view == "texture",
+            metadata=metadata,
         )
         plt.close(fig)
         return out.getvalue()

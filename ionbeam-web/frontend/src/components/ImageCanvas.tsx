@@ -33,6 +33,7 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { markScanPerformanceCanvasReady } from "../lib/scanPerformance";
 import { clampImagePane } from "../lib/imagePanelLayout";
+import type { ScanParamItem } from "../lib/scanParamChip";
 import { apiUrl } from "../lib/backendUrl";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { Icon } from "./Icon";
@@ -113,6 +114,20 @@ function rememberArchivedPaint(imageUrl: string, snapshot: PaintSnapshot): void 
     const oldest = archivedPaints.keys().next().value;
     if (oldest === undefined) break;
     archivedPaints.delete(oldest);
+  }
+}
+
+// Scan settings of each completed image, keyed like archivedPaints, so a
+// "Previous scan" pane keeps showing the parameter chip of its own scan.
+const archivedScanParams = new Map<string, ScanParamItem[]>();
+
+function rememberScanParams(imageUrl: string, items: ScanParamItem[]): void {
+  archivedScanParams.delete(imageUrl);
+  archivedScanParams.set(imageUrl, items);
+  while (archivedScanParams.size > ARCHIVED_PAINT_LIMIT) {
+    const oldest = archivedScanParams.keys().next().value;
+    if (oldest === undefined) break;
+    archivedScanParams.delete(oldest);
   }
 }
 
@@ -334,6 +349,9 @@ export function ImageCanvas({
   const lastOutput = useAppSelector((s) => s.scan.lastOutput);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
   const chunksReceived = useAppSelector((s) => s.scan.chunksReceived);
+  const lastScanParams = useAppSelector((s) => s.scan.lastScanParams);
+  const lastScanParamsRef = useRef(lastScanParams);
+  lastScanParamsRef.current = lastScanParams;
   const completedKind = lastOutput?.kind ?? lastResult?.kind ?? null;
   const hasPaintedCanvasImage = stats.populated > 0;
   const showServerFigure =
@@ -351,6 +369,15 @@ export function ImageCanvas({
   // A target pane added by the layout button stays empty until a scan fills it.
   const targetParked =
     imageLayout > 1 && phase !== "running" && phase !== "stopping" && !imageSlots[scanTargetPane];
+  // Settings chip of the scan the live pane is showing (only once it completed).
+  const liveScanParamItems =
+    phase === "completed" &&
+    !targetParked &&
+    lastScanParams?.kind === kind &&
+    (completedKind === null || completedKind === kind) &&
+    (hasLiveCanvasData || hasRenderedCanvasImage)
+      ? lastScanParams.items
+      : null;
   const editorToolbarVisible = toolbarVisible;
   const showCalibratedAxes = kind !== "roi";
   const showGrid =
@@ -504,6 +531,8 @@ export function ImageCanvas({
         markScanPerformanceCanvasReady(kind);
         const snapshot = liveSnapshotRef.current;
         if (snapshot) rememberArchivedPaint(image, snapshot);
+        const scanParams = lastScanParamsRef.current;
+        if (scanParams?.kind === kind) rememberScanParams(image, scanParams.items);
         emit(image);
       } catch {
         emit(null);
@@ -916,6 +945,8 @@ export function ImageCanvas({
       drawCanvasAnnotations(ctx, annotations, exportCanvas.width, exportCanvas.height);
       const mergedUrl = exportCanvas.toDataURL("image/png");
       if (archivedImageUrl && (kind === "raster" || kind === "vector")) {
+        const archivedParams = archivedScanParams.get(archivedImageUrl);
+        if (archivedParams) rememberScanParams(mergedUrl, archivedParams);
         onPaneImageChange?.(kind, mergePane, mergedUrl);
       } else {
         setMergedFigureUrl(mergedUrl);
@@ -1284,6 +1315,7 @@ export function ImageCanvas({
             }}
           />
           {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} />}
+          {liveScanParamItems && <ScanParamChip items={liveScanParamItems} t={t} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
@@ -1922,6 +1954,34 @@ function LiveAxisOverlay({
   );
 }
 
+/**
+ * Low-opacity summary of the settings a scan ran with, drawn over the image
+ * in the annotation layer. It never takes pointer events, so the editor
+ * tools underneath keep working, and it is not burned into merged figures.
+ */
+function ScanParamChip({
+  items,
+  t,
+}: {
+  items: ScanParamItem[];
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}) {
+  if (!items.length) return null;
+  return (
+    <div className="canvas-scan-params" role="note" aria-label={t("canvas.scanParams.aria")}>
+      {items.map((item) => (
+        <span key={item.id} className="canvas-scan-params__item">
+          <span className="canvas-scan-params__label">{t(item.labelKey as TranslationKey)}</span>
+          <span className="canvas-scan-params__value">
+            {item.valueKey ? t(item.valueKey as TranslationKey) : item.value}
+            {item.suffix}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function ArchivedScanDisplay({
   kind,
   imageUrl,
@@ -1946,6 +2006,7 @@ function ArchivedScanDisplay({
   editorLayer: ReactNode;
 }) {
   const snapshot = archivedPaints.get(imageUrl) ?? null;
+  const scanParams = archivedScanParams.get(imageUrl) ?? null;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Start from the levels the live image was shown with, then keep this
   // pane's own levels: adjusting it never touches the live wedge.
@@ -1981,6 +2042,7 @@ function ArchivedScanDisplay({
         <div className="canvas-frame" ref={onFrameRef}>
           <canvas ref={canvasRef} aria-label={alt} onDragStart={(event) => event.preventDefault()} />
           {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
+          {scanParams && <ScanParamChip items={scanParams} t={t} />}
           {editorLayer}
         </div>
         <LevelWedge
@@ -2002,6 +2064,7 @@ function ArchivedScanDisplay({
       <div className={`image-panel-grid__visual${target ? " image-panel-grid__target-visual" : ""}`} ref={onFrameRef}>
         <img className="image-panel-grid__image image-panel-grid__archived-image" src={imageUrl} alt={alt} style={{ filter: `brightness(${brightness}%)` }} />
         {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
+        {scanParams && <ScanParamChip items={scanParams} t={t} />}
         {editorLayer}
       </div>
       <label className="image-panel-grid__brightness">

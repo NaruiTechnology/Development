@@ -18,6 +18,10 @@ import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 import type { DimensionCalibrationValues } from "../lib/dimensionCalibrationPersistence";
 import type { AppliedScanGeometry } from "../lib/scanGeometry";
+import { estimateRevC3ScanTiming } from "../lib/scanTiming";
+import { summarizeScanParams, type ScanParamSummary } from "../lib/scanParamChip";
+
+const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
 
 export type ScanKind = "raster" | "vector" | "roi" | "mag";
 export type ScanPhase =
@@ -71,6 +75,9 @@ interface ScanState {
   vectorRenderMode: VectorRenderMode;
   /** Orientation applied to live and exported scan images. */
   streamTransforms: StreamTransforms;
+  /** Settings of the most recently started scan, shown as a chip on the
+   *  live image once that scan completes. */
+  lastScanParams: ScanParamSummary | null;
 }
 
 export interface ROIState {
@@ -193,6 +200,7 @@ const initialState: ScanState = {
   roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
   vectorRenderMode: "decimated",
   streamTransforms: { xflip: false, yflip: false, rotate90: false },
+  lastScanParams: null,
 };
 
 function numberDefault(value: unknown, fallback: number): number {
@@ -692,6 +700,9 @@ const slice = createSlice({
       s.phase = "error";
       s.errorMessage = a.payload;
     },
+    scanParamsCaptured(s, a: PayloadAction<ScanParamSummary>) {
+      s.lastScanParams = a.payload;
+    },
     streamReset(s) {
       s.phase = "idle";
       s.bytesReceived = 0;
@@ -701,7 +712,8 @@ const slice = createSlice({
     },
   },
   extraReducers: (b) => {
-    b.addCase(runRasterValidated.pending, (s) => {
+    b.addCase(runRasterValidated.pending, (s, a) => {
+      s.lastScanParams = summarizeScanParams("raster", a.meta.arg, { beamEnergyEv: s.beamEnergyEv, samplePeriodNs: SAMPLE_PERIOD_NS });
       s.phase = "running";
       s.bytesReceived = 0;
       s.chunksReceived = 0;
@@ -727,7 +739,8 @@ const slice = createSlice({
       s.phase = "error";
       s.errorMessage = a.error.message ?? "raster run failed";
     });
-    b.addCase(runVectorValidated.pending, (s) => {
+    b.addCase(runVectorValidated.pending, (s, a) => {
+      s.lastScanParams = summarizeScanParams("vector", a.meta.arg, { beamEnergyEv: s.beamEnergyEv, samplePeriodNs: SAMPLE_PERIOD_NS });
       s.phase = "running";
       s.bytesReceived = 0;
       s.chunksReceived = 0;
@@ -782,6 +795,7 @@ export const {
   clearLastOutput,
   setVectorRenderMode,
   streamStarted,
+  scanParamsCaptured,
   streamProgress,
   streamStopping,
   streamCompleted,

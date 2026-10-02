@@ -30,6 +30,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import {
+  scanParamsCaptured,
   streamCompleted,
   streamErrored,
   streamProgress,
@@ -60,6 +61,10 @@ import {
 } from "../lib/scanPerformance";
 import { apiUrl } from "../lib/backendUrl";
 import { wsUrl } from "../lib/backendUrl";
+import { estimateRevC3ScanTiming } from "../lib/scanTiming";
+import { summarizeScanParams } from "../lib/scanParamChip";
+
+const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
 
 type Closure = "stop";
 type ActiveScan =
@@ -97,6 +102,9 @@ export function useScanStream() {
     return Number.isFinite(n) ? n : 0;
   });
   const sessionSimulation = useAppSelector((s: RootState) => s.status.sessionSimulation);
+  const beamEnergyEv = useAppSelector((s: RootState) => s.scan.beamEnergyEv);
+  const beamEnergyEvRef = useRef(beamEnergyEv);
+  beamEnergyEvRef.current = beamEnergyEv;
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const chunksReceivedRef = useRef(chunksReceived);
@@ -138,6 +146,7 @@ export function useScanStream() {
         preserveFrame: options?.preserveFrame,
       }));
       dispatch(streamStarted());
+      dispatch(scanParamsCaptured(summarizeScanParams("raster", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS })));
       beginScanPerformance("raster", req as unknown as Record<string, unknown>, "websocket");
       const ws = openWs("/ws/scan/raster/stream");
       wsRef.current = ws;
@@ -224,6 +233,7 @@ export function useScanStream() {
         })
       );
       dispatch(streamStarted());
+      dispatch(scanParamsCaptured(summarizeScanParams("vector", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS })));
       beginScanPerformance("vector", req as unknown as Record<string, unknown>, "websocket");
       const ws = openWs("/ws/scan/vector/stream");
       wsRef.current = ws;

@@ -73,10 +73,10 @@ def dump_artifacts(config_path: str, snapshot: dict) -> list:
     output_dir.mkdir(parents=True, exist_ok=True)
     written = []
     csv_path = output_dir / svc._dump_filename("csv", timestamp)
-    csv_path.write_bytes(svc.last_csv_bytes())
+    csv_path.write_bytes(svc.last_dump_csv_bytes())
     written.append(str(csv_path))
     png_path = output_dir / svc._dump_filename("png", timestamp)
-    png_path.write_bytes(svc.last_figure_png())
+    png_path.write_bytes(svc.last_dump_png_bytes())
     written.append(str(png_path))
     return written
 

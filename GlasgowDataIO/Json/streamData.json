@@ -189,7 +189,7 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": false,
+    "IsProduction": true,
     "DumpData": true,
     "AdcTest": true,
     "transforms": {

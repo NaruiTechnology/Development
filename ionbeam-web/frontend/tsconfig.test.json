@@ -20,6 +20,7 @@
     "src/lib/scanError.ts",
     "src/lib/scanRepeat.ts",
     "src/lib/scanSamples.ts",
+    "src/lib/scanParamChip.ts",
     "src/lib/displayLevels.ts",
     "src/lib/levelStore.ts",
     "src/lib/scanTiming.ts",

@@ -3072,6 +3072,47 @@ body {
   background: transparent !important;
 }
 
+/* Scan-settings chip drawn over a completed image (annotation layer).
+   It ignores the pointer so the editor tools underneath keep working. */
+.canvas-scan-params {
+  position: absolute;
+  left: 12%;
+  bottom: 8%;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  max-width: 76%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.16);
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.55);
+  opacity: 0.78;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 120ms ease;
+}
+
+.canvas-frame:hover .canvas-scan-params,
+.image-panel-grid__visual:hover .canvas-scan-params {
+  opacity: 0.95;
+}
+
+.canvas-scan-params__item {
+  white-space: nowrap;
+}
+
+.canvas-scan-params__label {
+  margin-right: 3px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .canvas-axis-overlay {
   position: absolute;
   inset: 0;
