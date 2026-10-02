@@ -141,6 +141,7 @@ const runBufferMemory: Partial<Record<string, Uint16Array>> = {};
 // started. Session transform changes therefore affect the next scan without
 // repainting any already-rendered multi-scan pane.
 const runTransformsMemory: Partial<Record<string, StreamTransforms>> = {};
+const NO_STREAM_TRANSFORMS: StreamTransforms = { xflip: false, yflip: false, rotate90: false };
 
 type AnnotationTool = "highlight" | "comment" | "rectangle" | "circle";
 type LineStyle = "solid" | "dashed" | "dotted";
@@ -211,6 +212,7 @@ export function ImageCanvas({
   selectedPane: controlledSelectedPane,
   scanTargetPane: requestedScanTargetPane,
   onSelectedPaneChange,
+  ignoreTransforms = false,
 }: {
   kind: ScanKind;
   /** `scanId` is the same for every image of one scan run and changes when a new scan starts. */
@@ -224,6 +226,8 @@ export function ImageCanvas({
   selectedPane?: number;
   scanTargetPane?: number;
   onSelectedPaneChange?: (kind: Extract<ScanKind, "raster" | "vector">, pane: number) => void;
+  /** Paint in source orientation, ignoring the transform settings (ROI scans). */
+  ignoreTransforms?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
@@ -342,7 +346,8 @@ export function ImageCanvas({
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roi = useAppSelector((s) => s.scan.roi);
   const theme = useAppSelector((s) => s.theme.theme);
-  const streamTransforms = useAppSelector((s) => s.scan.streamTransforms);
+  const configuredStreamTransforms = useAppSelector((s) => s.scan.streamTransforms);
+  const streamTransforms = ignoreTransforms ? NO_STREAM_TRANSFORMS : configuredStreamTransforms;
 
   const phase = useAppSelector((s) => s.scan.phase);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
@@ -355,6 +360,7 @@ export function ImageCanvas({
   const completedKind = lastOutput?.kind ?? lastResult?.kind ?? null;
   const hasPaintedCanvasImage = stats.populated > 0;
   const showServerFigure =
+    !ignoreTransforms &&
     phase === "completed" &&
     completedKind === kind &&
     (kind !== "vector" || vectorSource === "vector");
@@ -1314,7 +1320,7 @@ export function ImageCanvas({
               display: displayedFigureUrl ? "none" : undefined,
             }}
           />
-          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} />}
+          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} />}
           {liveScanParamItems && <ScanParamChip items={liveScanParamItems} t={t} />}
           {displayedFigureUrl && (
             <img
@@ -1800,12 +1806,15 @@ function LiveAxisOverlay({
   roi,
   showGrid,
   t,
+  ignoreTransforms = false,
 }: {
   roi: ROIState;
   showGrid: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  ignoreTransforms?: boolean;
 }) {
-  const transforms = useAppSelector((s) => s.scan.streamTransforms);
+  const configuredTransforms = useAppSelector((s) => s.scan.streamTransforms);
+  const transforms = ignoreTransforms ? NO_STREAM_TRANSFORMS : configuredTransforms;
   const transformPoint = (x: number, y: number) => {
     if (transforms.rotate90) [x, y] = [1 - y, x];
     if (transforms.xflip) x = 1 - x;

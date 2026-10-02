@@ -72,6 +72,8 @@ function composeOverlayCounterTransform(
   return [counter, base].filter(Boolean).join(" ") || "none";
 }
 
+const NO_CANVAS_TRANSFORMS = { xflip: false, yflip: false, rotate90: false } as const;
+
 export function ROIEditor({
   disabled,
   variant = "all",
@@ -102,10 +104,22 @@ export function ROIEditor({
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
   const streamTransforms = useAppSelector((s) => s.scan.streamTransforms);
+  // The transform settings describe how scan data is oriented. A file the
+  // operator loaded and an ROI scan (its live preview and its result) are
+  // shown in source orientation: the canvas (and everything drawn on it, so
+  // overlays stay aligned) is not flipped or rotated, and pointer positions
+  // are not un-oriented either. Only a plain last-scan image keeps them.
+  const showingLoadedFile = roi.scanImageDataUrl === null && roi.imageKind === "file";
+  const showingROIScan =
+    liveVectorPreview ||
+    roi.scanImageDataUrl !== null ||
+    (roi.roiScanResultUrl !== null && roi.imageDataUrl === roi.roiScanResultUrl);
+  const canvasTransforms =
+    showingLoadedFile || showingROIScan ? NO_CANVAS_TRANSFORMS : streamTransforms;
   const canvasOrientation = [
-    streamTransforms.xflip ? "scaleX(-1)" : "",
-    streamTransforms.yflip ? "scaleY(-1)" : "",
-    streamTransforms.rotate90 ? "rotate(90deg)" : "",
+    canvasTransforms.xflip ? "scaleX(-1)" : "",
+    canvasTransforms.yflip ? "scaleY(-1)" : "",
+    canvasTransforms.rotate90 ? "rotate(90deg)" : "",
   ].filter(Boolean).join(" ");
   // Keep the axis notation upright while the canvas is flipped or rotated.
   // Derive the inverse from the exact CSS transform string so the text stays
@@ -478,9 +492,9 @@ export function ROIEditor({
     };
     // Pointer coordinates arrive in the oriented display space. Convert them
     // back to the image's source space before mapping to ROI/world coordinates.
-    if (streamTransforms.xflip) raw.x = ROI_CANVAS_EDGE - raw.x;
-    if (streamTransforms.yflip) raw.y = ROI_CANVAS_EDGE - raw.y;
-    if (streamTransforms.rotate90) {
+    if (canvasTransforms.xflip) raw.x = ROI_CANVAS_EDGE - raw.x;
+    if (canvasTransforms.yflip) raw.y = ROI_CANVAS_EDGE - raw.y;
+    if (canvasTransforms.rotate90) {
       [raw.x, raw.y] = [raw.y, ROI_CANVAS_EDGE - raw.x];
     }
     return clampToSelection ? clampCanvasPointToViewport(raw, viewportBounds(roi)) : raw;

@@ -113,6 +113,9 @@ export interface ROIState {
   /** Physical world bounds represented by the current image; null means the full hardware FOV. */
   imageBounds: ROIRequest | null;
   scanImageDataUrl: string | null;
+  /** The image an ROI scan produced, once it becomes the ROI image. Shown in
+   *  source orientation (the transform settings are not applied to it). */
+  roiScanResultUrl: string | null;
   /**
    * Rectified DAC <-> world (µm) transform from CONFIGURATION > Admin > Calibration > Scan geometry. When set and
    * enabled, ROI selections are mapped to DAC codes through it instead of the linear x_origin..x_end mapping.
@@ -193,6 +196,7 @@ const initialState: ScanState = {
     imageKind: "none",
     imageBounds: null,
     scanImageDataUrl: null,
+    roiScanResultUrl: null,
   },
   beamEnergyEv: 1000.0,
   roiGrayScaleSelection: null,

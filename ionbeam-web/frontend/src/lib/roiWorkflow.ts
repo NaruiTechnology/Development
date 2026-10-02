@@ -12,6 +12,7 @@ export function completedROIImagePatch(
     imageKind: "lastScan",
     imageBounds: roi.selection ?? roi.imageBounds,
     scanImageDataUrl: null,
+    roiScanResultUrl: imageDataUrl,
     selection: null,
   };
 }

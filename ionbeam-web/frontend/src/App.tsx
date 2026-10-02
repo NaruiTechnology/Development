@@ -773,6 +773,7 @@ export function App() {
         updateROI({
           imageName: t("roi.imageName.lastScan"),
           imageDataUrl: roiState.scanImageDataUrl,
+          roiScanResultUrl: roiState.scanImageDataUrl,
           imageKind: "lastScan",
           scanImageDataUrl: null,
         })
@@ -1672,6 +1673,7 @@ export function App() {
                       kind="vector"
                       onRenderedImageChange={handleRenderedImageChange}
                       onMergedFigureChange={handleMergedFigureChange}
+                      ignoreTransforms
                     />
                   ) : (
                     <ROIEditor
