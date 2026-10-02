@@ -432,9 +432,21 @@ body {
   display: none;
 }
 
+.image-panel-card__layout-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
 .image-panel-card__layout-button {
   flex: 0 0 auto;
   margin-left: 2px;
+}
+
+.image-panel-card__layout-lock {
+  margin: 0;
+  white-space: nowrap;
 }
 
 .image-panel-card__layout-button > .icon--quad {

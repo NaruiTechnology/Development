@@ -32,6 +32,7 @@ import type { ROIRequest, VectorScanPath } from "../types/api";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { markScanPerformanceCanvasReady } from "../lib/scanPerformance";
+import { clampImagePane } from "../lib/imagePanelLayout";
 import { apiUrl } from "../lib/backendUrl";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { Icon } from "./Icon";
@@ -192,6 +193,9 @@ export function ImageCanvas({
   vectorGrayScaleSkipped = null,
   imageLayout = 1,
   imageSlots = [],
+  selectedPane: controlledSelectedPane,
+  scanTargetPane: requestedScanTargetPane,
+  onSelectedPaneChange,
 }: {
   kind: ScanKind;
   /** `scanId` is the same for every image of one scan run and changes when a new scan starts. */
@@ -202,6 +206,9 @@ export function ImageCanvas({
   vectorGrayScaleSkipped?: boolean | null;
   imageLayout?: 1 | 2 | 3 | 4;
   imageSlots?: Array<string | null>;
+  selectedPane?: number;
+  scanTargetPane?: number;
+  onSelectedPaneChange?: (kind: Extract<ScanKind, "raster" | "vector">, pane: number) => void;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
@@ -249,11 +256,13 @@ export function ImageCanvas({
   const [strokeColor, setStrokeColor] = useState("lawngreen");
   const [lineStyle, setLineStyle] = useState<LineStyle>("solid");
   const [lineWidth, setLineWidth] = useState(0.5);
-  const [selectedPane, setSelectedPane] = useState(Math.max(0, imageLayout - 1));
+  const initialSelectedPane = clampImagePane(controlledSelectedPane ?? imageLayout - 1, imageLayout);
+  const [selectedPane, setSelectedPane] = useState(initialSelectedPane);
   const selectedPaneRef = useRef(selectedPane);
   selectedPaneRef.current = selectedPane;
-  const imageLayoutRef = useRef(imageLayout);
-  imageLayoutRef.current = imageLayout;
+  const scanTargetPane = clampImagePane(requestedScanTargetPane ?? imageLayout - 1, imageLayout);
+  const scanTargetPaneRef = useRef(scanTargetPane);
+  scanTargetPaneRef.current = scanTargetPane;
   const [annotationsByPane, setAnnotationsByPane] = useState<Record<number, CanvasAnnotation[]>>({});
   const annotations = annotationsByPane[selectedPane] ?? [];
   const setAnnotations = useCallback((next: CanvasAnnotation[] | ((current: CanvasAnnotation[]) => CanvasAnnotation[])) => {
@@ -275,14 +284,14 @@ export function ImageCanvas({
   const [editorError, setEditorError] = useState<string | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    const targetPane = Math.max(0, imageLayout - 1);
-    setSelectedPane(targetPane);
-    selectedPaneRef.current = targetPane;
+    const nextSelectedPane = clampImagePane(controlledSelectedPane ?? imageLayout - 1, imageLayout);
+    setSelectedPane(nextSelectedPane);
+    selectedPaneRef.current = nextSelectedPane;
     setSelectedAnnotationId(null);
     setDraftShape(null);
     setCommentDraft(null);
     setContextMenu(null);
-  }, [imageLayout]);
+  }, [controlledSelectedPane, imageLayout]);
   const lastRenderedImageEmitRef = useRef<{
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string | null;
@@ -336,12 +345,12 @@ export function ImageCanvas({
   const visibleVectorCursor = kind === "vector" && vectorSource !== "vector" ? 0 : vectorCursor;
   const hasRenderedCanvasImage =
     hasPaintedCanvasImage || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
-  const selectedPaneHasImage = selectedPane < imageLayout - 1 && Boolean(imageSlots[selectedPane]);
+  const selectedPaneHasImage = selectedPane !== scanTargetPane && Boolean(imageSlots[selectedPane]);
   const editorEnabled = selectedPaneHasImage || (phase === "completed" && hasRenderedCanvasImage);
   const toolbarVisible = editorEnabled;
   // A target pane added by the layout button stays empty until a scan fills it.
   const targetParked =
-    imageLayout > 1 && phase !== "running" && phase !== "stopping" && !imageSlots[imageLayout - 1];
+    imageLayout > 1 && phase !== "running" && phase !== "stopping" && !imageSlots[scanTargetPane];
   const editorToolbarVisible = toolbarVisible;
   const showCalibratedAxes = kind !== "roi";
   const showGrid =
@@ -517,7 +526,7 @@ export function ImageCanvas({
   const clearEditorState = useCallback(
     (notifyMerged = true) => {
       annotationSeqRef.current = 0;
-      const targetSelected = selectedPaneRef.current === imageLayoutRef.current - 1;
+      const targetSelected = selectedPaneRef.current === scanTargetPaneRef.current;
       if (targetSelected) {
         setAnnotations([]);
         setMergedFigureUrl(null);
@@ -529,7 +538,7 @@ export function ImageCanvas({
       setMergeConfirmOpen(false);
       setMergeBusy(false);
       setEditorError(null);
-      if (notifyMerged && selectedPaneRef.current === imageLayoutRef.current - 1 && (kind === "raster" || kind === "vector")) {
+      if (notifyMerged && selectedPaneRef.current === scanTargetPaneRef.current && (kind === "raster" || kind === "vector")) {
         onMergedFigureChangeRef.current?.(kind, null);
       }
     },
@@ -537,7 +546,7 @@ export function ImageCanvas({
   );
 
   const invalidateMergedFigure = useCallback(() => {
-    if (selectedPaneRef.current !== imageLayoutRef.current - 1) return;
+    if (selectedPaneRef.current !== scanTargetPaneRef.current) return;
     setMergedFigureUrl(null);
     if (kind === "raster" || kind === "vector") {
       onMergedFigureChangeRef.current?.(kind, null);
@@ -704,7 +713,7 @@ export function ImageCanvas({
 
   function getSelectedPaneFrame(): HTMLDivElement | null {
     const pane = selectedPaneRef.current;
-    if (pane === imageLayoutRef.current - 1) return frameRef.current;
+    if (pane === scanTargetPaneRef.current) return frameRef.current;
     return archivedPaneFramesRef.current.get(pane) ?? null;
   }
 
@@ -712,6 +721,7 @@ export function ImageCanvas({
     if (pane === selectedPaneRef.current) return;
     selectedPaneRef.current = pane;
     setSelectedPane(pane);
+    if (kind === "raster" || kind === "vector") onSelectedPaneChange?.(kind, pane);
     setSelectedAnnotationId(null);
     setDraftShape(null);
     setCommentDraft(null);
@@ -882,7 +892,7 @@ export function ImageCanvas({
   async function mergeAnnotationsIntoImage() {
     if (!annotations.length) return;
     const mergePane = selectedPane;
-    const archivedImageUrl = mergePane < imageLayout - 1 ? imageSlots[mergePane] ?? null : null;
+    const archivedImageUrl = mergePane !== scanTargetPane ? imageSlots[mergePane] ?? null : null;
     setMergeBusy(true);
     try {
       const sourceCanvas = canvasRef.current;
@@ -1200,13 +1210,16 @@ export function ImageCanvas({
       )}
 
       <div id="image-panel-grid" className={`image-panel-grid image-panel-grid--${imageLayout}`}>
-      {Array.from({ length: imageLayout - 1 }, (_, index) => {
+      {Array.from({ length: imageLayout }, (_, index) => index)
+        .filter((index) => index !== scanTargetPane)
+        .map((index) => {
         const imageUrl = imageSlots[index] ?? null;
         return (
           <div
             className="image-panel-grid__tile"
             data-selected={selectedPane === index ? "true" : "false"}
             key={`history-${index}`}
+            style={{ order: index }}
             onClick={() => selectPane(index)}
           >
             <div className="image-panel-grid__label">
@@ -1241,13 +1254,14 @@ export function ImageCanvas({
       })}
       <div
         className={`image-panel-grid__target${imageLayout === 1 ? " image-panel-grid__target--single" : " image-panel-grid__target--active"}`}
-        data-selected={selectedPane === imageLayout - 1 ? "true" : "false"}
-        onClick={() => selectPane(imageLayout - 1)}
+        data-selected={selectedPane === scanTargetPane ? "true" : "false"}
+        style={{ order: scanTargetPane }}
+        onClick={() => selectPane(scanTargetPane)}
       >
         {imageLayout > 1 && <div className="image-panel-grid__label">
           <span />
           {showCalibratedAxes && <label className="checkbox vacuum-switch app-switch image-panel-grid__grid-toggle">
-            <input type="checkbox" checked={paneGridVisibility[imageLayout - 1]} onChange={(event) => setPaneGrid(imageLayout - 1, event.target.checked)} />
+            <input type="checkbox" checked={paneGridVisibility[scanTargetPane]} onChange={(event) => setPaneGrid(scanTargetPane, event.target.checked)} />
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
             {t("roi.showGrid")}
           </label>}
@@ -1257,7 +1271,7 @@ export function ImageCanvas({
         ref={frameRef}
         className="canvas-frame"
         onContextMenu={(event) => {
-          if (editorEnabled && selectedPane === imageLayout - 1) openContextMenu(event, null);
+          if (editorEnabled && selectedPane === scanTargetPane) openContextMenu(event, null);
         }}
       >
           <canvas
@@ -1269,7 +1283,7 @@ export function ImageCanvas({
               display: displayedFigureUrl ? "none" : undefined,
             }}
           />
-          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[imageLayout - 1]} t={t} />}
+          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
@@ -1288,7 +1302,7 @@ export function ImageCanvas({
               aria-label={t("vector.displayScanPath")}
             />
           )}
-          {editorEnabled && selectedPane === imageLayout - 1 && (
+          {editorEnabled && selectedPane === scanTargetPane && (
             <div
               className="canvas-editor-layer"
               data-tool={activeTool}

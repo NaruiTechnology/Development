@@ -8,6 +8,7 @@
   "include": [
     "src/vite-env.d.ts",
     "src/lib/grayScaleUI.ts",
+    "src/lib/imagePanelLayout.ts",
     "src/lib/roiDac.ts",
     "src/lib/scanGeometry.ts",
     "src/lib/roiGeometry.ts",
