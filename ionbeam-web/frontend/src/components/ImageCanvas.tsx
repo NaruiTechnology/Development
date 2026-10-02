@@ -302,6 +302,9 @@ export function ImageCanvas({
   const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
+  // The image panel header (raster / vector) has a spot on its first row for
+  // the vector View selector; without it (e.g. ROI) the selector stays inline.
+  const [viewToggleHost, setViewToggleHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const nextSelectedPane = clampImagePane(controlledSelectedPane ?? imageLayout - 1, imageLayout);
     setSelectedPane(nextSelectedPane);
@@ -605,6 +608,12 @@ export function ImageCanvas({
     if (typeof document === "undefined") return;
     setToolbarHost(document.getElementById("image-panel-toolbar-slot"));
   }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const host = document.getElementById("image-panel-view-slot");
+    setViewToggleHost((current) => (current === host ? current : host));
+  });
 
   useEffect(() => {
     if (!editorEnabled) return;
@@ -973,6 +982,47 @@ export function ImageCanvas({
     }
   }
 
+  const viewToggle = (
+    <div className="canvas-view-toggle">
+      <span className="card__title" id="render-mode-label">
+        {t("canvas.view")}
+        <CanvasViewHelp />
+      </span>
+      <div
+        className="segmented"
+        role="radiogroup"
+        aria-labelledby="render-mode-label"
+      >
+        {(["decimated", "native"] as VectorRenderMode[]).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={renderMode === m}
+            aria-pressed={renderMode === m}
+            className="segmented__btn"
+            title={
+              m === "decimated"
+                ? t("canvas.view.decimated.title", { edge: viewVectorEdge })
+                : hasExactNativeStride
+                ? t("canvas.view.native.title", { edge: DAC_RANGE, stride })
+                : t("canvas.view.native.title.custom", {
+                    edge: DAC_RANGE,
+                    sourceEdge: viewVectorEdge,
+                  })
+            }
+            onClick={() => dispatch(setVectorRenderMode(m))}
+          >
+            <Icon name={m === "decimated" ? "scan" : "gridSvg"} tone="accent" />
+            {m === "decimated"
+              ? t("canvas.view.decimated", { edge: viewVectorEdge })
+              : t("canvas.view.native", { edge: DAC_RANGE })}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   const toolbar = editorToolbarVisible ? (
         <div className="canvas-toolbox" role="toolbar" aria-label={t("canvas.editor.toolbar.aria")}>
           <div className="canvas-toolbox__cluster" role="radiogroup" aria-label={t("canvas.editor.toolbar.tools")}>
@@ -1197,44 +1247,10 @@ export function ImageCanvas({
         document.body,
       )}
 
+      {showModeToggle && viewToggleHost && createPortal(viewToggle, viewToggleHost)}
       {showModeToggle && (
         <div className="row canvas-view-row" style={{ marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-          <span className="card__title" id="render-mode-label">
-            {t("canvas.view")}
-            <CanvasViewHelp />
-          </span>
-          <div
-            className="segmented"
-            role="radiogroup"
-            aria-labelledby="render-mode-label"
-          >
-            {(["decimated", "native"] as VectorRenderMode[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                role="radio"
-                aria-checked={renderMode === m}
-                aria-pressed={renderMode === m}
-                className="segmented__btn"
-                title={
-                  m === "decimated"
-                    ? t("canvas.view.decimated.title", { edge: viewVectorEdge })
-                    : hasExactNativeStride
-                    ? t("canvas.view.native.title", { edge: DAC_RANGE, stride })
-                    : t("canvas.view.native.title.custom", {
-                        edge: DAC_RANGE,
-                        sourceEdge: viewVectorEdge,
-                      })
-                }
-                onClick={() => dispatch(setVectorRenderMode(m))}
-              >
-                <Icon name={m === "decimated" ? "scan" : "gridSvg"} tone="accent" />
-                {m === "decimated"
-                  ? t("canvas.view.decimated", { edge: viewVectorEdge })
-                  : t("canvas.view.native", { edge: DAC_RANGE })}
-              </button>
-            ))}
-          </div>
+          {!viewToggleHost && viewToggle}
           <span className="canvas-view-row__editor-inline">
             {viewVectorEdge === DAC_RANGE && (
               <span className="muted canvas-view-row__stride-note">

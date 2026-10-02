@@ -1621,6 +1621,11 @@ export function App() {
                       ? "card.vectorPattern"
                       : imagePanelTitleKey
                   )}</span>
+                  {headerSecondRow && (
+                    // The vector View selector (Decimated / Native) is drawn
+                    // here by the image canvas, next to the title.
+                    <div id="image-panel-view-slot" className="image-panel-card__view-slot" />
+                  )}
                   {activeTopTab !== "adcTest" && gridLineToggle}
                   {activeTopTab !== "adcTest" && scanPathToggle}
                   {activeTopTab !== "adcTest" && kind === "vector" && (

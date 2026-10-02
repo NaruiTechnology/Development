@@ -447,9 +447,38 @@ body {
   gap: 8px 14px;
 }
 
-/* Title on the left; the switches flow to the right end of the row. */
+/* Title on the left; the vector View selector and the switches flow to the
+   right end of the row. */
 .image-panel-card__header--two-row .image-panel-card__header-main > .card__title {
   margin-right: auto;
+}
+
+.image-panel-card__view-slot {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.image-panel-card__view-slot:empty {
+  display: none;
+}
+
+.canvas-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* In the card header, `.card__header .icon` would blow the help icon up to 2em. */
+.image-panel-card__view-slot .card__title .help-btn .icon {
+  width: 1em;
+  height: 1em;
+}
+
+.image-panel-card__view-slot .card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .image-panel-card__header--two-row .image-panel-card__header-main {
