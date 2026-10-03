@@ -119,7 +119,8 @@ export const zhCN: Partial<TranslationTable> = {
   /* ===== card titles ============================================== */
   "card.controls": "控制",
   "card.dacCheck": "DAC 检查",
-  "card.runReport": "运行报告",
+  "card.runReport": "保存结果",
+  "card.adcTest": "ADC 测试",
   "card.rasterImage": "光栅图像",
   "canvas.layout.cycle": "切换图像布局（当前 {count} 个面板）",
   "canvas.layout.splitScreen": "分屏",
@@ -203,6 +204,10 @@ export const zhCN: Partial<TranslationTable> = {
   "dacRamp.waveformHint": "沿扫描位置的 ADC 读回值；干净的斜坡表示与参考 OBI 采集结果一致，阶梯状则指向扫描配置而非 DAC 本身。",
   "dacRamp.expand": "展开 DAC 检查",
   "dacRamp.collapse": "折叠 DAC 检查",
+  "saveResults.expand": "展开保存结果",
+  "saveResults.collapse": "折叠保存结果",
+  "adcTest.expand": "展开 ADC 测试",
+  "adcTest.collapse": "折叠 ADC 测试",
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "运行",

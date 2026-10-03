@@ -15,6 +15,7 @@
  * production port of upstream OBI's manual_dac_ctrl.RampControl.
  */
 import { useEffect, useRef, useState } from "react";
+import { LoadingSpinner } from "./LoadingSpinner";
 
 import type { DacRampAxis } from "../types/api";
 import { useDacRampStream } from "../hooks/useDacRampStream";
@@ -54,6 +55,9 @@ export function DacRampPanel({ disabled }: { disabled: boolean }) {
         />
         <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         <span>{t("dacRamp.toggle")}</span>
+        {switchOn && (
+          <LoadingSpinner inline size={20} ariaLabel={t(PHASE_LABELS[state.phase])} />
+        )}
       </label>
       <p className="dac-ramp-body__hint">{t("dacRamp.hint")}</p>
 

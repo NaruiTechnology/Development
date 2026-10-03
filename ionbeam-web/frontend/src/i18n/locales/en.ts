@@ -138,7 +138,8 @@ export const en = {
   /* ===== card titles ============================================== */
   "card.controls": "Controls",
   "card.dacCheck": "DAC check",
-  "card.runReport": "Run report",
+  "card.runReport": "Save results",
+  "card.adcTest": "ADC test",
   "card.rasterImage": "Raster image",
   "canvas.layout.cycle": "Change image layout (currently {count} panels)",
   "canvas.layout.splitScreen": "Split",
@@ -222,6 +223,10 @@ export const en = {
   "dacRamp.waveformHint": "ADC readback over sweep position; a clean ramp matches a reference OBI capture, a staircase points at scan configuration rather than the DAC itself.",
   "dacRamp.expand": "Expand DAC check",
   "dacRamp.collapse": "Collapse DAC check",
+  "saveResults.expand": "Expand Save results",
+  "saveResults.collapse": "Collapse Save results",
+  "adcTest.expand": "Expand ADC test",
+  "adcTest.collapse": "Collapse ADC test",
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "Run",
@@ -275,7 +280,7 @@ export const en = {
   "raster.frameBlank": "Frame blank (start and end blanked)",
   "raster.doValidate": "Run chunk-count / size checks",
   "raster.adcValid": "ADC valid",
-  "raster.footnote": "Validation applies to <Run validated>. After any scan completes, use the <Download CSV> / <Download figure> buttons in the Run report to export the data.",
+  "raster.footnote": "Validation applies to <Run validated>. After any scan completes, use the <Download CSV> / <Download figure> buttons in Save results to export the data.",
 
   /* ===== vector parameter form ==================================== */
   "vector.pattern": "Pattern",

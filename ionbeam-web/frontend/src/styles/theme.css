@@ -6402,7 +6402,9 @@ body {
   font-size: 11px;
 }
 
-.dac-check-card .card__header {
+.dac-check-card .card__header,
+.save-results-card .card__header,
+.adc-test-card .card__header {
   justify-content: space-between;
 }
 
@@ -6451,6 +6453,11 @@ body {
   width: 14px;
   height: 14px;
   transition: transform .15s ease;
+}
+
+.card__collapse-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
 }
 
 .card__collapse-btn[aria-expanded="false"] .icon {

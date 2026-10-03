@@ -393,7 +393,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <div className="dwell-help__rule">
         <strong>The validation report drives the result panel.</strong>{" "}
         When disabled, you still get the chunk count and timing in the
-        run report, but the per-check pass/fail list is omitted and
+        Save results panel, but the per-check pass/fail list is omitted and
         the Run pane shows just &ldquo;validation: off&rdquo;.
       </div>
 
@@ -429,7 +429,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         regular <code>Run</code> button streams chunks live and does
         not wait for the validation payload. <code>Run validated</code>{" "}
         is the path that produces the post-scan checks shown in the
-        Run report panel.
+        Save results panel.
       </div>
 
       <p>

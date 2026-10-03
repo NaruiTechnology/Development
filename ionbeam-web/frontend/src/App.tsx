@@ -104,7 +104,7 @@ const MIN_RIGHT_PANEL_WIDTH = 380;
 const SPLITTER_SPACE = 32;
 const LAST_ADMIN_LOGIN_STORAGE_KEY = "ionbeam:lastAdminLogin";
 type AppRoute = "control" | "report" | "vacuum";
-type LeftTopTab = "scan" | "calibrate" | "adcTest";
+type LeftTopTab = "scan" | "calibrate";
 type ScanSubTab = "roi" | "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
 
@@ -124,6 +124,14 @@ export function App() {
   // not part of the normal vector-scan flow, so it shouldn't compete
   // with Controls/Run report for attention by default.
   const [dacCheckCollapsed, setDacCheckCollapsed] = useState(true);
+  // Save results card starts collapsed. Collapsing only hides it —
+  // ValidationPanel stays mounted so the filename insert, chosen folder
+  // and auto-download keep working.
+  const [saveResultsCollapsed, setSaveResultsCollapsed] = useState(true);
+  // ADC test card (replaces the old ADC Test top tab). Starts collapsed;
+  // while expanded, the right-hand panel shows the ADC timeline instead
+  // of the scan canvas — the same view the old tab switched to.
+  const [adcTestCollapsed, setAdcTestCollapsed] = useState(true);
   const handleVacuumActivityChange = useCallback((active: boolean) => {
     setVacuumControllerBusy(active);
     setVacuumMinimized(!active);
@@ -260,17 +268,16 @@ export function App() {
   );
   const adcTest = useAdcTestStream();
   const adcActive = adcTest.state.phase === "connecting" || adcTest.state.phase === "running";
-  const showROIPreviewSideCard = showROIPreviewSideCardBase && activeTopTab !== "adcTest";
+  const adcView = adcTestEnabled && !adcTestCollapsed;
+  const showROIPreviewSideCard = showROIPreviewSideCardBase && !adcView;
 
   useEffect(() => {
     dispatch(fetchDefaults());
   }, [dispatch]);
 
   useEffect(() => {
-    if (!adcTestEnabled && activeTopTab === "adcTest") {
-      setActiveTopTab("scan");
-    }
-  }, [adcTestEnabled, activeTopTab]);
+    if (!adcTestEnabled) setAdcTestCollapsed(true);
+  }, [adcTestEnabled]);
 
   const dimensionCalibrationRestoredRef = useRef(false);
   useEffect(() => {
@@ -524,6 +531,11 @@ export function App() {
     vacuumEnabled,
     vacuumReady: isVacuumSystemReady,
   });
+  // A scan started while the ADC test card is open would draw behind the
+  // ADC timeline, so collapse the card to bring the scan canvas back.
+  useEffect(() => {
+    if (scanActive) setAdcTestCollapsed(true);
+  }, [scanActive]);
   const rasterVectorTabsDisabled = panelDisabled || roiActionLocked;
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
@@ -1173,11 +1185,6 @@ export function App() {
     activateCalibrateSubTab(calibrateSubTab);
   }
 
-  function activateAdcTestTab() {
-    if (scanActive) return;
-    setActiveTopTab("adcTest");
-  }
-
   function navigateTo(nextRoute: AppRoute) {
     const nextPath = `/${nextRoute}`;
     if (window.location.pathname === nextPath) return;
@@ -1225,7 +1232,7 @@ export function App() {
   // Select, or the annotation toolbox) and the Split button on a second
   // header row below the switches; ROI keeps its own header grid.
   const headerSecondRow =
-    activeTopTab !== "adcTest" && (kind === "raster" || kind === "vector");
+    !adcView && (kind === "raster" || kind === "vector");
   const toolbarSlot = (
     <div
       id="image-panel-toolbar-slot"
@@ -1358,16 +1365,6 @@ export function App() {
                 <Icon name="calibrate" tone="tab" />
                 {t("tabs.calibrate")}
               </button>
-              {adcTestEnabled && <button
-                role="tab"
-                className="tab tab--top"
-                aria-selected={activeTopTab === "adcTest"}
-                disabled={scanActive}
-                onClick={activateAdcTestTab}
-              >
-                <Icon name="adcTest" tone="tab" />
-                {t("tabs.adcTest")}
-              </button>}
             </div>
             {activeTopTab === "scan" ? (
               <div className="tabs tabs--sub" role="tablist" aria-label={t("tabs.scan.aria")}>
@@ -1433,13 +1430,7 @@ export function App() {
               </div>
             ) : null}
             <div className="card__body">
-              {activeTopTab === "adcTest" ? (
-                <AdcTestControls
-                  state={adcTest.state}
-                  onStart={adcTest.start}
-                  onStop={adcTest.stop}
-                />
-              ) : activeTopTab === "scan" ? (
+              {activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
                   <RasterParameters disabled={panelDisabled} />
                 ) : scanSubTab === "vector" ? (
@@ -1516,7 +1507,7 @@ export function App() {
             </div>
           </div>
 
-          {activeTopTab !== "adcTest" && showROIActionControls && kind !== "roi" && (
+          {showROIActionControls && kind !== "roi" && (
             <>
               <div
                 className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
@@ -1539,6 +1530,63 @@ export function App() {
                   />
                 </div>
               </div>
+              <div className="card save-results-card">
+                <div className="card__header">
+                  <span className="card__title">{t("card.runReport")}</span>
+                  <button
+                    type="button"
+                    className="card__collapse-btn"
+                    aria-expanded={!saveResultsCollapsed}
+                    aria-label={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
+                    title={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
+                    onClick={() => setSaveResultsCollapsed((collapsed) => !collapsed)}
+                  >
+                    <Icon name="chevronDown" />
+                  </button>
+                </div>
+                <div hidden={saveResultsCollapsed}>
+                  <ValidationPanel
+                    disabled={panelDisabled}
+                    mergedFigureUrl={
+                      actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
+                    }
+                    kindOverride={actionScanKind}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+          {adcTestEnabled && (
+            <div className="card adc-test-card">
+              <div className="card__header">
+                <span className="card__title">{t("card.adcTest")}</span>
+                <button
+                  type="button"
+                  className="card__collapse-btn"
+                  aria-expanded={!adcTestCollapsed}
+                  aria-label={adcTestCollapsed ? t("adcTest.expand") : t("adcTest.collapse")}
+                  title={adcTestCollapsed ? t("adcTest.expand") : t("adcTest.collapse")}
+                  // Same locks as the old tab: can't open during a scan,
+                  // can't close while the ADC stream is running.
+                  disabled={adcTestCollapsed ? scanActive : adcActive}
+                  onClick={() => setAdcTestCollapsed((collapsed) => !collapsed)}
+                >
+                  <Icon name="chevronDown" />
+                </button>
+              </div>
+              {!adcTestCollapsed && (
+                <div className="card__body">
+                  <AdcTestControls
+                    state={adcTest.state}
+                    onStart={adcTest.start}
+                    onStop={adcTest.stop}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {showROIActionControls && kind !== "roi" && (
+            <>
               {kind === "vector" && (
                 <div className="card dac-check-card">
                   <div className="card__header">
@@ -1564,18 +1612,6 @@ export function App() {
                   )}
                 </div>
               )}
-              <div className="card">
-                <div className="card__header">
-                  <span className="card__title">{t("card.runReport")}</span>
-                </div>
-                <ValidationPanel
-                  disabled={panelDisabled}
-                  mergedFigureUrl={
-                    actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
-                  }
-                  kindOverride={actionScanKind}
-                />
-              </div>
               <ErrorWedge signedInUser={signedInUser} />
             </>
           )}
@@ -1615,7 +1651,7 @@ export function App() {
               <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}${headerSecondRow ? " image-panel-card__header--two-row" : ""}`}>
                 <div className="image-panel-card__header-main">
                   <span className="card__title">{t(
-                    activeTopTab === "adcTest"
+                    adcView
                       ? "card.adcTimeline"
                       : kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
                       ? "card.vectorPattern"
@@ -1626,9 +1662,9 @@ export function App() {
                     // here by the image canvas, next to the title.
                     <div id="image-panel-view-slot" className="image-panel-card__view-slot" />
                   )}
-                  {activeTopTab !== "adcTest" && gridLineToggle}
-                  {activeTopTab !== "adcTest" && scanPathToggle}
-                  {activeTopTab !== "adcTest" && kind === "vector" && (
+                  {!adcView && gridLineToggle}
+                  {!adcView && scanPathToggle}
+                  {!adcView && kind === "vector" && (
                     <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">
                       <input
                         type="checkbox"
@@ -1641,9 +1677,9 @@ export function App() {
                       <VectorGrayLevelHelp />
                     </label>
                   )}
-                  {activeTopTab !== "adcTest" && !headerSecondRow && toolbarSlot}
+                  {!adcView && !headerSecondRow && toolbarSlot}
                 </div>
-                {activeTopTab === "scan" && showSplitButton && imagePanelSplitActive && (
+                {!adcView && activeTopTab === "scan" && showSplitButton && imagePanelSplitActive && (
                   <label className="checkbox vacuum-switch app-switch image-panel-card__layout-lock">
                     <input
                       type="checkbox"
@@ -1661,7 +1697,7 @@ export function App() {
                   // and the Split button.
                   <div className="image-panel-card__header-row">
                     {toolbarSlot}
-                    {activeTopTab === "scan" && showSplitButton && (
+                    {!adcView && activeTopTab === "scan" && showSplitButton && (
                       <button
                         type="button"
                         className="btn btn--primary image-panel-card__layout-button"
@@ -1680,7 +1716,7 @@ export function App() {
                 )}
             </div>
             <div className="card__body">
-                {activeTopTab === "adcTest" ? (
+                {adcView ? (
                   <AdcTimelineCanvas state={adcTest.state} />
                 ) : kind === "roi" ? (
                   roiActionCanvasVisible &&

@@ -419,7 +419,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <div className="dwell-help__rule">
         <strong>需要报告时用这个。</strong>普通的 <code>Run</code> 只负责实时发送数据块，
-        不会等待验证结果。<code>验证运行</code> 才是生成 Run report 面板中那些后扫描检查的路径。
+        不会等待验证结果。<code>验证运行</code> 才是生成 保存结果面板中那些后扫描检查的路径。
       </div>
 
       <p>
