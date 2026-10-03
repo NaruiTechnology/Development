@@ -1507,29 +1507,31 @@ export function App() {
             </div>
           </div>
 
-          {showROIActionControls && kind !== "roi" && (
+          {(showROIActionControls || (activeTopTab === "scan" && scanSubTab === "roi")) && (
             <>
-              <div
-                className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
-                style={scanPanelStyle}
-              >
-                <div className="card__header">
-                  <span className="card__title">{t("card.controls")}</span>
+              {kind !== "roi" && (
+                <div
+                  className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
+                  style={scanPanelStyle}
+                >
+                  <div className="card__header">
+                    <span className="card__title">{t("card.controls")}</span>
+                  </div>
+                  <div className="card__body">
+                    <ScanControls
+                      kind={actionScanKind}
+                      disabled={panelDisabled}
+                      scanActive={scanActive}
+                      repeat={repeat}
+                      onRepeatChange={setRepeat}
+                      showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
+                      vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
+                      vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                      onScanRunStart={setActiveScanType}
+                    />
+                  </div>
                 </div>
-                <div className="card__body">
-                  <ScanControls
-                    kind={actionScanKind}
-                    disabled={panelDisabled}
-                    scanActive={scanActive}
-                    repeat={repeat}
-                    onRepeatChange={setRepeat}
-                    showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
-                    vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
-                    vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
-                    onScanRunStart={setActiveScanType}
-                  />
-                </div>
-              </div>
+              )}
               <div className="card save-results-card">
                 <div className="card__header">
                   <span className="card__title">{t("card.runReport")}</span>
@@ -1556,7 +1558,7 @@ export function App() {
               </div>
             </>
           )}
-          {adcTestEnabled && (
+          {adcTestEnabled && activeTopTab === "scan" && scanSubTab === "vector" && (
             <div className="card adc-test-card">
               <div className="card__header">
                 <span className="card__title">{t("card.adcTest")}</span>
