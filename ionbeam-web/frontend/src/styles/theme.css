@@ -1715,10 +1715,16 @@ body {
 }
 
 .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.vector-scan-execution-settings { flex: 1 0 100%; min-width: 0; margin-bottom: 6px; }
 .scan-primary-controls { display: inline-flex; gap: 6px; flex-wrap: nowrap; }
 .scan-primary-controls--raster { flex: 1 0 100%; }
 .roi-action-controls { margin-top: 12px; }
 .scan-action-with-help { display: inline-flex; align-items: center; gap: 4px; }
+/* Run validated + Clear, portalled from ScanControls to the bottom of the
+   scan parameters card, directly under Validated run options. */
+.validated-run-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.validated-run-actions:empty { display: none; }
+.validated-run-summary:not(:empty) { margin-top: 10px; }
 
 .scan-loop-controls {
   display: grid;

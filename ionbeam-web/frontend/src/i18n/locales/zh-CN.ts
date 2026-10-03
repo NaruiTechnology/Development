@@ -118,6 +118,9 @@ export const zhCN: Partial<TranslationTable> = {
 
   /* ===== card titles ============================================== */
   "card.controls": "控制",
+  "card.scanParameters": "扫描参数",
+  "scanParameters.expand": "展开扫描参数",
+  "scanParameters.collapse": "收起扫描参数",
   "card.dacCheck": "DAC 检查",
   "card.runReport": "保存结果",
   "card.adcTest": "ADC 测试",

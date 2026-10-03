@@ -137,6 +137,9 @@ export const en = {
 
   /* ===== card titles ============================================== */
   "card.controls": "Controls",
+  "card.scanParameters": "Scan parameters",
+  "scanParameters.expand": "Expand Scan parameters",
+  "scanParameters.collapse": "Collapse Scan parameters",
   "card.dacCheck": "DAC check",
   "card.runReport": "Save results",
   "card.adcTest": "ADC test",

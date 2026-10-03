@@ -14,6 +14,7 @@
  *          populate the server's last-scan cache.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { useAppSelector } from "../store";
 import {
@@ -49,10 +50,12 @@ export function ValidationPanel({
   disabled = false,
   mergedFigureUrl = null,
   kindOverride = null,
+  validationSummaryHost = null,
 }: {
   disabled?: boolean;
   mergedFigureUrl?: string | null;
   kindOverride?: "raster" | "vector" | null;
+  validationSummaryHost?: HTMLElement | null;
 }) {
   const { t, fmt } = useTranslation();
   const result = useAppSelector((s) => s.scan.lastResult);
@@ -453,6 +456,31 @@ export function ValidationPanel({
   // result.kind is "raster" or "vector" — a fixed enum on the wire.
   // We surface it as the localised name from the i18n table.
   const resultKindKey = result?.kind === "vector" ? "tabs.vector" : "tabs.raster";
+  const validationSummary = v ? (
+    <>
+      <div className="divider" />
+      <div className="row" style={{ marginBottom: 6 }}>
+        <span className="card__title">{t("validation.title")}</span>
+        <span className="spacer" />
+        <span className="status-pill" data-state={v.passed ? "idle" : "error"}>
+          {v.passed ? t("validation.allPassed") : t("validation.failures")}
+        </span>
+      </div>
+      <ul className="validation-list">
+        {v.checks.map((c) => (
+          <li key={c.name}>
+            <span className={c.passed ? "pass" : "fail"}>
+              {c.passed ? t("validation.check.pass") : t("validation.check.fail")}
+            </span>
+            {/* Backend check names and details are technical identifiers and are
+                intentionally displayed verbatim. */}
+            <span>{c.name}</span>
+            <span className="muted">{c.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  ) : null;
 
   return (
     <div className="card__body">
@@ -534,42 +562,9 @@ export function ValidationPanel({
         </div>
       )}
 
-      {v && (
-        <>
-          <div className="divider" />
-          <div className="row" style={{ marginBottom: 6 }}>
-            <span className="card__title">{t("validation.title")}</span>
-            <span className="spacer" />
-            <span
-              className="status-pill"
-              data-state={v.passed ? "idle" : "error"}
-            >
-              {v.passed ? t("validation.allPassed") : t("validation.failures")}
-            </span>
-          </div>
-          <ul className="validation-list">
-            {v.checks.map((c) => (
-              <li key={c.name}>
-                <span className={c.passed ? "pass" : "fail"}>
-                  {c.passed ? t("validation.check.pass") : t("validation.check.fail")}
-                </span>
-                {/* Check names and details come from the backend in
-                    English. They're technical strings (e.g. "chunks
-                    correct", "first chunk has the expected cookie")
-                    that map to specific code paths in the Python
-                    service — translating them would create a key-by-
-                    string-prefix lookup that would silently break the
-                    next time a check is added on the backend. We
-                    surface them verbatim and rely on the PASS/FAIL
-                    pill to communicate state in the operator's
-                    language. The integration guide notes this. */}
-                <span>{c.name}</span>
-                <span className="muted">{c.detail}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      {validationSummaryHost && validationSummary
+        ? createPortal(validationSummary, validationSummaryHost)
+        : validationSummary}
     </div>
   );
 }

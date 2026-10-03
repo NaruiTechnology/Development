@@ -35,6 +35,7 @@ import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
 import { RasterParameters } from "./components/RasterParameters";
 import { VectorParameters } from "./components/VectorParameters";
+import { VectorScanExecutionSettings } from "./components/VectorScanExecutionSettings";
 import { VectorScanPathField } from "./components/VectorScanPathField";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
@@ -108,6 +109,29 @@ type LeftTopTab = "scan" | "calibrate";
 type ScanSubTab = "roi" | "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
 
+function CollapsibleScanParameters({ children }: { children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(true);
+  const { t } = useTranslation();
+  return (
+    <div className="card scan-parameters-card">
+      <div className="card__header">
+        <span className="card__title">{t("card.scanParameters")}</span>
+        <button
+          type="button"
+          className="card__collapse-btn"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? t("scanParameters.expand") : t("scanParameters.collapse")}
+          title={collapsed ? t("scanParameters.expand") : t("scanParameters.collapse")}
+          onClick={() => setCollapsed((value) => !value)}
+        >
+          <Icon name="chevronDown" />
+        </button>
+      </div>
+      <div hidden={collapsed}>{children}</div>
+    </div>
+  );
+}
+
 export function App() {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -132,6 +156,10 @@ export function App() {
   // while expanded, the right-hand panel shows the ADC timeline instead
   // of the scan canvas — the same view the old tab switched to.
   const [adcTestCollapsed, setAdcTestCollapsed] = useState(true);
+  // Slot at the bottom of the scan parameters card (under Validated run
+  // options) that ScanControls portals Run validated + Clear into.
+  const [validatedActionsHost, setValidatedActionsHost] = useState<HTMLDivElement | null>(null);
+  const [validationSummaryHost, setValidationSummaryHost] = useState<HTMLDivElement | null>(null);
   const handleVacuumActivityChange = useCallback((active: boolean) => {
     setVacuumControllerBusy(active);
     setVacuumMinimized(!active);
@@ -1432,12 +1460,25 @@ export function App() {
             <div className="card__body">
               {activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
-                  <RasterParameters disabled={panelDisabled} />
+                  <CollapsibleScanParameters>
+                    <div className="card__body">
+                      <RasterParameters disabled={panelDisabled} />
+                      <div ref={setValidatedActionsHost} className="validated-run-actions" />
+                      <div ref={setValidationSummaryHost} className="validated-run-summary" />
+                    </div>
+                  </CollapsibleScanParameters>
                 ) : scanSubTab === "vector" ? (
-                  <VectorParameters
-                    disabled={panelDisabled}
-                    grayLevelFilterActive={vectorGrayLevelsEnabled}
-                  />
+                  <CollapsibleScanParameters>
+                    <div className="card__body">
+                      <VectorParameters
+                        disabled={panelDisabled}
+                        grayLevelFilterActive={vectorGrayLevelsEnabled}
+                        showScanPathSettings={false}
+                      />
+                      <div ref={setValidatedActionsHost} className="validated-run-actions" />
+                      <div ref={setValidationSummaryHost} className="validated-run-summary" />
+                    </div>
+                  </CollapsibleScanParameters>
                 ) : (
                   <>
                     <ROIEditor
@@ -1527,7 +1568,14 @@ export function App() {
                       showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
                       vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
                       vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                      firstRowContent={scanSubTab === "vector" ? (
+                        <VectorScanExecutionSettings
+                          disabled={panelDisabled}
+                          grayLevelFilterActive={vectorGrayLevelsEnabled}
+                        />
+                      ) : null}
                       onScanRunStart={setActiveScanType}
+                      validatedActionsHost={validatedActionsHost}
                     />
                   </div>
                 </div>
@@ -1553,6 +1601,7 @@ export function App() {
                       actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
                     }
                     kindOverride={actionScanKind}
+                    validationSummaryHost={validationSummaryHost}
                   />
                 </div>
               </div>

@@ -3,7 +3,8 @@
  * uses the blocking REST endpoint (returns a ScanResult with timing,
  * validation report, and CSV path).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
 import { apiUrl } from "../lib/backendUrl";
@@ -94,6 +95,8 @@ export function ScanControls({
   vectorGrayScaleSkipped = null,
   onActionRunStart,
   onScanRunStart,
+  validatedActionsHost = null,
+  firstRowContent,
 }: {
   kind: ScanKind;
   disabled?: boolean;
@@ -106,6 +109,10 @@ export function ScanControls({
   vectorGrayScaleSkipped?: boolean | null;
   onActionRunStart?: () => void;
   onScanRunStart?: (scanType: ScanType) => void;
+  /** When set, Run validated + Clear render here (bottom of the scan
+   *  parameters card, under Validated run options) instead of inline. */
+  validatedActionsHost?: HTMLElement | null;
+  firstRowContent?: ReactNode;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -835,8 +842,31 @@ export function ScanControls({
     );
   }
 
+  const validatedActions = (
+    <>
+      <span className="scan-action-with-help">
+        <button
+          type="button"
+          className="btn"
+          disabled={runDisabled || kind === "roi" || vectorGrayFilterActive}
+          onClick={onRunValidated}
+          title={t("scan.runValidated.title")}
+        >
+          <Icon name="check" tone="success" />
+          {t("scan.runValidated")}
+        </button>
+        <RunValidatedHelp />
+      </span>
+      <button type="button" className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
+        <Icon name="x" tone="danger" />
+        {t("scan.clear")}
+      </button>
+    </>
+  );
+
   return (
     <div className="button-row">
+      {kind === "vector" && firstRowContent}
       <div className="scan-equipment-selectors">
         <label className="scan-equipment-field">
           <span>{t("scan.region.label")}</span>
@@ -941,23 +971,7 @@ export function ScanControls({
 
       {kind !== "raster" && <span className="spacer" />}
 
-      <span className="scan-action-with-help">
-        <button
-          type="button"
-          className="btn"
-          disabled={runDisabled || kind === "roi" || vectorGrayFilterActive}
-          onClick={onRunValidated}
-          title={t("scan.runValidated.title")}
-        >
-          <Icon name="check" tone="success" />
-          {t("scan.runValidated")}
-        </button>
-        <RunValidatedHelp />
-      </span>
-      <button type="button" className="btn btn--ghost" disabled={runDisabled} onClick={onClear}>
-        <Icon name="x" tone="danger" />
-        {t("scan.clear")}
-      </button>
+      {validatedActionsHost ? createPortal(validatedActions, validatedActionsHost) : validatedActions}
       {showRepeatControl && (
         <div className="button-row__repeat-footer">
           <RepeatControl

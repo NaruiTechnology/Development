@@ -43,9 +43,11 @@ function validateCustomVectorResolution(value: number, t: (key: "vector.resoluti
 export function VectorParameters({
   disabled,
   grayLevelFilterActive = false,
+  showScanPathSettings = true,
 }: {
   disabled: boolean;
   grayLevelFilterActive?: boolean;
+  showScanPathSettings?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
@@ -135,7 +137,7 @@ export function VectorParameters({
         </select>
       </div>
 
-      {v.pattern === "default" && (
+      {showScanPathSettings && v.pattern === "default" && (
         <>
           <VectorScanPathField disabled={disabled} />
           <div className="field-row">

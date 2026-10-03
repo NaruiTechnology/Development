@@ -127,6 +127,9 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== card titles ============================================== */
   "card.controls": "控制",
+  "card.scanParameters": "掃描參數",
+  "scanParameters.expand": "展開掃描參數",
+  "scanParameters.collapse": "收合掃描參數",
   "card.dacCheck": "DAC 檢查",
   "card.runReport": "儲存結果",
   "card.adcTest": "ADC 測試",
