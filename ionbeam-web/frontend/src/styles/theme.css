@@ -4154,16 +4154,44 @@ body {
 
 .roi-tooltip {
   position: fixed;
-  z-index: 50;
+  z-index: 10000;
   pointer-events: none;
-  padding: 4px 6px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.78);
-  color: #fff;
-  font: 12px var(--font-mono);
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 7px 10px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 7px;
+  background: var(--c-bg-elev-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+  color: var(--c-text);
+  font: 500 12px/1.4 var(--font-sans);
+  white-space: normal;
 }
 
 /* ---------- progress bar --------------------------------------------- */
+
+.app-tooltip {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 7px 10px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 7px;
+  background: var(--c-bg-elev-2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+  color: var(--c-text);
+  font: 500 12px/1.4 var(--font-sans);
+  pointer-events: none;
+  white-space: normal;
+  animation: app-tooltip-in 120ms ease-out both;
+}
+
+.app-tooltip--above { transform: translate(-50%, -100%); }
+.app-tooltip--below { transform: translate(-50%, 0); }
+
+@keyframes app-tooltip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 .progress {
   height: 6px;

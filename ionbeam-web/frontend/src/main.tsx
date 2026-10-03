@@ -4,6 +4,7 @@ import { Provider } from "react-redux";
 
 import { store } from "./store";
 import { applyLocaleToDocument } from "./i18n";
+import { TooltipLayer } from "./components/TooltipLayer";
 import "./styles/theme.css";
 import "./styles/mobile.css";
 
@@ -35,7 +36,7 @@ async function bootstrap() {
     root.render(
       <React.StrictMode>
         <Provider store={store}>
-          <MobilityApp />
+          <><MobilityApp /><TooltipLayer /></>
         </Provider>
       </React.StrictMode>
     );
@@ -46,7 +47,7 @@ async function bootstrap() {
   root.render(
     <React.StrictMode>
       <Provider store={store}>
-        <App />
+        <><App /><TooltipLayer /></>
       </Provider>
     </React.StrictMode>
   );
