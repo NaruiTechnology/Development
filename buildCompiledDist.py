@@ -127,6 +127,7 @@ REQUIRED_DIST_FILES = (
     'Development/Scripts/manage-local-system.sh',
     'Development/Scripts/program-fpga-ram.py',
     'Development/ionbeam-web/backend/package.json',
+    'Development/IobeamAdmin/Sql/006_equipment_csv_functions.sql',
     'Development/glasgow_service/requirements.txt',
     'Development/requirements.txt',
     'Development/ionbeam-native/requirements.txt',

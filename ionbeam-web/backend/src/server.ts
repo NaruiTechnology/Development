@@ -38,6 +38,8 @@ import {
   buildActivityReportFromDb,
   adminActivityExistsInDb,
   dedupeActivityRowsFromDb,
+  exportEquipmentCsvFromDb,
+  importEquipmentCsvToDb,
   listAllowedHostsFromDb,
   findAdminUserInDb,
   findAdminUserInDbById,
@@ -51,6 +53,7 @@ import {
   syncEquipmentToDb,
   type AdminUser,
   type Equipment,
+  type EquipmentCsvImportRow,
 } from "./adminDbRepository";
 import {
   recordInputSetupInDb,
@@ -431,6 +434,43 @@ app.get("/api/admin/iobeam/equipment", async (_req, res) => {
   try {
     const equipment = await listEquipmentFromDb();
     res.json({ ok: true, equipment });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.get("/api/admin/iobeam/equipment/export.csv", async (req, res) => {
+  try {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can export equipment");
+    res
+      .status(200)
+      .type("text/csv")
+      .set("Content-Disposition", 'attachment; filename="equipment.csv"')
+      .send(await exportEquipmentCsvFromDb());
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post("/api/admin/iobeam/equipment/import", async (req, res) => {
+  try {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can import equipment");
+    const incoming = parseEquipmentImportPayload(req.body?.equipment);
+    const current = await listEquipmentFromDb();
+    for (const [index, row] of incoming.entries()) {
+      const byId = row.id == null ? undefined : current.find((existing) => existing.id === row.id);
+      const bySerial = current.find((existing) =>
+        existing.serial_number.trim().toLowerCase() === row.serial_number.trim().toLowerCase(),
+      );
+      if (byId && bySerial && byId.id !== bySerial.id) {
+        throw new ConfigError(`equipment row ${index + 1} has an ID and serial number that refer to different records`);
+      }
+      if (!byId && !bySerial && !EQUIPMENT_CSV_SITES.has(row.site ?? "")) {
+        throw new ConfigError(`new equipment row ${index + 1} needs a supported site`);
+      }
+    }
+    const result = await importEquipmentCsvToDb(incoming);
+    res.json({ ok: true, ...result });
   } catch (err) {
     sendConfigError(res, err);
   }
@@ -1555,6 +1595,77 @@ function readEquipment(data: unknown): Equipment[] {
       description: String(row.description ?? ""),
     }))
     .filter((row) => row.name.trim() || row.serial_number.trim());
+}
+
+const EQUIPMENT_CSV_SITES = new Set([
+  "Beijing(北京)",
+  "Shanghai(上海)",
+  "Shenzheng(深圳)",
+  "Wuxi(无锡)",
+  "Xian(西安)",
+  "Chengdu(成都)",
+  "Hangzhou(杭州)",
+  "Tianjing(天津)",
+  "Taixin(泰兴)",
+]);
+
+function parseEquipmentImportPayload(value: unknown): EquipmentCsvImportRow[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 10_000) {
+    throw new ConfigError("equipment must contain between 1 and 10,000 CSV rows");
+  }
+  const rows: EquipmentCsvImportRow[] = [];
+  const ids = new Set<number>();
+  const serials = new Set<string>();
+  for (let index = 0; index < value.length; index++) {
+    const raw = value[index];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new ConfigError(`equipment row ${index + 1} is invalid`);
+    }
+    const record = raw as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    const serialNumber = typeof record.serial_number === "string" ? record.serial_number.trim() : "";
+    if (!name || !serialNumber) {
+      throw new ConfigError(`equipment row ${index + 1} needs a name and serial number`);
+    }
+    if (name.length > 100 || serialNumber.length > 15) {
+      throw new ConfigError(`equipment row ${index + 1} exceeds the name or serial number length limit`);
+    }
+    if (/[\r\n]/.test(name) || /[\r\n]/.test(serialNumber)) {
+      throw new ConfigError(`equipment row ${index + 1} name and serial number cannot contain line breaks`);
+    }
+    const row: EquipmentCsvImportRow = { name, serial_number: serialNumber };
+    if (record.id !== undefined) {
+      if (record.id !== null && (!Number.isSafeInteger(record.id) || Number(record.id) <= 0)) {
+        throw new ConfigError(`equipment row ${index + 1} has an invalid ID`);
+      }
+      row.id = record.id as number | null;
+    }
+    for (const field of ["model", "site", "description"] as const) {
+      if (record[field] === undefined) continue;
+      if (typeof record[field] !== "string") {
+        throw new ConfigError(`equipment row ${index + 1} has an invalid ${field}`);
+      }
+      const text = record[field].trim();
+      const limit = field === "description" ? 1000 : field === "site" ? 50 : 100;
+      if (text.length > limit) throw new ConfigError(`equipment row ${index + 1} ${field} is too long`);
+      if (field === "site" && !EQUIPMENT_CSV_SITES.has(text)) {
+        throw new ConfigError(`equipment row ${index + 1} has an unsupported site`);
+      }
+      if (field !== "description" && /[\r\n]/.test(text)) {
+        throw new ConfigError(`equipment row ${index + 1} ${field} cannot contain line breaks`);
+      }
+      row[field] = text;
+    }
+    if (row.id != null) {
+      if (ids.has(row.id)) throw new ConfigError(`CSV repeats equipment ID ${row.id}`);
+      ids.add(row.id);
+    }
+    const serialKey = serialNumber.toLowerCase();
+    if (serials.has(serialKey)) throw new ConfigError(`CSV repeats serial number ${serialNumber}`);
+    serials.add(serialKey);
+    rows.push(row);
+  }
+  return rows;
 }
 
 function adminDbSource(connection: PgConnection): "local_db" | "remote_db" {

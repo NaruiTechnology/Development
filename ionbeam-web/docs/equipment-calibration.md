@@ -69,7 +69,7 @@ updated `fn_import_equipment_calibration`.
 
 * `IobeamAdmin/Sql/003_calibration_schema.sql` is applied automatically after `001_schema.sql` by
   `applyAdminDatabaseSetup` (idempotent). So is `005_dimension_calibration_schema.sql` (Dimension Cal's
-  one-row-per-equipment table).
+  one-row-per-equipment table) and `006_equipment_csv_functions.sql` (equipment table CSV import/export).
 * The catalog (`004_calibration_seed.sql`, generated) is loaded on first use, or explicitly with
   `npm run db:seed:calibration` (backend). Re-running keeps human-edited names. The admin route
   `POST /api/admin/iobeam/calibration/catalog/reload` does the same.

@@ -10,6 +10,9 @@ Contents:
 - `Sql/003_calibration_schema.sql` - FIB / SEM calibration-parameter tables and stored functions (applied after 001).
 - `Sql/004_calibration_seed.sql` - generated parameter catalog; `CalibrationCatalog/build_seed.py` regenerates it.
   See `ionbeam-web/docs/equipment-calibration.md`.
+- `Sql/005_dimension_calibration_schema.sql` - per-equipment Dimension Cal storage and functions.
+- `Sql/006_equipment_csv_functions.sql` - equipment CSV export and validated, atomic import functions, applied by
+  `ionbeam-web/backend/src/adminDbService.ts` during admin database setup.
 
 For in-place schema upgrades on a live deployment, use the ionbeam-web backend
 runner:

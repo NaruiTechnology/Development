@@ -24,7 +24,7 @@
  * local modal state until Update is clicked. The Redux DevTools timeline
  * becomes the edit history for persisted fields for free.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
@@ -73,6 +73,7 @@ import {
   equipmentFromDraft,
   type EquipmentRow,
 } from "../lib/equipmentModel";
+import { parseEquipmentCsv } from "../lib/equipmentCsv";
 import { Icon } from "./Icon";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
@@ -1688,6 +1689,11 @@ function emptyAdminUser(nextId: number): AdminUserRow {
   };
 }
 
+function withEquipmentRows(data: unknown, equipment: EquipmentRow[]): unknown {
+  const next = writePath(data, ["equipments"], equipment);
+  return writePath(next, ["equipment"], equipment[0] ?? emptyEquipment(1));
+}
+
 function adminUsersFromDraft(draft: unknown): AdminUserRow[] {
   const users = readPath(draft, ["users"]);
   const rawUsers = Array.isArray(users)
@@ -1895,6 +1901,8 @@ function AdminTab({
   const [error, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [privilegeNotice, setPrivilegeNotice] = useState<string | null>(null);
+  const equipmentCsvInputRef = useRef<HTMLInputElement | null>(null);
+  const [equipmentCsvBusy, setEquipmentCsvBusy] = useState(false);
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
   const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
   const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
@@ -2041,6 +2049,95 @@ function AdminTab({
 
   function deleteEquipment(index: number) {
     setEquipment(equipmentFromDraft(draft).filter((_row, rowIndex) => rowIndex !== index));
+  }
+
+  async function exportEquipmentCsv() {
+    if (!canManageAdminConfig) {
+      showPrivilegeNotice();
+      return;
+    }
+    setEquipmentCsvBusy(true);
+    setLocalError(null);
+    try {
+      const response = await fetch(apiUrl("/api/admin/iobeam/equipment/export.csv"), {
+        headers: scanAuthHeaders(),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "equipment.csv";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (err) {
+      setLocalError(t("settings.admin.equipment.export.error", {
+        detail: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setEquipmentCsvBusy(false);
+    }
+  }
+
+  async function importEquipmentCsv(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (!canManageAdminConfig) {
+      showPrivilegeNotice();
+      return;
+    }
+    if (busy || equipmentCsvBusy) return;
+
+    setEquipmentCsvBusy(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error("The CSV exceeds the 10 MB file limit.");
+      const imported = parseEquipmentCsv(await file.text());
+      const existingEquipment = equipmentFromDraft(draft);
+      for (const [index, row] of imported.entries()) {
+        const existing = existingEquipment.find((candidate) =>
+          (row.id != null && candidate.id === row.id) ||
+          candidate.serial_number.trim().toLowerCase() === row.serial_number.trim().toLowerCase(),
+        );
+        if (!existing && !SITE_OPTIONS.some((option) => option.value === row.site)) {
+          throw new Error(`Row ${index + 2} needs a supported Site when adding new equipment.`);
+        }
+      }
+      if (!window.confirm(t("settings.admin.equipment.import.confirm", {
+        rows: imported.length,
+        file: file.name,
+      }))) return;
+      const response = await fetch(apiUrl("/api/admin/iobeam/equipment/import"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+        body: JSON.stringify({ equipment: imported }),
+      });
+      const result = await readJsonResponse<{
+        ok?: boolean;
+        equipment?: EquipmentRow[];
+        added?: number;
+        updated?: number;
+        error?: string;
+      }>(response, "equipment CSV import");
+      if (!response.ok || !Array.isArray(result.equipment)) {
+        throw new Error(result.error ?? `HTTP ${response.status}`);
+      }
+      setEquipment(result.equipment);
+      if (source !== null) setSource(withEquipmentRows(source, result.equipment));
+      setNotice(t("settings.admin.equipment.import.ok", {
+        added: result.added ?? 0,
+        updated: result.updated ?? 0,
+      }));
+    } catch (err) {
+      setLocalError(t("settings.admin.equipment.import.error", {
+        detail: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setEquipmentCsvBusy(false);
+    }
   }
 
   async function onSave(nextDraft: unknown = draft) {
@@ -2445,29 +2542,68 @@ function AdminTab({
         <>
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.equipment")}</h4>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => {
-                if (!canManageAdminConfig) {
-                  showPrivilegeNotice();
-                  return;
-                }
-                addEquipment();
-              }}
-              disabled={busy}
-              aria-disabled={!canManageAdminConfig}
-              title={t("settings.admin.equipment.add.title")}
-            >
-              <Icon name="upload" tone="accent" />
-              {t("settings.admin.equipment.add")}
-            </button>
+            <div className="button-row">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={exportEquipmentCsv}
+                disabled={busy || equipmentCsvBusy}
+                aria-disabled={!canManageAdminConfig}
+                aria-label={t("settings.admin.equipment.export")}
+                title={t("settings.admin.equipment.export.title")}
+              >
+                <Icon name="download" tone="accent" />
+                {t("settings.admin.equipment.export.button")}
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  if (!canManageAdminConfig) {
+                    showPrivilegeNotice();
+                    return;
+                  }
+                  equipmentCsvInputRef.current?.click();
+                }}
+                disabled={busy || equipmentCsvBusy}
+                aria-disabled={!canManageAdminConfig}
+                aria-label={t("settings.admin.equipment.import")}
+                title={t("settings.admin.equipment.import.title")}
+              >
+                <Icon name="upload" tone="accent" />
+                {t("settings.admin.equipment.import.button")}
+              </button>
+              <input
+                ref={equipmentCsvInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                hidden
+                onChange={(event) => void importEquipmentCsv(event)}
+              />
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => {
+                  if (!canManageAdminConfig) {
+                    showPrivilegeNotice();
+                    return;
+                  }
+                  addEquipment();
+                }}
+                disabled={busy || equipmentCsvBusy}
+                aria-disabled={!canManageAdminConfig}
+                title={t("settings.admin.equipment.add.title")}
+              >
+                <Icon name="upload" tone="accent" />
+                {t("settings.admin.equipment.add")}
+              </button>
+            </div>
           </div>
           <EquipmentGrid
             equipment={equipmentFromDraft(draft)}
             sourceEquipment={equipmentFromDraft(source)}
-            disabled={busy || !canManageAdminConfig}
-            actionDisabled={busy}
+            disabled={busy || equipmentCsvBusy || !canManageAdminConfig}
+            actionDisabled={busy || equipmentCsvBusy}
             canManage={canManageAdminConfig}
             onUpdate={updateEquipment}
             onPersist={() => void onSave()}

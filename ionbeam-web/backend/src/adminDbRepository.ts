@@ -30,6 +30,14 @@ export interface Equipment {
   description: string;
 }
 
+export type EquipmentCsvImportRow = Partial<Equipment> & Pick<Equipment, "name" | "serial_number">;
+
+export interface EquipmentCsvImportResult {
+  equipment: Equipment[];
+  added: number;
+  updated: number;
+}
+
 export interface AllowedHost {
   id: number | null;
   host: string;
@@ -172,6 +180,30 @@ export async function dedupeActivityRowsFromDb(): Promise<number> {
 export async function listEquipmentFromDb(): Promise<Equipment[]> {
   const raw = await queryStored("SELECT fn_list_equipment();");
   return parseArray(raw) as Equipment[];
+}
+
+export async function exportEquipmentCsvFromDb(): Promise<string> {
+  return queryStored("SELECT fn_export_equipment_csv();");
+}
+
+export async function importEquipmentCsvToDb(rows: EquipmentCsvImportRow[]): Promise<EquipmentCsvImportResult> {
+  const raw = await queryStored("SELECT fn_import_equipment_csv($$payload$$);", rows);
+  const parsed = JSON.parse(raw || "{}") as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("fn_import_equipment_csv returned an invalid response");
+  }
+  const result = parsed as Record<string, unknown>;
+  if (result.ok !== true || !Array.isArray(result.equipment)) {
+    throw new Error("fn_import_equipment_csv returned an invalid result");
+  }
+  if (!Number.isInteger(result.added) || !Number.isInteger(result.updated)) {
+    throw new Error("fn_import_equipment_csv returned invalid import counts");
+  }
+  return {
+    equipment: result.equipment as Equipment[],
+    added: result.added as number,
+    updated: result.updated as number,
+  };
 }
 
 export async function listAllowedHostsFromDb(): Promise<string[]> {
