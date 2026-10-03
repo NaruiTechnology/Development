@@ -13,13 +13,11 @@ import { useTranslation } from "../i18n";
 import { LatencyHelp } from "./LatencyHelp";
 import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
-import { PatternHelp } from "./PatternHelp";
 import { VectorResolutionHelp } from "./VectorResolutionHelp";
 import { CustomPointsHelp } from "./CustomPointsHelp";
 import { PreProcessHelp } from "./PreProcessHelp";
 import { ValidationHelp } from "./ValidationHelp";
 import { AdcValidHelp } from "./AdcValidHelp";
-import { ScanModeHelp } from "./ScanModeHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { DwellHelp } from "./DwellHelp";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
@@ -108,33 +106,24 @@ export function VectorParameters({
 
   return (
     <div>
-      <BeamEnergyField disabled={disabled} />
-
-      <div className="field">
-        <label>
-          {t("scan.modeGuide")}
-          <ScanModeHelp />
-        </label>
-      </div>
-
-      <div className="field">
-        <label>
-          {t("vector.pattern")}
-          <PatternHelp />
-        </label>
-        <select
-          className="select"
-          value={v.pattern}
-          disabled={disabled || grayLevelFilterActive}
-          onChange={(e) =>
-            dispatch(
-              updateVector({ pattern: e.target.value as "default" | "custom" })
-            )
-          }
-        >
-          <option value="default">{t("vector.pattern.default")}</option>
-          <option value="custom">{t("vector.pattern.custom")}</option>
-        </select>
+      <div className="field-row">
+        <BeamEnergyField disabled={disabled} />
+        <div className="field">
+          <label>{t("vector.pattern")}</label>
+          <select
+            className="select"
+            value={v.pattern}
+            disabled={disabled || grayLevelFilterActive}
+            onChange={(e) =>
+              dispatch(
+                updateVector({ pattern: e.target.value as "default" | "custom" })
+              )
+            }
+          >
+            <option value="default">{t("vector.pattern.default")}</option>
+            <option value="custom">{t("vector.pattern.custom")}</option>
+          </select>
+        </div>
       </div>
 
       {showScanPathSettings && v.pattern === "default" && (

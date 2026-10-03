@@ -360,6 +360,9 @@ body {
 }
 
 .card + .card { margin-top: 16px; }
+/* Cards nested in the scan panel card (Scan parameters, Controls, Save
+   results, ADC test, DAC check) stack with a tighter gap. */
+.scan-panel-card > .card__body > * + .card { margin-top: 12px; }
 
 .card__header {
   padding: 10px 14px;
@@ -1457,6 +1460,10 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.scan-parameters-card .card__header {
+  justify-content: space-between;
 }
 
 .field-row--three {
@@ -2659,6 +2666,39 @@ body {
 
 .tabs--top .tab {
   flex: 1 1 0;
+}
+
+.tab-group--scan {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.tab-group--scan .tab {
+  flex: 0 0 auto;
+}
+
+.tab-group--scan:has(.tab[aria-selected="true"])::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--c-warn);
+  content: "";
+  pointer-events: none;
+}
+
+.tab-group--scan .tab[aria-selected="true"] {
+  border-bottom-color: transparent;
+}
+
+.tab-group--scan > .help-btn {
+  flex: 0 0 auto;
+  margin: 0 4px 0 0;
 }
 
 .tabs--sub .tab {
@@ -6410,7 +6450,8 @@ body {
 
 .dac-check-card .card__header,
 .save-results-card .card__header,
-.adc-test-card .card__header {
+.adc-test-card .card__header,
+.scan-controls-card .card__header {
   justify-content: space-between;
 }
 

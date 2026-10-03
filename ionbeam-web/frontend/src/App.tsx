@@ -34,6 +34,7 @@ import { saveDimensionCalibration } from "./store/dimensionCalibrationSlice";
 import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
 import { RasterParameters } from "./components/RasterParameters";
+import { ScanModeHelp } from "./components/ScanModeHelp";
 import { VectorParameters } from "./components/VectorParameters";
 import { VectorScanExecutionSettings } from "./components/VectorScanExecutionSettings";
 import { VectorScanPathField } from "./components/VectorScanPathField";
@@ -156,6 +157,8 @@ export function App() {
   // while expanded, the right-hand panel shows the ADC timeline instead
   // of the scan canvas — the same view the old tab switched to.
   const [adcTestCollapsed, setAdcTestCollapsed] = useState(true);
+  // Controls card (nested in the scan panel card) starts expanded.
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
   // Slot at the bottom of the scan parameters card (under Validated run
   // options) that ScanControls portals Run validated + Clear into.
   const [validatedActionsHost, setValidatedActionsHost] = useState<HTMLDivElement | null>(null);
@@ -1373,16 +1376,19 @@ export function App() {
             style={scanPanelStyle}
           >
             <div className="tabs tabs--top" role="tablist" aria-label={t("tabs.top.aria")}>
-              <button
-                role="tab"
-                className="tab tab--top"
-                aria-selected={activeTopTab === "scan"}
-                disabled={panelDisabled}
-                onClick={activateScanTopTab}
-              >
-                <Icon name="scan" tone="tab" />
-                {t("tabs.scan")}
-              </button>
+              <div className="tab-group tab-group--scan">
+                <button
+                  role="tab"
+                  className="tab tab--top"
+                  aria-selected={activeTopTab === "scan"}
+                  disabled={panelDisabled}
+                  onClick={activateScanTopTab}
+                >
+                  <Icon name="scan" tone="tab" />
+                  {t("tabs.scan")}
+                </button>
+                <ScanModeHelp />
+              </div>
               <button
                 role="tab"
                 className="tab tab--top"
@@ -1545,127 +1551,135 @@ export function App() {
                   </>
                 )
               )}
-            </div>
-          </div>
-
-          {(showROIActionControls || (activeTopTab === "scan" && scanSubTab === "roi")) && (
-            <>
-              {kind !== "roi" && (
-                <div
-                  className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
-                  style={scanPanelStyle}
-                >
-                  <div className="card__header">
-                    <span className="card__title">{t("card.controls")}</span>
-                  </div>
-                  <div className="card__body">
-                    <ScanControls
-                      kind={actionScanKind}
-                      disabled={panelDisabled}
-                      scanActive={scanActive}
-                      repeat={repeat}
-                      onRepeatChange={setRepeat}
-                      showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
-                      vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
-                      vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
-                      firstRowContent={scanSubTab === "vector" ? (
-                        <VectorScanExecutionSettings
+              {(showROIActionControls || (activeTopTab === "scan" && scanSubTab === "roi")) && (
+                <>
+                  {kind !== "roi" && (
+                    <div className="card scan-controls-card">
+                      <div className="card__header">
+                        <span className="card__title">{t("card.controls")}</span>
+                        <button
+                          type="button"
+                          className="card__collapse-btn"
+                          aria-expanded={!controlsCollapsed}
+                          aria-label={controlsCollapsed ? t("controls.expand") : t("controls.collapse")}
+                          title={controlsCollapsed ? t("controls.expand") : t("controls.collapse")}
+                          onClick={() => setControlsCollapsed((collapsed) => !collapsed)}
+                        >
+                          <Icon name="chevronDown" />
+                        </button>
+                      </div>
+                      {/* hidden, not unmounted: ScanControls owns the live scan stream */}
+                      <div className="card__body" hidden={controlsCollapsed}>
+                        <ScanControls
+                          kind={actionScanKind}
                           disabled={panelDisabled}
-                          grayLevelFilterActive={vectorGrayLevelsEnabled}
+                          scanActive={scanActive}
+                          repeat={repeat}
+                          onRepeatChange={setRepeat}
+                          showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
+                          vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
+                          vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                          firstRowContent={scanSubTab === "vector" ? (
+                            <VectorScanExecutionSettings
+                              disabled={panelDisabled}
+                              grayLevelFilterActive={vectorGrayLevelsEnabled}
+                            />
+                          ) : null}
+                          onScanRunStart={setActiveScanType}
+                          validatedActionsHost={validatedActionsHost}
                         />
-                      ) : null}
-                      onScanRunStart={setActiveScanType}
-                      validatedActionsHost={validatedActionsHost}
-                    />
+                      </div>
+                    </div>
+                  )}
+                  <div className="card save-results-card">
+                    <div className="card__header">
+                      <span className="card__title">{t("card.runReport")}</span>
+                      <button
+                        type="button"
+                        className="card__collapse-btn"
+                        aria-expanded={!saveResultsCollapsed}
+                        aria-label={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
+                        title={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
+                        onClick={() => setSaveResultsCollapsed((collapsed) => !collapsed)}
+                      >
+                        <Icon name="chevronDown" />
+                      </button>
+                    </div>
+                    <div hidden={saveResultsCollapsed}>
+                      <ValidationPanel
+                        disabled={panelDisabled}
+                        mergedFigureUrl={
+                          actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
+                        }
+                        kindOverride={actionScanKind}
+                        validationSummaryHost={validationSummaryHost}
+                      />
+                    </div>
                   </div>
-                </div>
+                </>
               )}
-              <div className="card save-results-card">
-                <div className="card__header">
-                  <span className="card__title">{t("card.runReport")}</span>
-                  <button
-                    type="button"
-                    className="card__collapse-btn"
-                    aria-expanded={!saveResultsCollapsed}
-                    aria-label={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
-                    title={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
-                    onClick={() => setSaveResultsCollapsed((collapsed) => !collapsed)}
-                  >
-                    <Icon name="chevronDown" />
-                  </button>
-                </div>
-                <div hidden={saveResultsCollapsed}>
-                  <ValidationPanel
-                    disabled={panelDisabled}
-                    mergedFigureUrl={
-                      actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
-                    }
-                    kindOverride={actionScanKind}
-                    validationSummaryHost={validationSummaryHost}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-          {adcTestEnabled && activeTopTab === "scan" && scanSubTab === "vector" && (
-            <div className="card adc-test-card">
-              <div className="card__header">
-                <span className="card__title">{t("card.adcTest")}</span>
-                <button
-                  type="button"
-                  className="card__collapse-btn"
-                  aria-expanded={!adcTestCollapsed}
-                  aria-label={adcTestCollapsed ? t("adcTest.expand") : t("adcTest.collapse")}
-                  title={adcTestCollapsed ? t("adcTest.expand") : t("adcTest.collapse")}
-                  // Same locks as the old tab: can't open during a scan,
-                  // can't close while the ADC stream is running.
-                  disabled={adcTestCollapsed ? scanActive : adcActive}
-                  onClick={() => setAdcTestCollapsed((collapsed) => !collapsed)}
-                >
-                  <Icon name="chevronDown" />
-                </button>
-              </div>
-              {!adcTestCollapsed && (
-                <div className="card__body">
-                  <AdcTestControls
-                    state={adcTest.state}
-                    onStart={adcTest.start}
-                    onStop={adcTest.stop}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-          {showROIActionControls && kind !== "roi" && (
-            <>
-              {kind === "vector" && (
-                <div className="card dac-check-card">
+              {adcTestEnabled && activeTopTab === "scan" && scanSubTab === "vector" && (
+                <div className="card adc-test-card">
                   <div className="card__header">
-                    <span className="card__title">
-                      {t("card.dacCheck")}
-                      <DacCheckHelp />
-                    </span>
+                    <span className="card__title">{t("card.adcTest")}</span>
                     <button
                       type="button"
                       className="card__collapse-btn"
-                      aria-expanded={!dacCheckCollapsed}
-                      aria-label={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
-                      title={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
-                      onClick={() => setDacCheckCollapsed((collapsed) => !collapsed)}
+                      aria-expanded={!adcTestCollapsed}
+                      aria-label={adcTestCollapsed ? t("adcTest.expand") : t("adcTest.collapse")}
+                      title={adcTestCollapsed ? t("adcTest.expand") : t("adcTest.collapse")}
+                      // Same locks as the old tab: can't open during a scan,
+                      // can't close while the ADC stream is running.
+                      disabled={adcTestCollapsed ? scanActive : adcActive}
+                      onClick={() => setAdcTestCollapsed((collapsed) => !collapsed)}
                     >
                       <Icon name="chevronDown" />
                     </button>
                   </div>
-                  {!dacCheckCollapsed && (
+                  {!adcTestCollapsed && (
                     <div className="card__body">
-                      <DacRampPanel disabled={panelDisabled} />
+                      <AdcTestControls
+                        state={adcTest.state}
+                        onStart={adcTest.start}
+                        onStop={adcTest.stop}
+                      />
                     </div>
                   )}
                 </div>
               )}
-              <ErrorWedge signedInUser={signedInUser} />
-            </>
-          )}
+              {showROIActionControls && kind !== "roi" && (
+                <>
+                  {kind === "vector" && (
+                    <div className="card dac-check-card">
+                      <div className="card__header">
+                        <span className="card__title">
+                          {t("card.dacCheck")}
+                          <DacCheckHelp />
+                        </span>
+                        <button
+                          type="button"
+                          className="card__collapse-btn"
+                          aria-expanded={!dacCheckCollapsed}
+                          aria-label={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
+                          title={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
+                          onClick={() => setDacCheckCollapsed((collapsed) => !collapsed)}
+                        >
+                          <Icon name="chevronDown" />
+                        </button>
+                      </div>
+                      {!dacCheckCollapsed && (
+                        <div className="card__body">
+                          <DacRampPanel disabled={panelDisabled} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {showROIActionControls && kind !== "roi" && <ErrorWedge signedInUser={signedInUser} />}
         </section>
 
         <div
