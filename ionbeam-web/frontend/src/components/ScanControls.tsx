@@ -866,7 +866,7 @@ export function ScanControls({
 
   return (
     <div className="button-row">
-      {kind === "vector" && firstRowContent}
+      {firstRowContent}
       <div className="scan-equipment-selectors">
         <label className="scan-equipment-field">
           <span>{t("scan.region.label")}</span>

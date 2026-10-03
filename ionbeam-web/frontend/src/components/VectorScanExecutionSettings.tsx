@@ -41,7 +41,7 @@ export function VectorScanExecutionSettings({ disabled, grayLevelFilterActive = 
   if (vector.pattern !== "default") return null;
 
   return (
-    <div className="vector-scan-execution-settings">
+    <div className="scan-execution-settings">
       <VectorScanPathField disabled={disabled} />
       <div className="field-row">
         <PresetNumberField

@@ -1722,7 +1722,7 @@ body {
 }
 
 .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
-.vector-scan-execution-settings { flex: 1 0 100%; min-width: 0; margin-bottom: 6px; }
+.scan-execution-settings { flex: 1 0 100%; min-width: 0; margin-bottom: 6px; }
 .scan-primary-controls { display: inline-flex; gap: 6px; flex-wrap: nowrap; }
 .scan-primary-controls--raster { flex: 1 0 100%; }
 .roi-action-controls { margin-top: 12px; }

@@ -37,6 +37,7 @@ import { RasterParameters } from "./components/RasterParameters";
 import { ScanModeHelp } from "./components/ScanModeHelp";
 import { VectorParameters } from "./components/VectorParameters";
 import { VectorScanExecutionSettings } from "./components/VectorScanExecutionSettings";
+import { RasterScanExecutionSettings } from "./components/RasterScanExecutionSettings";
 import { VectorScanPathField } from "./components/VectorScanPathField";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
@@ -1584,6 +1585,8 @@ export function App() {
                               disabled={panelDisabled}
                               grayLevelFilterActive={vectorGrayLevelsEnabled}
                             />
+                          ) : scanSubTab === "raster" ? (
+                            <RasterScanExecutionSettings disabled={panelDisabled} />
                           ) : null}
                           onScanRunStart={setActiveScanType}
                           validatedActionsHost={validatedActionsHost}

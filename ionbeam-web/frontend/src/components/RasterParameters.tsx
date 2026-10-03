@@ -17,8 +17,6 @@ import { type ReactNode } from "react";
 import { updateRaster, updateROI } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
-import { DwellHelp } from "./DwellHelp";
-import { ResolutionHelp } from "./ResolutionHelp";
 import { LatencyHelp } from "./LatencyHelp";
 import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
@@ -28,19 +26,14 @@ import { AdcValidHelp } from "./AdcValidHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
-import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds, revC3DwellPresetOptions } from "../lib/scanTiming";
 
-const RES_PRESETS: PresetNumberOption[] = [128, 256, 512, 1024, 2048].map((value) => ({ value }));
-const LATENCY_PRESETS = [4096, 8192, 16384, 32768];
+const LATENCY_PRESETS: PresetNumberOption[] = [4096, 8192, 16384, 32768].map((value) => ({ value }));
 
 export function RasterParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const r = useAppSelector((s) => s.scan.raster);
   const roi = useAppSelector((s) => s.scan.roi);
-  const halfPeriod = useAppSelector((s) => Number(s.status.defaults?.adc?.adcHalfPeriod ?? 3));
-  const timing = estimateRevC3ScanTiming(r.resolution, r.dwell, halfPeriod);
-  const dwellPresets = revC3DwellPresetOptions(undefined, halfPeriod);
 
   // The footnote in the original code interpolates two <b> spans into a
   // sentence. Localised text reorders those spans (e.g. zh-CN puts
@@ -56,78 +49,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
   return (
     <div>
       <BeamEnergyField disabled={disabled} />
-
-      <div className="field-row">
-        <PresetNumberField
-          label={
-            <label>
-              {t("raster.resolution")}
-              <ResolutionHelp />
-            </label>
-          }
-          value={r.resolution}
-          options={RES_PRESETS}
-          min={1}
-          max={2048}
-          disabled={disabled}
-          onChange={(v) => dispatch(updateRaster({ resolution: v }))}
-        />
-        <PresetNumberField
-          label={
-            <label>
-              {t("scan.dwell.dynamic", {
-                dwell: r.dwell,
-                period: formatNanoseconds(timing.samplePeriodNs),
-                samples: timing.samplesPerPixel,
-                pixel: formatNanoseconds(timing.pixelDwellNs),
-                resolution: r.resolution,
-                frame: formatDuration(timing.frameSeconds),
-              })}
-              <DwellHelp />
-            </label>
-          }
-          value={r.dwell}
-          options={dwellPresets}
-          min={0}
-          max={65535}
-          disabled={disabled}
-          onChange={(v) => dispatch(updateRaster({ dwell: v }))}
-        />
-      </div>
-
-      <div className="field-row">
-        <PresetNumberField
-          label={
-            <label>
-              {t("raster.latencyBytes")}
-              <LatencyHelp />
-            </label>
-          }
-          value={r.latency_bytes}
-          options={LATENCY_PRESETS.map((value) => ({ value }))}
-          min={2}
-          max={1 << 20}
-          disabled={disabled}
-          onChange={(v) => dispatch(updateRaster({ latency_bytes: v }))}
-        />
-        <div className="field">
-          <label>
-            {t("raster.cookie")}
-            <CookieHelp />
-          </label>
-          <NumberStepperInput
-            value={r.cookie}
-            disabled={disabled}
-            onValueChange={(next) =>
-              dispatch(updateRaster({ cookie: clamp(next, 0, 0xffff, 123) }))
-            }
-            min={0}
-            max={0xffff}
-            step={1}
-            inputMode="numeric"
-          />
-        </div>
-      </div>
 
       <div className="field-row">
         <div className="field">
@@ -159,6 +80,40 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("raster.adcValid")} <AdcValidHelp />
       </label>
+      </div>
+
+      <div className="field-row">
+        <PresetNumberField
+          label={
+            <label>
+              {t("raster.latencyBytes")}
+              <LatencyHelp />
+            </label>
+          }
+          value={r.latency_bytes}
+          options={LATENCY_PRESETS}
+          min={2}
+          max={1 << 20}
+          disabled={disabled}
+          onChange={(v) => dispatch(updateRaster({ latency_bytes: v }))}
+        />
+        <div className="field">
+          <label>
+            {t("raster.cookie")}
+            <CookieHelp />
+          </label>
+          <NumberStepperInput
+            value={r.cookie}
+            disabled={disabled}
+            onValueChange={(next) =>
+              dispatch(updateRaster({ cookie: clamp(next, 0, 0xffff, 123) }))
+            }
+            min={0}
+            max={0xffff}
+            step={1}
+            inputMode="numeric"
+          />
+        </div>
       </div>
 
       <label className="checkbox vacuum-switch app-switch">
