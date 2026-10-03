@@ -3634,6 +3634,12 @@ body {
   cursor: text;
 }
 
+.canvas-editor-layer--preview,
+.canvas-editor-layer--preview * {
+  pointer-events: none;
+  cursor: default;
+}
+
 .canvas-editor__annotation {
   position: absolute;
   display: inline-flex;

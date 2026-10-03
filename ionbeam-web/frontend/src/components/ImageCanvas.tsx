@@ -549,7 +549,19 @@ export function ImageCanvas({
     });
 
     return () => window.cancelAnimationFrame(handle);
-  }, [kind, phase, revision, renderMode, cursor, vectorCursor, hasLiveCanvasData, streamTransforms]);
+  }, [
+    kind,
+    phase,
+    revision,
+    renderMode,
+    cursor,
+    vectorCursor,
+    hasLiveCanvasData,
+    streamTransforms,
+    vectorGraySpotSelection,
+    vectorGraySpotSkipped,
+    vectorGraySpotColor,
+  ]);
 
   useEffect(() => {
     const filename =
@@ -1297,7 +1309,11 @@ export function ImageCanvas({
                   if (node) archivedPaneFramesRef.current.set(index, node);
                   else archivedPaneFramesRef.current.delete(index);
                 }}
-                editorLayer={selectedPane === index ? archivedEditorLayer : null}
+                editorLayer={
+                  selectedPane === index
+                    ? archivedEditorLayer
+                    : <ArchivedAnnotationPreview annotations={annotationsByPane[index] ?? []} t={t} />
+                }
               />
             ) : (
               <div className="image-panel-grid__visual image-panel-grid__empty">{t("canvas.layout.empty", { number: index + 1 })}</div>
@@ -2104,6 +2120,44 @@ function ArchivedScanDisplay({
         />
         <output>{brightness}%</output>
       </label>
+    </div>
+  );
+}
+
+function ArchivedAnnotationPreview({
+  annotations,
+  t,
+}: {
+  annotations: CanvasAnnotation[];
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}) {
+  if (annotations.length === 0) return null;
+  return (
+    <div className="canvas-editor-layer canvas-editor-layer--preview" aria-hidden="true">
+      {annotations.map((annotation, index) => annotation.kind === "rectangle" || annotation.kind === "circle" ? (
+        <div
+          key={annotation.id}
+          className={`canvas-editor__shape canvas-editor__shape--${annotation.kind}`}
+          style={shapeStyle(annotation)}
+        />
+      ) : (
+        <div
+          key={annotation.id}
+          className={`canvas-editor__annotation canvas-editor__annotation--${annotation.kind}`}
+          style={{ left: `${annotation.x * 100}%`, top: `${annotation.y * 100}%` }}
+          title={annotation.kind === "comment" ? annotation.text : t("canvas.editor.tool.highlight")}
+        >
+          <span
+            className="canvas-editor__annotation-index"
+            style={{ borderColor: annotation.strokeColor, background: alphaColor(annotation.strokeColor, annotation.kind === "comment" ? 0.92 : 0.24) }}
+          >
+            {index + 1}
+          </span>
+          {annotation.kind === "comment" && annotation.text && (
+            <span className="canvas-editor__label">{annotation.text}</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
