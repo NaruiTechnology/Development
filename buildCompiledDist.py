@@ -735,6 +735,7 @@ def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_bas
        2. move <zip_name>.zip into deploy_dir
        3. strip *.pyc and __pycache__ from workspace_dir
        4. zip workspace_dir into <basename>.zip alongside the cwd
+       5. remove the intermediate distribution zip from deploy_dir
 
     Step 4 picks up the freshly-placed dist zip from step 2 because
     deploy_dir lives inside workspace_dir.
@@ -759,7 +760,13 @@ def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_bas
     clean_pycache_under(workspace_dir)
 
     # 4. Zip the entire workspace for handoff
-    return zip_folder(workspace_dir, archive_base=workspace_archive_base)
+    final_archive = zip_folder(workspace_dir, archive_base=workspace_archive_base)
+
+    # Keep the intermediate archive on packaging failure so the build can
+    # be recovered. The successful handoff already contains this archive.
+    os.remove(moved_path)
+    print(f"Removed intermediate archive: {moved_path}")
+    return final_archive
 
 
 def main(argv=None, script_path=None):

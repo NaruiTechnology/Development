@@ -50,6 +50,7 @@ def make_workspace(base):
         "glasgow_service/pyproject.toml": DEVELOPMENT / "glasgow_service/pyproject.toml",
         "glasgow_service/deploy/setup-redis-sentinel.sh": DEVELOPMENT / "glasgow_service/deploy/setup-redis-sentinel.sh",
         "requirements.txt": DEVELOPMENT / "requirements.txt",
+        "IobeamAdmin/Sql/006_equipment_csv_functions.sql": DEVELOPMENT / "IobeamAdmin/Sql/006_equipment_csv_functions.sql",
         "buildCompiledDist.py": BUILDER_SOURCE,
     }
     for rel, src in real.items():
@@ -113,7 +114,17 @@ class BuilderEndToEndTests(unittest.TestCase):
             return self.builder.main(list(args), script_path=str(self.script))
 
     def archive(self, name="dist_app.zip"):
-        return self.ws / SLOT / name
+        final_archives = list(self.ws.glob("DeployWorkspace_*.zip"))
+        if not final_archives:
+            return self.ws / SLOT / name
+        self.assertFalse((self.ws / SLOT / name).exists())
+        handoff = max(final_archives, key=lambda path: path.stat().st_mtime_ns)
+        extracted = self.other_cwd / "extracted" / name
+        extracted.parent.mkdir(exist_ok=True)
+        with zipfile.ZipFile(handoff) as archive:
+            extracted.write_bytes(archive.read(
+                f"DeployWorkSpace/Development/DistributionDeploy/{name}"))
+        return extracted
 
     def test_build_is_independent_of_the_working_directory(self):
         # The historical failure: launched from inside Development/, the build
@@ -160,6 +171,16 @@ class BuilderEndToEndTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             self.builder.post_build_deploy("dist_app", str(slot), str(self.ws / "Development/DeployWorkSpace"))
         self.assertEqual((slot / "dist_app.zip").read_bytes(), b"last good archive")
+
+    def test_intermediate_archive_survives_handoff_packaging_failure(self):
+        os.chdir(self.ws)
+        (self.ws / "dist_app.zip").write_bytes(b"new distribution")
+        slot = self.ws / SLOT
+        with patch.object(self.builder, "zip_folder", side_effect=OSError("packaging failed")):
+            with self.assertRaisesRegex(OSError, "packaging failed"):
+                self.builder.post_build_deploy(
+                    "dist_app", str(slot), str(self.ws / "Development/DeployWorkSpace"))
+        self.assertEqual((slot / "dist_app.zip").read_bytes(), b"new distribution")
 
     def test_raw_build_does_not_depend_on_the_interpreter(self):
         self.assertEqual(self.build(self.ws, "--raw"), 0)
