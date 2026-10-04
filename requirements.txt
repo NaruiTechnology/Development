@@ -34,6 +34,8 @@ pydantic==2.13.5
 pydantic_core==2.46.5
 Pygments==2.20.0
 pyparsing==3.3.2
+# Qt Python packages; Linux system libraries (including libxcb-cursor0)
+# are installed by DistributionDeploy's installIonbeamNative aptPackages.
 PyQt6==6.11.0
 PyQt6-Qt6==6.11.0
 PyQt6_sip==13.11.1

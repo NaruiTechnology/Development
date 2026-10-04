@@ -812,7 +812,7 @@ export function ScanControls({
             </button>
             <button
               type="button"
-              className="btn btn--danger"
+              className="btn btn--stop"
               disabled={stopDisabled}
               onClick={onStop}
               title={t("scan.stop.title")}
@@ -946,7 +946,7 @@ export function ScanControls({
         </button>
         <button
           type="button"
-          className="btn btn--danger"
+          className="btn btn--stop"
           disabled={stopDisabled}
           onClick={onStop}
           title={t("scan.stop.title")}

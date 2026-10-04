@@ -168,7 +168,7 @@ export function CalibrationHistory({
                   <button type="button" className="btn btn--primary" disabled={restore.busy || !restore.preview || restore.preview.changed === 0} onClick={() => void confirmRestore()}>
                     {t("calibration.history.restoreConfirm")}
                   </button>
-                  <button type="button" className="btn btn--ghost" onClick={() => setRestore(null)}>{t("calibration.edit.cancel")}</button>
+                  <button type="button" className="btn btn--cancel" onClick={() => setRestore(null)}>{t("calibration.edit.cancel")}</button>
                 </span>
               </div>
             )}

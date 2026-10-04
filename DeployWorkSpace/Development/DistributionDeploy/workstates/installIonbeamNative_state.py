@@ -88,22 +88,7 @@ class installIonbeamNative_state(distributionDeploy_state):
         if await self._run(verify, 30.0):
             self.info("[{}] Qt runtime libraries already installed".format(type(self).__name__))
             return True
-        # The host's dpkg/apt state may already be broken by an earlier,
-        # unrelated install (interrupted dpkg run, a .deb installed without its
-        # dependencies, ...). apt then refuses *any* install with
-        # "Unmet dependencies. Try 'apt --fix-broken install' with no packages".
-        # Repair that state first so this step does not depend on what ran
-        # before it (installRedisSentinel only repairs when it installs).
-        apt = ("sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 "
-               "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold")
-        command = (
-            "sudo -n true || {{ echo 'workflow sudo credential is unavailable' >&2; exit 1; }}; "
-            "sudo DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold --configure -a && "
-            "sudo apt-get -o DPkg::Lock::Timeout=600 update && "
-            "{apt} --fix-broken install -y && "
-            "{apt} install -y --no-install-recommends {packages} && "
-            "{verify}"
-        ).format(apt=apt, packages=packageArgs, verify=verify)
+        command = self.aptInstallCommand(packages, verify)
         self.info("[{}] installing Qt runtime libraries: {}"
                   .format(type(self).__name__, ", ".join(packages)))
         ok = await self._run(command, timeout)

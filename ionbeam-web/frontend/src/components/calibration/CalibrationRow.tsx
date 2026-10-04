@@ -205,7 +205,7 @@ function RowDetails(props: CalibrationRowProps & { effective: unknown; editable:
             {failure && <span className="calib-row__error" role="alert">{failure}</span>}
             <span className="calib-details__buttons">
               <button type="button" className="btn btn--primary" disabled={busy || !name.trim()} onClick={() => void submit()}>{t("calibration.edit.save")}</button>
-              <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setEditing(false)}>{t("calibration.edit.cancel")}</button>
+              <button type="button" className="btn btn--cancel" disabled={busy} onClick={() => setEditing(false)}>{t("calibration.edit.cancel")}</button>
             </span>
           </dd>
         </>

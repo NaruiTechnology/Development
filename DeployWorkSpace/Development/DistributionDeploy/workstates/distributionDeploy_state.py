@@ -14,6 +14,7 @@
 from abc import abstractmethod
 import copy
 import os
+import shlex
 
 from buildingblocks.workflow.workstate import WorkState
 
@@ -46,6 +47,33 @@ class distributionDeploy_state(WorkState):
         self._logger = val
 
     # ---- helpers used by every concrete state ----------------------------
+    def aptInstallCommand(self, packages, verify):
+        """Build a noninteractive, labelled package repair/install sequence."""
+        apt = ("sudo -n DEBIAN_FRONTEND=noninteractive apt-get "
+               "-o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef "
+               "-o Dpkg::Options::=--force-confold")
+        configure = ("sudo -n DEBIAN_FRONTEND=noninteractive dpkg "
+                     "--force-confdef --force-confold --configure -a")
+        return (
+            "deploy_step() {{ label=$1; shift; "
+            "echo \"Deployment package step: $label\"; \"$@\"; result=$?; "
+            "if [ $result -ne 0 ]; then "
+            "echo \"Deployment package step failed: $label (exit $result)\" >&2; fi; "
+            "return $result; }}; "
+            "deploy_step sudo-credential sudo -n true && "
+            # Interrupted dpkg must be configured before apt can run. Missing
+            # dependencies may make this fail; apt repair must still get a turn.
+            "{{ deploy_step dpkg-configure {configure} || "
+            "echo 'dpkg configuration incomplete; attempting apt dependency repair' >&2; }} && "
+            "deploy_step apt-update {apt} update && "
+            "deploy_step apt-repair {apt} --fix-broken install -y && "
+            "deploy_step dpkg-configure-after-repair {configure} && "
+            "deploy_step apt-install {apt} install -y --no-install-recommends {packages} && "
+            "deploy_step verify-packages sh -c {verify}"
+        ).format(apt=apt, configure=configure,
+                 packages=" ".join(shlex.quote(str(p)) for p in packages),
+                 verify=shlex.quote(verify))
+
     def deployRoot(self):
         """Return the deploy root directory configured for this run."""
         thread = self.ParentWorkThread

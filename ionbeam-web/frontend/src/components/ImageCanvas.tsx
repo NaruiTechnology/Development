@@ -1179,7 +1179,7 @@ export function ImageCanvas({
           <input autoFocus className="input" value={commentDraft.text} placeholder={t("canvas.editor.comment.placeholder")} onChange={(event) => setCommentDraft((current) => current ? { ...current, text: event.target.value } : current)} />
           <div className="button-row">
             <button type="submit" className="btn btn--ghost">{t("canvas.editor.comment.save")}</button>
-            <button type="button" className="btn btn--ghost" onClick={() => setCommentDraft(null)}>{t("canvas.editor.comment.cancel")}</button>
+            <button type="button" className="btn btn--cancel" onClick={() => setCommentDraft(null)}>{t("canvas.editor.comment.cancel")}</button>
           </div>
         </form>
       )}
@@ -1235,7 +1235,7 @@ export function ImageCanvas({
                 <span className="spacer" />
                 <button
                   type="button"
-                  className="btn btn--ghost"
+                  className="btn btn--cancel"
                   disabled={mergeBusy}
                   onClick={() => setMergeConfirmOpen(false)}
                 >
@@ -1479,7 +1479,7 @@ export function ImageCanvas({
                     </button>
                     <button
                       type="button"
-                      className="btn btn--ghost"
+                      className="btn btn--cancel"
                       onClick={() => setCommentDraft(null)}
                     >
                       {t("canvas.editor.comment.cancel")}

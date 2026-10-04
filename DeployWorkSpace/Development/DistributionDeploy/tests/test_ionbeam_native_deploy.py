@@ -1,6 +1,7 @@
 """The native desktop client (Development/ionbeam-native) in the build/deploy workflow."""
 import importlib.util
 import json
+import subprocess
 import shlex
 import sys
 import tempfile
@@ -67,6 +68,47 @@ class WorkflowConfigTests(unittest.TestCase):
             builder.copy_package_data(str(src), str(dist), [str(Path("Development") / "pkg")])
             copied = sorted(p.relative_to(dist).as_posix() for p in dist.rglob("*") if p.is_file())
             self.assertEqual(copied, ["Development/pkg/data/table.json"])
+
+
+class AptRecoveryTests(unittest.TestCase):
+    def run_sequence(self, failing_step):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = installIonbeamNative_state(SimpleNamespace())
+            log = Path(tmp) / "calls"
+            # Stub sudo rather than touching the host package manager. Fail the
+            # initial configure, or apt install, to exercise real shell flow.
+            stub = """sudo() {
+                echo "$*" >> "$CALL_LOG"
+                case "$*" in
+                    *dpkg*)
+                        if [ "$FAIL_STEP" = configure ] && [ ! -e "$CALL_LOG.once" ]; then
+                            touch "$CALL_LOG.once"; return 1
+                        fi ;;
+                    *'install -y --no-install-recommends'*)
+                        if [ "$FAIL_STEP" = install ]; then return 42; fi ;;
+                esac
+                return 0
+            }; """
+            import os
+            result = subprocess.run(
+                ["sh", "-c", stub + state.aptInstallCommand(["libxcb-cursor0"],
+                                                          "echo verified")],
+                env=dict(os.environ, CALL_LOG=str(log), FAIL_STEP=failing_step),
+                capture_output=True, text=True)
+            return result, log.read_text()
+
+    def test_failed_initial_configuration_still_repairs_and_verifies(self):
+        result, calls = self.run_sequence("configure")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--fix-broken install -y", calls)
+        self.assertEqual(calls.count("--configure -a"), 2)
+        self.assertIn("verified", result.stdout)
+
+    def test_install_failure_reports_phase_and_does_not_verify(self):
+        result, calls = self.run_sequence("install")
+        self.assertEqual(result.returncode, 42)
+        self.assertIn("apt-install (exit 42)", result.stderr)
+        self.assertNotIn("verified", result.stdout)
 
 
 class InstallStateTests(unittest.IsolatedAsyncioTestCase):

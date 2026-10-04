@@ -3786,7 +3786,7 @@ function ConfirmRow({
       <span className="spacer" />
       <button
         type="button"
-        className="btn btn--ghost"
+        className="btn btn--cancel"
         onClick={onCancel}
         disabled={disabled}
       >

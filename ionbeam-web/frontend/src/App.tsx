@@ -1987,7 +1987,7 @@ function GrayScaleConfirmDialog({
         <div className="settings-footer">
           <div className="settings-footer__row gray-scale-confirm__footer">
             <span className="spacer" />
-            <button type="button" className="btn btn--ghost" onClick={onClose}>
+            <button type="button" className="btn btn--cancel" onClick={onClose}>
               {t("settings.confirm.cancel")}
             </button>
             <button type="button" className="btn btn--primary" onClick={onConfirm}>

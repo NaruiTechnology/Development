@@ -189,7 +189,7 @@ function UserEditDialog({ draft, setDraft, onCancel, onApply, disabled, siteOpti
         <label>{t("settings.admin.user.sessionLifetimeDays")}<NumberStepperInput value={draft.session_lifetime_limit_days} min={1} step={1} inputMode="numeric" disabled={disabled} ariaLabel={t("settings.admin.user.sessionLifetimeDays")} onValueChange={(value) => update("session_lifetime_limit_days", Math.max(1, Math.trunc(Number(value) || 1)))} /></label>
         <label className="vacuum-switch settings-switch user-edit-dialog__active"><input type="checkbox" checked={draft.is_active} disabled={disabled} onChange={(e) => update("is_active", e.target.checked)} /><span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span><span>{t("settings.admin.user.active")}</span></label>
       </div>
-      <div className="modal__footer user-edit-dialog__footer"><button type="button" className="btn btn--ghost" onClick={onCancel}>{t("settings.admin.user.cancel")}</button><button type="button" className="btn btn--primary" disabled={disabled} onClick={onApply}>{t("settings.admin.user.apply")}</button></div>
+      <div className="modal__footer user-edit-dialog__footer"><button type="button" className="btn btn--cancel" onClick={onCancel}>{t("settings.admin.user.cancel")}</button><button type="button" className="btn btn--primary" disabled={disabled} onClick={onApply}>{t("settings.admin.user.apply")}</button></div>
     </div>
   </div>;
 }

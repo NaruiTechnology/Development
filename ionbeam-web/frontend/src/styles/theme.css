@@ -1692,6 +1692,24 @@ body {
 
 .btn--warn   { border-color: var(--c-warn-border); color: var(--c-warn); }
 .btn--danger { border-color: var(--c-danger-border); color: var(--c-danger); }
+.btn--stop {
+  background: #b42318;
+  border-color: #b42318;
+  color: #fff;
+}
+.btn--stop:hover:not(:disabled) {
+  background: #912018;
+  border-color: #912018;
+}
+.btn--cancel {
+  background: var(--c-bg-elev-2);
+  border-color: var(--c-bg-elev-2);
+  color: var(--c-text);
+}
+.btn--cancel:hover:not(:disabled) {
+  background: var(--c-btn-hover);
+  border-color: var(--c-btn-hover);
+}
 .btn--orange {
   background: #f97316;
   border-color: #fb923c;

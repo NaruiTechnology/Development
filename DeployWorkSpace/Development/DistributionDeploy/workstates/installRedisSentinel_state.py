@@ -47,25 +47,17 @@ class installRedisSentinel_state(distributionDeploy_state):
                 self._success = True
                 return
 
-            command = (
-                "sudo -n true || {{ echo 'workflow sudo credential is unavailable' >&2; exit 1; }}; "
-                "sudo apt-get -o DPkg::Lock::Timeout=600 update && "
-                "sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 "
-                "-o Dpkg::Options::=--force-confold "
-                "--fix-broken install -y && "
-                "sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 "
-                "-o Dpkg::Options::=--force-confold "
-                "install -y --no-install-recommends {packages} && "
-                "{verify}"
-            ).format(packages=packageArgs, verify=verify)
+            command = self.aptInstallCommand(packages, verify)
             self.info("[{}] installing local Redis/Sentinel packages: {}"
                       .format(type(self).__name__, ", ".join(packages)))
             self._success = await self._run(command, timeout)
             if not self._success:
                 stderr = (self._stderr.decode(errors="replace")
                           if self._stderr else "<no stderr>")
-                self.error("[{}] package installation failed\n{}"
-                           .format(type(self).__name__, stderr))
+                self.error("[{}] package installation failed\nstderr:\n{}\nstdout (tail):\n{}"
+                           .format(type(self).__name__, stderr,
+                                   "\n".join((self._stdout or b"").decode(errors="replace")
+                                             .splitlines()[-40:]) or "<no stdout>"))
         except Exception as exc:
             self.error("[{}] error: {}".format(type(self).__name__, exc))
             self._success = False

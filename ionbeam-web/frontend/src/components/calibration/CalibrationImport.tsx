@@ -255,7 +255,7 @@ export function CalibrationImport({
             <button type="button" className="btn btn--primary" disabled={!canCommit} onClick={() => void commit()}>
               {phase === "committing" ? t("calibration.import.committing") : t("calibration.import.commit", { count: fmt(preview.changed) })}
             </button>
-            <button type="button" className="btn btn--ghost" onClick={onClose}>{t("calibration.edit.cancel")}</button>
+            <button type="button" className="btn btn--cancel" onClick={onClose}>{t("calibration.edit.cancel")}</button>
           </span>
         </div>
       )}

@@ -91,7 +91,7 @@ export function AdcTestControls({ state, onStart, onStop }: ControlsProps) {
       {production && !simulation && <div className="adc-test-mode-note">{t("adc.productionRequired")}</div>}
       <button
         type="button"
-        className={`btn ${active ? "btn--danger" : "btn--primary"}`}
+        className={`btn ${active ? "btn--stop" : "btn--primary"}`}
         onClick={() => active
           ? onStop()
           : onStart({ durationMinutes, simulation, seed })}

@@ -1857,7 +1857,7 @@ export function ROIEditor({
               {calibrationCorrectionError && <div className="field-warning">{calibrationCorrectionError}</div>}
             </div>
             <div className="modal__footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" className="btn btn--ghost" onClick={() => {
+              <button type="button" className="btn btn--cancel" onClick={() => {
                 setCalibrationCorrection(null);
                 setCalibrationCorrectionBasis(null);
               }}>

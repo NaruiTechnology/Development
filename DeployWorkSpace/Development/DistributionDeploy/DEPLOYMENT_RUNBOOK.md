@@ -128,6 +128,14 @@ The workflow now:
 Any missing workstate, failed command, or failed readiness check now makes
 `distributionDeployApp.py` exit nonzero.
 
+Qt and Redis package installation first checks the configured package list and
+skips apt when everything is installed. Otherwise it configures interrupted dpkg
+work, refreshes apt, repairs dependencies, completes dpkg configuration, installs
+the requested libraries, and verifies them. An initial dpkg dependency failure
+does not prevent apt repair. Commands use noninteractive sudo; the entrypoint
+authenticates and keeps the credential alive. Package failures report the step
+name and exit code with stdout and stderr, including apt's dependency details.
+
 ## 6. Verify the deployed system
 
 ```bash
