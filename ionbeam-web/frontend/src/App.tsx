@@ -1747,24 +1747,24 @@ export function App() {
                   )}
                   {!adcView && !headerSecondRow && toolbarSlot}
                 </div>
-                {!adcView && activeTopTab === "scan" && showSplitButton && imagePanelSplitActive && (
-                  <label className="checkbox vacuum-switch app-switch image-panel-card__layout-lock">
-                    <input
-                      type="checkbox"
-                      checked={imagePanelLocked}
-                      disabled={scanActive}
-                      onChange={(event) => setImagePanelLocked(event.target.checked)}
-                    />
-                    <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-                    {t("canvas.layout.lock")}
-                  </label>
-                )}
                 {headerSecondRow && (
                   // Second header row, below the switches: the gray level
                   // filter slider + Select (vector), the annotation toolbox,
                   // and the Split button.
                   <div className="image-panel-card__header-row">
                     {toolbarSlot}
+                    {!adcView && activeTopTab === "scan" && showSplitButton && imagePanelSplitActive && (
+                      <label className="checkbox vacuum-switch app-switch image-panel-card__layout-lock">
+                        <input
+                          type="checkbox"
+                          checked={imagePanelLocked}
+                          disabled={scanActive}
+                          onChange={(event) => setImagePanelLocked(event.target.checked)}
+                        />
+                        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+                        {t("canvas.layout.lock")}
+                      </label>
+                    )}
                     {!adcView && activeTopTab === "scan" && showSplitButton && (
                       <button
                         type="button"
