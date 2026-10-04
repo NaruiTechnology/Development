@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type TooltipState = { text: string; left: number; top: number; side: "above" | "below" } | null;
@@ -6,6 +6,29 @@ type TooltipState = { text: string; left: number; top: number; side: "above" | "
 /** Applies one themed tooltip to native title hints throughout the app. */
 export function TooltipLayer() {
   const [tooltip, setTooltip] = useState<TooltipState>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const element = tooltipRef.current;
+    if (!tooltip || !element) return;
+    const margin = 8;
+    const { width, height } = element.getBoundingClientRect();
+    const left = Math.max(margin + width / 2, Math.min(tooltip.left, window.innerWidth - margin - width / 2));
+    let { top, side } = tooltip;
+    if (side === "above" && top - height < margin) {
+      top += 20;
+      side = "below";
+    } else if (side === "below" && top + height > window.innerHeight - margin) {
+      top -= 20;
+      side = "above";
+    }
+    top = side === "above"
+      ? Math.max(margin + height, Math.min(top, window.innerHeight - margin))
+      : Math.max(margin, Math.min(top, window.innerHeight - margin - height));
+    if (left !== tooltip.left || top !== tooltip.top || side !== tooltip.side) {
+      setTooltip({ ...tooltip, left, top, side });
+    }
+  }, [tooltip]);
 
   useEffect(() => {
     let active: HTMLElement | null = null;
@@ -92,7 +115,7 @@ export function TooltipLayer() {
 
   if (!tooltip) return null;
   return createPortal(
-    <div className={`app-tooltip app-tooltip--${tooltip.side}`} role="tooltip" style={{ left: tooltip.left, top: tooltip.top }}>
+    <div ref={tooltipRef} className={`app-tooltip app-tooltip--${tooltip.side}`} role="tooltip" style={{ left: tooltip.left, top: tooltip.top }}>
       {tooltip.text}
     </div>,
     document.body,
