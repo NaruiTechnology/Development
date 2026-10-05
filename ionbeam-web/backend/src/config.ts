@@ -86,7 +86,7 @@ const DEFAULT_VACUUM_CONFIG_PATH = path.join(
   DEPLOY_DEVELOPMENT_ROOT,
   "GlasgowDataIO",
   "Json",
-  "vacuumSystem.json"
+  "vacuumSystem.rpi5-io.example.json"
 );
 const DEFAULT_SAMPLE_STAGE_CONFIG_PATH = path.join(
   DEPLOY_DEVELOPMENT_ROOT,

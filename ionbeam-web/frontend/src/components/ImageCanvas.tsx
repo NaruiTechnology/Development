@@ -137,10 +137,6 @@ function rememberScanParams(imageUrl: string, items: ScanParamItem[]): void {
 // (e.g. after a resolution change) is never mistaken for a scan result.
 const scanSequenceMemory: Partial<Record<string, number>> = {};
 const runBufferMemory: Partial<Record<string, Uint16Array>> = {};
-// A completed scan keeps the orientation that was active when that run
-// started. Session transform changes therefore affect the next scan without
-// repainting any already-rendered multi-scan pane.
-const runTransformsMemory: Partial<Record<string, StreamTransforms>> = {};
 const NO_STREAM_TRANSFORMS: StreamTransforms = { xflip: false, yflip: false, rotate90: false };
 
 type AnnotationTool = "highlight" | "comment" | "rectangle" | "circle";
@@ -434,9 +430,8 @@ export function ImageCanvas({
       ? DAC_RANGE % viewVectorEdge === 0
       : true;
 
-  // Capture run identity, buffer, and orientation before the paint effect.
-  // React runs effects in declaration order, so the first frame of a new run
-  // already uses the transform snapshot that belongs to that run.
+  // Capture run identity and buffer before the paint effect.
+  // Orientation follows the shared controls immediately, including during a run.
   const previousPhaseRef = useRef(phase);
   useEffect(() => {
     if (kind !== "raster" && kind !== "vector") return;
@@ -444,7 +439,6 @@ export function ImageCanvas({
       const wasRunning = previousPhaseRef.current === "running" || previousPhaseRef.current === "stopping";
       if (!wasRunning) {
         scanSequenceMemory[kind] = (scanSequenceMemory[kind] ?? 0) + 1;
-        runTransformsMemory[kind] = { ...streamTransforms };
       }
       runBufferMemory[kind] = kind === "raster" ? frame : vectorImage;
     }
@@ -455,13 +449,7 @@ export function ImageCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const liveBuffer = kind === "raster" ? frame : vectorImage;
-    const belongsToCapturedRun =
-      (phase === "running" || phase === "stopping" || phase === "completed") &&
-      runBufferMemory[kind] === liveBuffer;
-    const paintTransforms = belongsToCapturedRun
-      ? runTransformsMemory[kind] ?? streamTransforms
-      : streamTransforms;
+    const paintTransforms = streamTransforms;
 
     let snapshot: PaintSnapshot;
     if (kind === "raster") {

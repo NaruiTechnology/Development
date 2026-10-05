@@ -20,7 +20,7 @@
  *       (what we do here).
  * (b) is simpler: persisted inputs dispatch `setDraft(writePath(...))`
  * with an immutably updated copy, and the dialog reads `draft` for
- * every render. Session-only image transforms and Simulation values stay in
+ * every render. Session-only Simulation values stay in
  * local modal state until Update is clicked. The Redux DevTools timeline
  * becomes the edit history for persisted fields for free.
  */
@@ -32,9 +32,7 @@ import {
   clearLastResult,
   clearROIImage,
   clearROISelection,
-  setStreamTransforms,
   streamReset,
-  type StreamTransforms,
 } from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
 import { fetchDefaultsMetadata, previewConfigDefaults, setSessionSimulation } from "../store/statusSlice";
@@ -59,6 +57,7 @@ import {
   saveSettingsConfig,
   setActiveTab,
   setDraft,
+  setDraftVacuumEnabled,
   setError,
   writePath,
   type SettingsConfigInfo,
@@ -206,6 +205,8 @@ function SettingsModalShell({
     restoring,
     source,
     draft,
+    sourceVacuumEnabled,
+    draftVacuumEnabled,
     configPath,
     hasBackup,
     error,
@@ -213,7 +214,6 @@ function SettingsModalShell({
     backupNotice,
   } = useAppSelector((s) => s.settings);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
-  const activeTransforms = useAppSelector((s) => s.scan.streamTransforms);
   const appliedSessionSimulation = useAppSelector((s) => s.status.sessionSimulation);
   const defaultSimulation = useAppSelector((s) => s.status.defaults?.simulation ?? null);
 
@@ -247,11 +247,6 @@ function SettingsModalShell({
   const [confirmDefault, setConfirmDefault] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
-  // Image orientation is a browser-session control. Keep its pending values
-  // outside the streamData draft so Update never persists or restarts for it.
-  const [sessionTransforms, setSessionTransforms] = useState<StreamTransforms>(() => ({
-    ...activeTransforms,
-  }));
   // Null means untouched: until the operator edits Simulation, follow the
   // latest active/default block instead of freezing an early loading value.
   const [sessionSimulationDraft, setSessionSimulationDraft] = useState<Record<string, unknown> | null>(null);
@@ -262,15 +257,11 @@ function SettingsModalShell({
 
   const busy = loading || saving || restoring;
   const adcTimingValid = draft === null || validAdcTiming(draft);
-  const configChanged = draft !== null && draft !== source;
-  const sessionTransformsChanged =
-    sessionTransforms.xflip !== activeTransforms.xflip ||
-    sessionTransforms.yflip !== activeTransforms.yflip ||
-    sessionTransforms.rotate90 !== activeTransforms.rotate90;
+  const configChanged = draft !== null && (draft !== source || draftVacuumEnabled !== sourceVacuumEnabled);
   const sessionSimulationChanged =
     sessionSimulationDraft !== null &&
     sessionSimulationSignature(pendingSimulation) !== sessionSimulationSignature(activeSimulation);
-  const sessionOnlyChanged = sessionTransformsChanged || sessionSimulationChanged;
+  const sessionOnlyChanged = sessionSimulationChanged;
   const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const canEditFtp = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const visibleTabs: SettingsTab[] = mobilityMode
@@ -304,10 +295,8 @@ function SettingsModalShell({
   }
 
   function applySessionSettings() {
-    if (sessionTransformsChanged) dispatch(setStreamTransforms(sessionTransforms));
     if (sessionSimulationChanged) dispatch(setSessionSimulation(pendingSimulation));
     if (sessionSimulationChanged) resetROIPreview(dispatch);
-    else if (sessionTransformsChanged) resetPartialROISelection(dispatch);
   }
 
   function onUpdate() {
@@ -470,8 +459,6 @@ function SettingsModalShell({
           mobilityMode={mobilityMode}
           canEditPins={canEditPins}
           canEditFtp={canEditFtp}
-          sessionTransforms={sessionTransforms}
-          onSessionTransformsChange={setSessionTransforms}
           sessionSimulation={pendingSimulation}
           onSessionSimulationChange={setSessionSimulationDraft}
         />
@@ -601,8 +588,6 @@ function SettingsTabBody({
   mobilityMode,
   canEditPins,
   canEditFtp,
-  sessionTransforms,
-  onSessionTransformsChange,
   sessionSimulation,
   onSessionSimulationChange,
 }: {
@@ -615,8 +600,6 @@ function SettingsTabBody({
   mobilityMode: boolean;
   canEditPins: boolean;
   canEditFtp: boolean;
-  sessionTransforms: StreamTransforms;
-  onSessionTransformsChange: (transforms: StreamTransforms) => void;
   sessionSimulation: Record<string, unknown>;
   onSessionSimulationChange: (simulation: Record<string, unknown>) => void;
 }) {
@@ -625,8 +608,6 @@ function SettingsTabBody({
       return (
         <GeneralTab
           draft={draft}
-          sessionTransforms={sessionTransforms}
-          onSessionTransformsChange={onSessionTransformsChange}
         />
       );
     case "raster":
@@ -661,12 +642,8 @@ function SettingsTabBody({
  * aren't raster- or vector-specific. */
 function GeneralTab({
   draft,
-  sessionTransforms,
-  onSessionTransformsChange,
 }: {
   draft: unknown;
-  sessionTransforms: StreamTransforms;
-  onSessionTransformsChange: (transforms: StreamTransforms) => void;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -676,7 +653,7 @@ function GeneralTab({
   const logName = stringField(draft, ["LogName"], "");
   const verbose = boolField(draft, ["Verbose"], false);
   const isProduction = boolField(draft, ["IsProduction"], false);
-  const { xflip, yflip, rotate90 } = sessionTransforms;
+  const vacuumEnabled = useAppSelector((s) => s.settings.draftVacuumEnabled);
   const dumpData = boolField(draft, ["DumpData"], false);
 
   // Glasgow / Device0 id.
@@ -710,10 +687,6 @@ function GeneralTab({
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
-  }
-
-  function setTransform(name: "xflip" | "yflip" | "rotate90", value: boolean) {
-    onSessionTransformsChange({ ...sessionTransforms, [name]: value });
   }
 
   function setHardwareTiming(
@@ -780,24 +753,15 @@ function GeneralTab({
           onChange={(v) => set(["IsProduction"], v)}
         />
         <CheckboxField
+          label={t("settings.general.activeVacuumControl")}
+          value={vacuumEnabled === true}
+          disabled={vacuumEnabled === null}
+          onChange={(v) => dispatch(setDraftVacuumEnabled(v))}
+        />
+        <CheckboxField
           label={t("settings.general.verbose")}
           value={verbose}
           onChange={(v) => set(["Verbose"], v)}
-        />
-        <CheckboxField
-          label={t("settings.general.xflip")}
-          value={xflip}
-          onChange={(v) => setTransform("xflip", v)}
-        />
-        <CheckboxField
-          label={t("settings.general.yflip")}
-          value={yflip}
-          onChange={(v) => setTransform("yflip", v)}
-        />
-        <CheckboxField
-          label={t("settings.general.rotate90")}
-          value={rotate90}
-          onChange={(v) => setTransform("rotate90", v)}
         />
         <CheckboxField
           label={t("settings.general.dumpData")}
@@ -3680,17 +3644,20 @@ function CheckboxField({
   help,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   help?: JSX.Element;
   value: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="settings-checkbox vacuum-switch settings-switch">
       <input
         type="checkbox"
         checked={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
       <span className="vacuum-switch__track">

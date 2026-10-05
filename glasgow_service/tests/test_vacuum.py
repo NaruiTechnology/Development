@@ -338,10 +338,22 @@ def test_vacuum_system_ready_requires_every_configured_port_b_pin_high():
     assert controller.status().isVacuumSystemReady is False
     for state in controller._states.values():
         state.port_b_value = controller.config.device.voltage
-    assert controller.isVacuumSystemReady is True
-    assert controller.status().isVacuumSystemReady is True
-    controller._states[MECHANICAL_PUMP].port_b_value = 0
-    assert controller.status().isVacuumSystemReady is False
+    # Fabricated or previous readings cannot make an unstarted controller ready.
+    assert controller.isVacuumSystemReady is False
+
+    async def scenario():
+        await controller.start()
+        try:
+            for name in controller._states:
+                await controller.set_simulated_read(name, True)
+            assert controller.isVacuumSystemReady is True
+            assert controller.status().isVacuumSystemReady is True
+            controller._states[MECHANICAL_PUMP].port_b_value = 0
+            assert controller.status().isVacuumSystemReady is False
+        finally:
+            await controller.close()
+
+    asyncio.run(scenario())
 
 
 def test_simulation_maps_port_a_equipment_values_to_configured_gpio_voltage():
@@ -363,7 +375,7 @@ def test_port_b_levels_are_reported_as_configured_pin_voltage():
     async def scenario():
         config = make_config(simulate=False)
         device = SimulatedVacuumDevice(
-            (pump.write for pump in config.pumps),
+            [*(pump.write for pump in config.pumps), config.high_voltage_transformer.write],
             (pump.read for pump in config.pumps),
         )
         controller = VacuumController(config, device=device)
@@ -372,8 +384,10 @@ def test_port_b_levels_are_reported_as_configured_pin_voltage():
             return {"B0": 1, "B1": 0, "B2": 1, "B3": 0}
 
         controller.gpio.read_port_b = fake_read_port_b
+        await controller.start()
         await controller.poll_once()
         states = {state.read: state for state in controller.status().pumps}
+        await controller.close()
 
         assert states["B0"].port_b_value == pytest.approx(config.device.voltage)
         assert states["B1"].port_b_value == 0.0
@@ -388,7 +402,7 @@ def test_numeric_gauge_values_flow_from_sbc_device_into_status():
     async def scenario():
         config = make_config(simulate=False)
         device = SimulatedVacuumDevice(
-            (pump.write for pump in config.pumps),
+            [*(pump.write for pump in config.pumps), config.high_voltage_transformer.write],
             (pump.read for pump in config.pumps),
         )
         controller = VacuumController(config, device=device)
@@ -397,8 +411,10 @@ def test_numeric_gauge_values_flow_from_sbc_device_into_status():
             return {"B0": 8.5e-2, "B1": 1.7e-3, "B2": 2.8e-5, "B3": None}
 
         controller.gpio.read_gauge_values = fake_read_gauges
+        await controller.start()
         await controller.poll_once()
         states = {state.read: state for state in controller.status().pumps}
+        await controller.close()
 
         assert states["B0"].value == pytest.approx(8.5e-2)
         assert states["B1"].value == pytest.approx(1.7e-3)

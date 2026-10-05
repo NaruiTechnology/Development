@@ -20,12 +20,17 @@ from .models import (
     VacuumSimulationRequest,
     VacuumSystemStatus,
 )
-from .vacuum import VacuumController, find_vacuum_config_path, load_vacuum_config
+from .vacuum import (
+    VacuumController,
+    find_vacuum_config_path,
+    load_runtime_vacuum_config,
+)
 from .vacuum_health import sbc_controller_is_ready
 
 
-def create_app() -> FastAPI:
+def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
     holder: dict[str, VacuumController] = {}
+    activation = {"enabled": False}
     lock = asyncio.Lock()
     bearer = HTTPBearer(auto_error=False)
 
@@ -38,12 +43,16 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        config = load_vacuum_config(find_vacuum_config_path())
+        config = config_loader(find_vacuum_config_path())
+        activation["enabled"] = config.enabled
         if not config.enabled:
-            raise RuntimeError("SBC vacuum controller is disabled")
+            yield
+            return
+        # Enable controls activation; IsProduction selects hardware or emulation.
         controller = VacuumController(
             config, authority=remote_authority_from_environment()
         )
+        emulator = controller.emulator
         holder["controller"] = controller
         if not controller.requires_remote_authority:
             await controller.start()
@@ -51,6 +60,8 @@ def create_app() -> FastAPI:
             yield
         finally:
             await controller.close()
+            if emulator is not None:
+                emulator.close()
             holder.clear()
 
     app = FastAPI(
@@ -59,9 +70,17 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    @app.middleware("http")
+    async def no_cached_controller_state(request, call_next):
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     def controller() -> VacuumController:
         value = holder.get("controller")
         if value is None:
+            if not activation["enabled"]:
+                raise HTTPException(404, "vacuum controller is disabled")
             raise HTTPException(503, "SBC vacuum controller is starting")
         return value
 
@@ -88,11 +107,23 @@ def create_app() -> FastAPI:
     async def service_status() -> dict[str, object]:
         target = holder.get("controller")
         status = target.status() if target is not None else None
+        if status is None:
+            mode = "disabled" if not activation["enabled"] else "gpio"
+        elif status.simulation:
+            mode = "simulation"
+        elif status.control_transport == "rpi5-vacuum-io-emulator":
+            mode = "board-emulator"
+        elif status.control_transport == "rpi5-vacuum-io":
+            mode = "board"
+        else:
+            mode = "gpio"
         return {
             "service": "sbc-vacuum",
             "vacuum_enabled": target is not None,
             "platform": "raspberry-pi",
-            "mode": "simulation" if status and status.simulation else "gpio",
+            "mode": mode,
+            "is_production": status.is_production if status else None,
+            "log_tag": target.log_tag if target is not None else None,
             "equipment_count": len(status.pumps) if status else 0,
             "running": status.running if status else False,
         }
@@ -105,6 +136,8 @@ def create_app() -> FastAPI:
     async def ready() -> dict[str, object]:
         target = holder.get("controller")
         if target is None:
+            if not activation["enabled"]:
+                return {"status": "ready", "vacuum_enabled": False}
             raise HTTPException(503, "SBC vacuum controller is starting")
         status = target.status()
         if not sbc_controller_is_ready(connected=status.connected, running=status.running):
@@ -205,14 +238,92 @@ def create_app() -> FastAPI:
     async def renew():
         return controller().status()
 
+    # ---------------------------------------------------------------- emulator
+    # Present only when SBC_VACUUM_EMULATOR is set: operator actions on the
+    # emulated rig (E-stop, jumpers, faults, utilities) for UI development.
+
+    def rig():
+        target = controller()
+        if target.emulator is None:
+            raise HTTPException(404, "the board emulator is not enabled")
+        return target.emulator
+
+    @app.get("/emulator")
+    async def emulator_state():
+        return rig().snapshot()
+
+    @app.post("/emulator/estop", dependencies=[Depends(require_sbc_token)])
+    async def emulator_estop(req: dict):
+        r = rig()
+        r.set_estop(bool(req.get("pressed", True)))
+        return r.snapshot()
+
+    @app.post("/emulator/inputs/{di}", dependencies=[Depends(require_sbc_token)])
+    async def emulator_jumper(di: int, req: dict):
+        if not 1 <= di <= 16:
+            raise HTTPException(404, "inputs are DI1..DI16")
+        r = rig()
+        r.jumper(di, bool(req.get("on", True)))
+        return r.snapshot()
+
+    @app.post("/emulator/tool", dependencies=[Depends(require_sbc_token)])
+    async def emulator_tool(req: dict):
+        r = rig()
+        r.connect_tool(bool(req.get("connected", True)))
+        return r.snapshot()
+
+    @app.post("/emulator/faults/{name}", dependencies=[Depends(require_sbc_token)])
+    async def emulator_fault(name: str, req: dict):
+        r = rig()
+        active = bool(req.get("active", True))
+        with r.clock.lock:
+            plant = r.plant
+            if name == "MechanicalVacuumPump":
+                plant.mechanical.thermal_trip = active
+            elif name in {t.name for t in plant.all_turbos}:
+                turbo = next(t for t in plant.all_turbos if t.name == name)
+                if active:
+                    turbo.error = str(req.get("code", "Err001"))
+                else:
+                    turbo.reset_error()
+            elif name in plant.utilities.__dict__:
+                setattr(plant.utilities, name, not active)
+            elif name == "heartbeat_stuck":
+                r.board.faults.stuck_heartbeat = active
+            elif name == "i2c_nack":
+                r.pi.i2c1.inject_nack(int(req.get("address", 0x21)), int(req.get("count", 1)))
+            else:
+                raise HTTPException(404, f"unknown emulator fault: {name}")
+        return r.snapshot()
+
     return app
 
 
 app = create_app()
 
 
+def configure_service_logging() -> None:
+    """Plain text (default) or JSON (``SBC_VACUUM_LOG_FORMAT=json``) logs.
+
+    Every vacuum line carries a mode tag: [VACUUM-HW], [VACUUM-EMU] or
+    [VACUUM-SIM].
+    """
+    import logging
+
+    level = os.environ.get("SBC_VACUUM_LOG_LEVEL", "INFO").upper()
+    if os.environ.get("SBC_VACUUM_LOG_FORMAT", "text").lower() == "json":
+        from .executor_logging import configure_logging
+
+        configure_logging(level)
+    else:
+        logging.basicConfig(
+            level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+
 def main() -> None:
     import uvicorn
+
+    configure_service_logging()
 
     uvicorn.run(
         app,

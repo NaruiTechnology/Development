@@ -37,6 +37,7 @@ import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 
 export interface SettingsConfigInfo {
+  vacuum_enabled?: boolean;
   path: string;
   backup_path: string;
   data: unknown;
@@ -78,6 +79,8 @@ function normalizeSettingsDwell(config: unknown): unknown {
 }
 
 interface SettingsState {
+  sourceVacuumEnabled: boolean | null;
+  draftVacuumEnabled: boolean | null;
   dialogOpen: boolean;
   /** Active tab inside the dialog. */
   activeTab: SettingsTab;
@@ -123,6 +126,8 @@ export type SettingsTab =
   | "admin";
 
 const initialState: SettingsState = {
+  sourceVacuumEnabled: null,
+  draftVacuumEnabled: null,
   dialogOpen: false,
   activeTab: "general",
   loading: false,
@@ -145,7 +150,7 @@ const initialState: SettingsState = {
 export const fetchSettingsConfig = createAsyncThunk<SettingsConfigInfo>(
   "settings/fetch",
   async () => {
-    const r = await fetch(apiUrl("/api/admin/config"));
+    const r = await fetch(apiUrl("/api/admin/config"), { cache: "no-store" });
     if (!r.ok) {
       const text = await r.text();
       throw new Error(`fetch config: HTTP ${r.status} ${text}`);
@@ -156,13 +161,14 @@ export const fetchSettingsConfig = createAsyncThunk<SettingsConfigInfo>(
 
 export const saveSettingsConfig = createAsyncThunk<
   SaveResponse,
-  unknown
->("settings/save", async (data) => {
+  unknown,
+  { state: { settings: SettingsState } }
+>("settings/save", async (data, { getState }) => {
   const normalized = normalizeSettingsDwell(data);
   const r = await fetch(apiUrl("/api/admin/config"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
-    body: JSON.stringify({ data: normalized }),
+    body: JSON.stringify({ data: normalized, vacuum_enabled: getState().settings.draftVacuumEnabled ?? undefined }),
   });
   if (!r.ok) {
     const text = await r.text();
@@ -218,6 +224,7 @@ const slice = createSlice({
     closeDialog(s) {
       s.dialogOpen = false;
       s.draft = s.source; // discard unsaved edits on close
+      s.draftVacuumEnabled = s.sourceVacuumEnabled;
       s.error = null;
       s.backupNotice = false;
       s.lastRestart = null;
@@ -242,9 +249,13 @@ const slice = createSlice({
     setDraft(s, a: PayloadAction<unknown>) {
       s.draft = a.payload;
     },
+    setDraftVacuumEnabled(s, a: PayloadAction<boolean>) {
+      s.draftVacuumEnabled = a.payload;
+    },
     /** Reset the draft to the last loaded source — "Discard changes". */
     resetDraft(s) {
       s.draft = s.source;
+      s.draftVacuumEnabled = s.sourceVacuumEnabled;
     },
     clearError(s) {
       s.error = null;
@@ -272,6 +283,8 @@ const slice = createSlice({
       s.loading = false;
       s.source = normalizeSettingsDwell(a.payload.data);
       s.draft = s.source;
+      s.sourceVacuumEnabled = a.payload.vacuum_enabled ?? null;
+      s.draftVacuumEnabled = s.sourceVacuumEnabled;
       s.configPath = a.payload.path;
       s.backupPath = a.payload.backup_path;
       s.hasBackup = a.payload.has_backup;
@@ -299,6 +312,7 @@ const slice = createSlice({
       // ourselves so the next "discard changes" / dirty check works.
       s.source = normalizeSettingsDwell(s.draft);
       s.draft = s.source;
+      s.sourceVacuumEnabled = s.draftVacuumEnabled;
     });
     b.addCase(saveSettingsConfig.rejected, (s, a) => {
       s.saving = false;
@@ -350,6 +364,7 @@ export const {
   clearDimensionCalNavigationRequest,
   setActiveTab,
   setDraft,
+  setDraftVacuumEnabled,
   resetDraft,
   clearError,
   setError,

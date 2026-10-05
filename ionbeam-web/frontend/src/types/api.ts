@@ -40,6 +40,7 @@ export interface VacuumSystemStatus {
   voltage: number;
   connected: boolean;
   simulation: boolean;
+  is_production?: boolean;
   control_transport: "sbc-simulation" | "raspberry-pi-gpio";
   running: boolean;
   runtime_seconds: number;
@@ -47,6 +48,7 @@ export interface VacuumSystemStatus {
   isVacuumSystemReady: boolean;
   high_voltage_power: boolean;
   last_error: string | null;
+  alarms?: string[];
   updated_at: string | null;
   pumps: VacuumPumpState[];
 }

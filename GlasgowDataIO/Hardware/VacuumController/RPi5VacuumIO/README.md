@@ -1,6 +1,8 @@
 # RPi5 Vacuum Controller I/O board (rev A.1)
 
-This is the interface board between a **Raspberry Pi 5** and the **FEI DB235 vacuum system**:
+This is the interface board between a **Raspberry Pi** and the **FEI DB235 vacuum system**. The controller SBC is a **Raspberry Pi 4 Model B** (see `glasgow_service/docs/rpi-vacuum-shopping-list.md`); the board works unchanged on a **Raspberry Pi 5**, because it uses only the 40-pin header and every pin it uses has the same function on both models. The "RPi5" in the name is historical.
+
+The board connects:
 
 - the four pumps shown on the SBC Vacuum Controller dashboard: `MechanicalVacuumPump`, `TurboVacuumPump`, and the UH stage `UHVacuumPump_1` / `UHVacuumPump_2` (turbomolecular pumps);
 - the vacuum gauges;
@@ -10,10 +12,10 @@ This is the interface board between a **Raspberry Pi 5** and the **FEI DB235 vac
 
 Step-by-step device wiring is in **[WIRING.md](WIRING.md)**.
 
-The Pi runs `glasgow_service.sbc_vacuum_app`. This board gives it isolated, fail-safe I/O. The service talks to it through `glasgow_service/vacuum_io_board.py`.
+The Pi runs `glasgow_service.sbc_vacuum_app`. This board gives it isolated, fail-safe I/O. The service talks to it through `glasgow_service/vacuum_io_board.py`. The whole board, the Pi and the DB235 are emulated in `glasgow_service.emulation`, so the controller can be tested without hardware (`python -m glasgow_service.emulation commission`; see `glasgow_service/docs/vacuum-emulator.md`).
 
 ```
- Raspberry Pi 5 ──40-way ribbon──> J3 ─┬─ I2C ─ MCP23017 0x20 ─┬─ ULN2803A ─ K1..K8 relays  ─> pump / HV permissive contacts
+ Raspberry Pi 4B/5 ─40-way ribbon─> J3 ─┬─ I2C ─ MCP23017 0x20 ─┬─ ULN2803A ─ K1..K8 relays  ─> pump / HV permissive contacts
                                        │                       └─ AO3400A x8 ─ V1..V8        ─> 24 V valve & cylinder solenoids
                                        ├─ I2C ─ MCP23017 0x21 ─── TLP291-4 x4 ─ DI1..DI16    <─ pump status, valve/cylinder switches
                                        ├─ I2C ─ ADS1115 x2 ─────── 68k/22k ─── AI1..AI8      <─ 0-10 V gauges, pump analog outputs
@@ -70,7 +72,7 @@ The same map is printed on the back silkscreen. It is also in `GlasgowDataIO/Jso
 | DI16 | Cooling water flow OK |
 | AI8 | Spare |
 
-The controller software today sequences the pumps and the HV permissive: A0–A4, B0–B3 and the per-pump gauges. The fault, valve, cylinder and utility channels are wired and readable, but automatic valve sequencing is not in the software yet.
+The controller software sequences the pumps and the HV permissive (A0–A4, B0–B3, the per-pump gauges), and acts on the fault inputs (`SBC.Faults`), the E-stop and output-rail status (GPIO5/6), the keep-alive and expander resets. All 16 inputs, the relays and the solenoids are reported in `GET /vacuum` → `board`. The valve, cylinder and utility channels are wired and readable, but automatic valve sequencing is not in the software yet.
 
 ## Fail-safe behaviour
 
@@ -96,7 +98,7 @@ Relay contacts are for the **permissive / remote-start inputs** of the tool's ow
 |---|---|---|
 | J1 | left edge, Phoenix MSTBA 5.08 | `+24V`, `0V`. 24 VDC 2–4 A (DIN-rail PSU) |
 | J2 | left edge, Phoenix MC 3.5 | E-stop NC loop: `ESTOP` (+24V_AUX out) and `LOOP` (return to K9 coil) |
-| J3 | 2×20 box header | Ribbon to the Pi 5 40-pin header (pin 1 to pin 1). The Pi's 5 V pins are **not** connected, so power the Pi from its own USB-C supply |
+| J3 | 2×20 box header | Ribbon to the Pi 40-pin header (pin 1 to pin 1). The Pi's 5 V pins are **not** connected, so power the Pi from its own USB-C supply |
 | J11–J18 | top edge, MSTBA 5.08 | K1–K8 `COM`, `NO`, `NC` |
 | J21–J24 | bottom edge, MC 3.5 | Two solenoids per connector: `+24`, `Vn-`, `+24`, `Vn+1-` |
 | J31–J34 | bottom edge, MC 3.5 | Four inputs, then `COM` (0 V of that group), then `+24` (sensor supply, 0.5 A PTC). An input is active when 24 V is applied between DIn and COM |
@@ -111,7 +113,7 @@ Relay contacts are for the **permissive / remote-start inputs** of the tool's ow
 | 2 / 3 | 3 / 5 | I2C1 SDA / SCL |
 | 14 / 15 | 8 / 10 | UART0 TX / RX → RS-485 |
 | 18 | 12 | RS-485 driver enable |
-| 12 / 13 | 32 / 33 | UART4 TX / RX → RS-232 (`dtoverlay=uart4-pi5`) |
+| 12 / 13 | 32 / 33 | RS-232 TX / RX: UART5 on the Pi 4B (`dtoverlay=uart5`), UART4 on the Pi 5 (`dtoverlay=uart4-pi5`) |
 | 19 | 35 | Watchdog heartbeat (1 kHz PWM) |
 | 22 | 15 | `IO_RESET_N` (expanders held in reset while low) |
 | 27 | 13 | Input change interrupt |
@@ -119,18 +121,28 @@ Relay contacts are for the **permissive / remote-start inputs** of the tool's ow
 | 5 / 6 | 29 / 31 | `ESTOP_OK_N` / `SAFE_OK_N` (low = OK) |
 | 26 | 37 | RUN LED |
 
-Add `dtparam=i2c_arm=on`, `enable_uart=1`, `dtoverlay=uart4-pi5` to `/boot/firmware/config.txt`.
+Add to `/boot/firmware/config.txt`:
+
+| Raspberry Pi 4 Model B | Raspberry Pi 5 |
+|---|---|
+| `dtparam=i2c_arm=on` | `dtparam=i2c_arm=on` |
+| `enable_uart=1` | `enable_uart=1` |
+| `dtoverlay=disable-bt` (full PL011 on GPIO14/15 for RS-485) | – |
+| `dtoverlay=uart5` (RS-232, usually `/dev/ttyAMA1`) | `dtoverlay=uart4-pi5` (RS-232, `/dev/ttyAMA4`) |
 
 ## Software configuration
 
-In `vacuumSystem.json`, replace the `SBC.GPIO` map with a board map:
+In `vacuumSystem.json`, replace the `SBC.GPIO` map with a board map. The complete example is `GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json`:
 
 ```json
 "SBC": {
-  "Id": "rpi5-vacuum-io",
+  "Id": "rpi-vacuum-io",
   "Board": "RPi5VacuumIO-A",
+  "PiModel": "4B",
   "Channels": {"A0": "K1", "A1": "K2", "A2": "K3", "A3": "K4", "A4": "K5",
                "B0": "DI1", "B1": "DI2", "B2": "DI3", "B3": "DI4"},
+  "Faults":   {"B0": "DI5", "B1": "DI6", "B2": "DI7", "B3": "DI8"},
+  "Serial":   {"RS485": "/dev/ttyAMA0", "RS232": "/dev/ttyAMA1"},
   "Gauges": {"B0": {"AIN": "AI1", "Law": "log", "Slope": 1.0,   "Offset": -5.5},
              "B1": {"AIN": "AI2", "Law": "log", "Slope": 1.667, "Offset": -11.33},
              "B2": {"AIN": "AI3", "Law": "log", "Slope": 1.667, "Offset": -11.33},
@@ -138,7 +150,7 @@ In `vacuumSystem.json`, replace the `SBC.GPIO` map with a board map:
 }
 ```
 
-`Law: "log"` computes p = 10^(Slope·U + Offset). The example values are the Pfeiffer PKR 251 law in mbar. `Law: "linear"` computes p = Slope·U + Offset. Readings outside 0.5–10 V are reported as unknown (sensor error or not connected). Install the extras with `pip install -e '.[sbc]'`, which adds `smbus2`.
+`Law: "log"` computes p = 10^(Slope·U + Offset). The example values are the Pfeiffer PKR 251 law in mbar. `Law: "linear"` computes p = Slope·U + Offset. Readings outside 0.5–10 V are reported as unknown (sensor error or not connected). `"IsProduction": false` runs the driver on the emulator instead of the board (the example config ships that way); set `"IsProduction": true` on the controller Pi for commissioning and production, then restart the service. Add `"Interlock": true` to a gauge to also require its pressure to be at or below the pump's `value` before the next stage starts. `Faults` are optional "healthy = ON" inputs: an open fault input stops that pump, raises an alarm and latches the cascade until `POST /vacuum/resume`. Install the extras with `pip install -e '.[sbc]'`, which adds `smbus2` and `pyserial`; the GPIO backend is `python3-lgpio` (works on both Pi models).
 
 ## PCB and files
 

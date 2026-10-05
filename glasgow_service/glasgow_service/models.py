@@ -60,6 +60,9 @@ class VacuumPumpState(BaseModel):
     ready: bool = False
     group: Optional[str] = None
     simulation_read: bool = False
+    # Board mode: False = the pump's "healthy" input is open (fault); None
+    # when no fault input is configured for this pump.
+    fault: Optional[bool] = None
 
 
 class VacuumSystemStatus(BaseModel):
@@ -67,7 +70,11 @@ class VacuumSystemStatus(BaseModel):
     voltage: float
     connected: bool
     simulation: bool
-    control_transport: Literal["sbc-simulation", "raspberry-pi-gpio"]
+    # IsProduction from vacuumSystem.json (false: emulator or simulator only).
+    is_production: bool = True
+    control_transport: Literal[
+        "sbc-simulation", "raspberry-pi-gpio", "rpi5-vacuum-io", "rpi5-vacuum-io-emulator"
+    ]
     running: bool
     runtime_seconds: float = 0.0
     cascade_stopped: bool
@@ -76,6 +83,11 @@ class VacuumSystemStatus(BaseModel):
     last_error: Optional[str] = None
     updated_at: Optional[str] = None
     pumps: List[VacuumPumpState]
+    # Active interlock conditions (E-stop, output rail, pump faults). These
+    # are not communication errors, so they do not affect ``connected``.
+    alarms: List[str] = Field(default_factory=list)
+    # Vacuum I/O board readback (rails, all 16 inputs, relays, solenoids).
+    board: Optional[dict] = None
 
 
 # ---------- requests -------------------------------------------------------

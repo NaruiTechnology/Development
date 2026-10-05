@@ -45,6 +45,24 @@ the installed ADC or serial gauge protocol. Until an adapter is supplied,
 numeric values are `null` while the independent digital comparator/interlock
 path remains active.
 
+## RPi5VacuumIO board mode
+
+The production hardware is a **Raspberry Pi 4 Model B** with the **RPi5VacuumIO rev A.1**
+interface board (see [`rpi-vacuum-shopping-list.md`](rpi-vacuum-shopping-list.md) and
+`GlasgowDataIO/Hardware/VacuumController/RPi5VacuumIO`). Configure it with an `SBC.Board` section
+instead of `SBC.GPIO` (example: `GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json`). The
+service then uses `glasgow_service/vacuum_io_board.py`: relays through the MCP23017 at 0x20,
+isolated inputs at 0x21, gauges through the two ADS1115s, the K10 heartbeat watchdog, and the
+E-stop and output-rail status. Board mode adds fault inputs, E-stop / rail / keep-alive /
+expander-reset interlocks, optional gauge interlocks, and `alarms` and `board` fields in
+`GET /vacuum`.
+
+Configuration → General → **Active vacuum control** edits `Enable` in
+`vacuumSystem.rpi5-io.example.json`. Enabled control uses the emulator when scanner `IsProduction` is false and real SBC hardware when it is true;
+disabled control remains idle and bypasses the vacuum scan gate. Scan
+`IsProduction` selects execution mode, while `Enable` controls activation. Explicit development tooling can
+run the production driver on an emulated rig; see [`vacuum-emulator.md`](vacuum-emulator.md).
+
 ## API
 
 Run `python -m glasgow_service.sbc_vacuum_app`. It exposes:
@@ -55,20 +73,22 @@ Run `python -m glasgow_service.sbc_vacuum_app`. It exposes:
 - `POST /vacuum/high-voltage/power` (vacuum-ready interlocked)
 - `POST /vacuum/stop`, `/vacuum/resume`, and `/vacuum/release`
 - `POST /vacuum/simulation/{name}/ready` with `{"ready": true|false}`
+- `GET /emulator` and `POST /emulator/*` (only when the emulator is active: `IsProduction` false)
 
 All mutations require the bearer token when `SBC_VACUUM_TOKEN` is set.
-`Simulate: false` selects BCM GPIO; `Simulate: true` selects the deterministic
-in-process plant. Both modes use the same controller and API.
+`Enable: true` activates control in the mode selected by scanner `IsProduction`. `Enable: false` reports an idle,
+disabled service, and `/vacuum` returns 404. Simulator endpoints are available
+only in an explicitly constructed development app.
 
 ## Run the simulation
 
-Keep `"Simulate": true` in `vacuumSystem.json`, then run:
+Keep `"IsProduction": false` and `"Simulate": true` in `vacuumSystem.json`, then run:
 
 ```bash
 export SBC_VACUUM_CONFIG=/path/to/vacuumSystem.json
 export SBC_REQUIRE_FENCING=false
 export SBC_VACUUM_TOKEN=local-test-token
-python -m glasgow_service.sbc_vacuum_app
+python -c 'import uvicorn; from glasgow_service.sbc_vacuum_app import create_app; from glasgow_service.vacuum import load_vacuum_config; uvicorn.run(create_app(config_loader=load_vacuum_config), host="127.0.0.1", port=8766)'
 ```
 
 Exercise the cascade and interlocks through the production API:

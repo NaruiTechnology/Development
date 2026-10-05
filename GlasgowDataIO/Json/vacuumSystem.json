@@ -113,8 +113,9 @@
         "The committed SBC.GPIO values are initial assignments only.",
         "Verify every BCM-to-physical-pin connection against the final Raspberry Pi model, carrier schematic, relay interface, and wiring drawing before changing Simulate to false."
     ],
+    "IsProduction": false,
     "Simulate": true,
-    "Enable": true,
+    "Enable": false,
     "LogName": "VacummDashboard",
     "Verbose": false
 }

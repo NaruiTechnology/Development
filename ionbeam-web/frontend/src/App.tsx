@@ -23,7 +23,7 @@ import { Header } from "./components/Header";
 import type { SignedInUser } from "./components/AuthDialog";
 import { apiUrl } from "./lib/backendUrl";
 import { readJsonResponse } from "./lib/readJsonResponse";
-import { shouldDisableScanPanel } from "./lib/vacuumPolicy";
+import { shouldDisableScanPanel, shouldShowVacuumControllerError } from "./lib/vacuumPolicy";
 import { dimensionBoundsFromGeometry, geometryFromConfig, toAppliedGeometry } from "./lib/scanGeometry";
 import { fetchScanGeometry } from "./lib/scanGeometryApi";
 import { fetchDimensionCalibrationRemote } from "./lib/dimensionCalibrationApi";
@@ -143,6 +143,7 @@ export function App() {
   // corresponding popup without requiring an initial open/close cycle.
   const [vacuumMinimized, setVacuumMinimized] = useState(true);
   const [vacuumControllerBusy, setVacuumControllerBusy] = useState(false);
+  const [vacuumControllerError, setVacuumControllerError] = useState(true);
   const [sampleStageOpen, setSampleStageOpen] = useState(true);
   const [sampleStageMinimized, setSampleStageMinimized] = useState(true);
   const [sampleStageControllerBusy, setSampleStageControllerBusy] = useState(false);
@@ -166,7 +167,6 @@ export function App() {
   const [validationSummaryHost, setValidationSummaryHost] = useState<HTMLDivElement | null>(null);
   const handleVacuumActivityChange = useCallback((active: boolean) => {
     setVacuumControllerBusy(active);
-    setVacuumMinimized(!active);
   }, []);
   const autoOpenedVacuumRef = useRef(false);
   const serviceStatus = useAppSelector((s) => s.status.service);
@@ -387,6 +387,7 @@ export function App() {
 
   useEffect(() => {
     if (!vacuumEnabled) {
+      setVacuumControllerError(false);
       setIsVacuumSystemReady(false);
       setHighVoltagePower(false);
       return;
@@ -395,22 +396,30 @@ export function App() {
     let cancelled = false;
     const controller = new AbortController();
 
+    setVacuumControllerError(true);
+
     async function refreshVacuumReadiness() {
       try {
         const response = await fetch(apiUrl("/api/vacuum"), {
           cache: "no-store",
           headers: scanAuthHeaders(),
-          signal: controller.signal,
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(3000)]),
         });
         if (!response.ok) throw new Error(`vacuum status: HTTP ${response.status}`);
         const status = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
         if (!cancelled) {
-          setIsVacuumSystemReady(status.isVacuumSystemReady === true);
-          setHighVoltagePower(status.high_voltage_power === true);
+          const invalid = shouldShowVacuumControllerError(status, null, null);
+          setIsVacuumSystemReady(!invalid);
+          setVacuumControllerError(invalid);
+          setHighVoltagePower(!invalid && status.high_voltage_power === true);
         }
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
-        if (!cancelled) setIsVacuumSystemReady(false);
+        if (!cancelled) {
+          setIsVacuumSystemReady(false);
+          setVacuumControllerError(true);
+          setHighVoltagePower(false);
+        }
       }
     }
 
@@ -1325,11 +1334,11 @@ export function App() {
         }}
         vacuumMinimized={vacuumMinimized}
         vacuumControllerBusy={vacuumControllerBusy}
+        vacuumControllerError={vacuumControllerError}
         onOpenSampleStage={() => {
           setSampleStageOpen(true);
           setSampleStageMinimized(false);
         }}
-        sampleStageMinimized={sampleStageMinimized}
         sampleStageControllerBusy={sampleStageControllerBusy}
         highVoltagePower={highVoltagePower}
         highVoltageReady={vacuumEnabled && isVacuumSystemReady}

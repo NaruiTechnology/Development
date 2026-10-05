@@ -257,6 +257,11 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             "STATIC_DIR=../frontend/dist",
             "GLASGOW_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "GlasgowDataIO", "Json", "streamData.json"))),
+            "SBC_VACUUM_CONFIG={}".format(
+                self.resolveDeployPath(actionData.get(
+                    "vacuumConfig", "Development/GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json"))),
+            "VACUUM_CONTROLLER_URL={}".format(
+                actionData.get("vacuumControllerUrl", "http://127.0.0.1:8780")),
             "IOBEAM_ADMIN_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "IobeamAdmin", "Json", "IobeamAdmin.json"))),
             "IOBEAM_ADMIN_DB_HOST={}".format(dbHost),

@@ -9,6 +9,7 @@ import { useTranslation } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
+import { vacuumReadingsAreFresh } from "../lib/vacuumPolicy";
 import type { VacuumPumpState, VacuumSystemStatus } from "../types/api";
 
 const MECHANICAL_PUMP = "MechanicalVacuumPump";
@@ -27,8 +28,6 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
   const mutationRef = useRef(false);
   const statusVersionRef = useRef(0);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -91,19 +90,24 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     if (mutationRef.current) return;
     const statusVersion = statusVersionRef.current;
     try {
-      const response = await fetch(apiUrl("/api/vacuum"), { headers: scanAuthHeaders(), signal });
-      if (response.status === 404) {
-        onCloseRef.current();
-        return;
-      }
+      const response = await fetch(apiUrl("/api/vacuum"), {
+        cache: "no-store", headers: scanAuthHeaders(),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000),
+      });
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
       const refreshed = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
+      if (!vacuumReadingsAreFresh(refreshed.updated_at)) {
+        setStatus(null);
+        setError(refreshed.last_error || "Vacuum readings are unavailable or stale");
+        return;
+      }
       setStatus(refreshed);
       setError(null);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
+      setStatus(null);
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }, []);
@@ -236,8 +240,10 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
           </div>
         </div>
 
-        {!minimized && <><div className="modal__body vacuum-dashboard__body">
+        <><div className="modal__body vacuum-dashboard__body">
           {error && <div className="vacuum-dashboard__error" role="alert">{error}</div>}
+          {status?.last_error && <div className="vacuum-dashboard__error" role="alert">{status.last_error}</div>}
+          {status?.alarms?.map((alarm) => <div key={alarm} className="vacuum-dashboard__error" role="alert">{alarm}</div>)}
           {!status ? (
             <div className="vacuum-dashboard__loading">
               {pending === "acquire" ? t("vacuum.acquiring") : t("vacuum.loading")}
@@ -262,7 +268,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
 
         <div className="vacuum-dashboard__footer">
           <span>{status?.cascade_stopped ? t("vacuum.cascadeStopped") : t("vacuum.cascadeRunning")}</span>
-        </div></>}
+        </div></>
       </section>}
     </div>
   );

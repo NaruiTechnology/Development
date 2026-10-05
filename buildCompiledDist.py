@@ -16,13 +16,14 @@ except ImportError:  # pragma: no cover - Python 3.10 deploy builder fallback
 
 
 REQUIRED_GLASGOW_RUNTIME_PACKAGES = ('gpiozero', 'httpx', 'redis')
+REQUIRED_SBC_RUNTIME_PACKAGES = ('smbus2', 'pyserial')
 REQUIRED_LOCAL_REDIS_APT_PACKAGES = (
     'redis-server', 'redis-sentinel', 'redis-tools')
 
 # Files (by name or glob) to copy verbatim into dist
 ASSET_PATTERNS = [
     '*.ihex', '*.toml', 'requirements.txt', 'README.md', '*.service',
-    '*.service.in', '*.env.example', '*.env.in', '*.sh', '*.rules'
+    '*.service.in', '*.env.example', '*.env.in', '*.local.env', '*.sh', '*.rules', '*.md'
 ]
 
 # Files to exclude from any copied tree or asset sweep.
@@ -40,6 +41,7 @@ SKIP_DIRS = {
     '.codex',
     '.pytest_cache',
     'node_modules',
+    'work',  # QEMU disk/kernel scratch files are not distribution inputs.
     'dist_app',
     'EsmBeamController',
     'Open-Beam-Interface',
@@ -73,7 +75,7 @@ COPY_TREE_DESTINATIONS = {
 TREE_COPY_IGNORE = (
     '__pycache__', '.git', '.venv', '.cache', '.pytest_cache',
     'node_modules', 'dist', 'build', '.next', '.turbo', '.env',
-    '*.log',
+    '*.log', '*.tsbuildinfo',
 )
 
 # Non-Python data inside Python packages. The per-file pass above only packages
@@ -178,7 +180,7 @@ def validate_glasgow_runtime_dependencies(src_dir):
 
     requirement_names = _requirement_names(requirements_path)
     missing_requirements = sorted(
-        set(REQUIRED_GLASGOW_RUNTIME_PACKAGES) - requirement_names)
+        set(REQUIRED_GLASGOW_RUNTIME_PACKAGES + REQUIRED_SBC_RUNTIME_PACKAGES) - requirement_names)
     if missing_requirements:
         raise ValueError(
             'glasgow_service/requirements.txt is missing: ' +
@@ -211,6 +213,18 @@ def validate_glasgow_runtime_dependencies(src_dir):
         raise ValueError(
             'glasgow_service/pyproject.toml is missing: ' +
             ', '.join(missing_metadata))
+    # Hardware drivers are optional project extras, but the deployment installs
+    # requirements.txt directly and must receive them before starting services.
+    with open(pyproject_path, 'r', encoding='utf-8') as stream:
+        metadata = stream.read()
+    sbc_extra = re.search(r'(?m)^sbc\s*=\s*\[(.*?)\]', metadata)
+    sbc_names = {
+        re.match(r'([A-Za-z0-9_.-]+)', value).group(1).lower().replace('_', '-')
+        for value in re.findall(r'["\']([^"\']+)["\']', sbc_extra.group(1) if sbc_extra else '')
+    }
+    missing_sbc = sorted(set(REQUIRED_SBC_RUNTIME_PACKAGES) - sbc_names)
+    if missing_sbc:
+        raise ValueError('glasgow_service/pyproject.toml SBC extra is missing: ' + ', '.join(missing_sbc))
     print('Validated Glasgow runtime dependencies: ' +
           ', '.join(REQUIRED_GLASGOW_RUNTIME_PACKAGES))
 
@@ -360,7 +374,7 @@ def copy_source_trees(src_dir, dist_dir, trees):
         shutil.copytree(
             src_tree,
             dst_tree,
-            ignore=_tree_copy_ignore_for(rel_tree),
+            ignore=_tree_copy_ignore_for(rel_tree, src_tree),
             dirs_exist_ok=True,
         )
         print(f"Copied source tree: {rel_tree} -> {target_tree}")
@@ -397,7 +411,7 @@ def make_shell_scripts_executable(root):
     return updated
 
 
-def _tree_copy_ignore_for(rel_tree):
+def _tree_copy_ignore_for(rel_tree, src_tree=None):
     """Return a per-tree ignore callback.
 
     The ionbeam-web tree should keep backend/deploy intact so the dist zip
@@ -408,9 +422,9 @@ def _tree_copy_ignore_for(rel_tree):
     if os.path.normpath(rel_tree) == os.path.join('Development', 'ionbeam-web'):
         def ignore(dirpath, names):
             ignored = set()
-            rel_dir = os.path.normpath(os.path.relpath(dirpath, rel_tree))
+            rel_dir = os.path.normpath(os.path.relpath(dirpath, src_tree or rel_tree))
             for name in names:
-                if name in base_ignore:
+                if any(fnmatch.fnmatch(name, pattern) for pattern in base_ignore):
                     ignored.add(name)
                     continue
                 if name == 'deploy':

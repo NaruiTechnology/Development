@@ -141,6 +141,40 @@ class BuilderEndToEndTests(unittest.TestCase):
         self.assertIn("Development/GlasgowDataIO/Json/streamData.json", listings[0])
         self.assertIn("dist_manifest.json", listings[0])
 
+    def test_working_tree_runtime_additions_are_packaged(self):
+        additions = {
+            "ionbeam-web/frontend/src/components/TransformCard.tsx": "export const TransformCard = () => null;\n",
+            "glasgow_service/glasgow_service/emulation/rig.py": "RIG = 1\n",
+            "glasgow_service/glasgow_service/vacuum_io_board.py": "BOARD = 1\n",
+            "glasgow_service/docs/vacuum-emulator.md": "# Emulator\n",
+            "GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json": "{}\n",
+            "ionbeam-web/backend/deploy/controller.service": "[Service]\n",
+            "glasgow_service/examples/sbc-vacuum.local.env": "SBC_VACUUM_EMULATOR_SPEED=20\n",
+            "ionbeam-web/frontend/tsconfig.tsbuildinfo": "stale build state",
+            "glasgow_service/scripts/qemu/work/scratch.py": "SCRATCH = 1\n",
+        }
+        for relative, content in additions.items():
+            target = self.ws / "Development" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+        self.assertEqual(self.build(self.ws), 0)
+        with zipfile.ZipFile(self.archive()) as archive:
+            for relative in list(additions)[:7]:
+                packaged = "Development/" + relative
+                if packaged.endswith(".py"):
+                    packaged += "c"
+                self.assertIn(packaged, archive.namelist())
+            self.assertNotIn("Development/ionbeam-web/frontend/tsconfig.tsbuildinfo", archive.namelist())
+            self.assertFalse(any("qemu/work/" in name for name in archive.namelist()))
+
+    def test_missing_board_dependency_prevents_archive_creation(self):
+        requirements = self.ws / "Development/glasgow_service/requirements.txt"
+        requirements.write_text("\n".join(
+            line for line in requirements.read_text().splitlines()
+            if not line.startswith("smbus2")))
+        self.assertEqual(self.build(self.ws), 1)
+        self.assertFalse(self.archive().exists())
+
     def test_unrelated_sibling_directories_are_not_packaged(self):
         self.assertEqual(self.build(self.ws), 0)
         with zipfile.ZipFile(self.archive()) as z:

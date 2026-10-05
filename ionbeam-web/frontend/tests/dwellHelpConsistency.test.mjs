@@ -207,7 +207,7 @@ test("the live dwell label receives the sample count", () => {
   for (const [name, text] of LOCALES) {
     assert.match(text, /"scan\.dwell\.dynamic": "[^"]*\{samples\}/, `${name}: scan.dwell.dynamic must show {samples}`);
   }
-  for (const file of ["components/RasterParameters.tsx", "components/VectorParameters.tsx"]) {
+  for (const file of ["components/RasterScanExecutionSettings.tsx", "components/VectorScanExecutionSettings.tsx", "components/VectorParameters.tsx"]) {
     assert.match(read(file), /samples: timing\.samplesPerPixel/, `${file} must pass samples to the label`);
   }
 });

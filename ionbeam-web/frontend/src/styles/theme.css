@@ -1745,8 +1745,8 @@ body {
 
 .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .scan-execution-settings { flex: 1 0 100%; min-width: 0; margin-bottom: 6px; }
-.scan-primary-controls { display: inline-flex; gap: 6px; flex-wrap: nowrap; }
-.scan-primary-controls--raster { flex: 1 0 100%; }
+.scan-primary-controls { display: flex; flex: 1 0 100%; min-width: 0; gap: 6px; flex-wrap: nowrap; }
+.scan-primary-controls > .btn { flex: 1 1 0; min-width: 0; justify-content: center; }
 .roi-action-controls { margin-top: 12px; }
 .scan-action-with-help { display: inline-flex; align-items: center; gap: 4px; }
 /* Run validated + Clear, portalled from ScanControls to the bottom of the
@@ -4673,6 +4673,30 @@ body {
   animation: controller-icon-busy-blink 0.8s ease-in-out infinite;
 }
 
+.app-header__controller--error,
+.app-header__controller--error:hover {
+  position: relative;
+  border-color: var(--c-danger);
+  background: color-mix(in srgb, var(--c-danger) 16%, var(--c-bg-elev));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--c-danger) 40%, transparent);
+}
+
+.app-header__controller-error-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--c-danger);
+  color: var(--c-bg);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 @keyframes controller-icon-busy-blink {
   0%, 100% {
     opacity: 1;
@@ -6916,3 +6940,12 @@ body {
 }
 .calib-import__problems--invalid p { margin: 6px 0 0; }
 .calib-import__keys { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+
+.scan-transform-card { flex: 1 0 100%; min-width: 0; margin-top: 6px; }
+.scan-transform-card .card__body[hidden] { display: none; }
+
+.scan-transform-switches { display: flex; flex-wrap: nowrap; gap: 12px; padding: 10px 8px; }
+.scan-transform-switches > .app-switch { flex: 1 1 auto; min-width: max-content; justify-content: flex-start; }
+.scan-transform-switches .vacuum-switch__track { flex-shrink: 0; }
+
+.scan-transform-label--nowrap { white-space: nowrap; }

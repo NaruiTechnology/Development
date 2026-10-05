@@ -255,23 +255,33 @@ case "${ACTION}" in
     ;;
   start|restart)
     install_units
+    stack_failed=0
     sudo_cmd systemctl stop "${EXECUTOR_UNIT}" "${GLASGOW_UNIT}" || true
     stop_stale_glasgow
-    user_systemctl "${ACTION}" "${SBC_UNIT}"
-    wait_http "SBC vacuum" "http://127.0.0.1:8766/health/ready"
-    sudo_cmd systemctl start "${GLASGOW_UNIT}"
-    wait_http "Glasgow" "http://127.0.0.1:8765/status"
-    sudo_cmd systemctl start "${EXECUTOR_UNIT}"
-    wait_http "vacuum executor" "http://127.0.0.1:8780/health/live"
+    user_systemctl "${ACTION}" "${SBC_UNIT}" || stack_failed=1
+    if ! wait_http "SBC vacuum" "http://127.0.0.1:8766/health/ready"; then
+      stack_failed=1
+      echo "Check ${LOG_DIR}/sbc-vacuum.log. Active vacuum control requires real SBC hardware; turn it off in Configuration > General when hardware is unavailable." >&2
+    fi
+    # Restore the remaining stack even when vacuum startup fails. The web UI
+    # must stay available to display the fault and change its Enable setting.
+    sudo_cmd systemctl start "${GLASGOW_UNIT}" || stack_failed=1
+    wait_http "Glasgow" "http://127.0.0.1:8765/status" || stack_failed=1
+    sudo_cmd systemctl start "${EXECUTOR_UNIT}" || stack_failed=1
+    wait_http "vacuum executor" "http://127.0.0.1:8780/health/live" || stack_failed=1
     user_systemctl stop "${BACKEND_UNIT}" "${FRONTEND_UNIT}" || true
     stop_stale_web_processes
-    user_systemctl start "${BACKEND_UNIT}"
-    wait_http "web backend" "http://127.0.0.1:4000/api/status"
-    wait_http "web sign-in account endpoint" "http://127.0.0.1:4000/api/admin/iobeam/auth/current-account"
-    wait_http "web sign-in users endpoint" "http://127.0.0.1:4000/api/admin/iobeam/auth/users"
-    user_systemctl start "${FRONTEND_UNIT}"
-    wait_http "web frontend" "http://127.0.0.1:5173/"
+    user_systemctl start "${BACKEND_UNIT}" || stack_failed=1
+    wait_http "web backend" "http://127.0.0.1:4000/api/status" || stack_failed=1
+    wait_http "web sign-in account endpoint" "http://127.0.0.1:4000/api/admin/iobeam/auth/current-account" || stack_failed=1
+    wait_http "web sign-in users endpoint" "http://127.0.0.1:4000/api/admin/iobeam/auth/users" || stack_failed=1
+    user_systemctl start "${FRONTEND_UNIT}" || stack_failed=1
+    wait_http "web frontend" "http://127.0.0.1:5173/" || stack_failed=1
     show_status
+    if ((stack_failed)); then
+      echo "Stack ${ACTION} completed with service failures; see the diagnostics above and ${LOG_DIR}." >&2
+    fi
+    exit "${stack_failed}"
     ;;
   stop)
     stop_installed_units user "${FRONTEND_UNIT}" "${BACKEND_UNIT}" "${SBC_UNIT}"

@@ -235,6 +235,18 @@ class WorkflowContractTests(unittest.TestCase):
             ("frontend-build", "/deploy/frontend", "npm run build"),
         ])
 
+    def test_generated_backend_env_uses_deployed_vacuum_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backend = root / "Development/ionbeam-web/backend"
+            backend.mkdir(parents=True)
+            state = setupIonbeamWeb_state(SimpleNamespace(deployRoot=str(root)))
+            state._readAdminDbConfig = Mock(return_value={})
+            state._writeBackendEnv(str(backend / ".env"), str(backend), {})
+            env = dict(line.split("=", 1) for line in (backend / ".env").read_text().splitlines() if "=" in line)
+            self.assertEqual(env["SBC_VACUUM_CONFIG"], str(root / "Development/GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json"))
+            self.assertEqual(env["VACUUM_CONTROLLER_URL"], "http://127.0.0.1:8780")
+
     def test_stop_gate_cannot_be_skipped_or_reused(self):
         for flag in ("skip", "transactionComplete"):
             payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())

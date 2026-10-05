@@ -34,6 +34,7 @@ import {
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
+import { TransformCard } from "./TransformCard";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ROIActionWedges } from "./ROIActionWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
@@ -933,6 +934,8 @@ export function ScanControls({
           <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />
         </span>
       )}
+      {!roiAction && (kind === "raster" || kind === "vector") && <TransformCard />}
+
       <div className={`scan-primary-controls${kind === "raster" ? " scan-primary-controls--raster" : ""}`}>
         <button
           type="button"

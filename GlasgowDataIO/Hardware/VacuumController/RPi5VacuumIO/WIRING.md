@@ -1,6 +1,6 @@
 # Wiring guide: RPi5 Vacuum Controller I/O board (rev A.1)
 
-This guide wires the board to a Raspberry Pi 5 and to the vacuum devices that the software controls. Those are the devices on the **SBC Vacuum Controller** dashboard:
+This guide wires the board to a Raspberry Pi 4 Model B (or a Raspberry Pi 5; differences are noted) and to the vacuum devices that the software controls. Those are the devices on the **SBC Vacuum Controller** dashboard:
 
 ```
  MechanicalVacuumPump  ──►  TurboVacuumPump  ══►  UH PUMPS (grouped stage)
@@ -15,7 +15,7 @@ Each software channel `An` is an output (the board turns a pump **on**). Each ch
 > - Work with the 24 V supply and the tool's own pump controllers switched off and locked out.
 > - The board grants **permissives**. It must never bypass the DB235's own interlocks, and it never switches pump motor mains power. Relay contacts go only to the *remote / enable* inputs of the pump controllers, or to the coil of a separately installed, rated contactor.
 > - The pin names of the tool's pump controllers, gauges and valves vary by make and model. Confirm every tool-side terminal against the DB235 service manual and each controller's manual before connecting.
-> - Keep `"Simulate": true` until step 12 (commissioning) is complete.
+> - Keep `"Enable": false` until step 12 (commissioning). The normal service drives real hardware when `"Enable": true` and scanner `"IsProduction": true`; scanner production false selects emulation.
 
 ---
 
@@ -38,7 +38,7 @@ Plug-in terminals are numbered **1 → n from the pin with the ▷ marker** (the
 ## 1. Mount the board and plan the cabinet
 
 1. Mount the board on M3 standoffs or a DIN-rail PCB carrier (four M3 holes, 3.5 mm from each corner). Leave about 25 mm clearance above the relays.
-2. Put the Raspberry Pi 5 next to J3, so the 40-way ribbon is at most 20 cm long.
+2. Put the Raspberry Pi next to J3, so the 40-way ribbon is at most 20 cm long.
 3. Suggested DIN-rail order:
    - E-stop safety relay;
    - 24 V PSU;
@@ -83,16 +83,20 @@ Check: close the loop, and yellow **D9** comes on. Open any E-stop, and D9 goes 
 
 ---
 
-## 4. Raspberry Pi 5 → J3 (ribbon)
+## 4. Raspberry Pi → J3 (ribbon)
 
 1. With everything unpowered, plug the 40-way ribbon into the Pi's GPIO header and into **J3**. Line up **pin 1** on both ends: the red stripe on the ribbon, the square pad and ▲ marker on J3, and the pin nearest the SD card on the Pi.
-2. Power the Pi from its **own** 27 W USB-C supply. The board's J3 deliberately leaves the Pi 5 V pins unconnected; it draws only 3.3 V logic power from the Pi.
+2. Power the Pi from its **own** USB-C supply (15 W / 3 A for the Pi 4B, 27 W / 5 A for the Pi 5). The board's J3 deliberately leaves the Pi 5 V pins unconnected; it draws only 3.3 V logic power from the Pi.
 3. On the Pi, add these lines to `/boot/firmware/config.txt`, then reboot:
    ```
+   # Raspberry Pi 4 Model B
    dtparam=i2c_arm=on
    enable_uart=1
-   dtoverlay=uart4-pi5
+   dtoverlay=disable-bt
+   dtoverlay=uart5
    ```
+   On the Pi 4B also run `sudo systemctl disable hciuart`. On a Raspberry Pi 5, use
+   `dtoverlay=uart4-pi5` instead of the last two lines.
 4. Run `sudo apt install i2c-tools` then `i2cdetect -y 1`. It must show **20, 21, 48, 49**.
 
 ---
@@ -300,13 +304,13 @@ If the A/B naming on a controller is ambiguous and nothing responds, swap A and 
 | 2 | `232RX` (board receives) | Device **TXD** |
 | 3 | `GND` | Device signal ground (DE-9 pin 5) |
 
-On the Pi this port is UART4 (`/dev/ttyAMA4`).
+On the Pi 4B this port is UART5 (usually `/dev/ttyAMA1`; check `ls -l /dev/ttyAMA*`). On the Pi 5 it is UART4 (`/dev/ttyAMA4`). Put the node in `vacuumSystem.json` → `SBC.Serial.RS232`.
 
 ---
 
 ## 11. Software configuration
 
-1. Copy `GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json` over the controller's `vacuumSystem.json`. Keep `"Simulate": true` for now. The example already maps the dashboard devices to the board:
+1. Use `GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json` as the controller profile (`SBC_VACUUM_CONFIG`). Set `"Enable": false` until commissioning; Configuration → General → Active vacuum control edits this flag. The example already maps the dashboard devices to the board:
    ```json
    "Channels": {"A0": "K1", "A1": "K2", "A2": "K3", "A3": "K4", "A4": "K5",
                 "B0": "DI1", "B1": "DI2", "B2": "DI3", "B3": "DI4"},
@@ -331,17 +335,20 @@ Do steps 1–4 with **all tool-side plugs unplugged** except J1 (24 V), J2 (E-st
 |---|---|---|
 | 1 | Power 24 V, E-stop closed, Pi off | D3 on, D9 on, **D10 off**, all relay/solenoid LEDs off |
 | 2 | Boot the Pi, service **not** running | Same as 1: outputs stay off, D10 off |
-| 3 | Start the service with `"Simulate": false` | D10 (output rail) and the blue RUN LED come on. `MechanicalVacuumPump` K1 LED comes on (the cascade starts the mechanical pump) |
+| 3 | Fit jumpers from J32-6 (+24) to J32-1…4 (fault inputs DI5–DI8 "healthy"; with `SBC.Faults` configured an open fault input blocks that pump), then set `"Enable": true` and scanner `"IsProduction": true` and start the service | D10 (output rail) and the blue RUN LED come on. `MechanicalVacuumPump` K1 LED comes on (the cascade starts the mechanical pump) |
 | 4 | Using a jumper wire from J31-6 (+24) to J31-1 (DI1) | DI1 LED on. Dashboard: MechanicalVacuumPump ready. **K2** (TurboVacuumPump) turns on |
 | 5 | Jumper +24 to DI2 | K3 and K4 (UH pumps) turn on |
 | 6 | Jumper DI3 and DI4 | All four ready. HV permissive K5 can be enabled from the UI |
 | 7 | Remove the DI2 jumper | K3, K4 and K5 drop at once (loss of turbo ready). K1 stays on |
-| 8 | Open the E-stop | D9 and D10 off; **every** relay and valve drops, including K1 |
-| 9 | Close the E-stop, then `sudo systemctl stop sbc-vacuum` | D10 drops within about 0.1 s. K2–K8 and all valves off; K1 stays on its E-stop rail |
+| 8 | Open the E-stop | D9 and D10 off; **every** relay and valve drops, including K1. Dashboard alarm "E-stop loop open" |
+| 8a | Close the E-stop | D9 and D10 on, but **nothing restarts**. Press Resume (`POST /vacuum/resume`): K1, then the cascade, restart |
+| 9 | `sudo systemctl stop sbc-vacuum` | D10 drops within about 0.1 s; K2–K8 and all valves off. **Note:** an orderly stop also switches K1 off (the software's documented shutdown policy: all managed outputs inactive). K1 stays on only when the Pi or service *hangs or crashes* (heartbeat stops, K10 drops, K1 keeps its E-stop rail). Check that case with `sudo systemctl kill -s STOP sbc-vacuum`: D10 drops within about 0.1 s and K1 stays on. Then `sudo systemctl kill -s CONT sbc-vacuum`: the keep-alive has expired, so the dashboard shows the keep-alive error until you press Resume |
 | 10 | Check each gauge input with a 0–10 V source or the gauge itself | Dashboard "Real-time value" follows the gauge |
+
+Steps 1–9 can be rehearsed without hardware: `python -m glasgow_service.emulation commission` replays this table on the emulated Pi, board and controller, and prints the board LEDs after each row.
 | 11 | Plug in the tool-side connectors one device at a time, and repeat the relevant check with the real device | – |
 
-Record the results, then keep a copy of `vacuumSystem.json` with the commissioned values.
+Record the results, then keep a copy of `vacuumSystem.json` with the commissioned values. The service journal is a record of the run: `journalctl -u sbc-vacuum -b | grep VACUUM-HW` lists the start-up banner, every relay switch and every alarm, each tagged `[VACUUM-HW]`. A `[VACUUM-EMU]` or `[VACUUM-SIM]` tag means the service was not driving this board.
 
 ---
 

@@ -24,7 +24,7 @@ import tls from "node:tls";
 import type { IncomingMessage } from "node:http";
 
 import { config } from "./config";
-import { readVacuumEnabled } from "./vacuumConfig";
+import { readVacuumEnabled, prepareVacuumEnabledUpdate } from "./vacuumConfig";
 import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
@@ -321,7 +321,8 @@ app.get("/healthz", (_req, res) => {
 app.get("/api/admin/config", async (_req, res) => {
   try {
     const info = await readWithBackup();
-    res.json(info);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ...info, vacuum_enabled: readVacuumEnabled(config.vacuumConfigPath) });
   } catch (err) {
     sendConfigError(res, err);
   }
@@ -343,8 +344,13 @@ app.post("/api/admin/config", async (req, res) => {
 
   try {
     await authorizeStreamConfigSave(req, data);
+    if (req.body?.vacuum_enabled !== undefined && typeof req.body.vacuum_enabled !== "boolean") {
+      throw new ConfigError("vacuum_enabled must be true or false", 400);
+    }
+    const commitVacuum = await prepareVacuumEnabledUpdate(config.vacuumConfigPath, req.body?.vacuum_enabled);
     const changed = await writeConfigIfChanged(data);
-    if (!changed) {
+    const vacuumChanged = commitVacuum ? await commitVacuum() : false;
+    if (!changed && !vacuumChanged) {
       respondRestartSkipped(res, "Configuration is unchanged.");
       return;
     }

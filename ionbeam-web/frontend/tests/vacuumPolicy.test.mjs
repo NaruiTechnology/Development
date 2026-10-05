@@ -4,7 +4,47 @@ import assert from "node:assert/strict";
 import {
   shouldDisableScanPanel,
   shouldShowVacuumController,
+  shouldShowVacuumControllerError,
+  vacuumReadingsAreFresh,
 } from "../.test-dist/lib/vacuumPolicy.js";
+
+const healthyVacuum = {
+  connected: true, running: true, isVacuumSystemReady: true,
+  cascade_stopped: false, last_error: null, alarms: [],
+  updated_at: new Date().toISOString(), is_production: true, simulation: false,
+};
+
+test("vacuum icon shows an error for unknown, unavailable, stopped and faulted states", () => {
+  assert.equal(shouldShowVacuumControllerError(null, null, null), true);
+  for (const fault of [
+    { connected: false }, { running: false }, { isVacuumSystemReady: false },
+    { cascade_stopped: true }, { last_error: "SBC unavailable" }, { alarms: ["E-stop"] },
+  ]) {
+    assert.equal(shouldShowVacuumControllerError({ ...healthyVacuum, ...fault }, null, null), true);
+  }
+  assert.equal(shouldShowVacuumControllerError(healthyVacuum, "503 unavailable", null), true);
+  assert.equal(shouldShowVacuumControllerError(healthyVacuum, "404 Not Found", null), true);
+  assert.equal(shouldShowVacuumControllerError(healthyVacuum, null, "power"), true);
+});
+
+test("vacuum icon clears its error after a healthy recovery", () => {
+  assert.equal(shouldShowVacuumControllerError(healthyVacuum, null, null), false);
+});
+
+test("stale or missing readings cannot make the vacuum icon healthy", () => {
+  const now = Date.now();
+  assert.equal(vacuumReadingsAreFresh(new Date(now - 5001).toISOString(), now), false);
+  assert.equal(vacuumReadingsAreFresh(new Date(now - 5000).toISOString(), now), true);
+  assert.equal(vacuumReadingsAreFresh(null, now), false);
+  assert.equal(vacuumReadingsAreFresh("invalid", now), false);
+  assert.equal(vacuumReadingsAreFresh(new Date(now + 2000).toISOString(), now), false);
+  assert.equal(shouldShowVacuumControllerError({ ...healthyVacuum, updated_at: new Date(now - 6000).toISOString() }, null, null), true);
+});
+
+test("vacuum status policy is independent of scanner production mode", () => {
+  assert.equal(shouldShowVacuumControllerError({ ...healthyVacuum, is_production: false }, null, null), false);
+  assert.equal(shouldShowVacuumControllerError(healthyVacuum, null, null), false);
+});
 
 function panelDisabled(vacuumEnabled, vacuumReady, overrides = {}) {
   return shouldDisableScanPanel({
