@@ -444,6 +444,7 @@ export const zhCN: Partial<TranslationTable> = {
   "validation.outputPrefix.placeholder": "时间戳前的可选文本",
   "validation.outputPrefix.help": "插入到 CSV 和 PNG 文件名的时间戳之前。留空则保持默认文件名。",
   "validation.autoDownload.error": "自动下载：{detail}",
+  "validation.autoDownload.mergedReplaced": "已用合并后的图像替换自动下载的文件：{filename}",
   "validation.downloadCsv": "下载 CSV",
   "validation.downloadCsv.fetching": "正在获取 CSV…",
   "validation.downloadCsv.title": "将最近扫描的数据下载为 CSV",

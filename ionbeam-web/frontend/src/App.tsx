@@ -1623,6 +1623,11 @@ export function App() {
                         mergedFigureUrl={
                           actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
                         }
+                        liveFigureUrl={
+                          lastLiveScanImage && lastLiveScanImage.kind === actionScanKind
+                            ? lastLiveScanImage.imageUrl
+                            : null
+                        }
                         kindOverride={actionScanKind}
                         validationSummaryHost={validationSummaryHost}
                       />

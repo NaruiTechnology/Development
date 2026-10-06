@@ -3587,6 +3587,29 @@ body {
   cursor: not-allowed;
 }
 
+.canvas-toolbox__action--pending {
+  border-radius: 3px;
+  animation: canvas-save-pending 1.4s ease-in-out infinite;
+}
+
+@keyframes canvas-save-pending {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 2px var(--c-success, #45c982);
+  }
+  50% {
+    opacity: 0.5;
+    box-shadow: 0 0 6px 2px var(--c-success, #45c982);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-toolbox__action--pending {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--c-success, #45c982);
+  }
+}
+
 .canvas-toolbox__field {
   display: inline-flex;
   align-items: center;

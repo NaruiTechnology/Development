@@ -503,6 +503,7 @@ export const en = {
   "validation.outputPrefix.placeholder": "Optional text before timestamp",
   "validation.outputPrefix.help": "Inserted before the timestamp in CSV and PNG filenames. Leave empty to keep the default name.",
   "validation.autoDownload.error": "Auto download: {detail}",
+  "validation.autoDownload.mergedReplaced": "Auto-downloaded image replaced with merged edits: {filename}",
   "validation.downloadCsv": "Download CSV",
   "validation.downloadCsv.fetching": "Fetching CSV...",
   "validation.downloadCsv.title": "Download the most recent scan's data as CSV",

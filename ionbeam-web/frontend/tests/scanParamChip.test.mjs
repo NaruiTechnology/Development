@@ -61,3 +61,46 @@ test("pixel dwell switches between ns and µs", () => {
   assert.equal(formatPixelDwell(0), "125.0 ns/px");
   assert.equal(formatPixelDwell(7), "1.00 µs/px");
 });
+
+test("burned-in chip segments match the on-screen label/value text", async () => {
+  const { scanParamChipSegments } = await import("../.test-dist/lib/scanParamChip.js");
+  const summary = summarizeScanParams(
+    "vector",
+    { pattern: "default", vector_resolution: 1024, scan_path: "horizontal_sawtooth", dwell: 2, latency_bytes: 8192 },
+    { beamEnergyEv: 1000 },
+  );
+  const dict = {
+    "canvas.scanParams.beamEnergy": "Beam",
+    "canvas.scanParams.resolution": "Res",
+    "canvas.scanParams.scanPath": "Path",
+    "canvas.scanParams.dwell": "Dwell",
+    "canvas.scanParams.latency": "Latency",
+    "vector.scanPath.horizontal_sawtooth": "Horizontal sawtooth",
+  };
+  const segments = scanParamChipSegments(summary.items, (k) => dict[k] ?? k);
+  assert.deepEqual(segments, [
+    "Beam 1000 eV",
+    "Res 1024×1024",
+    "Path Horizontal sawtooth",
+    "Dwell 2 (375.0 ns/px)",
+    "Latency 8192 B",
+  ]);
+});
+
+test("chip segments wrap greedily without splitting a segment", async () => {
+  const { wrapScanParamSegments } = await import("../.test-dist/lib/scanParamChip.js");
+  const measure = (s) => s.length;
+  assert.deepEqual(wrapScanParamSegments(["aaaa", "bbbb", "cccc"], 11, measure, " "), ["aaaa bbbb", "cccc"]);
+  assert.deepEqual(wrapScanParamSegments(["a-very-long-segment", "b"], 5, measure, " "), ["a-very-long-segment", "b"]);
+  assert.deepEqual(wrapScanParamSegments([], 10, measure), []);
+});
+
+test("small scans are upscaled by an integer factor before overlays are burned in", async () => {
+  const { exportScaleFactor } = await import("../.test-dist/lib/scanParamChip.js");
+  assert.equal(exportScaleFactor(128, 128), 8);
+  assert.equal(exportScaleFactor(256, 256), 4);
+  assert.equal(exportScaleFactor(300, 300), 4);
+  assert.equal(exportScaleFactor(1024, 1024), 1);
+  assert.equal(exportScaleFactor(2048, 2048), 1);
+  assert.equal(exportScaleFactor(0, 0), 1);
+});

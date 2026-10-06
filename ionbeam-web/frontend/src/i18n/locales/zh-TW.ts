@@ -453,6 +453,7 @@ export const zhTW: Partial<TranslationTable> = {
   "validation.outputPrefix.placeholder": "時間戳前的可選文字",
   "validation.outputPrefix.help": "插入到 CSV 和 PNG 檔名的時間戳之前。留空則保持預設檔名。",
   "validation.autoDownload.error": "自動下載：{detail}",
+  "validation.autoDownload.mergedReplaced": "已用合併後的影像取代自動下載的檔案：{filename}",
   "validation.downloadCsv": "下載 CSV",
   "validation.downloadCsv.fetching": "正在取得 CSV…",
   "validation.downloadCsv.title": "將最近掃描的資料下載為 CSV",

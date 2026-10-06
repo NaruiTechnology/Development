@@ -33,7 +33,7 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { markScanPerformanceCanvasReady } from "../lib/scanPerformance";
 import { clampImagePane } from "../lib/imagePanelLayout";
-import type { ScanParamItem } from "../lib/scanParamChip";
+import { drawScanParamChip, exportScaleFactor, type ScanParamItem } from "../lib/scanParamChip";
 import { apiUrl } from "../lib/backendUrl";
 import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/grayScaleSelection";
 import { Icon } from "./Icon";
@@ -295,6 +295,7 @@ export function ImageCanvas({
   const [mergedFigureUrl, setMergedFigureUrl] = useState<string | null>(null);
   const [mergedFigureFilename, setMergedFigureFilename] = useState<string | null>(null);
   const [mergeConfirmOpen, setMergeConfirmOpen] = useState(false);
+  const [acknowledgedAnnotationsByPane, setAcknowledgedAnnotationsByPane] = useState<Record<number, CanvasAnnotation[]>>({});
   const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
@@ -944,24 +945,48 @@ export function ImageCanvas({
       const ctx = exportCanvas.getContext("2d");
       if (!ctx) throw new Error(t("canvas.editor.merge.error"));
 
+      // Low-resolution scans are enlarged by an integer factor (no smoothing,
+      // pixels stay crisp blocks) so annotation labels and the parameter chip
+      // stay proportionate instead of covering the whole image.
+      const drawScaled = (source: CanvasImageSource, w: number, h: number) => {
+        const scale = exportScaleFactor(w, h);
+        exportCanvas.width = w * scale;
+        exportCanvas.height = h * scale;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(source, 0, 0, exportCanvas.width, exportCanvas.height);
+      };
       if (archivedImageUrl || displayedFigureUrl) {
         const image = await loadImage(archivedImageUrl ?? displayedFigureUrl!);
-        exportCanvas.width = image.naturalWidth || image.width;
-        exportCanvas.height = image.naturalHeight || image.height;
-        ctx.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
+        drawScaled(image, image.naturalWidth || image.width, image.naturalHeight || image.height);
       } else if (sourceCanvas) {
-        exportCanvas.width = sourceCanvas.width;
-        exportCanvas.height = sourceCanvas.height;
-        ctx.drawImage(sourceCanvas, 0, 0);
+        drawScaled(sourceCanvas, sourceCanvas.width, sourceCanvas.height);
       } else {
         throw new Error(t("canvas.editor.merge.error"));
       }
 
       drawCanvasAnnotations(ctx, annotations, exportCanvas.width, exportCanvas.height);
+      // Burn the scan-parameter chip into the merged PNG so the file carries
+      // the settings the scan ran with. A source that is already a merged
+      // figure has the chip in its pixels (and no params registered for an
+      // archived merged URL), so it is never stamped twice.
+      const paramItems = archivedImageUrl
+        ? archivedScanParams.get(archivedImageUrl) ?? null
+        : mergedFigureUrl
+          ? null
+          : liveScanParamItems;
+      if (paramItems?.length) {
+        drawScanParamChip(
+          ctx,
+          paramItems,
+          (key) => t(key as TranslationKey),
+          exportCanvas.width,
+          exportCanvas.height,
+        );
+      }
       const mergedUrl = exportCanvas.toDataURL("image/png");
       if (archivedImageUrl && (kind === "raster" || kind === "vector")) {
-        const archivedParams = archivedScanParams.get(archivedImageUrl);
-        if (archivedParams) rememberScanParams(mergedUrl, archivedParams);
+        // The chip is now part of the merged pixels; do not register it for
+        // the merged URL or the overlay would be drawn on top of it again.
         onPaneImageChange?.(kind, mergePane, mergedUrl);
       } else {
         setMergedFigureUrl(mergedUrl);
@@ -1097,10 +1122,13 @@ export function ImageCanvas({
           <div className="canvas-toolbox__cluster">
               <button
                 type="button"
-                className="canvas-toolbox__action"
+                className={`canvas-toolbox__action${annotations.length > 0 && annotations !== acknowledgedAnnotationsByPane[selectedPane] && !mergeConfirmOpen ? " canvas-toolbox__action--pending" : ""}`}
               disabled={!annotations.length}
                 title={t("canvas.editor.merge")}
-                onClick={() => setMergeConfirmOpen(true)}
+                onClick={() => {
+                  setAcknowledgedAnnotationsByPane((current) => ({ ...current, [selectedPane]: annotations }));
+                  setMergeConfirmOpen(true);
+                }}
               >
               <Icon name="save" tone="success" />
             </button>
@@ -1341,7 +1369,7 @@ export function ImageCanvas({
             }}
           />
           {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} />}
-          {liveScanParamItems && <ScanParamChip items={liveScanParamItems} t={t} />}
+          {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
@@ -1986,7 +2014,8 @@ function LiveAxisOverlay({
 /**
  * Low-opacity summary of the settings a scan ran with, drawn over the image
  * in the annotation layer. It never takes pointer events, so the editor
- * tools underneath keep working, and it is not burned into merged figures.
+ * tools underneath keep working. Merging edits burns the same summary into
+ * the merged PNG (see drawScanParamChip), after which this overlay is hidden.
  */
 function ScanParamChip({
   items,
