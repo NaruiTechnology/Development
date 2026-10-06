@@ -1,4 +1,4 @@
-"""Install Google Chrome when absent and register it as the default browser."""
+"""Install Google Chrome, make it the default browser and pin it to the dock."""
 import asyncio
 import shlex
 
@@ -47,9 +47,37 @@ fi
 sudo install -d -m 0755 "$(dirname POLICY_PATH)"
 printf '{"PromptForDownloadLocation":true}\n' | sudo tee POLICY_PATH >/dev/null
 sudo chmod 0644 POLICY_PATH
+# Run as the desktop user, never through sudo: favorites belong to that user.
+# Do this even when Chrome was already installed, preserving all other pins.
+python3 - <<'PIN_CHROME'
+import ast
+import os
+import subprocess
+
+if not os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+    bus = "/run/user/{}/bus".format(os.getuid())
+    if os.path.exists(bus):
+        os.environ["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=" + bus
+
+def favorites():
+    value = subprocess.check_output(
+        ["gsettings", "get", "org.gnome.shell", "favorite-apps"], text=True).strip()
+    # GVariant prints an empty string array with its type annotation.
+    return ast.literal_eval(value.removeprefix("@as "))
+
+desktop_id = "google-chrome.desktop"
+apps = favorites()
+if desktop_id not in apps:
+    subprocess.run(
+        ["gsettings", "set", "org.gnome.shell", "favorite-apps",
+         repr(apps + [desktop_id])], check=True)
+if desktop_id not in favorites():
+    raise RuntimeError("Google Chrome could not be pinned to the toolbox panel")
+print("Google Chrome is pinned to the toolbox panel")
+PIN_CHROME
 '''.replace("POLICY_PATH", shlex.quote(policyPath))
             command = "bash -c {}".format(shlex.quote(script))
-            self.info("[{}] checking/installing Google Chrome and configuring download prompts"
+            self.info("[{}] checking/installing Google Chrome, configuring download prompts and pinning to the toolbox panel"
                       .format(type(self).__name__))
             try:
                 self._success = await asyncio.wait_for(
