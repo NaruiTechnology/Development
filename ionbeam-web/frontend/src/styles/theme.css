@@ -1744,6 +1744,16 @@ body {
 }
 
 .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.validation-download-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+.validation-download-controls > .btn,
+.validation-download-controls > .app-switch {
+  flex: 0 0 auto;
+}
 .scan-execution-settings { flex: 1 0 100%; min-width: 0; margin-bottom: 6px; }
 .scan-primary-controls { display: flex; flex: 1 0 100%; min-width: 0; gap: 6px; flex-wrap: nowrap; }
 .scan-primary-controls > .btn { flex: 1 1 0; min-width: 0; justify-content: center; }

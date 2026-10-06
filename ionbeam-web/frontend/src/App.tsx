@@ -177,6 +177,10 @@ export function App() {
   const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
+  const previewMode = useAppSelector((s) => s.scan.preview);
+  useEffect(() => {
+    setSaveResultsCollapsed(previewMode);
+  }, [previewMode]);
   // "<kind>:<scanId>" of the scan whose image currently occupies the target pane.
   const completedImageRecordedScanRef = useRef<string | null>(null);
   // Latest image of that scan, so later images of the same scan can replace it.
@@ -1609,6 +1613,7 @@ export function App() {
                       <button
                         type="button"
                         className="card__collapse-btn"
+                        disabled={previewMode}
                         aria-expanded={!saveResultsCollapsed}
                         aria-label={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
                         title={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
@@ -1620,6 +1625,7 @@ export function App() {
                     <div hidden={saveResultsCollapsed}>
                       <ValidationPanel
                         disabled={panelDisabled}
+                        previewMode={previewMode}
                         mergedFigureUrl={
                           actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
                         }

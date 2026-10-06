@@ -995,11 +995,14 @@ export function ImageCanvas({
       setCommentDraft(null);
       setContextMenu(null);
       setEditorError(null);
+      // Close the in-app confirmation before asynchronous upload/download work
+      // can open a browser-owned Save dialog. The browser dialog is not part
+      // of this modal's lifecycle and may be cancelled independently.
+      setMergeConfirmOpen(false);
       if (!archivedImageUrl && (kind === "raster" || kind === "vector")) {
         onMergedFigureChangeRef.current?.(kind, mergedUrl);
         await uploadMergedFigure(kind, mergedUrl, mergedFigureFilename);
       }
-      setMergeConfirmOpen(false);
     } catch (error: any) {
       setEditorError(error?.message ?? t("canvas.editor.merge.error"));
     } finally {

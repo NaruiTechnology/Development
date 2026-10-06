@@ -38,6 +38,7 @@ import { TransformCard } from "./TransformCard";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ROIActionWedges } from "./ROIActionWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
+import { HelpPopover } from "./HelpPopover";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
@@ -791,6 +792,9 @@ export function ScanControls({
               {preview && <Icon name="alertTriangle" tone="warn" />}
               <span>{t("scan.preview")}</span>
             </label>
+            <HelpPopover title={t("scan.preview.help.title")} ariaLabel={t("scan.preview.help.aria")}>
+              {t("scan.preview.help.body")}
+            </HelpPopover>
             <span
               className="scan-busy"
               data-visible={busy ? "true" : "false"}
@@ -921,9 +925,12 @@ export function ScanControls({
           onChange={(event) => dispatch(setPreview(event.target.checked))}
         />
         <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-        {preview && <Icon name="alertTriangle" tone="warn" />}
-        <span>{t("scan.preview")}</span>
+          {preview && <Icon name="alertTriangle" tone="warn" />}
+          <span>{t("scan.preview")}</span>
           </label>
+          <HelpPopover title={t("scan.preview.help.title")} ariaLabel={t("scan.preview.help.aria")}>
+            {t("scan.preview.help.body")}
+          </HelpPopover>
           {kind === "vector" && (
             <span
               className="scan-busy"

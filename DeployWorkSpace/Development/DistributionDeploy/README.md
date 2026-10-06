@@ -119,6 +119,7 @@ DistributionDeploy/
     ├── verifyGlasgowService_state.py
     ├── launchIonbeamWebBackend_state.py
     ├── launchIonbeamWebFrontend_state.py
+    ├── installGoogleChrome_state.py      # Install/register Chrome and prompt for download location
     │
     │   # Custom-DoWork states (need branching or iteration):
     ├── verifyDistribution_state.py      # Re-verifies the extracted tree against the manifest

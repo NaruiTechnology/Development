@@ -34,35 +34,31 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { appendScanParamCaption, burnScanParamChip } from "../lib/scanParamChip";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
+import {
+  chooseExportFolder,
+  ensureFolderWritable,
+  loadExportFolder,
+  writeFileToFolder,
+  type ExportFolderHandle,
+} from "../lib/exportFolder";
 import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
 type DbFlowState = "checking" | "ready" | "disabled" | "saving" | "saved" | "error";
-type DirectoryPickerOptions = { startIn?: "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos" };
-type DirectoryHandle = {
-  name: string;
-  getFileHandle: (
-    name: string,
-    options?: { create?: boolean }
-  ) => Promise<{
-    createWritable: () => Promise<{
-      write: (data: Blob) => Promise<void>;
-      close: () => Promise<void>;
-    }>;
-  }>;
-};
-
 const OUTPUT_PREFIX_STORAGE_KEY = "ionbeam:downloadOutputPrefix";
+const SCAN_EXPORT_FOLDER = "scan-figures";
 const DEFAULT_DOWNLOAD_PATH_LABEL = defaultDownloadPathLabel();
 
 export function ValidationPanel({
   disabled = false,
+  previewMode = false,
   mergedFigureUrl = null,
   liveFigureUrl = null,
   kindOverride = null,
   validationSummaryHost = null,
 }: {
   disabled?: boolean;
+  previewMode?: boolean;
   mergedFigureUrl?: string | null;
   /** PNG data URL of the live canvas for the last completed scan. */
   liveFigureUrl?: string | null;
@@ -93,7 +89,7 @@ export function ValidationPanel({
   const [autoDownload, setAutoDownload] = useState(false);
   const [dbFlowState, setDbFlowState] = useState<DbFlowState>("checking");
   const [dbFlowErr, setDbFlowErr] = useState<string | null>(null);
-  const [downloadDir, setDownloadDir] = useState<DirectoryHandle | null>(null);
+  const [downloadDir, setDownloadDir] = useState<ExportFolderHandle | null>(null);
   // downloadDirLabel is set lazily after the first translation read so
   // we don't end up showing the English placeholder briefly during the
   // initial mount in a Chinese-locale session.
@@ -136,6 +132,23 @@ export function ValidationPanel({
   const lastAutoFigureRef = useRef<{ kind: "raster" | "vector"; filename: string } | null>(null);
   const lastReplacedMergedRef = useRef<string | null>(null);
   const [mergedReplaced, setMergedReplaced] = useState<string | null>(null);
+  const downloadControlsDisabled = disabled || previewMode;
+
+  useEffect(() => {
+    if (previewMode) setAutoDownload(false);
+  }, [previewMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadExportFolder(SCAN_EXPORT_FOLDER).then((handle) => {
+      if (cancelled || !handle) return;
+      setDownloadDir(handle);
+      setDownloadDirLabel(handle.name || DEFAULT_DOWNLOAD_PATH_LABEL);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const haveStreamData =
     (kind === "raster" && rasterCursor > 0) ||
@@ -147,20 +160,15 @@ export function ValidationPanel({
   const dbFlowReadyPhase = phase === "completed";
 
   async function selectDownloadFolder() {
-    if (disabled) return;
+    if (downloadControlsDisabled) return;
     setAutoErr(null);
-    const picker = (window as any).showDirectoryPicker as
-      | ((options?: DirectoryPickerOptions) => Promise<DirectoryHandle>)
-      | undefined;
-    if (!picker) {
-      setAutoErr(t("validation.folder.unavailable"));
-      setDownloadDir(null);
-      setDownloadDirLabel(DEFAULT_DOWNLOAD_PATH_LABEL);
-      return;
-    }
-
     try {
-      const dir = await picker({ startIn: "downloads" });
+      const dir = await chooseExportFolder(SCAN_EXPORT_FOLDER, downloadDir);
+      if (!dir) return;
+      if (!(await ensureFolderWritable(dir))) {
+        setAutoErr(t("validation.folder.unavailable"));
+        return;
+      }
       setDownloadDir(dir);
       setDownloadDirLabel(dir.name || t("validation.folder.default"));
     } catch (e: any) {
@@ -224,26 +232,26 @@ export function ValidationPanel({
           {t("validation.outputPrefix.help")}
         </span>
       </div>
-      <div className="button-row" style={{ marginTop: 8, alignItems: "center" }}>
-        <button className="btn btn--ghost" disabled={disabled} onClick={selectDownloadFolder}>
+      <span className="muted" style={{ display: "block", fontSize: 12, marginTop: 8 }}>
+        {downloadDirLabel}
+      </span>
+      <div className="validation-download-controls" style={{ marginTop: 8 }}>
+        <button className="btn btn--ghost" disabled={downloadControlsDisabled} onClick={selectDownloadFolder}>
           <Icon name="download" tone="accent" />
           {t("validation.selectFolder")}
         </button>
-        <span className="muted" style={{ fontSize: 12 }}>
-          {downloadDirLabel}
-        </span>
-        <label className="checkbox vacuum-switch app-switch" style={{ padding: 0 }}>
+        <label className="checkbox vacuum-switch app-switch" style={{ padding: 0, marginRight: 5 }}>
           <input
             type="checkbox"
             checked={autoDownload}
-            disabled={disabled}
+            disabled={downloadControlsDisabled}
             onChange={(e) => {
               setAutoDownload(e.target.checked);
               setAutoErr(null);
             }}
           />
           <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-          {t("validation.autoDownload")}
+          <span style={{ paddingRight: 5 }}>{t("validation.autoDownload")}</span>
         </label>
       </div>
       {mergedReplaced && !autoErr && (
@@ -393,10 +401,7 @@ export function ValidationPanel({
       downloadBlob(blob, filename);
       return;
     }
-    const fileHandle = await downloadDir.getFileHandle(filename, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(blob);
-    await writable.close();
+    await writeFileToFolder(downloadDir, filename, blob);
   }
 
   async function saveResultToDb() {
@@ -437,7 +442,7 @@ export function ValidationPanel({
   }
 
   useEffect(() => {
-    if (disabled || !autoDownload || phase !== "completed" || !haveAnyData) return;
+    if (disabled || previewMode || !autoDownload || phase !== "completed" || !haveAnyData) return;
 
     const key = [
       scanKind,
@@ -497,12 +502,12 @@ export function ValidationPanel({
 
     void runAutoDownload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled, autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode, outputPrefix]);
+  }, [disabled, previewMode, autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode, outputPrefix]);
 
   // "Save merged edits" was clicked after the auto download: the FTP copy is
   // replaced by ImageCanvas; replace the auto-downloaded PNG here as well.
   useEffect(() => {
-    if (disabled || !autoDownload || !mergedFigureUrl) return;
+    if (disabled || previewMode || !autoDownload || !mergedFigureUrl) return;
     const last = lastAutoFigureRef.current;
     if (!last || last.kind !== scanKind) return;
     if (lastReplacedMergedRef.current === mergedFigureUrl) return;
@@ -510,7 +515,7 @@ export function ValidationPanel({
       if (mountedRef.current) setAutoErr(e?.message ?? String(e));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled, autoDownload, mergedFigureUrl, scanKind]);
+  }, [disabled, previewMode, autoDownload, mergedFigureUrl, scanKind]);
 
   useEffect(() => {
     if (disabled || dbFlowState === "checking" || dbFlowState === "disabled" || !dbFlowReadyPhase || !haveAnyData) return;

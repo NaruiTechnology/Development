@@ -572,6 +572,16 @@
             }
         },
 	{
+	    "installGoogleChrome": {
+		"skip": false,
+		"transactionComplete": false,
+		"actionData": {
+		    "downloadPolicyPath": "/etc/opt/chrome/policies/managed/iobeam-downloads.json"
+		},
+		"timeout": 900.0
+	    }
+	},
+	{
 	    "launchUI": {
 		"skip": false,
 		"transactionComplete": false,
