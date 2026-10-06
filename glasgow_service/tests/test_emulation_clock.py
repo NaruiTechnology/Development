@@ -28,3 +28,35 @@ def test_realtime_sleep_exits_when_runner_stops():
     runner.stop()
     with pytest.raises(RuntimeError, match="clock stopped"):
         runner.sleep(0.01)
+
+
+def test_accelerated_catchup_yields_between_short_rig_lock_intervals(monkeypatch):
+    clock = VirtualClock()
+    runner = RealtimeRunner(clock, speed=20)
+    batches = []
+    yielded_at = []
+    advance = clock.advance
+
+    def record_advance(seconds):
+        batches.append(seconds)
+        advance(seconds)
+
+    monkeypatch.setattr(clock, "advance", record_advance)
+    monkeypatch.setattr("glasgow_service.emulation.clock.time.sleep",
+                        lambda _: yielded_at.append(clock.now()))
+    # A 250 ms host delay at 20x speed used to hold the rig lock for
+    # five simulated seconds in one uninterruptible integration batch.
+    runner._advance(0.25 * runner.speed)
+    assert clock.now() == pytest.approx(5)
+    assert max(batches) <= 0.05
+    assert len(yielded_at) == len(batches)
+    assert yielded_at == sorted(yielded_at)
+
+
+def test_accelerated_catchup_stops_between_batches(monkeypatch):
+    clock = VirtualClock()
+    runner = RealtimeRunner(clock, speed=20)
+    monkeypatch.setattr("glasgow_service.emulation.clock.time.sleep",
+                        lambda _: runner._stop.set())
+    runner._advance(5)
+    assert clock.now() == pytest.approx(0.05)

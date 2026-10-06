@@ -105,7 +105,19 @@ class RealtimeRunner:
             # GIL for seconds integrating physics.
             elapsed = min(now - last, 0.25)
             last = now
-            self.clock.advance(elapsed * self.speed)
+            self._advance(elapsed * self.speed)
+
+    def _advance(self, seconds: float) -> None:
+        # Each advance holds the rig lock while integrating the whole plant.
+        # At accelerated speeds, catching up in one batch can starve GPIO/ADC
+        # reads and the controller long enough to trip its wall-time watchdog.
+        # Release the lock and yield between small batches, including when
+        # the host resumes after a scheduling delay.
+        while seconds > 1e-12 and not self._stop.is_set():
+            step = min(seconds, 0.05)
+            self.clock.advance(step)
+            seconds -= step
+            time.sleep(0)
 
     def sleep(self, seconds: float) -> None:
         """Wait until the background runner advances the requested time.
