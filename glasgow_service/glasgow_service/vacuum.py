@@ -283,6 +283,10 @@ def load_runtime_vacuum_config(path: Path) -> VacuumConfig:
         if not isinstance(production, bool):
             raise ValueError("stream configuration IsProduction must be true or false")
         payload["IsProduction"] = production
+    # Runtime mode is selected by the scanner, not a stale simulator-tool flag.
+    # GPIO-only profiles still use the simulator via select_execution_mode.
+    if enabled:
+        payload["Simulate"] = False
     return VacuumConfig.model_validate(payload)
 
 

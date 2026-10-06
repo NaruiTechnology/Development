@@ -14,7 +14,8 @@ export function shouldShowVacuumControllerError(
 ): boolean {
   return pending !== null || error !== null || status === null
     || status.connected !== true || status.running !== true
-    || status.isVacuumSystemReady !== true || status.cascade_stopped === true
+    || (status.is_production !== false && status.isVacuumSystemReady !== true)
+    || status.cascade_stopped === true
     || Boolean(status.last_error) || (status.alarms?.length ?? 0) > 0
     || !vacuumReadingsAreFresh(status.updated_at);
 }

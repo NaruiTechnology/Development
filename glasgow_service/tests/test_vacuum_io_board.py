@@ -591,13 +591,28 @@ def test_production_api_fails_startup_without_sbc_hardware(tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize("scan_production", [False, True])
-def test_enabled_control_selects_mode_from_scan_production(tmp_path, monkeypatch, scan_production):
+@pytest.mark.parametrize("simulate", [False, True])
+def test_runtime_ignores_stale_simulator_flag(tmp_path, monkeypatch, scan_production, simulate):
+    source = tmp_path / "vacuum.json"
+    source.write_text(json.dumps(_payload(Enable=True, IsProduction=True, Simulate=simulate)))
+    stream = tmp_path / "streamData.json"
+    stream.write_text(json.dumps({"IsProduction": scan_production}))
+    monkeypatch.setenv("GLASGOW_CONFIG", str(stream))
+    config = load_runtime_vacuum_config(source)
+    assert config.is_production is scan_production
+    assert config.simulate is False
+    assert config.uses_emulator is (not scan_production)
+
+
+@pytest.mark.parametrize("scan_production", [False, True])
+@pytest.mark.parametrize("simulate", [False, True])
+def test_enabled_control_selects_mode_from_scan_production(tmp_path, monkeypatch, scan_production, simulate):
     from fastapi.testclient import TestClient
     from glasgow_service.sbc_vacuum_app import create_app
 
     _forbid_hardware(monkeypatch)
     source = tmp_path / "vacuum.json"
-    source.write_text(json.dumps(_payload(Enable=True, IsProduction=False, Simulate=False)))
+    source.write_text(json.dumps(_payload(Enable=True, IsProduction=False, Simulate=simulate)))
     stream = tmp_path / "streamData.json"
     stream.write_text(json.dumps({"IsProduction": scan_production}))
     monkeypatch.setenv("GLASGOW_CONFIG", str(stream))

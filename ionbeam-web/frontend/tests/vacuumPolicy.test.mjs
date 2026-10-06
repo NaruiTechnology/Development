@@ -46,6 +46,15 @@ test("vacuum status policy is independent of scanner production mode", () => {
   assert.equal(shouldShowVacuumControllerError(healthyVacuum, null, null), false);
 });
 
+test("emulator pump-down is healthy while actual emulator faults remain visible", () => {
+  const pumping = { ...healthyVacuum, is_production: false, isVacuumSystemReady: false };
+  assert.equal(shouldShowVacuumControllerError(pumping, null, null), false);
+  for (const fault of [{ connected: false }, { running: false },
+    { cascade_stopped: true }, { last_error: "emulator fault" }, { alarms: ["E-stop"] }]) {
+    assert.equal(shouldShowVacuumControllerError({ ...pumping, ...fault }, null, null), true);
+  }
+});
+
 function panelDisabled(vacuumEnabled, vacuumReady, overrides = {}) {
   return shouldDisableScanPanel({
     scanActive: false,
