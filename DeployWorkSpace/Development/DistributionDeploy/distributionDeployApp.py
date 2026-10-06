@@ -71,6 +71,11 @@ def main():
     parser.add_argument(
         '--mobility', action='store_true', dest='mobility',
         help="Deploy the mobility-only frontend variant")
+    parser.add_argument(
+        '--secrets-file', action='store', dest='secretsFile', default=None, metavar='FILE',
+        help="Prepared KEY=VALUE file with credentials (FTP, database, token) to store in "
+             "~/.config/iobeam/secrets.env; values in it replace stored ones. Lets a fresh "
+             "host deploy without interactive questions.")
 
     args = parser.parse_args()
     jsonpath = args.jsonfile
@@ -83,6 +88,17 @@ def main():
         else:
             raise FileNotFoundError(
                 f"Config JSON not found at '{args.jsonfile}' or '{alt}'.")
+
+    if args.secretsFile:
+        seed = os.path.abspath(os.path.expanduser(args.secretsFile))
+        if not os.path.isfile(seed):
+            print("Secrets file not found: {}".format(seed), file=sys.stderr)
+            return 1
+        if os.name == "posix" and os.stat(seed).st_mode & 0o077:
+            print("WARNING: {} is readable by other users; chmod 600 it, and delete it after "
+                  "the deployment.".format(seed), file=sys.stderr)
+        # Read by the provisionSecrets action (see workstates/provisionSecrets_state.py).
+        os.environ["IOBEAM_SECRETS_SEED"] = seed
 
     config = AutomationConfig(jsonpath)
     if args.deployRoot is not None:

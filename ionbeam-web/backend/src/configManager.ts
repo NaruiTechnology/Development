@@ -36,6 +36,12 @@ import { exec } from "node:child_process";
 import { isDeepStrictEqual, promisify } from "node:util";
 
 import { config } from "./config";
+import {
+  ADMIN_SECRET_BINDINGS,
+  STREAM_SECRET_BINDINGS,
+  externalizeSecrets,
+  type SecretBinding,
+} from "./secretStore";
 
 const execAsync = promisify(exec);
 
@@ -142,6 +148,20 @@ async function readConfigFileWithBackup(configPath: string): Promise<ConfigInfo>
     );
   }
 
+  // One-time migration for installs that predate the secrets file: move any
+  // literal credential into it and rewrite the JSON with placeholders, so
+  // the config endpoints never serve a password.
+  const bindings = configPath === config.adminConfigPath ? ADMIN_SECRET_BINDINGS : STREAM_SECRET_BINDINGS;
+  // The live file is what the app has been using, so its values win.
+  const sanitized = externalizeSecrets(data, bindings, { overwrite: true, credentialsOnly: true });
+  if (!isDeepStrictEqual(sanitized, data)) {
+    data = sanitized;
+    raw = JSON.stringify(sanitized, null, 4) + "\n";
+    await atomicWrite(configPath, raw);
+    console.warn(`[configManager] moved literal credentials from ${configPath} to the secrets file`);
+  }
+  await sanitizeBackup(backupPath, bindings);
+
   // Lazy backup creation. Only on first read of a config that has no
   // sibling backup yet — never overwrite an existing backup, even if
   // the live file has since diverged.
@@ -177,16 +197,27 @@ async function readConfigFileWithBackup(configPath: string): Promise<ConfigInfo>
  * needs to take effect in the FastAPI process.
  */
 export async function writeConfig(data: unknown): Promise<void> {
-  await writeJsonConfig(config.configPath, data, true);
+  await writeJsonConfig(config.configPath, data, true, false, STREAM_SECRET_BINDINGS);
 }
 
 /** Write streamData.json only when its parsed contents actually change. */
 export async function writeConfigIfChanged(data: unknown): Promise<boolean> {
-  return writeJsonConfig(config.configPath, data, true, true);
+  return writeJsonConfig(config.configPath, data, true, true, STREAM_SECRET_BINDINGS);
 }
 
 export async function writeAdminConfig(data: unknown): Promise<void> {
-  await writeJsonConfig(config.adminConfigPath, data, false);
+  await writeJsonConfig(config.adminConfigPath, withoutEquipment(data), false, false, ADMIN_SECRET_BINDINGS);
+}
+
+/**
+ * Equipment is stored only in the database (syncEquipmentToDb); keeping a
+ * copy in IobeamAdmin.json let the Settings table show stale rows when the
+ * database was unreachable.
+ */
+export function withoutEquipment(data: unknown): unknown {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return data;
+  const { equipment: _equipment, equipments: _equipments, ...rest } = data as Record<string, unknown>;
+  return rest;
 }
 
 async function writeJsonConfig(
@@ -194,10 +225,14 @@ async function writeJsonConfig(
   data: unknown,
   useStrictMode: boolean,
   skipIfUnchanged = false,
+  secretBindings: SecretBinding[] = [],
 ): Promise<boolean> {
   if (useStrictMode) {
     validateAdcTiming(data);
   }
+  // Credentials typed into the settings UI go to the owner-only secrets
+  // file; the JSON on disk keeps only ${VAR} placeholders.
+  data = externalizeSecrets(data, secretBindings);
 
   // Reject silly-large payloads up front. The Express body parser is
   // already capped at 16 MB; this is a tighter check on what we'll
@@ -229,6 +264,22 @@ async function writeJsonConfig(
 
   await atomicWrite(configPath, serialized);
   return true;
+}
+
+/** Rewrite an existing *_default.json backup that still holds literal credentials. */
+async function sanitizeBackup(backupPath: string, bindings: SecretBinding[]): Promise<void> {
+  let backup: unknown;
+  try {
+    backup = JSON.parse(await fsp.readFile(backupPath, "utf8"));
+  } catch {
+    return; // absent or unreadable: nothing to clean (restore reports errors)
+  }
+  // A backup is older than the live configuration: fill gaps only.
+  const sanitized = externalizeSecrets(backup, bindings, { overwrite: false, credentialsOnly: true });
+  if (!isDeepStrictEqual(sanitized, backup)) {
+    await atomicWrite(backupPath, JSON.stringify(sanitized, null, 4) + "\n");
+    console.warn(`[configManager] moved literal credentials from ${backupPath} to the secrets file`);
+  }
 }
 
 async function configFileMatches(configPath: string, data: unknown): Promise<boolean> {
@@ -340,6 +391,16 @@ async function restoreConfigFileFromBackup(
       `backup file is not valid JSON: ${err.message}`,
       500
     );
+  }
+
+  // A backup created by an older release may still hold literal
+  // credentials; move them to the secrets file instead of restoring them.
+  const bindings = configPath === config.adminConfigPath ? ADMIN_SECRET_BINDINGS : STREAM_SECRET_BINDINGS;
+  const sanitized = externalizeSecrets(restoredData, bindings, { overwrite: false, credentialsOnly: true });
+  if (!isDeepStrictEqual(sanitized, restoredData)) {
+    restoredData = sanitized;
+    raw = JSON.stringify(sanitized, null, 4) + "\n";
+    await atomicWrite(backupPath, raw);
   }
 
   if (skipIfUnchanged && await configFileMatches(configPath, restoredData)) {

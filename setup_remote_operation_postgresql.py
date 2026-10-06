@@ -21,6 +21,8 @@ if str(AUTOMATION_PY_ROOT) not in sys.path:
 
 from buildingblocks.decorators_acess_role import requireAdmin  # noqa: E402
 
+import secretstore
+
 DEFAULT_DB_CONFIG = DEVELOPMENT_ROOT / "OperationData" / "Json" / "OperationDataDb.json"
 DEFAULT_SCHEMA_FILE = DEVELOPMENT_ROOT / "OperationData" / "Sql" / "001_schema.sql"
 
@@ -107,7 +109,8 @@ def load_db_defaults(config_path):
         return {}
 
     with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+        # Credentials are ${VAR} references to the secrets file (see secretstore).
+        data = secretstore.expand(json.load(f), strict=False, blank=True)
     return {
         "Host": data.get("Host"),
         "Port": data.get("Port"),

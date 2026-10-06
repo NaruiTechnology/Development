@@ -1380,9 +1380,13 @@ function FtpTab({
   const [passwordVisible, setPasswordVisible] = useState(false);
 
   const enabled = boolField(draft, [...FTP_PATH, "enabled"], true);
-  const host = stringField(draft, [...FTP_PATH, "host"], "localhost");
-  const username = stringField(draft, [...FTP_PATH, "username"], "vboxuser");
-  const password = stringField(draft, [...FTP_PATH, "password"], "ionbeam123");
+  // host/username/password normally hold ${IOBEAM_FTP_*} references to the
+  // server's secrets file. Typing a new value replaces the reference; the
+  // backend moves it into the secrets file when the configuration is saved.
+  const host = stringField(draft, [...FTP_PATH, "host"], "");
+  const username = stringField(draft, [...FTP_PATH, "username"], "");
+  const password = stringField(draft, [...FTP_PATH, "password"], "");
+  const passwordInSecretsFile = /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}$/.test(password);
   const folder = stringField(draft, [...FTP_PATH, "folder"], "/tmp/ftp");
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
@@ -1397,6 +1401,7 @@ function FtpTab({
   return (
     <div className="settings-form">
       <p className="settings-form__hint">{t("settings.ftp.hint")}</p>
+      <p className="settings-form__hint">{t("settings.ftp.secretsHint")}</p>
       {disabled && (
         <p className="settings-form__hint" style={{ color: "var(--c-danger)" }}>
           {t("settings.admin.privilegeRequired")}
@@ -1432,7 +1437,7 @@ function FtpTab({
           label={t("settings.ftp.password")}
           value={password}
           visible={passwordVisible}
-          configured={false}
+          configured={passwordInSecretsFile}
           revealLabel={t("settings.admin.db.password.show")}
           disabled={disabled || !enabled}
           onReveal={() => setPasswordVisible(true)}
@@ -1870,6 +1875,8 @@ function AdminTab({
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
   const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
   const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
+  // Equipment is read from the database only; null while it is reachable.
+  const [equipmentError, setEquipmentError] = useState<string | null>(null);
   const [ftpSource, setFtpSource] = useState<unknown | null>(null);
   const [ftpDraft, setFtpDraft] = useState<unknown | null>(null);
   const [ftpConfigPath, setFtpConfigPath] = useState("");
@@ -1922,6 +1929,9 @@ function AdminTab({
         data = writeAdminDatabaseConnection(data, dbConnection.connection, false);
         setDbPasswordConfigured(dbConnection.connection.password_configured);
       }
+      setEquipmentError(info.equipment_source === "unavailable"
+        ? info.equipment_error || t("settings.admin.equipment.unavailable.unknown")
+        : null);
       setSource(info.data);
       setDraftLocal(data);
       setConfigPath(info.path);
@@ -2504,6 +2514,11 @@ function AdminTab({
 
       {activeSubTab === "equipment" && (
         <>
+          {equipmentError && (
+            <p className="settings-form__hint" role="alert" style={{ color: "var(--c-danger)" }}>
+              {t("settings.admin.equipment.unavailable", { error: equipmentError })}
+            </p>
+          )}
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.equipment")}</h4>
             <div className="button-row">
@@ -2511,7 +2526,7 @@ function AdminTab({
                 type="button"
                 className="btn btn--primary"
                 onClick={exportEquipmentCsv}
-                disabled={busy || equipmentCsvBusy}
+                disabled={busy || equipmentCsvBusy || equipmentError !== null}
                 aria-disabled={!canManageAdminConfig}
                 aria-label={t("settings.admin.equipment.export")}
                 title={t("settings.admin.equipment.export.title")}
@@ -2529,7 +2544,7 @@ function AdminTab({
                   }
                   equipmentCsvInputRef.current?.click();
                 }}
-                disabled={busy || equipmentCsvBusy}
+                disabled={busy || equipmentCsvBusy || equipmentError !== null}
                 aria-disabled={!canManageAdminConfig}
                 aria-label={t("settings.admin.equipment.import")}
                 title={t("settings.admin.equipment.import.title")}
@@ -2554,7 +2569,7 @@ function AdminTab({
                   }
                   addEquipment();
                 }}
-                disabled={busy || equipmentCsvBusy}
+                disabled={busy || equipmentCsvBusy || equipmentError !== null}
                 aria-disabled={!canManageAdminConfig}
                 title={t("settings.admin.equipment.add.title")}
               >
@@ -2566,8 +2581,8 @@ function AdminTab({
           <EquipmentGrid
             equipment={equipmentFromDraft(draft)}
             sourceEquipment={equipmentFromDraft(source)}
-            disabled={busy || equipmentCsvBusy || !canManageAdminConfig}
-            actionDisabled={busy || equipmentCsvBusy}
+            disabled={busy || equipmentCsvBusy || !canManageAdminConfig || equipmentError !== null}
+            actionDisabled={busy || equipmentCsvBusy || equipmentError !== null}
             canManage={canManageAdminConfig}
             onUpdate={updateEquipment}
             onPersist={() => void onSave()}

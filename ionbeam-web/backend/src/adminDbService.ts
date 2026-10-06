@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import { config, type Config } from "./config";
+import { expandPlaceholders } from "./secretStore";
 
 export interface PgConnection {
   host: string;
@@ -59,7 +60,16 @@ export function pgConnectionFromOperationRuntimeConfig(source: Config = config):
 }
 
 export function pgConnectionFromAdminConfig(data: unknown, fallback: PgConnection = pgConnectionFromRuntimeConfig()): PgConnection {
-  const db = readRecord(data, ["Database"]);
+  // IobeamAdmin.json holds ${VAR} placeholders; resolve them from the secrets file.
+  const db = expandPlaceholders(readRecord(data, ["Database"]));
+  // No shared admin server configured (no host and no login resolved, e.g. a
+  // fresh host whose installer had no credentials): use the local admin
+  // database the deployment created, as a whole, rather than mixing the local
+  // login with the shared server's database name.
+  if (!stringValue(db.Host ?? db.host) && !stringValue(db.User ?? db.user ?? db.Username ?? db.username)
+      && !stringValue(db.ConnectionString ?? db.connectionString)) {
+    return { ...fallback };
+  }
   const connectionString = stringValue(db.ConnectionString ?? db.connectionString);
   const parsed = connectionString ? parsePostgresConnectionString(connectionString) : null;
   return {
@@ -86,9 +96,9 @@ export function pgConnectionFromOperationConfig(
   data: unknown,
   fallback: PgConnection = pgConnectionFromOperationRuntimeConfig(),
 ): PgConnection {
-  const nested = readRecord(data, ["Database"]);
+  const nested = expandPlaceholders(readRecord(data, ["Database"]));
   const root = data && typeof data === "object" && !Array.isArray(data)
-    ? (data as Record<string, unknown>)
+    ? expandPlaceholders(data as Record<string, unknown>)
     : {};
   const db = Object.keys(nested).length > 0 ? nested : root;
   const connectionString = stringValue(db.ConnectionString ?? db.connectionString);

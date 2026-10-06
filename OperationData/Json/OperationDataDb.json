@@ -2,11 +2,11 @@
   "Provider": "PostgreSQL",
   "DatabaseName": "operation_data",
   "Schema": "operation_data",
-  "Host": "124.221.175.89",
+  "Host": "${IOBEAM_OPERATION_DB_HOST}",
   "Port": 5432,
-  "User": "deployworkspace",
-  "Password": "DWS_112233",
-  "ConnectionString": "postgresql://deployworkspace:DWS_112233@124.221.175.89:5432/operation_data",
+  "User": "${IOBEAM_OPERATION_DB_USER}",
+  "Password": "${IOBEAM_OPERATION_DB_PASSWORD}",
+  "ConnectionString": "${IOBEAM_OPERATION_DB_URL:-}",
   "SslMode": "",
   "CommandTimeoutMs": 30000
 }

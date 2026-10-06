@@ -7,7 +7,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { expandPlaceholders, loadSecretsIntoEnv } from "./secretStore";
+
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+// Credentials live in the owner-only secrets file (see secretStore.ts), not
+// in .env or tracked JSON. Values already in the environment take precedence.
+loadSecretsIntoEnv();
 
 function bool(v: string | undefined, fallback: boolean): boolean {
   if (v === undefined) return fallback;
@@ -152,7 +157,9 @@ function readAdminDbDefaults(filePath: string): AdminDbDefaults {
   };
 
   try {
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+    const raw = expandPlaceholders(
+      JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>,
+    );
     const db = readRecord(raw, "Database");
     const source = Object.keys(db).length > 0 ? db : raw;
     const connectionString = stringValue(source.ConnectionString ?? source.connectionString);
@@ -189,7 +196,9 @@ function readOperationDbDefaults(filePath: string, fallbackDefaults: AdminDbDefa
   };
 
   try {
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+    const raw = expandPlaceholders(
+      JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>,
+    );
     const db = readRecord(raw, "Database");
     const source = Object.keys(db).length > 0 ? db : raw;
     const connectionString = stringValue(source.ConnectionString ?? source.connectionString);

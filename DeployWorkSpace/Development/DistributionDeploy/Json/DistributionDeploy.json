@@ -19,11 +19,11 @@
         "GlasgowPort": 8765,
         "ProxyTargetHttp": "http://127.0.0.1:8765",
         "ProxyTargetWs": "ws://127.0.0.1:8765",
-        "DatabaseHost": "124.221.175.89",
+        "DatabaseHost": "${IOBEAM_ADMIN_CONFIG_DB_HOST:-}",
         "DatabasePort": 5432,
         "DatabaseName": "postgres",
-        "DatabaseUser": "deployworkspace",
-        "DatabasePassword": "DWS_112233",
+        "DatabaseUser": "${IOBEAM_ADMIN_CONFIG_DB_USER:-}",
+        "DatabasePassword": "${IOBEAM_ADMIN_CONFIG_DB_PASSWORD:-}",
         "GlasgowLog": "/tmp/glasgow.log",
         "GlasgowServiceLog": "/tmp/glasgow.log",
         "GlasgowRepoUrl": "https://github.com/GlasgowEmbedded/glasgow",
@@ -39,6 +39,28 @@
                 "transactionComplete": false,
                 "actionData": {},
                 "timeout": 120.0
+            }
+        },
+        {
+            "provisionSecrets": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "Comment": [
+                        "Creates/completes ~/.config/iobeam/secrets.env (mode 600) before",
+                        "DeployRoot is deleted, without asking. Sources, first match wins:",
+                        "--secrets-file FILE, the existing secrets file, exported variables,",
+                        "what earlier releases left on this host (the installation in",
+                        "DeployRoot, DeployWorkspace_* archives, ~/.bashrc, /etc/glasgow-svc.env),",
+                        "then generated values. Anything still unknown is reported at the end;",
+                        "the installation runs without it. Set prompt=true to be asked instead.",
+                        "See DEPLOYMENT_RUNBOOK.md section 4a."
+                    ],
+                    "secretsFile": "",
+                    "harvestFromDeployRoot": true,
+                    "prompt": false
+                },
+                "timeout": 600.0
             }
         },
         {
@@ -270,10 +292,6 @@
                     "commandFormat": "internal",
                     "bashrcPath": "~/.bashrc",
                     "exports": {
-                        "GLASGOW_TOKEN": {
-                            "value": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
-                            "resolve": false
-                        },
                         "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json"
                     }
                 },
@@ -289,7 +307,7 @@
                     "venvActivate": ".venv/bin/activate",
                     "exports": {
                         "GLASGOW_TOKEN": {
-                            "value": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
+                            "value": "${GLASGOW_TOKEN}",
                             "resolve": false
                         },
                         "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json",
@@ -364,7 +382,7 @@
                     "useNvm": true,
                     "exports": {
                         "GLASGOW_TOKEN": {
-                            "value": "376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee",
+                            "value": "${GLASGOW_TOKEN}",
                             "resolve": false
                         },
                         "GLASGOW_CONFIG": "Development/GlasgowDataIO/Json/streamData.json"

@@ -34,7 +34,8 @@ Usage: manage-local-system.sh [start|restart|stop|status|logs|install]
   install        Install/reload/enable units without restarting running services
 
 Log files are written under OPERATIONS_ROOT/logs.
-Environment overrides: OPERATIONS_ROOT, OPERATIONS_VENV, OPERATIONS_LOG_DIR, ADMIN_USER.
+Environment overrides: OPERATIONS_ROOT, OPERATIONS_VENV, OPERATIONS_LOG_DIR, ADMIN_USER,
+IOBEAM_SECRETS_FILE.
 EOF
 }
 
@@ -57,6 +58,10 @@ ADMIN_USER="${ADMIN_USER:-${SUDO_USER:-${USER}}}"
 ADMIN_UID="$(id -u "${ADMIN_USER}")"
 ADMIN_HOME="$(getent passwd "${ADMIN_USER}" | cut -d: -f6)"
 USER_SYSTEMD_DIR="${ADMIN_HOME}/.config/systemd/user"
+# Shared secrets file (systemd EnvironmentFile format). It lives in the
+# service account's home so a redeploy, which recreates OPERATIONS_ROOT,
+# never deletes it. Manage it with: python3 -m secretstore set NAME
+SECRETS_FILE="${IOBEAM_SECRETS_FILE:-${ADMIN_HOME}/.config/iobeam/secrets.env}"
 
 sudo_cmd() {
   if ((EUID == 0)); then "$@"; else sudo "$@"; fi
@@ -103,6 +108,7 @@ render() {
     -e "s|@FRONTEND_ROOT@|${FRONTEND_ROOT}|g" \
     -e "s|@LOG_DIR@|${LOG_DIR}|g" \
     -e "s|@ADMIN_USER@|${ADMIN_USER}|g" \
+    -e "s|@SECRETS_FILE@|${SECRETS_FILE}|g" \
     "$1"
 }
 
@@ -121,6 +127,13 @@ install_units() {
   }
   prepare_frontend
   ensure_log_files
+  if [[ ! -f "${SECRETS_FILE}" ]]; then
+    echo "WARNING: ${SECRETS_FILE} is missing; FTP upload, the admin database and GLASGOW_TOKEN auth" >&2
+    echo "         will be unconfigured. Create it with: python3 -m secretstore set NAME" >&2
+  elif [[ "$(stat -c %a "${SECRETS_FILE}")" != "600" ]]; then
+    echo "Refusing to start: ${SECRETS_FILE} must be mode 600 (chmod 600 ${SECRETS_FILE})." >&2
+    exit 1
+  fi
   local temp_dir
   temp_dir="$(mktemp -d)"
   trap 'rm -rf -- "${temp_dir}"' RETURN

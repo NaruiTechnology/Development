@@ -9,6 +9,8 @@ User=@ADMIN_USER@
 WorkingDirectory=@SERVICE_ROOT@
 Environment=PYTHONPATH=@OPERATIONS_ROOT@/Development:@SERVICE_ROOT@
 EnvironmentFile=/etc/vacuum-executor.env
+# Credentials (GLASGOW_TOKEN, DB, FTP): owner-only file outside the deploy root.
+EnvironmentFile=-@SECRETS_FILE@
 ExecStart=@PYTHON_BIN@ -m glasgow_service.vacuum_executor_app
 StandardOutput=append:@LOG_DIR@/vacuum-executor.log
 StandardError=append:@LOG_DIR@/vacuum-executor.log

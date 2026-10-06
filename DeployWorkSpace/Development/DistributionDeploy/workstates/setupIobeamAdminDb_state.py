@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import secrets
-from urllib.parse import quote
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -54,6 +53,8 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             dbPassword = dbPassword or self._readDbPassword(dbConfigFile) or ""
             if not dbPassword and self._isLocalHost(dbHost):
                 dbPassword = self._generatePassword()
+                self.info("[{}] generated a password for the local runtime role"
+                          .format(type(self).__name__))
             dbMemberRoles = self._databaseOwnerMembers(actionData, dbRole)
             dbReadRoles = self._databaseReadMembers(actionData, dbMemberRoles)
             schemaFile = self._resolveSqlFile(actionData.get(
@@ -361,9 +362,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             host = "localhost"
 
         command = (
-            "{}{} psql -h {} -p {} -U {} -d {} -Atqc {}".format(
-                "PGSSLMODE={} ".format(self._shellQuote(sslMode)) if sslMode else "",
-                "PGPASSWORD={} ".format(self._shellQuote(dbPassword)),
+            "psql -h {} -p {} -U {} -d {} -Atqc {}".format(
                 self._shellQuote(host),
                 self._shellQuote(str(dbPort)),
                 self._shellQuote(dbRole),
@@ -371,10 +370,15 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                 self._shellQuote("SELECT current_user || ':' || current_database();"),
             )
         )
+        # The password travels in the child's environment only; a
+        # PGPASSWORD=... prefix in the command string is visible in `ps`.
+        env = dict(os.environ, PGPASSWORD=dbPassword)
+        if sslMode:
+            env["PGSSLMODE"] = sslMode
         cmd = ["bash", "-lc", command]
         self.info("[{}][verify-runtime-role] >> psql -h {} -p {} -U {} -d {}"
                   .format(type(self).__name__, host, dbPort, dbRole, dbName))
-        ok, stdout, stderr = await self._runExec(cmd, timeout)
+        ok, stdout, stderr = await self._runExec(cmd, timeout, env=env)
         if not ok:
             self.error("[{}][verify-runtime-role] FAILED.\n{}".format(
                 type(self).__name__, stderr or "<no stderr>"))
@@ -388,6 +392,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             with open(configFile, "r", encoding="utf-8") as f:
                 data = json.load(f)
             db = data.get("Database") if isinstance(data.get("Database"), dict) else data
+            db = self.expandSecrets(db)
             return str(db.get("Password") or db.get("password") or "").strip()
         except Exception:
             return ""
@@ -421,24 +426,32 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             or deployment.get("DatabaseCommandTimeoutMs")
             or 30000
         )
-        connectionString = "postgresql://{}:{}@{}:{}/{}".format(
-            quote(dbRole, safe=""),
-            quote(dbPassword, safe=""),
-            host,
-            dbPort,
-            quote(dbName, safe=""),
-        )
-        if sslMode:
-            connectionString = "{}?sslmode={}".format(connectionString, quote(sslMode, safe=""))
+        # Credentials go to the owner-only secrets file; the JSON keeps
+        # ${VAR} references (the backend's existing IOBEAM_ADMIN_DB_* names).
+        store = self.secretStore()
+        try:
+            store.write({
+                "IOBEAM_ADMIN_DB_HOST": host,
+                "IOBEAM_ADMIN_DB_USER": dbRole,
+                "IOBEAM_ADMIN_DB_PASSWORD": dbPassword,
+            })
+            store.load_into_environ()
+            for name, value in (("IOBEAM_ADMIN_DB_HOST", host), ("IOBEAM_ADMIN_DB_USER", dbRole),
+                                ("IOBEAM_ADMIN_DB_PASSWORD", dbPassword)):
+                os.environ[name] = value
+        except Exception as e:
+            self.error("[{}][db-config] cannot update secrets file {}: {}"
+                       .format(type(self).__name__, store.default_secrets_path(), e))
+            return False
         data = {
             "Provider": "PostgreSQL",
             "DatabaseName": dbName,
             "Schema": "iobeam_admin",
-            "Host": host,
+            "Host": "${IOBEAM_ADMIN_DB_HOST}",
             "Port": dbPort,
-            "User": dbRole,
-            "Password": dbPassword,
-            "ConnectionString": connectionString,
+            "User": "${IOBEAM_ADMIN_DB_USER}",
+            "Password": "${IOBEAM_ADMIN_DB_PASSWORD}",
+            "ConnectionString": "${IOBEAM_ADMIN_DB_URL:-}",
             "SslMode": sslMode,
             "CommandTimeoutMs": commandTimeoutMs,
         }
@@ -532,10 +545,11 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
 
         return roles
 
-    async def _runExec(self, argv, timeout, stdin=None):
+    async def _runExec(self, argv, timeout, stdin=None, env=None):
         proc = await asyncio.create_subprocess_exec(
             *argv,
             cwd=self.resolveDeployPath("."),
+            env=env,
             stdin=asyncio.subprocess.PIPE if stdin is not None else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

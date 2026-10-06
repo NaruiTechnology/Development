@@ -13,6 +13,8 @@ Environment=SBC_VACUUM_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/v
 Environment=SBC_REQUIRE_FENCING=false
 Environment=SBC_FENCING_STATE=%t/sbc-vacuum-fencing-token.json
 EnvironmentFile=-@SERVICE_ROOT@/examples/sbc-vacuum.local.env
+# Credentials (GLASGOW_TOKEN, DB, FTP): owner-only file outside the deploy root.
+EnvironmentFile=-@SECRETS_FILE@
 ExecStart=@PYTHON_BIN@ -m glasgow_service.sbc_vacuum_app
 StandardOutput=append:@LOG_DIR@/sbc-vacuum.log
 StandardError=append:@LOG_DIR@/sbc-vacuum.log

@@ -82,7 +82,103 @@ Edit `Json/DistributionDeploy.json` and confirm at least:
   component is exactly `IobeamPlatform`.
 - `IsProduction` is `false` for the local five-service deployment.
 - Database address and account values are correct for the internal network.
+  The manifest holds only `${VAR}` references for them; the values live in
+  the secrets file (section 4a).
 - Glasgow configuration and USB identifiers match the target hardware.
+
+## 4a. Credentials (secrets file)
+
+No password, login, token or connection string is stored in the repository,
+`dist_app.zip`, or the DeployWorkspace archive; the build fails if one is
+found. Every component reads them from one owner-only file on the target:
+
+```text
+~/.config/iobeam/secrets.env        (mode 600, directory 700; override: IOBEAM_SECRETS_FILE)
+```
+
+It lives in the service account's home, so the clean redeploy (which deletes
+`DeployRoot`) never removes it. The `provisionSecrets` action creates or
+completes it right after `stopLocalSystem`, **before anything is deleted, and
+without asking the installer anything**. For each value the first available
+source wins:
+
+1. a prepared file given with `--secrets-file FILE` (replaces stored values);
+2. the existing secrets file (so later deployments reuse it);
+3. the deploy shell's environment (`export IOBEAM_FTP_PASSWORD=...`);
+4. what earlier releases left on this host:
+   - the installation in `DeployRoot` (its JSON files and backend `.env`);
+   - earlier `DeployWorkspace_*` archives or extracted folders next to the
+     one being deployed, or in `~`, `~/Downloads` and `/tmp` (their deploy
+     manifest and `dist_app.zip`);
+   - `~/.bashrc` (`export GLASGOW_TOKEN=...`) and `/etc/glasgow-svc.env`;
+5. generated: `GLASGOW_TOKEN` and the local runtime DB password.
+
+So an upgrade from a release that kept credentials in JSON, or a host where a
+newer deployment already replaced that installation, carries the existing
+values over with no input. Anything still unknown does **not** stop the
+deployment: the installation runs without it and the log ends with a
+"Not configured" summary:
+
+- no shared admin database login: the app uses the local admin database
+  this deployment creates (seeded with the root account and the equipment
+  registry);
+- no FTP login: scan upload to FTP is disabled.
+
+Set them later without redeploying, in the web app (Settings > Admin >
+Database or FTP) or with `python3 -m secretstore set NAME` followed by
+`Development/Scripts/manage-local-system.sh restart`.
+
+To provide values up front on a host that has none of the above, prepare a
+file readable only by you and pass it:
+
+```bash
+umask 077
+cat > ~/iobeam-secrets.env <<'EOT'
+IOBEAM_ADMIN_CONFIG_DB_HOST=db.example.internal
+IOBEAM_ADMIN_CONFIG_DB_USER=your-db-login
+IOBEAM_ADMIN_CONFIG_DB_PASSWORD='the database password'
+IOBEAM_FTP_HOST=ftp.example.internal
+IOBEAM_FTP_USER=your-ftp-login
+IOBEAM_FTP_PASSWORD='the FTP password'
+EOT
+python3 Development/DistributionDeploy/distributionDeployApp.py --secrets-file ~/iobeam-secrets.env
+rm ~/iobeam-secrets.env      # its values are now in ~/.config/iobeam/secrets.env
+```
+
+To be asked for missing values instead, set `"prompt": true` in the
+`provisionSecrets` action, or run `python3 -m secretstore init` any time.
+
+| Variable | Required | Used by |
+| --- | --- | --- |
+| `IOBEAM_ADMIN_CONFIG_DB_HOST`, `_USER`, `_PASSWORD` | no (local admin DB when unset) | shared admin DB the app queries: `IobeamAdmin.json` Database block (Settings, Database); users, equipment, reports |
+| `GLASGOW_TOKEN` | yes (generated) | bearer token shared by glasgow_service and the backend |
+| `IOBEAM_ADMIN_DB_PASSWORD` | generated | local runtime role created by `setupIobeamAdminDb` (`IobeamAdminDb.json`) |
+| `IOBEAM_FTP_HOST`, `IOBEAM_FTP_USER`, `IOBEAM_FTP_PASSWORD` | no | scan CSV/PNG upload (`streamData.json` ftp); empty disables upload |
+| `IOBEAM_ADMIN_DB_HOST`/`_USER`, `IOBEAM_OPERATION_DB_*` | written by the deploy | runtime role and operation telemetry DB |
+| `SMTP_USER`, `SMTP_PASSWORD`, `TWILIO_*` | no | optional notification providers |
+
+Manage the file later with the bundled tool, from
+`DeployWorkSpace/Development/DistributionDeploy/vendor` in the handoff
+archive, or from `Development/` in a source checkout. Values are never
+printed:
+
+```bash
+python3 -m secretstore init                          # ask for anything missing, generate tokens
+python3 -m secretstore init --from FILE              # take values from a prepared file
+python3 -m secretstore set IOBEAM_FTP_PASSWORD       # change one value (hidden prompt, asked twice)
+python3 -m secretstore list                          # names, values masked
+python3 -m secretstore check                         # what is still missing
+```
+
+After changing a value, restart the stack (`Scripts/manage-local-system.sh
+restart`); the systemd units load the file through `EnvironmentFile=`.
+Values saved from the web Settings dialog (FTP, Database) are written to this
+file and take effect immediately; the JSON keeps the `${VAR}` reference.
+
+Equipment (Settings, Configuration, Equipment) is read from the admin
+database only. If that database cannot be reached, for example because the
+secrets file is missing, the table shows the database error instead of
+cached rows; nothing is stored in `IobeamAdmin.json`.
 
 Keep a terminal open and authenticate sudo before the long workflow, so an
 expired password prompt does not look like a stalled state:
@@ -112,7 +208,8 @@ The workflow now:
 5. Installs Python, Node, PostgreSQL, Glasgow, and optional Pi GPIO runtime.
    The Python step also installs `Development/ionbeam-native/requirements.txt`
    (the native desktop client) and checks that `PyQt6` imports.
-6. Creates and secures the backend `.env` as mode `0600`.
+6. Creates and secures the backend `.env` as mode `0600`. It contains no
+   credentials; database logins and `GLASGOW_TOKEN` go to the secrets file.
 7. Installs the local Redis/Sentinel smoke-test topology.
 8. `installIonbeamNative`: installs the Qt runtime libraries (apt), then runs
    `Development/ionbeam-native/scripts/install_linux.sh --venv .venv --skip-pip`

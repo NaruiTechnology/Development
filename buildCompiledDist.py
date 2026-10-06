@@ -91,6 +91,16 @@ PACKAGE_DATA_IGNORE = ('*.py', '*.pyc', '__pycache__', '*.log')
 STREAM_DATA_JSON = os.path.join(
     'Development', 'GlasgowDataIO', 'Json', 'streamData.json')
 
+# Shared credential resolver (Development/secretstore). Packaged into the
+# distribution like any module, and vendored as source into the
+# DeployWorkspace handoff so provisionSecrets can run before dist_app.zip is
+# extracted (see DistributionDeploy/secretsSupport.py).
+SECRETSTORE_PARTS = ('Development', 'secretstore')
+SECRETSTORE_SOURCES = ('__init__.py', '__main__.py')
+SECRETSTORE_VENDOR_PARTS = (
+    'Development', 'DeployWorkSpace', 'Development', 'DistributionDeploy',
+    'vendor', 'secretstore')
+
 # The verifier/producer shared with the deploy workflow (see that file's
 # docstring). It lives in the workspace that ships to the deploy host.
 MANIFEST_MODULE_PARTS = (
@@ -100,6 +110,9 @@ MANIFEST_MODULE_PARTS = (
 # Modules a working deployment cannot do without. Packaged as .pyc when
 # compiled and as .py in raw mode, so they are named without an extension.
 REQUIRED_DIST_MODULES = (
+    # Credential resolver used by the ionbeam-native app and setup scripts.
+    'Development/secretstore/__init__',
+    'Development/secretstore/__main__',
     'Development/GlasgowDataIO/IobeamControl/IobeamLauncher',
     'Development/GlasgowDataIO/IobeamControl/applet/busController',
     'Development/GlasgowDataIO/IobeamControl/applet/upstreamBusController',
@@ -288,6 +301,47 @@ def resolve_workspace(script_path):
             "buildCompiledDist.py must live in a directory named 'Development' "
             "(found %s); archive paths are rooted at Development/." % development)
     return os.path.dirname(development)
+
+
+def load_secretstore(src_dir):
+    """Load Development/secretstore by path (the build never imports Development)."""
+    path = os.path.join(src_dir, *SECRETSTORE_PARTS, '__init__.py')
+    if not os.path.isfile(path):
+        raise FileNotFoundError('Missing credential module: ' + path)
+    spec = importlib.util.spec_from_file_location('secretstore', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def assert_no_literal_credentials(src_dir, root, label):
+    """Build gate: refuse to package a tree that contains literal credentials.
+
+    Checks JSON keys such as password/username/token/ConnectionString, URLs
+    with an embedded password, and KEY=VALUE secrets in .env / .service
+    files. Fix a finding by replacing the value with a ${VAR} placeholder and
+    storing the value with `python3 -m secretstore set VAR`.
+    """
+    problems = load_secretstore(src_dir).scan_tree(root)
+    if problems:
+        raise RuntimeError(
+            '%s contains literal credentials:\n  %s\nReplace them with ${VAR} '
+            'placeholders (python3 -m secretstore set VAR stores the value).'
+            % (label, '\n  '.join(problems)))
+    print(f"Credential scan passed: {label}")
+
+
+def vendor_secretstore(src_dir):
+    """Copy secretstore sources into the DeployWorkspace before it is zipped."""
+    source_dir = os.path.join(src_dir, *SECRETSTORE_PARTS)
+    vendor_dir = os.path.join(src_dir, *SECRETSTORE_VENDOR_PARTS)
+    if os.path.isdir(vendor_dir):
+        shutil.rmtree(vendor_dir)
+    os.makedirs(vendor_dir)
+    for name in SECRETSTORE_SOURCES:
+        shutil.copy2(os.path.join(source_dir, name), os.path.join(vendor_dir, name))
+    print(f"Vendored secretstore into {vendor_dir}")
+    return vendor_dir
 
 
 def load_manifest_module(src_dir):
@@ -623,6 +677,7 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False, package_roots=None
     make_shell_scripts_executable(dist_dir)
     validate_packaged_local_system_manager(dist_dir)
     validate_dist_contents(dist_dir, deliver_raw)
+    assert_no_literal_credentials(src_dir, dist_dir, 'dist_app')
     write_dist_manifest(src_dir, dist_dir, deliver_raw, compiled_sources)
 
     # 6. Zip the output content (distinct names so raw/compiled don't overwrite)
@@ -821,8 +876,14 @@ def main(argv=None, script_path=None):
         workspace_dir = os.path.join('.', 'Development', 'DeployWorkSpace')
         version_label = version_label_from_stream_data('.')
         workspace_archive_base = f"DeployWorkspace_{version_label}_{timestamp_label()}"
-        final_archive = post_build_deploy(
-            zip_name, deploy_dir, workspace_dir, workspace_archive_base)
+        vendor_dir = vendor_secretstore('.')
+        try:
+            assert_no_literal_credentials('.', workspace_dir, 'DeployWorkSpace handoff')
+            final_archive = post_build_deploy(
+                zip_name, deploy_dir, workspace_dir, workspace_archive_base)
+        finally:
+            # The vendored copy exists only inside the handoff archive.
+            shutil.rmtree(os.path.dirname(vendor_dir), ignore_errors=True)
         print(f"Final handoff archive: {final_archive}")
         print("\nAll steps complete.")
     except Exception as e:

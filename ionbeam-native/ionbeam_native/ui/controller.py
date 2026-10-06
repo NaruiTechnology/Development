@@ -73,6 +73,18 @@ def ftp_configured(stream_config: dict) -> bool:
         return False
     if not isinstance(ftp, dict):
         return False
+    # host/username/password are ${IOBEAM_FTP_*} references to the secrets
+    # file. Resolve them when the shared helper is importable; otherwise a
+    # reference counts as configured and the backend (which uploads) decides.
+    try:
+        import secretstore
+        ftp = secretstore.expand(ftp, strict=False)
+        if any(secretstore.references(ftp.get(k)) for k in ("host", "username", "password")):
+            return False
+    except ImportError:
+        pass
+    except Exception:  # unreadable/unsafe secrets file: the backend reports it
+        return False
     need = [str(ftp.get(k) or "").strip() for k in ("host", "username", "password", "folder")]
     return bool(ftp.get("enabled", False)) and all(need)
 

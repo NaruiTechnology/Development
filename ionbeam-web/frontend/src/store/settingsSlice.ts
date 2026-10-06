@@ -44,6 +44,10 @@ export interface SettingsConfigInfo {
   has_backup: boolean;
   /** True only on the call that created the backup as a side effect. */
   backup_created?: boolean;
+  /** Admin config only: equipment rows come from the database or not at all. */
+  equipment_source?: "database" | "unavailable";
+  /** Why the equipment database could not be read (admin config only). */
+  equipment_error?: string | null;
 }
 
 export interface RestartResult {

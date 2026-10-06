@@ -11,6 +11,10 @@
 # Action data fields recognised:
 #   bashrcPath   target rc file (default: ~/.bashrc)
 #   exports      dict { ENV_VAR_NAME: value }
+#
+# A value that references a secret (${VAR}) is set on os.environ for this
+# run only and is NEVER written to ~/.bashrc; services read secrets from the
+# owner-only secrets file instead (see Development/secretstore).
 #-------------------------------------------------------------------------------
 import os
 
@@ -42,8 +46,10 @@ class exportEnv_state(distributionDeploy_state):
             for k, v in exports.items():
                 resolved = self.resolveEnvValue(v)
                 os.environ[str(k)] = str(resolved)
+                raw = v.get("value", "") if isinstance(v, dict) else v
+                shown = "<secret>" if self.secretStore().references(raw) else resolved
                 self.info("[{}] os.environ[{}] = {}"
-                          .format(type(self).__name__, k, resolved))
+                          .format(type(self).__name__, k, shown))
 
             # 2. Append to ~/.bashrc, idempotently.
             existing = ""
@@ -59,6 +65,11 @@ class exportEnv_state(distributionDeploy_state):
             with open(bashrcPath, "a") as f:
                 f.write("\n# --- DistributionDeploy exports ---\n")
                 for k, v in exports.items():
+                    raw = v.get("value", "") if isinstance(v, dict) else v
+                    if self.secretStore().references(raw):
+                        self.info("[{}] '{}' is a secret; not persisted to {}."
+                                  .format(type(self).__name__, k, bashrcPath))
+                        continue
                     line = "export {}={}".format(k, _shquote(self.resolveEnvValue(v)))
                     if line in existing:
                         self.info("[{}] '{}' already present in {}, skipping."

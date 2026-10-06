@@ -154,7 +154,6 @@ class setupIonbeamWeb_state(distributionDeploy_state):
     def _writeBackendEnv(self, envFile, backendDir, actionData):
         deployRoot = self.resolveDeployPath(".")
         deployment = self.deploymentConfig()
-        token = os.environ.get("GLASGOW_TOKEN", "").strip()
         backendHost = str(
             deployment.get("BackendHost")
             or actionData.get("backendHost")
@@ -250,7 +249,6 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         lines = [
             "PROXY_TARGET_HTTP={}".format(proxyTargetHttp),
             "PROXY_TARGET_WS={}".format(proxyTargetWs),
-            "GLASGOW_TOKEN={}".format(token),
             "PORT=4000",
             "HOST={}".format(backendHost),
             "MOCK=0",
@@ -264,24 +262,16 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 actionData.get("vacuumControllerUrl", "http://127.0.0.1:8780")),
             "IOBEAM_ADMIN_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "IobeamAdmin", "Json", "IobeamAdmin.json"))),
-            "IOBEAM_ADMIN_DB_HOST={}".format(dbHost),
             "IOBEAM_ADMIN_DB_PORT={}".format(dbPort),
             "IOBEAM_ADMIN_DB_NAME={}".format(dbName),
-            "IOBEAM_ADMIN_DB_USER={}".format(dbUser),
         ]
-        if dbPassword:
-            lines.append("IOBEAM_ADMIN_DB_PASSWORD={}".format(dbPassword))
         if dbSslMode:
             lines.append("IOBEAM_ADMIN_DB_SSLMODE={}".format(dbSslMode))
         lines.append("IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS={}".format(dbTimeout))
         lines.extend([
-            "IOBEAM_OPERATION_DB_HOST={}".format(opDbHost),
             "IOBEAM_OPERATION_DB_PORT={}".format(opDbPort),
             "IOBEAM_OPERATION_DB_NAME={}".format(opDbName),
-            "IOBEAM_OPERATION_DB_USER={}".format(opDbUser),
         ])
-        if opDbPassword:
-            lines.append("IOBEAM_OPERATION_DB_PASSWORD={}".format(opDbPassword))
         if opDbSslMode:
             lines.append("IOBEAM_OPERATION_DB_SSLMODE={}".format(opDbSslMode))
         lines.append("IOBEAM_OPERATION_DB_COMMAND_TIMEOUT_MS={}".format(opDbTimeout))
@@ -296,6 +286,23 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             "GLASGOW_CONFIG_STRICT=0",
             "",
         ])
+        # Hosts, logins, passwords and GLASGOW_TOKEN live in the owner-only
+        # secrets file (loaded by config.ts and by the systemd units), never
+        # in .env, which sits inside the deploy tree.
+        secrets = {
+            "IOBEAM_ADMIN_DB_HOST": dbHost,
+            "IOBEAM_ADMIN_DB_USER": dbUser,
+            "IOBEAM_OPERATION_DB_HOST": opDbHost,
+            "IOBEAM_OPERATION_DB_USER": opDbUser,
+        }
+        if dbPassword:
+            secrets["IOBEAM_ADMIN_DB_PASSWORD"] = dbPassword
+        if opDbPassword:
+            secrets["IOBEAM_OPERATION_DB_PASSWORD"] = opDbPassword
+        store = self.secretStore()
+        store.write(secrets)
+        self.info("[{}] stored backend DB credentials in {}"
+                  .format(type(self).__name__, store.default_secrets_path()))
         with open(envFile, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
         os.chmod(envFile, 0o600)
@@ -312,7 +319,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             if not isinstance(data, dict):
                 return {}
             db = data.get("Database")
-            return db if isinstance(db, dict) else data
+            return self.expandSecrets(db if isinstance(db, dict) else data)
         except Exception as e:
             self.warn("[{}] could not read DB config from {}: {}"
                       .format(type(self).__name__, configPath, e))

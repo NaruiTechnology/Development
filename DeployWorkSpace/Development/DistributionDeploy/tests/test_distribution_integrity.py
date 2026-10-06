@@ -52,6 +52,8 @@ def make_workspace(base):
         "requirements.txt": DEVELOPMENT / "requirements.txt",
         "IobeamAdmin/Sql/006_equipment_csv_functions.sql": DEVELOPMENT / "IobeamAdmin/Sql/006_equipment_csv_functions.sql",
         "buildCompiledDist.py": BUILDER_SOURCE,
+        "secretstore/__init__.py": DEVELOPMENT / "secretstore/__init__.py",
+        "secretstore/__main__.py": DEVELOPMENT / "secretstore/__main__.py",
     }
     for rel, src in real.items():
         (dev / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -178,7 +180,10 @@ class BuilderEndToEndTests(unittest.TestCase):
     def test_unrelated_sibling_directories_are_not_packaged(self):
         self.assertEqual(self.build(self.ws), 0)
         with zipfile.ZipFile(self.archive()) as z:
-            self.assertFalse([n for n in z.namelist() if "Unrelated" in n or "secret" in n])
+            # "secret.py" is the fixture file in the unrelated sibling tree;
+            # Development/secretstore is a legitimate packaged module.
+            self.assertFalse([n for n in z.namelist()
+                              if "Unrelated" in n or n.endswith("/secret.py") or n == "secret.py"])
 
     def test_archive_is_verified_and_manifest_is_accurate(self):
         self.assertEqual(self.build(self.ws), 0)
@@ -499,7 +504,10 @@ class WorkflowWiringTests(unittest.TestCase):
     def test_verification_directly_follows_extraction_and_manifest_is_required(self):
         data = self.payload()
         names = [n for a in data["Actions"] for n in a]
-        self.assertEqual(names[:4], ["stopLocalSystem", "createDeployFolder",
+        # provisionSecrets sits between the stop and the deletion of
+        # DeployRoot: it must harvest credentials from the old installation
+        # and fail the run before that installation is removed.
+        self.assertEqual(names[:5], ["stopLocalSystem", "provisionSecrets", "createDeployFolder",
                                      "unzipDistribution", "verifyDistribution"])
         self.assertTrue(data["Deployment"]["RequireDistributionManifest"])
 

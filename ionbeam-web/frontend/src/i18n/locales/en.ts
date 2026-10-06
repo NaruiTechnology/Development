@@ -972,6 +972,9 @@ export const en = {
 
   /* ===== settings dialog — FTP tab =============================== */
   "settings.ftp.hint": "CSV files upload to the configured folder's csv subdirectory. PNG figures and merged figures upload to its img subdirectory.",
+  "settings.admin.equipment.unavailable": "Equipment could not be loaded from the database: {error}. Equipment is stored only in the database; check the database connection and the secrets file (python3 -m secretstore check), then reload.",
+  "settings.admin.equipment.unavailable.unknown": "the database is unreachable",
+  "settings.ftp.secretsHint": "Host, username and password are kept in the server's private secrets file, not in streamData.json. A value shown as ${NAME} refers to that file; type a new value to replace it.",
   "settings.ftp.enabled": "Enabled",
   "settings.ftp.save.ok": "FTP configuration saved.",
   "settings.ftp.restore.ok": "FTP configuration restored from backup.",

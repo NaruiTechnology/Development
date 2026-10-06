@@ -8,9 +8,10 @@ User=vboxuser
 WorkingDirectory=/home/vboxuser/Project/Operations
 Environment=PYTHONPATH=/home/vboxuser/Project/Operations/Development:/home/vboxuser/Project/Operations/Development/glasgow_service
 Environment=GLASGOW_CONFIG=/home/vboxuser/Project/Operations/Development/GlasgowDataIO/Json/streamData.json
-# Uncomment to turn on bearer auth:
+# GLASGOW_TOKEN (bearer auth) and other credentials come from the
+# service account's secrets file; see secretstore/README.md.
 EnvironmentFile=/etc/glasgow-svc.env
-Environment=GLASGOW_TOKEN=376e6207faf8425219a652914085bfb394a97582bbd0a8692042d77e8971a9ee
+EnvironmentFile=-/home/vboxuser/.config/iobeam/secrets.env
 
 ExecStart=/home/vboxuser/Project/Operations/.venv/bin/uvicorn glasgow_service.api:app \
           --host 127.0.0.1 --port 8765

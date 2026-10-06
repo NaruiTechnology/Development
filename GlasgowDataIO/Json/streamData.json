@@ -177,9 +177,9 @@
                     },
                     "ftp": {
                         "enabled": true,
-                        "host": "124.221.175.89",
-                        "username": "deployworkspace",
-                        "password": "DWS_112233",
+                        "host": "${IOBEAM_FTP_HOST}",
+                        "username": "${IOBEAM_FTP_USER}",
+                        "password": "${IOBEAM_FTP_PASSWORD}",
                         "folder": "/upload"
                     }
                 },

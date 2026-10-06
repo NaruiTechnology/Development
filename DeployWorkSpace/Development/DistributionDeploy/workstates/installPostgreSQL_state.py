@@ -29,7 +29,9 @@ class installPostgreSQL_state(distributionDeploy_state):
                 return
 
             command = (
-                "sudo -n true || {{ echo 'workflow sudo credential is unavailable' >&2; exit 1; }}; "
+                # Single braces: this string is not passed through str.format(), and
+                # doubled braces made the shell exit 1 on every fresh install.
+                "sudo -n true || { echo 'workflow sudo credential is unavailable' >&2; exit 1; }; "
                 "sudo DEBIAN_FRONTEND=noninteractive apt-get "
                 "-o DPkg::Lock::Timeout=600 update && "
                 "sudo DEBIAN_FRONTEND=noninteractive apt-get "

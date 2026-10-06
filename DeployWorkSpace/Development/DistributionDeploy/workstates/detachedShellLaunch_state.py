@@ -73,7 +73,22 @@ class detachedShellLaunch_state(distributionDeploy_state):
             if useNvm:
                 shellParts.append("export NVM_DIR={}".format(nvmDir))
                 shellParts.append('if [ -s "$NVM_DIR/nvm.sh" ]; then . "$NVM_DIR/nvm.sh"; fi')
+            secretsSourced = False
             for key, val in exports.items():
+                raw = val.get("value", "") if isinstance(val, dict) else val
+                if self.secretStore().references(raw):
+                    # Never place a credential on a command line (visible in
+                    # `ps` and logs). The detached child inherits os.environ;
+                    # a terminal launch sources the owner-only secrets file.
+                    resolved = self.resolveEnvValue(val)
+                    if resolved not in (None, ""):
+                        os.environ[str(key)] = str(resolved)
+                    if not secretsSourced:
+                        secretsFile = shlex.quote(self.secretStore().default_secrets_path())
+                        shellParts.append(
+                            "if [ -f {0} ]; then set -a; . {0}; set +a; fi".format(secretsFile))
+                        secretsSourced = True
+                    continue
                 shellParts.append("export {}={}".format(
                     key, shlex.quote(str(self.resolveEnvValue(val)))))
             if self.deploymentValue("MobilityOnly", False) and type(self).__name__ == "launchIonbeamWebFrontend_state":

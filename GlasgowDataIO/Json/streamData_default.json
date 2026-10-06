@@ -162,9 +162,9 @@
                     },
                     "ftp": {
                         "enabled": true,
-                        "host": "localhost",
-                        "username": "vboxuser",
-                        "password": "ionbeam123",
+                        "host": "${IOBEAM_FTP_HOST}",
+                        "username": "${IOBEAM_FTP_USER}",
+                        "password": "${IOBEAM_FTP_PASSWORD}",
                         "folder": "/tmp/ftp"
                     }
                 },

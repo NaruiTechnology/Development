@@ -21,6 +21,8 @@ if str(AUTOMATION_PY_ROOT) not in sys.path:
 
 from buildingblocks.decorators_acess_role import requireAdmin  # noqa: E402
 
+import secretstore
+
 DEFAULT_DEPLOY_CONFIG = (
     DEVELOPMENT_ROOT
     / "DeployWorkSpace"
@@ -126,7 +128,8 @@ def load_deploy_defaults(config_path):
         return {}
 
     with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+        # Credentials are ${VAR} references to the secrets file (see secretstore).
+        data = secretstore.expand(json.load(f), strict=False, blank=True)
     deployment = read_dict(data, "Deployment")
     setup_action = read_action_data(data, "setupIobeamAdminDb")
     if truthy(deployment.get("IsProduction")):

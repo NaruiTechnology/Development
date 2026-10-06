@@ -275,7 +275,7 @@ class WorkflowContractTests(unittest.TestCase):
     def test_fpga_precedes_remaining_installation_and_restart(self):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
         names = [name for action in payload["Actions"] for name in action]
-        self.assertEqual(names[:3], ["stopLocalSystem", "createDeployFolder", "unzipDistribution"])
+        self.assertEqual(names[:4], ["stopLocalSystem", "provisionSecrets", "createDeployFolder", "unzipDistribution"])
         for prerequisite in ("installPipRequirements", "installToolchain", "setupGlasgow"):
             self.assertLess(names.index(prerequisite), names.index("programFpgaRam"))
         for remaining in ("installPostgreSQL", "setupIonbeamWeb", "manageLocalSystem"):

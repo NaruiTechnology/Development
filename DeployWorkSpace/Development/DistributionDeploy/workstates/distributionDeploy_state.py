@@ -18,6 +18,8 @@ import shlex
 
 from buildingblocks.workflow.workstate import WorkState
 
+import secretsSupport
+
 
 @abstractmethod
 class distributionDeploy_state(WorkState):
@@ -89,7 +91,11 @@ class distributionDeploy_state(WorkState):
         return os.getcwd()
 
     def deploymentConfig(self):
-        """Return the top-level Deployment block for this run, if any."""
+        """Return the top-level Deployment block with ${VAR} secrets resolved."""
+        return self.expandSecrets(self.rawDeploymentConfig())
+
+    def rawDeploymentConfig(self):
+        """Return the Deployment block exactly as written in the manifest."""
         thread = self.ParentWorkThread
         config = getattr(thread, "Config", None) if thread is not None else None
         if isinstance(config, dict):
@@ -97,6 +103,19 @@ class distributionDeploy_state(WorkState):
         else:
             deployment = getattr(config, "Deployment", {}) if config is not None else {}
         return deployment if isinstance(deployment, dict) else {}
+
+    def secretStore(self):
+        """The shared secretstore module (see secretsSupport.py)."""
+        return secretsSupport.load()
+
+    def expandSecrets(self, value):
+        """Resolve ${VAR} placeholders from the environment / secrets file.
+
+        Unresolved required placeholders become "" so a state falls back to
+        its normal defaults; provisionSecrets has already failed the run if a
+        required value is missing.
+        """
+        return self.secretStore().expand(value, strict=False, blank=True)
 
     def deploymentValue(self, key, default=None):
         """Read a value from the top-level Deployment block."""
@@ -114,6 +133,9 @@ class distributionDeploy_state(WorkState):
         if not isinstance(stateConfig, dict):
             return stateConfig
 
+        # ${VAR} secrets stay unresolved here: they are expanded only where
+        # used (deploymentConfig, resolveEnvValue) so a credential is never
+        # copied into a command line or a log message by accident.
         resolved = copy.deepcopy(stateConfig)
         actionData = resolved.get("actionData", {})
         if not isinstance(actionData, dict):
@@ -170,6 +192,7 @@ class distributionDeploy_state(WorkState):
 
     def resolveEnvValue(self, value):
         """Resolve path-like env values; lists become os.pathsep-separated."""
+        value = self.expandSecrets(value)
         if isinstance(value, dict):
             raw = value.get("value", "")
             if value.get("resolve", True):

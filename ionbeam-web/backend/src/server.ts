@@ -389,17 +389,22 @@ app.get("/api/admin/iobeam/config", async (_req, res) => {
       );
       return [];
     });
-    const dbEquipment = await listEquipmentFromDb().catch((err) => {
-      console.warn(
-        `[iobeam-admin/config] DB equipment records were not loaded: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      return [];
-    });
+    // Equipment lives only in the database. When it cannot be read (for
+    // example the secrets file is missing), report that instead of showing
+    // rows from IobeamAdmin.json or any other copy.
+    let dbEquipment: Equipment[] = [];
+    let equipmentError: string | null = null;
+    try {
+      dbEquipment = await listEquipmentFromDb();
+    } catch (err) {
+      equipmentError = err instanceof Error ? err.message : String(err);
+      console.warn(`[iobeam-admin/config] equipment database unavailable: ${equipmentError}`);
+    }
     res.json({
       ...info,
       data: mergeAdminConfigData(info.data, dbUsers, dbEquipment),
+      equipment_source: equipmentError ? "unavailable" : "database",
+      equipment_error: equipmentError,
     });
   } catch (err) {
     sendConfigError(res, err);
@@ -1760,12 +1765,14 @@ function mergeAdminConfigData(
       ? { ...(data as Record<string, unknown>) }
       : {};
   const users = mergeAdminUsers(readAdminUsers(root), dbUsers);
-  const equipment = mergeEquipment(dbEquipment, readEquipment(root));
+  // Database rows only: never fall back to (or overlay) equipment copies
+  // stored in IobeamAdmin.json by older releases.
+  const equipment = [...dbEquipment].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
   return {
     ...root,
     user: users[0] ?? root.user ?? emptyAdminUser(),
     users,
-    equipment: equipment[0] ?? root.equipment ?? emptyEquipment(),
+    equipment: equipment[0] ?? emptyEquipment(),
     equipments: equipment,
   };
 }
@@ -1799,22 +1806,6 @@ function emptyAdminUser(): AdminUser {
     is_active: true,
     session_lifetime_limit_days: 1,
   };
-}
-
-function mergeEquipment(base: Equipment[], overlay: Equipment[]): Equipment[] {
-  const rows = new Map<string, Equipment>();
-  for (const equipment of [...base, ...overlay]) {
-    const key = equipmentKey(equipment);
-    if (key) rows.set(key, equipment);
-  }
-  return [...rows.values()].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
-}
-
-function equipmentKey(equipment: Equipment): string {
-  const serialNumber = equipment.serial_number.trim().toLowerCase();
-  if (serialNumber) return `serial:${serialNumber}`;
-  const name = equipment.name.trim().toLowerCase();
-  return name ? `name:${name}` : "";
 }
 
 function emptyEquipment(): Equipment {
