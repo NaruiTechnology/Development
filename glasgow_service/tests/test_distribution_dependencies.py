@@ -102,6 +102,10 @@ def isolated_builder(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     source = tmp_path / "source"
     source.mkdir()
+    # Keep the real credential gate active without adding scanner files to
+    # the miniature archive whose exact contents are asserted below.
+    scanner = builder.load_secretstore(str(DEVELOPMENT_ROOT.parent))
+    monkeypatch.setattr(builder, "load_secretstore", lambda src_dir: scanner)
     return builder, source
 
 

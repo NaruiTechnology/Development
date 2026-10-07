@@ -9,7 +9,8 @@ TSX = os.path.join(BACKEND, "node_modules", ".bin", "tsx")
 
 @pytest.mark.skipif(not os.path.exists(TSX) or not shutil.which("node"), reason="needs node and ionbeam-web/backend/node_modules")
 def test_calibration_api_end_to_end():
-    import pgserver, psycopg2
+    pgserver = pytest.importorskip("pgserver", reason="calibration API tests need pgserver")
+    psycopg2 = pytest.importorskip("psycopg2", reason="calibration API tests need psycopg2-binary")
     bin_dir = os.path.join(os.path.dirname(pgserver.__file__), "pginstall", "bin")     # provides the psql the backend shells out to
     d = tempfile.mkdtemp(prefix="calibpg_")
     srv = pgserver.get_server(d)

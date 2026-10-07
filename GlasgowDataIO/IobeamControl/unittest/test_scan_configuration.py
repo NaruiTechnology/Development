@@ -20,7 +20,7 @@ DEVELOPMENT = Path(__file__).resolve().parents[3]
 
 
 class ScanConfigurationTest(unittest.TestCase):
-    def test_shipped_configuration_preserves_vector_xy_at_dac_latches(self):
+    def test_shipped_configuration_reflects_vector_y_at_dac_latches(self):
         config = AutomationConfig(str(DEVELOPMENT / "GlasgowDataIO/Json/streamData.json"))
         args = configure_scan_args(config, GetStateConfigByName(config, "streamData")["actionData"],
                                    SimpleNamespace())
@@ -40,7 +40,7 @@ class ScanConfigurationTest(unittest.TestCase):
                 if ctx.get(dut.dac_stream.ready):
                     accepted = True
                 if accepted:
-                    for axis, expected in (("x", 1234), ("y", 5678)):
+                    for axis, expected in (("x", 1234), ("y", 16383 - 5678)):
                         if ctx.get(getattr(dut.bus, f"dac_{axis}_le_clk")):
                             self.assertEqual(ctx.get(dut.bus.data_o), expected)
                             observed.add(axis)
@@ -58,7 +58,7 @@ class ScanConfigurationTest(unittest.TestCase):
         self.assertEqual([pin.number for pin in args.ebeam_scan_enable], [0, 1])
         self.assertEqual([pin.number for pin in args.ibeam_blank_enable], [4, 5])
         self.assertEqual([(pin.number, pin.invert) for pin in args.ibeam_blank], [(2, True), (3, False)])
-        self.assertEqual((args.xflip, args.yflip, args.rotate90), (False, False, False))
+        self.assertEqual((args.xflip, args.yflip, args.rotate90), (False, True, False))
         self.assertEqual(args.ext_switch_delay_cycles, 960000)
         self.assertEqual(args.voltage, 3.3)
 
@@ -109,7 +109,7 @@ class ScanConfigurationTest(unittest.TestCase):
                     if not adc:
                         self.assertEqual(subtarget.ext_switch_delay, 960000)
                         self.assertEqual((subtarget.transforms.xflip, subtarget.transforms.yflip,
-                                          subtarget.transforms.rotate90), (False, False, False))
+                                          subtarget.transforms.rotate90), (False, True, False))
                         self.assertEqual(len(subtarget.ports.ibeam_blank), 2)
                     plan = target.platform.prepare(target, emit_src=False)
                     plans.append(plan.files)

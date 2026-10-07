@@ -72,7 +72,7 @@ def test_raster_recorded_with_artifacts(h):
     out = [r for r in h.backend_mock.requests if r["path"].endswith("/output-data")][-1]["body"]
     assert setup["kind"] == "raster" and "scan_parameters" in setup
     assert out["kind"] == "raster" and out["activity_id"] >= 1 and out["chunks"] > 0
-    assert set(out["artifacts"]) == {"csv_base64", "image_base64"} or "artifacts" not in out
+    assert "artifacts" not in out or set(out["artifacts"]) == {"csv_base64", "image_base64"}
     w.scan_controls.preview.setChecked(True)
 
 

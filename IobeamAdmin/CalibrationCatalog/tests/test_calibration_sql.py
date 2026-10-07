@@ -1,7 +1,8 @@
 """Behavioural tests of the stored functions in 003_calibration_schema.sql against a real PostgreSQL."""
 import json, os
-import psycopg2
 import pytest
+
+psycopg2 = pytest.importorskip("psycopg2", reason="calibration SQL tests need psycopg2-binary")
 
 ADMIN, DEV, SUPER, USER = 3, 2, 1, 0
 

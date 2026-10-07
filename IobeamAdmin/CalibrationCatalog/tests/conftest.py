@@ -15,7 +15,8 @@ def _read(name):
 
 @pytest.fixture(scope="session")
 def pg():
-    import pgserver, psycopg2
+    pgserver = pytest.importorskip("pgserver", reason="calibration SQL tests need pgserver")
+    psycopg2 = pytest.importorskip("psycopg2", reason="calibration SQL tests need psycopg2-binary")
     d = tempfile.mkdtemp(prefix="calibpg_")
     srv = pgserver.get_server(d)
     conn = psycopg2.connect(srv.get_uri())
