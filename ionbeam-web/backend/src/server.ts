@@ -348,12 +348,9 @@ app.post("/api/admin/config", async (req, res) => {
       throw new ConfigError("vacuum_enabled must be true or false", 400);
     }
     const commitVacuum = await prepareVacuumEnabledUpdate(config.vacuumConfigPath, req.body?.vacuum_enabled);
-    const changed = await writeConfigIfChanged(data);
-    const vacuumChanged = commitVacuum ? await commitVacuum() : false;
-    if (!changed && !vacuumChanged) {
-      respondRestartSkipped(res, "Configuration is unchanged.");
-      return;
-    }
+    await writeConfigIfChanged(data);
+    if (commitVacuum) await commitVacuum();
+    // Update also resets a faulted controller when its configuration is unchanged.
   } catch (err) {
     sendConfigError(res, err);
     return;
@@ -2874,7 +2871,7 @@ async function restartServicesAndRespond(
 ): Promise<void> {
   const restart = await restartService();
   const backendRestart = planBackendRestart(restart.ok);
-  res.json({ ok: true, restart, backend_restart: backendRestart });
+  res.json({ ok: restart.ok, restart, backend_restart: backendRestart });
   scheduleBackendRestartAfterResponse(res, backendRestart);
 }
 

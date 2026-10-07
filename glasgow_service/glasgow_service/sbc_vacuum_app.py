@@ -54,15 +54,19 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         )
         emulator = controller.emulator
         holder["controller"] = controller
-        if not controller.requires_remote_authority:
-            await controller.start()
         try:
+            if not controller.requires_remote_authority:
+                await controller.start()
             yield
         finally:
-            await controller.close()
-            if emulator is not None:
-                emulator.close()
-            holder.clear()
+            try:
+                await controller.close()
+            finally:
+                try:
+                    if emulator is not None:
+                        emulator.close()
+                finally:
+                    holder.clear()
 
     app = FastAPI(
         title="Raspberry Pi Vacuum Controller",
@@ -239,7 +243,7 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         return controller().status()
 
     # ---------------------------------------------------------------- emulator
-    # Present only when SBC_VACUUM_EMULATOR is set: operator actions on the
+    # Present only in non-production board mode: operator actions on the
     # emulated rig (E-stop, jumpers, faults, utilities) for UI development.
 
     def rig():
@@ -248,18 +252,20 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
             raise HTTPException(404, "the board emulator is not enabled")
         return target.emulator
 
+    # These handlers take the rig lock. Synchronous FastAPI handlers run in
+    # its worker pool, leaving the controller poll/lease loop responsive.
     @app.get("/emulator")
-    async def emulator_state():
+    def emulator_state():
         return rig().snapshot()
 
     @app.post("/emulator/estop", dependencies=[Depends(require_sbc_token)])
-    async def emulator_estop(req: dict):
+    def emulator_estop(req: dict):
         r = rig()
         r.set_estop(bool(req.get("pressed", True)))
         return r.snapshot()
 
     @app.post("/emulator/inputs/{di}", dependencies=[Depends(require_sbc_token)])
-    async def emulator_jumper(di: int, req: dict):
+    def emulator_jumper(di: int, req: dict):
         if not 1 <= di <= 16:
             raise HTTPException(404, "inputs are DI1..DI16")
         r = rig()
@@ -267,13 +273,13 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         return r.snapshot()
 
     @app.post("/emulator/tool", dependencies=[Depends(require_sbc_token)])
-    async def emulator_tool(req: dict):
+    def emulator_tool(req: dict):
         r = rig()
         r.connect_tool(bool(req.get("connected", True)))
         return r.snapshot()
 
     @app.post("/emulator/faults/{name}", dependencies=[Depends(require_sbc_token)])
-    async def emulator_fault(name: str, req: dict):
+    def emulator_fault(name: str, req: dict):
         r = rig()
         active = bool(req.get("active", True))
         with r.clock.lock:

@@ -319,7 +319,9 @@ class RPi5VacuumIODevice:
                 return
             errors = []
             try:
-                if self._bus is not None:
+                # A release may already have closed the board and asserted
+                # reset. Its I2C expanders cannot acknowledge another write.
+                if self._opened and self._bus is not None:
                     self._bus.write_i2c_block_data(ADDR_OUTPUTS, OLATA, [0x00, 0x00])
             except OSError as exc:
                 errors.append(str(exc))

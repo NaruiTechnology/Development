@@ -300,7 +300,7 @@ function SettingsModalShell({
   }
 
   function onUpdate() {
-    if (configChanged) {
+    if (configChanged || !sessionOnlyChanged) {
       setConfirmSave(true);
       return;
     }
@@ -522,10 +522,10 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || scanLocked || draft === null || (!configChanged && !sessionOnlyChanged) || !adcTimingValid}
+              disabled={busy || scanLocked || draft === null || !adcTimingValid}
               onClick={onUpdate}
               title={
-                configChanged
+                configChanged || !sessionOnlyChanged
                   ? t("settings.btn.saveAs.title")
                   : t("settings.btn.sessionOnly.title")
               }

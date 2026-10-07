@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/calibrationVendorFile.test.ts tests/calibrationCsvFile.test.ts tests/scanGeometryConfig.test.ts tests/vacuumConfig.test.ts tests/settingsVacuumControl.test.ts tests/secretStore.test.ts tests/adminEquipmentSource.test.ts",
+    "test": "tsx --test tests/calibrationVendorFile.test.ts tests/calibrationCsvFile.test.ts tests/scanGeometryConfig.test.ts tests/vacuumConfig.test.ts tests/settingsVacuumControl.test.ts tests/configReset.test.ts tests/serviceReset.test.ts tests/secretStore.test.ts tests/adminEquipmentSource.test.ts",
     "db:migrate:update-date": "tsx src/scripts/applyUpdateDateMigration.ts",
     "db:seed:calibration": "tsx src/scripts/seedCalibrationCatalog.ts",
     "deploy": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json",

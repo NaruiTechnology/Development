@@ -635,3 +635,27 @@ def test_board_profile_owns_its_enable_flag(tmp_path, monkeypatch):
     source.write_text(json.dumps(_payload(Enable=True)))
     (tmp_path / "vacuumSystem.json").write_text(json.dumps({"Enable": False}))
     assert load_runtime_vacuum_config(source).enabled
+
+
+def test_repeated_close_after_executor_release_is_safe():
+    rig = VacuumRig()
+    controller = VacuumController(board_config(), emulator=rig)
+
+    async def scenario():
+        await controller.start()
+        await controller.poll_once()
+        await controller.close()  # Executor releases before service shutdown.
+        await controller.close()  # Lifespan then shuts down the same controller.
+        rig.advance(0.2)
+        assert not rig.board.safe_rail_live
+        assert relays(rig) == [False] * 5
+        # A reset can acquire and start the same controller again.
+        await controller.start()
+        await controller.poll_once()
+        assert controller.status().connected
+        await controller.close()
+
+    try:
+        run(scenario())
+    finally:
+        rig.close()
