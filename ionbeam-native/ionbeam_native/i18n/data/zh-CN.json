@@ -1078,7 +1078,7 @@
  "vacuum.stopPump": "Stop",
  "vacuum.threshold": "Configured threshold",
  "vacuum.title": "SBC Vacuum Controller",
- "vacuum.uhGroup": "UH pumps · grouped stage",
+ "vacuum.groupedStage": "{group} · grouped stage",
  "validation.allPassed": "全部检查通过",
  "validation.autoDownload": "自动下载",
  "validation.autoDownload.error": "自动下载：{detail}",

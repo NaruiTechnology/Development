@@ -5561,13 +5561,10 @@ body {
 
 .vacuum-workflow {
   display: grid;
+  /* Default for three stages; VacuumDashboard sets the real template per groupName stage. */
   grid-template-columns: minmax(190px, 1fr) 54px minmax(190px, 1fr) 54px minmax(390px, 1.8fr);
   align-items: center;
   gap: 10px;
-}
-
-.vacuum-workflow:where([data-single-uh="true"]) {
-  grid-template-columns: minmax(190px, 1fr) 54px minmax(190px, 1fr) 54px minmax(190px, 1fr);
 }
 
 .vacuum-workflow__connector {

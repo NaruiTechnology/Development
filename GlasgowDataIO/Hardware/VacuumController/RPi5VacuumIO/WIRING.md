@@ -331,6 +331,11 @@ On the Pi 4B this port is UART5 (usually `/dev/ttyAMA1`; check `ls -l /dev/ttyAM
 
 Do steps 1–4 with **all tool-side plugs unplugged** except J1 (24 V), J2 (E-stop) and J3 (Pi).
 
+With no gauges connected, the pumps cannot reach their configured readings, so for this
+jumper test set `"Interlock": false` on every `SBC.Gauges` entry. **Remove it again (or set it
+back to `true`) before connecting the tool**: in normal operation a pump turns ready only when
+its ready input is on *and* its gauge reads exactly its configured `value` or lower.
+
 | # | Action | Expected |
 |---|---|---|
 | 1 | Power 24 V, E-stop closed, Pi off | D3 on, D9 on, **D10 off**, all relay/solenoid LEDs off |

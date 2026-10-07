@@ -41,6 +41,18 @@ def format_runtime(seconds) -> str:
     return f"{total // 3600:02d}:{(total % 3600) // 60:02d}:{total % 60:02d}"
 
 
+def group_stages(pumps) -> list:
+    """``[(groupName, [pump, ...]), ...]``: consecutive pumps sharing a group."""
+    stages: list = []
+    for pump in pumps:
+        group = pump.get("group") or pump.get("name")
+        if stages and stages[-1][0] == group:
+            stages[-1][1].append(pump)
+        else:
+            stages.append((group, [pump]))
+    return stages
+
+
 def group_state(pumps) -> str:
     if any(p.get("border") == "error" for p in pumps):
         return "error"
@@ -260,28 +272,27 @@ class VacuumDashboard(_ToolWindow):
                                           "muted"))
         else:
             pumps = s.get("pumps") or []
-            mech = next((p for p in pumps if p.get("name") == "MechanicalVacuumPump"), None)
-            turbo = next((p for p in pumps if p.get("name") == "TurboVacuumPump"), None)
-            uh = [p for p in pumps if p.get("group") == "ultra-high-vacuum"]
-            names = {"MechanicalVacuumPump", "TurboVacuumPump", *[p.get("name") for p in uh]}
-            others = [p for p in pumps if p.get("name") not in names]
-            if mech and turbo and uh and not others:
-                self.body_lay.addWidget(self._pump_card(mech))
-                self.body_lay.addWidget(self._arrow(mech.get("border")))
-                self.body_lay.addWidget(self._pump_card(turbo))
-                self.body_lay.addWidget(self._arrow(turbo.get("border")))
-                group = QFrame()
-                group.setObjectName("Card")
-                gcol = BORDER_COLORS.get(group_state(uh))
-                if gcol:
-                    group.setStyleSheet(f"QFrame#Card {{ border: 2px dashed {gcol}; }}")
-                gl = QVBoxLayout(group)
-                gl.addWidget(label(t("vacuum.uhGroup"), "dim"))
-                gr = QHBoxLayout()
-                for p in uh:
-                    gr.addWidget(self._pump_card(p))
-                gl.addLayout(gr)
-                self.body_lay.addWidget(group)
+            # Cascade stages come from each pump's groupName (``group``).
+            stages = group_stages(pumps)
+            if len(stages) > 1 and stages[0][1][0].get("name") == "MechanicalVacuumPump":
+                for index, (group_name, members) in enumerate(stages):
+                    if index:
+                        self.body_lay.addWidget(self._arrow(group_state(stages[index - 1][1])))
+                    if len(members) == 1:
+                        self.body_lay.addWidget(self._pump_card(members[0]))
+                        continue
+                    group = QFrame()
+                    group.setObjectName("Card")
+                    gcol = BORDER_COLORS.get(group_state(members))
+                    if gcol:
+                        group.setStyleSheet(f"QFrame#Card {{ border: 2px dashed {gcol}; }}")
+                    gl = QVBoxLayout(group)
+                    gl.addWidget(label(t("vacuum.groupedStage", group=group_name), "dim"))
+                    gr = QHBoxLayout()
+                    for p in members:
+                        gr.addWidget(self._pump_card(p))
+                    gl.addLayout(gr)
+                    self.body_lay.addWidget(group)
             else:
                 grid = QWidget()
                 gl = QGridLayout(grid)

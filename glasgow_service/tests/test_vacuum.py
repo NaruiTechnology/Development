@@ -54,12 +54,13 @@ def test_vacuum_equipment_count_is_configuration_driven_with_minimum_three():
     five = json.loads(json.dumps(payload))
     five["VacuumPumps"].append({
         "name": "UHVacuumPump_3",
+        "groupName": "UltraHighVacuum",
         "power": "off",
         "value": "4.0e-5",
         "write": "A5",
         "read": "B4",
     })
-    five["SBC"]["GPIO"].update({"A5": 16, "B4": 13})
+    five["SBC"]["GPIO"].update({"A5": "GPIO16", "B4": "GPIO13"})
     parsed_five = VacuumConfig.model_validate(five)
     assert [pump.name for pump in parsed_five.pumps][-1] == "UHVacuumPump_3"
 
@@ -79,6 +80,94 @@ def test_vacuum_config_requires_unique_names_and_core_sequence_stages():
     payload["VacuumPumps"][0]["name"] = "OtherBackingPump"
     with pytest.raises(ValueError, match="requires MechanicalVacuumPump"):
         VacuumConfig.model_validate(payload)
+
+
+def test_every_vacuum_equipment_node_declares_a_group_name():
+    payload = json.loads(CONFIG_PATH.read_text())
+    assert [(p["name"], p["groupName"]) for p in payload["VacuumPumps"]] == [
+        ("MechanicalVacuumPump", "MechanicalVacuum"),
+        ("TurboVacuumPump", "TurboVacuum"),
+        ("UHVacuumPump_1", "UltraHighVacuum"),
+        ("UHVacuumPump_2", "UltraHighVacuum"),
+    ]
+    assert make_config().stages == [
+        ("MechanicalVacuum", ["MechanicalVacuumPump"]),
+        ("TurboVacuum", ["TurboVacuumPump"]),
+        ("UltraHighVacuum", ["UHVacuumPump_1", "UHVacuumPump_2"]),
+    ]
+
+    missing = json.loads(CONFIG_PATH.read_text())
+    del missing["VacuumPumps"][1]["groupName"]
+    with pytest.raises(ValueError, match="groupName"):
+        VacuumConfig.model_validate(missing)
+
+    bad = json.loads(CONFIG_PATH.read_text())
+    bad["VacuumPumps"][1]["groupName"] = "1 turbo"
+    with pytest.raises(ValueError, match="groupName must start with a letter"):
+        VacuumConfig.model_validate(bad)
+
+
+def test_group_name_rules_define_an_unambiguous_cascade():
+    split = json.loads(CONFIG_PATH.read_text())
+    split["VacuumPumps"][1]["groupName"] = "UltraHighVacuum"
+    split["VacuumPumps"][2]["groupName"] = "TurboVacuum"
+    with pytest.raises(ValueError, match="is split"):
+        VacuumConfig.model_validate(split)
+
+    shared = json.loads(CONFIG_PATH.read_text())
+    shared["VacuumPumps"][1]["groupName"] = "MechanicalVacuum"
+    with pytest.raises(ValueError, match="first groupName must contain only"):
+        VacuumConfig.model_validate(shared)
+
+    single = json.loads(CONFIG_PATH.read_text())
+    for pump in single["VacuumPumps"]:
+        pump["groupName"] = "Everything"
+    with pytest.raises(ValueError, match="first groupName must contain only"):
+        VacuumConfig.model_validate(single)
+
+    # The cascade no longer depends on equipment names beyond the backing
+    # pump: a renamed turbo works as long as its groupName says where it runs.
+    renamed = json.loads(CONFIG_PATH.read_text())
+    renamed["VacuumPumps"][1]["name"] = "HiPaceTurbo"
+    config = VacuumConfig.model_validate(renamed)
+    assert config.stages[1] == ("TurboVacuum", ["HiPaceTurbo"])
+
+
+def test_sbc_gpio_uses_raspberry_pi_line_names():
+    config = make_config()
+    assert config.sbc.gpio == {
+        "A0": 17, "B0": 27, "A1": 22, "B1": 23, "A2": 24,
+        "B2": 25, "A3": 5, "B3": 6, "A4": 12,
+    }
+    payload = json.loads(CONFIG_PATH.read_text())
+    assert all(str(v).startswith("GPIO") for v in payload["SBC"]["GPIO"].values())
+
+    legacy = json.loads(CONFIG_PATH.read_text())
+    legacy["SBC"]["GPIO"]["A0"] = 17          # bare BCM number still accepted
+    assert VacuumConfig.model_validate(legacy).sbc.gpio["A0"] == 17
+
+    for value, message in [
+        ("GPIO0", "reserved for the HAT ID EEPROM"),
+        ("GPIO1", "reserved for the HAT ID EEPROM"),
+        ("GPIO28", "26 header GPIO lines"),
+        ("pin 11", "Raspberry Pi GPIO name"),
+        ("GPIO27", "both use GPIO27"),          # already used by B0
+    ]:
+        bad = json.loads(CONFIG_PATH.read_text())
+        bad["SBC"]["GPIO"]["A0"] = value
+        with pytest.raises(ValueError, match=message):
+            VacuumConfig.model_validate(bad)
+
+
+def test_raspberry_pi_header_table_has_26_lines_matching_the_emulator():
+    from glasgow_service.emulation.raspberry_pi import BCM_TO_HEADER
+    from glasgow_service.vacuum import RPI_HEADER_GPIO, rpi_gpio_name
+
+    assert sorted(RPI_HEADER_GPIO) == list(range(2, 28))
+    assert len(RPI_HEADER_GPIO) == 26
+    for line, pin in RPI_HEADER_GPIO.items():
+        assert BCM_TO_HEADER[line] == pin
+    assert rpi_gpio_name(17) == "GPIO17 (pin 11)"
 
 
 def test_disabled_vacuum_bypasses_controller_config_validation(tmp_path):
@@ -257,6 +346,41 @@ def test_upstream_interlock_loss_deenergizes_downstream_stages():
             states = {pump.name: pump for pump in controller.status().pumps}
             assert states[MECHANICAL_PUMP].power is True
             assert states["TurboVacuumPump"].power is False
+        finally:
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_cascade_stages_follow_group_name_not_equipment_names():
+    """Regrouping in JSON alone turns the UH pair into two sequential stages."""
+    payload = json.loads(CONFIG_PATH.read_text())
+    payload["VacuumPumps"][2]["groupName"] = "UltraHighVacuumStage1"
+    payload["VacuumPumps"][3]["groupName"] = "UltraHighVacuumStage2"
+    config = VacuumConfig.model_validate(payload).model_copy(
+        update={"enabled": True, "error_range": 0.005, "simulate": True})
+
+    async def scenario():
+        controller = VacuumController(config)
+        await controller.start()
+        try:
+            await controller.set_simulated_read(MECHANICAL_PUMP, True)
+            await controller.set_simulated_read("TurboVacuumPump", True)
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert states["UHVacuumPump_1"].power is True
+            assert states["UHVacuumPump_2"].power is False      # waits for stage 1
+            assert states["UHVacuumPump_1"].group == "UltraHighVacuumStage1"
+
+            await controller.set_simulated_read("UHVacuumPump_1", True)
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert states["UHVacuumPump_2"].power is True
+
+            # Losing stage 1 drops stage 2 only; turbo keeps running.
+            await controller.set_simulated_read("UHVacuumPump_1", False)
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert states["TurboVacuumPump"].power is True
+            assert states["UHVacuumPump_1"].power is False
+            assert states["UHVacuumPump_2"].power is False
         finally:
             await controller.close()
 
@@ -450,5 +574,76 @@ def test_port_b_read_failure_clears_stale_voltage_and_readiness():
         assert controller.status().cascade_stopped is True
         assert device.output_level("A0") is True
         assert all(device.output_level(pin) is False for pin in ("A1", "A2", "A3"))
+
+    asyncio.run(scenario())
+
+
+def test_direct_gpio_pump_is_ready_only_when_its_reading_reaches_threshold():
+    """With a gauge adapter, a high ready input is not enough on its own."""
+    config = make_config(simulate=False)
+    readings = {pump.read: None for pump in config.pumps}
+
+    class GaugedDevice(SimulatedVacuumDevice):
+        async def read_gauge_values(self):
+            return dict(readings)
+
+        async def read_port_b(self):
+            return {pin: 1 for pin in readings}
+
+    device = GaugedDevice(
+        [*(p.write for p in config.pumps), config.high_voltage_transformer.write],
+        (p.read for p in config.pumps))
+    controller = VacuumController(config, device=device)
+
+    async def scenario():
+        await controller.start()
+        mechanical = next(p for p in config.pumps if p.name == MECHANICAL_PUMP)
+        readings[mechanical.read] = mechanical.threshold * 5       # not reached
+        await controller.poll_once()
+        state = controller.status().pumps[0]
+        assert state.ready is False and state.border == "waiting"
+        assert controller.status().pumps[1].power is False
+
+        readings[mechanical.read] = mechanical.threshold * 0.2     # reached
+        await controller.poll_once()
+        state = controller.status().pumps[0]
+        assert state.ready is True and state.border == "ready"
+        assert controller.status().pumps[1].power is True
+        await controller.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(("factor", "ready"), [
+    (1.0, True),        # exact match
+    (0.5, True),        # lower (better vacuum)
+    (1.005, False),     # above, even though within errorRange
+    (1.01, False),
+])
+def test_pump_turns_green_only_on_exact_match_or_lower(factor, ready):
+    config = make_config(simulate=False, error_range=0.01)
+    readings = {pump.read: None for pump in config.pumps}
+
+    class GaugedDevice(SimulatedVacuumDevice):
+        async def read_gauge_values(self):
+            return dict(readings)
+
+        async def read_port_b(self):
+            return {pin: 1 for pin in readings}
+
+    device = GaugedDevice(
+        [*(p.write for p in config.pumps), config.high_voltage_transformer.write],
+        (p.read for p in config.pumps))
+    controller = VacuumController(config, device=device)
+
+    async def scenario():
+        await controller.start()
+        mechanical = next(p for p in config.pumps if p.name == MECHANICAL_PUMP)
+        readings[mechanical.read] = mechanical.threshold * factor
+        await controller.poll_once()
+        state = controller.status().pumps[0]
+        assert state.ready is ready
+        assert state.border == ("ready" if ready else "waiting")
+        await controller.close()
 
     asyncio.run(scenario())

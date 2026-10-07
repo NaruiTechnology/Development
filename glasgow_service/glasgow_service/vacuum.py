@@ -45,7 +45,47 @@ DEFAULT_VACUUM_CONFIG = Path(
 )
 GPIO_PIN_RE = re.compile(r"^[AB]([0-7])$")
 MECHANICAL_PUMP = "MechanicalVacuumPump"
-UH_GROUP = "ultra-high-vacuum"
+#: ``groupName`` values: one identifier per cascade stage.
+GROUP_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+
+#: Raspberry Pi GPIO line names follow the official ``GPIOn`` convention
+#: (``pinout``, ``gpioinfo``, ``pinctrl``); ``n`` is the Broadcom (BCM) line.
+RPI_GPIO_NAME_RE = re.compile(r"^GPIO([0-9]|[1-9][0-9])$")
+#: The 26 user GPIO lines on the 40-pin header (Pi 2B/3B/4B/5/400/Zero) and
+#: the physical header pin each one is wired to.  GPIO0/GPIO1 (pins 27/28,
+#: ID_SD/ID_SC) are reserved for the HAT ID EEPROM and are not assignable.
+RPI_HEADER_GPIO: dict[int, int] = {
+    2: 3, 3: 5, 4: 7, 5: 29, 6: 31, 7: 26, 8: 24, 9: 21, 10: 19,
+    11: 23, 12: 32, 13: 33, 14: 8, 15: 10, 16: 36, 17: 11, 18: 12,
+    19: 35, 20: 38, 21: 40, 22: 15, 23: 16, 24: 18, 25: 22, 26: 37, 27: 13,
+}
+
+
+def rpi_gpio_name(line: int) -> str:
+    """``17`` -> ``"GPIO17 (pin 11)"``."""
+    pin = RPI_HEADER_GPIO.get(line)
+    return f"GPIO{line}" + (f" (pin {pin})" if pin is not None else "")
+
+
+def _parse_rpi_gpio(logical: str, value: Any) -> int:
+    """Accept ``"GPIO17"`` (preferred) or a bare BCM number; return the line."""
+    if isinstance(value, bool):
+        raise ValueError(f"SBC.GPIO.{logical} must be a Raspberry Pi GPIO name such as GPIO17")
+    if isinstance(value, int):
+        line = value
+    else:
+        match = RPI_GPIO_NAME_RE.fullmatch(str(value).strip().upper())
+        if match is None:
+            raise ValueError(
+                f"SBC.GPIO.{logical} must be a Raspberry Pi GPIO name such as GPIO17, "
+                f"got {value!r}")
+        line = int(match.group(1))
+    if line not in RPI_HEADER_GPIO:
+        reserved = " (reserved for the HAT ID EEPROM)" if line in (0, 1) else ""
+        raise ValueError(
+            f"SBC.GPIO.{logical}=GPIO{line}{reserved} is not one of the 26 header "
+            "GPIO lines GPIO2..GPIO27")
+    return line
 
 
 def _parse_threshold(value: Any) -> float:
@@ -74,10 +114,11 @@ class GaugeConfig(BaseModel):
     offset: float = Field(0.0, alias="Offset")
     min_volts: float = Field(0.5, alias="MinVolts")
     max_volts: float = Field(10.0, alias="MaxVolts")
-    # When true the pump counts as ready only once this gauge reads at or
-    # below the pump's threshold (``value`` x (1 + errorRange)), in addition
-    # to its ready input.
-    interlock: bool = Field(False, alias="Interlock")
+    # The pump counts as ready only once this gauge reads exactly the pump's
+    # configured ``value`` or lower, in addition
+    # to its ready input.  Default on; set ``"Interlock": false`` to rely on
+    # the ready input alone (for example while commissioning a gauge).
+    interlock: bool = Field(True, alias="Interlock")
 
     @field_validator("ain")
     @classmethod
@@ -88,10 +129,36 @@ class GaugeConfig(BaseModel):
 
 
 class SbcDeviceConfig(BaseModel):
-    """Either a direct BCM ``GPIO`` map, or the RPi5VacuumIO ``Board`` map."""
+    """Either a direct Raspberry Pi ``GPIO`` map, or the RPi5VacuumIO ``Board`` map.
+
+    ``GPIO`` maps a logical channel to a Raspberry Pi GPIO line name, for
+    example ``{"A0": "GPIO17"}``.  After validation the value is the BCM line
+    number (``17``), which is what gpiozero/lgpio take.
+    """
     id: str = Field("raspberry-pi", alias="Id")
     voltage: float = 3.3
     gpio: dict[str, int] | None = Field(None, alias="GPIO")
+
+    @field_validator("gpio", mode="before")
+    @classmethod
+    def parse_gpio(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("SBC.GPIO must map logical channels to GPIO names")
+        lines: dict[str, int] = {}
+        for logical, raw in value.items():
+            if not GPIO_PIN_RE.fullmatch(str(logical)):
+                raise ValueError(f"SBC.GPIO key {logical!r} must be a logical channel A0..A7/B0..B7")
+            lines[logical] = _parse_rpi_gpio(logical, raw)
+        used: dict[int, str] = {}
+        for logical, line in lines.items():
+            if line in used:
+                raise ValueError(
+                    f"SBC.GPIO.{logical} and SBC.GPIO.{used[line]} both use GPIO{line}")
+            used[line] = logical
+        return lines
+
     active_high: bool = Field(True, alias="ActiveHigh")
     input_pull_up: bool | None = Field(None, alias="InputPullUp")
     board: Literal["RPi5VacuumIO-A"] | None = Field(None, alias="Board")
@@ -139,10 +206,22 @@ class SbcDeviceConfig(BaseModel):
 
 class VacuumPumpConfig(BaseModel):
     name: str
+    #: Cascade stage this equipment belongs to.  Equipment sharing a
+    #: ``groupName`` is energized together and must all be ready before the
+    #: next group starts.  Groups run in the order they first appear.
+    group_name: str = Field(alias="groupName")
     power: str = "off"
     threshold: float = Field(alias="value")
     write: str
     read: str
+
+    @field_validator("group_name")
+    @classmethod
+    def validate_group_name(cls, value: str) -> str:
+        if not GROUP_NAME_RE.fullmatch(value):
+            raise ValueError(
+                "groupName must start with a letter and use only letters, digits, '_' or '-'")
+        return value
 
     @field_validator("threshold", mode="before")
     @classmethod
@@ -220,9 +299,9 @@ class VacuumConfig(BaseModel):
         names = [pump.name for pump in self.pumps]
         if len(set(names)) != len(names):
             raise ValueError("vacuum equipment names must be unique")
-        for required in (MECHANICAL_PUMP, "TurboVacuumPump"):
-            if required not in names:
-                raise ValueError(f"vacuum config requires {required}")
+        if MECHANICAL_PUMP not in names:
+            raise ValueError(f"vacuum config requires {MECHANICAL_PUMP}")
+        self._validate_groups()
         if len(set(writes)) != len(writes):
             raise ValueError("vacuum Port A output pins must be unique")
         if self.high_voltage_transformer.write in writes:
@@ -242,6 +321,42 @@ class VacuumConfig(BaseModel):
                 raise ValueError(
                     f"SBC gauges/faults reference unknown channels: {', '.join(unknown)}")
         return self
+
+    def _validate_groups(self) -> None:
+        """``groupName`` defines the cascade; check it is well formed.
+
+        * each group's equipment is listed contiguously, so the stage order
+          is unambiguous;
+        * the first group contains only the backing ``MechanicalVacuumPump``
+          (it is always on and starts the cascade);
+        * there is at least one downstream group.
+        """
+        seen: list[str] = []
+        for pump in self.pumps:
+            if seen and pump.group_name == seen[-1]:
+                continue
+            if pump.group_name in seen:
+                raise ValueError(
+                    f"groupName {pump.group_name!r} is split: list equipment of the "
+                    "same group next to each other")
+            seen.append(pump.group_name)
+        first = [p.name for p in self.pumps if p.group_name == seen[0]]
+        if first != [MECHANICAL_PUMP]:
+            raise ValueError(
+                f"the first groupName must contain only {MECHANICAL_PUMP}, got {first}")
+        if len(seen) < 2:
+            raise ValueError("vacuum config needs at least two groupName stages")
+
+    @property
+    def stages(self) -> list[tuple[str, list[str]]]:
+        """``[(groupName, [equipment names]), ...]`` in cascade order."""
+        stages: list[tuple[str, list[str]]] = []
+        for pump in self.pumps:
+            if stages and stages[-1][0] == pump.group_name:
+                stages[-1][1].append(pump.name)
+            else:
+                stages.append((pump.group_name, [pump.name]))
+        return stages
 
     @property
     def device(self) -> SbcDeviceConfig:
@@ -317,6 +432,8 @@ class VacuumController:
     POLL_INTERVAL_SECONDS = 1.0
     READING_MAX_AGE_SECONDS = 5.0
     SIMULATION_STEP_FRACTION = 0.02
+    #: Float rounding only; not an operating tolerance (see _reading_reached).
+    READING_MATCH_RTOL = 1e-9
 
     def __init__(
         self,
@@ -390,10 +507,14 @@ class VacuumController:
                 threshold=pump.threshold,
                 write=pump.write,
                 read=pump.read,
-                group=UH_GROUP if pump.name.startswith("UHVacuumPump_") else None,
+                group=pump.group_name,
             )
             for pump in config.pumps
         }
+        #: Cascade stages from ``groupName``, upstream first.
+        self._stages: list[list[VacuumPumpState]] = [
+            [self._states[name] for name in names] for _group, names in config.stages
+        ]
         self._task: Optional[asyncio.Task] = None
         self._io_lock = asyncio.Lock()
         self._last_error: Optional[str] = None
@@ -432,7 +553,9 @@ class VacuumController:
         target = self.config.sbc.channel_map.get(logical)
         if target is None:
             return logical
-        return f"{logical}/{target}" if self.config.sbc.board else f"{logical}/BCM{target}"
+        if self.config.sbc.board:
+            return f"{logical}/{target}"
+        return f"{logical}/{rpi_gpio_name(int(target))}"
 
     def _log_mode_banner(self) -> None:
         cfg = self.config
@@ -765,9 +888,13 @@ class VacuumController:
                     ready = state.port_b_value == self.config.device.voltage
                     if state.fault:
                         ready = False
-                    if interlocks.get(state.read):
-                        limit = state.threshold * (1 + self.config.error_range)
-                        ready = ready and state.value is not None and state.value <= limit
+                    # The real-time reading must reach the configured value
+                    # before the pump reports ready (success).  Board mode:
+                    # every configured gauge unless "Interlock": false.
+                    # Direct GPIO: whenever a gauge adapter supplies a reading.
+                    if (interlocks.get(state.read) if board
+                            else state.value is not None):
+                        ready = ready and self._reading_reached(state)
                     state.ready = ready
                     state.border = "error" if state.fault else (
                         "ready" if ready else "waiting")
@@ -892,35 +1019,48 @@ class VacuumController:
             self._cascade_stopped = True
         self._alarms = alarms
 
+    def _reading_reached(self, state: VacuumPumpState) -> bool:
+        """Reading equals the configured ``value`` or is lower; no reading is not reached.
+
+        No tolerance above the configured value.  ``READING_MATCH_RTOL`` only
+        absorbs floating-point rounding in the gauge conversion, so a reading
+        that is numerically equal to the configured value counts as a match.
+        """
+        limit = state.threshold * (1 + self.READING_MATCH_RTOL)
+        return state.value is not None and state.value <= limit
+
+    @staticmethod
+    def _stage_ready(stage: list[VacuumPumpState]) -> bool:
+        """A ``groupName`` stage is ready when every member is ready."""
+        return bool(stage) and all(state.ready for state in stage)
+
     async def _advance_cascade(self) -> None:
-        mechanical = self._states.get(MECHANICAL_PUMP)
-        turbo = self._states.get("TurboVacuumPump")
-        uh = [state for state in self._states.values() if state.group == UH_GROUP]
-        if mechanical and mechanical.ready and turbo and not turbo.power \
-                and turbo.fault is not True:
-            await self.set_power(turbo.name, True, automatic=True)
-            return
-        if turbo and turbo.ready and uh and not all(state.power for state in uh):
-            # The UH pumps are a stage: energize both before evaluating either.
-            # A pump whose fault input is open is never started.
-            for state in uh:
-                if not state.power and state.fault is not True:
+        """Start the first ``groupName`` stage whose upstream stage is ready.
+
+        One stage per poll.  All members of a stage are energized together
+        before any of them is evaluated; a member whose fault input is open is
+        never started.
+        """
+        for upstream, stage in zip(self._stages, self._stages[1:]):
+            if not self._stage_ready(upstream):
+                return
+            pending = [s for s in stage if not s.power and s.fault is not True]
+            if pending:
+                for state in pending:
                     await self.set_power(state.name, True, automatic=True)
+                return
 
     async def _enforce_interlocks(self) -> None:
-        mechanical = self._states.get(MECHANICAL_PUMP)
-        turbo = self._states.get("TurboVacuumPump")
-        uh = [state for state in self._states.values() if state.group == UH_GROUP]
         # Reconcile from downstream to upstream before advancing. A dropped
-        # comparator is an interlock event, not merely a dashboard update.
-        # Keep the backing/mechanical pump running so the chamber can recover.
-        if turbo and not turbo.ready:
-            for state in uh:
+        # comparator is an interlock event, not merely a dashboard update:
+        # a stage loses power as soon as its upstream stage is not ready.
+        # The backing/mechanical stage is never switched off here.
+        for index in range(len(self._stages) - 1, 0, -1):
+            if self._stage_ready(self._stages[index - 1]):
+                continue
+            for state in self._stages[index]:
                 if state.power:
                     await self.set_power(state.name, False, automatic=True)
-        if mechanical and not mechanical.ready:
-            if turbo and turbo.power:
-                await self.set_power(turbo.name, False, automatic=True)
 
     async def _poll_worker(self) -> None:
         while True:

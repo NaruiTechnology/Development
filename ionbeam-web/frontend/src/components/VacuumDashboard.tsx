@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import mechanicalPumpImage from "../assets/MechanicalVacuumPump.png";
@@ -178,15 +178,13 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
 
   if (!open) return null;
 
-  const mechanicalPump = status?.pumps.find((pump) => pump.name === MECHANICAL_PUMP);
-  const turboPump = status?.pumps.find((pump) => pump.name === "TurboVacuumPump");
-  const uhPumps = status?.pumps.filter((pump) => pump.group === "ultra-high-vacuum") ?? [];
-  const workflowNames = new Set([
-    MECHANICAL_PUMP,
-    "TurboVacuumPump",
-    ...uhPumps.map((pump) => pump.name),
-  ]);
-  const otherPumps = status?.pumps.filter((pump) => !workflowNames.has(pump.name)) ?? [];
+  // Cascade stages come from each pump's groupName (reported as `group`),
+  // in configuration order.  No equipment names are hard-coded here.
+  const stages = status ? groupStages(status.pumps) : [];
+  const showWorkflow = stages.length > 1 && stages[0].pumps[0]?.name === MECHANICAL_PUMP;
+  const workflowColumns = stages
+    .map((stage) => (stage.pumps.length > 1 ? "minmax(390px, 1.8fr)" : "minmax(190px, 1fr)"))
+    .join(" 54px ");
 
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
@@ -265,20 +263,23 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
               {pending === "acquire" ? t("vacuum.acquiring") : t("vacuum.loading")}
             </div>
           ) : (
-            mechanicalPump && turboPump && uhPumps.length > 0 && otherPumps.length === 0 ? (
-              <div className="vacuum-workflow" data-single-uh={uhPumps.length === 1 ? "true" : undefined}>
-                <div className="vacuum-workflow__stage">{renderPumpCard(mechanicalPump)}</div>
-                <WorkflowArrow state={mechanicalPump.border} />
-                <div className="vacuum-workflow__stage">{renderPumpCard(turboPump)}</div>
-                <WorkflowArrow state={turboPump.border} grouped={uhPumps.length > 1} />
-                {uhPumps.length === 1 ? (
-                  <div className="vacuum-workflow__stage">{renderPumpCard(uhPumps[0])}</div>
-                ) : (
-                  <div className="vacuum-workflow__group" data-state={groupState(uhPumps)}>
-                    <div className="vacuum-workflow__group-title">{t("vacuum.uhGroup")}</div>
-                    {uhPumps.map(renderPumpCard)}
-                  </div>
-                )}
+            showWorkflow ? (
+              <div className="vacuum-workflow" style={{ gridTemplateColumns: workflowColumns }}>
+                {stages.map((stage, index) => (
+                  <Fragment key={stage.group}>
+                    {index > 0 && (
+                      <WorkflowArrow state={groupState(stages[index - 1].pumps)} grouped={stage.pumps.length > 1} />
+                    )}
+                    {stage.pumps.length === 1 ? (
+                      <div className="vacuum-workflow__stage">{renderPumpCard(stage.pumps[0])}</div>
+                    ) : (
+                      <div className="vacuum-workflow__group" data-state={groupState(stage.pumps)}>
+                        <div className="vacuum-workflow__group-title">{t("vacuum.groupedStage", { group: stage.group })}</div>
+                        {stage.pumps.map(renderPumpCard)}
+                      </div>
+                    )}
+                  </Fragment>
+                ))}
               </div>
             ) : (
               <div className="vacuum-dashboard__grid">{status.pumps.map(renderPumpCard)}</div>
@@ -306,6 +307,20 @@ function WorkflowArrow({ state, grouped = false }: { state: VacuumPumpState["bor
       <span className="vacuum-workflow__arrowhead" />
     </div>
   );
+}
+
+type VacuumStage = { group: string; pumps: VacuumPumpState[] };
+
+/** Consecutive pumps with the same groupName form one cascade stage. */
+export function groupStages(pumps: VacuumPumpState[]): VacuumStage[] {
+  const stages: VacuumStage[] = [];
+  for (const pump of pumps) {
+    const group = pump.group ?? pump.name;
+    const last = stages[stages.length - 1];
+    if (last && last.group === group) last.pumps.push(pump);
+    else stages.push({ group, pumps: [pump] });
+  }
+  return stages;
 }
 
 function groupState(pumps: VacuumPumpState[]): VacuumPumpState["border"] {

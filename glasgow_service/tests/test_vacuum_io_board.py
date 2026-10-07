@@ -24,6 +24,16 @@ def isolated_scan_configuration(monkeypatch):
     monkeypatch.delenv("SBC_VACUUM_ENABLE_CONFIG", raising=False)
 
 
+def jumper_gauges():
+    """Example gauges with the reading check off.
+
+    The WIRING.md commissioning test bridges the ready inputs with jumpers
+    and has no gauges connected, so it runs with ``"Interlock": false``.
+    """
+    gauges = json.loads(EXAMPLE.read_text())["SBC"]["Gauges"]
+    return {pin: {**gauge, "Interlock": False} for pin, gauge in gauges.items()}
+
+
 def board_config(**sbc_updates):
     payload = json.loads(EXAMPLE.read_text())
     payload["Enable"] = True
@@ -95,7 +105,8 @@ def test_wiring_guide_commissioning_table(model):
         assert rig.board.leds.d3_24v and rig.board.estop_rail_live
         assert not rig.board.safe_rail_live and relays(rig) == [False] * 5
 
-        controller = VacuumController(board_config(PiModel=model), emulator=rig)
+        controller = VacuumController(board_config(PiModel=model, Gauges=jumper_gauges()),
+                                  emulator=rig)
         for di in (5, 6, 7, 8):          # fault inputs wired "healthy"
             rig.jumper(di)
         # Row 3: service starts -> output rail + RUN LED, K1 (mechanical) on.
@@ -156,7 +167,7 @@ def test_wiring_guide_commissioning_table(model):
 @pytest.fixture
 def started():
     rig = VacuumRig(tool_connected=False)
-    controller = VacuumController(board_config(), emulator=rig)
+    controller = VacuumController(board_config(Gauges=jumper_gauges()), emulator=rig)
     for di in (1, 2, 3, 4, 5, 6, 7, 8):
         rig.jumper(di)
     run(controller.start())
@@ -659,3 +670,50 @@ def test_repeated_close_after_executor_release_is_safe():
         run(scenario())
     finally:
         rig.close()
+
+
+# ------------------------------------------------------------ reading must reach threshold
+
+def test_ready_input_alone_does_not_make_a_pump_ready_without_its_reading():
+    """Default gauges: DI1 jumpered but no gauge connected -> stays waiting."""
+    rig = VacuumRig(tool_connected=False)
+    controller = VacuumController(board_config(), emulator=rig)
+    for di in (1, 5, 6, 7, 8):
+        rig.jumper(di)
+
+    async def scenario():
+        await controller.start()
+        await poll(controller, rig)
+        mechanical = controller.status().pumps[0]
+        assert mechanical.port_b_value == pytest.approx(3.3)   # ready input on
+        assert mechanical.value is None                         # no reading
+        assert mechanical.ready is False and mechanical.border == "waiting"
+        assert relays(rig) == [True, False, False, False, False]  # turbo not started
+        await controller.close()
+
+    run(scenario())
+
+
+def test_every_pump_turns_ready_only_after_its_reading_reaches_its_threshold():
+    config = board_config()
+    limit = {p.name: p.threshold for p in config.pumps}
+    rig = VacuumRig()
+    controller = VacuumController(config, emulator=rig)
+
+    async def scenario():
+        await controller.start()
+        became_ready = {}
+        for _ in range(500):
+            await controller.poll_once()
+            rig.advance(1.0)
+            for pump in controller.status().pumps:
+                if pump.ready:
+                    assert pump.value is not None and pump.value <= limit[pump.name], pump
+                    became_ready.setdefault(pump.name, pump.value)
+            if controller.isVacuumSystemReady:
+                break
+        assert controller.isVacuumSystemReady
+        assert set(became_ready) == set(limit)
+        await controller.close()
+
+    run(scenario())

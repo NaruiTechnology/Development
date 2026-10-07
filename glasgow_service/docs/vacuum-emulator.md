@@ -126,7 +126,7 @@ SBC_VACUUM_LOG_FORMAT=json ...                              # JSON lines with "e
 
 All of it is covered by `tests/test_vacuum_io_board.py`:
 
-- **Cascade** (unchanged): mechanical → turbo → UH group, with downstream shutdown on loss of ready.
+- **Cascade** (from each pump's `groupName`): mechanical → turbo → UH group, with downstream shutdown on loss of ready.
 - **Ready** = the pump's ready input (B channel → DIn). With `"Interlock": true` on its gauge it
   also needs `p <= value × (1 + errorRange)`.
 - **Fault inputs** (`SBC.Faults`, wired "healthy = ON"): an open input marks the pump `fault`,

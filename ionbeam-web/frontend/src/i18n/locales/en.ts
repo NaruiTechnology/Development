@@ -721,7 +721,7 @@ export const en = {
   "sampleStage.mode.simulation": "Simulation",
   "sampleStage.mode.hardware": "Second Glasgow",
   "vacuum.alwaysRunning": "Continuous",
-  "vacuum.uhGroup": "UH pumps · grouped stage",
+  "vacuum.groupedStage": "{group} · grouped stage",
   "vacuum.hardwareRead.title": "Read-only state reported by the Raspberry Pi GPIO input",
 
   /* ===== settings dialog ============================================ */

@@ -17,16 +17,43 @@ continues to use `PROXY_TARGET_HTTP` and does not own vacuum GPIO.
 
 ## Control logic and safety boundary
 
-The configured sequence is:
+The sequence is defined by the `groupName` attribute of each `VacuumPumps`
+item in `vacuumSystem.json`. Items that share a `groupName` form one cascade
+stage, and stages run in the order their `groupName` first appears:
 
-1. Start the mechanical/backing pump.
-2. Wait for its isolated comparator input before starting the turbo pump.
-3. Wait for the turbo comparator before starting the UH pump group.
-4. Report ready only when every configured input is asserted.
+| `groupName` | Equipment |
+|---|---|
+| `MechanicalVacuum` | `MechanicalVacuumPump` (backing stage, always on) |
+| `TurboVacuum` | `TurboVacuumPump` |
+| `UltraHighVacuum` | `UHVacuumPump_1`, `UHVacuumPump_2` |
 
-The controller continuously reconciles interlocks. Loss of turbo-ready
-de-energizes all UH outputs; loss of mechanical-ready de-energizes turbo and UH
-outputs. A GPIO read failure clears all software readiness. The backing pump
+1. Start the mechanical/backing pump (the first stage).
+2. A pump is **ready** (green) only when its ready input is on **and** its
+   real-time reading has reached its configured `value`:
+   `reading <= value` (an exact match or lower). A lower (better) pressure stays
+   ready; no reading means not ready. In board mode this applies to every
+   gauge in `SBC.Gauges` unless it sets `"Interlock": false` (WIRING.md jumper
+   test). In direct-GPIO mode it applies whenever a gauge adapter supplies a
+   reading.
+3. When every member of a stage is ready, energize every member of the next
+   stage together. A member whose fault input is open is never started.
+4. Report ready only when every pump is ready.
+
+Configuration rules: the first `groupName` contains only
+`MechanicalVacuumPump`; there are at least two stages; items of one
+`groupName` are listed next to each other. To run the two UH pumps as two
+sequential stages, give them different `groupName` values; no code change is
+needed.
+
+The controller continuously reconciles interlocks, downstream first: when a
+stage is not ready, every powered output in the next stage is de-energized, so
+the loss propagates down the cascade. The backing pump is never switched off by
+an interlock. A GPIO read failure clears all software readiness.
+
+In `SBC.GPIO` mode, each logical channel maps to a Raspberry Pi GPIO line name
+(`"A0": "GPIO17"`). Only the 26 header lines `GPIO2`..`GPIO27` are accepted;
+`GPIO0`/`GPIO1` are reserved for the HAT ID EEPROM. Log lines name both the line
+and its header pin, for example `A0/GPIO17 (pin 11)`. The backing pump
 remains on during a normal stop so pressure can recover. Service shutdown
 drives all managed outputs inactive.
 

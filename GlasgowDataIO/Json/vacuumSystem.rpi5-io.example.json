@@ -2,6 +2,7 @@
     "VacuumPumps": [
         {
             "name": "MechanicalVacuumPump",
+            "groupName": "MechanicalVacuum",
             "power": "off",
             "value": "1.0*e-1",
             "write": "A0",
@@ -9,6 +10,7 @@
         },
         {
             "name": "TurboVacuumPump",
+            "groupName": "TurboVacuum",
             "power": "off",
             "value": "2.0*e-3",
             "write": "A1",
@@ -16,6 +18,7 @@
         },
         {
             "name": "UHVacuumPump_1",
+            "groupName": "UltraHighVacuum",
             "power": "off",
             "value": "3.0*e-5",
             "write": "A2",
@@ -23,6 +26,7 @@
         },
         {
             "name": "UHVacuumPump_2",
+            "groupName": "UltraHighVacuum",
             "power": "off",
             "value": "3.0*e-5",
             "write": "A3",
@@ -92,10 +96,12 @@
     },
     "Message": [
         "RPi5VacuumIO rev A.1 board on a Raspberry Pi 4 Model B (PiModel 4B) or Raspberry Pi 5 (PiModel 5).",
+        "groupName: equipment sharing a groupName is one cascade stage, energized together; every member must be ready",
+        "    before the next groupName starts. Order = first appearance. The first groupName holds only MechanicalVacuumPump.",
         "Channels: logical A outputs -> relays K1..K8; logical B ready inputs -> opto inputs DI1..DI16.",
         "Faults: optional 'healthy = ON' inputs per B channel. An open fault input stops that pump and the cascade.",
         "Gauges: AI input and conversion law. log: p = 10^(Slope*U + Offset); linear: p = Slope*U + Offset.",
-        "        Set \"Interlock\": true on a gauge to also require p <= value*(1+errorRange) before the next stage starts.",
+        "        A pump turns ready (green) only when its ready input is on AND its gauge reads p <= value (an exact match or lower). Set \"Interlock\": false on a gauge to use the ready input alone (WIRING.md jumper test).",
         "Serial: Pi 4B -> RS485 /dev/ttyAMA0 (needs dtoverlay=disable-bt), RS232 on uart5 (dtoverlay=uart5, check ls -l /dev/ttyAMA*).",
         "        Pi 5  -> RS485 /dev/ttyAMA0, RS232 /dev/ttyAMA4 (dtoverlay=uart4-pi5).",
         "Enable: CONFIGURATION / GENERAL / Active vacuum control edits this entry.",
@@ -106,7 +112,7 @@
     ],
     "IsProduction": false,
     "Simulate": false,
-    "Enable": false,
+    "Enable": true,
     "LogName": "VacuumDashboard",
     "Verbose": false
 }

@@ -32,6 +32,7 @@ export interface VacuumPumpState {
   read: string;
   border: VacuumBorderState;
   ready: boolean;
+  /** Cascade stage from the pump's groupName in vacuumSystem.json. */
   group: string | null;
 }
 
