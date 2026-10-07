@@ -244,7 +244,7 @@ class WorkflowContractTests(unittest.TestCase):
             state._readAdminDbConfig = Mock(return_value={})
             state._writeBackendEnv(str(backend / ".env"), str(backend), {})
             env = dict(line.split("=", 1) for line in (backend / ".env").read_text().splitlines() if "=" in line)
-            self.assertEqual(env["SBC_VACUUM_CONFIG"], str(root / "Development/GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json"))
+            self.assertEqual(env["SBC_VACUUM_CONFIG"], str(root / "Development/GlasgowDataIO/Json/vacuumSystem.json"))
             self.assertEqual(env["VACUUM_CONTROLLER_URL"], "http://127.0.0.1:8780")
 
     def test_stop_gate_cannot_be_skipped_or_reused(self):

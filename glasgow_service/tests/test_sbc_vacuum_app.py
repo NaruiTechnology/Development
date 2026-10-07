@@ -234,3 +234,23 @@ def test_production_missing_sbc_never_constructs_emulator(tmp_path, monkeypatch,
     with pytest.raises(RuntimeError, match="SBC hardware disconnected"):
         asyncio.run(start())
     assert calls == ["hardware"]
+
+
+def test_runtime_pump_list_comes_only_from_canonical_config(tmp_path, monkeypatch):
+    payload = json.loads(CONFIG_PATH.read_text())
+    payload["VacuumPumps"] = [pump for pump in payload["VacuumPumps"]
+                              if pump["name"] != "UHVacuumPump_1"]
+    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    source = tmp_path / "vacuumSystem.json"
+    source.write_text(json.dumps(payload))
+    (tmp_path / "streamData.json").write_text(json.dumps({"IsProduction": False}))
+    # A separate example must never add equipment to the selected profile.
+    (tmp_path / "vacuumSystem.rpi5-io.example.json").write_text("{}")
+    monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
+    monkeypatch.setenv("SBC_REQUIRE_FENCING", "false")
+    with TestClient(create_app()) as client:
+        status = client.get("/vacuum").json()
+        assert [pump["name"] for pump in status["pumps"]] == [
+            pump["name"] for pump in payload["VacuumPumps"]]
+        assert "UHVacuumPump_1" not in [pump["name"] for pump in status["pumps"]]
+        assert client.post("/vacuum/pumps/UHVacuumPump_1/power", json={"power": True}).status_code == 404

@@ -43,3 +43,15 @@ export function shouldDisableScanPanel({
 export function shouldShowVacuumController(vacuumEnabled: boolean): boolean {
   return vacuumEnabled;
 }
+
+/** Preserve configured equipment during faults without displaying stale readings. */
+export function vacuumStatusForDisplay(status: VacuumSystemStatus, now = Date.now()): VacuumSystemStatus {
+  if (status.connected && vacuumReadingsAreFresh(status.updated_at, now)) return status;
+  return {
+    ...status, connected: false, isVacuumSystemReady: false,
+    pumps: status.pumps.map((pump) => ({
+      ...pump, value: null, ready: false, port_b_value: 0,
+      border: pump.power ? "error" : "off",
+    })),
+  };
+}

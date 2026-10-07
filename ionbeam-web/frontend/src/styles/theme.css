@@ -5566,6 +5566,10 @@ body {
   gap: 10px;
 }
 
+.vacuum-workflow:where([data-single-uh="true"]) {
+  grid-template-columns: minmax(190px, 1fr) 54px minmax(190px, 1fr) 54px minmax(190px, 1fr);
+}
+
 .vacuum-workflow__connector {
   --vacuum-flow-color: var(--c-border);
   position: relative;

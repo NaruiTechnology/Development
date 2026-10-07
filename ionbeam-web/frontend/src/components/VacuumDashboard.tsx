@@ -9,7 +9,7 @@ import { useTranslation } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
-import { vacuumReadingsAreFresh } from "../lib/vacuumPolicy";
+import { vacuumReadingsAreFresh, vacuumStatusForDisplay } from "../lib/vacuumPolicy";
 import type { VacuumPumpState, VacuumSystemStatus } from "../types/api";
 
 const MECHANICAL_PUMP = "MechanicalVacuumPump";
@@ -97,13 +97,9 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
       const refreshed = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
-      if (!vacuumReadingsAreFresh(refreshed.updated_at)) {
-        setStatus(null);
-        setError(refreshed.last_error || "Vacuum readings are unavailable or stale");
-        return;
-      }
-      setStatus(refreshed);
-      setError(null);
+      setStatus(vacuumStatusForDisplay(refreshed));
+      setError(!vacuumReadingsAreFresh(refreshed.updated_at) && !refreshed.last_error
+        ? "Vacuum readings are unavailable or stale" : null);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
@@ -160,6 +156,26 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     }
   }
 
+  async function resumeController() {
+    mutationRef.current = true;
+    statusVersionRef.current += 1;
+    setPending("resume");
+    setError(null);
+    try {
+      const response = await fetch(apiUrl("/api/vacuum/resume"), {
+        method: "POST", headers: scanAuthHeaders(), signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      setStatus(vacuumStatusForDisplay(await readJsonResponse<VacuumSystemStatus>(response, "vacuum resume")));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      mutationRef.current = false;
+      setPending(null);
+      void refresh();
+    }
+  }
+
   if (!open) return null;
 
   const mechanicalPump = status?.pumps.find((pump) => pump.name === MECHANICAL_PUMP);
@@ -203,7 +219,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
                 type="button"
                 className="vacuum-power-button"
                 data-state={pump.power ? "on" : "off"}
-                disabled={mechanical || !status?.running || pending !== null}
+                disabled={mechanical || !status?.running || !status.connected || pending !== null}
                 aria-pressed={pump.power}
                 aria-label={`${pump.name} ${t("vacuum.power")}`}
                 title={`${t("vacuum.power")} ${pump.power ? "off" : "on"}`}
@@ -250,15 +266,19 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
             </div>
           ) : (
             mechanicalPump && turboPump && uhPumps.length > 0 && otherPumps.length === 0 ? (
-              <div className="vacuum-workflow">
+              <div className="vacuum-workflow" data-single-uh={uhPumps.length === 1 ? "true" : undefined}>
                 <div className="vacuum-workflow__stage">{renderPumpCard(mechanicalPump)}</div>
                 <WorkflowArrow state={mechanicalPump.border} />
                 <div className="vacuum-workflow__stage">{renderPumpCard(turboPump)}</div>
-                <WorkflowArrow state={turboPump.border} grouped />
-                <div className="vacuum-workflow__group" data-state={groupState(uhPumps)}>
-                  <div className="vacuum-workflow__group-title">{t("vacuum.uhGroup")}</div>
-                  {uhPumps.map(renderPumpCard)}
-                </div>
+                <WorkflowArrow state={turboPump.border} grouped={uhPumps.length > 1} />
+                {uhPumps.length === 1 ? (
+                  <div className="vacuum-workflow__stage">{renderPumpCard(uhPumps[0])}</div>
+                ) : (
+                  <div className="vacuum-workflow__group" data-state={groupState(uhPumps)}>
+                    <div className="vacuum-workflow__group-title">{t("vacuum.uhGroup")}</div>
+                    {uhPumps.map(renderPumpCard)}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="vacuum-dashboard__grid">{status.pumps.map(renderPumpCard)}</div>
@@ -267,7 +287,12 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
         </div>
 
         <div className="vacuum-dashboard__footer">
-          <span>{status?.cascade_stopped ? t("vacuum.cascadeStopped") : t("vacuum.cascadeRunning")}</span>
+          {status && <span>{status.cascade_stopped ? t("vacuum.cascadeStopped") : t("vacuum.cascadeRunning")}</span>}
+          {status?.running && status.cascade_stopped && (
+            <button type="button" className="button" disabled={pending !== null} onClick={() => void resumeController()}>
+              {t("scan.resume")}
+            </button>
+          )}
         </div></>
       </section>}
     </div>

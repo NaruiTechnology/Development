@@ -41,7 +41,7 @@ LOG_TAGS = {
 VACUUM_CONFIG_ENV = "SBC_VACUUM_CONFIG"
 DEFAULT_VACUUM_CONFIG = Path(
     Path(__file__).resolve().parents[2] / "GlasgowDataIO" / "Json"
-    / "vacuumSystem.rpi5-io.example.json"
+    / "vacuumSystem.json"
 )
 GPIO_PIN_RE = re.compile(r"^[AB]([0-7])$")
 MECHANICAL_PUMP = "MechanicalVacuumPump"

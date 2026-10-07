@@ -6,6 +6,7 @@ import {
   shouldShowVacuumController,
   shouldShowVacuumControllerError,
   vacuumReadingsAreFresh,
+  vacuumStatusForDisplay,
 } from "../.test-dist/lib/vacuumPolicy.js";
 
 const healthyVacuum = {
@@ -96,4 +97,25 @@ test("authentication and active scans still lock the panel independently", () =>
   assert.equal(panelDisabled(false, false, { scanActive: true }), true);
   assert.equal(panelDisabled(true, true, { signedIn: false }), true);
   assert.equal(panelDisabled(true, true, { scanActive: true }), true);
+});
+
+test("watchdog faults preserve the configured pump list while invalidating old readings", () => {
+  const status = {
+    ...healthyVacuum, connected: false, cascade_stopped: true,
+    last_error: "control loop keep-alive expired", updated_at: "2000-01-01T00:00:00Z",
+    pumps: ["MechanicalVacuumPump", "TurboVacuumPump", "UHVacuumPump_2"].map((name) => ({
+      name, power: true, value: 0.001, ready: true, port_b_value: 3.3, border: "ready",
+    })),
+  };
+  const shown = vacuumStatusForDisplay(status);
+  assert.deepEqual(shown.pumps.map(p => p.name), status.pumps.map(p => p.name));
+  assert.equal(shown.isVacuumSystemReady, false);
+  assert.equal(shown.last_error, status.last_error);
+  for (const pump of shown.pumps) {
+    assert.equal(pump.value, null);
+    assert.equal(pump.ready, false);
+    assert.equal(pump.border, "error");
+  }
+  assert.equal(status.pumps[0].value, 0.001);
+  assert.equal(vacuumStatusForDisplay({ ...status, connected: true }).connected, false);
 });
