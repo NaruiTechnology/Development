@@ -945,6 +945,22 @@ class VacuumController:
             return
         await self.poll_once()
 
+    async def set_simulated_excursion(self, name: str, pressure_mbar: float | None) -> None:
+        """Inject or clear a gauge excursion in the deterministic simulator."""
+        if not self.config.simulate:
+            raise ValueError("simulated excursions are unavailable outside simulation mode")
+        state = self._states.get(name)
+        if state is None:
+            raise KeyError(name)
+        if not state.power:
+            raise ValueError(f"{name} must be running before an excursion can be injected")
+        self._simulation_reads[name] = True
+        state.simulation_read = True
+        async with self._io_lock:
+            self._require_authority()
+            await self.gpio.set_gauge_excursion(state.read, pressure_mbar)
+        await self.poll_once()
+
     async def _reset_mechanical_if_downstream_stopped(self) -> None:
         if not self.config.simulate:
             return

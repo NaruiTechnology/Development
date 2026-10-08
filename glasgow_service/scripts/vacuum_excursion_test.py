@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Vacuum excursion test: one pump loses vacuum, is isolated, and recovers.
 
-Runs against the SBC vacuum service in board-emulator mode (vacuum
-``Enable: true``, scanner ``IsProduction: false``), so every step shows live
-on the SBC Vacuum Controller dashboard.
+Runs against the SBC vacuum service in board-emulator or deterministic GPIO
+simulation mode (vacuum ``Enable: true``, scanner ``IsProduction: false``), so
+every step shows live on the SBC Vacuum Controller dashboard.
 
 For the selected pump (picked at random from the configured pump list when
 no pump name is given; the name is optional):
@@ -68,6 +68,7 @@ class ServiceClient:
     def __init__(self, http, token: str | None):
         self.http = http
         self.headers = {"Authorization": f"Bearer {token}"} if token else {}
+        self.mode: str | None = None
 
     def _check(self, response):
         if response.status_code >= 400:
@@ -99,8 +100,9 @@ class ServiceClient:
         return self._send("POST", "/vacuum/resume", headers=self.headers)
 
     def excursion(self, pump: str, **body) -> dict:
-        return self._send("POST", f"/emulator/excursion/{pump}", json=body,
-                          headers=self.headers)
+        path = (f"/vacuum/simulation/{pump}/excursion" if self.mode == "simulation"
+                else f"/emulator/excursion/{pump}")
+        return self._send("POST", path, json=body, headers=self.headers)
 
 
 class _Response:
@@ -258,8 +260,8 @@ def diagnose(state: dict, pump: str) -> None:
         print(f"   -> {pump} is not started: the pumps before it in the cascade are not all ready.")
 
 
-def require_valve_support(client: ServiceClient) -> None:
-    """Stop early when the service predates controller-managed valves."""
+def require_valve_support(client: ServiceClient, mode: str) -> None:
+    """Require physical emulator valves or the simulator's virtual valves."""
     pumps = client.vacuum()["pumps"]
     if any("valve_open" not in p for p in pumps):
         raise SystemExit(
@@ -267,6 +269,8 @@ def require_valve_support(client: ServiceClient) -> None:
             "so it is running code from before the valve patch. Apply\n"
             "vacuum-valves-excursion-test.patch, then restart the service:\n"
             "    systemctl --user restart sbc-vacuum.service")
+    if mode == "simulation":
+        return
     if not any(p.get("valve") for p in pumps):
         raise SystemExit(
             "No pump has an isolation valve configured: add the SBC.Valves section to the\n"
@@ -558,11 +562,13 @@ def main() -> int:
     all_passed = True
     with context as client:
         mode = client.status().get("mode")
-        if mode != "board-emulator":
-            print(f"The vacuum service is in mode {mode!r}. This test needs the board emulator: "
+        if mode not in {"board-emulator", "simulation"}:
+            print(f"The vacuum service is in mode {mode!r}. This test needs the board emulator "
+                  "or deterministic GPIO simulator: "
                   "vacuum \"Enable\": true and scanner \"IsProduction\": false.", file=sys.stderr)
             return 2
-        require_valve_support(client)
+        client.mode = mode
+        require_valve_support(client, mode)
         requested = "restart" if args.restart else args.pump
         interactive = sys.stdin.isatty() and not args.once
         while True:

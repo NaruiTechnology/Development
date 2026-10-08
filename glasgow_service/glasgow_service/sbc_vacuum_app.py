@@ -261,6 +261,26 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
             raise HTTPException(409, str(exc)) from exc
         return target.status()
 
+    @app.post("/vacuum/simulation/{name}/excursion",
+              response_model=VacuumSystemStatus, dependencies=mutation_dependencies)
+    async def simulation_excursion(name: str, req: dict):
+        """Inject or release a gauge excursion in GPIO simulation mode."""
+        target = controller()
+        try:
+            release = bool(req.get("release", False))
+            if release:
+                pressure = None
+            elif req.get("mbar") is None:
+                raise ValueError("mbar is required unless release is true")
+            else:
+                pressure = float(req["mbar"])
+            await target.set_simulated_excursion(name, pressure)
+        except KeyError as exc:
+            raise HTTPException(404, f"unknown vacuum pump: {name}") from exc
+        except (AuthorityDenied, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return target.status()
+
     @app.post("/vacuum/leadership/renew", response_model=VacuumSystemStatus,
               dependencies=mutation_dependencies)
     async def renew():
