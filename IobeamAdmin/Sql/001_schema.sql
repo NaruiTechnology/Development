@@ -193,11 +193,8 @@ AS $$
         ('Expida 1285', 'Expida 1285', 'TX-EXPIDA1285', 'Taixin(泰兴)', 'Imported from the FIB host registry.'),
         ('FIB200', 'FIB200', 'TX-FIB200', 'Taixin(泰兴)', 'Imported from the FIB host registry.'),
         ('FIB835', 'FIB835', 'TX-FIB835', 'Taixin(泰兴)', 'Imported from the FIB host registry.')
-    ON CONFLICT (serial_number) DO UPDATE
-       SET name = EXCLUDED.name,
-           model = EXCLUDED.model,
-           site = EXCLUDED.site,
-           description = EXCLUDED.description;
+    -- Setup may run on every backend start. Preserve imported and edited records.
+    ON CONFLICT (serial_number) DO NOTHING;
 $$;
 
 SELECT fn_seed_equipment_registry();
