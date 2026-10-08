@@ -467,9 +467,10 @@ app.post("/api/admin/iobeam/equipment/import", async (req, res) => {
     const current = await listEquipmentFromDb();
     for (const [index, row] of incoming.entries()) {
       const byId = row.id == null ? undefined : current.find((existing) => existing.id === row.id);
-      const bySerial = current.find((existing) =>
-        existing.serial_number.trim().toLowerCase() === row.serial_number.trim().toLowerCase(),
-      );
+      const serialNumber = row.serial_number?.trim().toLowerCase() ?? "";
+      const bySerial = serialNumber
+        ? current.find((existing) => existing.serial_number.trim().toLowerCase() === serialNumber)
+        : undefined;
       if (byId && bySerial && byId.id !== bySerial.id) {
         throw new ConfigError(`equipment row ${index + 1} has an ID and serial number that refer to different records`);
       }
@@ -1600,6 +1601,12 @@ function readEquipment(data: unknown): Equipment[] {
       model: String(row.model ?? ""),
       serial_number: String(row.serial_number ?? ""),
       site: String(row.site ?? ""),
+      equipment_code: String(row.equipment_code ?? ""),
+      host_computer_model: String(row.host_computer_model ?? ""),
+      motherboard_model: String(row.motherboard_model ?? ""),
+      windows_version: String(row.windows_version ?? ""),
+      software_version: String(row.software_version ?? ""),
+      coreco_processing_card: String(row.coreco_processing_card ?? ""),
       description: String(row.description ?? ""),
     }))
     .filter((row) => row.name.trim() || row.serial_number.trim());
@@ -1631,30 +1638,36 @@ function parseEquipmentImportPayload(value: unknown): EquipmentCsvImportRow[] {
     }
     const record = raw as Record<string, unknown>;
     const name = typeof record.name === "string" ? record.name.trim() : "";
-    const serialNumber = typeof record.serial_number === "string" ? record.serial_number.trim() : "";
-    if (!name || !serialNumber) {
-      throw new ConfigError(`equipment row ${index + 1} needs a name and serial number`);
+    const hasSerialNumber = Object.hasOwn(record, "serial_number");
+    if (hasSerialNumber && typeof record.serial_number !== "string") {
+      throw new ConfigError(`equipment row ${index + 1} has an invalid serial number`);
     }
+    const serialNumber = hasSerialNumber ? (record.serial_number as string).trim() : "";
+    if (!name) throw new ConfigError(`equipment row ${index + 1} needs a name`);
     if (name.length > 100 || serialNumber.length > 15) {
       throw new ConfigError(`equipment row ${index + 1} exceeds the name or serial number length limit`);
     }
     if (/[\r\n]/.test(name) || /[\r\n]/.test(serialNumber)) {
       throw new ConfigError(`equipment row ${index + 1} name and serial number cannot contain line breaks`);
     }
-    const row: EquipmentCsvImportRow = { name, serial_number: serialNumber };
+    const row: EquipmentCsvImportRow = { name };
+    if (hasSerialNumber) row.serial_number = serialNumber;
     if (record.id !== undefined) {
       if (record.id !== null && (!Number.isSafeInteger(record.id) || Number(record.id) <= 0)) {
         throw new ConfigError(`equipment row ${index + 1} has an invalid ID`);
       }
       row.id = record.id as number | null;
     }
-    for (const field of ["model", "site", "description"] as const) {
+    for (const field of [
+      "model", "site", "equipment_code", "host_computer_model", "motherboard_model",
+      "windows_version", "software_version", "coreco_processing_card", "description",
+    ] as const) {
       if (record[field] === undefined) continue;
       if (typeof record[field] !== "string") {
         throw new ConfigError(`equipment row ${index + 1} has an invalid ${field}`);
       }
       const text = record[field].trim();
-      const limit = field === "description" ? 1000 : field === "site" ? 50 : 100;
+      const limit = field === "site" ? 50 : field === "model" ? 100 : 1000;
       if (text.length > limit) throw new ConfigError(`equipment row ${index + 1} ${field} is too long`);
       if (field === "site" && !EQUIPMENT_CSV_SITES.has(text)) {
         throw new ConfigError(`equipment row ${index + 1} has an unsupported site`);
@@ -1669,8 +1682,10 @@ function parseEquipmentImportPayload(value: unknown): EquipmentCsvImportRow[] {
       ids.add(row.id);
     }
     const serialKey = serialNumber.toLowerCase();
-    if (serials.has(serialKey)) throw new ConfigError(`CSV repeats serial number ${serialNumber}`);
-    serials.add(serialKey);
+    if (serialKey) {
+      if (serials.has(serialKey)) throw new ConfigError(`CSV repeats serial number ${serialNumber}`);
+      serials.add(serialKey);
+    }
     rows.push(row);
   }
   return rows;
@@ -1812,6 +1827,12 @@ function emptyEquipment(): Equipment {
     model: "",
     serial_number: "",
     site: "",
+    equipment_code: "",
+    host_computer_model: "",
+    motherboard_model: "",
+    windows_version: "",
+    software_version: "",
+    coreco_processing_card: "",
     description: "",
   };
 }

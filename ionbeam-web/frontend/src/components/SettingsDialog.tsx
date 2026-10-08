@@ -369,7 +369,7 @@ function SettingsModalShell({
   // we light up the tabs.
   return (
     <div
-      className={`modal settings-modal${activeTab === "admin" && activeSubTab === "calibration" ? " settings-modal--wide" : ""}`}
+      className={`modal settings-modal${activeTab === "admin" && activeSubTab === "calibration" ? " settings-modal--wide" : activeTab === "admin" && activeSubTab === "equipment" ? " settings-modal--equipment" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleIdRef.current}
@@ -439,7 +439,7 @@ function SettingsModalShell({
         ))}
       </div>
 
-      <div className="modal__body settings-modal__body">
+      <div className={`modal__body settings-modal__body${activeTab === "admin" && activeSubTab === "equipment" ? " settings-modal__body--equipment" : ""}`}>
         {loading && draft === null ? (
           <LoadingSpinner className="settings-loading" label={t("settings.loading")} />
         ) : draft === null ? (
@@ -2007,14 +2007,6 @@ function AdminTab({
     setDraftLocal(writePath(next, ["equipment"], equipment[0] ?? emptyEquipment(1)));
   }
 
-  function updateEquipment(index: number, field: keyof EquipmentRow, value: string | number | null) {
-    const equipment = equipmentFromDraft(draft);
-    const next = equipment.map((row, rowIndex) =>
-      rowIndex === index ? { ...row, [field]: value } : row
-    );
-    setEquipment(next);
-  }
-
   function addEquipment() {
     const equipment = equipmentFromDraft(draft);
     const maxId = equipment.reduce((max, row) => Math.max(max, row.id ?? 0), 0);
@@ -2069,19 +2061,28 @@ function AdminTab({
     setNotice(null);
     try {
       if (file.size > 10 * 1024 * 1024) throw new Error("The CSV exceeds the 10 MB file limit.");
-      const imported = parseEquipmentCsv(await file.text());
+      const validation = parseEquipmentCsv(await file.text());
       const existingEquipment = equipmentFromDraft(draft);
-      for (const [index, row] of imported.entries()) {
+      const imported = [];
+      let skippedRows = validation.skippedRows.length;
+      const skippedColumns = validation.skippedColumns.length;
+      for (const row of validation.rows) {
+        const serialNumber = row.serial_number?.trim().toLowerCase() ?? "";
         const existing = existingEquipment.find((candidate) =>
           (row.id != null && candidate.id === row.id) ||
-          candidate.serial_number.trim().toLowerCase() === row.serial_number.trim().toLowerCase(),
+          (serialNumber !== "" && candidate.serial_number.trim().toLowerCase() === serialNumber),
         );
         if (!existing && !SITE_OPTIONS.some((option) => option.value === row.site)) {
-          throw new Error(`Row ${index + 2} needs a supported Site when adding new equipment.`);
+          skippedRows++;
+          continue;
         }
+        imported.push(row);
       }
+      if (imported.length === 0) throw new Error(t("settings.admin.equipment.import.noneValid", { skipped: skippedRows }));
       if (!window.confirm(t("settings.admin.equipment.import.confirm", {
         rows: imported.length,
+        skipped: skippedRows,
+        columns: skippedColumns,
         file: file.name,
       }))) return;
       const response = await fetch(apiUrl("/api/admin/iobeam/equipment/import"), {
@@ -2104,6 +2105,8 @@ function AdminTab({
       setNotice(t("settings.admin.equipment.import.ok", {
         added: result.added ?? 0,
         updated: result.updated ?? 0,
+        skipped: skippedRows,
+        columns: skippedColumns,
       }));
     } catch (err) {
       setLocalError(t("settings.admin.equipment.import.error", {
@@ -2580,13 +2583,17 @@ function AdminTab({
           </div>
           <EquipmentGrid
             equipment={equipmentFromDraft(draft)}
-            sourceEquipment={equipmentFromDraft(source)}
             disabled={busy || equipmentCsvBusy || !canManageAdminConfig || equipmentError !== null}
             actionDisabled={busy || equipmentCsvBusy || equipmentError !== null}
             canManage={canManageAdminConfig}
-            onUpdate={updateEquipment}
-            onPersist={() => void onSave()}
             onDelete={deleteEquipment}
+            onApplyEdit={async (index, row) => {
+              if (draft === null) return;
+              const rows = equipmentFromDraft(draft).map((current, rowIndex) => rowIndex === index ? row : current);
+              const nextDraft = withEquipmentRows(draft, rows);
+              setDraftLocal(nextDraft);
+              await onSave(nextDraft);
+            }}
             onBlockedAction={showPrivilegeNotice}
           />
         </>

@@ -4,6 +4,15 @@
 -- =====================================================================================================
 SET search_path TO iobeam_admin, ionbeam_asset, public;
 
+ALTER TABLE ionbeam_asset.equipment ALTER COLUMN serial_number DROP NOT NULL;
+ALTER TABLE ionbeam_asset.equipment
+    ADD COLUMN IF NOT EXISTS equipment_code varchar(1000) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS host_computer_model varchar(1000) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS motherboard_model varchar(1000) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS windows_version varchar(1000) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS software_version varchar(1000) NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS coreco_processing_card varchar(1000) NOT NULL DEFAULT '';
+
 CREATE OR REPLACE FUNCTION fn_equipment_csv_cell(p_value text)
 RETURNS text
 LANGUAGE sql
@@ -38,15 +47,21 @@ RETURNS text
 LANGUAGE sql
 STABLE
 AS $$
-    SELECT 'id,name,model,serial_number,site,description' || E'\r\n' ||
+    SELECT 'id,name,model,serial_number,site,equipmentCode,hostComputerModel,motherboardModel,windowsVersion,softwareVersion,corecoProcessingCard,description' || E'\r\n' ||
            COALESCE(
                string_agg(
                    concat_ws(',',
                        fn_equipment_csv_cell(e.id::text),
                        fn_equipment_csv_cell(btrim(e.name::text)),
                        fn_equipment_csv_cell(btrim(e.model::text)),
-                       fn_equipment_csv_cell(btrim(e.serial_number::text)),
+                       fn_equipment_csv_cell(COALESCE(btrim(e.serial_number::text), '')),
                        fn_equipment_csv_cell(btrim(e.site::text)),
+                       fn_equipment_csv_cell(btrim(e.equipment_code::text)),
+                       fn_equipment_csv_cell(btrim(e.host_computer_model::text)),
+                       fn_equipment_csv_cell(btrim(e.motherboard_model::text)),
+                       fn_equipment_csv_cell(btrim(e.windows_version::text)),
+                       fn_equipment_csv_cell(btrim(e.software_version::text)),
+                       fn_equipment_csv_cell(btrim(e.coreco_processing_card::text)),
                        fn_equipment_csv_cell(btrim(e.description::text))
                    ),
                    E'\r\n' ORDER BY e.site, e.name, e.id
@@ -80,6 +95,8 @@ DECLARE
     v_serial text;
     v_site text;
     v_description text;
+    v_field text;
+    v_field_value text;
     v_by_id integer;
     v_by_serial integer;
     v_match_count integer;
@@ -109,19 +126,19 @@ BEGIN
         END IF;
 
         IF jsonb_typeof(item->'name') <> 'string'
-           OR jsonb_typeof(item->'serial_number') <> 'string' THEN
-            RAISE EXCEPTION 'equipment row % needs a name and serial number', v_row_number USING ERRCODE = '22023';
+           OR (item ? 'serial_number' AND jsonb_typeof(item->'serial_number') NOT IN ('string', 'null')) THEN
+            RAISE EXCEPTION 'equipment row % needs a name and a valid serial number', v_row_number USING ERRCODE = '22023';
         END IF;
 
         v_name := btrim(item->>'name');
-        v_serial := btrim(item->>'serial_number');
-        IF v_name = '' OR v_serial = '' THEN
-            RAISE EXCEPTION 'equipment row % needs a name and serial number', v_row_number USING ERRCODE = '22023';
+        v_serial := NULLIF(btrim(item->>'serial_number'), '');
+        IF v_name = '' THEN
+            RAISE EXCEPTION 'equipment row % needs a name', v_row_number USING ERRCODE = '22023';
         END IF;
         IF char_length(v_name) > 100 OR char_length(v_serial) > 15 THEN
             RAISE EXCEPTION 'equipment row % exceeds the name or serial number length limit', v_row_number USING ERRCODE = '22023';
         END IF;
-        IF v_name ~ E'[\r\n]' OR v_serial ~ E'[\r\n]' THEN
+        IF v_name ~ E'[\r\n]' OR COALESCE(v_serial ~ E'[\r\n]', false) THEN
             RAISE EXCEPTION 'equipment row % name and serial number cannot contain line breaks', v_row_number USING ERRCODE = '22023';
         END IF;
 
@@ -170,10 +187,27 @@ BEGIN
             END IF;
         END IF;
 
-        IF lower(v_serial) = ANY(v_seen_serials) THEN
+        FOREACH v_field IN ARRAY ARRAY[
+            'equipment_code', 'host_computer_model', 'motherboard_model',
+            'windows_version', 'software_version', 'coreco_processing_card'
+        ] LOOP
+            IF item ? v_field THEN
+                IF jsonb_typeof(item->v_field) <> 'string' THEN
+                    RAISE EXCEPTION 'equipment row % has an invalid %', v_row_number, v_field USING ERRCODE = '22023';
+                END IF;
+                v_field_value := btrim(item->>v_field);
+                IF char_length(v_field_value) > 1000 OR v_field_value ~ E'[\r\n]' THEN
+                    RAISE EXCEPTION 'equipment row % has an invalid %', v_row_number, v_field USING ERRCODE = '22023';
+                END IF;
+            END IF;
+        END LOOP;
+
+        IF v_serial IS NOT NULL AND lower(v_serial) = ANY(v_seen_serials) THEN
             RAISE EXCEPTION 'CSV repeats serial number %', v_serial USING ERRCODE = '22023';
         END IF;
-        v_seen_serials := array_append(v_seen_serials, lower(v_serial));
+        IF v_serial IS NOT NULL THEN
+            v_seen_serials := array_append(v_seen_serials, lower(v_serial));
+        END IF;
 
         v_by_id := NULL;
         IF v_id IS NOT NULL THEN
@@ -185,7 +219,7 @@ BEGIN
         SELECT min(e.id), count(*)::integer
           INTO v_by_serial, v_match_count
           FROM ionbeam_asset.equipment e
-         WHERE lower(btrim(e.serial_number::text)) = lower(v_serial);
+         WHERE v_serial IS NOT NULL AND lower(btrim(e.serial_number::text)) = lower(v_serial);
         IF v_match_count > 1 THEN
             RAISE EXCEPTION 'serial number % matches multiple existing equipment rows', v_serial USING ERRCODE = '22023';
         END IF;
@@ -199,8 +233,14 @@ BEGIN
             UPDATE ionbeam_asset.equipment
                SET name = v_name,
                    model = CASE WHEN item ? 'model' THEN v_model ELSE model END,
-                   serial_number = v_serial,
+                   serial_number = CASE WHEN item ? 'serial_number' THEN v_serial ELSE serial_number END,
                    site = CASE WHEN item ? 'site' THEN v_site ELSE site END,
+                   equipment_code = CASE WHEN item ? 'equipment_code' THEN btrim(item->>'equipment_code') ELSE equipment_code END,
+                   host_computer_model = CASE WHEN item ? 'host_computer_model' THEN btrim(item->>'host_computer_model') ELSE host_computer_model END,
+                   motherboard_model = CASE WHEN item ? 'motherboard_model' THEN btrim(item->>'motherboard_model') ELSE motherboard_model END,
+                   windows_version = CASE WHEN item ? 'windows_version' THEN btrim(item->>'windows_version') ELSE windows_version END,
+                   software_version = CASE WHEN item ? 'software_version' THEN btrim(item->>'software_version') ELSE software_version END,
+                   coreco_processing_card = CASE WHEN item ? 'coreco_processing_card' THEN btrim(item->>'coreco_processing_card') ELSE coreco_processing_card END,
                    description = CASE WHEN item ? 'description' THEN v_description ELSE description END
              WHERE id = v_target_id;
             v_updated := v_updated + 1;
@@ -208,8 +248,20 @@ BEGIN
             IF NOT fn_equipment_csv_site_allowed(v_site) THEN
                 RAISE EXCEPTION 'new equipment row % needs a supported site', v_row_number USING ERRCODE = '22023';
             END IF;
-            INSERT INTO ionbeam_asset.equipment (name, model, serial_number, site, description)
-            VALUES (v_name, COALESCE(v_model, ''), v_serial, COALESCE(v_site, ''), COALESCE(v_description, ''));
+            INSERT INTO ionbeam_asset.equipment (
+                name, model, serial_number, site, equipment_code, host_computer_model,
+                motherboard_model, windows_version, software_version, coreco_processing_card, description
+            )
+            VALUES (
+                v_name, COALESCE(v_model, ''), v_serial, COALESCE(v_site, ''),
+                btrim(COALESCE(item->>'equipment_code', '')),
+                btrim(COALESCE(item->>'host_computer_model', '')),
+                btrim(COALESCE(item->>'motherboard_model', '')),
+                btrim(COALESCE(item->>'windows_version', '')),
+                btrim(COALESCE(item->>'software_version', '')),
+                btrim(COALESCE(item->>'coreco_processing_card', '')),
+                COALESCE(v_description, '')
+            );
             v_added := v_added + 1;
         END IF;
     END LOOP;

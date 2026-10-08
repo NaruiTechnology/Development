@@ -7,6 +7,12 @@ export interface EquipmentRow {
   model: string;
   serial_number: string;
   site: string;
+  equipment_code: string;
+  host_computer_model: string;
+  motherboard_model: string;
+  windows_version: string;
+  software_version: string;
+  coreco_processing_card: string;
   description: string;
 }
 
@@ -17,6 +23,12 @@ export function emptyEquipment(nextId: number): EquipmentRow {
     model: "",
     serial_number: "",
     site: "",
+    equipment_code: "",
+    host_computer_model: "",
+    motherboard_model: "",
+    windows_version: "",
+    software_version: "",
+    coreco_processing_card: "",
     description: "",
   };
 }
@@ -37,6 +49,12 @@ export function equipmentFromDraft(draft: unknown): EquipmentRow[] {
       model: String(row.model ?? ""),
       serial_number: String(row.serial_number ?? ""),
       site: String(row.site ?? ""),
+      equipment_code: String(row.equipment_code ?? ""),
+      host_computer_model: String(row.host_computer_model ?? ""),
+      motherboard_model: String(row.motherboard_model ?? ""),
+      windows_version: String(row.windows_version ?? ""),
+      software_version: String(row.software_version ?? ""),
+      coreco_processing_card: String(row.coreco_processing_card ?? ""),
       description: String(row.description ?? ""),
     }));
 }

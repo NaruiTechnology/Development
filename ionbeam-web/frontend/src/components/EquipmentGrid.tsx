@@ -1,82 +1,43 @@
-/**
- * Admin > Equipment: the equipment matrix, rendered with AG Grid instead of the hand-rolled CSS table.
- *
- * `id` is a database-assigned primary key (see fn_upsert_equipment on the backend) so it is shown read-only,
- * never as an editable control — letting someone hand-edit a row's id previously risked silently repointing
- * that row at a different database record.
- *
- * Persistence here is document-level, not per-row: "Update"/"Save" both call the same onPersist(index), which
- * saves the whole equipment list as one settings document (see onSave() in SettingsDialog). The icon shown
- * (refresh vs. save) only reflects whether this particular row already exists in the persisted source.
- */
-import { useCallback, useMemo } from "react";
+/** Admin > Equipment grid and row editor. */
+import { useCallback, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type {
-  CellClickedEvent,
-  ColDef,
-  GetRowIdParams,
-  ICellRendererParams,
-} from "ag-grid-community";
+import type { CellClickedEvent, ColDef, GetRowIdParams, ICellRendererParams } from "ag-grid-community";
 
 import { useTranslation } from "../i18n";
 import { adminGridTheme } from "../lib/agGridTheme";
-import {
-  equipmentRowKey,
-  equipmentRowSignature,
-  type EquipmentRow,
-} from "../lib/equipmentModel";
+import { equipmentRowKey, type EquipmentRow } from "../lib/equipmentModel";
 import { Icon } from "./Icon";
 
-type EquipmentGridRow = EquipmentRow & {
-  _index: number;
-  _rowExistsInDb: boolean;
-  _rowDirty: boolean;
+type EquipmentGridRow = EquipmentRow & { _index: number };
+
+type EquipmentGridContext = {
+  t: ReturnType<typeof useTranslation>["t"];
+  canManage: boolean;
+  actionDisabled: boolean;
+  rowCount: number;
+  onEdit: (index: number) => void;
+  onDelete: (index: number) => void;
+  onBlockedAction: () => void;
 };
 
-function EquipmentActionsCell(
-  params: ICellRendererParams<EquipmentGridRow> & {
-    context: {
-      t: ReturnType<typeof useTranslation>["t"];
-      canManage: boolean;
-      actionDisabled: boolean;
-      rowCount: number;
-      onPersist: (index: number) => void;
-      onDelete: (index: number) => void;
-      onBlockedAction: () => void;
-    };
-  },
-) {
+function EquipmentActionsCell(params: ICellRendererParams<EquipmentGridRow> & { context: EquipmentGridContext }) {
   const row = params.data;
   if (!row) return null;
-  const { t, canManage, actionDisabled, rowCount, onPersist, onDelete, onBlockedAction } = params.context;
+  const { t, canManage, actionDisabled, rowCount, onEdit, onDelete, onBlockedAction } = params.context;
 
   return (
     <div className="settings-admin-table__actions">
-      {row._rowExistsInDb ? (
-        <button
-          type="button"
-          className="modal__close"
-          onClick={() => (canManage ? onPersist(row._index) : onBlockedAction())}
-          disabled={actionDisabled || !row._rowDirty}
-          aria-disabled={!canManage}
-          aria-label={t("settings.admin.equipment.update")}
-          title={t("settings.admin.equipment.update")}
-        >
-          <Icon name="refresh" tone="accent" />
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="modal__close"
-          onClick={() => (canManage ? onPersist(row._index) : onBlockedAction())}
-          disabled={actionDisabled}
-          aria-disabled={!canManage}
-          aria-label={t("settings.admin.equipment.save")}
-          title={t("settings.admin.equipment.save")}
-        >
-          <Icon name="save" tone="success" />
-        </button>
-      )}
+      <button
+        type="button"
+        className="modal__close"
+        onClick={() => (canManage ? onEdit(row._index) : onBlockedAction())}
+        disabled={actionDisabled}
+        aria-disabled={!canManage}
+        aria-label={t("settings.admin.equipment.edit")}
+        title={t("settings.admin.equipment.edit")}
+      >
+        <Icon name="edit" tone="accent" />
+      </button>
       <button
         type="button"
         className="modal__close"
@@ -94,142 +55,93 @@ function EquipmentActionsCell(
 
 export function EquipmentGrid({
   equipment,
-  sourceEquipment,
   disabled,
   actionDisabled,
   canManage,
-  onUpdate,
-  onPersist,
   onDelete,
+  onApplyEdit,
   onBlockedAction,
 }: {
   equipment: EquipmentRow[];
-  sourceEquipment: EquipmentRow[];
   disabled: boolean;
   actionDisabled: boolean;
   canManage: boolean;
-  onUpdate: (index: number, field: keyof EquipmentRow, value: string | number | null) => void;
-  onPersist: (index: number) => void;
   onDelete: (index: number) => void;
+  onApplyEdit: (index: number, row: EquipmentRow) => void | Promise<void>;
   onBlockedAction: () => void;
 }) {
   const { t } = useTranslation();
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingDraft, setEditingDraft] = useState<EquipmentRow | null>(null);
+  const rowData = useMemo<EquipmentGridRow[]>(() => equipment.map((row, index) => ({ ...row, _index: index })), [equipment]);
 
-  const rowData = useMemo<EquipmentGridRow[]>(() => {
-    const sourceSignatureByKey = new Map(
-      sourceEquipment.map((row, index) => [equipmentRowKey(row, index), equipmentRowSignature(row)] as const),
-    );
-    return equipment.map((row, index) => {
-      const persistedSignature = sourceSignatureByKey.get(equipmentRowKey(row, index));
-      return {
-        ...row,
-        _index: index,
-        _rowExistsInDb: persistedSignature !== undefined,
-        _rowDirty: persistedSignature !== equipmentRowSignature(row),
-      };
-    });
-  }, [equipment, sourceEquipment]);
+  const openEdit = useCallback((index: number) => {
+    const row = equipment[index];
+    if (row) {
+      setEditingIndex(index);
+      setEditingDraft({ ...row });
+    }
+  }, [equipment]);
+  const closeEdit = useCallback(() => {
+    setEditingIndex(null);
+    setEditingDraft(null);
+  }, []);
+  const applyEdit = useCallback(async () => {
+    if (editingIndex === null || !editingDraft) return;
+    await onApplyEdit(editingIndex, editingDraft);
+    closeEdit();
+  }, [editingDraft, editingIndex, onApplyEdit, closeEdit]);
 
   const getRowId = useCallback(
     (params: GetRowIdParams<EquipmentGridRow>) => equipmentRowKey(params.data, params.data._index),
     [],
   );
-
-  const columnDefs = useMemo<ColDef<EquipmentGridRow>[]>(
-    () => [
-      {
-        field: "id",
-        headerName: t("settings.admin.equipment.id"),
-        editable: false,
-        width: 90,
-        cellClass: "settings-equipment-grid__id-cell",
-        valueFormatter: (p) => (p.value === null || p.value === undefined ? "—" : String(p.value)),
-      },
-      {
-        field: "name",
-        headerName: t("settings.admin.equipment.name"),
-        editable: !disabled,
-        flex: 1.2,
-        minWidth: 120,
-        cellEditorParams: { maxLength: 100 },
-      },
-      {
-        field: "model",
-        headerName: t("settings.admin.equipment.model"),
-        editable: !disabled,
-        flex: 1,
-        minWidth: 100,
-        cellEditorParams: { maxLength: 100 },
-      },
-      {
-        field: "serial_number",
-        headerName: t("settings.admin.equipment.serial"),
-        editable: !disabled,
-        flex: 1,
-        minWidth: 110,
-        cellEditorParams: { maxLength: 15 },
-      },
-      {
-        field: "site",
-        headerName: t("settings.admin.equipment.site"),
-        editable: !disabled,
-        flex: 0.8,
-        minWidth: 90,
-        cellEditorParams: { maxLength: 50 },
-      },
-      {
-        field: "description",
-        headerName: t("settings.admin.equipment.description"),
-        editable: !disabled,
-        flex: 2,
-        minWidth: 160,
-        cellEditorParams: { maxLength: 1000 },
-      },
-      {
-        colId: "actions",
-        headerName: t("settings.admin.equipment.actions"),
-        editable: false,
-        sortable: false,
-        filter: false,
-        resizable: false,
-        width: 100,
-        pinned: "right",
-        cellRenderer: EquipmentActionsCell,
-      },
-    ],
-    [t, disabled],
-  );
-
-  const context = useMemo(
-    () => ({
-      t,
-      canManage,
-      actionDisabled,
-      rowCount: equipment.length,
-      onPersist,
-      onDelete,
-      onBlockedAction,
-    }),
-    [t, canManage, actionDisabled, equipment.length, onPersist, onDelete, onBlockedAction],
-  );
-
-  const handleCellClicked = useCallback(
-    (event: CellClickedEvent<EquipmentGridRow>) => {
-      if (!canManage) onBlockedAction();
+  const columnDefs = useMemo<ColDef<EquipmentGridRow>[]>(() => [
+    {
+      field: "id",
+      headerName: t("settings.admin.equipment.id"),
+      editable: false,
+      width: 90,
+      cellClass: "settings-equipment-grid__id-cell",
+      valueFormatter: (p) => (p.value === null || p.value === undefined ? "—" : String(p.value)),
     },
-    [canManage, onBlockedAction],
-  );
-
-  const handleCellValueChanged = useCallback(
-    (event: { data: EquipmentGridRow; colDef: ColDef<EquipmentGridRow>; newValue: unknown }) => {
-      const field = event.colDef.field as keyof EquipmentRow | undefined;
-      if (!field || field === "id") return;
-      onUpdate(event.data._index, field, event.newValue as string);
+    { field: "name", headerName: t("settings.admin.equipment.name"), editable: false, width: 150 },
+    { field: "model", headerName: t("settings.admin.equipment.model"), editable: false, width: 140 },
+    { field: "site", headerName: t("settings.admin.equipment.site"), editable: false, width: 150 },
+    { field: "equipment_code", headerName: t("settings.admin.equipment.equipmentCode"), editable: false, width: 190 },
+    { field: "host_computer_model", headerName: t("settings.admin.equipment.hostComputerModel"), editable: false, width: 240 },
+    { field: "motherboard_model", headerName: t("settings.admin.equipment.motherboardModel"), editable: false, width: 220 },
+    { field: "windows_version", headerName: t("settings.admin.equipment.windowsVersion"), editable: false, width: 180 },
+    { field: "software_version", headerName: t("settings.admin.equipment.softwareVersion"), editable: false, width: 180 },
+    { field: "coreco_processing_card", headerName: t("settings.admin.equipment.corecoProcessingCard"), editable: false, width: 220 },
+    { field: "description", headerName: t("settings.admin.equipment.description"), editable: false, width: 220 },
+    {
+      colId: "actions",
+      headerName: t("settings.admin.equipment.actions"),
+      editable: false,
+      sortable: false,
+      filter: false,
+      resizable: false,
+      width: 92,
+      pinned: "right",
+      cellRenderer: EquipmentActionsCell,
     },
-    [onUpdate],
-  );
+  ], [t]);
 
-  return (
+  const context = useMemo<EquipmentGridContext>(() => ({
+    t,
+    canManage,
+    actionDisabled,
+    rowCount: equipment.length,
+    onEdit: openEdit,
+    onDelete,
+    onBlockedAction,
+  }), [t, canManage, actionDisabled, equipment.length, openEdit, onDelete, onBlockedAction]);
+  const handleCellClicked = useCallback((event: CellClickedEvent<EquipmentGridRow>) => {
+    if (!canManage) onBlockedAction();
+  }, [canManage, onBlockedAction]);
+
+  return <>
     <div className="settings-admin-table-wrap settings-equipment-grid">
       <AgGridReact<EquipmentGridRow>
         theme={adminGridTheme}
@@ -237,13 +149,60 @@ export function EquipmentGrid({
         columnDefs={columnDefs}
         getRowId={getRowId}
         context={context}
-        domLayout="autoHeight"
-        singleClickEdit
-        stopEditingWhenCellsLoseFocus
+        domLayout="normal"
+        alwaysShowHorizontalScroll
+        alwaysShowVerticalScroll
         suppressCellFocus={disabled}
         onCellClicked={handleCellClicked}
-        onCellValueChanged={handleCellValueChanged}
       />
+    </div>
+    {editingDraft && (
+      <EquipmentEditDialog
+        draft={editingDraft}
+        setDraft={setEditingDraft}
+        onCancel={closeEdit}
+        onApply={() => void applyEdit()}
+        disabled={disabled || actionDisabled}
+      />
+    )}
+  </>;
+}
+
+function EquipmentEditDialog({ draft, setDraft, onCancel, onApply, disabled }: {
+  draft: EquipmentRow;
+  setDraft: (next: EquipmentRow) => void;
+  onCancel: () => void;
+  onApply: () => void;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const update = <K extends keyof EquipmentRow>(field: K, value: EquipmentRow[K]) => setDraft({ ...draft, [field]: value });
+  return (
+    <div className="equipment-edit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+      <div className="modal equipment-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="equipment-edit-title">
+        <div className="modal__header">
+          <div id="equipment-edit-title" className="modal__title">{t("settings.admin.equipment.editTitle")}</div>
+          <button type="button" className="modal__close" onClick={onCancel} aria-label={t("settings.admin.equipment.cancel")}><Icon name="x" /></button>
+        </div>
+        <div className="modal__body equipment-edit-dialog__body">
+          <label>{t("settings.admin.equipment.id")}<input className="input" value={draft.id ?? ""} disabled readOnly /></label>
+          <label>{t("settings.admin.equipment.name")}<input className="input" value={draft.name} maxLength={100} disabled={disabled} onChange={(e) => update("name", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.model")}<input className="input" value={draft.model} maxLength={100} disabled={disabled} onChange={(e) => update("model", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.serial")}<input className="input" value={draft.serial_number} maxLength={100} disabled={disabled} onChange={(e) => update("serial_number", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.site")}<input className="input" value={draft.site} maxLength={50} disabled={disabled} onChange={(e) => update("site", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.equipmentCode")}<input className="input" value={draft.equipment_code} maxLength={1000} disabled={disabled} onChange={(e) => update("equipment_code", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.hostComputerModel")}<input className="input" value={draft.host_computer_model} maxLength={1000} disabled={disabled} onChange={(e) => update("host_computer_model", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.motherboardModel")}<input className="input" value={draft.motherboard_model} maxLength={1000} disabled={disabled} onChange={(e) => update("motherboard_model", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.windowsVersion")}<input className="input" value={draft.windows_version} maxLength={1000} disabled={disabled} onChange={(e) => update("windows_version", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.softwareVersion")}<input className="input" value={draft.software_version} maxLength={1000} disabled={disabled} onChange={(e) => update("software_version", e.target.value)} /></label>
+          <label>{t("settings.admin.equipment.corecoProcessingCard")}<input className="input" value={draft.coreco_processing_card} maxLength={1000} disabled={disabled} onChange={(e) => update("coreco_processing_card", e.target.value)} /></label>
+          <label className="equipment-edit-dialog__description">{t("settings.admin.equipment.description")}<textarea className="input" rows={3} maxLength={1000} value={draft.description} disabled={disabled} onChange={(e) => update("description", e.target.value)} /></label>
+        </div>
+        <div className="modal__footer equipment-edit-dialog__footer">
+          <button type="button" className="btn btn--cancel" onClick={onCancel}>{t("settings.admin.equipment.cancel")}</button>
+          <button type="button" className="btn btn--primary" disabled={disabled} onClick={onApply}>{t("settings.admin.equipment.apply")}</button>
+        </div>
+      </div>
     </div>
   );
 }

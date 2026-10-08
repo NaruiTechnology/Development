@@ -27,10 +27,16 @@ export interface Equipment {
   model: string;
   serial_number: string;
   site: string;
+  equipment_code: string;
+  host_computer_model: string;
+  motherboard_model: string;
+  windows_version: string;
+  software_version: string;
+  coreco_processing_card: string;
   description: string;
 }
 
-export type EquipmentCsvImportRow = Partial<Equipment> & Pick<Equipment, "name" | "serial_number">;
+export type EquipmentCsvImportRow = Partial<Equipment> & Pick<Equipment, "name">;
 
 export interface EquipmentCsvImportResult {
   equipment: Equipment[];
@@ -212,7 +218,7 @@ export async function listAllowedHostsFromDb(): Promise<string[]> {
 }
 
 export async function syncEquipmentToDb(equipmentRows: Equipment[]): Promise<void> {
-  const rows = equipmentRows.filter((equipment) => equipment.name.trim() && equipment.serial_number.trim());
+  const rows = equipmentRows.filter((equipment) => equipment.name.trim());
   if (rows.length === 0) return;
   await executeStored("SELECT fn_upsert_equipment($$payload$$);", rows);
 }
