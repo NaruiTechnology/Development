@@ -63,6 +63,14 @@ class VacuumPumpState(BaseModel):
     # Board mode: False = the pump's "healthy" input is open (fault); None
     # when no fault input is configured for this pump.
     fault: Optional[bool] = None
+    # Isolation valve of this pump ("V2"); None when the hardware has no
+    # valve for it.  ``valve_open`` is the controller's valve state (board:
+    # read back from the solenoid driver).  The dashboard slide switch shows it.
+    valve: Optional[str] = None
+    valve_open: bool = False
+    # True while the pump runs but its reading has risen above its value
+    # after it had been ready (vacuum excursion): valve closed, card red.
+    excursion: bool = False
 
 
 class VacuumSystemStatus(BaseModel):

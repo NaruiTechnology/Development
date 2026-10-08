@@ -278,6 +278,24 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         r.connect_tool(bool(req.get("connected", True)))
         return r.snapshot()
 
+    @app.post("/emulator/excursion/{name}", dependencies=[Depends(require_sbc_token)])
+    def emulator_excursion(name: str, req: dict):
+        """Pressure excursion on one pump's gauge (test tooling).
+
+        ``{"mbar": 2.5e-3}`` raises and holds it; ``{"release": true}`` lets
+        the running pump work it back down (``recovery_s``: emulated time
+        constant, default 120 s); ``{"mbar": 0}`` clears it.
+        """
+        r = rig()
+        mbar = req.get("mbar")
+        try:
+            r.set_excursion(name, None if mbar is None else float(mbar),
+                            release=bool(req.get("release", False)),
+                            recovery_s=req.get("recovery_s"))
+        except KeyError:
+            raise HTTPException(404, f"unknown vacuum pump: {name}") from None
+        return r.snapshot()
+
     @app.post("/emulator/faults/{name}", dependencies=[Depends(require_sbc_token)])
     def emulator_fault(name: str, req: dict):
         r = rig()

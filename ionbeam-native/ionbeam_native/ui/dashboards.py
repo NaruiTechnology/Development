@@ -216,9 +216,15 @@ class VacuumDashboard(_ToolWindow):
         if color:
             card.setStyleSheet(f"QFrame#Card {{ border: 2px solid {color}; }}")
         sw = Switch()
-        sw.setChecked(pump.get("port_b_value") == s.get("voltage"))
+        # The slide switch shows the pump's isolation valve (controller
+        # managed); older services without valve data: the ready input.
+        valve_open = pump.get("valve_open")
+        if valve_open is None:
+            valve_open = pump.get("port_b_value") == s.get("voltage")
+        sw.setChecked(bool(valve_open))
         sw.setEnabled(False)
-        sw.setToolTip(t("vacuum.mechanicalAlwaysOn") if mech else pump.get("name", ""))
+        sw.setToolTip(t("vacuum.valveState", valve=pump.get("valve") or "",
+                        state=t("vacuum.valveOpen" if valve_open else "vacuum.valveClosed")))
         card.header_tools.addWidget(sw)
         img = PUMP_IMAGES.get(pump.get("name"))
         if img:

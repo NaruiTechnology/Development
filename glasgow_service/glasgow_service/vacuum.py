@@ -102,6 +102,7 @@ BOARD_RPI_VACUUM_IO = "RPi5VacuumIO-A"
 RELAY_RE = re.compile(r"^K([1-8])$")
 DI_RE = re.compile(r"^DI([1-9]|1[0-6])$")
 AI_RE = re.compile(r"^AI([1-8])$")
+VALVE_RE = re.compile(r"^V([1-8])$")
 EMULATOR_SPEED_ENV = "SBC_VACUUM_EMULATOR_SPEED"
 EMULATOR_MODEL_ENV = "SBC_VACUUM_EMULATOR_MODEL"
 
@@ -168,6 +169,11 @@ class SbcDeviceConfig(BaseModel):
     channels: dict[str, str] = Field(default_factory=dict, alias="Channels")
     gauges: dict[str, GaugeConfig] = Field(default_factory=dict, alias="Gauges")
     faults: dict[str, str] = Field(default_factory=dict, alias="Faults")
+    #: Per-pump isolation valve, keyed by the pump's B (ready) channel:
+    #: ``{"B1": "V2"}``.  The controller opens a pump's valve only while that
+    #: pump is ready and closes it on any loss (reading above its value, ready
+    #: input lost, fault, interlock).  Board mode only.
+    valves: dict[str, str] = Field(default_factory=dict, alias="Valves")
     i2c_bus: int = Field(1, alias="I2CBus")
     heartbeat_hz: float = Field(1000.0, alias="HeartbeatHz", ge=200, le=5000)
     keepalive_seconds: float = Field(3.0, alias="KeepAliveSeconds", gt=0, le=30)
@@ -194,6 +200,11 @@ class SbcDeviceConfig(BaseModel):
             relays = [t for k, t in self.channels.items() if k.startswith("A")]
             if len(set(relays)) != len(relays):
                 raise ValueError("SBC output channels must use distinct relays")
+            for logical, target in self.valves.items():
+                if not VALVE_RE.fullmatch(target):
+                    raise ValueError(f"SBC.Valves.{logical} must name a solenoid V1..V8")
+            if len(set(self.valves.values())) != len(self.valves):
+                raise ValueError("SBC valves must use distinct solenoid outputs")
             ains = [g.ain for g in self.gauges.values()]
             if len(set(ains)) != len(ains):
                 raise ValueError("SBC gauges must use distinct AI inputs")
@@ -316,10 +327,11 @@ class VacuumConfig(BaseModel):
         if missing:
             raise ValueError(f"{section} is missing channels: {', '.join(missing)}")
         if self.sbc.board:
-            unknown = sorted((set(self.sbc.gauges) | set(self.sbc.faults)) - set(reads))
+            unknown = sorted((set(self.sbc.gauges) | set(self.sbc.faults)
+                              | set(self.sbc.valves)) - set(reads))
             if unknown:
                 raise ValueError(
-                    f"SBC gauges/faults reference unknown channels: {', '.join(unknown)}")
+                    f"SBC gauges/faults/valves reference unknown channels: {', '.join(unknown)}")
         return self
 
     def _validate_groups(self) -> None:
@@ -508,6 +520,8 @@ class VacuumController:
                 write=pump.write,
                 read=pump.read,
                 group=pump.group_name,
+                valve=(config.sbc.valves.get(pump.read)
+                       if config.sbc.board is not None else None),
             )
             for pump in config.pumps
         }
@@ -629,9 +643,13 @@ class VacuumController:
                 state.value = None
                 state.port_b_value = 0.0
                 state.ready = False
+                state.excursion = False
                 if self.config.simulate:
                     async with self._io_lock:
                         await self.gpio.set_gauge_ready(state.read, False)
+                # Initialization: every isolation valve closed, every pump
+                # but the backing pump stopped.
+                await self._set_valve(state, False, reason="initialization", force=True)
                 if name != MECHANICAL_PUMP:
                     await self.set_power(name, False, automatic=True)
             await self.set_power(MECHANICAL_PUMP, True, automatic=True)
@@ -656,6 +674,11 @@ class VacuumController:
             self._task = None
         if self._high_voltage_power:
             await self._set_high_voltage_output(False)
+        for state in self._states.values():
+            try:
+                await self._set_valve(state, False, reason="controller stop")
+            except Exception:
+                pass    # the board reset below drops every solenoid anyway
         await self.gpio.close()
         self._log(logging.INFO, "vacuum.stop", "controller stopped: all managed outputs off")
 
@@ -666,6 +689,7 @@ class VacuumController:
         return self._readings_current and bool(self._states) and not self._alarms and all(
             state.port_b_value == self.config.device.voltage
             and state.fault is not True
+            and not state.excursion
             and (state.ready or not self._is_board)
             for state in self._states.values()
         )
@@ -892,13 +916,24 @@ class VacuumController:
                     # before the pump reports ready (success).  Board mode:
                     # every configured gauge unless "Interlock": false.
                     # Direct GPIO: whenever a gauge adapter supplies a reading.
-                    if (interlocks.get(state.read) if board
-                            else state.value is not None):
+                    gauge_checked = (interlocks.get(state.read) if board
+                                     else state.value is not None)
+                    if gauge_checked:
                         ready = ready and self._reading_reached(state)
+                    # Vacuum excursion: the pump is running, its ready input
+                    # is still on, but its reading rose above its value after
+                    # it had been ready (valve open).  Close its valve and
+                    # show it red until the pump works the reading back down.
+                    input_ok = (state.port_b_value == self.config.device.voltage
+                                and not state.fault)
+                    state.excursion = bool(
+                        not ready and gauge_checked and input_ok
+                        and (state.excursion or state.valve_open))
                     state.ready = ready
-                    state.border = "error" if state.fault else (
+                    state.border = "error" if (state.fault or state.excursion) else (
                         "ready" if ready else "waiting")
                 else:
+                    state.excursion = False
                     state.ready = False
                     state.border = "error" if state.fault else "off"
             self._updated_at = datetime.now(timezone.utc).isoformat()
@@ -914,6 +949,7 @@ class VacuumController:
                 await self._set_high_voltage_output(False)
             if not self._cascade_stopped:
                 await self._advance_cascade()
+            await self._apply_valves()
         except Exception as exc:
             errors = [str(exc)]
             if self._high_voltage_power:
@@ -937,6 +973,12 @@ class VacuumController:
                 except Exception as shutdown_exc:
                     errors.append(f"failed to de-energize {name}: {shutdown_exc}")
                     state.border = "error"
+            for state in self._states.values():
+                try:
+                    await self._set_valve(state, False, reason="device error")
+                except Exception as valve_exc:
+                    errors.append(f"failed to close {state.valve or 'valve'} of "
+                                  f"{state.name}: {valve_exc}")
             self._cascade_stopped = True
             self._last_error = "; ".join(errors)
             if self._last_error != self._logged_error:
@@ -1050,13 +1092,67 @@ class VacuumController:
                     await self.set_power(state.name, True, automatic=True)
                 return
 
+    @staticmethod
+    def _stage_holding(stage: list[VacuumPumpState]) -> bool:
+        """Members are ready, or merely isolated by a vacuum excursion.
+
+        An excursion closes that pump's valve but the pump keeps running, so
+        it does not pull the stages downstream of it down.
+        """
+        return bool(stage) and all(s.ready or s.excursion for s in stage)
+
     async def _enforce_interlocks(self) -> None:
+        backing = self._stages[0] if self._stages else []
+        if backing and not self._stage_ready(backing):
+            # The backing (mechanical) pump lost vacuum or its ready input:
+            # restart like controller initialization -- every other pump
+            # stopped and every valve closed at once.  The backing pump keeps
+            # running to recover; the cascade then restarts from the top.
+            stopped = [s for stage in self._stages[1:] for s in stage if s.power]
+            for state in stopped:
+                await self.set_power(state.name, False, automatic=True)
+            for stage in self._stages:
+                for state in stage:
+                    await self._set_valve(state, False, reason="backing pump restart")
+            if stopped:
+                self._log(logging.WARNING, "vacuum.restart",
+                          f"{MECHANICAL_PUMP} not ready: stopped "
+                          f"{', '.join(s.name for s in stopped)}; all valves closed")
+            return
+        await self._enforce_stage_interlocks()
+
+    async def _apply_valves(self) -> None:
+        """Each pump's isolation valve is open exactly while it is ready."""
+        for state in self._states.values():
+            await self._set_valve(state, state.ready, reason=(
+                "ready" if state.ready else
+                "vacuum excursion" if state.excursion else "not ready"))
+
+    async def _set_valve(self, state: VacuumPumpState, open_: bool, *,
+                         reason: str, force: bool = False) -> None:
+        board_valve = self._is_board and state.valve is not None
+        current = self.gpio.valve_level(state.read) if board_valve else state.valve_open
+        if current == open_ and not force:
+            state.valve_open = bool(current)
+            return
+        if board_valve:
+            async with self._io_lock:
+                self._require_authority()
+                await self.gpio.write_valve(state.read, open_)
+            open_ = bool(self.gpio.valve_level(state.read))
+        if state.valve_open != open_:
+            self._log(logging.INFO if open_ else logging.WARNING, "vacuum.valve",
+                      f"{state.name} isolation valve {state.valve or '(virtual)'} "
+                      f"{'OPEN' if open_ else 'CLOSED'} ({reason})")
+        state.valve_open = open_
+
+    async def _enforce_stage_interlocks(self) -> None:
         # Reconcile from downstream to upstream before advancing. A dropped
         # comparator is an interlock event, not merely a dashboard update:
         # a stage loses power as soon as its upstream stage is not ready.
         # The backing/mechanical stage is never switched off here.
         for index in range(len(self._stages) - 1, 0, -1):
-            if self._stage_ready(self._stages[index - 1]):
+            if self._stage_holding(self._stages[index - 1]):
                 continue
             for state in self._stages[index]:
                 if state.power:

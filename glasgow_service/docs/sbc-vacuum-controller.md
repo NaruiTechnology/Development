@@ -84,6 +84,38 @@ E-stop and output-rail status. Board mode adds fault inputs, E-stop / rail / kee
 expander-reset interlocks, optional gauge interlocks, and `alarms` and `board` fields in
 `GET /vacuum`.
 
+### Isolation valves
+
+Each pump has an isolation valve managed by the controller, mapped in `SBC.Valves` by the pump's
+B channel:
+
+| Pump | Valve |
+|---|---|
+| `MechanicalVacuumPump` (B0) | V1 roughing / fore-line |
+| `TurboVacuumPump` (B1) | V2 chamber gate |
+| `UHVacuumPump_1` (B2) | V4 UH isolation 1 |
+| `UHVacuumPump_2` (B3) | V5 UH isolation 2 |
+
+A valve is open exactly while its pump is ready (running, ready input on, reading at or below its
+value, no fault). The slide switch in each pump card's header shows the valve (`valve_open` in
+`GET /vacuum`).
+
+- **Vacuum excursion**: a running pump's reading rises above its value after it was ready. Its
+  valve closes and its card turns red (`excursion: true`). The other pumps keep running. When
+  the pump has worked the reading back to the value or below, the valve reopens and the card
+  turns green.
+- **Mechanical pump restart**: when `MechanicalVacuumPump` is not ready, every other pump stops
+  and every valve closes at once, as at initialization. The mechanical pump keeps running to
+  recover, then the cascade restarts from the top.
+- Valves also close at controller start and stop, on an E-stop or output-rail trip, and on a
+  device error.
+
+Only board mode drives real valves. In direct-GPIO and simulator mode, `valve_open` is the
+controller's state with no hardware behind it.
+
+To exercise this on the emulator, see the excursion test app in
+[`vacuum-emulator.md`](vacuum-emulator.md#excursion-test-app).
+
 Configuration → General → **Active vacuum control** edits `Enable` in
 `vacuumSystem.rpi5-io.example.json`. Enabled control uses the emulator when scanner `IsProduction` is false and real SBC hardware when it is true;
 disabled control remains idle and bypasses the vacuum scan gate. Scan

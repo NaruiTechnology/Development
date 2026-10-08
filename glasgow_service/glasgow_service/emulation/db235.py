@@ -27,6 +27,8 @@ from typing import Callable
 from .. import pfeiffer
 
 ATM = 1013.0
+#: Gauge keys, in AI order: AI1 fore-line, AI2 chamber, AI3/AI4 UH stages.
+GAUGE_KEYS = ("fore", "chamber", "uh1", "uh2")
 
 
 # ------------------------------------------------------------------ gauges
@@ -240,6 +242,15 @@ class DB235Plant:
     #: valves yet, so this keeps the cascade pumpable with all valves off.
     gate_valves_affect_flow: bool = False
     step_seconds: float = 0.02
+    #: Test-only pressure excursion added to one gauge's reading (mbar), by
+    #: gauge key.  While "held" it stays put; once released it decays with
+    #: ``excursion_recovery_s`` but only while that gauge's pump is running,
+    #: modelling the pump working the excursion back down.  It is local to
+    #: the gauge, so it does not load the fore-line (see vacuum-emulator.md).
+    excursion: dict[str, float] = field(default_factory=lambda: dict.fromkeys(GAUGE_KEYS, 0.0))
+    excursion_held: dict[str, bool] = field(default_factory=lambda: dict.fromkeys(GAUGE_KEYS, False))
+    excursion_recovery_s: dict[str, float] = field(
+        default_factory=lambda: dict.fromkeys(GAUGE_KEYS, 120.0))
 
     p_fore: float = ATM
     p_chamber: float = ATM
@@ -262,12 +273,38 @@ class DB235Plant:
     _acc: float = 0.0
 
     def __post_init__(self) -> None:
+        x = self.excursion
         self.gauges = {
-            "fore": Gauge("fore-line Pirani", "pirani", lambda: self.p_fore),
-            "chamber": Gauge("chamber PKR 251", "fullrange", lambda: self.p_chamber),
-            "uh1": Gauge("UH stage 1 PKR 251", "fullrange", lambda: self.p_uh[0]),
-            "uh2": Gauge("UH stage 2 PKR 251", "fullrange", lambda: self.p_uh[1]),
+            "fore": Gauge("fore-line Pirani", "pirani", lambda: self.p_fore + x["fore"]),
+            "chamber": Gauge("chamber PKR 251", "fullrange",
+                             lambda: self.p_chamber + x["chamber"]),
+            "uh1": Gauge("UH stage 1 PKR 251", "fullrange", lambda: self.p_uh[0] + x["uh1"]),
+            "uh2": Gauge("UH stage 2 PKR 251", "fullrange", lambda: self.p_uh[1] + x["uh2"]),
         }
+
+    def gauge_pump_running(self, key: str) -> bool:
+        """Is the pump that works the volume behind gauge ``key`` running?"""
+        if key == "fore":
+            return self.mechanical.running
+        pump = self.turbo if key == "chamber" else self.uh_turbos[GAUGE_KEYS.index(key) - 2]
+        return pump.commanded and not pump.error and self.mechanical.running
+
+    def set_excursion(self, key: str, mbar: float | None = None, *,
+                      release: bool = False, recovery_s: float | None = None) -> None:
+        if key not in self.excursion:
+            raise KeyError(key)
+        if mbar is not None:
+            self.excursion[key] = max(0.0, float(mbar))
+        if recovery_s is not None:
+            self.excursion_recovery_s[key] = max(0.1, float(recovery_s))
+        self.excursion_held[key] = not release
+
+    def _step_excursions(self, dt: float) -> None:
+        for key, value in self.excursion.items():
+            if value <= 0.0 or self.excursion_held[key] or not self.gauge_pump_running(key):
+                continue
+            decayed = value * math.exp(-dt / self.excursion_recovery_s[key])
+            self.excursion[key] = 0.0 if decayed < 1e-12 else decayed
 
     @property
     def all_turbos(self) -> list[TurboController]:
@@ -281,6 +318,7 @@ class DB235Plant:
 
     def step(self, dt: float) -> None:
         u = self.utilities
+        self._step_excursions(dt)
         self.mechanical.step(self.p_fore)
         for pump in self.all_turbos:
             pump.step(dt, self.p_fore)
@@ -348,6 +386,7 @@ class DB235Plant:
                 "fore": self.p_fore, "chamber": self.p_chamber,
                 "uh1": self.p_uh[0], "uh2": self.p_uh[1],
             },
+            "excursion_mbar": {k: v for k, v in self.excursion.items() if v > 0.0},
             "mechanical": {"running": self.mechanical.running,
                            "thermal_trip": self.mechanical.thermal_trip},
             "turbos": {t.name: {"hz": round(t.hz, 1), "at_speed": t.at_speed_contact(),

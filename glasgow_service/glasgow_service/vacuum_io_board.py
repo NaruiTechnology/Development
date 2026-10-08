@@ -167,8 +167,9 @@ class RPi5VacuumIODevice:
 
     ``outputs`` maps logical A channels to relays (``{"A0": "K1"}``),
     ``inputs`` maps B channels to opto inputs (``{"B0": "DI1"}``), ``faults``
-    maps B channels to "healthy = ON" fault inputs and ``gauges`` maps B
-    channels to :class:`GaugeChannel` conversions.
+    maps B channels to "healthy = ON" fault inputs, ``gauges`` maps B
+    channels to :class:`GaugeChannel` conversions and ``valves`` maps B
+    channels to the pump's isolation-valve solenoid (``{"B1": "V2"}``).
     """
 
     KEEPALIVE_POLL = 0.1
@@ -182,6 +183,7 @@ class RPi5VacuumIODevice:
         gpio: GpioHAL,
         gauges: Mapping[str, GaugeChannel] | None = None,
         faults: Mapping[str, str] | None = None,
+        valves: Mapping[str, str] | None = None,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
         heartbeat_hz: float = 1000.0,
@@ -195,6 +197,12 @@ class RPi5VacuumIODevice:
         self._di_of = {pin: _parse_index(d, "DI", 16) for pin, d in inputs.items()}
         self._fault_di = {pin: _parse_index(d, "DI", 16) for pin, d in (faults or {}).items()}
         self._gauges = dict(gauges or {})
+        self._valve_of = {pin: _parse_index(v, "V", 8) for pin, v in (valves or {}).items()}
+        if len(set(self._valve_of.values())) != len(self._valve_of):
+            raise ValueError("each pump needs its own isolation valve")
+        unknown = sorted(set(self._valve_of) - set(self._di_of))
+        if unknown:
+            raise ValueError(f"valves for unknown input channels: {', '.join(unknown)}")
         if len(set(self._relay_of.values())) != len(self._relay_of):
             raise ValueError("each output channel needs its own relay")
         used_di = list(self._di_of.values()) + list(self._fault_di.values())
@@ -413,8 +421,27 @@ class RPi5VacuumIODevice:
     def _write_relay_sync(self, relay: int, value: bool) -> None:
         self._write_bit_sync(0, relay - 1, value)
 
+    async def write_valve(self, pin: str, open_: bool) -> None:
+        """Open/close the isolation valve of the pump read on ``pin``."""
+        try:
+            number = self._valve_of[pin]
+        except KeyError as exc:
+            raise ValueError(f"no isolation valve configured for {pin}") from exc
+        await self.write_solenoid(number, open_)
+
+    def valve_level(self, pin: str) -> bool | None:
+        """Valve solenoid as read back from U1; None when no valve is mapped."""
+        number = self._valve_of.get(pin)
+        if number is None:
+            return None
+        return bool(self._olat_readback[1] & (1 << (number - 1)))
+
+    def valve_name(self, pin: str) -> str | None:
+        number = self._valve_of.get(pin)
+        return None if number is None else f"V{number}"
+
     async def write_solenoid(self, number: int, value: bool) -> None:
-        """Drive solenoid output Vn (1..8).  Not used by the cascade yet."""
+        """Drive solenoid output Vn (1..8)."""
         if not 1 <= number <= 8:
             raise ValueError("solenoid outputs are V1..V8")
         await asyncio.to_thread(self._write_bit_sync, 1, number - 1, bool(value))
@@ -635,7 +662,7 @@ def build_board_device(sbc, outputs: Mapping[str, str], inputs: Mapping[str, str
         for pin, g in sbc.gauges.items()
     }
     common = dict(
-        gauges=gauges, faults=dict(sbc.faults),
+        gauges=gauges, faults=dict(sbc.faults), valves=dict(sbc.valves),
         heartbeat_hz=sbc.heartbeat_hz, keepalive_seconds=sbc.keepalive_seconds,
     )
     if emulator is not None:

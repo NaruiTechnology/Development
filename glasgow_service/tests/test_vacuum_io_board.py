@@ -717,3 +717,126 @@ def test_every_pump_turns_ready_only_after_its_reading_reaches_its_threshold():
         await controller.close()
 
     run(scenario())
+
+
+# ------------------------------------------------------------ isolation valves
+
+def pumped_down(**sbc_updates):
+    """Controller + deterministic rig, run until the whole system is ready."""
+    rig = VacuumRig()
+    controller = VacuumController(board_config(**sbc_updates), emulator=rig)
+
+    async def go():
+        await controller.start()
+        for _ in range(600):
+            await controller.poll_once()
+            rig.advance(1.0)
+            if controller.isVacuumSystemReady:
+                return
+        raise AssertionError("pump-down did not complete")
+
+    run(go())
+    return rig, controller
+
+
+def pumps(controller):
+    return {p.name: p for p in controller.status().pumps}
+
+
+async def poll_until(controller, rig, predicate, limit=600):
+    for _ in range(limit):
+        await controller.poll_once()
+        rig.advance(1.0)
+        if predicate():
+            return True
+    return False
+
+
+def test_valve_config_validation():
+    with pytest.raises(ValueError, match="solenoid V1..V8"):
+        board_config(Valves={"B0": "V9"})
+    with pytest.raises(ValueError, match="distinct solenoid"):
+        board_config(Valves={"B0": "V1", "B1": "V1"})
+    with pytest.raises(ValueError, match="unknown channels: B7"):
+        board_config(Valves={"B7": "V8"})
+
+
+def test_valves_closed_at_start_and_open_only_once_each_pump_is_ready():
+    rig = VacuumRig()
+    controller = VacuumController(board_config(), emulator=rig)
+
+    async def scenario():
+        await controller.start()
+        state = pumps(controller)
+        assert [state[n].valve for n in state] == ["V1", "V2", "V4", "V5"]
+        assert not any(p.valve_open for p in state.values())
+        assert not any(rig.board.solenoid_on(n) for n in (1, 2, 4, 5))
+        for _ in range(600):
+            await controller.poll_once()
+            rig.advance(1.0)
+            for p in controller.status().pumps:
+                assert p.valve_open == p.ready, p          # open exactly while ready
+            if controller.isVacuumSystemReady:
+                break
+        assert all(rig.board.solenoid_on(n) for n in (1, 2, 4, 5))
+        await controller.close()
+
+    run(scenario())
+
+
+def test_turbo_excursion_isolates_only_that_pump_until_it_recovers():
+    rig, controller = pumped_down()
+
+    async def scenario():
+        rig.set_excursion("TurboVacuumPump", 3e-3)         # reading above 2e-3
+        assert await poll_until(controller, rig, lambda: pumps(controller)[
+            "TurboVacuumPump"].border == "error", limit=5)
+        turbo = pumps(controller)["TurboVacuumPump"]
+        assert turbo.excursion and turbo.power and not turbo.valve_open
+        assert not rig.board.solenoid_on(2)                # V2 closed
+        others = [p for p in controller.status().pumps if p.name != "TurboVacuumPump"]
+        assert all(p.power and p.valve_open for p in others)   # still running
+        assert not controller.isVacuumSystemReady           # HV blocked
+
+        rig.set_excursion("TurboVacuumPump", release=True, recovery_s=30)
+        assert await poll_until(controller, rig, lambda: controller.isVacuumSystemReady)
+        turbo = pumps(controller)["TurboVacuumPump"]
+        assert turbo.value <= turbo.threshold
+        assert turbo.border == "ready" and turbo.valve_open and not turbo.excursion
+        assert rig.board.solenoid_on(2)
+        await controller.close()
+
+    run(scenario())
+
+
+def test_mechanical_excursion_restarts_like_initialization():
+    rig, controller = pumped_down()
+
+    async def scenario():
+        rig.set_excursion("MechanicalVacuumPump", 0.2)     # reading above 0.1
+        assert await poll_until(controller, rig, lambda: pumps(controller)[
+            "MechanicalVacuumPump"].border == "error", limit=5)
+        state = pumps(controller)
+        assert state["MechanicalVacuumPump"].power         # keeps running to recover
+        assert not any(p.power for n, p in state.items() if n != "MechanicalVacuumPump")
+        assert not any(p.valve_open for p in state.values())
+        assert not any(rig.board.solenoid_on(n) for n in (1, 2, 4, 5))
+        assert relays(rig)[1:4] == [False, False, False]
+
+        rig.set_excursion("MechanicalVacuumPump", release=True, recovery_s=30)
+        assert await poll_until(controller, rig, lambda: controller.isVacuumSystemReady)
+        assert all(p.valve_open and p.border == "ready" for p in controller.status().pumps)
+        assert controller.status().cascade_stopped is False
+        await controller.close()
+
+    run(scenario())
+
+
+def test_excursion_recovers_only_while_its_pump_runs():
+    rig = VacuumRig()
+    plant = rig.plant
+    rig.set_excursion("UHVacuumPump_2", 1e-3, release=True, recovery_s=10)
+    rig.advance(30.0)                                   # pump off: no recovery
+    assert plant.excursion["uh2"] == pytest.approx(1e-3)
+    with pytest.raises(KeyError):
+        rig.set_excursion("NoSuchPump", 1.0)

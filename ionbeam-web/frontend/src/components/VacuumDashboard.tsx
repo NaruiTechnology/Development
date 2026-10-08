@@ -188,16 +188,23 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
 
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
+    // The header slide switch shows the pump's isolation valve (controller
+    // managed). Older services without valve data fall back to the ready input.
+    const valveOpen = pump.valve_open ?? pump.port_b_value === status?.voltage;
+    const valveTitle = t("vacuum.valveState", {
+      valve: pump.valve ?? "",
+      state: t(valveOpen ? "vacuum.valveOpen" : "vacuum.valveClosed"),
+    });
     return (
       <article key={pump.name} className="card vacuum-card" data-border={pump.border}>
         <div className="card__header vacuum-card__header">
           <span className="card__title">{pump.name}</span>
-          <label className="vacuum-switch" title={mechanical ? t("vacuum.mechanicalAlwaysOn") : pump.name}>
+          <label className="vacuum-switch" title={valveTitle}>
             <input
               type="checkbox"
-              checked={pump.port_b_value === status?.voltage}
+              checked={valveOpen}
               disabled
-              aria-label={`${pump.name} ${t("vacuum.power")}`}
+              aria-label={valveTitle}
             />
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
           </label>

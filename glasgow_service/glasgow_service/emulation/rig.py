@@ -124,6 +124,25 @@ class VacuumRig:
         with self.clock.lock:
             (self.jumpers.add if on else self.jumpers.discard)(di)
 
+    def gauge_key_of(self, pump: str) -> str:
+        """Gauge (volume) that belongs to a pump, following the AI wiring."""
+        p = self.plant
+        if pump == p.mechanical.name:
+            return "fore"
+        if pump == p.turbo.name:
+            return "chamber"
+        for i, turbo in enumerate(p.uh_turbos):
+            if pump == turbo.name:
+                return f"uh{i + 1}"
+        raise KeyError(pump)
+
+    def set_excursion(self, pump: str, mbar: float | None = None, *,
+                      release: bool = False, recovery_s: float | None = None) -> None:
+        """Raise (hold) or release a pressure excursion on ``pump``'s gauge."""
+        with self.clock.lock:
+            self.plant.set_excursion(self.gauge_key_of(pump), mbar,
+                                     release=release, recovery_s=recovery_s)
+
     def set_estop(self, pressed: bool) -> None:
         with self.clock.lock:
             self.board.estop_loop_closed = not pressed

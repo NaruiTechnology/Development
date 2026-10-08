@@ -72,7 +72,7 @@ The same map is printed on the back silkscreen. It is also in `GlasgowDataIO/Jso
 | DI16 | Cooling water flow OK |
 | AI8 | Spare |
 
-The controller software sequences the pumps and the HV permissive (A0–A4, B0–B3, the per-pump gauges), and acts on the fault inputs (`SBC.Faults`), the E-stop and output-rail status (GPIO5/6), the keep-alive and expander resets. All 16 inputs, the relays and the solenoids are reported in `GET /vacuum` → `board`. The valve, cylinder and utility channels are wired and readable, but automatic valve sequencing is not in the software yet.
+The controller software sequences the pumps and the HV permissive (A0–A4, B0–B3, the per-pump gauges), and acts on the fault inputs (`SBC.Faults`), the E-stop and output-rail status (GPIO5/6), the keep-alive and expander resets. All 16 inputs, the relays and the solenoids are reported in `GET /vacuum` → `board`. The per-pump isolation valves V1, V2, V4 and V5 are driven by the controller (`SBC.Valves`: open exactly while that pump is ready, see `glasgow_service/docs/sbc-vacuum-controller.md`). The vent, bypass, cylinder and utility channels are wired and readable, but not sequenced yet.
 
 ## Fail-safe behaviour
 

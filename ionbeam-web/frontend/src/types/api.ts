@@ -34,6 +34,12 @@ export interface VacuumPumpState {
   ready: boolean;
   /** Cascade stage from the pump's groupName in vacuumSystem.json. */
   group: string | null;
+  /** Isolation valve of this pump ("V2"); null when the hardware has none. */
+  valve?: string | null;
+  /** Controller's valve state; the card's slide switch shows it. */
+  valve_open?: boolean;
+  /** Running, but the reading rose above its value after being ready. */
+  excursion?: boolean;
 }
 
 export interface VacuumSystemStatus {

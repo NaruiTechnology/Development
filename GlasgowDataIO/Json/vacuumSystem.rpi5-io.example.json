@@ -60,6 +60,12 @@
             "B2": "DI7",
             "B3": "DI8"
         },
+        "Valves": {
+            "B0": "V1",
+            "B1": "V2",
+            "B2": "V4",
+            "B3": "V5"
+        },
         "Gauges": {
             "B0": {
                 "AIN": "AI1",
@@ -100,6 +106,12 @@
         "    before the next groupName starts. Order = first appearance. The first groupName holds only MechanicalVacuumPump.",
         "Channels: logical A outputs -> relays K1..K8; logical B ready inputs -> opto inputs DI1..DI16.",
         "Faults: optional 'healthy = ON' inputs per B channel. An open fault input stops that pump and the cascade.",
+        "Valves: per-pump isolation valve (solenoid V1..V8), keyed by the pump's B channel. The controller opens a pump's valve",
+        "        only while that pump is ready and closes it on any loss; the dashboard slide switch shows it.",
+        "        B0 MechanicalVacuumPump -> V1 roughing/fore-line, B1 TurboVacuumPump -> V2 chamber gate,",
+        "        B2 UHVacuumPump_1 -> V4 UH isolation 1, B3 UHVacuumPump_2 -> V5 UH isolation 2.",
+        "        Reading above value while running = vacuum excursion: that valve closes and the pump turns red until it recovers.",
+        "        MechanicalVacuumPump not ready = restart: every other pump stops and every valve closes, as at initialization.",
         "Gauges: AI input and conversion law. log: p = 10^(Slope*U + Offset); linear: p = Slope*U + Offset.",
         "        A pump turns ready (green) only when its ready input is on AND its gauge reads p <= value (an exact match or lower). Set \"Interlock\": false on a gauge to use the ready input alone (WIRING.md jumper test).",
         "Serial: Pi 4B -> RS485 /dev/ttyAMA0 (needs dtoverlay=disable-bt), RS232 on uart5 (dtoverlay=uart5, check ls -l /dev/ttyAMA*).",
@@ -112,7 +124,7 @@
     ],
     "IsProduction": false,
     "Simulate": false,
-    "Enable": true,
+    "Enable": false,
     "LogName": "VacuumDashboard",
     "Verbose": false
 }

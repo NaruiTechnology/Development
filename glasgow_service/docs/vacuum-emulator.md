@@ -86,6 +86,36 @@ analog voltages). Operator actions on the emulated rig, for UI work (bearer toke
 | `POST /emulator/inputs/{n}` | `{"on": true}` | Commissioning jumper +24 V → DIn |
 | `POST /emulator/tool` | `{"connected": false}` | Unplug / plug all tool-side connectors |
 | `POST /emulator/faults/{name}` | `{"active": true}` | `MechanicalVacuumPump` thermal trip; turbo error (`"code": "Err006"`); `door_closed`, `compressed_air_ok`, `n2_ok`, `cooling_water_ok`; `heartbeat_stuck`; `i2c_nack` (`"address": 33`) |
+| `POST /emulator/excursion/{pump}` | `{"mbar": 3e-3}` / `{"release": true, "recovery_s": 120}` / `{"mbar": 0}` | Pressure excursion on that pump's gauge: raise and hold it; release it (the running pump works it back down with that emulated time constant); clear it |
+
+The excursion is added to one gauge's reading only (`MechanicalVacuumPump` → fore-line
+Pirani AI1, `TurboVacuumPump` → chamber AI2, `UHVacuumPump_1/2` → AI3/AI4). It does not
+load the fore-line. A real chamber leak large enough to lift the turbo's reading past
+2e-3 mbar also lifts the fore-line past 0.1 mbar with the emulated 3 L/s backing pump, so a
+real leak always becomes the mechanical-pump case. The excursion lets each pump be tested
+on its own.
+
+### Excursion test app
+
+`scripts/vacuum_excursion_test.py` drives one excursion through the running service and
+checks the controller's response, live on the dashboard:
+
+```bash
+cd glasgow_service
+python scripts/vacuum_excursion_test.py                    # a random pump from the config
+python scripts/vacuum_excursion_test.py TurboVacuumPump    # a specific pump
+python scripts/vacuum_excursion_test.py --once             # one run, no next-pump prompt
+python scripts/vacuum_excursion_test.py --local            # in-process emulator, no service
+```
+
+It raises the pump's reading slowly until it crosses the configured value, checks that its
+isolation valve closes (slide switch off) and its card turns red while the other pumps keep
+running, releases the excursion, and checks that the reading drops back to the value or
+below, the valve opens and the card turns green. For `MechanicalVacuumPump` it also checks the
+restart: every other pump stops and every valve closes, then the cascade restarts and the whole
+system becomes ready. With no pump name it picks one at random from the configured `VacuumPumps` list and waits until that pump is running and green; a stopped cascade is resumed. Afterwards it asks for the next pump (Enter = random, q = quit). If the service predates the valve patch, it says so and stops. Pass the
+service's bearer token with `--token` or `SBC_VACUUM_TOKEN`. The exit code is 0 when every check
+passed.
 
 ## Log tags: which mode is running
 
@@ -127,8 +157,17 @@ SBC_VACUUM_LOG_FORMAT=json ...                              # JSON lines with "e
 All of it is covered by `tests/test_vacuum_io_board.py`:
 
 - **Cascade** (from each pump's `groupName`): mechanical → turbo → UH group, with downstream shutdown on loss of ready.
-- **Ready** = the pump's ready input (B channel → DIn). With `"Interlock": true` on its gauge it
-  also needs `p <= value × (1 + errorRange)`.
+- **Ready** = the pump's ready input (B channel → DIn) and its gauge reading at or below its
+  configured value (unless the gauge sets `"Interlock": false`).
+- **Isolation valves** (`SBC.Valves`, B channel → solenoid): a pump's valve is open exactly while
+  the pump is ready. All valves close at start, stop, E-stop, device errors and interlocks.
+- **Vacuum excursion**: a running pump whose reading rises above its value after being ready has
+  its valve closed and turns red (`excursion: true`, `border: "error"`). The other pumps keep
+  running. When the reading is back at or below the value, the valve reopens and the card turns
+  green. HV is blocked meanwhile.
+- **Backing pump restart**: when `MechanicalVacuumPump` is not ready (excursion or ready input
+  lost), every other pump stops and every valve closes at once, as at initialization. The
+  mechanical pump keeps running; once it is ready again the cascade restarts from the top.
 - **Fault inputs** (`SBC.Faults`, wired "healthy = ON"): an open input marks the pump `fault`,
   switches that pump off (the backing pump is never switched off by software), raises an alarm and
   latches the cascade until `POST /vacuum/resume`. A faulted pump is never started.
@@ -145,8 +184,8 @@ All of it is covered by `tests/test_vacuum_io_board.py`:
 - Alarms are reported in `status.alarms`; they are not communication errors, so `connected` and
   `/health/ready` stay true during an E-stop.
 
-Not implemented yet: automatic valve sequencing (V1-V8 are driven by `write_solenoid()` but nothing
-calls it), and reading turbo speed or errors over RS-485 in the control loop
+Not implemented yet: the vent (V3), bypass (V6) and cylinder (V7) channels are not sequenced,
+and turbo speed or errors are not read over RS-485 in the control loop
 (`glasgow_service.pfeiffer.PfeifferClient` works against the emulated drives).
 
 ## QEMU (operating-system level)

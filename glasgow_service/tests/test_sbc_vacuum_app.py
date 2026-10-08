@@ -254,3 +254,17 @@ def test_runtime_pump_list_comes_only_from_canonical_config(tmp_path, monkeypatc
             pump["name"] for pump in payload["VacuumPumps"]]
         assert "UHVacuumPump_1" not in [pump["name"] for pump in status["pumps"]]
         assert client.post("/vacuum/pumps/UHVacuumPump_1/power", json={"power": True}).status_code == 404
+
+
+def test_emulator_excursion_endpoint_requires_board_emulator(tmp_path, monkeypatch):
+    """GPIO-simulator profiles have no emulator: the endpoint is 404."""
+    payload = json.loads(CONFIG_PATH.read_text())
+    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    profile = tmp_path / "vacuum.json"
+    profile.write_text(json.dumps(payload))
+    monkeypatch.setenv("SBC_VACUUM_CONFIG", str(profile))
+    monkeypatch.setenv("SBC_REQUIRE_FENCING", "false")
+    monkeypatch.delenv("SBC_VACUUM_TOKEN", raising=False)
+    with TestClient(create_app(config_loader=load_vacuum_config)) as client:
+        response = client.post("/emulator/excursion/TurboVacuumPump", json={"mbar": 1e-2})
+        assert response.status_code == 404
