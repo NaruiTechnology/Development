@@ -144,6 +144,7 @@ REQUIRED_DIST_FILES = (
     'Development/ionbeam-web/backend/package.json',
     'Development/IobeamAdmin/Sql/006_equipment_csv_functions.sql',
     'Development/glasgow_service/requirements.txt',
+    'Development/glasgow_service/scripts/vacuum_excursion_test.py',
     'Development/requirements.txt',
     'Development/ionbeam-native/requirements.txt',
     'Development/ionbeam-native/scripts/install_linux.sh',
@@ -590,6 +591,12 @@ def build_compiled_dist(src_dir, dist_dir, deliver_raw=False, package_roots=None
     # from per-file processing.
     copy_source_trees(src_dir, dist_dir, COPY_TREES)
     copy_preserved_files(src_dir, dist_dir, [
+        # Keep this command-line test runnable by its documented .py path,
+        # including in compiled distributions.
+        (
+            os.path.join('Development', 'glasgow_service', 'scripts', 'vacuum_excursion_test.py'),
+            os.path.join('Development', 'glasgow_service', 'scripts', 'vacuum_excursion_test.py'),
+        ),
         (
             os.path.join('Development', 'ionbeam-web', 'backend', '.env'),
             os.path.join('Development', 'ionbeam-web', 'backend', '.env'),
