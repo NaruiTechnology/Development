@@ -109,6 +109,12 @@ value, no fault). The slide switch in each pump card's header shows the valve (`
   recover, then the cascade restarts from the top.
 - Valves also close at controller start and stop, on an E-stop or output-rail trip, and on a
   device error.
+- **Mechanical pump restart** (`POST /vacuum/pumps/MechanicalVacuumPump/restart`): a real power
+  cycle, like controller initialization. Before the call returns, high voltage is off, every other
+  pump is stopped, every valve is closed and the mechanical pump is switched OFF. After
+  `off_seconds` (default 3) it switches ON again and the cascade restarts from the top. While it
+  runs, `GET /vacuum` reports `restarting: true` and the cascade cannot advance. Only the backing
+  pump can be restarted; a second request during a restart is refused (409).
 
 Only board mode drives real valves. In direct-GPIO and simulator mode, `valve_open` is the
 controller's state with no hardware behind it.
@@ -131,6 +137,8 @@ Run `python -m glasgow_service.sbc_vacuum_app`. It exposes:
 - `POST /vacuum/pumps/{name}/power`
 - `POST /vacuum/high-voltage/power` (vacuum-ready interlocked)
 - `POST /vacuum/stop`, `/vacuum/resume`, and `/vacuum/release`
+- `POST /vacuum/pumps/MechanicalVacuumPump/restart` with optional `{"off_seconds": 3}`:
+  restart the backing pump like controller initialization (see below)
 - `POST /vacuum/simulation/{name}/ready` with `{"ready": true|false}`
 - `GET /emulator` and `POST /emulator/*` (only when the emulator is active: `IsProduction` false)
 

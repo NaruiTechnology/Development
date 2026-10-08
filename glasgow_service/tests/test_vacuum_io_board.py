@@ -840,3 +840,60 @@ def test_excursion_recovers_only_while_its_pump_runs():
     assert plant.excursion["uh2"] == pytest.approx(1e-3)
     with pytest.raises(KeyError):
         rig.set_excursion("NoSuchPump", 1.0)
+
+
+# ------------------------------------------------------------ backing-pump restart
+
+def test_backing_pump_restart_power_cycles_like_initialization():
+    rig, controller = pumped_down()
+
+    async def scenario():
+        await controller.restart_backing_pump(off_seconds=0.2)
+        # Stop phase is applied before the call returns.
+        status = controller.status()
+        assert status.restarting and status.cascade_stopped
+        assert not any(p.power for p in status.pumps)                 # mechanical too
+        assert not any(p.valve_open for p in status.pumps)
+        rig.advance(0.05)
+        assert relays(rig) == [False] * 5                             # K1..K5 open
+        assert not any(rig.board.solenoid_on(n) for n in (1, 2, 4, 5))
+        # The poll loop must not restart anything during the OFF dwell.
+        await controller.poll_once()
+        rig.advance(0.05)
+        assert relays(rig)[0] is False and not controller.status().pumps[0].power
+        with pytest.raises(ValueError, match="already in progress"):
+            await controller.restart_backing_pump()
+
+        await asyncio.sleep(0.3)                                      # dwell elapses
+        status = controller.status()
+        assert not status.restarting and not status.cascade_stopped
+        assert status.pumps[0].power and not any(p.power for p in status.pumps[1:])
+
+        green_order = []
+        for _ in range(600):
+            await controller.poll_once()
+            rig.advance(1.0)
+            for p in controller.status().pumps:
+                if p.border == "ready" and p.name not in green_order:
+                    green_order.append(p.name)
+            if controller.isVacuumSystemReady:
+                break
+        assert controller.isVacuumSystemReady
+        assert green_order[:2] == ["MechanicalVacuumPump", "TurboVacuumPump"]
+        assert all(p.valve_open for p in controller.status().pumps)
+        await controller.close()
+
+    run(scenario())
+
+
+def test_backing_pump_restart_rejects_bad_requests():
+    rig, controller = pumped_down()
+
+    async def scenario():
+        with pytest.raises(ValueError, match="between 0 and 60"):
+            await controller.restart_backing_pump(off_seconds=120)
+        await controller.close()
+        with pytest.raises(RuntimeError, match="not running"):
+            await controller.restart_backing_pump()
+
+    run(scenario())

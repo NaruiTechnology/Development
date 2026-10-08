@@ -268,3 +268,25 @@ def test_emulator_excursion_endpoint_requires_board_emulator(tmp_path, monkeypat
     with TestClient(create_app(config_loader=load_vacuum_config)) as client:
         response = client.post("/emulator/excursion/TurboVacuumPump", json={"mbar": 1e-2})
         assert response.status_code == 404
+
+
+def test_restart_endpoint_only_restarts_the_backing_pump(tmp_path, monkeypatch):
+    payload = json.loads(CONFIG_PATH.with_name("vacuumSystem.rpi5-io.example.json").read_text())
+    payload.update(Enable=True, IsProduction=False, Simulate=False)
+    profile = tmp_path / "vacuum.json"
+    profile.write_text(json.dumps(payload))
+    monkeypatch.setenv("SBC_VACUUM_CONFIG", str(profile))
+    monkeypatch.setenv("SBC_REQUIRE_FENCING", "false")
+    monkeypatch.setenv("SBC_VACUUM_EMULATOR_SPEED", "40")
+    monkeypatch.delenv("SBC_VACUUM_TOKEN", raising=False)
+    with TestClient(create_app(config_loader=load_vacuum_config)) as client:
+        assert client.post("/vacuum/pumps/NoSuchPump/restart", json={}).status_code == 404
+        assert client.post("/vacuum/pumps/TurboVacuumPump/restart", json={}).status_code == 409
+        response = client.post("/vacuum/pumps/MechanicalVacuumPump/restart",
+                               json={"off_seconds": 0.5})
+        assert response.status_code == 200, response.text
+        state = response.json()
+        assert state["restarting"] is True
+        assert not any(p["power"] or p["valve_open"] for p in state["pumps"])
+        assert client.post("/vacuum/pumps/MechanicalVacuumPump/restart",
+                           json={}).status_code == 409                # already restarting

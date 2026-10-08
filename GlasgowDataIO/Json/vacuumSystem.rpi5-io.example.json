@@ -124,7 +124,7 @@
     ],
     "IsProduction": false,
     "Simulate": false,
-    "Enable": false,
+    "Enable": true,
     "LogName": "VacuumDashboard",
     "Verbose": false
 }

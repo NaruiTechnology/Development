@@ -21,6 +21,7 @@ from .models import (
     VacuumSystemStatus,
 )
 from .vacuum import (
+    MECHANICAL_PUMP,
     VacuumController,
     find_vacuum_config_path,
     load_runtime_vacuum_config,
@@ -188,6 +189,29 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
             raise HTTPException(404, f"unknown vacuum pump: {name}") from exc
         except (AuthorityDenied, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
+        return target.status()
+
+    @app.post("/vacuum/pumps/{name}/restart", response_model=VacuumSystemStatus,
+              dependencies=mutation_dependencies)
+    async def restart_pump(name: str, req: dict | None = None):
+        """Restart (power-cycle) the backing pump like controller initialization.
+
+        Every other pump stops and every valve closes before this returns;
+        the pump comes back ON after ``off_seconds`` (default 3) and the
+        cascade restarts.  Only the backing pump can be restarted.
+        """
+        target = controller()
+        names = [p.name for p in target.status().pumps]
+        if name not in names:
+            raise HTTPException(404, f"unknown vacuum pump: {name}")
+        if name != MECHANICAL_PUMP:
+            raise HTTPException(409, f"only {MECHANICAL_PUMP} can be restarted")
+        try:
+            await target.restart_backing_pump((req or {}).get("off_seconds"))
+        except (AuthorityDenied, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from exc
         return target.status()
 
     @app.post("/vacuum/high-voltage/power", response_model=VacuumSystemStatus,

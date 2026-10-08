@@ -86,6 +86,8 @@ class VacuumSystemStatus(BaseModel):
     running: bool
     runtime_seconds: float = 0.0
     cascade_stopped: bool
+    # A backing-pump restart (power cycle) is in progress.
+    restarting: bool = False
     isVacuumSystemReady: bool = False
     high_voltage_power: bool = False
     last_error: Optional[str] = None

@@ -104,6 +104,7 @@ checks the controller's response, live on the dashboard:
 cd glasgow_service
 python scripts/vacuum_excursion_test.py                    # a random pump from the config
 python scripts/vacuum_excursion_test.py TurboVacuumPump    # a specific pump
+python scripts/vacuum_excursion_test.py --restart          # mechanical-pump restart
 python scripts/vacuum_excursion_test.py --once             # one run, no next-pump prompt
 python scripts/vacuum_excursion_test.py --local            # in-process emulator, no service
 ```
@@ -113,7 +114,7 @@ isolation valve closes (slide switch off) and its card turns red while the other
 running, releases the excursion, and checks that the reading drops back to the value or
 below, the valve opens and the card turns green. For `MechanicalVacuumPump` it also checks the
 restart: every other pump stops and every valve closes, then the cascade restarts and the whole
-system becomes ready. With no pump name it picks one at random from the configured `VacuumPumps` list and waits until that pump is running and green; a stopped cascade is resumed. Afterwards it asks for the next pump (Enter = random, q = quit). If the service predates the valve patch, it says so and stops. Pass the
+system becomes ready. With no pump name it picks one at random from the configured `VacuumPumps` list and waits until that pump is running and green; a stopped cascade is resumed. The restart scenario (`--restart`, or `r` in the menu) restarts `MechanicalVacuumPump` through `POST /vacuum/pumps/MechanicalVacuumPump/restart` and checks that every other pump stops, every valve closes, the pump switches OFF then ON, and the cascade restarts stage by stage until the whole system is ready. Afterwards a menu offers the next test: `1`..`n` for a pump's excursion (the mechanical pump included), `r` for the restart, Enter for a random pump, `q` to quit. If the service predates the valve patch, it says so and stops. Pass the
 service's bearer token with `--token` or `SBC_VACUUM_TOKEN`. The exit code is 0 when every check
 passed.
 

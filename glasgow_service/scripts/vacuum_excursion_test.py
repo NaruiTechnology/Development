@@ -17,16 +17,26 @@ no pump name is given; the name is optional):
 4. Check: reading <= value, valve open again (switch ON), card green.
    MechanicalVacuumPump: the cascade restarts and the whole system is ready.
 
-Then it waits for the next pump to be selected (Enter = random, q = quit).
+Restart scenario (``--restart``, or ``r`` at the prompt): a real restart of
+MechanicalVacuumPump, like controller initialization.  Checks that every other
+pump stops and every valve closes, the mechanical pump switches OFF and then
+ON again, and the cascade restarts stage by stage (each stage green before the
+next starts) until the whole system is ready.
+
+Then it shows a menu for the next test: 1..n = that pump's excursion test
+(MechanicalVacuumPump included), r = mechanical-pump restart, Enter = random
+pump, q = quit.
 
 Usage (from glasgow_service/):
     python scripts/vacuum_excursion_test.py                    # random configured pump
     python scripts/vacuum_excursion_test.py TurboVacuumPump    # that pump
+    python scripts/vacuum_excursion_test.py --restart          # mechanical-pump restart
     python scripts/vacuum_excursion_test.py --once             # one run, no prompt
     python scripts/vacuum_excursion_test.py --local            # in-process emulator,
                                                                # no service needed
 Options: --url (default http://127.0.0.1:8766), --token (default
-$SBC_VACUUM_TOKEN), --ramp-seconds, --hold-seconds, --recovery-s, --timeout.
+$SBC_VACUUM_TOKEN), --ramp-seconds, --hold-seconds, --recovery-s, --off-seconds,
+--timeout.
 Exit code 0 when every check passed.
 """
 from __future__ import annotations
@@ -42,6 +52,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 MECHANICAL = "MechanicalVacuumPump"
+RESTART_WORDS = {"r", "restart", "--restart"}
 POLL = 0.5                      # wall seconds between status reads
 
 GREEN, RED, DIM, BOLD, RESET = "\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[0m"
@@ -79,6 +90,10 @@ class ServiceClient:
 
     def vacuum(self) -> dict:
         return self._send("GET", "/vacuum")
+
+    def restart(self, pump: str, off_seconds: float) -> dict:
+        return self._send("POST", f"/vacuum/pumps/{pump}/restart",
+                          json={"off_seconds": off_seconds}, headers=self.headers)
 
     def resume(self) -> dict:
         return self._send("POST", "/vacuum/resume", headers=self.headers)
@@ -139,7 +154,11 @@ def local_client(speed: float):
     """In-process service on the board emulator, like scripts/verify-vacuum-emulator.py."""
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root))
-    from fastapi.testclient import TestClient
+    try:
+        from fastapi.testclient import TestClient
+    except ImportError:
+        raise SystemExit("--local runs the service in-process and needs the project's packages: "
+                         "activate the project .venv first (the default mode needs none).") from None
     from glasgow_service.sbc_vacuum_app import create_app
     from glasgow_service.vacuum import load_vacuum_config
 
@@ -399,6 +418,116 @@ def run_excursion(client: ServiceClient, pump: str, args) -> bool:
     return checks.passed
 
 
+# --------------------------------------------------------------------- restart
+
+def stages_of(state: dict) -> list[list[str]]:
+    """Cascade stages: consecutive pumps sharing a groupName."""
+    stages: list[tuple[str, list[str]]] = []
+    for p in state["pumps"]:
+        group = p.get("group") or p["name"]
+        if stages and stages[-1][0] == group:
+            stages[-1][1].append(p["name"])
+        else:
+            stages.append((group, [p["name"]]))
+    return [names for _group, names in stages]
+
+
+def run_restart(client: ServiceClient, args) -> bool:
+    checks = Checks()
+    print(f"\n{BOLD}=== Mechanical pump restart test: {MECHANICAL} ==={RESET}")
+
+    # 0. Start from a fully running system.
+    print(" 0. waiting until every pump is running, valves open, cards green ...")
+    deadline = time.monotonic() + args.timeout
+    resumed = False
+    state = client.vacuum()
+    while not state["isVacuumSystemReady"] and time.monotonic() < deadline:
+        if state.get("cascade_stopped") and state.get("running") and not resumed \
+                and not state.get("restarting"):
+            print("   cascade is stopped; resuming it (emulator) ...")
+            client.resume()
+            resumed = True
+        time.sleep(POLL)
+        state = client.vacuum()
+    if not checks.check("whole system ready before the restart", state["isVacuumSystemReady"]):
+        diagnose(state, MECHANICAL)
+        return False
+    for q in state["pumps"]:
+        print(f"   {describe(q)}")
+    stages = stages_of(state)
+
+    # 1. Request the restart: the stop phase is applied before the call returns.
+    print(f" 1. restarting {MECHANICAL} (OFF for {args.off_seconds:g} s) ...")
+    requested_at = time.monotonic()
+    state = client.restart(MECHANICAL, args.off_seconds)
+    pumps = pumps_by_name(state)
+    others = [p for p in state["pumps"] if p["name"] != MECHANICAL]
+    checks.check("restart in progress", state.get("restarting") is True)
+    checks.check(f"{MECHANICAL} switched OFF", pumps[MECHANICAL]["power"] is False)
+    checks.check("every other pump stopped", all(not p["power"] for p in others),
+                 ", ".join(p["name"] for p in others if p["power"]))
+    checks.check("every isolation valve closed (all slide switches OFF)",
+                 all(not p.get("valve_open") for p in state["pumps"]),
+                 ", ".join(p["name"] for p in state["pumps"] if p.get("valve_open")))
+    checks.check("no card green", all(p["border"] != "ready" for p in state["pumps"]))
+    checks.check("high voltage off", state["high_voltage_power"] is False)
+    for q in state["pumps"]:
+        print(f"   {describe(q)}")
+
+    # 2. The mechanical pump comes back ON after the dwell.
+    print(" 2. waiting for the mechanical pump to switch ON again ...")
+    back_on = wait_for(client, lambda s: pumps_by_name(s)[MECHANICAL]["power"],
+                       args.off_seconds + 30.0)
+    off_for = time.monotonic() - requested_at
+    checks.check(f"{MECHANICAL} switched ON again", back_on is not None)
+    checks.check(f"stayed OFF for the requested {args.off_seconds:g} s",
+                 off_for >= args.off_seconds * 0.8, f"{off_for:.1f} s")
+    if back_on is None:
+        diagnose(client.vacuum(), MECHANICAL)
+        return False
+
+    # 3. The cascade restarts from the top, stage by stage.
+    print(" 3. watching the cascade restart ...")
+    powered_at: dict[str, float] = {}
+    green_at: dict[str, float] = {}
+    last = None
+    deadline = time.monotonic() + args.timeout
+    while time.monotonic() < deadline:
+        state = client.vacuum()
+        now = time.monotonic()
+        for p in state["pumps"]:
+            if p["power"]:
+                powered_at.setdefault(p["name"], now)
+            if p["border"] == "ready" and p.get("valve_open"):
+                green_at.setdefault(p["name"], now)
+        line = "  ".join(f"{p['name']}:{'G' if p['border'] == 'ready' else ('on' if p['power'] else '-')}"
+                         for p in state["pumps"])
+        if line != last:
+            print(f"   {DIM}{line}{RESET}")
+            last = line
+        if state["isVacuumSystemReady"]:
+            break
+        time.sleep(POLL)
+    checks.check("whole system ready again", state["isVacuumSystemReady"])
+    in_order = True
+    for upstream, downstream in zip(stages, stages[1:]):
+        up_green = max((green_at.get(n, float("inf")) for n in upstream), default=0.0)
+        down_on = min((powered_at.get(n, float("inf")) for n in downstream), default=0.0)
+        if not up_green <= down_on:
+            in_order = False
+    checks.check("cascade order: each stage green before the next starts", in_order,
+                 " -> ".join("+".join(stage) for stage in stages))
+    checks.check("every valve open again, every card green",
+                 all(p.get("valve_open") and p["border"] == "ready" for p in state["pumps"]))
+    for q in state["pumps"]:
+        print(f"   {describe(q)}")
+
+    verdict = f"{GREEN}PASSED{RESET}" if checks.passed else f"{RED}FAILED{RESET}"
+    print(f"{BOLD}=== {MECHANICAL} restart: {verdict}{BOLD} "
+          f"({sum(ok for _, ok in checks.results)}/{len(checks.results)} checks) ==={RESET}")
+    return checks.passed
+
+
 # --------------------------------------------------------------------- main
 
 def main() -> int:
@@ -410,6 +539,10 @@ def main() -> int:
     parser.add_argument("--local", action="store_true",
                         help="run an in-process service on the emulator instead of --url")
     parser.add_argument("--speed", type=float, default=20.0, help="--local emulator speed")
+    parser.add_argument("--restart", action="store_true",
+                        help=f"run the {MECHANICAL} restart scenario instead of an excursion")
+    parser.add_argument("--off-seconds", type=float, default=3.0,
+                        help="how long the mechanical pump stays OFF in a restart (default 3)")
     parser.add_argument("--once", action="store_true", help="one run, no next-pump prompt")
     parser.add_argument("--ramp-seconds", type=float, default=20.0,
                         help="wall time for the slow rise (default 20)")
@@ -430,17 +563,29 @@ def main() -> int:
                   "vacuum \"Enable\": true and scanner \"IsProduction\": false.", file=sys.stderr)
             return 2
         require_valve_support(client)
-        requested = args.pump
+        requested = "restart" if args.restart else args.pump
         interactive = sys.stdin.isatty() and not args.once
         while True:
-            pump = pick_pump(client, requested)
-            all_passed = run_excursion(client, pump, args) and all_passed
+            if requested and requested.lower() in RESTART_WORDS:
+                all_passed = run_restart(client, args) and all_passed
+            else:
+                pump = pick_pump(client, requested)
+                all_passed = run_excursion(client, pump, args) and all_passed
             if not interactive:
                 break
             names = [p["name"] for p in client.vacuum()["pumps"]]
-            answer = input(f"\nNext pump [{' / '.join(names)}; Enter = random; q = quit]: ").strip()
+            print(f"\n{BOLD}Select the next test:{RESET}")
+            for i, name in enumerate(names, 1):
+                note = ("excursion; edge case: every other pump stops, every valve closes"
+                        if name == MECHANICAL else "excursion")
+                print(f"  {i}) {name:<22} {DIM}{note}{RESET}")
+            print(f"  r) {MECHANICAL:<22} {DIM}restart: power OFF -> ON, cascade restarts{RESET}")
+            print(f"  {DIM}Enter = random pump, q = quit (a pump name also works){RESET}")
+            answer = input("> ").strip()
             if answer.lower() in {"q", "quit", "exit"}:
                 break
+            if answer.isdigit() and 1 <= int(answer) <= len(names):
+                answer = names[int(answer) - 1]
             requested = answer or None
     return 0 if all_passed else 1
 

@@ -444,6 +444,8 @@ class VacuumController:
     POLL_INTERVAL_SECONDS = 1.0
     READING_MAX_AGE_SECONDS = 5.0
     SIMULATION_STEP_FRACTION = 0.02
+    #: Default OFF dwell of a backing-pump restart (wall seconds).
+    BACKING_RESTART_OFF_SECONDS = 3.0
     #: Float rounding only; not an operating tolerance (see _reading_reached).
     READING_MATCH_RTOL = 1e-9
 
@@ -542,6 +544,7 @@ class VacuumController:
         self._alarms: list[str] = []
         self._logged_error: Optional[str] = None
         self._injected_device = device is not None
+        self._restart_task: Optional[asyncio.Task] = None
         self._log_mode_banner()
 
     # ------------------------------------------------------------- logging
@@ -665,6 +668,13 @@ class VacuumController:
 
     async def close(self) -> None:
         self._running = False
+        if self._restart_task is not None and not self._restart_task.done():
+            self._restart_task.cancel()
+            try:
+                await self._restart_task
+            except asyncio.CancelledError:
+                pass
+        self._restart_task = None
         if self._task is not None:
             self._task.cancel()
             try:
@@ -728,6 +738,7 @@ class VacuumController:
                 if self._running and self._started_at is not None else 0.0
             ),
             cascade_stopped=self._cascade_stopped,
+            restarting=self.restarting,
             isVacuumSystemReady=self.isVacuumSystemReady,
             high_voltage_power=self._high_voltage_power,
             last_error=(self._last_error or
@@ -816,6 +827,71 @@ class VacuumController:
                       f"{name} ({self._channel_name(state.write)}) "
                       f"{'ON' if power else 'OFF'} failed: {exc}")
             raise
+
+    # ------------------------------------------------------- backing restart
+    @property
+    def restarting(self) -> bool:
+        """True while a backing-pump restart is in progress."""
+        return self._restart_task is not None and not self._restart_task.done()
+
+    async def restart_backing_pump(self, off_seconds: float | None = None) -> None:
+        """Power-cycle the backing (mechanical) pump, like controller initialization.
+
+        Runs the stop phase before returning -- high voltage off, every other
+        pump stopped (downstream first), every isolation valve closed, the
+        mechanical pump switched OFF -- then, in the background, waits
+        ``off_seconds`` and switches the mechanical pump ON again.  The
+        cascade then restarts from the top exactly as after ``start()``.
+        """
+        self._require_authority()
+        if not self._running:
+            raise RuntimeError("vacuum controller is not running")
+        if self.restarting:
+            raise ValueError("a backing-pump restart is already in progress")
+        off = self.BACKING_RESTART_OFF_SECONDS if off_seconds is None else float(off_seconds)
+        if not 0.0 <= off <= 60.0:
+            raise ValueError("off_seconds must be between 0 and 60")
+        self._log(logging.WARNING, "vacuum.restart",
+                  f"{MECHANICAL_PUMP} restart requested: stopping every pump, closing every "
+                  f"valve, OFF for {off:g} s")
+        self._cascade_stopped = True          # nothing advances while restarting
+        if self._high_voltage_power:
+            await self._set_high_voltage_output(False)
+        for stage in reversed(self._stages[1:]):
+            for state in stage:
+                if state.power:
+                    await self.set_power(state.name, False, automatic=True)
+        for state in self._states.values():
+            state.excursion = False
+            await self._set_valve(state, False, reason="backing pump restart")
+        mechanical = self._states[MECHANICAL_PUMP]
+        async with self._io_lock:
+            self._require_authority()
+            await self.gpio.write(mechanical.write, False)
+        self._log(logging.WARNING, "vacuum.output",
+                  f"{MECHANICAL_PUMP} ({self._channel_name(mechanical.write)}) OFF (restart)")
+        mechanical.power = False
+        mechanical.port_a_value = 0.0
+        mechanical.ready = False
+        mechanical.value = None
+        mechanical.border = "off"
+        self._restart_task = asyncio.create_task(
+            self._finish_backing_restart(off), name="vacuum-backing-restart")
+
+    async def _finish_backing_restart(self, off_seconds: float) -> None:
+        try:
+            await asyncio.sleep(off_seconds)
+            if not self._running:
+                return
+            await self.set_power(MECHANICAL_PUMP, True, automatic=True)
+            self._cascade_stopped = False     # restart the cascade from the top
+            self._log(logging.INFO, "vacuum.restart",
+                      f"{MECHANICAL_PUMP} back ON: cascade restarting from the top")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._last_error = f"backing-pump restart failed: {exc}"
+            self._log(logging.ERROR, "vacuum.restart", self._last_error)
 
     async def stop_non_mechanical(self) -> None:
         self._require_authority()
