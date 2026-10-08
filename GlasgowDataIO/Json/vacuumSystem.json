@@ -189,7 +189,7 @@
     ],
     "IsProduction": false,
     "Simulate": true,
-    "Enable": true,
+    "Enable": false,
     "LogName": "VacummDashboard",
     "Verbose": false
 }
