@@ -20,10 +20,16 @@ export function shouldShowVacuumControllerError(
     || !vacuumReadingsAreFresh(status.updated_at);
 }
 
+/** Controls require completed initialization in both hardware and simulation modes. */
+export function vacuumIsReadyForControls(status: VacuumSystemStatus): boolean {
+  return status.isVacuumSystemReady === true
+    && !shouldShowVacuumControllerError(status, null, null);
+}
+
 export interface VacuumUiPolicyInput {
   scanActive: boolean;
   signedIn: boolean;
-  vacuumEnabled: boolean;
+  vacuumEnabled: boolean | null;
   vacuumReady: boolean;
 }
 
@@ -37,7 +43,7 @@ export function shouldDisableScanPanel({
   vacuumEnabled,
   vacuumReady,
 }: VacuumUiPolicyInput): boolean {
-  return scanActive || !signedIn || (vacuumEnabled && !vacuumReady);
+  return scanActive || !signedIn || vacuumEnabled === null || (vacuumEnabled && !vacuumReady);
 }
 
 export function shouldShowVacuumController(vacuumEnabled: boolean): boolean {

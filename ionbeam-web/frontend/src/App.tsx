@@ -23,7 +23,7 @@ import { Header } from "./components/Header";
 import type { SignedInUser } from "./components/AuthDialog";
 import { apiUrl } from "./lib/backendUrl";
 import { readJsonResponse } from "./lib/readJsonResponse";
-import { shouldDisableScanPanel, shouldShowVacuumControllerError } from "./lib/vacuumPolicy";
+import { vacuumIsReadyForControls, shouldDisableScanPanel, shouldShowVacuumControllerError } from "./lib/vacuumPolicy";
 import { dimensionBoundsFromGeometry, geometryFromConfig, toAppliedGeometry } from "./lib/scanGeometry";
 import { fetchScanGeometry } from "./lib/scanGeometryApi";
 import { fetchDimensionCalibrationRemote } from "./lib/dimensionCalibrationApi";
@@ -413,7 +413,7 @@ export function App() {
         const status = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
         if (!cancelled) {
           const invalid = shouldShowVacuumControllerError(status, null, null);
-          setIsVacuumSystemReady(!invalid);
+          setIsVacuumSystemReady(vacuumIsReadyForControls(status));
           setVacuumControllerError(invalid);
           setHighVoltagePower(!invalid && status.high_voltage_power === true);
         }
@@ -461,7 +461,7 @@ export function App() {
         throw new Error(detail || `${response.status} ${response.statusText}`);
       }
       const status = await readJsonResponse<VacuumSystemStatus>(response, "high-voltage power");
-      setIsVacuumSystemReady(status.isVacuumSystemReady === true);
+      setIsVacuumSystemReady(vacuumIsReadyForControls(status));
       setHighVoltagePower(status.high_voltage_power === true);
     } catch (cause) {
       setHighVoltageError(cause instanceof Error ? cause.message : String(cause));
@@ -573,7 +573,7 @@ export function App() {
   const panelDisabled = shouldDisableScanPanel({
     scanActive: scanActive || adcActive,
     signedIn: isSignedIn,
-    vacuumEnabled,
+    vacuumEnabled: serviceStatus === null ? null : vacuumEnabled,
     vacuumReady: isVacuumSystemReady,
   });
   // A scan started while the ADC test card is open would draw behind the
@@ -581,6 +581,7 @@ export function App() {
   useEffect(() => {
     if (scanActive) setAdcTestCollapsed(true);
   }, [scanActive]);
+  const vacuumControlsLocked = serviceStatus === null || (vacuumEnabled && !isVacuumSystemReady);
   const rasterVectorTabsDisabled = panelDisabled || roiActionLocked;
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
@@ -1384,7 +1385,11 @@ export function App() {
         style={layoutStyle}
       >
         {/* left column */}
-        <section>
+        <section
+          aria-disabled={vacuumControlsLocked}
+          {...(vacuumControlsLocked ? { inert: "" } : {})}
+          style={vacuumControlsLocked ? { opacity: 0.55 } : undefined}
+        >
           <div
             className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
             style={scanPanelStyle}

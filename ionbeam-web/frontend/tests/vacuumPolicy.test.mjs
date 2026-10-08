@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   shouldDisableScanPanel,
+  vacuumIsReadyForControls,
   shouldShowVacuumController,
   shouldShowVacuumControllerError,
   vacuumReadingsAreFresh,
@@ -118,4 +119,21 @@ test("watchdog faults preserve the configured pump list while invalidating old r
   }
   assert.equal(status.pumps[0].value, 0.001);
   assert.equal(vacuumStatusForDisplay({ ...status, connected: true }).connected, false);
+});
+
+
+test("startup locks controls until the service feature flag is known", () => {
+  assert.equal(panelDisabled(null, false), true);
+  assert.equal(panelDisabled(null, true), true);
+});
+
+test("simulation pump-down cannot unlock controls before initialization completes", () => {
+  const simulated = { ...healthyVacuum, is_production: false, simulation: true };
+  assert.equal(vacuumIsReadyForControls({ ...simulated, isVacuumSystemReady: false }), false);
+  assert.equal(vacuumIsReadyForControls(simulated), true);
+  assert.equal(vacuumIsReadyForControls(healthyVacuum), true);
+  for (const fault of [{ connected: false }, { running: false }, { cascade_stopped: true },
+    { last_error: "fault" }, { alarms: ["fault"] }, { updated_at: null }]) {
+    assert.equal(vacuumIsReadyForControls({ ...simulated, ...fault }), false);
+  }
 });
