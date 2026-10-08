@@ -17,6 +17,14 @@
             "read": "B1"
         },
         {
+            "name": "TurboVacuumPump_2",
+            "groupName": "TurboVacuum",
+            "power": "off",
+            "value": "2.0*e-3",
+            "write": "A7",
+            "read": "B7"
+        },
+        {
             "name": "UHVacuumPump_1",
             "groupName": "UltraHighVacuum",
             "power": "off",
@@ -31,6 +39,22 @@
             "value": "3.0*e-5",
             "write": "A3",
             "read": "B3"
+        },
+        {
+            "name": "UHVacuumPump_3",
+            "groupName": "UltraHighVacuum",
+            "power": "off",
+            "value": "3.0*e-5",
+            "write": "A5",
+            "read": "B5"
+        },
+        {
+            "name": "UHVacuumPump_4",
+            "groupName": "UltraHighVacuum",
+            "power": "off",
+            "value": "3.0*e-5",
+            "write": "A6",
+            "read": "B6"
         }
     ],
     "errorRange": "0.01",
@@ -50,7 +74,13 @@
             "B2": "GPIO25",
             "A3": "GPIO5",
             "B3": "GPIO6",
-            "A4": "GPIO12"
+            "A4": "GPIO12",
+            "A5": "GPIO13",
+            "B5": "GPIO16",
+            "A6": "GPIO26",
+            "B6": "GPIO4",
+            "A7": "GPIO18",
+            "B7": "GPIO19"
         },
         "ActiveHigh": true,
         "InputPullUp": null
@@ -63,8 +93,8 @@
         "Stages run in the order their groupName first appears. If a stage loses readiness,",
         "every stage downstream of it is switched off. MechanicalVacuumPump is never switched off.",
         "    MechanicalVacuum  -> MechanicalVacuumPump (backing stage, always on)",
-        "    TurboVacuum       -> TurboVacuumPump",
-        "    UltraHighVacuum   -> UHVacuumPump_1, UHVacuumPump_2",
+        "    TurboVacuum       -> TurboVacuumPump, TurboVacuumPump_2",
+        "    UltraHighVacuum   -> UHVacuumPump_1, UHVacuumPump_2, UHVacuumPump_3, UHVacuumPump_4",
         "A pump turns ready (green) only when its ready input is on and, when a gauge reading is",
         "available, the reading exactly matches the configured value or is lower.",
         "Rules:",
@@ -95,6 +125,12 @@
         "A3       GPIO5    pin 29      UHVacuumPump_2 output",
         "B3       GPIO6    pin 31      UHVacuumPump_2 ready input",
         "A4       GPIO12   pin 32      HighVoltageTransformer permissive output",
+        "A5       GPIO13   pin 33      UHVacuumPump_3 output",
+        "B5       GPIO16   pin 36      UHVacuumPump_3 ready input",
+        "A6       GPIO26   pin 37      UHVacuumPump_4 output",
+        "B6       GPIO4    pin 7       UHVacuumPump_4 ready input",
+        "A7       GPIO18   pin 12      TurboVacuumPump_2 output",
+        "B7       GPIO19   pin 35      TurboVacuumPump_2 ready input",
         "",
         "RASPBERRY PI 40-PIN HEADER: THE 26 GPIO LINES",
         "---------------------------------------------",
@@ -129,6 +165,7 @@
         "",
         "Preferred general-purpose lines: GPIO4-GPIO6, GPIO12, GPIO13, GPIO16, GPIO17, GPIO22-GPIO27.",
         "An alternate-function line may be used as plain GPIO only when that interface and its device-tree overlay are disabled.",
+        "GPIO18 (PCM CLK/PWM0) and GPIO19 (PCM FS/PWM1/SPI1 MISO) are assigned to A7/B7; disable conflicting interfaces and overlays.",
         "",
         "CHANGING THE EQUIPMENT COUNT",
         "----------------------------",
@@ -152,7 +189,7 @@
     ],
     "IsProduction": false,
     "Simulate": true,
-    "Enable": false,
+    "Enable": true,
     "LogName": "VacummDashboard",
     "Verbose": false
 }

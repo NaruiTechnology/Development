@@ -6,7 +6,7 @@ After=network-online.target
 Type=exec
 WorkingDirectory=@BACKEND_ROOT@
 Environment=GLASGOW_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/streamData.json
-Environment=SBC_VACUUM_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json
+Environment=SBC_VACUUM_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/vacuumSystem.json
 Environment=GLASGOW_RESTART_CMD=@BACKEND_ROOT@/scripts/restart-glasgow-service.sh
 Environment=PATH=@NPM_DIR@:/usr/local/bin:/usr/bin:/bin
 # Credentials (GLASGOW_TOKEN, DB, FTP): owner-only file outside the deploy root.

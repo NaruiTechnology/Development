@@ -19,6 +19,10 @@ const PUMP_IMAGES: Record<string, string> = {
   UHVacuumPump_1: uhPump1Image,
   UHVacuumPump_2: uhPump2Image,
 };
+const GROUP_PUMP_IMAGES: Record<string, string> = {
+  TurboVacuum: turboPumpImage,
+  UltraHighVacuum: uhPump1Image,
+};
 
 export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onActivityChange: (active: boolean) => void; onClose: () => void }) {
   const { t } = useTranslation();
@@ -188,6 +192,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
 
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
+    const pumpImage = PUMP_IMAGES[pump.name] ?? GROUP_PUMP_IMAGES[pump.group ?? ""];
     // The header slide switch shows the pump's isolation valve (controller
     // managed). Older services without valve data fall back to the ready input.
     const valveOpen = pump.valve_open ?? pump.port_b_value === status?.voltage;
@@ -210,9 +215,9 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
           </label>
         </div>
         <div className="card__body vacuum-card__body">
-          {PUMP_IMAGES[pump.name] && (
+          {pumpImage && (
             <div className="vacuum-card__image-wrap">
-              <img className="vacuum-card__image" src={PUMP_IMAGES[pump.name]} alt="" />
+              <img className="vacuum-card__image" src={pumpImage} alt="" />
             </div>
           )}
           <div className="vacuum-card__reading"><span>{t("vacuum.threshold")}</span><strong>{formatVacuumValue(pump.threshold)}</strong></div>
