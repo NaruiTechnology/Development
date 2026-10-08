@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   shouldDisableScanPanel,
   vacuumIsReadyForControls,
+  vacuumWindowState,
   shouldShowVacuumController,
   shouldShowVacuumControllerError,
   vacuumReadingsAreFresh,
@@ -136,4 +137,16 @@ test("simulation pump-down cannot unlock controls before initialization complete
     { last_error: "fault" }, { alarms: ["fault"] }, { updated_at: null }]) {
     assert.equal(vacuumIsReadyForControls({ ...simulated, ...fault }), false);
   }
+});
+
+
+test("vacuum window opens for any operating pump and minimizes at readiness", () => {
+  const status = { ...healthyVacuum, isVacuumSystemReady: false,
+    pumps: [{ power: false }, { power: true }] };
+  assert.equal(vacuumWindowState(status), "pumping");
+  assert.equal(vacuumWindowState({ ...status, pumps: [{ power: false }] }), "idle");
+  assert.equal(vacuumWindowState({ ...status, isVacuumSystemReady: true }), "ready");
+  assert.equal(vacuumWindowState({ ...status, is_production: false, simulation: true }), "pumping");
+  assert.equal(vacuumWindowState({ ...status, connected: false }), null);
+  assert.equal(vacuumWindowState({ ...status, updated_at: null }), null);
 });

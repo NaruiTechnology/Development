@@ -61,3 +61,13 @@ export function vacuumStatusForDisplay(status: VacuumSystemStatus, now = Date.no
     })),
   };
 }
+
+
+export type VacuumWindowState = "idle" | "pumping" | "ready";
+
+/** Ready pumps remain powered; only a new pump-down cycle should reopen the window. */
+export function vacuumWindowState(status: VacuumSystemStatus): VacuumWindowState | null {
+  if (!status.connected || !vacuumReadingsAreFresh(status.updated_at)) return null;
+  if (vacuumIsReadyForControls(status)) return "ready";
+  return status.pumps.some((pump) => pump.power) ? "pumping" : "idle";
+}

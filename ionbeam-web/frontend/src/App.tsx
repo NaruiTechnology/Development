@@ -23,7 +23,7 @@ import { Header } from "./components/Header";
 import type { SignedInUser } from "./components/AuthDialog";
 import { apiUrl } from "./lib/backendUrl";
 import { readJsonResponse } from "./lib/readJsonResponse";
-import { vacuumIsReadyForControls, shouldDisableScanPanel, shouldShowVacuumControllerError } from "./lib/vacuumPolicy";
+import { vacuumWindowState, type VacuumWindowState, vacuumIsReadyForControls, shouldDisableScanPanel, shouldShowVacuumControllerError } from "./lib/vacuumPolicy";
 import { dimensionBoundsFromGeometry, geometryFromConfig, toAppliedGeometry } from "./lib/scanGeometry";
 import { fetchScanGeometry } from "./lib/scanGeometryApi";
 import { fetchDimensionCalibrationRemote } from "./lib/dimensionCalibrationApi";
@@ -168,7 +168,7 @@ export function App() {
   const handleVacuumActivityChange = useCallback((active: boolean) => {
     setVacuumControllerBusy(active);
   }, []);
-  const autoOpenedVacuumRef = useRef(false);
+  const previousVacuumWindowState = useRef<VacuumWindowState | null>(null);
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
   const [isVacuumSystemReady, setIsVacuumSystemReady] = useState(false);
@@ -381,16 +381,8 @@ export function App() {
   }, [route, serviceStatus, vacuumEnabled]);
 
   useEffect(() => {
-    // Open the dashboard once as soon as the enabled vacuum service is
-    // available. VacuumDashboard's mount lifecycle acquires the controller;
-    // the ref prevents closing it from immediately reopening it.
-    if (!vacuumEnabled || autoOpenedVacuumRef.current) return;
-    autoOpenedVacuumRef.current = true;
-    if (route !== "vacuum") navigateTo("vacuum");
-  }, [route, vacuumEnabled]);
-
-  useEffect(() => {
     if (!vacuumEnabled) {
+      previousVacuumWindowState.current = null;
       setVacuumControllerError(false);
       setIsVacuumSystemReady(false);
       setHighVoltagePower(false);
@@ -413,6 +405,16 @@ export function App() {
         const status = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
         if (!cancelled) {
           const invalid = shouldShowVacuumControllerError(status, null, null);
+          const windowState = vacuumWindowState(status);
+          if (windowState !== null && windowState !== previousVacuumWindowState.current) {
+            previousVacuumWindowState.current = windowState;
+            if (windowState === "pumping") {
+              setVacuumMinimized(false);
+              navigateTo("vacuum");
+            } else if (windowState === "ready") {
+              setVacuumMinimized(true);
+            }
+          }
           setIsVacuumSystemReady(vacuumIsReadyForControls(status));
           setVacuumControllerError(invalid);
           setHighVoltagePower(!invalid && status.high_voltage_power === true);
