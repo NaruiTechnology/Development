@@ -201,6 +201,7 @@ export function ImageCanvas({
   onRenderedImageChange,
   onMergedFigureChange,
   onPaneImageChange,
+  onPaneRecycle,
   vectorGrayScaleSelection = null,
   vectorGrayScaleSkipped = null,
   imageLayout = 1,
@@ -216,6 +217,7 @@ export function ImageCanvas({
   /** `scanId` is the same for every image of one scan run and changes when a new scan starts. */
   onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null, scanId: number) => void;
   onMergedFigureChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
+  onPaneRecycle?: (kind: "raster" | "vector", pane: number) => void;
   onPaneImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, pane: number, imageUrl: string) => void;
   vectorGrayScaleSelection?: [number, number] | null;
   vectorGrayScaleSkipped?: boolean | null;
@@ -426,12 +428,24 @@ export function ImageCanvas({
       : kind === "vector"
         ? roi.vector_show_grid
         : roi.show_grid;
-  const [paneGridVisibility, setPaneGridVisibility] = useState<boolean[]>(() => Array(4).fill(showGrid));
+  const [paneGridByKind, setPaneGridByKind] = useState<Partial<Record<ScanKind, boolean[]>>>({});
+  const previousGridDefaultsRef = useRef<Partial<Record<ScanKind, boolean>>>({});
+  const paneGridVisibility = paneGridByKind[kind] ?? Array<boolean>(4).fill(showGrid);
   useEffect(() => {
-    setPaneGridVisibility(Array(4).fill(showGrid));
+    const previous = previousGridDefaultsRef.current[kind];
+    previousGridDefaultsRef.current[kind] = showGrid;
+    // A header-switch change updates this view; switching scan kinds must
+    // preserve each pane's independent grid choice.
+    if (previous !== undefined && previous !== showGrid) {
+      setPaneGridByKind((current) => ({ ...current, [kind]: Array<boolean>(4).fill(showGrid) }));
+    }
   }, [showGrid, kind]);
   const setPaneGrid = (index: number, visible: boolean) => {
-    setPaneGridVisibility((current) => current.map((value, pane) => pane === index ? visible : value));
+    setPaneGridByKind((current) => ({
+      ...current,
+      [kind]: (current[kind] ?? Array<boolean>(4).fill(showGrid))
+        .map((value, pane) => pane === index ? visible : value),
+    }));
   };
   const showScanPath =
     (kind === "raster" || (kind === "vector" && vectorPattern === "default")) &&
@@ -1209,6 +1223,35 @@ export function ImageCanvas({
         </div>
       ) : null;
 
+  const recyclePaneButton = (pane: number) => (
+    <button
+      type="button"
+      className="btn btn--ghost image-panel-grid__recycle"
+      aria-label={t("canvas.layout.recycle", { number: pane + 1 })}
+      title={t("canvas.layout.recycle", { number: pane + 1 })}
+      disabled={phase === "running" || phase === "stopping"}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (kind !== "raster" && kind !== "vector") return;
+        setAnnotationsByPane((current) => ({ ...current, [pane]: [] }));
+        setAcknowledgedAnnotationsByPane((current) => ({ ...current, [pane]: [] }));
+        setSelectedAnnotationId(null);
+        setDraftShape(null);
+        setCommentDraft(null);
+        setContextMenu(null);
+        editorPressSurfaceRef.current = null;
+        paneTransforms[pane] = configuredStreamTransforms;
+        if (pane === scanTargetPane) {
+          setMergedFigureUrl(null);
+          setMergedFigureFilename(null);
+        }
+        onPaneRecycle?.(kind, pane);
+      }}
+    >
+      <Icon name="x" />
+    </button>
+  );
+
   const archivedEditorLayer = selectedPaneHasImage && editorEnabled ? (
     <div
       className="canvas-editor-layer"
@@ -1365,11 +1408,12 @@ export function ImageCanvas({
           >
             <div className="image-panel-grid__label">
               <span>{t("canvas.layout.previous", { number: index + 1 })}</span>
-              {showCalibratedAxes && <label className="checkbox vacuum-switch app-switch image-panel-grid__grid-toggle">
+              {showCalibratedAxes && <label className="checkbox vacuum-switch app-switch image-panel-grid__grid-toggle" onClick={(event) => event.stopPropagation()}>
                 <input type="checkbox" checked={paneGridVisibility[index]} onChange={(event) => setPaneGrid(index, event.target.checked)} />
                 <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
                 {t("roi.showGrid")}
               </label>}
+              {recyclePaneButton(index)}
             </div>
             {imageUrl ? (
               <ArchivedScanDisplay
@@ -1394,7 +1438,10 @@ export function ImageCanvas({
               />
             ) : (
               <div className="canvas-stage image-panel-grid__archived-stage">
-                <div className="canvas-frame image-panel-grid__empty">{t("canvas.layout.empty", { number: index + 1 })}</div>
+                <div className="canvas-frame image-panel-grid__empty">
+                  {t("canvas.layout.empty", { number: index + 1 })}
+                  {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[index]} t={t} transforms={paneTransforms[index]} />}
+                </div>
                 <LevelWedge histogram={null} levels={{ low: 0, high: 0xfffc }} auto onChange={() => undefined} onAuto={() => undefined} disabled />
               </div>
             )}
@@ -1409,11 +1456,12 @@ export function ImageCanvas({
       >
         {imageLayout > 1 && <div className="image-panel-grid__label">
           <span />
-          {showCalibratedAxes && <label className="checkbox vacuum-switch app-switch image-panel-grid__grid-toggle">
+          {showCalibratedAxes && <label className="checkbox vacuum-switch app-switch image-panel-grid__grid-toggle" onClick={(event) => event.stopPropagation()}>
             <input type="checkbox" checked={paneGridVisibility[scanTargetPane]} onChange={(event) => setPaneGrid(scanTargetPane, event.target.checked)} />
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
             {t("roi.showGrid")}
           </label>}
+          {recyclePaneButton(scanTargetPane)}
         </div>}
           {singlePaneImage && imageLayout === 1 ? (
             <ArchivedScanDisplay
@@ -1422,7 +1470,7 @@ export function ImageCanvas({
               transforms={paneTransforms[singlePaneSourceIndex]}
               alt={kindLabel}
               roi={roi}
-              showGrid={paneGridVisibility[0]}
+              showGrid={paneGridVisibility[singlePaneSourceIndex]}
               showAxes={showCalibratedAxes}
               t={t}
               onFrameRef={(node) => { frameRef.current = node; }}
@@ -1991,26 +2039,36 @@ function LiveAxisOverlay({
   return (
     <div className="canvas-axis-overlay" aria-hidden="true">
       {showGrid && (
-        <>
-          {ticks.filter((tick) => tick.major).map((tick) => {
-            const point = xAxisPoint(tick.ratio);
-            return (
-            <div
-              key={`grid-x-${tick.key}`}
-              className={`canvas-axis-overlay__grid canvas-axis-overlay__grid--${xAxisVertical ? "y" : "x"}`}
-              style={xAxisVertical ? { top: pct(point.y) } : { left: pct(point.x) }}
-            />
-          );})}
-          {ticks.filter((tick) => tick.major).map((tick) => {
-            const point = yAxisPoint(tick.ratio);
-            return (
-            <div
-              key={`grid-y-${tick.key}`}
-              className={`canvas-axis-overlay__grid canvas-axis-overlay__grid--${yAxisVertical ? "y" : "x"}`}
-              style={yAxisVertical ? { top: pct(point.y) } : { left: pct(point.x) }}
-            />
-          );})}
-        </>
+        <svg
+          className="canvas-axis-overlay__grid"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          shapeRendering="crispEdges"
+          aria-hidden="true"
+        >
+          {ticks.filter((tick) => tick.major).flatMap((tick) => {
+            const xPoint = xAxisPoint(tick.ratio);
+            const yPoint = yAxisPoint(tick.ratio);
+            return [
+              <line
+                key={`grid-x-${tick.key}`}
+                x1={xAxisVertical ? 0 : xPoint.x * 100}
+                x2={xAxisVertical ? 100 : xPoint.x * 100}
+                y1={xAxisVertical ? xPoint.y * 100 : 0}
+                y2={xAxisVertical ? xPoint.y * 100 : 100}
+                vectorEffect="non-scaling-stroke"
+              />,
+              <line
+                key={`grid-y-${tick.key}`}
+                x1={yAxisVertical ? 0 : yPoint.x * 100}
+                x2={yAxisVertical ? 100 : yPoint.x * 100}
+                y1={yAxisVertical ? yPoint.y * 100 : 0}
+                y2={yAxisVertical ? yPoint.y * 100 : 100}
+                vectorEffect="non-scaling-stroke"
+              />,
+            ];
+          })}
+        </svg>
       )}
       <div className={`canvas-axis-overlay__axis canvas-axis-overlay__axis--${xAxisVertical ? "y" : "x"}`} style={axisStyle(xAxisVertical, xAxisStart)} />
       <div className={`canvas-axis-overlay__axis canvas-axis-overlay__axis--${yAxisVertical ? "y" : "x"}`} style={axisStyle(yAxisVertical, yAxisStart)} />

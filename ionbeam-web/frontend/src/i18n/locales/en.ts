@@ -147,6 +147,7 @@ export const en = {
   "card.adcTest": "ADC test",
   "card.rasterImage": "Raster image",
   "canvas.layout.cycle": "Change image layout (currently {count} panels)",
+  "canvas.layout.recycle": "Clear window {number} for reuse",
   "canvas.layout.splitScreen": "Split",
   "canvas.layout.lock": "Lock",
   "canvas.layout.help.title": "Multi-scan windows",

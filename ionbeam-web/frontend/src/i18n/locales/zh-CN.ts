@@ -128,6 +128,7 @@ export const zhCN: Partial<TranslationTable> = {
   "card.adcTest": "ADC 测试",
   "card.rasterImage": "光栅图像",
   "canvas.layout.cycle": "切换图像布局（当前 {count} 个面板）",
+  "canvas.layout.recycle": "清空窗口 {number} 以重新使用",
   "canvas.layout.splitScreen": "分屏",
   "canvas.layout.lock": "锁定",
   "canvas.layout.help.title": "多扫描窗口",

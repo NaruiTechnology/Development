@@ -137,6 +137,7 @@ export const zhTW: Partial<TranslationTable> = {
   "card.adcTest": "ADC 測試",
   "card.rasterImage": "光柵影像",
   "canvas.layout.cycle": "切換影像版面（目前 {count} 個面板）",
+  "canvas.layout.recycle": "清空視窗 {number} 以重新使用",
   "canvas.layout.splitScreen": "分割畫面",
   "canvas.layout.lock": "鎖定",
   "canvas.layout.help.title": "多重掃描視窗",

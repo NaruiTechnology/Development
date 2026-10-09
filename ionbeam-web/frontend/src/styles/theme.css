@@ -3307,20 +3307,14 @@ body {
 
 .canvas-axis-overlay__grid {
   position: absolute;
-  background: rgba(95, 184, 255, 0.14);
-  z-index: 9999;
-}
-
-.canvas-axis-overlay__grid--x {
-  top: 0;
-  bottom: 0;
-  width: 1px;
-}
-
-.canvas-axis-overlay__grid--y {
-  left: 0;
-  right: 0;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: rgba(95, 184, 255, 0.22);
+  stroke-width: 1px;
+  pointer-events: none;
 }
 
 .canvas-axis-overlay__axis {
@@ -7003,3 +6997,14 @@ body {
 .scan-transform-switches .vacuum-switch__track { flex-shrink: 0; }
 
 .scan-transform-label--nowrap { white-space: nowrap; }
+
+.image-panel-grid__recycle {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  min-height: 22px;
+  margin-left: auto;
+}
+
+.image-panel-grid__recycle:hover {
+  color: var(--c-danger);
+}

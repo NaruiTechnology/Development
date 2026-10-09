@@ -910,7 +910,9 @@ export function App() {
           const recordedPane = completedImagePaneRef.current[scanKind];
           setImagePanelSlots((current) => ({
             ...current,
-            [scanKind]: replaceCompletedScanPane(current[scanKind], recordedPane, imageUrl),
+            [scanKind]: current[scanKind][recordedPane] === null
+              ? current[scanKind]
+              : replaceCompletedScanPane(current[scanKind], recordedPane, imageUrl),
           }));
         } else if (scanKindLayout === 1 && imagePanelSplitActive) {
           // Split mode is on (another view was split) but this view has not
@@ -1029,6 +1031,18 @@ export function App() {
       });
     },
     []
+  );
+
+  const handleImagePaneRecycle = useCallback(
+    (scanKind: "raster" | "vector", pane: number) => {
+      setImagePanelSlots((current) => ({
+        ...current,
+        [scanKind]: current[scanKind].map((image, index) => index === pane ? null : image),
+      }));
+      setSelectedImagePane((current) => ({ ...current, [scanKind]: pane }));
+      setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
+    },
+    [],
   );
 
   const handleImagePaneSelect = useCallback(
@@ -1877,6 +1891,7 @@ export function App() {
                     onRenderedImageChange={handleRenderedImageChange}
                     onMergedFigureChange={handleMergedFigureChange}
                     onPaneImageChange={handleImagePaneChange}
+                    onPaneRecycle={handleImagePaneRecycle}
                   vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
                   vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
                   singlePaneSourceIndex={savedSplitRef.current?.selected[kind as "raster" | "vector"] ?? 0}
