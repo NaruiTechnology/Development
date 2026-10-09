@@ -42,6 +42,8 @@ interface RasterParams {
   frame_blank?: boolean;
   simulation_bitmap?: SimulationBitmapPayload | null;
   simulation?: Record<string, unknown>;
+  /** Live (Infinite) scan: repeat frames until the client closes. */
+  continuous?: boolean;
 }
 
 interface VectorParams {
@@ -57,6 +59,8 @@ interface VectorParams {
   roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
   simulation_bitmap?: SimulationBitmapPayload | null;
   simulation?: Record<string, unknown>;
+  /** Live (Infinite) scan: replay the pass until the client closes. */
+  continuous?: boolean;
 }
 
 type VectorScanPath =
@@ -387,8 +391,10 @@ export async function streamMockRaster(
   const simulationImage = loadSimulationImage(p.simulation);
   const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
-  while (sent < total) {
+  while (sent < total || p.continuous === true) {
     if (ws.readyState !== ws.OPEN) return;
+    // Live scan: wrap to the next frame on the same socket (Stop closes it).
+    if (sent >= total) sent = 0;
 
     const n = Math.min(pixelsPerChunk, total - sent);
     const buf = Buffer.alloc(n * 2);
@@ -459,8 +465,10 @@ export async function streamMockVector(
   const simulationImage = loadSimulationImage(p.simulation);
   const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
-  while (i < pts.length) {
+  while (i < pts.length || (p.continuous === true && pts.length > 0)) {
     if (ws.readyState !== ws.OPEN) return;
+    // Live scan: wrap to the next pass on the same socket (Stop closes it).
+    if (i >= pts.length) i = 0;
     const slice = pts.slice(i, i + valuesPerChunk);
     const buf = Buffer.alloc(slice.length * 2);
     for (let k = 0; k < slice.length; k++) {

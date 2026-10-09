@@ -327,6 +327,8 @@ export function ImageCanvas({
   const resolution = useAppSelector((s) => s.image.resolution);
   const frame = useAppSelector((s) => s.image.frame);
   const cursor = useAppSelector((s) => s.image.cursor);
+  // Valid raster pixels; stays at the full frame once a live scan wraps.
+  const rasterFilled = useAppSelector((s) => s.image.filled);
 
   // Vector fields
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
@@ -336,6 +338,8 @@ export function ImageCanvas({
   const vectorCustomBlankMask = useAppSelector((s) => s.image.vectorCustomBlankMask);
   const vectorCustomSpotMask = useAppSelector((s) => s.image.vectorCustomSpotMask);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
+  // Valid vector samples; stays at the full pass once a live scan wraps.
+  const vectorFilled = useAppSelector((s) => s.image.vectorFilled);
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
   const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
   const vectorSource = useAppSelector((s) => s.image.vectorSource);
@@ -365,7 +369,7 @@ export function ImageCanvas({
     completedKind === kind &&
     (kind !== "vector" || vectorSource === "vector");
   const hasLiveCanvasData =
-    kind === "raster" ? cursor > 0 : kind === "vector" ? vectorSource === "vector" && vectorCursor > 0 : false;
+    kind === "raster" ? rasterFilled > 0 : kind === "vector" ? vectorSource === "vector" && vectorFilled > 0 : false;
   const visibleVectorCursor = kind === "vector" && vectorSource !== "vector" ? 0 : vectorCursor;
   const hasRenderedCanvasImage =
     hasPaintedCanvasImage || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
@@ -454,7 +458,7 @@ export function ImageCanvas({
 
     let snapshot: PaintSnapshot;
     if (kind === "raster") {
-      snapshot = { mode: "grayscale", buf: frame, edge: resolution, populated: cursor, transforms: paintTransforms };
+      snapshot = { mode: "grayscale", buf: frame, edge: resolution, populated: rasterFilled, transforms: paintTransforms };
     } else if (kind === "vector" && vectorSource !== "vector") {
       snapshot = { mode: "clear", transforms: paintTransforms };
     } else if (kind === "vector" && vectorPattern === "default") {
@@ -462,7 +466,7 @@ export function ImageCanvas({
         mode: renderMode === "native" && vectorEdge < DAC_RANGE ? "vectorBlock" : "vectorDefault",
         buf: vectorImage,
         edge: vectorEdge,
-        populated: vectorCursor,
+        populated: vectorFilled,
         scanPath: vectorScanPath,
         graySelection: vectorGraySpotSelection,
         graySkipped: vectorGraySpotSkipped,
@@ -475,14 +479,14 @@ export function ImageCanvas({
         buf: vectorImage,
         edge: vectorEdge,
         points: vectorCustomRenderPoints,
-        populated: vectorCursor,
+        populated: vectorFilled,
         blankMask: vectorCustomBlankMask,
         spotMask: vectorCustomSpotMask,
         grayColor: vectorGraySpotColor,
         transforms: paintTransforms,
       };
     } else {
-      snapshot = { mode: "grayscale", buf: vectorImage, edge: vectorEdge, populated: vectorCursor, transforms: paintTransforms };
+      snapshot = { mode: "grayscale", buf: vectorImage, edge: vectorEdge, populated: vectorFilled, transforms: paintTransforms };
     }
     liveSnapshotRef.current = snapshot;
     setStats(paintSnapshot(canvas, snapshot, levelSetting));

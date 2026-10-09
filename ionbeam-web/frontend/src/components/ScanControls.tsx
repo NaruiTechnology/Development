@@ -296,22 +296,34 @@ export function ScanControls({
     setInfiniteScanActive((current) => current ? false : current);
   }, []);
 
-  // OBI's live scanner runs `capture_frame()` in a `while not abort` loop.
-  // This UI has one WebSocket per frame, so starting the next frame from the
-  // completed transition is the equivalent lifecycle: Stop closes the active
-  // socket, which the service maps to RasterScanCommand.abort. Vector scans
-  // use the same loop (each pass is one complete vector scan).
-  const startInfiniteScanRun = useCallback((entry: InfiniteScanEntry, preserveFrame = false) => {
+  // Infinite mirrors OBI's live scan / Acquire Photo data path, for Raster
+  // AND Vector, in production and simulation: ONE WebSocket and ONE
+  // synchronized FPGA command stream for the whole session (`continuous`).
+  // The service queues frame after frame (Raster) or replays the point list
+  // pass after pass (Vector) in-band, so XY never stops at a boundary, and
+  // each chunk is painted as it arrives. The canvas keeps the current image
+  // and overwrites it pixel by pixel; the cursor wraps at the frame / pass
+  // end (OBI Frame.fill_lines roll-over) instead of blanking the canvas.
+  // Stop -> /api/scan/abort -> command.abort, then `done`; the image stays.
+  // The completed-transition restart below only fires if the stream ends
+  // without Stop (e.g. after a recoverable server close).
+  // Adaptive gray feedback decides each pass on the host, so it keeps the
+  // per-pass loop (still painting in place).
+  const startInfiniteScanRun = useCallback((entry: InfiniteScanEntry, preserveFrame = true) => {
     if (entry.kind === "raster") {
       onScanRunStart?.(ScanType.RASTER);
       stream.startRaster(
-        { ...entry.req, preview: entry.req.preview ?? preview },
-        { preserveFrame },
+        { ...entry.req, preview: entry.req.preview ?? preview, continuous: true },
+        { preserveFrame, continuous: true },
       );
       return;
     }
     onScanRunStart?.(entry.scanType);
-    stream.startVector({ ...entry.req, preview: entry.req.preview ?? preview });
+    const continuous = entry.req.feedback_mode !== "adaptive_gray_feedback";
+    stream.startVector(
+      { ...entry.req, preview: entry.req.preview ?? preview, continuous },
+      { preserveFrame, continuous },
+    );
   }, [onScanRunStart, preview, stream]);
 
   const startRepeatActionRun = useCallback(
@@ -512,9 +524,13 @@ export function ScanControls({
 
   function onStop() {
     if (roiEbeamDisabled || !stopAvailable) return;
+    // Like OBI, stopping a live (Infinite) scan leaves the last image on the
+    // canvas; only finite runs clear it.
+    const stoppingLiveScan = infiniteScanActiveRef.current;
     clearActionLoopState();
     clearInfiniteScanState();
     stream.stop();
+    if (stoppingLiveScan) return;
     if (roiAction && !roiActionGrayFilterActive) dispatch(resetVector());
     else if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());

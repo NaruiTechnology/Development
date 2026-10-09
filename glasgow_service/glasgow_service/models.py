@@ -114,6 +114,15 @@ class RasterRequest(BaseModel):
     adc_valid:     bool = Field(True, description="Run the production ADC presence/saturation check.")
     beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
+    continuous: bool = Field(
+        False,
+        description=(
+            "WebSocket stream only (Infinite / live scan): keep scanning frame after "
+            "frame on one synchronized FPGA command stream until /scan/abort, like "
+            "OBI's live scan. Pixels stream continuously and wrap at the frame end; "
+            "the `done` event is sent only after Stop. Ignored by /scan/raster/run."
+        ),
+    )
 
     # Wet-run extras (REST only; WebSocket streaming ignores these):
     do_validate: bool = Field(True, description="Run chunk-count / size checks and return the report.")
@@ -308,6 +317,16 @@ class VectorRequest(BaseModel):
     beam_type:      str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
     cookie:         int  = Field(123, ge=0, le=0xFFFF)
+    continuous:     bool = Field(
+        False,
+        description=(
+            "WebSocket stream only (Infinite / live scan): replay the point list pass "
+            "after pass on one synchronized FPGA command stream until /scan/abort, "
+            "like OBI's live scan. Samples stream continuously and wrap at the pass "
+            "end; `done` is sent only after Stop. Ignored by /scan/vector/run and "
+            "with feedback_mode=adaptive_gray_feedback."
+        ),
+    )
 
     # Wet-run extras (REST only):
     pre_process:    bool = Field(False, description="Call _pre_process_chunks before transfer; time it separately.")

@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { ROIRequest, VectorPoint, VectorPointTuple, VectorScanPath } from "../types/api";
-import { vectorScanSamplePixel } from "../lib/vectorScanPath";
+import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
 
 /**
  * Image / pixel buffers, kept here (outside the serialisability check)
@@ -25,7 +25,18 @@ export type VectorSource = "vector" | "roi";
 interface ImageState {
   // ---------- raster -----------------------------------------------------
   resolution: number;
+  /** Index of the next raster pixel to be written (the beam position). */
   cursor: number;
+  /** Pixels of `frame` that hold valid data. Equals `cursor` for a single
+   *  frame; once a live (continuous) scan wraps, the whole frame stays
+   *  valid and new samples overwrite the previous frame in place — OBI's
+   *  Frame.fill_lines roll-over — so the canvas never blanks. */
+  filled: number;
+  /** Live scan: wrap `cursor` to 0 at the frame end instead of dropping
+   *  the extra samples. */
+  rasterContinuous: boolean;
+  /** Completed frames in the current live scan. */
+  rasterFrames: number;
   frame: Uint16Array;
 
   // ---------- vector -----------------------------------------------------
@@ -47,8 +58,16 @@ interface ImageState {
   /** For custom pattern only: 1 when the point is a selected Spot beam-on pixel. */
   vectorCustomSpotMask: Uint8Array | null;
   vectorCustomCount: number;
-  /** Number of ADC samples received so far. */
+  /** Sample index of the next vector sample (the beam position). */
   vectorCursor: number;
+  /** Samples of the current pass layout that hold valid data. Stays at the
+   *  full pass once a live scan wraps, so the whole image keeps rendering
+   *  and new samples overwrite it in place (OBI live scan behavior). */
+  vectorFilled: number;
+  /** Live scan: wrap `vectorCursor` to 0 at the pass end. */
+  vectorContinuous: boolean;
+  /** Completed passes in the current live scan. */
+  vectorPasses: number;
   /** Whether ROI gray feedback should be composited after this cycle completes. */
   retainVectorFeedbackOnComplete: boolean;
 
@@ -62,6 +81,9 @@ const VEC_EDGE = 2048;
 const initialState: ImageState = {
   resolution: RES,
   cursor: 0,
+  filled: 0,
+  rasterContinuous: false,
+  rasterFrames: 0,
   frame: new Uint16Array(RES * RES),
 
   vectorPattern: "default",
@@ -75,6 +97,9 @@ const initialState: ImageState = {
   vectorCustomSpotMask: null,
   vectorCustomCount: 0,
   vectorCursor: 0,
+  vectorFilled: 0,
+  vectorContinuous: false,
+  vectorPasses: 0,
   retainVectorFeedbackOnComplete: true,
 
   revision: 0,
@@ -90,6 +115,12 @@ interface SetupVectorPayload {
   /** Active ROI in 14-bit DAC coordinates. Used to map custom points to pixels. */
   roi?: ROIRequest | null;
   simulationBitmap?: { width: number; height: number } | null;
+  /** Live scan: wrap at the pass end instead of stopping. */
+  continuous?: boolean;
+  /** Keep the current image (and its filled count) when the layout is
+   *  unchanged, like OBI's FrameBuffer._set_current_frame: only the write
+   *  position returns to the start, the previous pixels stay on screen. */
+  preserveImage?: boolean;
 }
 
 const slice = createSlice({
@@ -106,7 +137,10 @@ const slice = createSlice({
 
     /* ---------- raster -------------------------------------------------- */
 
-    resetRaster(state, a: PayloadAction<{ resolution: number; preserveFrame?: boolean }>) {
+    resetRaster(
+      state,
+      a: PayloadAction<{ resolution: number; preserveFrame?: boolean; continuous?: boolean }>,
+    ) {
       const keepExistingFrame =
         a.payload.preserveFrame === true &&
         state.resolution === a.payload.resolution &&
@@ -114,16 +148,35 @@ const slice = createSlice({
       state.resolution = a.payload.resolution;
       if (!keepExistingFrame) {
         state.frame = new Uint16Array(a.payload.resolution * a.payload.resolution);
+        state.filled = 0;
       }
+      // A preserved frame keeps its `filled` count, so the previous image
+      // stays on screen while the new pass overwrites it from the top.
       state.cursor = 0;
+      state.rasterContinuous = a.payload.continuous === true;
+      state.rasterFrames = 0;
       state.revision++;
     },
     appendRaster(state, a: PayloadAction<{ pixels: Uint16Array }>) {
       const { pixels } = a.payload;
-      const remaining = state.frame.length - state.cursor;
-      const n = Math.min(pixels.length, remaining);
-      state.frame.set(pixels.subarray(0, n), state.cursor);
-      state.cursor += n;
+      const length = state.frame.length;
+      if (length === 0) return;
+      let offset = 0;
+      while (offset < pixels.length) {
+        const remaining = length - state.cursor;
+        const n = Math.min(pixels.length - offset, remaining);
+        state.frame.set(pixels.subarray(offset, offset + n), state.cursor);
+        state.cursor += n;
+        offset += n;
+        if (state.cursor > state.filled) state.filled = state.cursor;
+        if (state.cursor < length) break;
+        // Frame end. A single frame drops anything extra (unchanged
+        // behavior); a live scan rolls over and keeps painting.
+        if (!state.rasterContinuous) break;
+        state.cursor = 0;
+        state.filled = length;
+        state.rasterFrames++;
+      }
       state.revision++;
     },
 
@@ -136,12 +189,34 @@ const slice = createSlice({
     setupVector(state, a: PayloadAction<SetupVectorPayload>) {
       const pattern = a.payload.pattern;
       const edge = a.payload.edge ?? VEC_EDGE;
+      const scanPath = a.payload.scanPath ?? "vertical_raster";
+      const source: VectorSource = pattern === "custom" && a.payload.roi ? "roi" : "vector";
+      const customCount = pattern === "custom"
+        ? a.payload.points?.length ??
+          (a.payload.simulationBitmap
+            ? Math.max(1, a.payload.simulationBitmap.width | 0) *
+              Math.max(1, a.payload.simulationBitmap.height | 0)
+            : 0)
+        : 0;
+      const keepImage =
+        a.payload.preserveImage === true &&
+        state.vectorPattern === pattern &&
+        state.vectorScanPath === scanPath &&
+        state.vectorSource === source &&
+        state.vectorEdge === edge &&
+        state.vectorImage.length === edge * edge &&
+        (pattern !== "custom" || state.vectorCustomCount === customCount);
       state.vectorPattern = pattern;
-      state.vectorScanPath = a.payload.scanPath ?? "vertical_raster";
-      state.vectorSource = pattern === "custom" && a.payload.roi ? "roi" : "vector";
+      state.vectorScanPath = scanPath;
+      state.vectorSource = source;
       state.vectorEdge = edge;
-      state.vectorImage = new Uint16Array(edge * edge);
+      if (!keepImage) {
+        state.vectorImage = new Uint16Array(edge * edge);
+        state.vectorFilled = 0;
+      }
       state.vectorCursor = 0;
+      state.vectorContinuous = a.payload.continuous === true;
+      state.vectorPasses = 0;
 
       if (pattern === "custom" && a.payload.points && a.payload.points.length) {
         const pts = a.payload.points;
@@ -219,32 +294,51 @@ const slice = createSlice({
       const values = a.payload.values;
       const N = values.length;
       const edge = state.vectorEdge;
-      const cur = state.vectorCursor;
+      const isDefault = state.vectorPattern === "default";
+      const pts = state.vectorCustomRenderPoints;
+      // Samples in one pass: the default sweep covers edge x edge, custom
+      // replays its point list.
+      const passLength = isDefault
+        ? vectorScanSampleCount(edge, state.vectorScanPath)
+        : state.vectorCustomCount;
 
-      if (state.vectorPattern === "default") {
-        for (let k = 0; k < N; k++) {
-          const i = cur + k;
-          const pixel = vectorScanSamplePixel(i, edge, state.vectorScanPath);
-          if (pixel) {
-            state.vectorImage[pixel.y * edge + pixel.x] = values[k];
+      let k = 0;
+      while (k < N) {
+        const cur = state.vectorCursor;
+        const room = passLength > 0 ? passLength - cur : N - k;
+        const n = Math.max(0, Math.min(N - k, room));
+        if (isDefault) {
+          for (let m = 0; m < n; m++) {
+            const pixel = vectorScanSamplePixel(cur + m, edge, state.vectorScanPath);
+            if (pixel) {
+              state.vectorImage[pixel.y * edge + pixel.x] = values[k + m];
+            }
           }
-        }
-      } else {
-        const pts = state.vectorCustomRenderPoints;
-        const pcnt = state.vectorCustomCount;
-        if (pts) {
-          for (let k = 0; k < N; k++) {
-            const i = cur + k;
-            if (i >= pcnt) break;
+        } else if (pts) {
+          for (let m = 0; m < n; m++) {
+            const i = cur + m;
             const x = pts[2 * i] | 0;
             const y = pts[2 * i + 1] | 0;
             if (x >= 0 && x < edge && y >= 0 && y < edge) {
-              state.vectorImage[y * edge + x] = values[k];
+              state.vectorImage[y * edge + x] = values[k + m];
             }
           }
         }
+        k += n;
+        state.vectorCursor = cur + n;
+        if (state.vectorCursor > state.vectorFilled) state.vectorFilled = state.vectorCursor;
+        if (passLength <= 0 || state.vectorCursor < passLength) break;
+        if (!state.vectorContinuous) {
+          // Single pass: count (but do not paint) anything past the end,
+          // matching the previous cursor behavior.
+          state.vectorCursor += N - k;
+          break;
+        }
+        // Pass end in a live scan: roll over and keep painting in place.
+        state.vectorCursor = 0;
+        state.vectorFilled = passLength;
+        state.vectorPasses++;
       }
-      state.vectorCursor += N;
       state.revision++;
     },
 
@@ -291,6 +385,7 @@ const slice = createSlice({
     resetVector(state) {
       state.vectorImage = new Uint16Array(state.vectorEdge * state.vectorEdge);
       state.vectorCursor = 0;
+      state.vectorFilled = 0;
       state.revision++;
     },
   },

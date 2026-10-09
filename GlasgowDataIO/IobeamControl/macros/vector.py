@@ -149,6 +149,9 @@ class VectorScanCommand(BaseCommand):
         fpga_pipeline_depth_pixels: int = DEFAULT_FPGA_PIPELINE_DEPTH_PIXELS,
         drain_safety_factor: float      = DEFAULT_DRAIN_SAFETY_FACTOR,
         sender_drain_timeout_s: float   = DEFAULT_SENDER_DRAIN_TIMEOUT_S,
+        # --- live scan --------------------------------------------------
+        continuous: bool                = False,
+        points_factory=None,
     ):
         """
         Args:
@@ -171,6 +174,17 @@ class VectorScanCommand(BaseCommand):
             sender_drain_timeout_s (float): Bound on how long transfer()
                 waits for the sender task to drain after the receiver
                 loop ends, before logging a warning and cancelling.
+            continuous (bool): Live ("Infinite") scan, the vector
+                counterpart of OBI's live scan. The point list is replayed
+                pass after pass on ONE synchronized command stream until
+                ``abort`` is set: no re-sync, no drain padding and no USB
+                teardown between passes, so the beam never parks and the
+                host receives samples without a gap. Padding and teardown
+                run once, after Stop. Not available with adaptive gray
+                feedback (each pass there depends on host decisions).
+            points_factory (callable, optional): Returns a fresh iterable of
+                points for each pass in continuous mode. When omitted,
+                ``iter_points`` is materialized once and replayed.
         """
         # Avoid the mutable-default trap: Python evaluates defaults once
         # at class-definition time, so a second VectorScanCommand in the
@@ -179,8 +193,15 @@ class VectorScanCommand(BaseCommand):
         if iter_points is None:
             iter_points = default_iter()
 
-        self._iter_points = iter_points
         self._adaptive_gray_feedback = adaptive_gray_feedback
+        self.continuous = bool(continuous) and adaptive_gray_feedback is None
+        if self.continuous and points_factory is None:
+            replay = list(iter_points)
+            points_factory = lambda: iter(replay)
+        self._points_factory = points_factory if self.continuous else None
+        if self._points_factory is not None:
+            iter_points = self._points_factory()
+        self._iter_points = iter_points
         self._processed_points = []
         self._processed_adaptive_points = None
         self._processed = False
@@ -215,9 +236,13 @@ class VectorScanCommand(BaseCommand):
                 f"external_control={self._external_control}, "
                 f"adaptive_gray_feedback={self._adaptive_gray_feedback}, "
                 f"max_pipeline={self._max_pipeline}, "
-                f"drain_floor_pixels={self._drain_floor_pixels}")
+                f"drain_floor_pixels={self._drain_floor_pixels}, "
+                f"continuous={self.continuous}")
 
     def _pre_process_chunks(self, latency):
+        if self.continuous:
+            # An endless pass stream cannot be materialized up front.
+            return
         print("Pre-processing commands...")
         if self._adaptive_gray_feedback is not None:
             self._processed_adaptive_points = [
@@ -358,34 +383,45 @@ class VectorScanCommand(BaseCommand):
         await BlankCommand(enable=True, inline=False).transfer(stream)
         await FlushCommand().transfer(stream)
 
+    def _iter_passes(self):
+        """Point iterables to scan: one pass, or (continuous) passes forever."""
+        if not self.continuous:
+            yield self._iter_points
+            return
+        yield self._iter_points          # first pass (already created)
+        while True:
+            yield self._points_factory()
+
     def _iter_chunks(self, latency):
         if self._processed:
             for commands, pixel_count in self._processed_points:
                 yield commands, pixel_count
-        else:
-            commands = bytearray()
-            vector_body = bytearray()
-            current_blank = None
-            saw_explicit_blank = False
-            current_pass_index = None
+            return
 
-            def get_command(pixel_count):
-                cmd = ArrayCommand(cmdtype=CmdType.VectorPixel,
-                                   array_length=pixel_count - 1)
-                return bytes(cmd)
+        commands = bytearray()
+        vector_body = bytearray()
+        current_blank = None
+        saw_explicit_blank = False
+        current_pass_index = None
 
-            def flush_vector_body():
-                nonlocal vector_body, vector_body_count
-                if vector_body_count > 0:
-                    commands.extend(get_command(vector_body_count))
-                    commands.extend(vector_body)
-                    vector_body = bytearray()
-                    vector_body_count = 0
+        def get_command(pixel_count):
+            cmd = ArrayCommand(cmdtype=CmdType.VectorPixel,
+                               array_length=pixel_count - 1)
+            return bytes(cmd)
 
-            chunk_pixel_count = 0
-            vector_body_count = 0
-            total_dwell = 0
-            for point in self._iter_points:
+        def flush_vector_body():
+            nonlocal vector_body, vector_body_count
+            if vector_body_count > 0:
+                commands.extend(get_command(vector_body_count))
+                commands.extend(vector_body)
+                vector_body = bytearray()
+                vector_body_count = 0
+
+        chunk_pixel_count = 0
+        vector_body_count = 0
+        total_dwell = 0
+        for points in self._iter_passes():
+            for point in points:
                 x, y, dwell, blank, pass_index = _normalize_point(point)
                 if pass_index is not None and current_pass_index != pass_index:
                     self._logger.debug("vector pass index %s", pass_index)
@@ -413,11 +449,21 @@ class VectorScanCommand(BaseCommand):
                     chunk_pixel_count = 0
                     total_dwell = 0
 
-            if chunk_pixel_count > 0:
+            if self.continuous and chunk_pixel_count > 0:
+                # End every live pass on a chunk boundary (the next pass's
+                # first point follows in the same command stream; the beam
+                # is NOT blanked between passes, like OBI's live scan).
                 flush_vector_body()
-                if saw_explicit_blank and current_blank is False:
-                    commands.extend(bytes(BlankCommand(enable=True)))
                 yield (memoryview(commands), chunk_pixel_count)
+                commands = bytearray()
+                chunk_pixel_count = 0
+                total_dwell = 0
+
+        if chunk_pixel_count > 0:
+            flush_vector_body()
+            if saw_explicit_blank and current_blank is False:
+                commands.extend(bytes(BlankCommand(enable=True)))
+            yield (memoryview(commands), chunk_pixel_count)
 
     @BaseCommand.log_transfer
     async def transfer(self, stream, *, latency: int = 65536 * 65536):
@@ -474,8 +520,10 @@ class VectorScanCommand(BaseCommand):
                         await token_fut
                     if self.abort.is_set():
                         # go to a blanked state after an aborted frame
-                        commands.extend(bytes(BlankCommand(enable=True,
-                                                           inline=False)))
+                        # (_iter_chunks yields memoryviews, which cannot be
+                        # extended in place)
+                        commands = bytes(commands) + bytes(BlankCommand(
+                            enable=True, inline=False))
                     await stream.write(commands)
                     # Per-chunk host-side flush. Without this, stream.write()
                     # only appends to the demultiplexer _out_buffer and the

@@ -140,6 +140,54 @@ def _collect_first_distinct(values: "np.ndarray", seen: set, limit: int) -> None
             return
 
 
+def _simulated_pass_samples(kind: str, req) -> int:
+    """Samples in one simulated frame (raster) or pass (vector)."""
+    if kind == "raster":
+        return req.resolution * req.resolution
+    if req.pattern is VectorPattern.custom and req.points is not None:
+        return len(req.points)
+    bitmap = getattr(req, "simulation_bitmap", None)
+    if req.pattern is VectorPattern.custom and bitmap is not None:
+        return int(bitmap.width) * int(bitmap.height)
+    return req.vector_resolution * req.vector_resolution
+
+
+class _FrameRing:
+    """Chunk capture for a continuous (live) raster stream.
+
+    A live scan never ends on its own, so keeping every chunk (as the
+    single-frame path does for /scan/last/*) would grow without bound.
+    This keeps only the chunks of the frame in progress plus the last
+    complete frame. ``frame()`` returns the last complete frame, or the
+    partial first frame if Stop came before one finished.
+
+    Chunk boundaries always coincide with frame boundaries (each frame is
+    chunked independently), so counting pixels is enough to find them.
+    """
+
+    def __init__(self, frame_pixels: int):
+        self.frame_pixels = max(1, int(frame_pixels))
+        self._current: List = []
+        self._current_pixels = 0
+        self._last: Optional[List] = None
+        self.frames_completed = 0
+
+    def append(self, chunk) -> None:
+        self._current.append(chunk)
+        self._current_pixels += len(chunk)
+        if self._current_pixels >= self.frame_pixels:
+            self._last = self._current
+            self._current = []
+            self._current_pixels = 0
+            self.frames_completed += 1
+
+    def frame(self) -> List:
+        return self._last if self._last is not None else list(self._current)
+
+    def __len__(self) -> int:
+        return len(self.frame())
+
+
 class _AdcPresenceMonitor:
     """Detect the disconnected-bus signature while samples are streaming."""
 
@@ -1028,18 +1076,26 @@ class DeviceService:
         # Building a bitmap frame is pure Python; keep it off the event loop.
         transforms = self._action_defaults.get("transforms", {}) or {}
         bitmap_chunks = await asyncio.to_thread(build_bitmap, req, transforms)
-        if bitmap_chunks is not None:
-            source = _paced_chunks(bitmap_chunks, abort=command.abort, interval=interval)
-        elif kind == "raster":
-            source = _simulated_raster_chunks(
-                req, simulation, abort=command.abort, interval=interval,
-                transforms=transforms)
-        else:
-            source = _simulated_vector_chunks(
-                req, simulation, abort=command.abort, interval=interval,
-                transforms=transforms)
-        async for chunk in source:
-            yield chunk
+        # Live raster (Infinite): repeat frames back to back on the same
+        # stream until Stop, exactly like the hardware continuous command.
+        continuous = pace and bool(getattr(req, "continuous", False))
+        while True:
+            if bitmap_chunks is not None:
+                source = _paced_chunks(bitmap_chunks, abort=command.abort, interval=interval)
+            elif kind == "raster":
+                source = _simulated_raster_chunks(
+                    req, simulation, abort=command.abort, interval=interval,
+                    transforms=transforms)
+            else:
+                source = _simulated_vector_chunks(
+                    req, simulation, abort=command.abort, interval=interval,
+                    transforms=transforms)
+            async for chunk in source:
+                yield chunk
+            if not continuous or command.abort.is_set():
+                return
+            # Keep the chunk cadence across the frame boundary.
+            await asyncio.sleep(interval)
 
     def _simulated_last_scan(self, kind: str, req, chunks: List, source: str) -> dict:
         if kind == "raster":
@@ -1069,6 +1125,8 @@ class DeviceService:
     async def _simulated_scan(self, kind: str, req, *, native_samples: bool = False):
         """A streamed scan with no device: same lock, abort and bookkeeping as a real one."""
         captured: List = []
+        if getattr(req, "continuous", False):
+            captured = _FrameRing(_simulated_pass_samples(kind, req))
         async with self._acquire(kind):
             command = _SimulatedCommand()
             self._activate_command(command)
@@ -1080,6 +1138,8 @@ class DeviceService:
             finally:
                 self._deactivate_command(command)
                 # Like a real scan: keep whatever was captured, even if stopped.
+                if isinstance(captured, _FrameRing):
+                    captured = captured.frame()
                 self._set_last_scan(req, self._simulated_last_scan(kind, req, captured, "stream"))
 
     async def _simulated_run_chunks(self, kind: str, req) -> List:
@@ -1277,10 +1337,17 @@ class DeviceService:
         captured: List = []
         scan_started = time.monotonic()
         first_sample_logged = False
+        continuous = bool(getattr(req, "continuous", False))
         async with self._acquire("raster", transport=transport):
             conn = await self._ensure_conn()
-            cmd = self._build_raster_cmd(req)
+            cmd = self._build_raster_cmd(req, continuous=continuous)
             latency = self._chunk_latency("raster", req.latency_bytes, cmd)
+            if continuous:
+                # Live scan: keep only the most recent frame for /scan/last/*
+                # instead of every chunk of an unbounded stream.
+                captured = _FrameRing(cmd.frame_pixels)
+                logger.info("[raster] continuous live scan: %d px/frame, %d chunks/frame",
+                            cmd.frame_pixels, cmd.frame_chunk_count(latency))
             self._activate_command(cmd)
             adc_monitor = _AdcPresenceMonitor(
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
@@ -1317,7 +1384,8 @@ class DeviceService:
                 if not adc_presence_fault:
                     self._set_last_scan(req, {
                         "kind": "raster",
-                        "chunks": captured,
+                        "chunks": (captured.frame() if isinstance(captured, _FrameRing)
+                                   else captured),
                         "resolution": req.resolution,
                         "dwell": req.dwell,
                         "latency_bytes": latency,
@@ -1336,10 +1404,18 @@ class DeviceService:
         first_sample_logged = False
         async with self._acquire("vector", transport=transport):
             conn = await self._ensure_conn()
-            cmd = self._build_vector_cmd(req)
+            cmd = self._build_vector_cmd(
+                req, continuous=bool(getattr(req, "continuous", False)))
             latency = self._chunk_latency("vector", req.latency_bytes, cmd)
+            if getattr(cmd, "continuous", False):
+                # Live scan: keep only the most recent pass for /scan/last/*.
+                pass_pixels = getattr(cmd, "pass_pixels", None) or cmd.frame_pixels
+                captured = _FrameRing(pass_pixels)
+                logger.info("[vector] continuous live scan: %d samples/pass (%s)",
+                            pass_pixels, type(cmd).__name__)
             self._activate_command(cmd)
-            if req.pre_process and hasattr(cmd, "_pre_process_chunks"):
+            if (req.pre_process and hasattr(cmd, "_pre_process_chunks")
+                    and not getattr(cmd, "continuous", False)):
                 cmd._pre_process_chunks(latency=latency)
             transfer_iter = conn.transfer_multiple(
                 cmd, latency=latency)
@@ -1380,7 +1456,8 @@ class DeviceService:
                     if not adc_presence_fault:
                         self._set_last_scan(req, {
                             "kind": "vector",
-                            "chunks": captured,
+                            "chunks": (captured.frame() if isinstance(captured, _FrameRing)
+                                       else captured),
                             "latency_bytes": latency,
                             "pattern": req.pattern.value if hasattr(req.pattern, "value") else str(req.pattern),
                             "scan_path": req.scan_path.value,
@@ -1444,6 +1521,9 @@ class DeviceService:
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
     async def run_raster(self, req: RasterRequest) -> ScanResult:
+        if getattr(req, "continuous", False):
+            # Blocking REST returns one frame; live streaming is WebSocket-only.
+            req = req.model_copy(update={"continuous": False})
         if self._hardware_free(req):
             async with self._acquire("raster"):
                 simulated_chunks = await self._simulated_run_chunks("raster", req)
@@ -1611,6 +1691,9 @@ class DeviceService:
         )
 
     async def run_vector(self, req: VectorRequest) -> ScanResult:
+        if getattr(req, "continuous", False):
+            # Blocking REST returns one pass; live streaming is WebSocket-only.
+            req = req.model_copy(update={"continuous": False})
         if self._hardware_free(req):
             async with self._acquire("vector"):
                 simulated_chunks = await self._simulated_run_chunks("vector", req)
@@ -1715,10 +1798,14 @@ class DeviceService:
 
     # -------- command construction ---------------------------------------
 
-    def _build_raster_cmd(self, req: RasterRequest) -> RasterScanCommand:
+    def _build_raster_cmd(self, req: RasterRequest, *,
+                          continuous: bool = False) -> RasterScanCommand:
         """Build the macro command from JSON defaults overridden by the
         request. Every field the macro accepts is passed explicitly —
-        nothing falls through to a hardcoded macro default."""
+        nothing falls through to a hardcoded macro default.
+
+        ``continuous`` is passed only by the streaming path (raster_scan);
+        blocking /scan/raster/run always scans exactly one frame."""
         params = self._effective_raster_params(req)
 
         bounds = _roi_bounds(req.roi)
@@ -1756,6 +1843,7 @@ class DeviceService:
             padding_min_pixels=params.padding_min_pixels,
             padding_ratio_denominator=params.padding_ratio_denominator,
             padding_dwell=params.padding_dwell,
+            continuous=continuous,
         )
 
     def _build_dac_ramp_cmd(self, req: DacRampRequest) -> RasterScanCommand:
@@ -1790,7 +1878,7 @@ class DeviceService:
             external_control=req.external_control,
         )
 
-    def _build_vector_cmd(self, req: VectorRequest):
+    def _build_vector_cmd(self, req: VectorRequest, *, continuous: bool = False):
         """Same shape as raster: every macro tunable comes from the
         effective params object.
 
@@ -1835,6 +1923,7 @@ class DeviceService:
                 padding_min_pixels=raster.padding_min_pixels,
                 padding_ratio_denominator=raster.padding_ratio_denominator,
                 padding_dwell=raster.padding_dwell,
+                continuous=continuous,
             )
 
         if req.pattern is VectorPattern.custom:
@@ -1846,19 +1935,25 @@ class DeviceService:
                 raise ValueError("pattern=custom requires `points` or a production bitmap fallback")
             if req.points is not None:
                 _log_vector_point_flags(req.points)
-                iter_points = iter(req.points)
+                points_factory = lambda: iter(req.points)
+                pass_pixels = len(req.points)
             else:
                 # Production compatibility for browser ROI bitmap scans:
                 # simulation_bitmap is ignored by hardware, so fall back to
                 # the regular ROI vector sweep rather than rejecting the
                 # request as custom-without-points.
-                iter_points = _roi_vector_iter(
+                points_factory = lambda: _roi_vector_iter(
                     params.vector_resolution, req.roi, dwell=params.dwell, scan_path=req.scan_path
                 )
+                pass_pixels = params.vector_resolution * params.vector_resolution
         else:
-            iter_points = _roi_vector_iter(
+            points_factory = lambda: _roi_vector_iter(
                 params.vector_resolution, req.roi, dwell=params.dwell, scan_path=req.scan_path
             )
+            pass_pixels = params.vector_resolution * params.vector_resolution
+        iter_points = points_factory()
+        # Live passes re-generate their points; adaptive feedback stays per pass.
+        continuous = continuous and adaptive_feedback is None
 
         try:
             output_mode = OutputMode[params.output_mode]
@@ -1887,8 +1982,11 @@ class DeviceService:
             fpga_pipeline_depth_pixels=params.fpga_pipeline_depth_pixels,
             drain_safety_factor=params.drain_safety_factor,
             sender_drain_timeout_s=params.sender_drain_timeout_s,
+            continuous=continuous,
+            points_factory=points_factory if continuous else None,
         )
         cmd.link_dwell = params.dwell
+        cmd.pass_pixels = pass_pixels
         return cmd
 
     def _vector_runs_on_raster_generator(self, req: VectorRequest, adaptive_feedback) -> bool:

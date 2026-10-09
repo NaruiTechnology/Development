@@ -73,6 +73,11 @@ export interface RasterRequest {
   output_mode?: "SixteenBit" | "EightBit";
   adc_valid: boolean;
   do_validate: boolean;
+  /** Infinite / live scan (WebSocket only): the service keeps one FPGA
+   *  command stream open and scans frame after frame until Stop, like
+   *  OBI's live scan. Samples wrap at the frame end; `done` arrives only
+   *  after Stop. */
+  continuous?: boolean;
   roi?: ROIRequest | null;
   /** Browser-provided grayscale crop for simulation-only raster scans.
    *  Production hardware ignores it and uses the DAC ROI normally. */
@@ -109,6 +114,10 @@ export interface VectorRequest {
   scan_path: VectorScanPath;
   points: Array<VectorPointTuple | VectorPoint> | null;
   preview?: boolean;
+  /** Infinite / live scan (WebSocket only): the service replays the point
+   *  list pass after pass on one FPGA command stream until Stop. Samples
+   *  wrap at the pass end; `done` arrives only after Stop. */
+  continuous?: boolean;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */

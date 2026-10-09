@@ -135,15 +135,21 @@ export function useScanStream() {
   }, [dispatch]);
 
   const startRaster = useCallback(
-    (req: RasterRequest, options?: { preserveFrame?: boolean }) => {
+    (req: RasterRequest, options?: { preserveFrame?: boolean; continuous?: boolean }) => {
       if (sessionSimulation) req = { ...req, simulation: sessionSimulation };
+      // Live scan (Infinite): one WebSocket for the whole session; samples
+      // arrive frame after frame and appendRaster wraps at the frame end.
+      const continuous = options?.continuous === true || req.continuous === true;
+      if (continuous) req = { ...req, continuous: true };
       stopExisting(wsRef);
       discardPendingSamples(pendingRasterRef.current);
       activeScanRef.current = { kind: "raster", req };
       autoReconnectAttemptedRef.current = false;
       dispatch(resetRaster({
         resolution: req.resolution,
-        preserveFrame: options?.preserveFrame,
+        // A live scan always overwrites the current frame in place (OBI).
+        preserveFrame: options?.preserveFrame === true || continuous,
+        continuous,
       }));
       dispatch(streamStarted());
       dispatch(scanParamsCaptured(summarizeScanParams("raster", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS })));
@@ -202,8 +208,14 @@ export function useScanStream() {
   );
 
   const startVector = useCallback(
-    (req: VectorRequest) => {
+    (req: VectorRequest, options?: { preserveFrame?: boolean; continuous?: boolean }) => {
       if (sessionSimulation) req = { ...req, simulation: sessionSimulation };
+      // Live scan (Infinite): one WebSocket for the whole session; the
+      // service replays the pass and the image wraps at the pass end.
+      const continuous = options?.continuous === true || req.continuous === true;
+      if (continuous) req = { ...req, continuous: true };
+      // A live scan always overwrites the current image in place (OBI).
+      const preserveImage = options?.preserveFrame === true || continuous;
       stopExisting(wsRef);
       discardPendingSamples(pendingVectorRef.current);
       activeScanRef.current = { kind: "vector", req };
@@ -230,6 +242,8 @@ export function useScanStream() {
                 height: req.simulation_bitmap.height,
               }
             : undefined,
+          continuous,
+          preserveImage,
         })
       );
       dispatch(streamStarted());
@@ -275,7 +289,9 @@ export function useScanStream() {
           ev.data,
           dispatch,
           sawDoneRef,
-          vectorLineShiftPerXRow,
+          // A live scan keeps painting in raw scan order across passes;
+          // rolling the image at Stop would misalign the next live run.
+          continuous ? 0 : vectorLineShiftPerXRow,
         );
         if (!valid) {
           activeScanRef.current = null;
@@ -573,7 +589,7 @@ async function handleClose(
   autoReconnectAttemptedRef: React.MutableRefObject<boolean>,
   reconnectInFlightRef: React.MutableRefObject<Promise<boolean> | null>,
   startRaster: (req: RasterRequest) => void,
-  startVector: (req: VectorRequest) => void,
+  startVector: (req: VectorRequest, options?: { preserveFrame?: boolean; continuous?: boolean }) => void,
 ): Promise<void> {
   if (!isRecoverableDisconnect(ev, closure, sawDone, currentPhase)) {
     finalize(closure, sawDone, currentPhase, currentChunks, ev, dispatch);

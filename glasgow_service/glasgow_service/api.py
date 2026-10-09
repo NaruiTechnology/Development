@@ -134,7 +134,12 @@ async def stream_raster(ws: WebSocket):
     """Client sends RasterRequest as JSON, then receives binary chunk frames,
     terminated by `{"event":"done","chunks":N}` or an error event.
     The validate flag in the request is ignored here; the live stream is
-    cached for /scan/last/* downloads."""
+    cached for /scan/last/* downloads.
+
+    With `continuous: true` (Infinite / live scan) the service keeps one
+    FPGA command stream open and scans frame after frame until
+    POST /scan/abort; pixels stream without a gap at frame boundaries and
+    `done` is sent only after Stop (the last complete frame is cached)."""
     await _stream_scan(ws, lambda p: svc.raster_scan(RasterRequest(**p)))
 
 

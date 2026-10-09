@@ -349,6 +349,7 @@ function handleMock(
           latency_bytes: Number(body.latency_bytes ?? 16384),
           simulation_bitmap: body.simulation_bitmap ?? undefined,
           simulation: body.simulation && typeof body.simulation === "object" ? body.simulation : undefined,
+          continuous: body.continuous === true,
         });
       } else {
         await streamMockVector(client, {
@@ -363,6 +364,7 @@ function handleMock(
           vector_resolution: body.vector_resolution
             ? Number(body.vector_resolution)
             : undefined,
+          continuous: body.continuous === true,
         });
       }
     } catch (e: any) {

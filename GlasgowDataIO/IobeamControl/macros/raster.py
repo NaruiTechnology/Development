@@ -79,6 +79,8 @@ class RasterScanCommand(BaseCommand):
         padding_min_pixels: int         = DEFAULT_PADDING_MIN_PIXELS,
         padding_ratio_denominator: int  = DEFAULT_PADDING_RATIO_DENOM,
         padding_dwell: int              = DEFAULT_PADDING_DWELL,
+        # --- live scan --------------------------------------------------
+        continuous: bool                = False,
     ):
         """
         Scan a frame and return data using a combination of
@@ -111,6 +113,19 @@ class RasterScanCommand(BaseCommand):
                 pixels. These pixels are read but discarded by the
                 receiver, so the value only affects how long the drain
                 takes — not the scan output. Default 2.
+            continuous (bool): Live ("Infinite") scan. Instead of one frame,
+                the command streams frame after frame over a single
+                synchronized command stream until ``abort`` is set — the
+                same idea as OBI's Acquire Photo / live scan, where the
+                display is fed per chunk and never waits for a frame
+                boundary. Each new frame is re-armed in-band by a
+                ``RasterRegionCommand`` queued directly behind the previous
+                frame's last ``RasterPixelRun``: the gateware RasterScanner
+                returns to ``Get-ROI`` after the last pixel and accepts the
+                queued region from its command FIFO, so XY keeps moving with
+                no host round trip, no re-sync, no drain padding and no USB
+                teardown between frames. Padding, fly-back and teardown run
+                once, after Stop. Default False (single frame, unchanged).
         """
         self._x_range     = x_range
         self._y_range     = y_range
@@ -125,6 +140,7 @@ class RasterScanCommand(BaseCommand):
         self._padding_min_pixels        = int(padding_min_pixels)
         self._padding_ratio_denominator = int(padding_ratio_denominator)
         self._padding_dwell             = int(padding_dwell)
+        self.continuous                 = bool(continuous)
 
         self.abort = asyncio.Event()
 
@@ -135,9 +151,42 @@ class RasterScanCommand(BaseCommand):
                 f"beam_type={self._beam_type}, "
                 f"external_control={self._external_control}, "
                 f"frame_blank={self.frame_blank}, "
-                f"max_pipeline={self._max_pipeline}")
+                f"max_pipeline={self._max_pipeline}, "
+                f"continuous={self.continuous}")
+
+    @property
+    def frame_pixels(self) -> int:
+        return self._x_range.count * self._y_range.count
+
+    def frame_chunk_count(self, latency) -> int:
+        """Number of chunks (receiver yields) that make up one frame."""
+        return sum(1 for _ in self._iter_frame_chunks(latency, last_frame=False))
 
     def _iter_chunks(self, latency):
+        """Chunks for the whole command: one frame, or frames forever.
+
+        In continuous mode every frame after the first starts with an
+        in-band ``RasterRegionCommand`` (the first frame's region is sent
+        by ``transfer()`` together with the synchronize command). The
+        generator is lazy, so the infinite loop costs nothing until it is
+        consumed; sender and receiver both stop iterating after an abort.
+        """
+        if not self.continuous:
+            yield from self._iter_frame_chunks(latency, last_frame=True)
+            return
+
+        region = bytes(RasterRegionCommand(
+            x_range=self._x_range, y_range=self._y_range))
+        first = True
+        while True:
+            for n, (commands, pixel_count) in enumerate(
+                    self._iter_frame_chunks(latency, last_frame=False)):
+                if n == 0 and not first:
+                    commands[:0] = region
+                yield (commands, pixel_count)
+            first = False
+
+    def _iter_frame_chunks(self, latency, *, last_frame: bool):
         commands = bytearray()
 
         def append_command(pixel_count):
@@ -172,8 +221,9 @@ class RasterScanCommand(BaseCommand):
             while total - done >= per_chunk:
                 done += per_chunk
                 append_command(per_chunk)
-                # blank at the end of the last pixel
-                if self.frame_blank and done == total:
+                # blank at the end of the last pixel (never between live
+                # frames: the beam stays on for the next frame, like OBI)
+                if self.frame_blank and last_frame and done == total:
                     commands.extend(bytes(BlankCommand(enable=True, inline=False)))
                 yield (commands, per_chunk)
                 commands = bytearray()
@@ -192,7 +242,7 @@ class RasterScanCommand(BaseCommand):
         stats = LinkStats(
             "raster", dwell=self._dwell,
             beam_hz=getattr(self, "link_beam_hz", None),
-            expected_chunks=math.ceil(
+            expected_chunks=None if self.continuous else math.ceil(
                 total_pixels / max(1, math.ceil(latency / max(1, int(self._dwell))))))
 
         async def sender():
@@ -303,7 +353,7 @@ class RasterScanCommand(BaseCommand):
                 t_read = time.perf_counter()
                 res = await self.recv_res(pixel_count, stream, self._output_mode)
                 stats.received(time.perf_counter() - t_read, pixel_count)
-                if stats.pixels_recv >= total_pixels:
+                if not self.continuous and stats.pixels_recv >= total_pixels:
                     # Last chunk: log now.  The consumer normally stops
                     # iterating after it, so code after the final `yield`
                     # (including `finally`) may not run until GC/teardown.
