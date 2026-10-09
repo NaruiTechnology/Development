@@ -57,8 +57,13 @@ class UpstreamBusController(wiring.Component):
         # Queue; as above
         last_sample = Signal(self.adc_latency)
 
+        # The ADC is pipelined: up to `adc_latency` samples are already in flight when
+        # `skid_buffer.i.ready` deasserts (USB IN backpressure), and those samples are
+        # written unconditionally. The FIFO must hold the ready threshold (1) plus every
+        # in-flight sample, otherwise samples are silently dropped, the averaging window
+        # (`last`) desynchronizes and pixels are lost from the image stream.
         m.submodules.skid_buffer = skid_buffer = \
-            SkidBuffer(self.adc_stream.payload.shape(), depth=self.adc_latency)
+            SkidBuffer(self.adc_stream.payload.shape(), depth=self.adc_latency + 2)
         wiring.connect(m, flipped(self.adc_stream), skid_buffer.o)
 
         adc_stream_data = Signal.like(self.adc_stream.payload) # FIXME: will not be needed after FIFOs have shapes

@@ -218,7 +218,7 @@ class DACStream(data.Struct):
     dac_x_code: 14
     padding_x:  2
     dac_y_code: 14
-    padding_x:  2
+    padding_y:  2
     dwell_time: 16
     blank:      BlankRequest
     delay:      3
