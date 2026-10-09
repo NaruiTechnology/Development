@@ -57,3 +57,12 @@ export function placeCompletedScan({
     selectedPane: nextLayout - 1,
   };
 }
+
+/** A repeated render belongs to its recorded pane, even if other images match. */
+export function replaceCompletedScanPane(
+  slots: Array<string | null>,
+  pane: number,
+  imageUrl: string,
+): Array<string | null> {
+  return slots.map((item, index) => index === pane ? imageUrl : item);
+}

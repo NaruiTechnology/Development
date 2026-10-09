@@ -102,8 +102,8 @@ type PaintSnapshot =
     };
 
 // Raw data of captured scans, keyed by the image URL that App stores in the
-// pane slots. Bounded so old scans do not pile up; an evicted entry falls back
-// to showing the stored picture with a plain brightness slider.
+// pane slots. Bounded so old scans do not pile up; evicted images are
+// decoded into grayscale samples to keep the same level controls.
 const ARCHIVED_PAINT_LIMIT = 12;
 const archivedPaints = new Map<string, PaintSnapshot>();
 
@@ -204,6 +204,8 @@ export function ImageCanvas({
   vectorGrayScaleSelection = null,
   vectorGrayScaleSkipped = null,
   imageLayout = 1,
+  singlePaneImage = null,
+  singlePaneSourceIndex = 0,
   imageSlots = [],
   selectedPane: controlledSelectedPane,
   scanTargetPane: requestedScanTargetPane,
@@ -218,6 +220,8 @@ export function ImageCanvas({
   vectorGrayScaleSelection?: [number, number] | null;
   vectorGrayScaleSkipped?: boolean | null;
   imageLayout?: 1 | 2 | 3 | 4;
+  singlePaneImage?: string | null;
+  singlePaneSourceIndex?: number;
   imageSlots?: Array<string | null>;
   selectedPane?: number;
   scanTargetPane?: number;
@@ -289,6 +293,7 @@ export function ImageCanvas({
     });
   }, []);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const editorPressSurfaceRef = useRef<HTMLDivElement | null>(null);
   const [draftShape, setDraftShape] = useState<DraftShape | null>(null);
   const [commentDraft, setCommentDraft] = useState<CommentDraft | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -306,6 +311,7 @@ export function ImageCanvas({
     const nextSelectedPane = clampImagePane(controlledSelectedPane ?? imageLayout - 1, imageLayout);
     setSelectedPane(nextSelectedPane);
     selectedPaneRef.current = nextSelectedPane;
+    editorPressSurfaceRef.current = null;
     setSelectedAnnotationId(null);
     setDraftShape(null);
     setCommentDraft(null);
@@ -315,6 +321,7 @@ export function ImageCanvas({
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string | null;
     revision: number;
+    scanId: number;
   } | null>(null);
   const onRenderedImageChangeRef = useRef(onRenderedImageChange);
   const onMergedFigureChangeRef = useRef(onMergedFigureChange);
@@ -351,7 +358,27 @@ export function ImageCanvas({
   const roi = useAppSelector((s) => s.scan.roi);
   const theme = useAppSelector((s) => s.theme.theme);
   const configuredStreamTransforms = useAppSelector((s) => s.scan.streamTransforms);
-  const streamTransforms = ignoreTransforms ? NO_STREAM_TRANSFORMS : configuredStreamTransforms;
+  // Only control changes update the selected pane. Selecting a different pane
+  // must not apply the previous pane's controls to its archived scan.
+  const transformsByKindRef = useRef<Partial<Record<ScanKind, Array<StreamTransforms | undefined>>>>({});
+  const paneTransforms = transformsByKindRef.current[kind] ??= [];
+  const previousConfiguredTransformsRef = useRef(configuredStreamTransforms);
+  for (let pane = 0; pane < imageLayout; pane += 1) {
+    if (!paneTransforms[pane]) {
+      const imageUrl = imageSlots[pane];
+      paneTransforms[pane] =
+        (imageUrl ? archivedPaints.get(imageUrl)?.transforms : undefined) ?? configuredStreamTransforms;
+    }
+  }
+  if (previousConfiguredTransformsRef.current !== configuredStreamTransforms) {
+    paneTransforms[selectedPane] = configuredStreamTransforms;
+    previousConfiguredTransformsRef.current = configuredStreamTransforms;
+  }
+  const streamTransforms = ignoreTransforms
+    ? NO_STREAM_TRANSFORMS
+    : imageLayout === 1
+      ? configuredStreamTransforms
+      : paneTransforms[scanTargetPane] ?? configuredStreamTransforms;
 
   const phase = useAppSelector((s) => s.scan.phase);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
@@ -374,7 +401,10 @@ export function ImageCanvas({
   const hasRenderedCanvasImage =
     hasPaintedCanvasImage || Boolean(serverFigureUrl) || Boolean(mergedFigureUrl);
   const selectedPaneHasImage = selectedPane !== scanTargetPane && Boolean(imageSlots[selectedPane]);
-  const editorEnabled = selectedPaneHasImage || (phase === "completed" && hasRenderedCanvasImage);
+  const selectedTargetHasImage = selectedPane === scanTargetPane &&
+    (imageLayout === 1 || Boolean(imageSlots[scanTargetPane]));
+  const editorEnabled = selectedPaneHasImage ||
+    (selectedTargetHasImage && phase === "completed" && hasRenderedCanvasImage);
   const toolbarVisible = editorEnabled;
   // A target pane added by the layout button stays empty until a scan fills it.
   const targetParked =
@@ -404,7 +434,8 @@ export function ImageCanvas({
     setPaneGridVisibility((current) => current.map((value, pane) => pane === index ? visible : value));
   };
   const showScanPath =
-    kind === "vector" && vectorPattern === "default" && roi.vector_show_scan_path;
+    (kind === "raster" || (kind === "vector" && vectorPattern === "default")) &&
+    (kind === "raster" ? roi.raster_show_scan_path : roi.vector_show_scan_path);
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
   const vectorGraySpotSelection =
@@ -500,16 +531,17 @@ export function ImageCanvas({
     vectorGraySpotSkipped,
     levelSetting,
     streamTransforms,
+    singlePaneImage,
   ]);
 
   useEffect(() => {
-    if (!onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
+    if (singlePaneImage || !onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
     const scanId = scanSequenceMemory[kind] ?? 0;
 
     const emit = (imageUrl: string | null) => {
       const previous = lastRenderedImageEmitRef.current;
-      if (previous?.kind === kind && previous.imageUrl === imageUrl && previous.revision === revision) return;
-      lastRenderedImageEmitRef.current = { kind, imageUrl, revision };
+      if (previous?.kind === kind && previous.imageUrl === imageUrl && previous.revision === revision && previous.scanId === scanId) return;
+      lastRenderedImageEmitRef.current = { kind, imageUrl, revision, scanId };
       onRenderedImageChangeRef.current?.(kind, imageUrl, scanId);
     };
 
@@ -554,6 +586,7 @@ export function ImageCanvas({
     vectorGraySpotSelection,
     vectorGraySpotSkipped,
     vectorGraySpotColor,
+    singlePaneImage,
   ]);
 
   useEffect(() => {
@@ -741,13 +774,25 @@ export function ImageCanvas({
   useEffect(() => {
     const canvas = scanPathCanvasRef.current;
     if (!canvas || !showScanPath) return;
-    paintVectorScanOrderOverlay(
-      canvas,
-      vectorEdge,
-      visibleVectorCursor,
-      vectorScanPath,
-    );
-  }, [revision, showScanPath, vectorEdge, vectorScanPath, visibleVectorCursor]);
+    const edge = kind === "raster" ? resolution : vectorEdge;
+    const receivedCursor = kind === "raster" ? cursor : visibleVectorCursor;
+    const path = kind === "raster" ? "horizontal_sawtooth" : vectorScanPath;
+    const running = phase === "running";
+    let animationFrame = 0;
+    const draw = (now: number) => {
+      // Chunks commonly end on whole rows. Animate the visual indicator within
+      // the active sweep; this is not a per-pixel hardware position report.
+      const sweepStart = Math.floor(Math.max(0, receivedCursor - 1) / edge) * edge;
+      const indicatorCursor = running
+        ? sweepStart + Math.floor(((now % 800) / 800) * edge) + 1
+        : receivedCursor;
+      paintVectorScanOrderOverlay(canvas, edge, indicatorCursor, path);
+      orientCanvas(canvas, streamTransforms);
+      if (running) animationFrame = requestAnimationFrame(draw);
+    };
+    draw(performance.now());
+    return () => cancelAnimationFrame(animationFrame);
+  }, [revision, showScanPath, kind, resolution, cursor, vectorEdge, vectorScanPath, visibleVectorCursor, streamTransforms, phase]);
 
   const phaseKey = PHASE_KEYS[phase];
   const kindKey = KIND_KEYS[kind];
@@ -810,8 +855,13 @@ export function ImageCanvas({
     });
   }
 
-  function handleEditorSurfaceClick(event: { clientX: number; clientY: number }) {
-    if (!editorEnabled) return;
+  function handleEditorSurfaceClick(event: React.MouseEvent<HTMLDivElement>) {
+    const pressSurface = editorPressSurfaceRef.current;
+    editorPressSurfaceRef.current = null;
+    // A control click or forwarded label click is not an image-edit gesture.
+    if (!editorEnabled || pressSurface !== event.currentTarget || event.target !== event.currentTarget || event.detail === 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
     setSelectedAnnotationId(null);
     if (activeTool !== "highlight" && activeTool !== "comment") return;
     setContextMenu(null);
@@ -842,8 +892,10 @@ export function ImageCanvas({
   }
 
   function handleEditorPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (!editorEnabled || (activeTool !== "rectangle" && activeTool !== "circle")) return;
-    if (event.button !== 0) return;
+    editorPressSurfaceRef.current = null;
+    if (!editorEnabled || event.button !== 0 || event.target !== event.currentTarget) return;
+    editorPressSurfaceRef.current = event.currentTarget;
+    if (activeTool !== "rectangle" && activeTool !== "circle") return;
     const point = toRelativePoint(event.clientX, event.clientY);
     if (!point) return;
     setCommentDraft(null);
@@ -1164,6 +1216,7 @@ export function ImageCanvas({
       onPointerDown={handleEditorPointerDown}
       onPointerMove={handleEditorPointerMove}
       onPointerUp={handleEditorPointerUp}
+      onPointerCancel={() => { editorPressSurfaceRef.current = null; setDraftShape(null); }}
       onClick={handleEditorSurfaceClick}
     >
       {annotations.map((annotation, index) => annotation.kind === "rectangle" || annotation.kind === "circle" ? (
@@ -1327,6 +1380,7 @@ export function ImageCanvas({
                 roi={roi}
                 showGrid={paneGridVisibility[index]}
                 showAxes={showCalibratedAxes}
+                transforms={paneTransforms[index]}
                 t={t}
                 onFrameRef={(node) => {
                   if (node) archivedPaneFramesRef.current.set(index, node);
@@ -1339,7 +1393,10 @@ export function ImageCanvas({
                 }
               />
             ) : (
-              <div className="image-panel-grid__visual image-panel-grid__empty">{t("canvas.layout.empty", { number: index + 1 })}</div>
+              <div className="canvas-stage image-panel-grid__archived-stage">
+                <div className="canvas-frame image-panel-grid__empty">{t("canvas.layout.empty", { number: index + 1 })}</div>
+                <LevelWedge histogram={null} levels={{ low: 0, high: 0xfffc }} auto onChange={() => undefined} onAuto={() => undefined} disabled />
+              </div>
             )}
           </div>
         );
@@ -1358,6 +1415,20 @@ export function ImageCanvas({
             {t("roi.showGrid")}
           </label>}
         </div>}
+          {singlePaneImage && imageLayout === 1 ? (
+            <ArchivedScanDisplay
+              kind={kind}
+              imageUrl={singlePaneImage}
+              transforms={paneTransforms[singlePaneSourceIndex]}
+              alt={kindLabel}
+              roi={roi}
+              showGrid={paneGridVisibility[0]}
+              showAxes={showCalibratedAxes}
+              t={t}
+              onFrameRef={(node) => { frameRef.current = node; }}
+              editorLayer={null}
+            />
+          ) : (
           <div className={`canvas-stage${targetParked ? " canvas-stage--parked" : ""}`}>
       <div
         ref={frameRef}
@@ -1375,7 +1446,7 @@ export function ImageCanvas({
               display: displayedFigureUrl ? "none" : undefined,
             }}
           />
-          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} />}
+          {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} transforms={streamTransforms} />}
           {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}
           {displayedFigureUrl && (
             <img
@@ -1402,6 +1473,7 @@ export function ImageCanvas({
               onPointerDown={handleEditorPointerDown}
               onPointerMove={handleEditorPointerMove}
               onPointerUp={handleEditorPointerUp}
+              onPointerCancel={() => { editorPressSurfaceRef.current = null; setDraftShape(null); }}
               onClick={handleEditorSurfaceClick}
             >
               {annotations.map((annotation, index) => (
@@ -1585,33 +1657,16 @@ export function ImageCanvas({
             </div>
           )}
       </div>
-      {targetParked ? (
-        // Nothing to level yet: an empty target pane shows the same plain
-        // brightness control as the empty "Previous scan" panes.
-        <label className="image-panel-grid__brightness">
-          <span>{t("canvas.brightness")}</span>
-          <input
-            type="range"
-            min={25}
-            max={200}
-            value={100}
-            disabled
-            aria-label={t("canvas.brightness")}
-            onChange={() => undefined}
-          />
-          <output>100%</output>
-        </label>
-      ) : (
-        <LevelWedge
-          histogram={stats.histogram ?? null}
-          levels={{ low: stats.low ?? 0, high: stats.high ?? 0xfffc }}
-          auto={levelSetting.mode === "auto"}
-          onChange={handleWedgeChange}
-          onAuto={handleWedgeAuto}
-          disabled={!stats.histogram || stats.histogram.total <= 0 || Boolean(displayedFigureUrl)}
-        />
-      )}
+      <LevelWedge
+        histogram={targetParked ? null : stats.histogram ?? null}
+        levels={targetParked ? { low: 0, high: 0xfffc } : { low: stats.low ?? 0, high: stats.high ?? 0xfffc }}
+        auto={targetParked || levelSetting.mode === "auto"}
+        onChange={handleWedgeChange}
+        onAuto={handleWedgeAuto}
+        disabled={targetParked || !stats.histogram || stats.histogram.total <= 0 || Boolean(displayedFigureUrl)}
+      />
           </div>
+          )}
       </div>
       </div>
 
@@ -1755,13 +1810,14 @@ function paintVectorScanOrderOverlay(
 
   const total = vectorScanSampleCount(edge, scanPath);
   const limit = Math.min(cursor, total);
-  const trailSamples = Math.min(limit, Math.max(24, Math.min(160, edge >> 2)));
-  const first = limit - trailSamples;
+  // Show the complete active sweep, including the part ahead of the marker.
+  const first = Math.floor((limit - 1) / edge) * edge;
+  const sweepEnd = Math.min(first + edge, total);
   ctx.save();
-  ctx.strokeStyle = "rgba(111, 190, 211, 0.18)";
-  ctx.lineWidth = 0.55;
+  ctx.strokeStyle = "rgba(111, 190, 211, 0.75)";
+  ctx.lineWidth = 0.8;
   ctx.beginPath();
-  for (let index = first; index < limit; index++) {
+  for (let index = first; index < sweepEnd; index++) {
     const point = vectorScanSamplePixel(index, edge, scanPath);
     if (!point) continue;
     const x = (point.x / Math.max(1, edge - 1)) * (size - 1);
@@ -1777,12 +1833,14 @@ function paintVectorScanOrderOverlay(
   const cx = (current.x / Math.max(1, edge - 1)) * (size - 1);
   const cy = (current.y / Math.max(1, edge - 1)) * (size - 1);
   ctx.save();
-  ctx.fillStyle = "rgba(151, 210, 224, 0.48)";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+  ctx.shadowBlur = 2;
+  ctx.fillStyle = "rgba(151, 210, 224, 1)";
   ctx.beginPath();
   ctx.arc(cx, cy, 1.15, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = "rgba(151, 210, 224, 0.42)";
-  ctx.lineWidth = 0.6;
+  ctx.strokeStyle = "rgba(151, 210, 224, 1)";
+  ctx.lineWidth = 0.9;
   ctx.beginPath();
   ctx.arc(cx, cy, 1.3, 0, Math.PI * 2);
   ctx.moveTo(cx - 2.3, cy);
@@ -1862,14 +1920,16 @@ function LiveAxisOverlay({
   showGrid,
   t,
   ignoreTransforms = false,
+  transforms: paneTransforms,
 }: {
   roi: ROIState;
   showGrid: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   ignoreTransforms?: boolean;
+  transforms?: StreamTransforms;
 }) {
   const configuredTransforms = useAppSelector((s) => s.scan.streamTransforms);
-  const transforms = ignoreTransforms ? NO_STREAM_TRANSFORMS : configuredTransforms;
+  const transforms = ignoreTransforms ? NO_STREAM_TRANSFORMS : paneTransforms ?? configuredTransforms;
   const transformPoint = (x: number, y: number) => {
     if (transforms.rotate90) [x, y] = [1 - y, x];
     if (transforms.xflip) x = 1 - x;
@@ -2055,7 +2115,7 @@ function ArchivedScanDisplay({
   showGrid,
   showAxes,
   t,
-  target = false,
+  transforms,
   onFrameRef,
   editorLayer,
 }: {
@@ -2066,18 +2126,18 @@ function ArchivedScanDisplay({
   showGrid: boolean;
   showAxes: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  target?: boolean;
+  transforms?: StreamTransforms;
   onFrameRef: (node: HTMLDivElement | null) => void;
   editorLayer: ReactNode;
 }) {
-  const snapshot = archivedPaints.get(imageUrl) ?? null;
+  const [decodedSnapshot, setDecodedSnapshot] = useState<PaintSnapshot | null>(null);
+  const snapshot = archivedPaints.get(imageUrl) ?? decodedSnapshot;
   const scanParams = archivedScanParams.get(imageUrl) ?? null;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Start from the levels the live image was shown with, then keep this
   // pane's own levels: adjusting it never touches the live wedge.
   const [levelSetting, setLevelSetting] = useState<LevelSetting>(() => levelMemory[kind] ?? AUTO_LEVELS);
   const [stats, setStats] = useState<PaintStats>({ min: 0, max: 0, populated: 0 });
-  const [brightness, setBrightness] = useState(120);
   const pendingLevelRef = useRef<LevelSetting | null>(null);
   const levelFrameRef = useRef<number | null>(null);
   const applyLevelSetting = useCallback((next: LevelSetting) => {
@@ -2098,15 +2158,15 @@ function ArchivedScanDisplay({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !snapshot) return;
-    setStats(paintSnapshot(canvas, snapshot, levelSetting));
-  }, [snapshot, levelSetting]);
+    setStats(paintSnapshot(canvas, { ...snapshot, transforms: transforms ?? snapshot.transforms }, levelSetting));
+  }, [snapshot, levelSetting, transforms]);
 
   if (snapshot) {
     return (
       <div className="canvas-stage image-panel-grid__archived-stage">
         <div className="canvas-frame" ref={onFrameRef}>
           <canvas ref={canvasRef} aria-label={alt} onDragStart={(event) => event.preventDefault()} />
-          {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
+          {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} transforms={transforms ?? snapshot?.transforms ?? NO_STREAM_TRANSFORMS} />}
           {scanParams && <ScanParamChip items={scanParams} t={t} />}
           {editorLayer}
         </div>
@@ -2122,28 +2182,48 @@ function ArchivedScanDisplay({
     );
   }
 
-  // Raw data no longer cached (captured before this version, or evicted):
-  // show the stored picture with a plain brightness control.
+  // Reconstruct display samples from an uncached PNG. These are image gray
+  // values rather than the original ADC readings, but use the same wedge.
   return (
-    <div className={`image-panel-grid__content${target ? " image-panel-grid__content--target" : ""}`}>
-      <div className={`image-panel-grid__visual${target ? " image-panel-grid__target-visual" : ""}`} ref={onFrameRef}>
-        <img className="image-panel-grid__image image-panel-grid__archived-image" src={imageUrl} alt={alt} style={{ filter: `brightness(${brightness}%)` }} />
-        {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} />}
+    <div className="canvas-stage image-panel-grid__archived-stage">
+      <div className="canvas-frame" ref={onFrameRef}>
+        <img
+          className="image-panel-grid__image image-panel-grid__archived-image"
+          src={imageUrl}
+          alt={alt}
+          onLoad={(event) => {
+            const image = event.currentTarget;
+            const edge = Math.max(image.naturalWidth, image.naturalHeight);
+            if (!edge) return;
+            const canvas = document.createElement("canvas");
+            canvas.width = canvas.height = edge;
+            const context = canvas.getContext("2d");
+            if (!context) return;
+            try {
+              context.drawImage(image, 0, 0, edge, edge);
+              const pixels = context.getImageData(0, 0, edge, edge).data;
+              const buf = new Uint16Array(edge * edge);
+              for (let i = 0; i < buf.length; i += 1) {
+                buf[i] = Math.round((0.299 * pixels[4 * i] + 0.587 * pixels[4 * i + 1] + 0.114 * pixels[4 * i + 2]) * 0xfffc / 255);
+              }
+              setDecodedSnapshot({ mode: "grayscale", buf, edge, populated: buf.length, transforms: NO_STREAM_TRANSFORMS });
+            } catch {
+              // Keep the stored image visible if its pixels cannot be read.
+            }
+          }}
+        />
+        {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} transforms={transforms ?? NO_STREAM_TRANSFORMS} />}
         {scanParams && <ScanParamChip items={scanParams} t={t} />}
         {editorLayer}
       </div>
-      <label className="image-panel-grid__brightness">
-        <span>{t("canvas.brightness")}</span>
-        <input
-          type="range"
-          min={25}
-          max={200}
-          value={brightness}
-          aria-label={t("canvas.brightness")}
-          onChange={(event) => setBrightness(Number(event.target.value))}
-        />
-        <output>{brightness}%</output>
-      </label>
+      <LevelWedge
+        histogram={null}
+        levels={{ low: 0, high: 0xfffc }}
+        auto
+        onChange={() => undefined}
+        onAuto={() => undefined}
+        disabled
+      />
     </div>
   );
 }

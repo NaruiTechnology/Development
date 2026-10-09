@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { placeCompletedScan } from "../.test-dist/lib/imagePanelLayout.js";
+import { placeCompletedScan, replaceCompletedScanPane } from "../.test-dist/lib/imagePanelLayout.js";
 
 test("locked multi-scan replaces only the selected pane and preserves the layout", () => {
   const result = placeCompletedScan({
@@ -57,5 +57,17 @@ test("locked re-scan of an older selected pane does not add a pane", () => {
   assert.deepEqual(
     placeCompletedScan({ slots: ["scan-1", "scan-2", null], layout: 3, selectedPane: 0, locked: true, imageUrl: "again" }),
     { slots: ["again", "scan-2", null], layout: 3, selectedPane: 0 },
+  );
+});
+
+test("later render of an identical second scan updates only its recorded pane", () => {
+  const placement = placeCompletedScan({
+    slots: ["identical-image", null], layout: 2, selectedPane: 1,
+    locked: true, imageUrl: "identical-image",
+  });
+  assert.deepEqual(placement.slots, ["identical-image", "identical-image", null]);
+  assert.deepEqual(
+    replaceCompletedScanPane(placement.slots, 1, "second-scan-final-render"),
+    ["identical-image", "second-scan-final-render", null],
   );
 });

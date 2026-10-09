@@ -28,7 +28,7 @@ import { dimensionBoundsFromGeometry, geometryFromConfig, toAppliedGeometry } fr
 import { fetchScanGeometry } from "./lib/scanGeometryApi";
 import { fetchDimensionCalibrationRemote } from "./lib/dimensionCalibrationApi";
 import { selectedEquipmentId } from "./lib/adminActivity";
-import { placeCompletedScan, type ImagePanelLayout } from "./lib/imagePanelLayout";
+import { placeCompletedScan, replaceCompletedScanPane, type ImagePanelLayout } from "./lib/imagePanelLayout";
 import { setScanGeometry, setStreamTransforms } from "./store/scanSlice";
 import { saveDimensionCalibration } from "./store/dimensionCalibrationSlice";
 import { Footer } from "./components/Footer";
@@ -183,8 +183,7 @@ export function App() {
   }, [previewMode]);
   // "<kind>:<scanId>" of the scan whose image currently occupies the target pane.
   const completedImageRecordedScanRef = useRef<string | null>(null);
-  // Latest image of that scan, so later images of the same scan can replace it.
-  const completedImageRecordedUrlRef = useRef<string | null>(null);
+  const completedImagePaneRef = useRef<Record<"raster" | "vector", number>>({ raster: 0, vector: 0 });
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const adcTestEnabled = useAppSelector((s) => s.status.defaults?.adc_test !== false);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
@@ -225,6 +224,13 @@ export function App() {
   const imagePanelSplitActive =
     imagePanelLayoutByKind.raster > 1 || imagePanelLayoutByKind.vector > 1;
   const [imagePanelLocked, setImagePanelLocked] = useState(true);
+  const [singlePaneImages, setSinglePaneImages] = useState<Record<"raster" | "vector", string | null>>({ raster: null, vector: null });
+  const savedSplitRef = useRef<{
+    layouts: Record<"raster" | "vector", ImagePanelLayout>;
+    selected: Record<"raster" | "vector", number>;
+    targets: Record<"raster" | "vector", number>;
+    completed: Record<"raster" | "vector", number>;
+  } | null>(null);
   const [selectedImagePane, setSelectedImagePane] = useState<
     Record<"raster" | "vector", number>
   >({ raster: 0, vector: 0 });
@@ -242,6 +248,9 @@ export function App() {
   useEffect(() => {
     const scanStarted = phase === "running" && previousScanPhaseRef.current !== "running";
     previousScanPhaseRef.current = phase;
+    if (scanStarted && (kind === "raster" || kind === "vector")) {
+      setSinglePaneImages((current) => ({ ...current, [kind]: null }));
+    }
     if (!scanStarted || imagePanelLayout === 1 || (kind !== "raster" && kind !== "vector")) return;
     const targetPane = imagePanelLocked ? selectedImagePane[kind] : imagePanelLayout - 1;
     setScanTargetImagePane((current) =>
@@ -642,17 +651,6 @@ export function App() {
         <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("roi.showGrid")}
       </label>
-    ) : kind === "raster" ? (
-      <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
-        <input
-          type="checkbox"
-          checked={roiState.raster_show_grid}
-          disabled={panelDisabled}
-          onChange={(e) => dispatch(updateROI({ raster_show_grid: e.target.checked }))}
-        />
-        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-        {t("roi.showGrid")}
-      </label>
     ) : kind === "vector" ? (
       <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
         <input
@@ -666,14 +664,16 @@ export function App() {
       </label>
     ) : null;
   const scanPathToggle =
-    kind === "vector" || (kind === "roi" && hasPartialROI) ? (
+    kind === "vector" || kind === "raster" || (kind === "roi" && hasPartialROI) ? (
     <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-scan-path-toggle">
       <input
         type="checkbox"
-        checked={roiState.vector_show_scan_path}
+        checked={kind === "raster" ? roiState.raster_show_scan_path : roiState.vector_show_scan_path}
         disabled={panelDisabled}
         onChange={(e) =>
-          dispatch(updateROI({ vector_show_scan_path: e.target.checked }))
+          dispatch(updateROI(kind === "raster"
+            ? { raster_show_scan_path: e.target.checked }
+            : { vector_show_scan_path: e.target.checked }))
         }
       />
       <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
@@ -896,9 +896,7 @@ export function App() {
         // a "Previous scan" pane.
         const scanKey = `${scanKind}:${scanId}`;
         const sameScan = completedImageRecordedScanRef.current === scanKey;
-        const previousScanImage = completedImageRecordedUrlRef.current;
         completedImageRecordedScanRef.current = scanKey;
-        completedImageRecordedUrlRef.current = imageUrl;
         setCompletedImageHistory((current) => {
           const earlier = sameScan ? current[scanKind].slice(1) : current[scanKind];
           return {
@@ -908,15 +906,17 @@ export function App() {
         });
         const scanKindLayout = imagePanelLayoutByKind[scanKind];
         if (scanKindLayout > 1 && sameScan) {
-          // Same scan, newer image: update it in whichever pane shows it now.
+          // Address the scan by pane identity, never by identical PNG pixels.
+          const recordedPane = completedImagePaneRef.current[scanKind];
           setImagePanelSlots((current) => ({
             ...current,
-            [scanKind]: current[scanKind].map((item) => (item === previousScanImage ? imageUrl : item)),
+            [scanKind]: replaceCompletedScanPane(current[scanKind], recordedPane, imageUrl),
           }));
         } else if (scanKindLayout === 1 && imagePanelSplitActive) {
           // Split mode is on (another view was split) but this view has not
           // been split yet: its first completed scan fills pane 1 and opens
           // pane 2 as the empty target for the next scan.
+          completedImagePaneRef.current[scanKind] = 0;
           setImagePanelSlots((current) => ({ ...current, [scanKind]: [imageUrl, null] }));
           setImagePanelLayoutByKind((current) => ({ ...current, [scanKind]: 2 }));
           setSelectedImagePane((current) => ({ ...current, [scanKind]: 1 }));
@@ -924,6 +924,9 @@ export function App() {
         } else if (scanKindLayout > 1) {
           // After the split, each completed scan opens the next empty pane
           // automatically unless the operator locked the current layout.
+          completedImagePaneRef.current[scanKind] = imagePanelLocked
+            ? scanTargetImagePane[scanKind]
+            : scanKindLayout - 1;
           const placement = placeCompletedScan({
             slots: imagePanelSlots[scanKind],
             layout: scanKindLayout,
@@ -985,10 +988,22 @@ export function App() {
   // Keep the split button visible for raster/vector scans; it becomes enabled
   // as soon as the live target contains an image to preserve in the first pane.
   const showSplitButton = kind === "raster" || kind === "vector";
-  const canSplitImagePanel = imagePanelLayout === 1 && currentTargetImage !== null;
+  const canSplitImagePanel = imagePanelLayout === 1 && (savedSplitRef.current !== null || currentTargetImage !== null);
 
   const splitImagePanel = useCallback(() => {
     if (!canSplitImagePanel || (kind !== "raster" && kind !== "vector")) return;
+    setImagePanelLocked(true);
+    const saved = savedSplitRef.current;
+    if (saved) {
+      setImagePanelLayoutByKind(saved.layouts);
+      setSelectedImagePane(saved.selected);
+      setScanTargetImagePane(saved.targets);
+      completedImagePaneRef.current = saved.completed;
+      setSinglePaneImages({ raster: null, vector: null });
+      savedSplitRef.current = null;
+      return;
+    }
+    completedImagePaneRef.current[kind] = 0;
     // Pane 1 keeps the first scan; pane 2 is the empty target for the next scan.
     setImagePanelSlots((current) => ({ ...current, [kind]: [currentTargetImage, null] }));
     setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
@@ -1212,11 +1227,30 @@ export function App() {
     selectKind("mag");
   }
 
+  function handleImagePanelLockChange(locked: boolean) {
+    setImagePanelLocked(locked);
+    if (locked) return;
+    savedSplitRef.current = {
+      layouts: imagePanelLayoutByKind,
+      selected: selectedImagePane,
+      targets: scanTargetImagePane,
+      completed: { ...completedImagePaneRef.current },
+    };
+    setSinglePaneImages({
+      raster: imagePanelSlots.raster[selectedImagePane.raster] ?? null,
+      vector: imagePanelSlots.vector[selectedImagePane.vector] ?? null,
+    });
+    setImagePanelLayoutByKind({ raster: 1, vector: 1 });
+    setSelectedImagePane({ raster: 0, vector: 0 });
+    setScanTargetImagePane({ raster: 0, vector: 0 });
+  }
+
   // Unlocked layouts keep their original navigation behavior. A locked layout
   // remains available while the operator visits another tab or route.
   function closeImagePanelSplit() {
-    if (imagePanelLocked) return;
+    if (imagePanelLocked || savedSplitRef.current) return;
     setImagePanelLayoutByKind({ raster: 1, vector: 1 });
+    completedImagePaneRef.current = { raster: 0, vector: 0 };
     setImagePanelSlots({ raster: [], vector: [] });
     setSelectedImagePane({ raster: 0, vector: 0 });
     setScanTargetImagePane({ raster: 0, vector: 0 });
@@ -1786,7 +1820,7 @@ export function App() {
                           type="checkbox"
                           checked={imagePanelLocked}
                           disabled={scanActive}
-                          onChange={(event) => setImagePanelLocked(event.target.checked)}
+                          onChange={(event) => handleImagePanelLockChange(event.target.checked)}
                         />
                         <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
                         {t("canvas.layout.lock")}
@@ -1845,6 +1879,8 @@ export function App() {
                     onPaneImageChange={handleImagePaneChange}
                   vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
                   vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                  singlePaneSourceIndex={savedSplitRef.current?.selected[kind as "raster" | "vector"] ?? 0}
+                  singlePaneImage={singlePaneImages[kind as "raster" | "vector"]}
                   imageLayout={imagePanelLayout}
                   imageSlots={imagePanelSlots[kind as "raster" | "vector"]}
                   selectedPane={selectedImagePane[kind as "raster" | "vector"]}

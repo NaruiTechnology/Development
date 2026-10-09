@@ -487,6 +487,9 @@ export function ScanControls({
     if ((kind !== "raster" && kind !== "vector") || disabled || infiniteScanActiveRef.current) return;
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
+    dispatch(updateROI(kind === "raster"
+      ? { raster_show_scan_path: true }
+      : { vector_show_scan_path: true }));
     try {
       let entry: InfiniteScanEntry;
       if (kind === "raster") {

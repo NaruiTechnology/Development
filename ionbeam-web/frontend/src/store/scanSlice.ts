@@ -105,6 +105,7 @@ export interface ROIState {
   show_grid: boolean;
   raster_show_grid: boolean;
   vector_show_grid: boolean;
+  raster_show_scan_path: boolean;
   vector_show_scan_path: boolean;
   selection: ROIRequest | null;
   imageName: string;
@@ -189,6 +190,7 @@ const initialState: ScanState = {
     show_grid: true,
     raster_show_grid: true,
     vector_show_grid: true,
+    raster_show_scan_path: false,
     vector_show_scan_path: false,
     selection: null,
     imageName: "No image selected",
@@ -379,6 +381,9 @@ function normalizeROIPatch(
       : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_grid")
       ? { vector_show_grid: booleanDefault(patch.vector_show_grid, current.vector_show_grid) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "raster_show_scan_path")
+      ? { raster_show_scan_path: booleanDefault(patch.raster_show_scan_path, current.raster_show_scan_path) }
       : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_scan_path")
       ? {
