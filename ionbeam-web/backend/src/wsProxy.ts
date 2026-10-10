@@ -65,6 +65,10 @@ export function attachWsProxy(
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (req, socket, head) => {
+    // Browsers can abort an upgrade while authorization is still pending.
+    // Without an error listener, writing the rejection response to that
+    // already-closed socket terminates Node with `Error: write EOF`.
+    socket.on("error", () => undefined);
     if (!req.url) {
       socket.destroy();
       return;
@@ -81,7 +85,7 @@ export function attachWsProxy(
       const auth = authorize ? await authorize(req) : { ok: true as const };
       if (!auth.ok) {
         const statusText = auth.status === 403 ? "Forbidden" : "Scan authorization failed";
-        socket.write(
+        if (!socket.destroyed && socket.writable) socket.write(
           `HTTP/1.1 ${auth.status} ${statusText}\r\n` +
             "Content-Type: text/plain; charset=utf-8\r\n" +
             "Connection: close\r\n" +
@@ -100,7 +104,7 @@ export function attachWsProxy(
         }
       });
     })().catch((err) => {
-      socket.write(
+      if (!socket.destroyed && socket.writable) socket.write(
         "HTTP/1.1 500 Internal Server Error\r\n" +
           "Connection: close\r\n" +
           `Content-Length: ${Buffer.byteLength(String(err))}\r\n\r\n` +

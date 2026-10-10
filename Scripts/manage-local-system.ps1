@@ -68,10 +68,12 @@ function Start-Managed {
         FilePath = $FilePath
         ArgumentList = $Arguments
         WorkingDirectory = $WorkingDirectory
-        RedirectStandardOutput = (Join-Path $logRoot "$Name.out.log")
-        RedirectStandardError = (Join-Path $logRoot "$Name.err.log")
         WindowStyle = "Hidden"
         PassThru = $true
+    }
+    if ($Name -ne "ionbeam-frontend") {
+        $startArgs.RedirectStandardOutput = Join-Path $logRoot "$Name.out.log"
+        $startArgs.RedirectStandardError = Join-Path $logRoot "$Name.err.log"
     }
     $process = Start-Process @startArgs
     Set-Content -LiteralPath (Get-PidPath $Name) -Value $process.Id -Encoding ascii
@@ -95,7 +97,12 @@ function Wait-Http {
     param([string]$Name, [string]$Url)
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 2 | Out-Null
+            # Node's upstream proxy may need a few seconds on first request
+            # while Glasgow and its database-backed configuration warm up.
+            # A two-second client abort can make Node write to a closed socket
+            # and crash with `Error: write EOF`.
+            & curl.exe --silent --show-error --fail --max-time 10 $Url | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "curl failed" }
             Write-Host "$Name is ready at $Url."
             return
         } catch {
@@ -151,6 +158,19 @@ function Start-Controllers {
     Wait-Http "vacuum executor" "http://127.0.0.1:8780/health/live"
 }
 
+function Start-NodeDetached {
+    param([string]$Name, [string]$Script, [string]$WorkingDirectory)
+    $existing = Get-ManagedProcess $Name
+    if ($existing) { Write-Host "$Name already running (PID $($existing.Id))."; return }
+    $stdoutLog = Join-Path $logRoot "$Name.out.log"
+    $stderrLog = Join-Path $logRoot "$Name.err.log"
+    $command = "start `"`" /b `"$($nodeCommand.Source)`" `"$Script`" 1> `"$stdoutLog`" 2> `"$stderrLog`""
+    $process = Start-Process -FilePath "cmd.exe" -ArgumentList @("/d", "/c", $command) `
+        -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru
+    Set-Content -LiteralPath (Get-PidPath $Name) -Value $process.Id -Encoding ascii
+    Write-Host "Started $Name (PID $($process.Id))."
+}
+
 function Start-Stack {
     Start-Controllers
     Start-SampleStage
@@ -158,7 +178,7 @@ function Start-Stack {
     # expects an interactive console and can terminate with write-EOF when
     # launched by Start-Process without stdin.
     if (-not $nodeCommand) { throw "node.exe was not found." }
-    Start-Managed "ionbeam-backend" $nodeCommand.Source @("dist/server.js") $backendRoot
+    Start-NodeDetached "ionbeam-backend" (Join-Path $backendRoot "dist\server.js") $backendRoot
     Wait-Http "web backend" "http://127.0.0.1:4000/api/status"
     $viteScript = Join-Path $frontendRoot "node_modules\vite\bin\vite.js"
     Start-Managed "ionbeam-frontend" $nodeCommand.Source @($viteScript, "preview", "--host", "127.0.0.1", "--port", "5173") $frontendRoot

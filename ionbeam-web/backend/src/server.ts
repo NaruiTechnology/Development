@@ -64,6 +64,12 @@ import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
 import { registerCalibrationRoutes } from "./calibrationRoutes";
 import { registerDimensionCalibrationRoutes } from "./dimensionCalibrationRoutes";
 import { normalizeScanGeometry, readScanGeometry, writeScanGeometry } from "./scanGeometryConfig";
+
+// Windows service launchers can close inherited console handles while a
+// request is still being logged. Node 24 reports that as an unhandled
+// `write EOF` on the output stream unless the stream has an error listener.
+process.stdout.on("error", () => undefined);
+process.stderr.on("error", () => undefined);
 import {
   ConfigError,
   type RestartResult,
@@ -276,6 +282,13 @@ const DEFAULT_SITE = SITE_OPTIONS[0];
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "256mb" })); // scan DB flow may post large CSV/PNG blobs
+// A health probe can disconnect immediately after receiving the response.
+// Swallow response socket errors so Node does not terminate the service.
+app.use((_req, res, next) => {
+  res.on("error", () => undefined);
+  res.socket?.on("error", () => undefined);
+  next();
+});
 app.use((req, res, next) => {
   const origin = req.get("origin");
   const allowed =
@@ -1510,6 +1523,10 @@ void syncAllowedHostsModuleFromDb().catch((err) => {
 });
 
 server = http.createServer(app);
+server.on("clientError", (err, socket) => {
+  socket.on("error", () => undefined);
+  socket.destroy();
+});
 attachWsProxy(server, authorizeScanUpgrade);
 
 server.listen(config.port, () => {
