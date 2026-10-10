@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import { Header } from "./components/Header";
+import { HelpPopover } from "./components/HelpPopover";
 import type { SignedInUser } from "./components/AuthDialog";
 import { apiUrl } from "./lib/backendUrl";
 import { readJsonResponse } from "./lib/readJsonResponse";
@@ -1804,6 +1805,17 @@ export function App() {
                     <div id="image-panel-view-slot" className="image-panel-card__view-slot" />
                   )}
                   {!adcView && gridLineToggle}
+                  {!adcView && kind === "roi" && roiState.calibration_enabled && (
+                    <HelpPopover title={t("roi.calibration.helpTitle")} ariaLabel={t("roi.calibration.helpTitle")}>
+                      <ol>
+                        <li>{t("roi.calibration.helpImage")}</li>
+                        <li>{t("roi.calibration.helpBounds")}</li>
+                        <li>{t("roi.calibration.helpCoordinates")}</li>
+                        <li>{t("roi.calibration.helpGrid")}</li>
+                        <li>{t("roi.calibration.helpConfirm")}</li>
+                      </ol>
+                    </HelpPopover>
+                  )}
                   {!adcView && scanPathToggle}
                   {!adcView && kind === "vector" && (
                     <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">

@@ -456,9 +456,11 @@ export function ROIEditor({
 
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp, { once: true });
+    window.addEventListener("pointercancel", onPointerUp, { once: true });
     return () => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
     };
   }, [activeHandle, roi]);
 
@@ -1153,10 +1155,10 @@ export function ROIEditor({
               <Icon name="upload" tone="accent" />
               {t("roi.select")}
             </button>
-            {lastScanImageUrl && (
+            {(lastScanImageUrl || roi.calibration_enabled) && (
               <button
                 className="btn btn--ghost"
-                disabled={disabled || roi.imageKind === "lastScan"}
+                disabled={disabled || !lastScanImageUrl || !onLoadLastScan || roi.imageKind === "lastScan"}
                 onClick={() => {
                   if (fileRef.current) {
                     fileRef.current.value = "";
@@ -1613,6 +1615,41 @@ export function ROIEditor({
           })()}
           {roi.calibration_enabled && (
             <>
+              {(["x-start", "x-end", "y-start", "y-end"] as CalibrationHandle[]).map((handle) => {
+                const vertical = handle.startsWith("x-");
+                const position = handle === "x-start" ? draftBounds.left
+                  : handle === "x-end" ? draftBounds.right
+                  : handle === "y-start" ? draftBounds.top : draftBounds.bottom;
+                const label = handle === "x-start" ? "roi.xOrigin"
+                  : handle === "x-end" ? "roi.xEnd"
+                  : handle === "y-start" ? "roi.yOrigin" : "roi.yEnd";
+                return (
+                  <button
+                    key={handle}
+                    type="button"
+                    className={`roi-calibration-boundary roi-calibration-boundary--${vertical ? "vertical" : "horizontal"}`}
+                    data-active={activeHandle === handle ? "true" : "false"}
+                    style={vertical ? {
+                      left: `${position / ROI_CANVAS_EDGE * 100}%`,
+                      top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%`,
+                      height: `${draftBounds.height / ROI_CANVAS_EDGE * 100}%`,
+                    } : {
+                      top: `${position / ROI_CANVAS_EDGE * 100}%`,
+                      left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%`,
+                      width: `${draftBounds.width / ROI_CANVAS_EDGE * 100}%`,
+                    }}
+                    disabled={disabled}
+                    aria-label={t(label)}
+                    title={t(label)}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setActiveHandle(handle);
+                    }}
+                  />
+                );
+              })}
               <div className="roi-calibration-ruler roi-calibration-ruler--top">
                 <div
                   className="roi-calibration-ruler__track"
@@ -2272,7 +2309,7 @@ function ROICalibrationAxisOverlay({
         ticks.filter((tick) => tick.major).map((tick) => (
           <span
             key={`grid-x-${tick.key}`}
-            className="canvas-axis-overlay__grid canvas-axis-overlay__grid--x"
+            className="canvas-axis-overlay__calibration-grid canvas-axis-overlay__calibration-grid--x"
             style={{
               left: tick.x,
               top: "0%",
@@ -2284,7 +2321,7 @@ function ROICalibrationAxisOverlay({
         ticks.filter((tick) => tick.major).map((tick) => (
           <span
             key={`grid-y-${tick.key}`}
-            className="canvas-axis-overlay__grid canvas-axis-overlay__grid--y"
+            className="canvas-axis-overlay__calibration-grid canvas-axis-overlay__calibration-grid--y"
             style={{
               left: "0%",
               top: tick.y,

@@ -10,10 +10,11 @@ const defaults: DimensionCalibrationValues = {
   x_end: 100,
   y_origin: 0,
   y_end: 100,
-  viewport_x_start: 0,
-  viewport_x_end: 640,
-  viewport_y_start: 0,
-  viewport_y_end: 640,
+  // Inset starting area matching the calibration canvas reference (640 px).
+  viewport_x_start: 118,
+  viewport_x_end: 520,
+  viewport_y_start: 144,
+  viewport_y_end: 437,
   scale_unit: "um",
 };
 

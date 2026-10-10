@@ -478,6 +478,16 @@ body {
   height: 1em;
 }
 
+/* Inline calibration help uses the standard 14px help icon, even in a header. */
+.image-panel-card__header-main > .help-btn {
+  flex: 0 0 auto;
+}
+
+.image-panel-card__header-main > .help-btn .icon {
+  width: 1em;
+  height: 1em;
+}
+
 .image-panel-card__view-slot .card__title {
   display: inline-flex;
   align-items: center;
@@ -3323,6 +3333,20 @@ body {
   z-index: 1;
 }
 
+.canvas-axis-overlay__calibration-grid {
+  position: absolute;
+  background: rgba(95, 184, 255, 0.3);
+  pointer-events: none;
+}
+
+.canvas-axis-overlay__calibration-grid--x {
+  width: 1px;
+}
+
+.canvas-axis-overlay__calibration-grid--y {
+  height: 1px;
+}
+
 .canvas-axis-overlay__axis--x {
   left: 0;
   right: 0;
@@ -4041,8 +4065,63 @@ body {
   padding: 4px 8px;
 }
 
+.roi-calibration-boundary {
+  position: absolute;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.roi-calibration-boundary::after {
+  content: "";
+  position: absolute;
+  background: lawngreen;
+  box-shadow: 0 0 8px rgba(124, 252, 0, 0.24);
+}
+
+.roi-calibration-boundary--vertical {
+  width: 14px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+}
+
+.roi-calibration-boundary--vertical::after {
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+}
+
+.roi-calibration-boundary--horizontal {
+  height: 14px;
+  transform: translateY(-50%);
+  cursor: ns-resize;
+}
+
+.roi-calibration-boundary--horizontal::after {
+  top: 50%;
+  left: 0;
+  height: 1px;
+  width: 100%;
+}
+
+.roi-calibration-boundary:hover::after,
+.roi-calibration-boundary:focus-visible::after,
+.roi-calibration-boundary[data-active="true"]::after {
+  background: cyan;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.6);
+}
+
+.roi-calibration-boundary:disabled {
+  pointer-events: none;
+}
+
 .roi-calibration-ruler {
   position: absolute;
+  z-index: 3;
   pointer-events: none;
 }
 
