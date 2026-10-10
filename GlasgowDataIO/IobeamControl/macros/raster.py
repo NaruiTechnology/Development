@@ -59,7 +59,7 @@ DEFAULT_MAX_PIPELINE        = 32
 DEFAULT_PADDING_MIN_PIXELS  = 128
 DEFAULT_PADDING_RATIO_DENOM = 200    # padding = total_pixels // 200 (0.5%)
 DEFAULT_PADDING_DWELL       = 2
-DEFAULT_FRAME_BLANK         = False  # matches the API request default
+DEFAULT_FRAME_BLANK         = True  # matches the API request default
 
 
 class RasterScanCommand(BaseCommand):
@@ -180,9 +180,10 @@ class RasterScanCommand(BaseCommand):
         first = True
         while True:
             for n, (commands, pixel_count) in enumerate(
-                    self._iter_frame_chunks(latency, last_frame=False)):
+                    self._iter_frame_chunks(latency, last_frame=self.frame_blank)):
                 if n == 0 and not first:
-                    commands[:0] = region
+                    commands[:0] = region + (bytes(BlankCommand(enable=False, inline=True))
+                                             if self.frame_blank else b"")
                 yield (commands, pixel_count)
             first = False
 
@@ -230,6 +231,8 @@ class RasterScanCommand(BaseCommand):
 
         if total - done > 0:
             append_command(total - done)
+            if self.frame_blank and last_frame:
+                commands.extend(bytes(BlankCommand(enable=True, inline=False)))
             yield (commands, total - done)
 
     @BaseCommand.log_transfer

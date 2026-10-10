@@ -240,7 +240,7 @@ class FrameBuffer:
         else:
             return False
 
-    async def _capture_frame_iter_fill(self, *, frame: Frame, x_range:DACCodeRange, y_range:DACCodeRange, dwell_time: int, latency:int=65536, cookie:int=123, output_mode:OutputMode=OutputMode.SixteenBit, beam_type:BeamType=BeamType.Ion, external_control:bool=True, frame_blank:bool=False):
+    async def _capture_frame_iter_fill(self, *, frame: Frame, x_range:DACCodeRange, y_range:DACCodeRange, dwell_time: int, latency:int=65536, cookie:int=123, output_mode:OutputMode=OutputMode.SixteenBit, beam_type:BeamType=BeamType.Ion, external_control:bool=True, frame_blank:bool=True):
         """
         Core function for capturing image data produced by a raster scan into a 2D array.
 
@@ -255,7 +255,7 @@ class FrameBuffer:
                 hardcoded to 123, which silently ignored anything passed in via **kwargs.
             output_mode (optional): Output bit depth. Default SixteenBit matches the previous
                 implicit default in RasterScanCommand.
-            frame_blank (optional): Blank between frames. Default False matches the API.
+            frame_blank (optional): Blank between frames. Default True matches the API.
         Yields:
             :class:`Frame`: A :class:`Frame` object is yielded each time new pixels are added
         """

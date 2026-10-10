@@ -106,7 +106,7 @@ class RasterRequest(BaseModel):
     resolution:    int  = Field(512,   ge=1, le=2048, description="DAC range (NxN).")
     dwell:         int  = Field(2,     ge=0, le=65535, description="A dwell of N averages N + 1 ADC samples (125 ns each with the current revC3 timing); 0 is the upstream OBI one-sample setting.")
     latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
-    frame_blank:   bool = False
+    frame_blank:   bool = True
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
     # New in scan-params refactor. Was previously hardcoded to SixteenBit
     # inside the macro because the API had no field for it.

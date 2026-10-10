@@ -152,6 +152,7 @@ class VectorScanCommand(BaseCommand):
         # --- live scan --------------------------------------------------
         continuous: bool                = False,
         points_factory=None,
+        frame_blank: bool = True,
     ):
         """
         Args:
@@ -193,6 +194,7 @@ class VectorScanCommand(BaseCommand):
         if iter_points is None:
             iter_points = default_iter()
 
+        self.frame_blank = bool(frame_blank)
         self._adaptive_gray_feedback = adaptive_gray_feedback
         self.continuous = bool(continuous) and adaptive_gray_feedback is None
         if self.continuous and points_factory is None:
@@ -512,6 +514,7 @@ class VectorScanCommand(BaseCommand):
         async def sender():
             nonlocal tokens, sent_total
             total_pixels = 0
+            between_frames = False
             try:
                 for commands, pixel_count in self._iter_chunks(latency):
                     self._logger.debug(f"sender: tokens={tokens}")
@@ -524,6 +527,9 @@ class VectorScanCommand(BaseCommand):
                         # extended in place)
                         commands = bytes(commands) + bytes(BlankCommand(
                             enable=True, inline=False))
+                    if between_frames:
+                        await BlankCommand(enable=False, inline=True).transfer(stream)
+                        between_frames = False
                     await stream.write(commands)
                     # Per-chunk host-side flush. Without this, stream.write()
                     # only appends to the demultiplexer _out_buffer and the
@@ -537,10 +543,17 @@ class VectorScanCommand(BaseCommand):
                     stats.sent(time.perf_counter() - t_flush)
                     tokens -= 1
                     total_pixels += pixel_count
+                    pass_pixels = getattr(self, "pass_pixels", 0)
+                    if self.frame_blank and self.continuous and pass_pixels and total_pixels % pass_pixels == 0:
+                        await BlankCommand(enable=True, inline=False).transfer(stream)
+                        between_frames = True
                     await count_queue.put(pixel_count)
                     if self.abort.is_set():
                         break
                     await asyncio.sleep(0)
+
+                if self.frame_blank:
+                    await BlankCommand(enable=True, inline=False).transfer(stream)
 
                 sent_total = total_pixels
 

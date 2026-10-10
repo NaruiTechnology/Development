@@ -128,7 +128,7 @@ const defaultRaster: RasterRequest = {
   resolution: 512,
   dwell: 16,
   latency_bytes: 16384,
-  frame_blank: false,
+  frame_blank: true,
   cookie: 123,
   output_mode: "SixteenBit",
   adc_valid: true,

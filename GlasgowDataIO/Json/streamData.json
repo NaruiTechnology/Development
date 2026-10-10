@@ -44,7 +44,7 @@
                     "rasterScan": {
                         "minChunkBeamTimeMs": 100,
                         "pixels": 8192,
-                        "frameBlank": false,
+                        "frameBlank": true,
                         "beamType": "Ion",
                         "externalControl": true,
                         "resolution": 1024,

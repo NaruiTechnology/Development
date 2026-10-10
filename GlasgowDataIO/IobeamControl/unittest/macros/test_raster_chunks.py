@@ -40,6 +40,8 @@ def reference_chunks(cmd, latency):
             total_dwell = 0
     if pixel_count > 0:
         append_command(pixel_count)
+        if cmd.frame_blank:
+            commands.extend(bytes(BlankCommand(enable=True, inline=False)))
         yield (bytes(commands), pixel_count)
 
 

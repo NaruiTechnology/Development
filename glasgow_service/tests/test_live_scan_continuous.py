@@ -198,6 +198,20 @@ def test_service_builds_continuous_vector_commands():
     assert not single.continuous
 
 
+def test_frame_blank_config_applies_to_all_scan_command_paths():
+    from glasgow_service.models import RasterRequest
+
+    service = DeviceService(str(CONFIG_PATH))
+    for enabled in (False, True):
+        service._raster_params_defaults = service._raster_params_defaults.override(frame_blank=enabled)
+        assert service._effective_raster_params(RasterRequest()).frame_blank is enabled
+        for path in ("vertical_raster", "horizontal_sawtooth"):
+            command = service._build_vector_cmd(VectorRequest(
+                pattern="default", scan_path=path, vector_resolution=256))
+            assert command.frame_blank is enabled
+    assert service._effective_raster_params(RasterRequest(frame_blank=False)).frame_blank is False
+
+
 def test_simulated_continuous_vector_runs_past_one_pass_and_stops():
     async def scenario():
         service = DeviceService(str(CONFIG_PATH))

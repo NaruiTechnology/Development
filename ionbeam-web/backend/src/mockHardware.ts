@@ -624,7 +624,7 @@ export const mockRest = {
         resolution: finiteNumber(raster.resolution, 512),
         dwell: finiteNumber(raster.dwell, 16),
         latency: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
-        frameBlank: Boolean(raster.frameBlank ?? false),
+        frameBlank: Boolean(raster.frameBlank ?? true),
       },
       vector: {
         ...vector,
@@ -638,7 +638,7 @@ export const mockRest = {
         resolution: finiteNumber(raster.resolution, 512),
         dwell: finiteNumber(raster.dwell, 16),
         latency_bytes: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
-        frame_blank: Boolean(raster.frameBlank ?? false),
+        frame_blank: Boolean(raster.frameBlank ?? true),
         cookie: finiteNumber(raster.cookie, 123),
         output_mode: raster.outputMode ?? "EightBit",
       },
