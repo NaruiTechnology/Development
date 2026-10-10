@@ -23,6 +23,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $frontendRoot "package.json"))) { $f
 $venvRoot = if ($env:IOBEAM_VENV) { [IO.Path]::GetFullPath($env:IOBEAM_VENV) } else { Join-Path $operationsRoot ".venv" }
 $python = Join-Path $venvRoot "Scripts\python.exe"
 $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+$nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
 $runtimeRoot = Join-Path $operationsRoot "Runtime"
 $logRoot = Join-Path $operationsRoot "Logs"
 New-Item -ItemType Directory -Path $runtimeRoot, $logRoot -Force | Out-Null
@@ -153,9 +154,14 @@ function Start-Controllers {
 function Start-Stack {
     Start-Controllers
     Start-SampleStage
-    Start-Managed "ionbeam-backend" $npmCommand.Source @("run", "dev") $backendRoot
+    # Use built production artifacts for a detached Windows process. `tsx watch`
+    # expects an interactive console and can terminate with write-EOF when
+    # launched by Start-Process without stdin.
+    if (-not $nodeCommand) { throw "node.exe was not found." }
+    Start-Managed "ionbeam-backend" $nodeCommand.Source @("dist/server.js") $backendRoot
     Wait-Http "web backend" "http://127.0.0.1:4000/api/status"
-    Start-Managed "ionbeam-frontend" $npmCommand.Source @("run", "dev", "--", "--host", "127.0.0.1") $frontendRoot
+    $viteScript = Join-Path $frontendRoot "node_modules\vite\bin\vite.js"
+    Start-Managed "ionbeam-frontend" $nodeCommand.Source @($viteScript, "preview", "--host", "127.0.0.1", "--port", "5173") $frontendRoot
     Wait-Http "web frontend" "http://127.0.0.1:5173/"
 }
 
