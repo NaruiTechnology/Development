@@ -149,6 +149,12 @@ function Start-Controllers {
     if (-not $env:VACUUM_EXECUTOR_ID) { $env:VACUUM_EXECUTOR_ID = "local-executor" }
     if (-not $env:VACUUM_REDIS_MASTER) { $env:VACUUM_REDIS_MASTER = "mymaster" }
     if (-not $env:VACUUM_REDIS_WAIT_REPLICAS) { $env:VACUUM_REDIS_WAIT_REPLICAS = "0" }
+    # Local Windows PostgreSQL is provisioned with the postgres administrator
+    # role. Make the local admin API use that role unless the operator supplied
+    # an explicit database configuration through the secrets file.
+    if (-not $env:IOBEAM_ADMIN_DB_HOST) { $env:IOBEAM_ADMIN_DB_HOST = "localhost" }
+    if (-not $env:IOBEAM_ADMIN_DB_NAME) { $env:IOBEAM_ADMIN_DB_NAME = "iobeam_admin" }
+    if (-not $env:IOBEAM_ADMIN_DB_USER) { $env:IOBEAM_ADMIN_DB_USER = "postgres" }
 
     Start-Managed "sbc-vacuum" $python @("-m", "glasgow_service.sbc_vacuum_app") $serviceRoot
     Wait-Http "SBC vacuum" "http://127.0.0.1:8766/health/ready"

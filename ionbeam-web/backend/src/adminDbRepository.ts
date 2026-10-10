@@ -68,6 +68,14 @@ export async function ensureAdminSchema(connection?: PgConnection): Promise<void
       .then(() => undefined)
       .catch((err) => {
         schemaReadyByConnection.delete(key);
+        // Runtime roles may read an already-provisioned database without
+        // being allowed to run the owner-only GRANT statements in the
+        // idempotent setup script. Continue in that case; the stored
+        // functions and tables are still available to the query below.
+        if (err instanceof Error && /permission denied for database/i.test(err.message)) {
+          console.warn(`[iobeam-admin] setup skipped for runtime role ${resolved.user}: ${err.message}`);
+          return;
+        }
         throw err;
       });
     schemaReadyByConnection.set(key, promise);
