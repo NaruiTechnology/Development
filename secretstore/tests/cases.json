@@ -1,0 +1,21 @@
+{
+  "_comment": "Shared by secretstore/tests/test_secretstore.py and ionbeam-web/backend/tests/secretStore.test.ts so both implementations parse, quote and expand identically.",
+  "parse": [
+    {"text": "# comment\n; also a comment\n\nA=plain\n", "values": {"A": "plain"}},
+    {"text": "B='single # not a comment'\n", "values": {"B": "single # not a comment"}},
+    {"text": "C=\"dq \\\"quoted\\\" \\\\ \\$HOME\"\n", "values": {"C": "dq \"quoted\" \\ $HOME"}},
+    {"text": "D=中文密码\n", "values": {"D": "中文密码"}},
+    {"text": "E=\n", "values": {"E": ""}},
+    {"text": "F=a=b=c\n", "values": {"F": "a=b=c"}}
+  ],
+  "parse_errors": ["export A=1\n", "not a pair\n", "A='unterminated\n"],
+  "roundtrip": ["simple", "with space", "it's", "a\"b'c", "$HOME `cmd` \\back", "中文 password", "", "#hash", "p@ss:w/rd+=,."],
+  "expand": [
+    {"env": {"X": "1"}, "input": "${X}", "output": "1"},
+    {"env": {}, "input": "${MISSING:-fallback}", "output": "fallback"},
+    {"env": {}, "input": "${MISSING:-}", "output": ""},
+    {"env": {"X": "a"}, "input": "pre-${X}-post", "output": "pre-a-post"},
+    {"env": {"X": ""}, "input": "${X:-default}", "output": "default"},
+    {"env": {}, "input": "$NOT_A_PLACEHOLDER {X}", "output": "$NOT_A_PLACEHOLDER {X}"}
+  ]
+}

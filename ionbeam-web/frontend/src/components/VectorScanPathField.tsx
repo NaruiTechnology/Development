@@ -4,6 +4,7 @@ import { updateVector } from "../store/scanSlice";
 import type { VectorScanPath } from "../types/api";
 import { useTranslation } from "../i18n";
 import { VectorScanPathPreview } from "./VectorScanPathPreview";
+import { PatternHelp } from "./PatternHelp";
 
 export function VectorScanPathField({
   disabled,
@@ -18,7 +19,7 @@ export function VectorScanPathField({
 
   return (
     <div className="field vector-scan-path-field">
-      <label htmlFor={id}>{t("vector.scanPath")}</label>
+      <label htmlFor={id}><PatternHelp />{t("vector.scanPath")}</label>
       <div className="vector-scan-path-field__content">
         <select
           id={id}

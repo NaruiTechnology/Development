@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import { config, type Config } from "./config";
+import { expandPlaceholders } from "./secretStore";
 
 export interface PgConnection {
   host: string;
@@ -59,7 +60,16 @@ export function pgConnectionFromOperationRuntimeConfig(source: Config = config):
 }
 
 export function pgConnectionFromAdminConfig(data: unknown, fallback: PgConnection = pgConnectionFromRuntimeConfig()): PgConnection {
-  const db = readRecord(data, ["Database"]);
+  // IobeamAdmin.json holds ${VAR} placeholders; resolve them from the secrets file.
+  const db = expandPlaceholders(readRecord(data, ["Database"]));
+  // No shared admin server configured (no host and no login resolved, e.g. a
+  // fresh host whose installer had no credentials): use the local admin
+  // database the deployment created, as a whole, rather than mixing the local
+  // login with the shared server's database name.
+  if (!stringValue(db.Host ?? db.host) && !stringValue(db.User ?? db.user ?? db.Username ?? db.username)
+      && !stringValue(db.ConnectionString ?? db.connectionString)) {
+    return { ...fallback };
+  }
   const connectionString = stringValue(db.ConnectionString ?? db.connectionString);
   const parsed = connectionString ? parsePostgresConnectionString(connectionString) : null;
   return {
@@ -86,9 +96,9 @@ export function pgConnectionFromOperationConfig(
   data: unknown,
   fallback: PgConnection = pgConnectionFromOperationRuntimeConfig(),
 ): PgConnection {
-  const nested = readRecord(data, ["Database"]);
+  const nested = expandPlaceholders(readRecord(data, ["Database"]));
   const root = data && typeof data === "object" && !Array.isArray(data)
-    ? (data as Record<string, unknown>)
+    ? expandPlaceholders(data as Record<string, unknown>)
     : {};
   const db = Object.keys(nested).length > 0 ? nested : root;
   const connectionString = stringValue(db.ConnectionString ?? db.connectionString);
@@ -113,8 +123,22 @@ export function pgConnectionFromOperationConfig(
   };
 }
 
+/**
+ * Idempotent SQL that is loaded after 001_schema.sql (and the optional seed) on every admin database setup.
+ * 003 adds the FIB / SEM calibration-parameter tables and stored functions (see calibrationRepository.ts).
+ * 005 adds the single-row-per-equipment Dimension Cal setting (see dimensionCalibrationRepository.ts).
+ * 006 adds the equipment CSV export and validated, atomic import functions.
+ * The 2 MB parameter catalog itself is 004_calibration_seed.sql, loaded by `npm run db:seed:calibration`
+ * or automatically the first time the calibration API is used (ensureCalibrationCatalog).
+ */
+export const ADMIN_EXTRA_SCHEMA_FILES = [
+  "003_calibration_schema.sql",
+  "005_dimension_calibration_schema.sql",
+  "006_equipment_csv_functions.sql",
+];
+
 export async function applyAdminDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {
-  return applyDatabaseSetup(options, ["public", "iobeam_admin", "ionbeam_asset"]);
+  return applyDatabaseSetup(options, ["public", "iobeam_admin", "ionbeam_asset"], ADMIN_EXTRA_SCHEMA_FILES);
 }
 
 export async function applyOperationDatabaseSetup(options: AdminDatabaseSetupOptions): Promise<AdminDatabaseSetupResult> {
@@ -124,6 +148,7 @@ export async function applyOperationDatabaseSetup(options: AdminDatabaseSetupOpt
 async function applyDatabaseSetup(
   options: AdminDatabaseSetupOptions,
   grantSchemas: string[],
+  extraSchemaFiles: string[] = [],
 ): Promise<AdminDatabaseSetupResult> {
   const connection = options.connection;
   const steps: AdminDatabaseSetupResult["steps"] = [];
@@ -140,11 +165,15 @@ async function applyDatabaseSetup(
   if (options.loadSeed !== false) {
     sqlFiles.push(readSql(seedFile));
   }
+  // After the seed on purpose: extra files change search_path, and 002 relies on the one 001 set.
+  for (const extra of extraSchemaFiles) {
+    sqlFiles.push(readSql(resolveSqlFile(extra)));
+  }
   await runPsql(["-v", "ON_ERROR_STOP=1"], connection.database, sqlFiles.join("\n"), connection);
   steps.push({
     name: "load-schema",
     ok: true,
-    detail: `loaded ${path.basename(schemaFile)}${options.loadSeed === false ? "" : ` and ${path.basename(seedFile)}`}`,
+    detail: `loaded ${[path.basename(schemaFile), ...(options.loadSeed === false ? [] : [path.basename(seedFile)]), ...extraSchemaFiles].join(", ")}`,
   });
 
   if (options.ensureRole !== false) {
@@ -302,7 +331,7 @@ function parsePostgresConnectionString(value: string): Partial<PgConnection> {
   };
 }
 
-function resolveSqlFile(configuredPath: string): string {
+export function resolveSqlFile(configuredPath: string): string {
   if (path.isAbsolute(configuredPath) && fs.existsSync(configuredPath)) return configuredPath;
   const developmentRoot = path.resolve(__dirname, "..", "..", "..");
   const candidates = [

@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../store";
 import { confirmROICalibration, updateROI } from "../store/scanSlice";
 import { saveDimensionCalibration } from "../store/dimensionCalibrationSlice";
+import { shortTimestamp, type DimensionCalibrationSource } from "../lib/dimensionCalibrationPersistence";
+import { saveDimensionCalibrationRemote } from "../lib/dimensionCalibrationApi";
+import { selectedEquipmentId } from "../lib/adminActivity";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
 import { viewportBounds } from "../lib/roiGeometry";
 import { useTranslation, type TranslationKey } from "../i18n";
@@ -28,6 +31,7 @@ export function ROICalibrationCard({
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const roi = useAppSelector((s) => s.scan.roi);
+  const currentSource = useAppSelector((s) => s.dimensionCalibration.values.source);
   const bounds = viewportBounds(roi, "draft");
 
   const xSpan = Math.abs(roi.calibration_x_end - roi.calibration_x_origin);
@@ -58,8 +62,19 @@ export function ROICalibrationCard({
 
   function confirmCalibration() {
     if (disabled || validation) return;
+    if (
+      currentSource?.kind === "scanGeometry" &&
+      !window.confirm(
+        t("roi.calibration.overwriteScanGeometry", {
+          type: currentSource.equipment_type,
+          revision: currentSource.profile_revision ?? 0,
+        })
+      )
+    ) {
+      return;
+    }
     clearBitmapSelectionCache();
-    dispatch(saveDimensionCalibration({
+    const values = {
       x_origin: roi.calibration_x_origin,
       x_end: roi.calibration_x_end,
       y_origin: roi.calibration_y_origin,
@@ -69,13 +84,18 @@ export function ROICalibrationCard({
       viewport_y_start: roi.calibration_viewport_y_start,
       viewport_y_end: roi.calibration_viewport_y_end,
       scale_unit: roi.scale_unit,
-    }));
+      source: { kind: "manual" as const, set_at: new Date().toISOString() },
+    };
+    dispatch(saveDimensionCalibration(values));
     dispatch(confirmROICalibration());
+    const equipmentId = selectedEquipmentId();
+    if (equipmentId !== null) void saveDimensionCalibrationRemote(equipmentId, values);
   }
 
   return (
     <div className="roi-calibration-card">
       <p className="muted roi-calibration-card__hint">{t("roi.calibration.instructions")}</p>
+      <SourceBadge source={currentSource} />
       {lastScanImageUrl && onLoadLastScan && (
         <div className="button-row">
           <button
@@ -209,6 +229,25 @@ function CalibrationField(props: {
 
 function formatOneDecimal(value: number): string {
   return Number.isFinite(value) ? value.toFixed(1) : "0.0";
+}
+
+function SourceBadge({ source }: { source: DimensionCalibrationSource | undefined }) {
+  const { t } = useTranslation();
+  if (!source) return null;
+  const text =
+    source.kind === "manual"
+      ? t("roi.calibration.source.manual", { when: shortTimestamp(source.set_at) })
+      : t("roi.calibration.source.scanGeometry", {
+          type: source.equipment_type,
+          revision: source.profile_revision ?? 0,
+          when: shortTimestamp(source.applied_at),
+        });
+  return (
+    <p className={`roi-calibration-card__source roi-calibration-card__source--${source.kind}`}>
+      <Icon name={source.kind === "scanGeometry" ? "target" : "edit"} tone="accent" />
+      {text}
+    </p>
+  );
 }
 
 function hasAtMostOneDecimal(text: string): boolean {

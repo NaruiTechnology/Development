@@ -24,7 +24,7 @@ import tls from "node:tls";
 import type { IncomingMessage } from "node:http";
 
 import { config } from "./config";
-import { readVacuumEnabled } from "./vacuumConfig";
+import { readVacuumEnabled, prepareVacuumEnabledUpdate } from "./vacuumConfig";
 import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
@@ -38,6 +38,8 @@ import {
   buildActivityReportFromDb,
   adminActivityExistsInDb,
   dedupeActivityRowsFromDb,
+  exportEquipmentCsvFromDb,
+  importEquipmentCsvToDb,
   listAllowedHostsFromDb,
   findAdminUserInDb,
   findAdminUserInDbById,
@@ -51,6 +53,7 @@ import {
   syncEquipmentToDb,
   type AdminUser,
   type Equipment,
+  type EquipmentCsvImportRow,
 } from "./adminDbRepository";
 import {
   recordInputSetupInDb,
@@ -58,6 +61,9 @@ import {
   readOperationTelemetrySummaryFromDb,
 } from "./operationDataRepository";
 import { saveAllowedHosts, syncAllowedHostsModuleFromDb } from "./allowedHosts";
+import { registerCalibrationRoutes } from "./calibrationRoutes";
+import { registerDimensionCalibrationRoutes } from "./dimensionCalibrationRoutes";
+import { normalizeScanGeometry, readScanGeometry, writeScanGeometry } from "./scanGeometryConfig";
 import {
   ConfigError,
   type RestartResult,
@@ -68,8 +74,10 @@ import {
   restoreFromBackup,
   writeAdminConfig,
   writeConfig,
+  writeConfigIfChanged,
 } from "./configManager";
 import {
+  scanArtifactBytesFromBody,
   uploadMergedFigureToConfiguredFtp,
   uploadScanArtifactsToConfiguredFtp,
   testConfiguredFtpConnection,
@@ -313,7 +321,8 @@ app.get("/healthz", (_req, res) => {
 app.get("/api/admin/config", async (_req, res) => {
   try {
     const info = await readWithBackup();
-    res.json(info);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ...info, vacuum_enabled: readVacuumEnabled(config.vacuumConfigPath) });
   } catch (err) {
     sendConfigError(res, err);
   }
@@ -335,7 +344,13 @@ app.post("/api/admin/config", async (req, res) => {
 
   try {
     await authorizeStreamConfigSave(req, data);
-    await writeConfig(data);
+    if (req.body?.vacuum_enabled !== undefined && typeof req.body.vacuum_enabled !== "boolean") {
+      throw new ConfigError("vacuum_enabled must be true or false", 400);
+    }
+    const commitVacuum = await prepareVacuumEnabledUpdate(config.vacuumConfigPath, req.body?.vacuum_enabled);
+    await writeConfigIfChanged(data);
+    if (commitVacuum) await commitVacuum();
+    // Update also resets a faulted controller when its configuration is unchanged.
   } catch (err) {
     sendConfigError(res, err);
     return;
@@ -347,7 +362,11 @@ app.post("/api/admin/config", async (req, res) => {
 app.post("/api/admin/config/restore", async (_req, res) => {
   try {
     await requireAdminPrivilege(_req, "only Admin or Auditor accounts can restore stream configuration");
-    await restoreFromBackup();
+    const changed = await restoreFromBackup();
+    if (!changed) {
+      respondRestartSkipped(res, "Configuration already matches the default backup.");
+      return;
+    }
   } catch (err) {
     sendConfigError(res, err);
     return;
@@ -367,17 +386,22 @@ app.get("/api/admin/iobeam/config", async (_req, res) => {
       );
       return [];
     });
-    const dbEquipment = await listEquipmentFromDb().catch((err) => {
-      console.warn(
-        `[iobeam-admin/config] DB equipment records were not loaded: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      return [];
-    });
+    // Equipment lives only in the database. When it cannot be read (for
+    // example the secrets file is missing), report that instead of showing
+    // rows from IobeamAdmin.json or any other copy.
+    let dbEquipment: Equipment[] = [];
+    let equipmentError: string | null = null;
+    try {
+      dbEquipment = await listEquipmentFromDb();
+    } catch (err) {
+      equipmentError = err instanceof Error ? err.message : String(err);
+      console.warn(`[iobeam-admin/config] equipment database unavailable: ${equipmentError}`);
+    }
     res.json({
       ...info,
       data: mergeAdminConfigData(info.data, dbUsers, dbEquipment),
+      equipment_source: equipmentError ? "unavailable" : "database",
+      equipment_error: equipmentError,
     });
   } catch (err) {
     sendConfigError(res, err);
@@ -421,6 +445,57 @@ app.get("/api/admin/iobeam/equipment", async (_req, res) => {
   } catch (err) {
     sendConfigError(res, err);
   }
+});
+
+app.get("/api/admin/iobeam/equipment/export.csv", async (req, res) => {
+  try {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can export equipment");
+    res
+      .status(200)
+      .type("text/csv")
+      .set("Content-Disposition", 'attachment; filename="equipment.csv"')
+      .send(await exportEquipmentCsvFromDb());
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.post("/api/admin/iobeam/equipment/import", async (req, res) => {
+  try {
+    await requireAdminPrivilege(req, "only Admin or Auditor accounts can import equipment");
+    const incoming = parseEquipmentImportPayload(req.body?.equipment);
+    const current = await listEquipmentFromDb();
+    for (const [index, row] of incoming.entries()) {
+      const byId = row.id == null ? undefined : current.find((existing) => existing.id === row.id);
+      const serialNumber = row.serial_number?.trim().toLowerCase() ?? "";
+      const bySerial = serialNumber
+        ? current.find((existing) => existing.serial_number.trim().toLowerCase() === serialNumber)
+        : undefined;
+      if (byId && bySerial && byId.id !== bySerial.id) {
+        throw new ConfigError(`equipment row ${index + 1} has an ID and serial number that refer to different records`);
+      }
+      if (!byId && !bySerial && !EQUIPMENT_CSV_SITES.has(row.site ?? "")) {
+        throw new ConfigError(`new equipment row ${index + 1} needs a supported site`);
+      }
+    }
+    const result = await importEquipmentCsvToDb(incoming);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+// FIB | SEM calibration parameters (CONFIGURATION > Admin > Calibration). See calibrationRoutes.ts.
+registerCalibrationRoutes(app, {
+  currentActor: (req) => currentAdminActor(req),
+  sendError: sendConfigError,
+  roles: { superUser: ROLE_SUPER_USER, developer: ROLE_DEVELOPER, admin: ROLE_ADMIN },
+});
+
+// Dimension Cal server-side setting (CONFIGURATION > Calibrate > DIMENTION CAL). See dimensionCalibrationRoutes.ts.
+registerDimensionCalibrationRoutes(app, {
+  currentActor: (req) => currentAdminActor(req),
+  sendError: sendConfigError,
 });
 
 app.get("/api/admin/iobeam/hosts", async (_req, res: express.Response<AllowedHostsResponse>) => {
@@ -1049,12 +1124,17 @@ app.post("/api/admin/iobeam/operation/output-data", async (req, res) => {
       return;
     }
 
+    // Optional artifact bytes (native desktop app): never persist them in the
+    // operation record, only hand them to the FTP upload.
+    const artifacts = scanArtifactBytesFromBody((body as { artifacts?: unknown } | null)?.artifacts);
+    const recordBody = body ? { ...(body as Record<string, unknown>) } : null;
+    if (recordBody) delete recordBody.artifacts;
     const output = await recordOperationScanOutput(
       kind,
       activityId,
-      body as Record<string, unknown> | null,
-      jsonObjectOrSelf(body?.scan_result, body),
-      normalizeInteger(body?.chunks, 0),
+      recordBody,
+      jsonObjectOrSelf(recordBody?.scan_result, recordBody),
+      normalizeInteger(recordBody?.chunks, 0),
     );
 
     res.json({
@@ -1067,7 +1147,7 @@ app.post("/api/admin/iobeam/operation/output-data", async (req, res) => {
     void uploadScanArtifactsToConfiguredFtp(kind, {
       csvFilename: output.csvFilename,
       imageFilename: output.imageFilename,
-    }).catch((err) => {
+    }, false, artifacts).catch((err) => {
       console.warn(`[ftp-upload] failed to upload ${kind} scan artifacts:`, err);
     });
   } catch (err) {
@@ -1116,6 +1196,34 @@ app.post("/api/admin/mag-calibration", async (req, res: express.Response<MagCali
     }
     const mag = readMagCalibrationConfig(next);
     res.json({ ok: true, selected_beam: mag.selected_beam, beams: mag.beams });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+// Scan geometry (CONFIGURATION > Admin > Calibration > Scan geometry): the rectified DAC <-> world transform that the
+// ROI / bitmap scan paths apply. Stored in streamData.json next to magCalibration. No service restart: the Python
+// service keeps receiving plain DAC ranges; only the browser's world -> DAC mapping changes.
+app.get("/api/admin/scan-geometry", async (_req, res) => {
+  try {
+    const info = await readWithBackup();
+    res.set("Cache-Control", "no-store");
+    res.json({ ok: true, ...readScanGeometry(info.data) });
+  } catch (err) {
+    sendConfigError(res, err);
+  }
+});
+
+app.put("/api/admin/scan-geometry", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor || !actor.is_active) throw new ConfigError("sign in to change the scan geometry", 401);
+    if (actor.role < ROLE_SUPER_USER) throw new ConfigError("changing the scan geometry needs SuperUser or higher", 403);
+    const info = await readWithBackup();
+    const value = req.body?.scan_geometry === null ? null : normalizeScanGeometry(req.body?.scan_geometry, actor.login_name);
+    const next = writeScanGeometry(info.data, value);
+    await writeConfig(next);
+    res.json({ ok: true, ...readScanGeometry(next) });
   } catch (err) {
     sendConfigError(res, err);
   }
@@ -1320,11 +1428,51 @@ app.get("/api/defaults", async (_req, res) => {
     }
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    res.status(502).json({
-      error: "defaults_unreachable",
-      detail: `glasgow_service unreachable: ${detail}`,
-      upstream: config.proxyTargetHttp,
-    });
+    // Defaults are configuration metadata, not device state. Keep the UI
+    // authoritative when the Glasgow service is disconnected by reading the
+    // local streamData.json directly. In particular, this prevents a cached
+    // simulation checkbox from remaining enabled after IsProduction=true.
+    try {
+      const info = await readWithBackup();
+      const root = (info.data && typeof info.data === "object")
+        ? info.data as Record<string, any>
+        : {};
+      const states = root.Actions ?? root.WorkStates ?? root.workStates ?? root.states ?? [];
+      const stream = Array.isArray(states)
+        ? states.find((entry: any) => entry?.streamData || entry?.name === "streamData" || entry?.Name === "streamData")
+        : null;
+      const action = stream?.streamData?.actionData
+        ?? stream?.actionData
+        ?? stream?.ActionData
+        ?? stream?.action_data
+        ?? root.actionData
+        ?? {};
+      res.json({
+        raster: action.rasterScan ?? {},
+        vector: action.vectorScan ?? {},
+        simulation: action.simulation ?? {},
+        adc: {
+          adcHalfPeriod: action.adcHalfPeriod ?? 3,
+          adcSettleCycles: action.adcSettleCycles ?? 1,
+          adcLatchCycles: action.adcLatchCycles ?? 1,
+          busTurnaroundCycles: action.busTurnaroundCycles ?? 0,
+          dacDataSetupCycles: action.dacDataSetupCycles ?? 1,
+          dacLatchCycles: action.dacLatchCycles ?? 1,
+        },
+        is_production: root.IsProduction === true,
+        adc_test: root.AdcTest !== false && action.AdcTest !== false,
+        version: String(root.Version ?? ""),
+        defaults_source: "local-config",
+        service_error: detail,
+      });
+    } catch (fallbackError) {
+      res.status(502).json({
+        error: "defaults_unreachable",
+        detail: `glasgow_service unreachable: ${detail}`,
+        fallback_error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        upstream: config.proxyTargetHttp,
+      });
+    }
   }
 });
 
@@ -1453,9 +1601,94 @@ function readEquipment(data: unknown): Equipment[] {
       model: String(row.model ?? ""),
       serial_number: String(row.serial_number ?? ""),
       site: String(row.site ?? ""),
+      equipment_code: String(row.equipment_code ?? ""),
+      host_computer_model: String(row.host_computer_model ?? ""),
+      motherboard_model: String(row.motherboard_model ?? ""),
+      windows_version: String(row.windows_version ?? ""),
+      software_version: String(row.software_version ?? ""),
+      coreco_processing_card: String(row.coreco_processing_card ?? ""),
       description: String(row.description ?? ""),
     }))
     .filter((row) => row.name.trim() || row.serial_number.trim());
+}
+
+const EQUIPMENT_CSV_SITES = new Set([
+  "Beijing(北京)",
+  "Shanghai(上海)",
+  "Shenzheng(深圳)",
+  "Wuxi(无锡)",
+  "Xian(西安)",
+  "Chengdu(成都)",
+  "Hangzhou(杭州)",
+  "Tianjing(天津)",
+  "Taixin(泰兴)",
+]);
+
+function parseEquipmentImportPayload(value: unknown): EquipmentCsvImportRow[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 10_000) {
+    throw new ConfigError("equipment must contain between 1 and 10,000 CSV rows");
+  }
+  const rows: EquipmentCsvImportRow[] = [];
+  const ids = new Set<number>();
+  const serials = new Set<string>();
+  for (let index = 0; index < value.length; index++) {
+    const raw = value[index];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new ConfigError(`equipment row ${index + 1} is invalid`);
+    }
+    const record = raw as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    const hasSerialNumber = Object.hasOwn(record, "serial_number");
+    if (hasSerialNumber && typeof record.serial_number !== "string") {
+      throw new ConfigError(`equipment row ${index + 1} has an invalid serial number`);
+    }
+    const serialNumber = hasSerialNumber ? (record.serial_number as string).trim() : "";
+    if (!name) throw new ConfigError(`equipment row ${index + 1} needs a name`);
+    if (name.length > 100 || serialNumber.length > 15) {
+      throw new ConfigError(`equipment row ${index + 1} exceeds the name or serial number length limit`);
+    }
+    if (/[\r\n]/.test(name) || /[\r\n]/.test(serialNumber)) {
+      throw new ConfigError(`equipment row ${index + 1} name and serial number cannot contain line breaks`);
+    }
+    const row: EquipmentCsvImportRow = { name };
+    if (hasSerialNumber) row.serial_number = serialNumber;
+    if (record.id !== undefined) {
+      if (record.id !== null && (!Number.isSafeInteger(record.id) || Number(record.id) <= 0)) {
+        throw new ConfigError(`equipment row ${index + 1} has an invalid ID`);
+      }
+      row.id = record.id as number | null;
+    }
+    for (const field of [
+      "model", "site", "equipment_code", "host_computer_model", "motherboard_model",
+      "windows_version", "software_version", "coreco_processing_card", "description",
+    ] as const) {
+      if (record[field] === undefined) continue;
+      if (typeof record[field] !== "string") {
+        throw new ConfigError(`equipment row ${index + 1} has an invalid ${field}`);
+      }
+      const text = record[field].trim();
+      const limit = field === "site" ? 50 : field === "model" ? 100 : 1000;
+      if (text.length > limit) throw new ConfigError(`equipment row ${index + 1} ${field} is too long`);
+      if (field === "site" && !EQUIPMENT_CSV_SITES.has(text)) {
+        throw new ConfigError(`equipment row ${index + 1} has an unsupported site`);
+      }
+      if (field !== "description" && /[\r\n]/.test(text)) {
+        throw new ConfigError(`equipment row ${index + 1} ${field} cannot contain line breaks`);
+      }
+      row[field] = text;
+    }
+    if (row.id != null) {
+      if (ids.has(row.id)) throw new ConfigError(`CSV repeats equipment ID ${row.id}`);
+      ids.add(row.id);
+    }
+    const serialKey = serialNumber.toLowerCase();
+    if (serialKey) {
+      if (serials.has(serialKey)) throw new ConfigError(`CSV repeats serial number ${serialNumber}`);
+      serials.add(serialKey);
+    }
+    rows.push(row);
+  }
+  return rows;
 }
 
 function adminDbSource(connection: PgConnection): "local_db" | "remote_db" {
@@ -1544,12 +1777,14 @@ function mergeAdminConfigData(
       ? { ...(data as Record<string, unknown>) }
       : {};
   const users = mergeAdminUsers(readAdminUsers(root), dbUsers);
-  const equipment = mergeEquipment(dbEquipment, readEquipment(root));
+  // Database rows only: never fall back to (or overlay) equipment copies
+  // stored in IobeamAdmin.json by older releases.
+  const equipment = [...dbEquipment].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
   return {
     ...root,
     user: users[0] ?? root.user ?? emptyAdminUser(),
     users,
-    equipment: equipment[0] ?? root.equipment ?? emptyEquipment(),
+    equipment: equipment[0] ?? emptyEquipment(),
     equipments: equipment,
   };
 }
@@ -1585,22 +1820,6 @@ function emptyAdminUser(): AdminUser {
   };
 }
 
-function mergeEquipment(base: Equipment[], overlay: Equipment[]): Equipment[] {
-  const rows = new Map<string, Equipment>();
-  for (const equipment of [...base, ...overlay]) {
-    const key = equipmentKey(equipment);
-    if (key) rows.set(key, equipment);
-  }
-  return [...rows.values()].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
-}
-
-function equipmentKey(equipment: Equipment): string {
-  const serialNumber = equipment.serial_number.trim().toLowerCase();
-  if (serialNumber) return `serial:${serialNumber}`;
-  const name = equipment.name.trim().toLowerCase();
-  return name ? `name:${name}` : "";
-}
-
 function emptyEquipment(): Equipment {
   return {
     id: null,
@@ -1608,6 +1827,12 @@ function emptyEquipment(): Equipment {
     model: "",
     serial_number: "",
     site: "",
+    equipment_code: "",
+    host_computer_model: "",
+    motherboard_model: "",
+    windows_version: "",
+    software_version: "",
+    coreco_processing_card: "",
     description: "",
   };
 }
@@ -2667,8 +2892,19 @@ async function restartServicesAndRespond(
 ): Promise<void> {
   const restart = await restartService();
   const backendRestart = planBackendRestart(restart.ok);
-  res.json({ ok: true, restart, backend_restart: backendRestart });
+  res.json({ ok: restart.ok, restart, backend_restart: backendRestart });
   scheduleBackendRestartAfterResponse(res, backendRestart);
+}
+
+function respondRestartSkipped(
+  res: express.Response<RestartServicesResponse>,
+  reason: string,
+): void {
+  res.json({
+    ok: true,
+    restart: { ok: true, command: config.restartCmd, skipped: true, reason },
+    backend_restart: { ok: true, scheduled: false, mode: "disabled" },
+  });
 }
 
 function scheduleBackendRestartAfterResponse(

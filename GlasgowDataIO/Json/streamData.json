@@ -1,5 +1,5 @@
 {
-    "Version": "0.8.0",
+    "Version": "1.0.0",
     "Glasgow": {
         "Device0": {
             "Id": ""
@@ -10,27 +10,58 @@
             "streamData": {
                 "actionData": {
                     "ev": 1000,
-                    "voltage": 2.5,
+                    "beam": {
+                        "electron": {
+                            "pinout": {
+                                "scan_enable": "A0:1"
+                            }
+                        },
+                        "ion": {
+                            "pinout": {
+                                "blank_enable": "A4:5",
+                                "blank": "A2#,A3"
+                            }
+                        }
+                    },
+                    "transforms": {
+                        "xflip": false,
+                        "yflip": true,
+                        "rotate90": false
+                    },
+                    "timings": {
+                        "ext_switch_delay_ms": 20
+                    },
+                    "voltage": 3.3,
                     "bufferSize": "1024*1024",
-                    "adcHalfPeriod": 4,
-                    "adcSettleCycles": 2,
+                    "adcHalfPeriod": 3,
+                    "adcSettleCycles": 1,
+                    "adcLatchCycles": 1,
+                    "busTurnaroundCycles": 0,
+                    "dacDataSetupCycles": 1,
+                    "dacLatchCycles": 1,
                     "enableEbeam": false,
                     "enableIbeam": true,
                     "rasterScan": {
-                        "pixels": 32768,
+                        "minChunkBeamTimeMs": 100,
+                        "pixels": 8192,
                         "frameBlank": false,
                         "beamType": "Ion",
                         "externalControl": true,
                         "resolution": 1024,
                         "adcLatency": 8,
-                        "dwell": 2,
-                        "maxPipeline": 4
+                        "dwell": 16
                     },
                     "vectorScan": {
+                        "minChunkBeamTimeMs": 100,
+                        "sawtoothOnRasterGenerator": true,
                         "latency": 8196,
                         "adcLatency": 8,
                         "beamType": "Ion",
                         "externalControl": true,
+                        "dwell": 16,
+                        "PixelFallbackBlank": true,
+                        "adaptiveFeedbackWindowPoints": 1,
+                        "adaptiveFeedbackPipelineDelayPoints": 0,
                         "lineShiftPerXRow": 5.5,
                         "drainFloorPixels": 21000
                     },
@@ -49,6 +80,11 @@
                                 "an active-high digital output unless 'invert': true is set."
                             ],
                             "subsignals": [
+                                {
+                                    "name": "power_good",
+                                    "pin": "K1",
+                                    "direction": "i"
+                                },
                                 {
                                     "name": "adc_clk",
                                     "pin": "G1",
@@ -122,9 +158,9 @@
                             "             'random'  -> RNG-fill, seeded by 'seed'.",
                             "",
                             "Paths are interpreted relative to IOBEAM_ROOT when not",
-                            "absolute. On Windows, the launcher may set IOBEAM_ROOT;",
-                            "otherwise the app walks up from this checkout or uses the",
-                            "service working directory.",
+                            "absolute. IOBEAM_ROOT defaults to the systemd unit's",
+                            "WorkingDirectory (/home/vboxuser/Project/IobeamTech) but",
+                            "can be overridden by environment.",
                             "",
                             "Note: if IsProduction=false AND simulation.enabled=true AND",
                             "mode!='zeros', the FPGA bakes a fake image into the bitstream.",
@@ -134,16 +170,16 @@
                         "mode": "image",
                         "imageResolution": 64,
                         "source": "pattern",
-                        "patternKind": "checker",
+                        "patternKind": "bars",
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,
                         "seed": 42
                     },
                     "ftp": {
                         "enabled": true,
-                        "host": "124.221.175.89",
-                        "username": "deployworkspace",
-                        "password": "DWS_112233",
+                        "host": "${IOBEAM_FTP_HOST}",
+                        "username": "${IOBEAM_FTP_USER}",
+                        "password": "${IOBEAM_FTP_PASSWORD}",
                         "folder": "/upload"
                     }
                 },
@@ -154,5 +190,11 @@
     "LogName": "PatternScan",
     "Verbose": true,
     "IsProduction": true,
-    "DumpData": true
+    "DumpData": true,
+    "AdcTest": true,
+    "transforms": {
+        "xflip": false,
+        "yflip": true,
+        "rotate90": false
+    }
 }

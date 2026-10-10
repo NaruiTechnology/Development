@@ -9,7 +9,7 @@ from GlasgowDataIO.IobeamControl.applet.pipelinedLoopbackAdapter import (
 
 
 class PipelinedLoopbackAdapterTest(unittest.TestCase):
-    def test_samples_on_adc_oe_rising_edge(self):
+    def test_conversion_clock_advances_with_outputs_disabled(self):
         dut = PipelinedLoopbackAdapter(adc_latency=1)
 
         m = Module()
@@ -22,17 +22,18 @@ class PipelinedLoopbackAdapterTest(unittest.TestCase):
 
         async def bench(ctx):
             ctx.set(dut.bus.adc_oe, 0)
+            ctx.set(dut.bus.adc_clk, 1)
             ctx.set(dut.loopback_stream, 0x1234)
             await ctx.tick()
             observed.append(ctx.get(dut.bus.data_i))
 
             ctx.set(dut.loopback_stream, 0xABCD)
-            ctx.set(dut.bus.adc_oe, 1)
+            ctx.set(dut.bus.adc_clk, 0)
             await ctx.tick()
             observed.append(ctx.get(dut.bus.data_i))
 
             ctx.set(dut.loopback_stream, 0x0FED)
-            ctx.set(dut.bus.adc_oe, 0)
+            ctx.set(dut.bus.adc_oe, 1)
             await ctx.tick()
             observed.append(ctx.get(dut.bus.data_i))
 

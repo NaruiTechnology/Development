@@ -5,6 +5,37 @@ from ..IobeamLauncher import IobeamLauncher
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.support.logging import dump_hex
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.hardware.device import _transfer_timeout_s
 
+
+async def log_power_good(logger, device, address, when):
+    """Log the FPGA's view of the K1 ``power_good`` input.
+
+    Register layout (iobeamDataSubtarget): bit 0 = synchronized K1 level,
+    bit 1 = "configured" (the pin exists in this bitstream). Nothing in the
+    scan path previously read this register, so logs said nothing about whether
+    the analog board was powered when the ADC returned static data. Returns the
+    raw register value, or None when unavailable. Never raises: diagnostics
+    must not affect a scan.
+    """
+    if address is None:
+        return None
+    try:
+        value = await device.read_register(address)
+    except Exception as e:  # diagnostics only
+        logger.warning("Unable to read power_good register (%s): %s", when, e)
+        return None
+    configured, level = bool(value & 0x02), bool(value & 0x01)
+    if not configured:
+        logger.info("power_good (%s): K1 not configured in this bitstream (reg=0x%02x)",
+                    when, value)
+    elif level:
+        logger.info("power_good (%s): K1 high (reg=0x%02x)", when, value)
+    else:
+        logger.warning(
+            "power_good (%s): K1 LOW (reg=0x%02x). If K1 is wired to the OBI board's "
+            "power-good, ADC data cannot be trusted; check board supplies before "
+            "debugging gateware.", when, value)
+    return value
+
 class GlasgowStream(Stream):
     def __init__(self, iface, config):
         super(GlasgowStream, self).__init__(config)
@@ -34,7 +65,7 @@ class GlasgowStream(Stream):
                 self.lower.read(length), timeout=_transfer_timeout_s())
             after = len(self.lower._in_buffer)
             got = len(data) if data is not None else 0
-            print(f"[GlasgowStream.read] returned={got}  in_buffer_after={after}", flush=True)
+            self._logger.debug(f"[GlasgowStream.read] returned={got}  in_buffer_after={after}")
             return data
         except Exception as e:
             after = len(self.lower._in_buffer)
@@ -107,6 +138,8 @@ class GlasgowConnection(Connection):
             raise ConnectionError("Launcher failed to start: Interface is None")
         self._stream = GlasgowStream(iface, self._config)
         self._logger.debug("Successfully connected and wrapped GlasgowStream")
+        await log_power_good(self._logger, iface.device,
+                             getattr(iface, "iobeam_power_good_addr", None), "connect")
 
     async def _hard_close(self) -> None:
         if self._stream is None:
@@ -114,6 +147,37 @@ class GlasgowConnection(Connection):
 
         iface = self._stream.lower
         device = iface.device
+
+        # Read sticky FPGA observations before cancelling USB access. This
+        # logs actual internal bus ownership activity from the completed
+        # transfer without producing a line on every 48 MHz clock cycle.
+        await log_power_good(self._logger, device,
+                             getattr(iface, "iobeam_power_good_addr", None), "close")
+        ownership_addr = getattr(iface, "iobeam_bus_ownership_addr", None)
+        if ownership_addr is not None:
+            try:
+                ownership = await device.read_register(ownership_addr)
+                adc_driving = bool(ownership & 0x01)
+                fpga_driving = bool(ownership & 0x02)
+                contention = bool(ownership & 0x04)
+                turnaround = bool(ownership & 0x08)
+                self._logger.info(
+                    "Bus ownership observed: ADC driving "
+                    "(adc_oe=1, data_oe=0)=%s; FPGA driving "
+                    "(adc_oe=0, data_oe=1)=%s; turnaround=%s; contention=%s",
+                    adc_driving, fpga_driving, turnaround, contention,
+                )
+                if contention:
+                    self._logger.error(
+                        "Bus ownership fault: adc_oe=1 and data_oe=1 were "
+                        "observed simultaneously")
+                if not adc_driving or not fpga_driving:
+                    self._logger.warning(
+                        "Incomplete bus ownership activity: adc_driving=%s "
+                        "fpga_driving=%s", adc_driving, fpga_driving)
+            except Exception as e:
+                self._logger.warning(
+                    "Unable to read FPGA bus ownership diagnostics: %s", e)
 
         # 1) Cancel in-flight bulk_read/bulk_write tasks cleanly, before yanking
         #    the USB handle out from under them. iface.cancel() is the library's

@@ -45,6 +45,8 @@ class WetRunRasterTest(unittest.TestCase):
 
     def setUp(self):
         self.svc = DeviceService(CONFIG_PATH)
+        self.svc._config.IsProduction = False
+        self.svc._simulation_defaults["enabled"] = True
         asyncio.run(self.svc.start())
 
     def tearDown(self):
@@ -109,6 +111,8 @@ class WetRunVectorTest(unittest.TestCase):
 
     def setUp(self):
         self.svc = DeviceService(CONFIG_PATH)
+        self.svc._config.IsProduction = False
+        self.svc._simulation_defaults["enabled"] = True
         asyncio.run(self.svc.start())
 
     def tearDown(self):

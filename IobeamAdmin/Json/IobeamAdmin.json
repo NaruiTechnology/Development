@@ -8,13 +8,13 @@
         "Provider": "PostgreSQL",
         "DatabaseName": "ionbeam_admin_db",
         "Schema": "public",
-        "Host": "124.221.175.89",
+        "Host": "${IOBEAM_ADMIN_CONFIG_DB_HOST}",
         "Port": 5432,
-        "User": "deployworkspace",
-        "Password": "DWS_112233",
-        "ConnectionString": "postgresql://deployworkspace@124.221.175.89:5432/ionbeam_admin_db",
+        "User": "${IOBEAM_ADMIN_CONFIG_DB_USER}",
+        "Password": "${IOBEAM_ADMIN_CONFIG_DB_PASSWORD}",
+        "ConnectionString": "${IOBEAM_ADMIN_CONFIG_DB_URL:-}",
         "SslMode": "",
-        "CommandTimeoutMs": 30000
+        "CommandTimeoutMs": 120000
     },
     "ROLE": {
         "AUDIT": 4,
@@ -114,6 +114,19 @@
             "role": 0,
             "is_active": true,
             "session_lifetime_limit_days": 1
+        },
+        {
+            "id": 7,
+            "login_name": "xyp",
+            "first_name": "xyp",
+            "last_name": "xyp",
+            "email": "yiping.xu@ionbeamtech.com",
+            "phone_number": "123",
+            "company_name": "123",
+            "site": "Beijing(北京)",
+            "role": 3,
+            "is_active": true,
+            "session_lifetime_limit_days": 1
         }
     ],
     "auditor": {
@@ -140,32 +153,12 @@
             "user_name": "Yuyao Jiang",
             "email": "yuyao.jiang@ionbeamtech.com",
             "is_active": true
-        }
-    ],
-    "equipment": {
-        "id": 1,
-        "name": "FEI Helios NanoLab 600i DualBeam",
-        "model": "",
-        "serial_number": "DB123456z",
-        "site": "Taixin",
-        "description": "DualBeam SEM/FIB, containing both a focused Ga+ ion beam (\"Tomahawk\") and a high resolution field emission scanning electron (\"Elstar\") column."
-    },
-    "equipments": [
-        {
-            "id": 1,
-            "name": "FEI Helios NanoLab 600i DualBeam",
-            "model": "",
-            "serial_number": "DB123456z",
-            "site": "Taixin",
-            "description": "DualBeam SEM/FIB, containing both a focused Ga+ ion beam (\"Tomahawk\") and a high resolution field emission scanning electron (\"Elstar\") column."
         },
         {
-            "id": 2,
-            "name": "FIB",
-            "model": "",
-            "serial_number": "FIB123",
-            "site": "Taixin",
-            "description": "123"
+            "id": 4,
+            "user_name": "xvn",
+            "email": "2369161342@qq.com",
+            "is_active": true
         }
     ],
     "session": {

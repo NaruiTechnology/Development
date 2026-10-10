@@ -279,6 +279,10 @@ class Connection(metaclass=ABCMeta):
         # the same `ch` object is both yielded and stored.
         captured_chunks = []
         command_iter = None
+        # A continuous (live) command streams until aborted: accumulating
+        # every chunk would grow without bound, and the auto-save hook is a
+        # single-frame feature. The service keeps its own last-frame copy.
+        retain_chunks = not getattr(command, "continuous", False)
 
         try:
             if not self.synchronized:
@@ -286,7 +290,7 @@ class Connection(metaclass=ABCMeta):
             self._logger.debug(f"synchronize transfer_multiple")
             command_iter = command.transfer(self._stream, **kwargs)
             async for value in command_iter:
-                if value is not None:
+                if retain_chunks and value is not None:
                     captured_chunks.append(value)
                 yield value
                 self._logger.debug(f"yield transfer_multiple")

@@ -13,12 +13,11 @@ import { useTranslation } from "../i18n";
 import { LatencyHelp } from "./LatencyHelp";
 import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
-import { PatternHelp } from "./PatternHelp";
 import { VectorResolutionHelp } from "./VectorResolutionHelp";
 import { CustomPointsHelp } from "./CustomPointsHelp";
 import { PreProcessHelp } from "./PreProcessHelp";
 import { ValidationHelp } from "./ValidationHelp";
-import { ScanModeHelp } from "./ScanModeHelp";
+import { AdcValidHelp } from "./AdcValidHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { DwellHelp } from "./DwellHelp";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
@@ -29,7 +28,6 @@ import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds, revC3DwellP
 
 const MAX_POINTS = 1_000_000;
 const VECTOR_RES_OPTIONS = [2048, 1024, 512, 256, 128] as const;
-const VECTOR_DWELL_OPTIONS: PresetNumberOption[] = revC3DwellPresetOptions();
 
 function validateCustomVectorResolution(value: number, t: (key: "vector.resolution.validation.powerOfTwo" | "vector.resolution.validation.min128") => string): string | null {
   const intValue = Math.trunc(value);
@@ -43,9 +41,11 @@ function validateCustomVectorResolution(value: number, t: (key: "vector.resoluti
 export function VectorParameters({
   disabled,
   grayLevelFilterActive = false,
+  showScanPathSettings = true,
 }: {
   disabled: boolean;
   grayLevelFilterActive?: boolean;
+  showScanPathSettings?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
@@ -55,7 +55,9 @@ export function VectorParameters({
     v.points ? v.points.map((p) => formatPoint(p)).join("\n") : ""
   );
   const [pointsErr, setPointsErr] = useState<string | null>(null);
-  const timing = estimateRevC3ScanTiming(v.vector_resolution, v.dwell);
+  const halfPeriod = useAppSelector((s) => Number(s.status.defaults?.adc?.adcHalfPeriod ?? 3));
+  const timing = estimateRevC3ScanTiming(v.vector_resolution, v.dwell, halfPeriod);
+  const vectorDwellOptions = revC3DwellPresetOptions(undefined, halfPeriod);
 
   function commitPoints(text: string) {
     setPointsText(text);
@@ -104,36 +106,27 @@ export function VectorParameters({
 
   return (
     <div>
-      <BeamEnergyField disabled={disabled} />
-
-      <div className="field">
-        <label>
-          {t("scan.modeGuide")}
-          <ScanModeHelp />
-        </label>
+      <div className="field-row">
+        <BeamEnergyField disabled={disabled} />
+        <div className="field">
+          <label>{t("vector.pattern")}</label>
+          <select
+            className="select"
+            value={v.pattern}
+            disabled={disabled || grayLevelFilterActive}
+            onChange={(e) =>
+              dispatch(
+                updateVector({ pattern: e.target.value as "default" | "custom" })
+              )
+            }
+          >
+            <option value="default">{t("vector.pattern.default")}</option>
+            <option value="custom">{t("vector.pattern.custom")}</option>
+          </select>
+        </div>
       </div>
 
-      <div className="field">
-        <label>
-          {t("vector.pattern")}
-          <PatternHelp />
-        </label>
-        <select
-          className="select"
-          value={v.pattern}
-          disabled={disabled || grayLevelFilterActive}
-          onChange={(e) =>
-            dispatch(
-              updateVector({ pattern: e.target.value as "default" | "custom" })
-            )
-          }
-        >
-          <option value="default">{t("vector.pattern.default")}</option>
-          <option value="custom">{t("vector.pattern.custom")}</option>
-        </select>
-      </div>
-
-      {v.pattern === "default" && (
+      {showScanPathSettings && v.pattern === "default" && (
         <>
           <VectorScanPathField disabled={disabled} />
           <div className="field-row">
@@ -160,6 +153,7 @@ export function VectorParameters({
                   {t("scan.dwell.dynamic", {
                     dwell: v.dwell,
                     period: formatNanoseconds(timing.samplePeriodNs),
+                    samples: timing.samplesPerPixel,
                     pixel: formatNanoseconds(timing.pixelDwellNs),
                     resolution: v.vector_resolution,
                     frame: formatDuration(timing.frameSeconds),
@@ -168,8 +162,8 @@ export function VectorParameters({
                 </label>
               }
               value={v.dwell}
-              options={VECTOR_DWELL_OPTIONS}
-              min={1}
+          options={vectorDwellOptions}
+              min={grayLevelFilterActive ? 2 : 0}
               max={65535}
               disabled={disabled}
               normalizeValue={(value) => grayLevelFilterActive ? Math.max(2, value) : value}
@@ -184,32 +178,12 @@ export function VectorParameters({
       <div className="field-row">
         <div className="field">
           <label>
-            {t("vector.latencyBytes")}
-            <LatencyHelp />
-          </label>
-          <NumberStepperInput
-            value={v.latency_bytes}
-            min={latencyMin}
-            step={1}
-            inputMode="numeric"
-            disabled={disabled}
-            onValueChange={(next) =>
-              dispatch(
-                updateVector({
-                  latency_bytes: clamp(next, latencyMin, 1 << 20, 8196),
-                })
-              )
-            }
-          />
-        </div>
-        <div className="field">
-          <label>
             {t("vector.outputMode")}
             <OutputModeHelp />
           </label>
           <select
             className="select"
-            value={v.output_mode}
+            value={v.output_mode ?? "SixteenBit"}
             disabled={disabled}
             onChange={(e) =>
               dispatch(
@@ -223,9 +197,22 @@ export function VectorParameters({
             <option value="EightBit">EightBit</option>
           </select>
         </div>
+        <label className="checkbox vacuum-switch app-switch">
+          <input type="checkbox" checked={v.adc_valid} disabled={disabled}
+            onChange={(e) => dispatch(updateVector({ adc_valid: e.target.checked }))} />
+          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+          {t("vector.adcValid")} <AdcValidHelp />
+        </label>
       </div>
 
-      <div className="field">
+      <div className="field-row">
+        <div className="field">
+          <label>{t("vector.latencyBytes")} <LatencyHelp /></label>
+          <NumberStepperInput value={v.latency_bytes} min={latencyMin} step={1}
+            inputMode="numeric" disabled={disabled}
+            onValueChange={(next) => dispatch(updateVector({ latency_bytes: clamp(next, latencyMin, 1 << 20, 8196) }))} />
+        </div>
+        <div className="field">
         <label>
           {t("vector.cookie")}
           <CookieHelp />
@@ -241,6 +228,7 @@ export function VectorParameters({
             dispatch(updateVector({ cookie: clamp(next, 0, 0xffff, 123) }))
           }
         />
+        </div>
       </div>
 
       {v.pattern === "custom" && (
@@ -300,6 +288,7 @@ export function VectorParameters({
         {t("vector.doValidate")}
         <ValidationHelp />
       </label>
+
     </div>
   );
 }

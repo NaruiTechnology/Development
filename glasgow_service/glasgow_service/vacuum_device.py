@@ -34,6 +34,8 @@ class SimulatedVacuumDeviceControl(Protocol):
 
     async def set_gauge_ready(self, pin: str, ready: bool) -> None: ...
 
+    async def set_gauge_excursion(self, pin: str, pressure_mbar: float | None) -> None: ...
+
     def reconnect(self) -> None: ...
 
 
@@ -62,6 +64,9 @@ class SimulatedVacuumDevice:
         self._gauge_values: dict[str, float | None] = {
             pin: None for pin in self._gauge_channels
         }
+        self._gauge_overrides: dict[str, float | None] = {
+            pin: None for pin in self._gauge_channels
+        }
         self._forced_ready = {pin: False for pin in self._gauge_channels}
         self._error_range = error_range
         self._simulation_step_fraction = simulation_step_fraction
@@ -82,7 +87,7 @@ class SimulatedVacuumDevice:
         self._connected = True
 
     def fail_next(self, operation: str, error: BaseException | None = None) -> None:
-        if operation not in {"write", "read", "set_gauge_ready", "close"}:
+        if operation not in {"write", "read", "set_gauge_ready", "set_gauge_excursion", "close"}:
             raise ValueError(f"unknown simulated operation: {operation}")
         self._next_failure[operation] = error or RuntimeError(
             f"simulated {operation} failure"
@@ -101,6 +106,7 @@ class SimulatedVacuumDevice:
                     self._gauge_values[read_pin] = 1.5 * abs(threshold)
             else:
                 self._gauge_values[read_pin] = None
+                self._gauge_overrides[read_pin] = None
                 self._forced_ready[read_pin] = False
                 self._inputs[read_pin] = False
         self.history.append(("write", pin, bool(value)))
@@ -109,6 +115,7 @@ class SimulatedVacuumDevice:
         self._check("set_gauge_ready")
         if pin not in self._gauge_channels:
             raise ValueError(f"unknown simulated gauge pin: {pin}")
+        self._gauge_overrides[pin] = None
         self._forced_ready[pin] = bool(ready)
         _write_pin, threshold = self._gauge_channels[pin]
         self._gauge_values[pin] = (
@@ -117,12 +124,36 @@ class SimulatedVacuumDevice:
         self._inputs[pin] = bool(ready)
         self.history.append(("set_gauge_ready", pin, bool(ready)))
 
+    async def set_gauge_excursion(self, pin: str, pressure_mbar: float | None) -> None:
+        """Hold a simulated gauge above threshold while its ready input stays on.
+
+        Passing ``None`` releases the excursion and restores the configured
+        threshold, modeling a recovered gauge without changing pump power.
+        """
+        self._check("set_gauge_excursion")
+        if pin not in self._gauge_channels:
+            raise ValueError(f"unknown simulated gauge pin: {pin}")
+        _write_pin, threshold = self._gauge_channels[pin]
+        if pressure_mbar is not None and (not math.isfinite(pressure_mbar) or pressure_mbar < 0):
+            raise ValueError("simulated pressure must be finite and non-negative")
+        self._forced_ready[pin] = True
+        self._gauge_overrides[pin] = (
+            None if pressure_mbar is None else float(pressure_mbar)
+        )
+        self._gauge_values[pin] = (
+            abs(threshold) if pressure_mbar is None else float(pressure_mbar)
+        )
+        self._inputs[pin] = True
+        self.history.append(("set_gauge_excursion", pin, pressure_mbar is not None))
+
     async def read_gauge_values(self) -> dict[str, float | None]:
         self._check("read")
         readings: dict[str, float | None] = {}
         for read_pin, (write_pin, threshold) in self._gauge_channels.items():
             if not self._outputs[write_pin]:
                 value = None
+            elif self._gauge_overrides[read_pin] is not None:
+                value = self._gauge_overrides[read_pin]
             elif self._forced_ready[read_pin]:
                 value = abs(threshold)
             else:
@@ -134,10 +165,13 @@ class SimulatedVacuumDevice:
                     value = max(abs(threshold), current - step)
             self._gauge_values[read_pin] = value
             readings[read_pin] = value
-            tolerance = abs(threshold) * self._error_range
-            self._inputs[read_pin] = (
-                value is not None and abs(value - abs(threshold)) <= tolerance
-            )
+            if self._gauge_overrides[read_pin] is not None:
+                self._inputs[read_pin] = self._forced_ready[read_pin]
+            else:
+                tolerance = abs(threshold) * self._error_range
+                self._inputs[read_pin] = (
+                    value is not None and abs(value - abs(threshold)) <= tolerance
+                )
         self.history.append(("read_gauges", None, None))
         return readings
 

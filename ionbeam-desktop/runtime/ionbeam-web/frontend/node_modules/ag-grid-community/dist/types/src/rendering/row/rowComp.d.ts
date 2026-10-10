@@ -1,0 +1,36 @@
+import type { BeanCollection } from '../../context/context';
+import type { RowContainerType } from '../../gridBodyComp/rowContainer/rowContainerCtrl';
+import { Component } from '../../widgets/component';
+import type { RowCtrl } from './rowCtrl';
+export declare class RowComp extends Component {
+    private fullWidthCellRenderer;
+    private fullWidthCellRendererParams;
+    private fullWidthCellRenderersBySection;
+    private fullWidthCellRendererParamsBySection;
+    private readonly rowCtrl;
+    private readonly ePinnedLeftSection;
+    private readonly ePinnedLeftCells;
+    private readonly eScrollingCells;
+    private readonly ePinnedRightSection;
+    private readonly ePinnedRightCells;
+    private domOrder;
+    private readonly cellComps;
+    constructor(ctrl: RowCtrl, beans: BeanCollection, containerType: RowContainerType);
+    private refreshPinnedSections;
+    private setInitialStyle;
+    private showFullWidth;
+    private showEmbeddedFullWidth;
+    private showEmbeddedFullWidthSection;
+    private refreshEmbeddedFullWidth;
+    private getAllFullWidthCellRenderers;
+    private getPrimaryFullWidthCellRendererParams;
+    private getFullWidthCellRendererParamsForPinned;
+    private getEmbeddedSectionForPinned;
+    private setCellCtrls;
+    private ensureDomOrder;
+    private newCellComp;
+    destroy(): void;
+    private setFullWidthRowComp;
+    private setEmbeddedFullWidthRowComp;
+    private destroyCells;
+}

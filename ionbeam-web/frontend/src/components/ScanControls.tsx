@@ -3,7 +3,8 @@
  * uses the blocking REST endpoint (returns a ScanResult with timing,
  * validation report, and CSV path).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
 import { apiUrl } from "../lib/backendUrl";
@@ -33,14 +34,21 @@ import {
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { Icon } from "./Icon";
-import { ROIGrayActionVectorWedges } from "./ROIGrayActionVectorWedges";
-import { ROIRasterActionWedges } from "./ROIRasterActionWedges";
+import { TransformCard } from "./TransformCard";
+import { LoadingSpinner } from "./LoadingSpinner";
+import { ROIActionWedges } from "./ROIActionWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
+import { HelpPopover } from "./HelpPopover";
 import { NumberStepperInput } from "./NumberStepperField";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
-import type { VectorRequest } from "../types/api";
+import { SITE_OPTIONS } from "../lib/sites";
+import type { RasterRequest, VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
+
+type InfiniteScanEntry =
+  | { kind: "raster"; req: RasterRequest }
+  | { kind: "vector"; req: VectorRequest; scanType: ScanType };
 import type { ROIState } from "../store/scanSlice";
 import {
   repeatCountdownDisplay,
@@ -89,6 +97,8 @@ export function ScanControls({
   vectorGrayScaleSkipped = null,
   onActionRunStart,
   onScanRunStart,
+  validatedActionsHost = null,
+  firstRowContent,
 }: {
   kind: ScanKind;
   disabled?: boolean;
@@ -101,6 +111,10 @@ export function ScanControls({
   vectorGrayScaleSkipped?: boolean | null;
   onActionRunStart?: () => void;
   onScanRunStart?: (scanType: ScanType) => void;
+  /** When set, Run validated + Clear render here (bottom of the scan
+   *  parameters card, under Validated run options) instead of inline. */
+  validatedActionsHost?: HTMLElement | null;
+  firstRowContent?: ReactNode;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -111,6 +125,7 @@ export function ScanControls({
   const preview = useAppSelector((s) => s.scan.preview);
   const roiState = useAppSelector((s) => s.scan.roi);
   const defaults = useAppSelector((s) => s.status.defaults);
+  const sessionSimulation = useAppSelector((s) => s.status.sessionSimulation);
   const settingsSaving = useAppSelector((s) => s.settings.saving);
   const backendRestarting = useAppSelector((s) => s.settings.backendRestarting);
   const roiGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
@@ -128,13 +143,23 @@ export function ScanControls({
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
   const actionLoopCompletionPendingRef = useRef(false);
+  // Infinite mode repeats one prepared request until Stop: a Raster frame or a
+  // Vector scan (with the scan type its progress/feedback handling needs).
+  const infiniteScanRef = useRef<InfiniteScanEntry | null>(null);
+  const infiniteScanActiveRef = useRef(false);
   // Repeated ROI action scans need a longer settle window between runs
   // so blank/spot updates are fully reflected before the next loop starts.
   const actionLoopGapMs = 750;
   const [actionLoopIteration, setActionLoopIteration] = useState(0);
   const [actionLoopActive, setActionLoopActive] = useState(false);
+  const [infiniteScanActive, setInfiniteScanActive] = useState(false);
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
+  const [region, setRegion] = useState("");
   const [equipmentId, setEquipmentId] = useState("");
+  const availableRegions = SITE_OPTIONS.filter((option) =>
+    equipment.some((row) => row.site === option.value),
+  );
+  const regionEquipment = equipment.filter((row) => row.site === region);
   const isProduction = defaults?.is_production !== false;
   const vectorPixelFallbackBlank = (() => {
     const vectorParams = defaults?.vector_params;
@@ -243,7 +268,7 @@ export function ScanControls({
   const busy = streaming || closing;
   // The panel is disabled while a scan runs to prevent parameter changes, but
   // Stop must remain available so an active scan can always be cancelled.
-  const stopAvailable = streaming || closing || actionLoopActive;
+  const stopAvailable = streaming || closing || actionLoopActive || infiniteScanActive;
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
   const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
 
@@ -264,6 +289,42 @@ export function ScanControls({
     setActionLoopIteration((current) => current === 0 ? current : 0);
     setActionLoopActive((current) => current ? false : current);
   }, [clearActionLoopTimer]);
+
+  const clearInfiniteScanState = useCallback(() => {
+    infiniteScanRef.current = null;
+    infiniteScanActiveRef.current = false;
+    setInfiniteScanActive((current) => current ? false : current);
+  }, []);
+
+  // Infinite mirrors OBI's live scan / Acquire Photo data path, for Raster
+  // AND Vector, in production and simulation: ONE WebSocket and ONE
+  // synchronized FPGA command stream for the whole session (`continuous`).
+  // The service queues frame after frame (Raster) or replays the point list
+  // pass after pass (Vector) in-band, so XY never stops at a boundary, and
+  // each chunk is painted as it arrives. The canvas keeps the current image
+  // and overwrites it pixel by pixel; the cursor wraps at the frame / pass
+  // end (OBI Frame.fill_lines roll-over) instead of blanking the canvas.
+  // Stop -> /api/scan/abort -> command.abort, then `done`; the image stays.
+  // The completed-transition restart below only fires if the stream ends
+  // without Stop (e.g. after a recoverable server close).
+  // Adaptive gray feedback decides each pass on the host, so it keeps the
+  // per-pass loop (still painting in place).
+  const startInfiniteScanRun = useCallback((entry: InfiniteScanEntry, preserveFrame = true) => {
+    if (entry.kind === "raster") {
+      onScanRunStart?.(ScanType.RASTER);
+      stream.startRaster(
+        { ...entry.req, preview: entry.req.preview ?? preview, continuous: true },
+        { preserveFrame, continuous: true },
+      );
+      return;
+    }
+    onScanRunStart?.(entry.scanType);
+    const continuous = entry.req.feedback_mode !== "adaptive_gray_feedback";
+    stream.startVector(
+      { ...entry.req, preview: entry.req.preview ?? preview, continuous },
+      { preserveFrame, continuous },
+    );
+  }, [onScanRunStart, preview, stream]);
 
   const startRepeatActionRun = useCallback(
     (entry: { req: VectorRequest; preview: boolean; scanType: ScanType }) => {
@@ -422,10 +483,57 @@ export function ScanControls({
     }
   }
 
+  async function onInfinite() {
+    if ((kind !== "raster" && kind !== "vector") || disabled || infiniteScanActiveRef.current) return;
+    const allowed = await refreshScanPrivilege();
+    if (!allowed) return;
+    dispatch(updateROI(kind === "raster"
+      ? { raster_show_scan_path: true }
+      : { vector_show_scan_path: true }));
+    try {
+      let entry: InfiniteScanEntry;
+      if (kind === "raster") {
+        const req = await rasterRequestWithBitmapSelection(
+          { ...raster, roi: null },
+          withoutPartialROISelection(roiState),
+          {
+            isProduction,
+            allowBitmapSimulation,
+            grayScaleSelection: scanGrayScaleSelection,
+            grayScaleSkipped: scanGrayScaleSkipped,
+          }
+        );
+        entry = { kind: "raster", req: { ...req, preview } };
+      } else {
+        const req = await buildVectorRequest();
+        logVectorRequestContext(
+          "stream",
+          req,
+          resolveVectorBranch(req),
+        );
+        entry = { kind: "vector", req: { ...req, preview }, scanType: resolveVectorScanType(req) };
+        // Infinite replaces the finite Repeat loop.
+        clearActionLoopState();
+      }
+      infiniteScanRef.current = entry;
+      infiniteScanActiveRef.current = true;
+      setInfiniteScanActive(true);
+      startInfiniteScanRun(entry);
+    } catch (e: any) {
+      clearInfiniteScanState();
+      dispatch(streamErrored(e?.message ?? String(e)));
+    }
+  }
+
   function onStop() {
     if (roiEbeamDisabled || !stopAvailable) return;
+    // Like OBI, stopping a live (Infinite) scan leaves the last image on the
+    // canvas; only finite runs clear it.
+    const stoppingLiveScan = infiniteScanActiveRef.current;
     clearActionLoopState();
+    clearInfiniteScanState();
     stream.stop();
+    if (stoppingLiveScan) return;
     if (roiAction && !roiActionGrayFilterActive) dispatch(resetVector());
     else if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
@@ -449,7 +557,11 @@ export function ScanControls({
             grayScaleSkipped: null,
           }
         );
-        const promise = dispatch(runRasterValidated({ ...req, preview }));
+        const promise = dispatch(runRasterValidated({
+          ...req,
+          preview,
+          ...(sessionSimulation ? { simulation: sessionSimulation } : {}),
+        }));
         const unregister = registerScanActionStop(() => {
           promise.abort();
           dispatch(streamReset());
@@ -467,7 +579,11 @@ export function ScanControls({
           req,
           resolveVectorBranch(req),
         );
-        const promise = dispatch(runVectorValidated({ ...req, preview }));
+        const promise = dispatch(runVectorValidated({
+          ...req,
+          preview,
+          ...(sessionSimulation ? { simulation: sessionSimulation } : {}),
+        }));
         const unregister = registerScanActionStop(() => {
           promise.abort();
           dispatch(streamReset());
@@ -493,6 +609,8 @@ export function ScanControls({
     closing ||
     (roiAction && actionLoopActive);
   const stopDisabled = roiEbeamDisabled || !stopAvailable;
+  const infiniteDisabled =
+    (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive;
   const repeatDisplayCount = repeatCountdownDisplay(
     repeat,
     actionLoopIteration,
@@ -513,6 +631,7 @@ export function ScanControls({
         const stored = selectedEquipmentId();
         const selected = rows.find((row) => row.id === stored) ?? rows[0];
         if (selected?.id) {
+          setRegion(selected.site);
           setEquipmentId(String(selected.id));
           setSelectedEquipmentId(selected.id);
         }
@@ -525,6 +644,17 @@ export function ScanControls({
       cancelled = true;
     };
   }, []);
+
+  function onRegionChange(value: string) {
+    setRegion(value);
+    const selected = equipment.find((row) => row.site === value);
+    if (selected?.id) {
+      setEquipmentId(String(selected.id));
+      setSelectedEquipmentId(selected.id);
+    } else {
+      setEquipmentId("");
+    }
+  }
 
   function onEquipmentChange(value: string) {
     setEquipmentId(value);
@@ -586,58 +716,85 @@ export function ScanControls({
       }
       clearActionLoopState();
     }
+    if (completedNow && infiniteScanActiveRef.current) {
+      const entry = infiniteScanRef.current;
+      if (entry) {
+        clearBitmapSelectionCache();
+        startInfiniteScanRun(entry, true);
+        return;
+      }
+    }
     if (phase === "error" || phase === "idle") {
       clearActionLoopState();
+      clearInfiniteScanState();
     }
-  }, [clearActionLoopState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, scheduleNextActionRun]);
+  }, [clearActionLoopState, clearInfiniteScanState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, scheduleNextActionRun, startInfiniteScanRun]);
 
   useEffect(() => {
     clearActionLoopState();
-  }, [clearActionLoopState, roiAction, roiSelectionKey, kind]);
+    clearInfiniteScanState();
+  }, [clearActionLoopState, clearInfiniteScanState, roiAction, roiSelectionKey, kind]);
 
   useEffect(() => {
     return () => {
       clearActionLoopState();
+      clearInfiniteScanState();
     };
-  }, [clearActionLoopState]);
+  }, [clearActionLoopState, clearInfiniteScanState]);
 
   if (roiAction) {
     const showRoiGrayControls = roiActionGrayFilterActive;
     return (
       <div className="button-row">
-        <label className="scan-equipment-field">
-          <span>{t("scan.equipment.label")}</span>
-          <select
-            className="select"
-            value={equipmentId}
-            disabled={controlsDisabled || equipment.length === 0}
-            onChange={(event) => onEquipmentChange(event.target.value)}
-            title={t("scan.equipment.title")}
-          >
-            {equipment.length === 0 ? (
-              <option value="">{t("scan.equipment.empty")}</option>
-            ) : (
-              equipment.map((row) => (
-                <option key={row.id ?? row.serial_number} value={String(row.id)}>
-                  {row.name}
-                </option>
-            ))
-          )}
-          </select>
-        </label>
-        {showRoiGrayControls && (
-          <div className="scan-loop-controls__roi-wedges">
-            <ROIGrayActionVectorWedges
-              active={showRoiGrayControls}
-              disabled={controlsDisabled || roiEbeamDisabled}
-            />
-          </div>
-        )}
-        {!showRoiGrayControls && (
-          <div className="scan-loop-controls__roi-wedges">
-            <ROIRasterActionWedges disabled={controlsDisabled || roiEbeamDisabled} />
-          </div>
-        )}
+        <div className="scan-equipment-selectors">
+          <label className="scan-equipment-field">
+            <span>{t("scan.region.label")}</span>
+            <select
+              className="select"
+              value={region}
+              disabled={controlsDisabled || availableRegions.length === 0}
+              onChange={(event) => onRegionChange(event.target.value)}
+              title={t("scan.region.title")}
+            >
+              {availableRegions.length === 0 ? (
+                <option value="">{t("scan.region.empty")}</option>
+              ) : (
+                availableRegions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {t(option.labelKey)}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          <label className="scan-equipment-field">
+            <span>{t("scan.equipment.label")}</span>
+            <select
+              className="select"
+              value={equipmentId}
+              disabled={controlsDisabled || regionEquipment.length === 0}
+              onChange={(event) => onEquipmentChange(event.target.value)}
+              title={t("scan.equipment.title")}
+            >
+              {regionEquipment.length === 0 ? (
+                <option value="">{t("scan.equipment.empty")}</option>
+              ) : (
+                regionEquipment.map((row) => (
+                  <option key={row.id ?? row.serial_number} value={String(row.id)}>
+                    {row.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+        </div>
+        <div className="scan-loop-controls__roi-wedges">
+          <ROIActionWedges
+            mode={showRoiGrayControls ? "vector" : "raster"}
+            active={showRoiGrayControls}
+            disabled={controlsDisabled || roiEbeamDisabled}
+          />
+        </div>
         <div className="scan-loop-controls">
           <div className="scan-loop-controls__preview">
             <label
@@ -654,13 +811,16 @@ export function ScanControls({
               {preview && <Icon name="alertTriangle" tone="warn" />}
               <span>{t("scan.preview")}</span>
             </label>
+            <HelpPopover title={t("scan.preview.help.title")} ariaLabel={t("scan.preview.help.aria")}>
+              {t("scan.preview.help.body")}
+            </HelpPopover>
             <span
               className="scan-busy"
               data-visible={busy ? "true" : "false"}
               aria-hidden={!busy}
               title={t("scan.busy.title")}
             >
-              <span className="scan-busy__spinner" />
+              <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />
             </span>
           </div>
           <div className="scan-loop-controls__buttons scan-loop-controls__buttons--roi">
@@ -676,7 +836,7 @@ export function ScanControls({
             </button>
             <button
               type="button"
-              className="btn btn--danger"
+              className="btn btn--stop"
               disabled={stopDisabled}
               onClick={onStop}
               title={t("scan.stop.title")}
@@ -706,75 +866,8 @@ export function ScanControls({
     );
   }
 
-  return (
-    <div className="button-row">
-      <label className="scan-equipment-field">
-        <span>{t("scan.equipment.label")}</span>
-        <select
-          className="select"
-          value={equipmentId}
-          disabled={controlsDisabled || equipment.length === 0}
-          onChange={(event) => onEquipmentChange(event.target.value)}
-          title={t("scan.equipment.title")}
-        >
-          {equipment.length === 0 ? (
-            <option value="">{t("scan.equipment.empty")}</option>
-          ) : (
-            equipment.map((row) => (
-              <option key={row.id ?? row.serial_number} value={String(row.id)}>
-                {row.name}
-              </option>
-            ))
-          )}
-        </select>
-      </label>
-          <label
-            className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
-            title={t("scan.preview.title")}
-          >
-        <input
-          type="checkbox"
-          checked={preview}
-          disabled={controlsDisabled || kind === "roi"}
-          onChange={(event) => dispatch(setPreview(event.target.checked))}
-        />
-        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-        {preview && <Icon name="alertTriangle" tone="warn" />}
-        <span>{t("scan.preview")}</span>
-          </label>
-          {kind === "vector" && (
-            <span
-              className="scan-busy"
-          data-visible={busy ? "true" : "false"}
-          aria-hidden={!busy}
-          title={t("scan.busy.title")}
-        >
-          <span className="scan-busy__spinner" />
-        </span>
-      )}
-      <button
-        type="button"
-        className="btn btn--primary"
-        disabled={runDisabled || kind === "roi"}
-        onClick={onRun}
-        title={t("scan.run.title.start")}
-      >
-        <Icon name="play" tone="success" />
-        {t("scan.run")}
-      </button>
-      <button
-        type="button"
-        className="btn btn--danger"
-        disabled={stopDisabled}
-        onClick={onStop}
-        title={t("scan.stop.title")}
-      >
-        <Icon name="square" tone="danger" />
-        {t("scan.stop")}
-      </button>
-
-      <span className="spacer" />
-
+  const validatedActions = (
+    <>
       <span className="scan-action-with-help">
         <button
           type="button"
@@ -792,6 +885,122 @@ export function ScanControls({
         <Icon name="x" tone="danger" />
         {t("scan.clear")}
       </button>
+    </>
+  );
+
+  return (
+    <div className="button-row">
+      {firstRowContent}
+      <div className="scan-equipment-selectors">
+        <label className="scan-equipment-field">
+          <span>{t("scan.region.label")}</span>
+          <select
+            className="select"
+            value={region}
+            disabled={controlsDisabled || availableRegions.length === 0}
+            onChange={(event) => onRegionChange(event.target.value)}
+            title={t("scan.region.title")}
+          >
+            {availableRegions.length === 0 ? (
+              <option value="">{t("scan.region.empty")}</option>
+            ) : (
+              availableRegions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {t(option.labelKey)}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+        <label className="scan-equipment-field">
+          <span>{t("scan.equipment.label")}</span>
+          <select
+            className="select"
+            value={equipmentId}
+            disabled={controlsDisabled || regionEquipment.length === 0}
+            onChange={(event) => onEquipmentChange(event.target.value)}
+            title={t("scan.equipment.title")}
+          >
+            {regionEquipment.length === 0 ? (
+              <option value="">{t("scan.equipment.empty")}</option>
+            ) : (
+              regionEquipment.map((row) => (
+                <option key={row.id ?? row.serial_number} value={String(row.id)}>
+                  {row.name}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+          <label
+            className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
+            title={t("scan.preview.title")}
+          >
+        <input
+          type="checkbox"
+          checked={preview}
+          disabled={controlsDisabled || kind === "roi"}
+          onChange={(event) => dispatch(setPreview(event.target.checked))}
+        />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+          {preview && <Icon name="alertTriangle" tone="warn" />}
+          <span>{t("scan.preview")}</span>
+          </label>
+          <HelpPopover title={t("scan.preview.help.title")} ariaLabel={t("scan.preview.help.aria")}>
+            {t("scan.preview.help.body")}
+          </HelpPopover>
+          {kind === "vector" && (
+            <span
+              className="scan-busy"
+          data-visible={busy ? "true" : "false"}
+          aria-hidden={!busy}
+          title={t("scan.busy.title")}
+        >
+          <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />
+        </span>
+      )}
+      {!roiAction && (kind === "raster" || kind === "vector") && <TransformCard />}
+
+      <div className={`scan-primary-controls${kind === "raster" ? " scan-primary-controls--raster" : ""}`}>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={runDisabled || kind === "roi"}
+          onClick={onRun}
+          title={t("scan.run.title.start")}
+        >
+          <Icon name="play" tone="success" />
+          {t("scan.run")}
+        </button>
+        <button
+          type="button"
+          className="btn btn--stop"
+          disabled={stopDisabled}
+          onClick={onStop}
+          title={t("scan.stop.title")}
+        >
+          <Icon name="square" tone="danger" />
+          {t("scan.stop")}
+        </button>
+        {(kind === "raster" || kind === "vector") && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={infiniteDisabled}
+            onClick={onInfinite}
+            title={kind === "vector" ? t("scan.infinite.title.vector") : t("scan.infinite.title")}
+            aria-pressed={infiniteScanActive}
+          >
+            <Icon name="infinity" tone="accent" />
+            {t("scan.infinite")}
+          </button>
+        )}
+      </div>
+
+      {kind !== "raster" && <span className="spacer" />}
+
+      {validatedActionsHost ? createPortal(validatedActions, validatedActionsHost) : validatedActions}
       {showRepeatControl && (
         <div className="button-row__repeat-footer">
           <RepeatControl

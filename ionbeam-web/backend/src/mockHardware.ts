@@ -41,6 +41,9 @@ interface RasterParams {
   cookie?: number;
   frame_blank?: boolean;
   simulation_bitmap?: SimulationBitmapPayload | null;
+  simulation?: Record<string, unknown>;
+  /** Live (Infinite) scan: repeat frames until the client closes. */
+  continuous?: boolean;
 }
 
 interface VectorParams {
@@ -55,6 +58,9 @@ interface VectorParams {
   vector_resolution?: number;
   roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
   simulation_bitmap?: SimulationBitmapPayload | null;
+  simulation?: Record<string, unknown>;
+  /** Live (Infinite) scan: replay the pass until the client closes. */
+  continuous?: boolean;
 }
 
 type VectorScanPath =
@@ -87,19 +93,20 @@ interface SimulationImage {
 
 let cachedSimulationImage: SimulationImage | null = null;
 
-function loadSimulationImage(): SimulationImage {
-  if (cachedSimulationImage) return cachedSimulationImage;
+function loadSimulationImage(override?: Record<string, unknown>): SimulationImage {
+  if (!override && cachedSimulationImage) return cachedSimulationImage;
 
-  const sim = loadActionData().simulation ?? {};
+  const sim = override ?? loadActionData().simulation ?? {};
   const resolution = validateImageResolution(Number(sim?.imageResolution ?? 64));
   const source = String(sim?.source ?? "pattern");
 
   if (source === "random") {
-    cachedSimulationImage = {
+    const image = {
       resolution,
       pixels: randomImage(resolution, Number(sim?.seed ?? 1)),
     };
-    return cachedSimulationImage;
+    if (!override) cachedSimulationImage = image;
+    return image;
   }
 
   if (source === "file") {
@@ -108,18 +115,19 @@ function loadSimulationImage(): SimulationImage {
       ? loadImageFile(filePath, resolution, Boolean(sim?.invert ?? sim?._alt_file?.invert))
       : null;
     if (loaded) {
-      cachedSimulationImage = loaded;
-      return cachedSimulationImage;
+      if (!override) cachedSimulationImage = loaded;
+      return loaded;
     }
   }
 
   // Pattern fallback keeps MOCK=1 on the current FakeAdcSimulator DAC
   // mapping even when the configured file cannot be decoded locally.
-  cachedSimulationImage = {
+  const image = {
     resolution,
     pixels: patternImage(resolution, String(sim?.patternKind ?? "ramp")),
   };
-  return cachedSimulationImage;
+  if (!override) cachedSimulationImage = image;
+  return image;
 }
 
 function streamDataConfigPath(): string {
@@ -263,8 +271,15 @@ function loadImageFile(filePath: string, resolution: number, invert: boolean): S
   }
 }
 
-function sampleFakeAdc(dacX: number, dacY: number): number {
-  const img = loadSimulationImage();
+function sampleFakeAdc(
+  dacX: number,
+  dacY: number,
+  simulation: Record<string, unknown>,
+  img: SimulationImage,
+): number {
+  const mode = String(simulation.mode ?? "image").toLowerCase();
+  if (mode === "zeros") return 0;
+  if (mode === "loopback") return dacX & ADC_MAX;
   const bits = Math.log2(img.resolution);
   const shift = DAC_BITS - bits;
   const xIdx = Math.max(0, Math.min(img.resolution - 1, dacX >> shift));
@@ -371,7 +386,13 @@ function normalizeVectorPoint(
   ];
 }
 
-function writeSampleBE(buf: Buffer, sampleIndex: number, value: number): void {
+// Scan samples are OBI-aligned like the real gateware sends them: the 14-bit
+// code left-aligned in 16 bits (code << 2, full scale 0xfffc). The ADC-only
+// test mock (wsProxy.ts) stays raw 14-bit because the real ADC-only gateware is.
+const OBI_SAMPLE_SHIFT = 2;
+
+function writeSampleBE(buf: Buffer, sampleIndex: number, raw14: number): void {
+  const value = raw14 << OBI_SAMPLE_SHIFT;
   const o = sampleIndex * 2;
   buf[o] = (value >> 8) & 0xff;
   buf[o + 1] = value & 0xff;
@@ -389,10 +410,14 @@ export async function streamMockRaster(
 
   let sent = 0;
   let chunks = 0;
+  const simulation = p.simulation ?? loadActionData().simulation ?? {};
+  const simulationImage = loadSimulationImage(p.simulation);
   const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
-  while (sent < total) {
+  while (sent < total || p.continuous === true) {
     if (ws.readyState !== ws.OPEN) return;
+    // Live scan: wrap to the next frame on the same socket (Stop closes it).
+    if (sent >= total) sent = 0;
 
     const n = Math.min(pixelsPerChunk, total - sent);
     const buf = Buffer.alloc(n * 2);
@@ -409,7 +434,7 @@ export async function streamMockRaster(
             p.resolution <= 1 ? 0 : y / (p.resolution - 1),
             bitmapMode
           )
-        : sampleFakeAdc(dacX, dacY);
+        : sampleFakeAdc(dacX, dacY, simulation, simulationImage);
       writeSampleBE(buf, k, sample);
     }
     ws.send(buf);
@@ -459,10 +484,14 @@ export async function streamMockVector(
   const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
   let i = 0;
   let chunks = 0;
+  const simulation = p.simulation ?? loadActionData().simulation ?? {};
+  const simulationImage = loadSimulationImage(p.simulation);
   const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
-  while (i < pts.length) {
+  while (i < pts.length || (p.continuous === true && pts.length > 0)) {
     if (ws.readyState !== ws.OPEN) return;
+    // Live scan: wrap to the next pass on the same socket (Stop closes it).
+    if (i >= pts.length) i = 0;
     const slice = pts.slice(i, i + valuesPerChunk);
     const buf = Buffer.alloc(slice.length * 2);
     for (let k = 0; k < slice.length; k++) {
@@ -482,7 +511,7 @@ export async function streamMockVector(
               p.simulation_bitmap.height <= 1 ? 0 : y / (p.simulation_bitmap.height - 1),
               bitmapMode
             )
-        : sampleFakeAdc(x, y);
+        : sampleFakeAdc(x, y, simulation, simulationImage);
       writeSampleBE(buf, k, sample);
     }
     ws.send(buf);
@@ -505,6 +534,55 @@ export async function streamMockVector(
         image_filename: `${base}_${ts}.png`,
       }),
     );
+  }
+}
+
+export interface DacRampParams {
+  axis: "x" | "y";
+  fixed_code: number;
+  dwell: number;
+  latency_bytes: number;
+}
+
+/**
+ * Mock counterpart of glasgow_service's /scan/dac_ramp/run|/stream:
+ * sweeps one DAC axis across the full 14-bit range (0..16383) while the
+ * other is held at `fixed_code`, mirroring _build_dac_ramp_cmd's
+ * DACCodeRange.from_resolution(16384) + DACCodeRange(count=1). Feeds
+ * sampleFakeAdc() the same way streamMockRaster/streamMockVector do, so
+ * MOCK=1 renders a plausible waveform for UI development without real
+ * hardware — real linearity is only checked on production.
+ */
+export async function streamMockDacRamp(
+  ws: WebSocket,
+  p: DacRampParams
+): Promise<void> {
+  const total = 1 << DAC_BITS; // 16384
+  const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
+  const fixed = Math.max(0, Math.min(total - 1, Math.trunc(p.fixed_code)));
+  const simulation = loadActionData().simulation ?? {};
+  const simulationImage = loadSimulationImage();
+
+  let sent = 0;
+  let chunks = 0;
+  while (sent < total) {
+    if (ws.readyState !== ws.OPEN) return;
+    const n = Math.min(valuesPerChunk, total - sent);
+    const buf = Buffer.alloc(n * 2);
+    for (let k = 0; k < n; k++) {
+      const swept = sent + k;
+      const dacX = p.axis === "y" ? fixed : swept;
+      const dacY = p.axis === "y" ? swept : fixed;
+      writeSampleBE(buf, k, sampleFakeAdc(dacX, dacY, simulation, simulationImage));
+    }
+    ws.send(buf);
+    sent += n;
+    chunks++;
+    await sleep(30);
+  }
+
+  if (ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify({ event: "done", chunks }));
   }
 }
 
@@ -559,6 +637,7 @@ export const mockRest = {
     const voltage = finiteNumber(action.voltage, 2.5);
     return {
       is_production: false,
+      adc_test: streamDataConfig.AdcTest !== false && action.AdcTest !== false,
       ev,
       voltage,
       simulation: action.simulation ?? {},
@@ -576,7 +655,7 @@ export const mockRest = {
         vectorResolution: finiteNumber(vector.vectorResolution, 2048),
         voltage,
         latency: finiteNumber(vector.latency, 8196),
-        outputMode: vector.outputMode ?? "SixteenBit",
+        outputMode: vector.outputMode ?? "EightBit",
       },
       raster_params: {
         resolution: finiteNumber(raster.resolution, 512),
@@ -584,14 +663,14 @@ export const mockRest = {
         latency_bytes: finiteNumber(raster.latency, finiteNumber(raster.pixels, 8192) * 2),
         frame_blank: Boolean(raster.frameBlank ?? false),
         cookie: finiteNumber(raster.cookie, 123),
-        output_mode: raster.outputMode ?? "SixteenBit",
+        output_mode: raster.outputMode ?? "EightBit",
       },
       vector_params: {
         vector_resolution: finiteNumber(vector.vectorResolution, 2048),
         dwell: finiteNumber(vector.dwell, 16),
         latency_bytes: finiteNumber(vector.latency, 8196),
         cookie: finiteNumber(vector.cookie, 123),
-        output_mode: vector.outputMode ?? "SixteenBit",
+        output_mode: vector.outputMode ?? "EightBit",
         pre_process: Boolean(vector.preProcess ?? false),
         do_validate: Boolean(vector.doValidate ?? true),
       },

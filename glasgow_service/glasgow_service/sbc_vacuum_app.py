@@ -20,12 +20,18 @@ from .models import (
     VacuumSimulationRequest,
     VacuumSystemStatus,
 )
-from .vacuum import VacuumController, find_vacuum_config_path, load_vacuum_config
+from .vacuum import (
+    MECHANICAL_PUMP,
+    VacuumController,
+    find_vacuum_config_path,
+    load_runtime_vacuum_config,
+)
 from .vacuum_health import sbc_controller_is_ready
 
 
-def create_app() -> FastAPI:
+def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
     holder: dict[str, VacuumController] = {}
+    activation = {"enabled": False}
     lock = asyncio.Lock()
     bearer = HTTPBearer(auto_error=False)
 
@@ -38,20 +44,30 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        config = load_vacuum_config(find_vacuum_config_path())
+        config = config_loader(find_vacuum_config_path())
+        activation["enabled"] = config.enabled
         if not config.enabled:
-            raise RuntimeError("SBC vacuum controller is disabled")
+            yield
+            return
+        # Enable controls activation; IsProduction selects hardware or emulation.
         controller = VacuumController(
             config, authority=remote_authority_from_environment()
         )
+        emulator = controller.emulator
         holder["controller"] = controller
-        if not controller.requires_remote_authority:
-            await controller.start()
         try:
+            if not controller.requires_remote_authority:
+                await controller.start()
             yield
         finally:
-            await controller.close()
-            holder.clear()
+            try:
+                await controller.close()
+            finally:
+                try:
+                    if emulator is not None:
+                        emulator.close()
+                finally:
+                    holder.clear()
 
     app = FastAPI(
         title="Raspberry Pi Vacuum Controller",
@@ -59,9 +75,17 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    @app.middleware("http")
+    async def no_cached_controller_state(request, call_next):
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     def controller() -> VacuumController:
         value = holder.get("controller")
         if value is None:
+            if not activation["enabled"]:
+                raise HTTPException(404, "vacuum controller is disabled")
             raise HTTPException(503, "SBC vacuum controller is starting")
         return value
 
@@ -88,11 +112,23 @@ def create_app() -> FastAPI:
     async def service_status() -> dict[str, object]:
         target = holder.get("controller")
         status = target.status() if target is not None else None
+        if status is None:
+            mode = "disabled" if not activation["enabled"] else "gpio"
+        elif status.simulation:
+            mode = "simulation"
+        elif status.control_transport == "rpi5-vacuum-io-emulator":
+            mode = "board-emulator"
+        elif status.control_transport == "rpi5-vacuum-io":
+            mode = "board"
+        else:
+            mode = "gpio"
         return {
             "service": "sbc-vacuum",
             "vacuum_enabled": target is not None,
             "platform": "raspberry-pi",
-            "mode": "simulation" if status and status.simulation else "gpio",
+            "mode": mode,
+            "is_production": status.is_production if status else None,
+            "log_tag": target.log_tag if target is not None else None,
             "equipment_count": len(status.pumps) if status else 0,
             "running": status.running if status else False,
         }
@@ -105,6 +141,8 @@ def create_app() -> FastAPI:
     async def ready() -> dict[str, object]:
         target = holder.get("controller")
         if target is None:
+            if not activation["enabled"]:
+                return {"status": "ready", "vacuum_enabled": False}
             raise HTTPException(503, "SBC vacuum controller is starting")
         status = target.status()
         if not sbc_controller_is_ready(connected=status.connected, running=status.running):
@@ -151,6 +189,29 @@ def create_app() -> FastAPI:
             raise HTTPException(404, f"unknown vacuum pump: {name}") from exc
         except (AuthorityDenied, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
+        return target.status()
+
+    @app.post("/vacuum/pumps/{name}/restart", response_model=VacuumSystemStatus,
+              dependencies=mutation_dependencies)
+    async def restart_pump(name: str, req: dict | None = None):
+        """Restart (power-cycle) the backing pump like controller initialization.
+
+        Every other pump stops and every valve closes before this returns;
+        the pump comes back ON after ``off_seconds`` (default 3) and the
+        cascade restarts.  Only the backing pump can be restarted.
+        """
+        target = controller()
+        names = [p.name for p in target.status().pumps]
+        if name not in names:
+            raise HTTPException(404, f"unknown vacuum pump: {name}")
+        if name != MECHANICAL_PUMP:
+            raise HTTPException(409, f"only {MECHANICAL_PUMP} can be restarted")
+        try:
+            await target.restart_backing_pump((req or {}).get("off_seconds"))
+        except (AuthorityDenied, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from exc
         return target.status()
 
     @app.post("/vacuum/high-voltage/power", response_model=VacuumSystemStatus,
@@ -200,10 +261,108 @@ def create_app() -> FastAPI:
             raise HTTPException(409, str(exc)) from exc
         return target.status()
 
+    @app.post("/vacuum/simulation/{name}/excursion",
+              response_model=VacuumSystemStatus, dependencies=mutation_dependencies)
+    async def simulation_excursion(name: str, req: dict):
+        """Inject or release a gauge excursion in GPIO simulation mode."""
+        target = controller()
+        try:
+            release = bool(req.get("release", False))
+            if release:
+                pressure = None
+            elif req.get("mbar") is None:
+                raise ValueError("mbar is required unless release is true")
+            else:
+                pressure = float(req["mbar"])
+            await target.set_simulated_excursion(name, pressure)
+        except KeyError as exc:
+            raise HTTPException(404, f"unknown vacuum pump: {name}") from exc
+        except (AuthorityDenied, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return target.status()
+
     @app.post("/vacuum/leadership/renew", response_model=VacuumSystemStatus,
               dependencies=mutation_dependencies)
     async def renew():
         return controller().status()
+
+    # ---------------------------------------------------------------- emulator
+    # Present only in non-production board mode: operator actions on the
+    # emulated rig (E-stop, jumpers, faults, utilities) for UI development.
+
+    def rig():
+        target = controller()
+        if target.emulator is None:
+            raise HTTPException(404, "the board emulator is not enabled")
+        return target.emulator
+
+    # These handlers take the rig lock. Synchronous FastAPI handlers run in
+    # its worker pool, leaving the controller poll/lease loop responsive.
+    @app.get("/emulator")
+    def emulator_state():
+        return rig().snapshot()
+
+    @app.post("/emulator/estop", dependencies=[Depends(require_sbc_token)])
+    def emulator_estop(req: dict):
+        r = rig()
+        r.set_estop(bool(req.get("pressed", True)))
+        return r.snapshot()
+
+    @app.post("/emulator/inputs/{di}", dependencies=[Depends(require_sbc_token)])
+    def emulator_jumper(di: int, req: dict):
+        if not 1 <= di <= 16:
+            raise HTTPException(404, "inputs are DI1..DI16")
+        r = rig()
+        r.jumper(di, bool(req.get("on", True)))
+        return r.snapshot()
+
+    @app.post("/emulator/tool", dependencies=[Depends(require_sbc_token)])
+    def emulator_tool(req: dict):
+        r = rig()
+        r.connect_tool(bool(req.get("connected", True)))
+        return r.snapshot()
+
+    @app.post("/emulator/excursion/{name}", dependencies=[Depends(require_sbc_token)])
+    def emulator_excursion(name: str, req: dict):
+        """Pressure excursion on one pump's gauge (test tooling).
+
+        ``{"mbar": 2.5e-3}`` raises and holds it; ``{"release": true}`` lets
+        the running pump work it back down (``recovery_s``: emulated time
+        constant, default 120 s); ``{"mbar": 0}`` clears it.
+        """
+        r = rig()
+        mbar = req.get("mbar")
+        try:
+            r.set_excursion(name, None if mbar is None else float(mbar),
+                            release=bool(req.get("release", False)),
+                            recovery_s=req.get("recovery_s"))
+        except KeyError:
+            raise HTTPException(404, f"unknown vacuum pump: {name}") from None
+        return r.snapshot()
+
+    @app.post("/emulator/faults/{name}", dependencies=[Depends(require_sbc_token)])
+    def emulator_fault(name: str, req: dict):
+        r = rig()
+        active = bool(req.get("active", True))
+        with r.clock.lock:
+            plant = r.plant
+            if name == "MechanicalVacuumPump":
+                plant.mechanical.thermal_trip = active
+            elif name in {t.name for t in plant.all_turbos}:
+                turbo = next(t for t in plant.all_turbos if t.name == name)
+                if active:
+                    turbo.error = str(req.get("code", "Err001"))
+                else:
+                    turbo.reset_error()
+            elif name in plant.utilities.__dict__:
+                setattr(plant.utilities, name, not active)
+            elif name == "heartbeat_stuck":
+                r.board.faults.stuck_heartbeat = active
+            elif name == "i2c_nack":
+                r.pi.i2c1.inject_nack(int(req.get("address", 0x21)), int(req.get("count", 1)))
+            else:
+                raise HTTPException(404, f"unknown emulator fault: {name}")
+        return r.snapshot()
 
     return app
 
@@ -211,8 +370,28 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
+def configure_service_logging() -> None:
+    """Plain text (default) or JSON (``SBC_VACUUM_LOG_FORMAT=json``) logs.
+
+    Every vacuum line carries a mode tag: [VACUUM-HW], [VACUUM-EMU] or
+    [VACUUM-SIM].
+    """
+    import logging
+
+    level = os.environ.get("SBC_VACUUM_LOG_LEVEL", "INFO").upper()
+    if os.environ.get("SBC_VACUUM_LOG_FORMAT", "text").lower() == "json":
+        from .executor_logging import configure_logging
+
+        configure_logging(level)
+    else:
+        logging.basicConfig(
+            level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+
 def main() -> None:
     import uvicorn
+
+    configure_service_logging()
 
     uvicorn.run(
         app,

@@ -4,7 +4,7 @@
  *
  * Bounds match the Pydantic field validators:
  *   resolution    1..2048
- *   dwell         1..65535
+ *   dwell         0..65535 (0 is the upstream OBI one-sample setting)
  *   latency_bytes >= 2
  *
  * Every parameter has an inline "?" help button next to its label,
@@ -17,29 +17,23 @@ import { type ReactNode } from "react";
 import { updateRaster, updateROI } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
-import { DwellHelp } from "./DwellHelp";
-import { ResolutionHelp } from "./ResolutionHelp";
 import { LatencyHelp } from "./LatencyHelp";
 import { CookieHelp } from "./CookieHelp";
 import { OutputModeHelp } from "./OutputModeHelp";
 import { FrameBlankHelp } from "./FrameBlankHelp";
 import { ValidationHelp } from "./ValidationHelp";
-import { ScanModeHelp } from "./ScanModeHelp";
+import { AdcValidHelp } from "./AdcValidHelp";
 import { BeamEnergyField } from "./BeamEnergyField";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
-import { estimateRevC3ScanTiming, formatDuration, formatNanoseconds, revC3DwellPresetOptions } from "../lib/scanTiming";
 
-const RES_PRESETS: PresetNumberOption[] = [128, 256, 512, 1024, 2048].map((value) => ({ value }));
-const DWELL_PRESETS: PresetNumberOption[] = revC3DwellPresetOptions();
-const LATENCY_PRESETS = [4096, 8192, 16384, 32768];
+const LATENCY_PRESETS: PresetNumberOption[] = [4096, 8192, 16384, 32768].map((value) => ({ value }));
 
 export function RasterParameters({ disabled }: { disabled: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const r = useAppSelector((s) => s.scan.raster);
   const roi = useAppSelector((s) => s.scan.roi);
-  const timing = estimateRevC3ScanTiming(r.resolution, r.dwell);
 
   // The footnote in the original code interpolates two <b> spans into a
   // sentence. Localised text reorders those spans (e.g. zh-CN puts
@@ -56,48 +50,36 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
     <div>
       <BeamEnergyField disabled={disabled} />
 
-      <div className="field">
-        <label>
-          {t("scan.modeGuide")}
-          <ScanModeHelp />
-        </label>
-      </div>
-
       <div className="field-row">
-        <PresetNumberField
-          label={
-            <label>
-              {t("raster.resolution")}
-              <ResolutionHelp />
-            </label>
-          }
-          value={r.resolution}
-          options={RES_PRESETS}
-          min={1}
-          max={2048}
+        <div className="field">
+        <label>
+          {t("raster.outputMode")}
+          <OutputModeHelp />
+        </label>
+        <select
+          className="select"
+          value={r.output_mode ?? "SixteenBit"}
           disabled={disabled}
-          onChange={(v) => dispatch(updateRaster({ resolution: v }))}
-        />
-        <PresetNumberField
-          label={
-            <label>
-              {t("scan.dwell.dynamic", {
-                dwell: r.dwell,
-                period: formatNanoseconds(timing.samplePeriodNs),
-                pixel: formatNanoseconds(timing.pixelDwellNs),
-                resolution: r.resolution,
-                frame: formatDuration(timing.frameSeconds),
-              })}
-              <DwellHelp />
-            </label>
+          onChange={(e) =>
+            dispatch(
+              updateRaster({
+                output_mode: e.target.value as "SixteenBit" | "EightBit",
+              })
+            )
           }
-          value={r.dwell}
-          options={DWELL_PRESETS}
-          min={1}
-          max={65535}
-          disabled={disabled}
-          onChange={(v) => dispatch(updateRaster({ dwell: v }))}
-        />
+        >
+          {/* Output mode values are FPGA-side enums, not user-facing
+              prose; they stay in English in every locale. */}
+          <option value="SixteenBit">SixteenBit</option>
+          <option value="EightBit">EightBit</option>
+        </select>
+      </div>
+      <label className="checkbox vacuum-switch app-switch">
+        <input type="checkbox" checked={r.adc_valid} disabled={disabled}
+          onChange={(e) => dispatch(updateRaster({ adc_valid: e.target.checked }))} />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+        {t("raster.adcValid")} <AdcValidHelp />
+      </label>
       </div>
 
       <div className="field-row">
@@ -109,7 +91,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
             </label>
           }
           value={r.latency_bytes}
-          options={LATENCY_PRESETS.map((value) => ({ value }))}
+          options={LATENCY_PRESETS}
           min={2}
           max={1 << 20}
           disabled={disabled}
@@ -132,30 +114,6 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
             inputMode="numeric"
           />
         </div>
-      </div>
-
-      <div className="field">
-        <label>
-          {t("raster.outputMode")}
-          <OutputModeHelp />
-        </label>
-        <select
-          className="select"
-          value={r.output_mode ?? "SixteenBit"}
-          disabled={disabled}
-          onChange={(e) =>
-            dispatch(
-              updateRaster({
-                output_mode: e.target.value as "SixteenBit" | "EightBit",
-              })
-            )
-          }
-        >
-          {/* Output mode values are FPGA-side enums, not user-facing
-              prose; they stay in English in every locale. */}
-          <option value="SixteenBit">SixteenBit</option>
-          <option value="EightBit">EightBit</option>
-        </select>
       </div>
 
       <label className="checkbox vacuum-switch app-switch">
@@ -187,6 +145,7 @@ export function RasterParameters({ disabled }: { disabled: boolean }) {
         {t("raster.doValidate")}
         <ValidationHelp />
       </label>
+
 
       <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
         {footnoteParts}

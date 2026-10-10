@@ -23,25 +23,29 @@ class FakeAdcSimulatorTest(unittest.TestCase):
         m.submodules.dut = dut
 
         sim = Simulator(m)
+        sim.add_clock(1e-6)
         observed = []
 
         async def bench(ctx):
             ctx.set(dut.dac_x_code, 0)
             ctx.set(dut.dac_y_code, 0)
+            await ctx.tick()
             observed.append(ctx.get(dut.loopback_value))
 
             ctx.set(dut.dac_x_code, 8192)
             ctx.set(dut.dac_y_code, 4096)
+            await ctx.tick()
             observed.append(ctx.get(dut.loopback_value))
 
             ctx.set(dut.dac_x_code, 16383)
             ctx.set(dut.dac_y_code, 16383)
+            await ctx.tick()
             observed.append(ctx.get(dut.loopback_value))
 
         sim.add_testbench(bench)
         sim.run()
 
-        self.assertEqual(observed, [0x0001, 0x1207, 0xFFFF])
+        self.assertEqual(observed, [0x0001, 0x1207, 0x3FFF])
 
     def test_rejects_resolution_larger_than_dac_address_space(self):
         was_silenced = UnusedElaboratable._MustUse__silence

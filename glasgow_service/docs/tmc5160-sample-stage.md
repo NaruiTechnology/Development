@@ -11,7 +11,7 @@ simulation mode permits five-axis UI and API development without energizing
 unknown hardware.
 
 The sourced performance benchmark and electrical partition are documented in
-`GlasgowDataIO/Hardware/kitcard/GlasgowRevC3FiveAxisStage/README.md`.
+`GlasgowDataIO/Hardware/StepperController/GlasgowRevC3FiveAxisStage/README.md`.
 
 ## Delivered X/Y boundary
 

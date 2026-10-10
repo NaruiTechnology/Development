@@ -12,20 +12,45 @@ import type { ReactNode } from "react";
 import type { HelpKey } from "./en";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
+  adcValid: () => (
+    <p>啟用後，生產掃描會監視 ADC 資料流中的持續滿量程值，這通常表示 ADC 匯流排斷線或未被驅動。只有在刻意收集原始診斷資料時才關閉。</p>
+  ),
+  dacCheck: () => (
+    <>
+      <p>
+        開啟開關只會執行<strong>一種</strong>設定：在讓另一軸保持固定於
+        <strong>固定值</strong>的同時，掃描所選<strong>軸</strong>的完整
+        0–16383 範圍。這就是為什麼預設執行只會顯示一條由 16384 個樣本組成
+        的連續斜坡——開關本身不會自動循環其他設定。
+      </p>
+      <p>若要檢查其他設定，請在開啟開關<em>之前</em>先修改以下欄位：</p>
+      <ul>
+        <li><strong>軸</strong> — 設為 Y 可改為掃描垂直 DAC 而非 X。未被掃描的那一軸就是被固定在「固定值」上的軸。</li>
+        <li><strong>固定值</strong> — 未被掃描的那一軸所停留的 DAC 碼（0–16383）。可嘗試不同數值（例如接近 0、中間值、接近 16383），以確認線性度並非只在中點附近良好。</li>
+        <li><strong>停留時間</strong> — 每個 DAC 碼平均的 ADC 取樣數。數值越大波形雜訊越小，但掃描速度越慢；預設值（500）與上游 OBI 的參考測試一致。</li>
+      </ul>
+      <p>
+        每次開關由關閉切換為開啟時，都會以當時設定的軸 / 固定值 / 停留時間
+        重新啟動一次完整的 16384 個樣本掃描——關閉開關、修改欄位，再重新開啟
+        即可執行下一項檢查。
+      </p>
+    </>
+  ),
   dwell: () => (
     <>
       <div className="dwell-help__rule">
-        <strong>revC3 硬體下限：166.667 ns。</strong>48 MHz FPGA 時脈和目前設定的
-        8 時脈 ADC/DAC 交易將 dwell 1 限制為理論 6 MPix/s。目前閘級電路無法實現
+        <strong>revC3 硬體下限：單次 ADC 取樣 125 ns。</strong>48 MHz FPGA 時脈和目前設定的
+        6 時脈 ADC/DAC 交易將單次取樣限制為 125 ns（8 MS/s）。dwell 為 N 時每像素取樣 N + 1 次，
+        因此介面可請求的最短像素（dwell 1）為 250 ns，即 4 MPix/s。目前閘級電路無法實現
         10 ns 駐留；單一 FPGA 時脈週期也需要 20.833 ns。
       </div>
 
       <div className="dwell-help__rule">
-        <strong>請選擇 2 的冪次。</strong>如果每像素的有效取樣數不是 2 的冪次，
+        <strong>請選擇 dwell = 2^k − 1。</strong>每像素取樣數為 dwell + 1。如果它不是 2 的冪次，
         閘級電路只會對最後 2 的冪次個取樣取平均，多餘的取樣會被捨棄。
-        例如 7 個取樣的像素只會平均其中 4 個；9 個取樣只會平均其中 8 個。
-        因此請始終選擇能使每像素取樣數為 2、4、8、16、32、64…… 的{" "}
-        <code>dwell_time</code>。
+        例如 7 個取樣的像素只會平均其中 4 個；9 個取樣只會平均其中 8 個；
+        dwell 16 需要 17 個取樣，只平均其中 16 個。
+        因此請選擇 <code>dwell</code> = 1、3、7、15、31、63……，使每像素取樣數為 2、4、8、16、32、64……。
       </div>
 
       <div className="dwell-help__rule">
@@ -37,14 +62,13 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p><code>dwell</code> 欄位是超取樣控制。各取值含義：</p>
 
       <ul className="dwell-help__list">
-        <li><code>"dwell": 1</code> → 超取樣器不工作，理論像素率 6 MPix/s</li>
-        <li><code>"dwell": 2</code> → 2 倍平均（3 MPix/s），SNR 增益 √2</li>
-        <li><code>"dwell": 4</code> → 4 倍平均（1.5 MPix/s），SNR 增益 2 倍</li>
-        <li><code>"dwell": 8</code> → 8 倍平均（750 kPix/s），SNR 增益約 2.8 倍</li>
-        <li><code>"dwell": 16</code> → 16 倍平均（375 kPix/s），SNR 增益 4 倍</li>
-        <li><code>"dwell": 32</code> → 32 倍平均（187.5 kPix/s），SNR 增益約 5.7 倍</li>
-        <li><code>"dwell": 64</code> → 64 倍平均（93.75 kPix/s），SNR 增益 8 倍</li>
-        <li>…… 直至 <code>dwell = 65535</code>（約每像素 10.92 ms）</li>
+        <li><code>"dwell": 1</code> → 介面允許的最快掃描（平均 2 個取樣）（4 MPix/s）</li>
+        <li><code>"dwell": 3</code> → 平均 4 個取樣（2 MPix/s），相對 dwell 1 SNR 增益 √2</li>
+        <li><code>"dwell": 7</code> → 平均 8 個取樣（1 MPix/s），SNR 增益 2 倍</li>
+        <li><code>"dwell": 15</code> → 平均 16 個取樣（500 kPix/s），SNR 增益約 2.8 倍</li>
+        <li><code>"dwell": 31</code> → 平均 32 個取樣（250 kPix/s），SNR 增益 4 倍</li>
+        <li><code>"dwell": 63</code> → 平均 64 個取樣（125 kPix/s），SNR 增益約 5.7 倍</li>
+        <li>…… 直至 <code>dwell = 65535</code>（約每像素 8.19 ms）</li>
       </ul>
 
       <div className="dwell-help__table-wrap">
@@ -57,13 +81,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>1</td><td>1</td><td>6.0 MPix/s</td><td>1.00×</td><td>175 ms</td></tr>
-            <tr><td>2</td><td>2</td><td>3.0 MPix/s</td><td>1.41×</td><td>350 ms</td></tr>
-            <tr><td>4</td><td>4</td><td>1.5 MPix/s</td><td>2.00×</td><td>699 ms</td></tr>
-            <tr><td>8</td><td>8</td><td>750 kPix/s</td><td>2.83×</td><td>1.40 s</td></tr>
-            <tr><td>16</td><td>16</td><td>375 kPix/s</td><td>4.00×</td><td>2.80 s</td></tr>
-            <tr><td>32</td><td>32</td><td>187.5 kPix/s</td><td>5.66×</td><td>5.59 s</td></tr>
-            <tr><td>64</td><td>64</td><td>93.75 kPix/s</td><td>8.00×</td><td>11.18 s</td></tr>
+            <tr><td>1</td><td>2</td><td>4.0 MPix/s</td><td>1.00×</td><td>262 ms</td></tr>
+            <tr><td>3</td><td>4</td><td>2.0 MPix/s</td><td>1.41×</td><td>524 ms</td></tr>
+            <tr><td>7</td><td>8</td><td>1.0 MPix/s</td><td>2.00×</td><td>1.05 s</td></tr>
+            <tr><td>15</td><td>16</td><td>500 kPix/s</td><td>2.83×</td><td>2.10 s</td></tr>
+            <tr><td>31</td><td>32</td><td>250 kPix/s</td><td>4.00×</td><td>4.19 s</td></tr>
+            <tr><td>63</td><td>64</td><td>125 kPix/s</td><td>5.66×</td><td>8.39 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -88,7 +111,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>解析度會影響通常關心的三個量：</p>
 
       <ul className="dwell-help__list">
-        <li><strong>畫面時長</strong> — 目前 revC3 按 <code>N² × dwell × 166.667 ns</code> 縮放。解析度加倍，時間變為四倍。</li>
+        <li><strong>畫面時長</strong> — 目前 revC3 按 <code>N² × (dwell + 1) × 125 ns</code> 縮放。解析度加倍，時間變為四倍。</li>
         <li><strong>CSV / 影像的像素數</strong> — <code>N²</code> 個值。2048² 的 16 位元光柵在傳輸線上為 8 MB，展開為 CSV 後約為 32 MB。</li>
         <li><strong>空間取樣率</strong> — 網格越細可解析越小的特徵，但在總駐留預算相同的情況下，解析度越高代表每像素時間越短，除非同時增大 dwell。</li>
       </ul>
@@ -103,16 +126,16 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>64</td><td>65 536</td><td>175 ms</td><td>128 KB</td></tr>
-            <tr><td>512</td><td>32</td><td>262 144</td><td>699 ms</td><td>512 KB</td></tr>
-            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.80 s</td><td>2 MB</td></tr>
-            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>11.18 s</td><td>8 MB</td></tr>
+            <tr><td>256</td><td>64</td><td>65 536</td><td>139 ms</td><td>128 KB</td></tr>
+            <tr><td>512</td><td>32</td><td>262 144</td><td>557 ms</td><td>512 KB</td></tr>
+            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.23 s</td><td>2 MB</td></tr>
+            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>8.91 s</td><td>8 MB</td></tr>
           </tbody>
         </table>
       </div>
 
       <p>
-        上述畫面時長假設以 revC3 閘級電路的理論 6 MSPS 取樣率連續串流。實際數值會略長，
+        上述畫面時長假設以 revC3 閘級電路的理論 8 MSPS 取樣率連續串流。實際數值會略長，
         因為每個資料區塊都有 USB 額外開銷，並且每次掃描末尾還有用於排空流水線的填充。
       </p>
     </>
@@ -284,7 +307,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit</strong> — 每像素 2 位元組。原始 14 位元 ADC 讀數零擴充至 uint16，小端序。這是唯一能在後處理中還原完整 ADC 動態範圍的模式。</li>
+        <li><strong>SixteenBit</strong> — 每像素 2 位元組。原始 14 位元 ADC 讀數左對齊至 uint16，大端序（高位元組在前），與 OBI 一致。這是唯一能在後處理中還原完整 ADC 動態範圍的模式。</li>
         <li><strong>EightBit</strong> — 每像素 1 位元組。FPGA 捨棄低 6 位元，僅回傳高 8 位元。USB 頻寬減半，但會損失 6 位元的動態範圍 — 依賴那些低位元的微弱特徵將無法還原。</li>
       </ul>
 
@@ -298,7 +321,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>如何選擇：</p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit（預設）</strong> — 任何在意影像品質的場合。定量 SEM、EBIC，以及任何需要後期做對比度調整或雜訊分析的工作。</li>
+        <li><strong>SixteenBit</strong> — 任何在意影像品質的場合。定量 SEM、EBIC，以及任何需要後期做對比度調整或雜訊分析的工作。</li>
         <li><strong>EightBit</strong> — 當 USB 頻寬成為瓶頸、僅需預覽時。大型矢量掃描（數百萬點）且 dwell 較高，會超出 480 Mbps USB 2.0 連結時使用。螢幕顯示效果仍然良好；只是無法定量還原微弱訊號。</li>
       </ul>
 
@@ -392,7 +415,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <div className="dwell-help__rule">
         <strong>需要報告時用這個。</strong>一般的 <code>Run</code> 只負責即時送出資料區塊，
-        不會等待驗證結果。<code>驗證執行</code> 才是產生 Run report 面板中那些掃描後檢查的路徑。
+        不會等待驗證結果。<code>驗證執行</code> 才是產生 儲存結果面板中那些掃描後檢查的路徑。
       </div>
 
       <p>
@@ -459,10 +482,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><th>解析度</th><th>步長</th><th>總點數</th><th>大致掃描時間<br /><span className="muted">（dwell=1）</span></th></tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>8</td><td>65 536</td><td>~11 ms</td></tr>
-            <tr><td>512</td><td>4</td><td>262 144</td><td>~44 ms</td></tr>
-            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~175 ms</td></tr>
-            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~699 ms</td></tr>
+            <tr><td>256</td><td>8</td><td>65 536</td><td>~16 ms</td></tr>
+            <tr><td>512</td><td>4</td><td>262 144</td><td>~66 ms</td></tr>
+            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~262 ms</td></tr>
+            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~1.05 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -501,7 +524,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <ul className="dwell-help__list">
         <li><strong><code>x</code>、<code>y</code></strong> — DAC 碼值，閉區間 0..16383。超出範圍的值會在裝置上被截斷，但無法產生有用輸出。</li>
-        <li><strong><code>dwell</code></strong> — 單位與光柵 dwell 一致：目前 revC3 的 166.667 ns 取樣週期個數。1 最快（無超取樣）；2/4/8/16/…… 是 SNR 平均的實用值。最大可至 65535（約每像素 10.92 ms）。</li>
+        <li><strong><code>dwell</code></strong> — 單位與光柵 dwell 一致：dwell 為 N 時每像素取樣 N + 1 次，每次 125 ns（revC3）。1 最快（2 個取樣）；3/7/15/31/…… 是 SNR 平均的實用值。最大可至 65535（約每像素 8.19 ms）。</li>
       </ul>
 
       <div className="dwell-help__rule">
@@ -618,6 +641,120 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <p>
         曲線使用 log-log 座標，因為 FOV 通常近似與放大倍率成反比。CSV 匯入/匯出使用兩欄資料：magnification 與 FOV meters。
+      </p>
+    </>
+  ),
+  scanGeometry: () => (
+    <>
+      <p>
+        本面板把所選設備的校準檔案（profile）數值與目前束流已測得的放大倍率校準結合，
+        將掃描映射為真實世界座標（µm）。在按下<strong>套用至掃描</strong>之前，不會影響實際掃描。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>1 · 來自校準檔案的數值。</strong>像素數、旋轉偏移、Y/X 長寬比、束流傾角、
+        停束位置（spot park）以及廠商 dwell 基準值，均讀取自 CONFIGURATION &gt; Admin &gt;
+        Calibration 中該設備與該欄（FIB/SEM）的資料。顯示為<em>未設定</em>的項會使用內建預設值——
+        按旁邊的<strong>編輯</strong>可為其填入真正測量得到的值。
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>放大倍率（Magnification）</strong>由顯微鏡本身設定，本軟體並不控制它——請填入鏡台目前實際顯示的數值。</li>
+        <li><strong>HFOV 覆寫 / Pixels X / Pixels Y</strong> 僅針對本次操作點，覆寫校準檔案或放大倍率校準原本提供的值。</li>
+        <li><strong>掃描旋轉</strong>與<strong>載台 X/Y</strong>描述即將掃描的畫面：其旋轉角度，以及畫面中心處的載台位置（µm）。</li>
+        <li><strong>傾角校正</strong>在載台朝向束流傾斜時補償 Y 方向的比例——啟用後填入載台傾角（度）。</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>3 · 結果。</strong>該操作點下計算出的掃描畫面：像素尺寸、比例係數
+        （µm / DAC 碼）、視場（FOV）、畫面中心及其四個角點的世界座標，以及旋轉、剪切與畫面時間。
+        只有當上方檔案中的數值是真正的校準值而非預設值時，這些結果才可信。
+      </div>
+
+      <p>
+        結果旁邊的小方框畫的就是這個掃描畫面：虛線輪廓是未經校正的標稱（nominal）畫面，
+        實心輪廓是校正後（rectified）的畫面，圓點標記 DAC (0, 0)，圓環標記你輸入的基準點，
+        從圓環引出的紅線代表該基準點的殘差——擬合結果與它的偏差——並放大 20 倍以便看清微小誤差。
+        尚未加入基準點或完成擬合時，兩條輪廓線會重疊，所以看起來只是一個普通方框——
+        這是正常現象，不是錯誤。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>4 · 用基準點（fiducials）校正。</strong>對於已知真實世界位置的特徵（網格線、
+        標記點、一次載台移動），填入它在影像中出現的位置（像素或 DAC）及其真實位置（µm）。
+        至少加入 3 個點（仿射擬合）或 2 個點（相似變換擬合，無剪切/獨立縮放），並盡量分布在整個
+        視場內，然後按<strong>擬合</strong>。殘差欄與預覽圖會顯示每個點與擬合結果的偏差。
+      </div>
+
+      <p>
+        <strong>套用至掃描</strong>需要 SuperUser 或更高權限，會把結果寫入{" "}
+        <code>streamData.json</code>，並讓 ROI / 點陣掃描路徑改用這個經過校正的映射。
+        出現「過期」標記表示校準檔案自套用後已產生新的修訂版本——請檢查後重新套用。
+        <strong>將縮放併入 HFOV</strong>（擬合後才會出現）會把擬合得到的縮放修正直接併入已保存的
+        放大倍率校準曲線，而不是單獨保留為一次性校正，這樣往後在該放大倍率下的掃描會直接使用修正後的值。
+      </p>
+    </>
+  ),
+  geometryFit: () => (
+    <>
+      <p>
+        擬合會計算一個較小的修正——縮放（X/Y）、旋轉，以及（仿射擬合時）剪切——
+        使標稱（未校準）畫面盡可能與你輸入的基準點對齊：即已啟用、同時填有像素/DAC 位置
+        與真實世界位置的行。這是一次最小平方擬合，本身並不會改變任何東西；之後仍需按下
+        <strong>套用至掃描</strong>才會真正生效。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>仿射（affine）與相似變換（similarity）。</strong>仿射會求解獨立的 X/Y
+        縮放及剪切——至少需要 3 個點——最適合擬合真實的光學畸變。相似變換只求解單一的
+        縮放與旋轉（無剪切）——至少需要 2 個點——在基準點較少時更安全，因為它不會把雜訊
+        誤「解釋」為剪切。
+      </div>
+
+      <p>
+        當點數恰好等於最小要求時，擬合依定義就是精確的（殘差為零）——這並不代表擬合品質好，
+        只是說明已經沒有多餘的資料可用來檢驗它。在信任殘差欄或預覽圖中的紅線之前，
+        建議在最小點數之上再多加一兩個點，並盡量分散在整個視場內，而不是集中在一處。
+      </p>
+    </>
+  ),
+  rectifyFiducials: () => (
+    <>
+      <p>
+        這裡提供幾個點：你既知道它們在掃描中的位置，也知道它們真實的世界座標，
+        由此擬合可以求解出校準檔案本身無法給出的旋轉/剪切誤差。這一步完全是可選的——
+        沒有它，第 1–3 節仍能給出一個可用、只是未經校正的畫面。
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>1 · 選擇已知位置的參考特徵。</strong>
+        校準標準件上的網格線、把載台移動到某個已知偏移處的標記點、一次已知距離的載台移動——
+        總之，這個特徵在真實世界中的位置（µm）你已經從系統之外確知無疑。這就是擬合用來
+        校驗一切的基準。
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>2 · 填寫每一列。</strong>
+        <em>Measured in</em>：若你是從拍到的影像上讀取位置（像素欄/列），選 pixel；
+        若你已直接知道其原始束流位置代碼（0–16383），選 DAC。
+        <em>Column/X</em> 與 <em>Row/Y</em>：該特徵實際出現的位置。
+        <em>World X/Y (µm)</em>：它真實、已知的位置——來自第 1 步的基準值，而不是工具算出來的。
+        只有兩個位置都填寫後，該列才會被計入；取消勾選某一列可將其排除而不必刪除。
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>3 · 加入足夠多、分布分散的點。</strong>
+        仿射擬合至少需要 3 個點（獨立的 X/Y 縮放、旋轉與剪切）；相似變換擬合至少需要 2 個點
+        （僅單一縮放與旋轉，無剪切——點數較少時更安全）。盡量把點分布在整個視場內：
+        角落與邊緣上的點對擬合的約束力遠大於聚在一起的點。
+      </div>
+
+      <p>
+        按下<strong>擬合</strong>可計算修正值，並在預覽圖與殘差欄中顯示——僅此一步
+        不會改變任何實際掃描。當點數恰好等於最小要求時，擬合依定義就是精確的（殘差為零），
+        這並不代表品質好；建議在最小點數之上再加一兩個點後再信任殘差。
+        只有按下<strong>套用至掃描</strong>才會真正生效，若即將取代 Dimension Cal 的
+        手動測量值，會先給出警告。
       </p>
     </>
   ),

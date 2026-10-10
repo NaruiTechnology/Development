@@ -1,32 +1,43 @@
+import scanIcon from "../assets/Scan.png";
+import calibrateIcon from "../assets/Calibrate.png";
 import rulerIcon from "../assets/ruler.png";
+import magCalIcon from "../assets/MagCal.png";
 import roiIcon from "../assets/ROI.png";
 import rasterIcon from "../assets/raster.png";
 import vectorIcon from "../assets/vector.png";
 import dashboardIcon from "../assets/UHVacuumPump_1.png";
+import adcTestIcon from "../assets/Cog.png";
 
 type IconName =
   | "check"
+  | "calibrate"
   | "circleTool"
   | "cog"
   | "commentTool"
   | "crop"
   | "download"
+  | "edit"
   | "dashboard"
   | "globe"
   | "grid"
   | "gridSvg"
   | "help"
   | "alertTriangle"
+  | "adcTest"
+  | "waveform"
   | "highlightTool"
   | "image"
+  | "infinity"
   | "home"
   | "layers"
   | "link"
   | "mail"
+  | "magCal"
   | "moon"
   | "pause"
   | "play"
   | "plus"
+  | "quad"
   | "refresh"
   | "rectangleTool"
   | "route"
@@ -39,12 +50,14 @@ type IconName =
   | "atom"
   | "tools"
   | "fileText"
+  | "folder"
   | "eye"
   | "sheet"
   | "trash"
   | "upload"
   | "zoomIn"
   | "zoomOut"
+  | "chevronDown"
   | "x";
 
 export function Icon({
@@ -54,33 +67,19 @@ export function Icon({
   name: IconName;
   tone?: "accent" | "danger" | "success" | "tab" | "warn";
 }) {
-  if (name === "ruler") {
-    return (
-      <span
-        className="icon icon--ruler"
-        aria-hidden
-        style={{
-          WebkitMaskImage: `url(${rulerIcon})`,
-          WebkitMaskPosition: "center",
-          WebkitMaskRepeat: "no-repeat",
-          WebkitMaskSize: "contain",
-          backgroundColor: "currentColor",
-          maskImage: `url(${rulerIcon})`,
-          maskPosition: "center",
-          maskRepeat: "no-repeat",
-          maskSize: "contain",
-        }}
-      />
-    );
-  }
-
   const imageSource = imageSources[name];
   const className = `${tone ? `icon icon--${tone}` : "icon"} icon--${name}`;
   if (imageSource) {
     const intrinsicClass =
       name === "target"
         ? " icon--intrinsic icon--intrinsic-roi"
-        : name === "grid" || name === "route"
+        : name === "grid" ||
+          name === "route" ||
+          name === "scan" ||
+          name === "calibrate" ||
+          name === "ruler" ||
+          name === "magCal" ||
+          name === "adcTest"
         ? " icon--intrinsic"
         : "";
     return (
@@ -101,6 +100,11 @@ export function Icon({
 }
 
 const imageSources: Partial<Record<IconName, string>> = {
+  scan: scanIcon,
+  calibrate: calibrateIcon,
+  ruler: rulerIcon,
+  magCal: magCalIcon,
+  adcTest: adcTestIcon,
   dashboard: dashboardIcon,
   target: roiIcon,
   grid: rasterIcon,
@@ -110,6 +114,9 @@ const imageSources: Partial<Record<IconName, string>> = {
 };
 
 const paths: Partial<Record<IconName, JSX.Element>> = {
+  waveform: (
+    <path d="M3 13h3l2-6 4 12 3-9 2 3h4" />
+  ),
   check: <path d="M5 12.5l4 4L19 6.5" />,
   highlightTool: (
     <>
@@ -135,6 +142,12 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
   ),
   crop: <path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14" />,
   download: <path d="M12 3v11m0 0l-4-4m4 4l4-4M5 19h14" />,
+  edit: (
+    <>
+      <path d="M4 20h4l10.5-10.5a2.12 2.12 0 0 0-3-3L5 17v3z" />
+      <path d="M13.5 7.5l3 3" />
+    </>
+  ),
   // Globe — outer circle + equator + a meridian. Two curves are enough
   // to read as "globe" without looking like a tennis ball; deliberately
   // chunky to match the stroke weight of the other 24×24 icons.
@@ -178,6 +191,9 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
       <path d="M21 15l-5-5L5 21" />
     </>
   ),
+  infinity: (
+    <path d="M8.25 7.5c-2.9 0-5.25 2.02-5.25 4.5s2.35 4.5 5.25 4.5c3.75 0 5.75-9 9.5-9 2.9 0 5.25 2.02 5.25 4.5s-2.35 4.5-5.25 4.5c-3.75 0-5.75-9-9.5-9z" />
+  ),
   home: (
     <>
       <path d="M4 11.5L12 4l8 7.5" />
@@ -212,6 +228,14 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
   ),
   play: <path d="M6 4l14 8-14 8V4z" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  quad: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1" />
+    </>
+  ),
   refresh: (
     <>
       <path d="M20 4v6h-6" />
@@ -300,6 +324,7 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
       <path d="M19 6l-1.5 14a2 2 0 0 1-2 1.8h-7a2 2 0 0 1-2-1.8L5 6" />
     </>
   ),
+  folder: <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" />,
   upload: <path d="M12 21V10m0 0l-4 4m4-4l4 4M5 5h14" />,
   zoomIn: (
     <>
@@ -314,4 +339,5 @@ const paths: Partial<Record<IconName, JSX.Element>> = {
     </>
   ),
   x: <path d="M5 5l14 14M19 5L5 19" />,
+  chevronDown: <path d="M6 9l6 6 6-6" />,
 };

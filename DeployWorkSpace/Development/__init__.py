@@ -1,4 +1,5 @@
-__all__= ["DistributionDeploy", "AutomationPy"]
+"""Deployment workspace packages.
 
-from .DistributionDeploy import *
-from .DistributionDeploy.AutomationPy import *
+AutomationPy is installed separately; it is not a DistributionDeploy child.
+Keep package discovery free of runtime imports.
+"""

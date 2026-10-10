@@ -1,0 +1,14 @@
+{
+ "en": {
+  "native.releaseDevice": "Release Glasgow (hand it over to the web app)",
+  "native.reconnect": "Reconnect Glasgow"
+ },
+ "zh-CN": {
+  "native.releaseDevice": "释放 Glasgow（交给网页版使用）",
+  "native.reconnect": "重新连接 Glasgow"
+ },
+ "zh-TW": {
+  "native.releaseDevice": "釋放 Glasgow（交給網頁版使用）",
+  "native.reconnect": "重新連線 Glasgow"
+ }
+}

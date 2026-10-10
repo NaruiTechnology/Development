@@ -15,6 +15,7 @@ AutomationPy.buildingblocks.scan_params for the dataclass.
 import array
 import asyncio
 import struct
+import time
 from dataclasses import dataclass
 
 # Import path note: must match the prefix used by callers
@@ -29,13 +30,23 @@ from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
 )
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode, CmdType, BeamType
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
+from GlasgowDataIO.IobeamControl.transfer.linkStats import LinkStats
 
 
 BIG_ENDIAN = (struct.pack('@H', 0x1234) == struct.pack('>H', 0x1234))
 
 
+# The gateware sends SixteenBit samples the way OBI does: the 14-bit ADC code
+# left-aligned in 16 bits (code << 2, full scale 0xFFFC). The adaptive-gray
+# thresholds below stay in 14-bit units (they are built from the UI's 8-bit gray
+# window), so received samples are converted back before they are compared.
+OBI_SAMPLE_SHIFT = 2
+
+
 @dataclass(frozen=True)
 class AdaptiveGrayFeedbackConfig:
+    """Thresholds are raw 14-bit ADC codes (0..0x3FFF), not OBI-aligned samples."""
+
     gray_min: int
     gray_max: int
     blank_when_inside: bool
@@ -138,6 +149,9 @@ class VectorScanCommand(BaseCommand):
         fpga_pipeline_depth_pixels: int = DEFAULT_FPGA_PIPELINE_DEPTH_PIXELS,
         drain_safety_factor: float      = DEFAULT_DRAIN_SAFETY_FACTOR,
         sender_drain_timeout_s: float   = DEFAULT_SENDER_DRAIN_TIMEOUT_S,
+        # --- live scan --------------------------------------------------
+        continuous: bool                = False,
+        points_factory=None,
     ):
         """
         Args:
@@ -160,6 +174,17 @@ class VectorScanCommand(BaseCommand):
             sender_drain_timeout_s (float): Bound on how long transfer()
                 waits for the sender task to drain after the receiver
                 loop ends, before logging a warning and cancelling.
+            continuous (bool): Live ("Infinite") scan, the vector
+                counterpart of OBI's live scan. The point list is replayed
+                pass after pass on ONE synchronized command stream until
+                ``abort`` is set: no re-sync, no drain padding and no USB
+                teardown between passes, so the beam never parks and the
+                host receives samples without a gap. Padding and teardown
+                run once, after Stop. Not available with adaptive gray
+                feedback (each pass there depends on host decisions).
+            points_factory (callable, optional): Returns a fresh iterable of
+                points for each pass in continuous mode. When omitted,
+                ``iter_points`` is materialized once and replayed.
         """
         # Avoid the mutable-default trap: Python evaluates defaults once
         # at class-definition time, so a second VectorScanCommand in the
@@ -168,8 +193,15 @@ class VectorScanCommand(BaseCommand):
         if iter_points is None:
             iter_points = default_iter()
 
-        self._iter_points = iter_points
         self._adaptive_gray_feedback = adaptive_gray_feedback
+        self.continuous = bool(continuous) and adaptive_gray_feedback is None
+        if self.continuous and points_factory is None:
+            replay = list(iter_points)
+            points_factory = lambda: iter(replay)
+        self._points_factory = points_factory if self.continuous else None
+        if self._points_factory is not None:
+            iter_points = self._points_factory()
+        self._iter_points = iter_points
         self._processed_points = []
         self._processed_adaptive_points = None
         self._processed = False
@@ -204,9 +236,13 @@ class VectorScanCommand(BaseCommand):
                 f"external_control={self._external_control}, "
                 f"adaptive_gray_feedback={self._adaptive_gray_feedback}, "
                 f"max_pipeline={self._max_pipeline}, "
-                f"drain_floor_pixels={self._drain_floor_pixels}")
+                f"drain_floor_pixels={self._drain_floor_pixels}, "
+                f"continuous={self.continuous}")
 
     def _pre_process_chunks(self, latency):
+        if self.continuous:
+            # An endless pass stream cannot be materialized up front.
+            return
         print("Pre-processing commands...")
         if self._adaptive_gray_feedback is not None:
             self._processed_adaptive_points = [
@@ -231,7 +267,8 @@ class VectorScanCommand(BaseCommand):
     def _feedback_sample_value(samples) -> int:
         if samples is None or len(samples) == 0:
             return 0
-        return int(sum(int(sample) for sample in samples) / len(samples))
+        # SixteenBit samples arrive OBI-aligned (code << 2); the thresholds are 14-bit.
+        return int(sum(int(sample) for sample in samples) / len(samples)) >> OBI_SAMPLE_SHIFT
 
     def _feedback_blank_decision(self, samples) -> bool:
         cfg = self._adaptive_gray_feedback
@@ -239,12 +276,6 @@ class VectorScanCommand(BaseCommand):
         sample_value = self._feedback_sample_value(samples)
         in_range = cfg.gray_min <= sample_value <= cfg.gray_max
         return in_range if cfg.blank_when_inside else not in_range
-
-    @staticmethod
-    def _feedback_zero_sample_like(samples):
-        if samples is None:
-            return None
-        return array.array(samples.typecode, [0] * len(samples))
 
     @staticmethod
     def _feedback_combine_samples(probe_samples, action_samples, *, probe_dwell: int, action_dwell: int):
@@ -314,7 +345,10 @@ class VectorScanCommand(BaseCommand):
             blank_state = self._feedback_blank_decision(probe_samples)
 
             if self.abort.is_set():
-                yield self._feedback_zero_sample_like(probe_samples)
+                # Keep the probe value in the returned image.  The action
+                # sample is intentionally blank, but the UI needs the probe
+                # gray level to identify and mark this filtered point red.
+                yield probe_samples
                 break
 
             action_samples = None
@@ -334,7 +368,10 @@ class VectorScanCommand(BaseCommand):
                 action_samples = await self.recv_res(1, stream, OutputMode.SixteenBit)
 
             if blank_state:
-                yield self._feedback_zero_sample_like(probe_samples if probe_samples is not None else action_samples)
+                # Return the unblanked probe reading rather than a synthetic
+                # zero.  A zero loses the source gray level and makes the
+                # filtered column render black instead of the ROI red spot.
+                yield probe_samples if probe_samples is not None else action_samples
             else:
                 yield self._feedback_combine_samples(
                     probe_samples,
@@ -346,34 +383,45 @@ class VectorScanCommand(BaseCommand):
         await BlankCommand(enable=True, inline=False).transfer(stream)
         await FlushCommand().transfer(stream)
 
+    def _iter_passes(self):
+        """Point iterables to scan: one pass, or (continuous) passes forever."""
+        if not self.continuous:
+            yield self._iter_points
+            return
+        yield self._iter_points          # first pass (already created)
+        while True:
+            yield self._points_factory()
+
     def _iter_chunks(self, latency):
         if self._processed:
             for commands, pixel_count in self._processed_points:
                 yield commands, pixel_count
-        else:
-            commands = bytearray()
-            vector_body = bytearray()
-            current_blank = None
-            saw_explicit_blank = False
-            current_pass_index = None
+            return
 
-            def get_command(pixel_count):
-                cmd = ArrayCommand(cmdtype=CmdType.VectorPixel,
-                                   array_length=pixel_count - 1)
-                return bytes(cmd)
+        commands = bytearray()
+        vector_body = bytearray()
+        current_blank = None
+        saw_explicit_blank = False
+        current_pass_index = None
 
-            def flush_vector_body():
-                nonlocal vector_body, vector_body_count
-                if vector_body_count > 0:
-                    commands.extend(get_command(vector_body_count))
-                    commands.extend(vector_body)
-                    vector_body = bytearray()
-                    vector_body_count = 0
+        def get_command(pixel_count):
+            cmd = ArrayCommand(cmdtype=CmdType.VectorPixel,
+                               array_length=pixel_count - 1)
+            return bytes(cmd)
 
-            chunk_pixel_count = 0
-            vector_body_count = 0
-            total_dwell = 0
-            for point in self._iter_points:
+        def flush_vector_body():
+            nonlocal vector_body, vector_body_count
+            if vector_body_count > 0:
+                commands.extend(get_command(vector_body_count))
+                commands.extend(vector_body)
+                vector_body = bytearray()
+                vector_body_count = 0
+
+        chunk_pixel_count = 0
+        vector_body_count = 0
+        total_dwell = 0
+        for points in self._iter_passes():
+            for point in points:
                 x, y, dwell, blank, pass_index = _normalize_point(point)
                 if pass_index is not None and current_pass_index != pass_index:
                     self._logger.debug("vector pass index %s", pass_index)
@@ -401,11 +449,21 @@ class VectorScanCommand(BaseCommand):
                     chunk_pixel_count = 0
                     total_dwell = 0
 
-            if chunk_pixel_count > 0:
+            if self.continuous and chunk_pixel_count > 0:
+                # End every live pass on a chunk boundary (the next pass's
+                # first point follows in the same command stream; the beam
+                # is NOT blanked between passes, like OBI's live scan).
                 flush_vector_body()
-                if saw_explicit_blank and current_blank is False:
-                    commands.extend(bytes(BlankCommand(enable=True)))
                 yield (memoryview(commands), chunk_pixel_count)
+                commands = bytearray()
+                chunk_pixel_count = 0
+                total_dwell = 0
+
+        if chunk_pixel_count > 0:
+            flush_vector_body()
+            if saw_explicit_blank and current_blank is False:
+                commands.extend(bytes(BlankCommand(enable=True)))
+            yield (memoryview(commands), chunk_pixel_count)
 
     @BaseCommand.log_transfer
     async def transfer(self, stream, *, latency: int = 65536 * 65536):
@@ -437,9 +495,22 @@ class VectorScanCommand(BaseCommand):
 
         count_queue = asyncio.Queue()
         end_marker = object()
+        # Per-point dwell can vary; the service sets link_dwell to the nominal
+        # dwell so the summary can estimate beam time (None -> timings only).
+        stats = LinkStats("vector", dwell=getattr(self, "link_dwell", None),
+                          beam_hz=getattr(self, "link_beam_hz", None))
+        outcome = "error"
+        summary_logged = False
+        sent_total = None      # set by the sender after the last real chunk
+
+        def emit_summary(result):
+            nonlocal summary_logged
+            if not summary_logged:
+                summary_logged = True
+                self._logger.info(stats.summary(result))
 
         async def sender():
-            nonlocal tokens
+            nonlocal tokens, sent_total
             total_pixels = 0
             try:
                 for commands, pixel_count in self._iter_chunks(latency):
@@ -449,8 +520,10 @@ class VectorScanCommand(BaseCommand):
                         await token_fut
                     if self.abort.is_set():
                         # go to a blanked state after an aborted frame
-                        commands.extend(bytes(BlankCommand(enable=True,
-                                                           inline=False)))
+                        # (_iter_chunks yields memoryviews, which cannot be
+                        # extended in place)
+                        commands = bytes(commands) + bytes(BlankCommand(
+                            enable=True, inline=False))
                     await stream.write(commands)
                     # Per-chunk host-side flush. Without this, stream.write()
                     # only appends to the demultiplexer _out_buffer and the
@@ -459,13 +532,17 @@ class VectorScanCommand(BaseCommand):
                     # The token-based pacing then loses sync with the actual
                     # device-visible state, freezing exactly at
                     # max_pipeline+1 chunks.
+                    t_flush = time.perf_counter()
                     await stream.flush()
+                    stats.sent(time.perf_counter() - t_flush)
                     tokens -= 1
                     total_pixels += pixel_count
                     await count_queue.put(pixel_count)
                     if self.abort.is_set():
                         break
                     await asyncio.sleep(0)
+
+                sent_total = total_pixels
 
                 # ---------- pipeline-drain padding -----------------------------
                 # Mirrors RasterScanCommand.sender's tail. After the last real
@@ -509,6 +586,14 @@ class VectorScanCommand(BaseCommand):
 
         await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
         await ExternalCtrlCommand(enable=self._external_control).transfer(stream)
+        # The gateware resets with the beam BLANKED (blank_enable init=1).
+        # Points without an explicit blank flag (the default ROI sweeps) never
+        # send a BlankCommand, so without this the ion beam stays off and the
+        # ADC only sees its zero level.  OBI clients send this before every
+        # frame (opcode 0x52).  Points that carry explicit blank flags still
+        # override it inline from the first point on.
+        if self._beam_type != BeamType.NoBeam:
+            await BlankCommand(enable=False, inline=True).transfer(stream)
         await SynchronizeCommand(
             cookie=self._cookie, raster=False, output=self._output_mode,
         ).transfer(stream)
@@ -529,11 +614,27 @@ class VectorScanCommand(BaseCommand):
                     token_fut = asyncio.Future()
                 if tokens == max_pipeline + 1:
                     if self.abort.is_set():
+                        outcome = "aborted"
                         break
                 self._logger.debug(f"recver: tokens={tokens}")
-                yield await self.recv_res(pixel_count, stream, self._output_mode)
+                t_read = time.perf_counter()
+                res = await self.recv_res(pixel_count, stream, self._output_mode)
+                stats.received(time.perf_counter() - t_read, pixel_count)
+                if sent_total is not None and stats.pixels_recv >= sent_total:
+                    # Last chunk: log now; the consumer normally stops after
+                    # it, so `finally` may not run until GC/teardown.
+                    emit_summary("ok")
+                t_yield = time.perf_counter()
+                yield res
+                stats.consumed(time.perf_counter() - t_yield)
             receiver_complete = True
+            if outcome != "aborted":
+                outcome = "ok"
+        except GeneratorExit:
+            outcome = "closed"
+            raise
         finally:
+            emit_summary(outcome)
             # Wait for the sender to finish its drain padding + final
             # flush before this generator returns.
             #

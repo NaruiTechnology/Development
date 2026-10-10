@@ -9,11 +9,20 @@
  *   - CSV: validated runs hit /api/scan/last/csv on the server.
  *          Live streams (no validated result) generate the CSV
  *          client-side from imageSlice; matches the server format.
- *   - Figure (PNG): always hits /api/scan/last/figure (matplotlib only
- *          runs server-side). Both validated and streaming scans
- *          populate the server's last-scan cache.
+ *   - Figure (PNG), first available of:
+ *          1. the merged figure (edits + chip already burned in);
+ *          2. the live canvas image — the same pixels the canvas shows and
+ *             the merged FTP upload is built from (gray filter, levels,
+ *             decimation) — with the glass scan-parameter chip burned in;
+ *          3. fallback /api/scan/last/figure (matplotlib, server-side) with
+ *             the scan-parameter summary appended as a caption band.
+ *
+ * Auto download saves the PNG first, then the CSV. When edits are merged
+ * afterwards, the auto-downloaded PNG is replaced with the merged figure
+ * under the same filename (overwritten in place when a folder is selected).
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { useAppSelector } from "../store";
 import {
@@ -21,38 +30,40 @@ import {
   vectorCsvBlob,
   downloadBlob,
 } from "../lib/csvExport";
-import { useTranslation } from "../i18n";
+import { useTranslation, type TranslationKey } from "../i18n";
+import { appendScanParamCaption, burnScanParamChip } from "../lib/scanParamChip";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
+import {
+  chooseExportFolder,
+  ensureFolderWritable,
+  loadExportFolder,
+  writeFileToFolder,
+  type ExportFolderHandle,
+} from "../lib/exportFolder";
 import { Icon } from "./Icon";
 
 type DownloadState = "idle" | "fetching" | "error";
 type DbFlowState = "checking" | "ready" | "disabled" | "saving" | "saved" | "error";
-type DirectoryPickerOptions = { startIn?: "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos" };
-type DirectoryHandle = {
-  name: string;
-  getFileHandle: (
-    name: string,
-    options?: { create?: boolean }
-  ) => Promise<{
-    createWritable: () => Promise<{
-      write: (data: Blob) => Promise<void>;
-      close: () => Promise<void>;
-    }>;
-  }>;
-};
-
 const OUTPUT_PREFIX_STORAGE_KEY = "ionbeam:downloadOutputPrefix";
+const SCAN_EXPORT_FOLDER = "scan-figures";
 const DEFAULT_DOWNLOAD_PATH_LABEL = defaultDownloadPathLabel();
 
 export function ValidationPanel({
   disabled = false,
+  previewMode = false,
   mergedFigureUrl = null,
+  liveFigureUrl = null,
   kindOverride = null,
+  validationSummaryHost = null,
 }: {
   disabled?: boolean;
+  previewMode?: boolean;
   mergedFigureUrl?: string | null;
+  /** PNG data URL of the live canvas for the last completed scan. */
+  liveFigureUrl?: string | null;
   kindOverride?: "raster" | "vector" | null;
+  validationSummaryHost?: HTMLElement | null;
 }) {
   const { t, fmt } = useTranslation();
   const result = useAppSelector((s) => s.scan.lastResult);
@@ -69,6 +80,7 @@ export function ValidationPanel({
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
   const vectorLatency = useAppSelector((s) => s.scan.vector.latency_bytes);
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
+  const lastScanParams = useAppSelector((s) => s.scan.lastScanParams);
 
   const [csvState, setCsvState] = useState<DownloadState>("idle");
   const [figState, setFigState] = useState<DownloadState>("idle");
@@ -77,7 +89,7 @@ export function ValidationPanel({
   const [autoDownload, setAutoDownload] = useState(false);
   const [dbFlowState, setDbFlowState] = useState<DbFlowState>("checking");
   const [dbFlowErr, setDbFlowErr] = useState<string | null>(null);
-  const [downloadDir, setDownloadDir] = useState<DirectoryHandle | null>(null);
+  const [downloadDir, setDownloadDir] = useState<ExportFolderHandle | null>(null);
   // downloadDirLabel is set lazily after the first translation read so
   // we don't end up showing the English placeholder briefly during the
   // initial mount in a Chinese-locale session.
@@ -88,6 +100,55 @@ export function ValidationPanel({
   const [autoErr, setAutoErr] = useState<string | null>(null);
   const lastAutoDownloadKeyRef = useRef<string | null>(null);
   const lastDbFlowKeyRef = useRef<string | null>(null);
+  // Async download work must outlive re-renders: a dependency change while
+  // the (slow) figure render is in flight used to cancel the run after the
+  // first file, silently dropping the PNG. Only unmount stops state updates.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  const mergedFigureUrlRef = useRef(mergedFigureUrl);
+  mergedFigureUrlRef.current = mergedFigureUrl;
+  const liveFigureUrlRef = useRef(liveFigureUrl);
+  liveFigureUrlRef.current = liveFigureUrl;
+  // Live image left over from the previous scan: never export it for the
+  // scan that is running/just finished (the new one is captured a frame
+  // after completion).
+  const staleLiveFigureRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (phase === "running" || phase === "stopping") {
+      staleLiveFigureRef.current = liveFigureUrlRef.current;
+    }
+  }, [phase]);
+  // The canvas clears its image when a new scan starts; once that happens
+  // the next image is fresh even if its pixels match the previous scan.
+  useEffect(() => {
+    if (!liveFigureUrl) staleLiveFigureRef.current = null;
+  }, [liveFigureUrl]);
+  // PNG written by the last auto download, so a later merge can replace it.
+  const lastAutoFigureRef = useRef<{ kind: "raster" | "vector"; filename: string } | null>(null);
+  const lastReplacedMergedRef = useRef<string | null>(null);
+  const [mergedReplaced, setMergedReplaced] = useState<string | null>(null);
+  const downloadControlsDisabled = disabled || previewMode;
+
+  useEffect(() => {
+    if (previewMode) setAutoDownload(false);
+  }, [previewMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadExportFolder(SCAN_EXPORT_FOLDER).then((handle) => {
+      if (cancelled || !handle) return;
+      setDownloadDir(handle);
+      setDownloadDirLabel(handle.name || DEFAULT_DOWNLOAD_PATH_LABEL);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const haveStreamData =
     (kind === "raster" && rasterCursor > 0) ||
@@ -99,20 +160,15 @@ export function ValidationPanel({
   const dbFlowReadyPhase = phase === "completed";
 
   async function selectDownloadFolder() {
-    if (disabled) return;
+    if (downloadControlsDisabled) return;
     setAutoErr(null);
-    const picker = (window as any).showDirectoryPicker as
-      | ((options?: DirectoryPickerOptions) => Promise<DirectoryHandle>)
-      | undefined;
-    if (!picker) {
-      setAutoErr(t("validation.folder.unavailable"));
-      setDownloadDir(null);
-      setDownloadDirLabel(DEFAULT_DOWNLOAD_PATH_LABEL);
-      return;
-    }
-
     try {
-      const dir = await picker({ startIn: "downloads" });
+      const dir = await chooseExportFolder(SCAN_EXPORT_FOLDER, downloadDir);
+      if (!dir) return;
+      if (!(await ensureFolderWritable(dir))) {
+        setAutoErr(t("validation.folder.unavailable"));
+        return;
+      }
       setDownloadDir(dir);
       setDownloadDirLabel(dir.name || t("validation.folder.default"));
     } catch (e: any) {
@@ -176,28 +232,33 @@ export function ValidationPanel({
           {t("validation.outputPrefix.help")}
         </span>
       </div>
-      <div className="button-row" style={{ marginTop: 8, alignItems: "center" }}>
-        <button className="btn btn--ghost" disabled={disabled} onClick={selectDownloadFolder}>
+      <span className="muted" style={{ display: "block", fontSize: 12, marginTop: 8 }}>
+        {downloadDirLabel}
+      </span>
+      <div className="validation-download-controls" style={{ marginTop: 8 }}>
+        <button className="btn btn--ghost" disabled={downloadControlsDisabled} onClick={selectDownloadFolder}>
           <Icon name="download" tone="accent" />
           {t("validation.selectFolder")}
         </button>
-        <span className="muted" style={{ fontSize: 12 }}>
-          {downloadDirLabel}
-        </span>
-        <label className="checkbox vacuum-switch app-switch" style={{ padding: 0 }}>
+        <label className="checkbox vacuum-switch app-switch" style={{ padding: 0, marginRight: 5 }}>
           <input
             type="checkbox"
             checked={autoDownload}
-            disabled={disabled}
+            disabled={downloadControlsDisabled}
             onChange={(e) => {
               setAutoDownload(e.target.checked);
               setAutoErr(null);
             }}
           />
           <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-          {t("validation.autoDownload")}
+          <span style={{ paddingRight: 5 }}>{t("validation.autoDownload")}</span>
         </label>
       </div>
+      {mergedReplaced && !autoErr && (
+        <div style={{ color: "var(--c-accent)", fontSize: 12, marginTop: 6 }}>
+          {t("validation.autoDownload.mergedReplaced", { filename: mergedReplaced })}
+        </div>
+      )}
       {autoErr && (
         <div style={{ color: "var(--c-warn)", fontSize: 12, marginTop: 6 }}>
           {t("validation.autoDownload.error", { detail: autoErr })}
@@ -249,9 +310,10 @@ export function ValidationPanel({
     };
   }
 
-  async function figureDownloadBlob(): Promise<{ blob: Blob; filename: string }> {
-    if (mergedFigureUrl) {
-      const merged = await fetch(mergedFigureUrl);
+  async function figureDownloadBlob(): Promise<{ blob: Blob; filename: string; mergedSource: string | null }> {
+    const mergedUrl = mergedFigureUrlRef.current;
+    if (mergedUrl) {
+      const merged = await fetch(mergedUrl);
       if (!merged.ok) {
         throw new Error(`HTTP ${merged.status}: merged figure export failed`);
       }
@@ -261,7 +323,31 @@ export function ValidationPanel({
           resolution: result?.resolution ?? rasterRes,
           latency_bytes: vectorLatency,
         }, outputPrefix),
+        mergedSource: mergedUrl,
       };
+    }
+
+    const paramItems = lastScanParams?.kind === scanKind ? lastScanParams.items : null;
+    const translate = (key: string) => t(key as TranslationKey);
+    const filename = defaultDownloadFilename(scanKind, "png", {
+      resolution: result?.resolution ?? rasterRes,
+      latency_bytes: vectorLatency,
+    }, outputPrefix);
+
+    const liveUrl = await waitForLiveFigure();
+    if (liveUrl) {
+      const live = await fetch(liveUrl);
+      if (live.ok) {
+        let blob = await live.blob();
+        if (paramItems?.length) {
+          try {
+            blob = await burnScanParamChip(blob, paramItems, translate);
+          } catch {
+            // Keep the plain canvas image rather than failing the download.
+          }
+        }
+        return { blob, filename, mergedSource: null };
+      }
     }
 
     const url =
@@ -273,14 +359,41 @@ export function ValidationPanel({
       const detail = await r.text().catch(() => "");
       throw new Error(`HTTP ${r.status}: ${detail || "figure render failed"}`);
     }
-    const blob = await r.blob();
-    return {
-      blob,
-      filename: defaultDownloadFilename(scanKind, "png", {
-        resolution: result?.resolution ?? rasterRes,
-        latency_bytes: vectorLatency,
-      }, outputPrefix),
-    };
+    let blob = await r.blob();
+    // Fallback only (no live canvas image): the server figure has no scan
+    // settings on it, so add them as a caption band.
+    if (paramItems?.length) {
+      try {
+        blob = await appendScanParamCaption(blob, paramItems, translate);
+      } catch {
+        // Keep the plain figure rather than failing the download.
+      }
+    }
+    return { blob, filename, mergedSource: null };
+  }
+
+  /**
+   * The canvas snapshot is taken one animation frame after the scan
+   * completes, so auto download can start before it exists. Wait briefly
+   * for it instead of falling back to the differently rendered server PNG.
+   */
+  async function waitForLiveFigure(timeoutMs = 4000): Promise<string | null> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const url = liveFigureUrlRef.current;
+      if (url && url !== staleLiveFigureRef.current) return url;
+      if (Date.now() >= deadline || !mountedRef.current) return null;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  /** Overwrite the auto-downloaded PNG with the merged figure. */
+  async function replaceAutoFigureWithMerged(mergedUrl: string, filename: string) {
+    lastReplacedMergedRef.current = mergedUrl;
+    const merged = await fetch(mergedUrl);
+    if (!merged.ok) throw new Error(`HTTP ${merged.status}: merged figure export failed`);
+    await saveDownload(await merged.blob(), filename);
+    if (mountedRef.current) setMergedReplaced(filename);
   }
 
   async function saveDownload(blob: Blob, filename: string) {
@@ -288,10 +401,7 @@ export function ValidationPanel({
       downloadBlob(blob, filename);
       return;
     }
-    const fileHandle = await downloadDir.getFileHandle(filename, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(blob);
-    await writable.close();
+    await writeFileToFolder(downloadDir, filename, blob);
   }
 
   async function saveResultToDb() {
@@ -332,7 +442,7 @@ export function ValidationPanel({
   }
 
   useEffect(() => {
-    if (disabled || !autoDownload || phase !== "completed" || !haveAnyData) return;
+    if (disabled || previewMode || !autoDownload || phase !== "completed" || !haveAnyData) return;
 
     const key = [
       scanKind,
@@ -346,40 +456,66 @@ export function ValidationPanel({
     if (lastAutoDownloadKeyRef.current === key) return;
     lastAutoDownloadKeyRef.current = key;
 
-    let cancelled = false;
+    lastAutoFigureRef.current = null;
+    lastReplacedMergedRef.current = null;
+    setMergedReplaced(null);
+
     async function runAutoDownload() {
       setCsvState("fetching");
       setFigState("fetching");
       setCsvErr(null);
       setFigErr(null);
       setAutoErr(null);
+      const errors: string[] = [];
+
+      // PNG first: it is the primary result, and browsers that throttle
+      // repeated programmatic downloads still let the first one through.
+      // Each file is tried independently so one failure cannot drop the other.
+      try {
+        const figure = await figureDownloadBlob();
+        await saveDownload(figure.blob, figure.filename);
+        lastAutoFigureRef.current = { kind: scanKind, filename: figure.filename };
+        if (mountedRef.current) setFigState("idle");
+        // Edits merged while the figure was rendering: replace the file now.
+        const latestMerged = mergedFigureUrlRef.current;
+        if (latestMerged && latestMerged !== figure.mergedSource) {
+          await replaceAutoFigureWithMerged(latestMerged, figure.filename);
+        } else if (figure.mergedSource) {
+          lastReplacedMergedRef.current = figure.mergedSource;
+        }
+      } catch (e: any) {
+        if (mountedRef.current) setFigState("error");
+        errors.push(e?.message ?? String(e));
+      }
+
       try {
         const csv = await csvDownloadBlob();
-        if (cancelled) return;
         await saveDownload(csv.blob, csv.filename);
-
-        const figure = await figureDownloadBlob();
-        if (cancelled) return;
-        await saveDownload(figure.blob, figure.filename);
-
-        setCsvState("idle");
-        setFigState("idle");
+        if (mountedRef.current) setCsvState("idle");
       } catch (e: any) {
-        if (!cancelled) {
-          const msg = e?.message ?? String(e);
-          setCsvState("error");
-          setFigState("error");
-          setAutoErr(msg);
-        }
+        if (mountedRef.current) setCsvState("error");
+        errors.push(e?.message ?? String(e));
       }
+
+      if (errors.length && mountedRef.current) setAutoErr(errors.join("; "));
     }
 
-    runAutoDownload();
-    return () => {
-      cancelled = true;
-    };
+    void runAutoDownload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disabled, autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode, outputPrefix]);
+  }, [disabled, previewMode, autoDownload, phase, haveAnyData, scanKind, result?.chunks, result?.bytes, rasterCursor, vectorCursor, vectorRenderMode, outputPrefix]);
+
+  // "Save merged edits" was clicked after the auto download: the FTP copy is
+  // replaced by ImageCanvas; replace the auto-downloaded PNG here as well.
+  useEffect(() => {
+    if (disabled || previewMode || !autoDownload || !mergedFigureUrl) return;
+    const last = lastAutoFigureRef.current;
+    if (!last || last.kind !== scanKind) return;
+    if (lastReplacedMergedRef.current === mergedFigureUrl) return;
+    void replaceAutoFigureWithMerged(mergedFigureUrl, last.filename).catch((e: any) => {
+      if (mountedRef.current) setAutoErr(e?.message ?? String(e));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabled, previewMode, autoDownload, mergedFigureUrl, scanKind]);
 
   useEffect(() => {
     if (disabled || dbFlowState === "checking" || dbFlowState === "disabled" || !dbFlowReadyPhase || !haveAnyData) return;
@@ -423,7 +559,12 @@ export function ValidationPanel({
     return (
       <div className="card__body">
         {downloadSettings}
-        <div style={{ color: "var(--c-danger)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+        <div style={{
+          color: "var(--c-danger)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          whiteSpace: "pre-wrap",
+        }}>
           {error}
         </div>
       </div>
@@ -448,6 +589,31 @@ export function ValidationPanel({
   // result.kind is "raster" or "vector" — a fixed enum on the wire.
   // We surface it as the localised name from the i18n table.
   const resultKindKey = result?.kind === "vector" ? "tabs.vector" : "tabs.raster";
+  const validationSummary = v ? (
+    <>
+      <div className="divider" />
+      <div className="row" style={{ marginBottom: 6 }}>
+        <span className="card__title">{t("validation.title")}</span>
+        <span className="spacer" />
+        <span className="status-pill" data-state={v.passed ? "idle" : "error"}>
+          {v.passed ? t("validation.allPassed") : t("validation.failures")}
+        </span>
+      </div>
+      <ul className="validation-list">
+        {v.checks.map((c) => (
+          <li key={c.name}>
+            <span className={c.passed ? "pass" : "fail"}>
+              {c.passed ? t("validation.check.pass") : t("validation.check.fail")}
+            </span>
+            {/* Backend check names and details are technical identifiers and are
+                intentionally displayed verbatim. */}
+            <span>{c.name}</span>
+            <span className="muted">{c.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  ) : null;
 
   return (
     <div className="card__body">
@@ -529,42 +695,9 @@ export function ValidationPanel({
         </div>
       )}
 
-      {v && (
-        <>
-          <div className="divider" />
-          <div className="row" style={{ marginBottom: 6 }}>
-            <span className="card__title">{t("validation.title")}</span>
-            <span className="spacer" />
-            <span
-              className="status-pill"
-              data-state={v.passed ? "idle" : "error"}
-            >
-              {v.passed ? t("validation.allPassed") : t("validation.failures")}
-            </span>
-          </div>
-          <ul className="validation-list">
-            {v.checks.map((c) => (
-              <li key={c.name}>
-                <span className={c.passed ? "pass" : "fail"}>
-                  {c.passed ? t("validation.check.pass") : t("validation.check.fail")}
-                </span>
-                {/* Check names and details come from the backend in
-                    English. They're technical strings (e.g. "chunks
-                    correct", "first chunk has the expected cookie")
-                    that map to specific code paths in the Python
-                    service — translating them would create a key-by-
-                    string-prefix lookup that would silently break the
-                    next time a check is added on the backend. We
-                    surface them verbatim and rely on the PASS/FAIL
-                    pill to communicate state in the operator's
-                    language. The integration guide notes this. */}
-                <span>{c.name}</span>
-                <span className="muted">{c.detail}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      {validationSummaryHost && validationSummary
+        ? createPortal(validationSummary, validationSummaryHost)
+        : validationSummary}
     </div>
   );
 }

@@ -1,5 +1,3 @@
-
-
 #-------------------------------------------------------------------------------
 # setupIonbeamWeb_state.py
 #
@@ -28,23 +26,47 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
 
-            webRoot = actionData.get(
-                "webRoot",
-                os.path.join(self.deployRoot(), "Development", "ionbeam-web"))
-            webRoot = self.resolveDeployPath(webRoot)
-            webRoot = self._resolveWebRoot(webRoot)
+            webRoot = self.resolveDeployPath(actionData.get(
+                "webRoot", os.path.join("Development", "ionbeam-web")))
             backendDir = actionData.get("backendDir")
             backendDir = (self.resolveDeployPath(backendDir)
                           if backendDir else os.path.join(webRoot, "backend"))
             frontendDir = actionData.get("frontendDir")
             frontendDir = (self.resolveDeployPath(frontendDir)
                            if frontendDir else os.path.join(webRoot, "frontend"))
-            if not os.path.isdir(backendDir) or not os.path.isdir(frontendDir):
-                backendDir = os.path.join(webRoot, "backend")
-                frontendDir = os.path.join(webRoot, "frontend")
             createEnv = bool(actionData.get("createBackendEnv", True))
             install = bool(actionData.get("npmInstall", True))
+            build = bool(actionData.get("npmBuild", True))
             useNvm = bool(actionData.get("useNvm", True))
+
+            # Optional extra args appended to `npm install` per target.
+            # e.g. "--legacy-peer-deps", "--force", "--no-audit --no-fund".
+            backendInstallArgs = str(actionData.get("backendInstallArgs", "") or "").strip()
+            frontendInstallArgs = str(actionData.get("frontendInstallArgs", "") or "").strip()
+            backendBuildCommand = str(
+                actionData.get("backendBuildCommand", "npm run build") or ""
+            ).strip()
+            frontendBuildCommand = str(
+                actionData.get("frontendBuildCommand", "npm run build") or ""
+            ).strip()
+
+            # Layered check: report the highest missing level so the user
+            # can tell stale-zip from missing-subdirs from missing-manifests.
+            if not os.path.isdir(webRoot):
+                self.error("[{}] webRoot does not exist: {}\n"
+                           "  hint: dist_app.zip may have been built without "
+                           "Development/ionbeam-web, or buildDistribution was "
+                           "skipped with a stale zip."
+                           .format(type(self).__name__, webRoot))
+                self._success = False
+                return
+
+            try:
+                webRootContents = sorted(os.listdir(webRoot))
+            except OSError as e:
+                webRootContents = []
+                self.warn("[{}] could not list {}: {}"
+                          .format(type(self).__name__, webRoot, e))
 
             required = [
                 (backendDir, "backend directory"),
@@ -55,8 +77,13 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             missing = [label + ": " + path for path, label in required
                        if not os.path.exists(path)]
             if missing:
-                self.error("[{}] ionbeam-web is incomplete:\n{}"
-                           .format(type(self).__name__, "\n".join(missing)))
+                self.error(
+                    "[{}] ionbeam-web is incomplete under {}\n"
+                    "  webRoot contents: {}\n"
+                    "  missing:\n    {}"
+                    .format(type(self).__name__, webRoot,
+                            webRootContents or "<empty>",
+                            "\n    ".join(missing)))
                 self._success = False
                 return
 
@@ -64,15 +91,20 @@ class setupIonbeamWeb_state(distributionDeploy_state):
                 envFile = os.path.join(backendDir, ".env")
                 self._writeBackendEnv(envFile, backendDir, actionData)
 
-            if not install:
+            if not install and not build:
                 self._success = True
                 return
 
-            npm = "npm.cmd" if os.name == "nt" else "npm"
-            commands = [
-                ("backend", backendDir, "{} install".format(npm)),
-                ("frontend", frontendDir, "{} install".format(npm)),
-            ]
+            commands = self._projectCommands(
+                backendDir,
+                frontendDir,
+                install,
+                build,
+                backendInstallArgs,
+                frontendInstallArgs,
+                backendBuildCommand,
+                frontendBuildCommand,
+            )
 
             allOk = True
             for label, runDir, rawCmd in commands:
@@ -92,10 +124,36 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             self.error("[{}] error: {}".format(type(self).__name__, e))
             self._success = False
 
+    @staticmethod
+    def _projectCommands(
+        backendDir,
+        frontendDir,
+        install,
+        build,
+        backendInstallArgs="",
+        frontendInstallArgs="",
+        backendBuildCommand="npm run build",
+        frontendBuildCommand="npm run build",
+    ):
+        def installCommand(extra):
+            return "npm install" if not extra else "npm install {}".format(extra)
+
+        commands = []
+        if install:
+            commands.extend([
+                ("backend-install", backendDir, installCommand(backendInstallArgs)),
+                ("frontend-install", frontendDir, installCommand(frontendInstallArgs)),
+            ])
+        if build:
+            if backendBuildCommand:
+                commands.append(("backend-build", backendDir, backendBuildCommand))
+            if frontendBuildCommand:
+                commands.append(("frontend-build", frontendDir, frontendBuildCommand))
+        return commands
+
     def _writeBackendEnv(self, envFile, backendDir, actionData):
         deployRoot = self.resolveDeployPath(".")
         deployment = self.deploymentConfig()
-        token = os.environ.get("GLASGOW_TOKEN", "").strip()
         backendHost = str(
             deployment.get("BackendHost")
             or actionData.get("backendHost")
@@ -191,49 +249,63 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         lines = [
             "PROXY_TARGET_HTTP={}".format(proxyTargetHttp),
             "PROXY_TARGET_WS={}".format(proxyTargetWs),
-            "GLASGOW_TOKEN={}".format(token),
             "PORT=4000",
             "HOST={}".format(backendHost),
             "MOCK=0",
             "STATIC_DIR=../frontend/dist",
             "GLASGOW_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "GlasgowDataIO", "Json", "streamData.json"))),
+            "SBC_VACUUM_CONFIG={}".format(
+                self.resolveDeployPath(actionData.get(
+                    "vacuumConfig", "Development/GlasgowDataIO/Json/vacuumSystem.json"))),
+            "VACUUM_CONTROLLER_URL={}".format(
+                actionData.get("vacuumControllerUrl", "http://127.0.0.1:8780")),
             "IOBEAM_ADMIN_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "IobeamAdmin", "Json", "IobeamAdmin.json"))),
-            "IOBEAM_ADMIN_DB_HOST={}".format(dbHost),
             "IOBEAM_ADMIN_DB_PORT={}".format(dbPort),
             "IOBEAM_ADMIN_DB_NAME={}".format(dbName),
-            "IOBEAM_ADMIN_DB_USER={}".format(dbUser),
         ]
-        if dbPassword:
-            lines.append("IOBEAM_ADMIN_DB_PASSWORD={}".format(dbPassword))
         if dbSslMode:
             lines.append("IOBEAM_ADMIN_DB_SSLMODE={}".format(dbSslMode))
         lines.append("IOBEAM_ADMIN_DB_COMMAND_TIMEOUT_MS={}".format(dbTimeout))
         lines.extend([
-            "IOBEAM_OPERATION_DB_HOST={}".format(opDbHost),
             "IOBEAM_OPERATION_DB_PORT={}".format(opDbPort),
             "IOBEAM_OPERATION_DB_NAME={}".format(opDbName),
-            "IOBEAM_OPERATION_DB_USER={}".format(opDbUser),
         ])
-        if opDbPassword:
-            lines.append("IOBEAM_OPERATION_DB_PASSWORD={}".format(opDbPassword))
         if opDbSslMode:
             lines.append("IOBEAM_OPERATION_DB_SSLMODE={}".format(opDbSslMode))
         lines.append("IOBEAM_OPERATION_DB_COMMAND_TIMEOUT_MS={}".format(opDbTimeout))
         lines.extend([
-            "GLASGOW_RESTART_CMD=powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{}\"" .format(
-                os.path.join(backendDir, "scripts", "restart-glasgow-service.ps1")),
-            "IONBEAM_BACKEND_RESTART_CMD=powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{}\"" .format(
-                os.path.join(backendDir, "scripts", "restart-ionbeam-backend.ps1")),
+            "GLASGOW_RESTART_CMD={}".format(
+                os.path.join(backendDir, "scripts", "restart-glasgow-service.sh")),
+            "IONBEAM_BACKEND_RESTART_CMD={}".format(
+                os.path.join(backendDir, "scripts", "restart-ionbeam-backend.sh")),
             "IONBEAM_MOBILITY_ONLY={}".format(
                 "1" if self.deploymentValue("MobilityOnly", False) else "0"),
             "GLASGOW_PROJECT_ROOT={}".format(deployRoot),
             "GLASGOW_CONFIG_STRICT=0",
             "",
         ])
+        # Hosts, logins, passwords and GLASGOW_TOKEN live in the owner-only
+        # secrets file (loaded by config.ts and by the systemd units), never
+        # in .env, which sits inside the deploy tree.
+        secrets = {
+            "IOBEAM_ADMIN_DB_HOST": dbHost,
+            "IOBEAM_ADMIN_DB_USER": dbUser,
+            "IOBEAM_OPERATION_DB_HOST": opDbHost,
+            "IOBEAM_OPERATION_DB_USER": opDbUser,
+        }
+        if dbPassword:
+            secrets["IOBEAM_ADMIN_DB_PASSWORD"] = dbPassword
+        if opDbPassword:
+            secrets["IOBEAM_OPERATION_DB_PASSWORD"] = opDbPassword
+        store = self.secretStore()
+        store.write(secrets)
+        self.info("[{}] stored backend DB credentials in {}"
+                  .format(type(self).__name__, store.default_secrets_path()))
         with open(envFile, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
+        os.chmod(envFile, 0o600)
         self.info("[{}] wrote deployment backend env: {}"
                   .format(type(self).__name__, envFile))
 
@@ -247,33 +319,19 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             if not isinstance(data, dict):
                 return {}
             db = data.get("Database")
-            return db if isinstance(db, dict) else data
+            return self.expandSecrets(db if isinstance(db, dict) else data)
         except Exception as e:
             self.warn("[{}] could not read DB config from {}: {}"
                       .format(type(self).__name__, configPath, e))
             return {}
 
     def _wrapNodeCommand(self, cmd, useNvm):
-        return cmd
-
-    def _resolveWebRoot(self, configuredRoot):
-        candidates = [
-            configuredRoot,
-            os.path.join(self.deployRoot(), "ionbeam-web"),
-            os.path.join(self.deployRoot(), "Development", "ionbeam-web"),
-        ]
-        for candidate in candidates:
-            if self._hasNodeProjects(candidate):
-                if candidate != configuredRoot:
-                    self.info("[{}] using detected ionbeam-web root: {}"
-                              .format(type(self).__name__, candidate))
-                return candidate
-        return configuredRoot
-
-    def _hasNodeProjects(self, webRoot):
+        if not useNvm:
+            return cmd
         return (
-            os.path.isfile(os.path.join(webRoot, "backend", "package.json")) and
-            os.path.isfile(os.path.join(webRoot, "frontend", "package.json"))
+            "bash -lc 'export NVM_DIR=\"$HOME/.nvm\" && "
+            "if [ -s \"$NVM_DIR/nvm.sh\" ]; then . \"$NVM_DIR/nvm.sh\"; fi; {}'"
+            .format(cmd)
         )
 
     async def _runWithTimeout(self, cmd, runDir, timeout):

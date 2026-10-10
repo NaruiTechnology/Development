@@ -27,7 +27,21 @@ export interface Equipment {
   model: string;
   serial_number: string;
   site: string;
+  equipment_code: string;
+  host_computer_model: string;
+  motherboard_model: string;
+  windows_version: string;
+  software_version: string;
+  coreco_processing_card: string;
   description: string;
+}
+
+export type EquipmentCsvImportRow = Partial<Equipment> & Pick<Equipment, "name">;
+
+export interface EquipmentCsvImportResult {
+  equipment: Equipment[];
+  added: number;
+  updated: number;
 }
 
 export interface AllowedHost {
@@ -174,13 +188,37 @@ export async function listEquipmentFromDb(): Promise<Equipment[]> {
   return parseArray(raw) as Equipment[];
 }
 
+export async function exportEquipmentCsvFromDb(): Promise<string> {
+  return queryStored("SELECT fn_export_equipment_csv();");
+}
+
+export async function importEquipmentCsvToDb(rows: EquipmentCsvImportRow[]): Promise<EquipmentCsvImportResult> {
+  const raw = await queryStored("SELECT fn_import_equipment_csv($$payload$$);", rows);
+  const parsed = JSON.parse(raw || "{}") as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("fn_import_equipment_csv returned an invalid response");
+  }
+  const result = parsed as Record<string, unknown>;
+  if (result.ok !== true || !Array.isArray(result.equipment)) {
+    throw new Error("fn_import_equipment_csv returned an invalid result");
+  }
+  if (!Number.isInteger(result.added) || !Number.isInteger(result.updated)) {
+    throw new Error("fn_import_equipment_csv returned invalid import counts");
+  }
+  return {
+    equipment: result.equipment as Equipment[],
+    added: result.added as number,
+    updated: result.updated as number,
+  };
+}
+
 export async function listAllowedHostsFromDb(): Promise<string[]> {
   const raw = await queryStored("SELECT fn_list_hosts();");
   return parseStringArray(raw);
 }
 
 export async function syncEquipmentToDb(equipmentRows: Equipment[]): Promise<void> {
-  const rows = equipmentRows.filter((equipment) => equipment.name.trim() && equipment.serial_number.trim());
+  const rows = equipmentRows.filter((equipment) => equipment.name.trim());
   if (rows.length === 0) return;
   await executeStored("SELECT fn_upsert_equipment($$payload$$);", rows);
 }
@@ -237,9 +275,25 @@ async function queryStored(sqlTemplate: string, payload: unknown = null, fallbac
   const connection = await resolveCurrentAdminDbConnection();
   await ensureAdminSchema(connection);
   const payloadSql = jsonbLiteral(payload);
-  const sql = `SET search_path TO iobeam_admin, ionbeam_asset, public;\n${sqlTemplate.replace("$$payload$$", payloadSql)}`;
+  // A replacer *function*: String.replace() would otherwise expand "$&", "$'" ... sequences found inside the JSON payload.
+  const sql = `SET search_path TO iobeam_admin, ionbeam_asset, public;\n${sqlTemplate.replace("$$payload$$", () => payloadSql)}`;
   const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
   return out.trim() || fallback;
+}
+
+/** Run a whole SQL script (e.g. a seed file) against the admin database. */
+export async function runAdminSqlScript(sql: string): Promise<void> {
+  const connection = await resolveCurrentAdminDbConnection();
+  await ensureAdminSchema(connection);
+  await runPsql(["-q", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
+}
+
+export async function queryAdminStored(
+  sqlTemplate: string,
+  payload: unknown = null,
+  fallback = "",
+): Promise<string> {
+  return queryStored(sqlTemplate, payload, fallback);
 }
 
 function parseFirstUser(raw: string): AdminUser | null {

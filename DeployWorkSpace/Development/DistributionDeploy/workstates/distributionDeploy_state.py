@@ -14,8 +14,12 @@
 from abc import abstractmethod
 import copy
 import os
+import shlex
+import asyncio
 
 from buildingblocks.workflow.workstate import WorkState
+
+import secretsSupport
 
 
 @abstractmethod
@@ -46,12 +50,53 @@ class distributionDeploy_state(WorkState):
         self._logger = val
 
     # ---- helpers used by every concrete state ----------------------------
+    def aptInstallCommand(self, packages, verify):
+        """Build a noninteractive, labelled package repair/install sequence."""
+        apt = ("sudo -n DEBIAN_FRONTEND=noninteractive apt-get "
+               "-o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef "
+               "-o Dpkg::Options::=--force-confold")
+        configure = ("sudo -n DEBIAN_FRONTEND=noninteractive dpkg "
+                     "--force-confdef --force-confold --configure -a")
+        return (
+            "deploy_step() {{ label=$1; shift; "
+            "echo \"Deployment package step: $label\"; \"$@\"; result=$?; "
+            "if [ $result -ne 0 ]; then "
+            "echo \"Deployment package step failed: $label (exit $result)\" >&2; fi; "
+            "return $result; }}; "
+            "deploy_step sudo-credential sudo -n true && "
+            # Interrupted dpkg must be configured before apt can run. Missing
+            # dependencies may make this fail; apt repair must still get a turn.
+            "{{ deploy_step dpkg-configure {configure} || "
+            "echo 'dpkg configuration incomplete; attempting apt dependency repair' >&2; }} && "
+            "deploy_step apt-update {apt} update && "
+            "deploy_step apt-repair {apt} --fix-broken install -y && "
+            "deploy_step dpkg-configure-after-repair {configure} && "
+            "deploy_step apt-install {apt} install -y --no-install-recommends {packages} && "
+            "deploy_step verify-packages sh -c {verify}"
+        ).format(apt=apt, configure=configure,
+                 packages=" ".join(shlex.quote(str(p)) for p in packages),
+                 verify=shlex.quote(verify))
+
     def deployRoot(self):
         """Return the deploy root directory configured for this run."""
         thread = self.ParentWorkThread
         if thread is not None and hasattr(thread, "deployRoot"):
             return thread.deployRoot
         return "."
+
+    async def runArguments(self, arguments, timeout, env=None):
+        """Run an argument vector without platform-dependent shell quoting."""
+        process = await asyncio.create_subprocess_exec(
+            *arguments, cwd=self.deployRoot(), env=env,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        try:
+            self._stdout, self._stderr = await asyncio.wait_for(
+                process.communicate(), timeout=timeout or None)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            process.kill()
+            await process.communicate()
+            raise
+        return process.returncode == 0
 
     def workRoot(self):
         """Return the DistributionDeploy working directory for this run."""
@@ -61,7 +106,11 @@ class distributionDeploy_state(WorkState):
         return os.getcwd()
 
     def deploymentConfig(self):
-        """Return the top-level Deployment block for this run, if any."""
+        """Return the top-level Deployment block with ${VAR} secrets resolved."""
+        return self.expandSecrets(self.rawDeploymentConfig())
+
+    def rawDeploymentConfig(self):
+        """Return the Deployment block exactly as written in the manifest."""
         thread = self.ParentWorkThread
         config = getattr(thread, "Config", None) if thread is not None else None
         if isinstance(config, dict):
@@ -69,6 +118,19 @@ class distributionDeploy_state(WorkState):
         else:
             deployment = getattr(config, "Deployment", {}) if config is not None else {}
         return deployment if isinstance(deployment, dict) else {}
+
+    def secretStore(self):
+        """The shared secretstore module (see secretsSupport.py)."""
+        return secretsSupport.load()
+
+    def expandSecrets(self, value):
+        """Resolve ${VAR} placeholders from the environment / secrets file.
+
+        Unresolved required placeholders become "" so a state falls back to
+        its normal defaults; provisionSecrets has already failed the run if a
+        required value is missing.
+        """
+        return self.secretStore().expand(value, strict=False, blank=True)
 
     def deploymentValue(self, key, default=None):
         """Read a value from the top-level Deployment block."""
@@ -86,6 +148,9 @@ class distributionDeploy_state(WorkState):
         if not isinstance(stateConfig, dict):
             return stateConfig
 
+        # ${VAR} secrets stay unresolved here: they are expanded only where
+        # used (deploymentConfig, resolveEnvValue) so a credential is never
+        # copied into a command line or a log message by accident.
         resolved = copy.deepcopy(stateConfig)
         actionData = resolved.get("actionData", {})
         if not isinstance(actionData, dict):
@@ -142,6 +207,7 @@ class distributionDeploy_state(WorkState):
 
     def resolveEnvValue(self, value):
         """Resolve path-like env values; lists become os.pathsep-separated."""
+        value = self.expandSecrets(value)
         if isinstance(value, dict):
             raw = value.get("value", "")
             if value.get("resolve", True):

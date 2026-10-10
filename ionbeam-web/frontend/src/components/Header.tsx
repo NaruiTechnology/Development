@@ -61,8 +61,8 @@ export function Header({
   onOpenVacuum,
   vacuumMinimized,
   vacuumControllerBusy,
+  vacuumControllerError,
   onOpenSampleStage,
-  sampleStageMinimized,
   sampleStageControllerBusy,
   highVoltagePower,
   highVoltageReady,
@@ -70,6 +70,7 @@ export function Header({
   highVoltageError,
   onToggleHighVoltage,
   scanLocked,
+  adcTestActive,
 }: {
   signedInUser: SignedInUser | null;
   onSignedIn: (user: SignedInUser) => void;
@@ -79,8 +80,8 @@ export function Header({
   onOpenVacuum: () => void;
   vacuumMinimized: boolean;
   vacuumControllerBusy: boolean;
+  vacuumControllerError: boolean;
   onOpenSampleStage: () => void;
-  sampleStageMinimized: boolean;
   sampleStageControllerBusy: boolean;
   highVoltagePower: boolean;
   highVoltageReady: boolean;
@@ -88,6 +89,7 @@ export function Header({
   highVoltageError: string | null;
   onToggleHighVoltage: () => void;
   scanLocked: boolean;
+  adcTestActive: boolean;
 }) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.status.service);
@@ -111,7 +113,7 @@ export function Header({
       setAuthOpen(false);
       return;
     }
-    if (activeView === "report" || signedInUser || authAutoOpenedRef.current) return;
+    if (signedInUser || authAutoOpenedRef.current) return;
     authAutoOpenedRef.current = true;
     setAuthOpen(true);
   }, [activeView, scanLocked, signedInUser]);
@@ -128,6 +130,7 @@ export function Header({
 
   const state = status?.state ?? "disconnected";
   const stateKey = STATE_LABEL_KEYS[state];
+  const displayedStateKey = adcTestActive ? "header.state.adcConnecting" : stateKey;
   const beamLabelKey =
     selectedBeam === "ebeam"
       ? "header.beam.ebeam"
@@ -183,7 +186,7 @@ export function Header({
       )}
 
       <span className="status-pill" data-state={state}>
-        {stateKey ? t(stateKey) : state}
+        {displayedStateKey ? t(displayedStateKey) : state}
       </span>
       <div className="row" style={{ gap: 8 }}>
         <span className="card__title" id="theme-picker-label">
@@ -210,16 +213,16 @@ export function Header({
       <div className="app-header__utility-panel">
         <button
           type="button"
-          className="btn btn--ghost app-header__settings"
+          className="btn btn--ghost"
           onClick={() => {
             if (activeView === "report") onOpenScan();
             else onOpenReport();
           }}
-          aria-label={activeView === "report" ? t("header.scan.aria") : t("header.report.aria")}
-          title={activeView === "report" ? t("header.scan.title") : t("header.report.title")}
-          disabled={headerActionDisabled}
+          title={t(activeView === "report" ? "header.scan.title" : "header.dashboard.title")}
+          aria-pressed={activeView === "report"}
         >
           <Icon name={activeView === "report" ? "scan" : "layers"} tone="accent" />
+          {t(activeView === "report" ? "header.desktop.label" : "header.dashboard.label")}
         </button>
         <button
           type="button"
@@ -250,28 +253,28 @@ export function Header({
         {shouldShowVacuumController(vacuumEnabled) && (
           <button
             type="button"
-            className={`btn btn--ghost app-header__settings app-header__vacuum${vacuumControllerBusy ? " app-header__controller--busy" : ""}`}
+            className={`btn btn--ghost app-header__settings app-header__vacuum${vacuumControllerError ? " app-header__controller--error" : vacuumControllerBusy ? " app-header__controller--busy" : ""}`}
             onClick={onOpenVacuum}
-            aria-label={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.aria")}
-            title={vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.title")}
+            aria-label={vacuumControllerError ? t("header.vacuum.error") : vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.aria")}
+            title={vacuumControllerError ? t("header.vacuum.error") : vacuumMinimized ? t("vacuum.restore") : t("header.vacuum.title")}
             aria-busy={vacuumControllerBusy}
             disabled={headerActionDisabled}
           >
             <Icon name="dashboard" />
+            {vacuumControllerError && <span className="app-header__controller-error-badge" aria-hidden>!</span>}
           </button>
         )}
         <button
           type="button"
           className={`btn btn--ghost app-header__settings app-header__sample-stage${sampleStageControllerBusy ? " app-header__controller--busy" : ""}`}
           onClick={onOpenSampleStage}
-          aria-label={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.aria")}
-          title={sampleStageMinimized ? t("sampleStage.restore") : t("header.sampleStage.title")}
+          aria-label={t("header.sampleStage.aria")}
+          title={t("header.sampleStage.title")}
           aria-busy={sampleStageControllerBusy}
           disabled={headerActionDisabled}
         >
           <img src={sampleStageImage} alt="" aria-hidden />
         </button>
-        {shouldShowVacuumController(vacuumEnabled) && (
           <button
             type="button"
             className={`btn btn--ghost app-header__settings app-header__high-voltage${highVoltagePower ? " app-header__high-voltage--on" : ""}${highVoltagePending ? " app-header__controller--busy" : ""}`}
@@ -284,7 +287,6 @@ export function Header({
           >
             <img src={highVoltageImage} alt="" aria-hidden />
           </button>
-        )}
       </div>
       <button
         type="button"

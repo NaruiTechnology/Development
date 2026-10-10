@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # buildDistribution_state.py
 #
-# First action: invoke buidCompiledDist.py to produce dist_app.zip.
+# First action: invoke buildCompiledDist.py to produce dist_app.zip.
 # Pure template state -- the JSON drives the command.
 #-------------------------------------------------------------------------------
 from .executeShellCommand_state import executeShellCommand_state

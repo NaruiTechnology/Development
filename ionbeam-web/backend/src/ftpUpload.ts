@@ -1,9 +1,12 @@
 import { spawn } from "node:child_process";
 import { Buffer } from "node:buffer";
 import fsp from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { config } from "./config";
 import { ConfigError } from "./configManager";
+import { expandPlaceholders } from "./secretStore";
 
 type UploadSubdir = "csv" | "img";
 
@@ -20,6 +23,16 @@ interface ScanArtifactUpload {
   imageFilename: string;
 }
 
+/**
+ * Artifact bytes supplied by the caller. The native desktop app acquires in
+ * its own process, so glasgow_service's /scan/last/* holds a different (stale)
+ * scan; it sends the CSV/PNG it rendered for this scan instead.
+ */
+export interface ScanArtifactBytes {
+  csv: Buffer;
+  image: Buffer;
+}
+
 export interface FtpConnectionResult {
   enabled: boolean;
   reachable: boolean;
@@ -32,6 +45,7 @@ export async function uploadScanArtifactsToConfiguredFtp(
   kind: "raster" | "vector",
   filenames: ScanArtifactUpload,
   preview = false,
+  artifacts: ScanArtifactBytes | null = null,
 ): Promise<void> {
   if (preview) {
     console.warn(`[ftp-upload] skipping ${kind} scan upload: preview mode`);
@@ -47,15 +61,29 @@ export async function uploadScanArtifactsToConfiguredFtp(
     return;
   }
 
-  const csvBuffer = await fetchArtifactWithRetry("/scan/last/csv");
+  const csvBuffer = artifacts?.csv ?? await fetchArtifactWithRetry("/scan/last/csv");
   await uploadBufferWithCurl(ftp, "csv", filenames.csvFilename, csvBuffer);
 
   const figurePath =
     kind === "vector"
       ? "/scan/last/figure?render=decimated"
       : "/scan/last/figure";
-  const imageBuffer = await fetchArtifactWithRetry(figurePath);
+  const imageBuffer = artifacts?.image ?? await fetchArtifactWithRetry(figurePath);
   await uploadBufferWithCurl(ftp, "img", filenames.imageFilename, imageBuffer);
+}
+
+/**
+ * Decode optional `artifacts: { csv_base64, image_base64 }` from a request
+ * body. Returns null (fall back to fetching from glasgow_service) when absent
+ * or incomplete.
+ */
+export function scanArtifactBytesFromBody(value: unknown): ScanArtifactBytes | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const csv = typeof record.csv_base64 === "string" ? Buffer.from(record.csv_base64, "base64") : null;
+  const image = typeof record.image_base64 === "string" ? Buffer.from(record.image_base64, "base64") : null;
+  if (!csv || !image || csv.length === 0 || image.length === 0) return null;
+  return { csv, image };
 }
 
 export async function uploadMergedFigureToConfiguredFtp(
@@ -89,7 +117,9 @@ async function loadFtpSettings(): Promise<FtpSettings | null> {
   try {
     const raw = await fsp.readFile(config.configPath, "utf8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const ftp = readConfigPath(parsed, FTP_CONFIG_PATH);
+    // host/username/password are ${IOBEAM_FTP_*} placeholders resolved from
+    // the owner-only secrets file; unresolved ones read as "not configured".
+    const ftp = expandPlaceholders(readConfigPath(parsed, FTP_CONFIG_PATH));
     if (!ftp || typeof ftp !== "object" || Array.isArray(ftp)) {
       return null;
     }
@@ -146,24 +176,25 @@ async function testFtpConnection(ftp: FtpSettings): Promise<FtpConnectionResult>
   target.pathname = buildRemoteFolderPath(ftp.folder);
 
   try {
-    await runCurl(
-      [
-        "--silent",
-        "--show-error",
-        "--fail",
-        "--connect-timeout",
-        "3",
-        "--max-time",
-        "5",
-        "--ftp-method",
-        "nocwd",
-        "--disable-epsv",
-        "--user",
-        `${ftp.username}:${ftp.password}`,
-        "--list-only",
-        target.toString(),
-      ],
-      undefined,
+    await withCurlCredentials(ftp, (credentialArgs) =>
+      runCurl(
+        [
+          "--silent",
+          "--show-error",
+          "--fail",
+          "--connect-timeout",
+          "3",
+          "--max-time",
+          "5",
+          "--ftp-method",
+          "nocwd",
+          "--disable-epsv",
+          ...credentialArgs,
+          "--list-only",
+          target.toString(),
+        ],
+        undefined,
+      ),
     );
     return {
       enabled: true,
@@ -188,28 +219,49 @@ async function uploadBufferWithCurl(
   const remotePath = buildRemotePath(ftp.folder, subdir, filename);
   const target = new URL(`ftp://${ftp.host}`);
   target.pathname = remotePath;
-  await runCurl(
-    [
-      "--silent",
-      "--show-error",
-      "--fail",
-      "--ftp-create-dirs",
-      "--ftp-method",
-      "nocwd",
-      "--disable-epsv",
-      "--user",
-      `${ftp.username}:${ftp.password}`,
-      // Quote commands run before curl changes directories. Use the full
-      // remote path so an existing image is deleted from img/, not the
-      // account's login directory. The leading * tolerates a missing file.
-      "--quote",
-      `*DELE ${remotePath}`,
-      "--upload-file",
-      "-",
-      target.toString(),
-    ],
-    buffer,
+  await withCurlCredentials(ftp, (credentialArgs) =>
+    runCurl(
+      [
+        "--silent",
+        "--show-error",
+        "--fail",
+        "--ftp-create-dirs",
+        "--ftp-method",
+        "nocwd",
+        "--disable-epsv",
+        ...credentialArgs,
+        // Quote commands run before curl changes directories. Use the full
+        // remote path so an existing image is deleted from img/, not the
+        // account's login directory. The leading * tolerates a missing file.
+        "--quote",
+        `*DELE ${remotePath}`,
+        "--upload-file",
+        "-",
+        target.toString(),
+      ],
+      buffer,
+    ),
   );
+}
+
+/**
+ * Hand the FTP login to curl through a private, short-lived config file
+ * instead of `--user name:password`, which any local account could read
+ * from the process list while the upload runs.
+ */
+export async function withCurlCredentials<T>(
+  ftp: Pick<FtpSettings, "username" | "password">,
+  run: (credentialArgs: string[]) => Promise<T>,
+): Promise<T> {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "ionbeam-ftp-"));
+  const file = path.join(dir, "curl.conf");
+  const escape = (value: string) => value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  try {
+    await fsp.writeFile(file, `user = "${escape(`${ftp.username}:${ftp.password}`)}"\n`, { mode: 0o600 });
+    return await run(["--config", file]);
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
 }
 
 async function runCurl(args: string[], stdin: Buffer | undefined): Promise<string> {

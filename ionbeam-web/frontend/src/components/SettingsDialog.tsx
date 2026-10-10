@@ -18,18 +18,24 @@
  *   (a) reconciling three local drafts on save (error-prone), or
  *   (b) pushing each per-field change up to settingsSlice immediately
  *       (what we do here).
- * (b) is simpler: every input dispatches `setDraft(writePath(...))`
+ * (b) is simpler: persisted inputs dispatch `setDraft(writePath(...))`
  * with an immutably updated copy, and the dialog reads `draft` for
- * every render. The Redux DevTools timeline becomes the edit history
- * for free.
+ * every render. Session-only Simulation values stay in
+ * local modal state until Update is clicked. The Redux DevTools timeline
+ * becomes the edit history for persisted fields for free.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
-import { clearLastResult, clearROIImage, clearROISelection, streamReset } from "../store/scanSlice";
+import {
+  clearLastResult,
+  clearROIImage,
+  clearROISelection,
+  streamReset,
+} from "../store/scanSlice";
 import { resetRaster, resetVector } from "../store/imageSlice";
-import { fetchDefaultsMetadata, previewConfigDefaults } from "../store/statusSlice";
+import { fetchDefaultsMetadata, previewConfigDefaults, setSessionSimulation } from "../store/statusSlice";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
@@ -51,13 +57,24 @@ import {
   saveSettingsConfig,
   setActiveTab,
   setDraft,
+  setDraftVacuumEnabled,
   setError,
   writePath,
   type SettingsConfigInfo,
   type SettingsTab,
 } from "../store/settingsSlice";
 import { HelpPopover } from "./HelpPopover";
+import { CalibrationPanel } from "./calibration/CalibrationPanel";
+import { EquipmentGrid } from "./EquipmentGrid";
+import { UserAccountsGrid } from "./UserAccountsGrid";
+import {
+  emptyEquipment,
+  equipmentFromDraft,
+  type EquipmentRow,
+} from "../lib/equipmentModel";
+import { parseEquipmentCsv } from "../lib/equipmentCsv";
 import { Icon } from "./Icon";
+import { LoadingSpinner } from "./LoadingSpinner";
 import { PresetNumberField, type PresetNumberOption } from "./PresetNumberField";
 import { NumberStepperInput } from "./NumberStepperField";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
@@ -65,18 +82,20 @@ import { DEFAULT_SITE, SITE_OPTIONS, normalizeSiteValue } from "../lib/sites";
 
 const RASTER_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
 const VECTOR_RESOLUTION_OPTIONS: PresetNumberOption[] = [256, 512, 1024, 2048].map((value) => ({ value }));
-const DWELL_OPTIONS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
+const DWELL_OPTIONS: PresetNumberOption[] = [0, 1, 3, 7, 15, 31, 63].map((value) => ({ value }));
 
 export function SettingsDialog({
   targetAccountId = null,
   targetLogin = null,
   mobilityMode = false,
   scanLocked = false,
+  vectorGrayLevelsEnabled = false,
 }: {
   targetAccountId?: number | null;
   targetLogin?: string | null;
   mobilityMode?: boolean;
   scanLocked?: boolean;
+  vectorGrayLevelsEnabled?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const open = useAppSelector((s) => s.settings.dialogOpen);
@@ -86,9 +105,8 @@ export function SettingsDialog({
     dispatch(fetchSettingsConfig());
   }, [dispatch, open]);
 
-  // Scroll lock while the settings modal is open. The dialog closes
-  // only from the explicit header close button so restart results stay
-  // visible until the operator dismisses them.
+  // Scroll lock while the settings modal is open. Persisted updates keep the
+  // dialog open for restart results; session-only updates close it.
   useEffect(() => {
     if (!open) return;
 
@@ -109,6 +127,7 @@ export function SettingsDialog({
         targetLogin={targetLogin}
         mobilityMode={mobilityMode}
         scanLocked={scanLocked}
+        vectorGrayLevelsEnabled={vectorGrayLevelsEnabled}
       />
     </div>
   );
@@ -129,11 +148,11 @@ function resetROIPreview(dispatch: AppDispatch) {
   dispatch(clearROIImage());
 }
 
-function resetScanImages(dispatch: AppDispatch, rasterResolution: number) {
+function resetScanImages(dispatch: AppDispatch, rasterResolution: number, preserveVectorImage: boolean) {
   dispatch(streamReset());
   dispatch(clearLastResult());
   dispatch(resetRaster({ resolution: rasterResolution }));
-  dispatch(resetVector());
+  if (!preserveVectorImage) dispatch(resetVector());
 }
 
 function simulationImageSignature(config: unknown): string {
@@ -152,6 +171,16 @@ function simulationImageChanged(before: unknown, after: unknown): boolean {
   return simulationImageSignature(before) !== simulationImageSignature(after);
 }
 
+function simulationRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function sessionSimulationSignature(value: Record<string, unknown>): string {
+  return JSON.stringify(value);
+}
+
 /* -------- modal shell -------------------------------------------------- */
 
 function SettingsModalShell({
@@ -159,11 +188,13 @@ function SettingsModalShell({
   targetLogin,
   mobilityMode,
   scanLocked,
+  vectorGrayLevelsEnabled,
 }: {
   targetAccountId: number | null;
   targetLogin: string | null;
   mobilityMode: boolean;
   scanLocked: boolean;
+  vectorGrayLevelsEnabled: boolean;
 }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -174,6 +205,8 @@ function SettingsModalShell({
     restoring,
     source,
     draft,
+    sourceVacuumEnabled,
+    draftVacuumEnabled,
     configPath,
     hasBackup,
     error,
@@ -181,6 +214,9 @@ function SettingsModalShell({
     backupNotice,
   } = useAppSelector((s) => s.settings);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
+  const appliedSessionSimulation = useAppSelector((s) => s.status.sessionSimulation);
+  const defaultSimulation = useAppSelector((s) => s.status.defaults?.simulation ?? null);
+
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const titleIdRef = useRef(
     `settings-modal-title-${Math.random().toString(36).slice(2, 9)}`,
@@ -211,9 +247,21 @@ function SettingsModalShell({
   const [confirmDefault, setConfirmDefault] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>("users");
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
+  // Null means untouched: until the operator edits Simulation, follow the
+  // latest active/default block instead of freezing an early loading value.
+  const [sessionSimulationDraft, setSessionSimulationDraft] = useState<Record<string, unknown> | null>(null);
+
+  const configuredSimulation = simulationRecord(readPath(source, SIMULATION_PATH));
+  const activeSimulation = appliedSessionSimulation ?? defaultSimulation ?? configuredSimulation ?? {};
+  const pendingSimulation = sessionSimulationDraft ?? activeSimulation;
 
   const busy = loading || saving || restoring;
   const adcTimingValid = draft === null || validAdcTiming(draft);
+  const configChanged = draft !== null && (draft !== source || draftVacuumEnabled !== sourceVacuumEnabled);
+  const sessionSimulationChanged =
+    sessionSimulationDraft !== null &&
+    sessionSimulationSignature(pendingSimulation) !== sessionSimulationSignature(activeSimulation);
+  const sessionOnlyChanged = sessionSimulationChanged;
   const canEditPins = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const canEditFtp = currentAccountRole !== null && currentAccountRole >= ADMIN_ROLE;
   const visibleTabs: SettingsTab[] = mobilityMode
@@ -246,6 +294,21 @@ function SettingsModalShell({
     dispatch(setActiveTab(tab));
   }
 
+  function applySessionSettings() {
+    if (sessionSimulationChanged) dispatch(setSessionSimulation(pendingSimulation));
+    if (sessionSimulationChanged) resetROIPreview(dispatch);
+  }
+
+  function onUpdate() {
+    if (configChanged || !sessionOnlyChanged) {
+      setConfirmSave(true);
+      return;
+    }
+    if (!sessionOnlyChanged) return;
+    applySessionSettings();
+    dispatch(closeDialog());
+  }
+
   async function onConfirmSave() {
     if (draft === null) return;
     if (!validAdcTiming(draft)) {
@@ -257,16 +320,18 @@ function SettingsModalShell({
     const imageChanged = simulationImageChanged(source, draft);
     const result = await dispatch(saveSettingsConfig(draft));
     if (saveSettingsConfig.fulfilled.match(result)) {
+      if (sessionOnlyChanged) applySessionSettings();
       if (imageChanged) {
         resetROIPreview(dispatch);
       } else {
         resetPartialROISelection(dispatch);
       }
-      resetScanImages(dispatch, rasterResolution);
+      resetScanImages(dispatch, rasterResolution, vectorGrayLevelsEnabled);
       dispatch(previewConfigDefaults(configDefaultsPreview(draft)));
       if (await refreshDefaultsForSettings(dispatch)) {
         dispatch(setBackendRestarting(false));
       }
+      if (sessionOnlyChanged) dispatch(closeDialog());
     }
     // The restart result is surfaced via `lastRestart`; we don't
     // auto-close the dialog so the operator can see whether it
@@ -277,7 +342,7 @@ function SettingsModalShell({
     setConfirmDefault(false);
     const result = await dispatch(restoreSettingsConfig());
     if (restoreSettingsConfig.fulfilled.match(result)) {
-      resetScanImages(dispatch, rasterResolution);
+      resetScanImages(dispatch, rasterResolution, vectorGrayLevelsEnabled);
       // Pull the restored values back into the dialog so the tabs
       // show the freshly-installed defaults instead of the pre-restore
       // draft.
@@ -304,7 +369,7 @@ function SettingsModalShell({
   // we light up the tabs.
   return (
     <div
-      className="modal settings-modal"
+      className={`modal settings-modal${activeTab === "admin" && activeSubTab === "calibration" ? " settings-modal--wide" : activeTab === "admin" && activeSubTab === "equipment" ? " settings-modal--equipment" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleIdRef.current}
@@ -356,7 +421,9 @@ function SettingsModalShell({
           tone={lastRestart.ok ? "success" : "error"}
           message={
             lastRestart.ok
-              ? t("settings.restart.ok", { command: lastRestart.command })
+              ? lastRestart.skipped
+                ? t("settings.restart.skipped")
+                : t("settings.restart.ok", { command: lastRestart.command })
               : t("settings.restart.fail", {
                   command: lastRestart.command,
                   detail: lastRestart.error || lastRestart.stderr || "",
@@ -372,9 +439,9 @@ function SettingsModalShell({
         ))}
       </div>
 
-      <div className="modal__body settings-modal__body">
+      <div className={`modal__body settings-modal__body${activeTab === "admin" && activeSubTab === "equipment" ? " settings-modal__body--equipment" : ""}`}>
         {loading && draft === null ? (
-          <div className="settings-loading">{t("settings.loading")}</div>
+          <LoadingSpinner className="settings-loading" label={t("settings.loading")} />
         ) : draft === null ? (
           <div className="settings-loading">{t("settings.empty")}</div>
         ) : (
@@ -392,6 +459,8 @@ function SettingsModalShell({
           mobilityMode={mobilityMode}
           canEditPins={canEditPins}
           canEditFtp={canEditFtp}
+          sessionSimulation={pendingSimulation}
+          onSessionSimulationChange={setSessionSimulationDraft}
         />
         )}
       </div>
@@ -420,7 +489,7 @@ function SettingsModalShell({
               data-visible={busy || scanLocked ? "true" : "false"}
               aria-hidden={!busy}
             >
-              <span className="scan-busy__spinner" />
+              <LoadingSpinner inline size={20} ariaLabel={t("settings.admin.busy")} />
             </span>
 
             <button
@@ -453,9 +522,13 @@ function SettingsModalShell({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || scanLocked || draft === null || draft === source || !adcTimingValid}
-              onClick={() => setConfirmSave(true)}
-              title={t("settings.btn.saveAs.title")}
+              disabled={busy || scanLocked || draft === null || !adcTimingValid}
+              onClick={onUpdate}
+              title={
+                configChanged || !sessionOnlyChanged
+                  ? t("settings.btn.saveAs.title")
+                  : t("settings.btn.sessionOnly.title")
+              }
             >
               <Icon name="download" />
               {t("settings.btn.saveAs")}
@@ -515,6 +588,8 @@ function SettingsTabBody({
   mobilityMode,
   canEditPins,
   canEditFtp,
+  sessionSimulation,
+  onSessionSimulationChange,
 }: {
   tab: SettingsTab;
   draft: unknown;
@@ -525,10 +600,16 @@ function SettingsTabBody({
   mobilityMode: boolean;
   canEditPins: boolean;
   canEditFtp: boolean;
+  sessionSimulation: Record<string, unknown>;
+  onSessionSimulationChange: (simulation: Record<string, unknown>) => void;
 }) {
   switch (tab) {
     case "general":
-      return <GeneralTab draft={draft} />;
+      return (
+        <GeneralTab
+          draft={draft}
+        />
+      );
     case "raster":
       return <RasterTab draft={draft} />;
     case "vector":
@@ -536,7 +617,12 @@ function SettingsTabBody({
     case "pins":
       return <PinsTab draft={draft} disabled={!canEditPins} />;
     case "simulation":
-      return <SimulationTab draft={draft} />;
+      return (
+        <SimulationTab
+          simulation={sessionSimulation}
+          onSimulationChange={onSessionSimulationChange}
+        />
+      );
     case "ftp":
       return <FtpTab draft={draft} disabled={!canEditFtp} />;
     case "admin":
@@ -554,7 +640,11 @@ function SettingsTabBody({
 
 /* General tab: top-level flags plus the basic actionData scalars that
  * aren't raster- or vector-specific. */
-function GeneralTab({ draft }: { draft: unknown }) {
+function GeneralTab({
+  draft,
+}: {
+  draft: unknown;
+}) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
@@ -563,6 +653,7 @@ function GeneralTab({ draft }: { draft: unknown }) {
   const logName = stringField(draft, ["LogName"], "");
   const verbose = boolField(draft, ["Verbose"], false);
   const isProduction = boolField(draft, ["IsProduction"], false);
+  const vacuumEnabled = useAppSelector((s) => s.settings.draftVacuumEnabled);
   const dumpData = boolField(draft, ["DumpData"], false);
 
   // Glasgow / Device0 id.
@@ -575,9 +666,18 @@ function GeneralTab({ draft }: { draft: unknown }) {
     1000,
   );
   const bufferSize = stringField(draft, [...ACTION_DATA_PATH, "bufferSize"], "");
-  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
-  const adcSettleCycles = numberField(draft, [...ACTION_DATA_PATH, "adcSettleCycles"], 2);
+  const adcHalfPeriod = numberField(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], 3);
+  const adcSettleCycles = numberField(draft, [...ACTION_DATA_PATH, "adcSettleCycles"], 1);
+  const adcLatchCycles = numberField(draft, [...ACTION_DATA_PATH, "adcLatchCycles"], 1);
+  const busTurnaroundCycles = numberField(draft, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 0);
+  const dacDataSetupCycles = numberField(draft, [...ACTION_DATA_PATH, "dacDataSetupCycles"], 1);
+  const dacLatchCycles = numberField(draft, [...ACTION_DATA_PATH, "dacLatchCycles"], 1);
   const adcTimingValid = validAdcTiming(draft);
+  const requiredTimingCycles = adcSettleCycles + adcLatchCycles
+    + busTurnaroundCycles + 2 * (dacDataSetupCycles + dacLatchCycles);
+  const adcMinimumHalfPeriod = Math.max(
+    2, adcLatchCycles + adcSettleCycles, Math.ceil(requiredTimingCycles / 2),
+  );
   const adcClockMHz = Number.isFinite(adcHalfPeriod) && adcHalfPeriod > 0
     ? 48 / (2 * adcHalfPeriod)
     : 0;
@@ -587,6 +687,41 @@ function GeneralTab({ draft }: { draft: unknown }) {
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
+  }
+
+  function setHardwareTiming(
+    halfPeriod: number, settleCycles: number, latchCycles: number,
+    turnaroundCycles: number, dacSetupCycles: number, nextDacLatchCycles: number,
+  ) {
+    let next = writePath(draft, [...ACTION_DATA_PATH, "adcHalfPeriod"], halfPeriod);
+    next = writePath(next, [...ACTION_DATA_PATH, "adcSettleCycles"], settleCycles);
+    next = writePath(next, [...ACTION_DATA_PATH, "adcLatchCycles"], latchCycles);
+    next = writePath(next, [...ACTION_DATA_PATH, "busTurnaroundCycles"], turnaroundCycles);
+    next = writePath(next, [...ACTION_DATA_PATH, "dacDataSetupCycles"], dacSetupCycles);
+    next = writePath(next, [...ACTION_DATA_PATH, "dacLatchCycles"], nextDacLatchCycles);
+    dispatch(setDraft(next));
+  }
+
+  function boundedTimingValue(value: number, minimum = 1, maximum = 255): number {
+    return Math.min(maximum, Math.max(minimum, Math.trunc(value)));
+  }
+
+  function applyTimingChange(values: {
+    half?: number; settle?: number; latch?: number; turnaround?: number;
+    setup?: number; dacLatch?: number;
+  }) {
+    const settle = values.settle ?? adcSettleCycles;
+    const latch = values.latch ?? adcLatchCycles;
+    const turnaround = values.turnaround ?? busTurnaroundCycles;
+    const setup = values.setup ?? dacDataSetupCycles;
+    const dacLatch = values.dacLatch ?? dacLatchCycles;
+    const required = Math.max(
+      2,
+      settle + latch,
+      Math.ceil((settle + latch + turnaround + 2 * (setup + dacLatch)) / 2),
+    );
+    const half = Math.max(required, values.half ?? adcHalfPeriod);
+    setHardwareTiming(half, settle, latch, turnaround, setup, dacLatch);
   }
 
   return (
@@ -613,14 +748,20 @@ function GeneralTab({ draft }: { draft: unknown }) {
 
       <div className="settings-flags">
         <CheckboxField
-          label={t("settings.general.verbose")}
-          value={verbose}
-          onChange={(v) => set(["Verbose"], v)}
-        />
-        <CheckboxField
           label={t("settings.general.isProduction")}
           value={isProduction}
           onChange={(v) => set(["IsProduction"], v)}
+        />
+        <CheckboxField
+          label={t("settings.general.activeVacuumControl")}
+          value={vacuumEnabled === true}
+          disabled={vacuumEnabled === null}
+          onChange={(v) => dispatch(setDraftVacuumEnabled(v))}
+        />
+        <CheckboxField
+          label={t("settings.general.verbose")}
+          value={verbose}
+          onChange={(v) => set(["Verbose"], v)}
         />
         <CheckboxField
           label={t("settings.general.dumpData")}
@@ -655,27 +796,51 @@ function GeneralTab({ draft }: { draft: unknown }) {
 
       <p className="settings-form__hint">
         {t("settings.general.adcClock", { mhz: adcClockMHz.toFixed(2) })}
+        {" "}
+        {t("settings.general.adcTiming.rule", { minimum: adcMinimumHalfPeriod })}
       </p>
 
-      <div className="field-row">
+      <div className="field-row field-row--three">
         <NumberField
           label={t("settings.general.adcHalfPeriod")}
           help={<SettingsHelp topic="generalAdcHalfPeriod" />}
-          value={adcHalfPeriod}
-          min={1}
-          max={255}
+          value={adcHalfPeriod} min={adcMinimumHalfPeriod} max={255}
           invalid={!adcTimingValid}
           warning={!adcTimingValid ? t("settings.general.adcTiming.validation") : undefined}
-          onChange={(v) => set([...ACTION_DATA_PATH, "adcHalfPeriod"], Math.trunc(v))}
+          onChange={(value) => applyTimingChange({ half: boundedTimingValue(value, 2) })}
         />
         <NumberField
           label={t("settings.general.adcSettleCycles")}
           help={<SettingsHelp topic="generalAdcSettleCycles" />}
-          value={adcSettleCycles}
-          min={1}
-          max={255}
-          invalid={!adcTimingValid}
-          onChange={(v) => set([...ACTION_DATA_PATH, "adcSettleCycles"], Math.trunc(v))}
+          value={adcSettleCycles} min={1} max={255} invalid={!adcTimingValid}
+          onChange={(value) => applyTimingChange({ settle: boundedTimingValue(value) })}
+        />
+        <NumberField
+          label={t("settings.general.adcLatchCycles")}
+          help={<SettingsHelp topic="generalAdcLatchCycles" />}
+          value={adcLatchCycles} min={1} max={255} invalid={!adcTimingValid}
+          onChange={(value) => applyTimingChange({ latch: boundedTimingValue(value) })}
+        />
+      </div>
+
+      <div className="field-row field-row--three settings-form__timing-row">
+        <NumberField
+          label={t("settings.general.busTurnaroundCycles")}
+          help={<SettingsHelp topic="generalBusTurnaroundCycles" />}
+          value={busTurnaroundCycles} min={0} max={255} invalid={!adcTimingValid}
+          onChange={(value) => applyTimingChange({ turnaround: boundedTimingValue(value, 0) })}
+        />
+        <NumberField
+          label={t("settings.general.dacDataSetupCycles")}
+          help={<SettingsHelp topic="generalDacDataSetupCycles" />}
+          value={dacDataSetupCycles} min={1} max={255} invalid={!adcTimingValid}
+          onChange={(value) => applyTimingChange({ setup: boundedTimingValue(value) })}
+        />
+        <NumberField
+          label={t("settings.general.dacLatchCycles")}
+          help={<SettingsHelp topic="generalDacLatchCycles" />}
+          value={dacLatchCycles} min={1} max={255} invalid={!adcTimingValid}
+          onChange={(value) => applyTimingChange({ dacLatch: boundedTimingValue(value) })}
         />
       </div>
 
@@ -769,7 +934,7 @@ function RasterTab({ draft }: { draft: unknown }) {
           label={<FieldLabel label={t("settings.raster.dwell")} help={<SettingsHelp topic="rasterDwell" />} />}
           value={dwell}
           options={DWELL_OPTIONS}
-          min={1}
+          min={0}
           max={65535}
           disabled={false}
           onChange={(v) => set([...RASTER_PATH, "dwell"], v)}
@@ -832,7 +997,7 @@ function VectorTab({ draft }: { draft: unknown }) {
           label={<FieldLabel label={t("settings.vector.dwell")} help={<SettingsHelp topic="vectorDwell" />} />}
           value={dwell}
           options={DWELL_OPTIONS}
-          min={1}
+          min={0}
           max={65535}
           disabled={false}
           onChange={(v) => set([...VECTOR_PATH, "dwell"], v)}
@@ -1070,24 +1235,29 @@ interface ControlSubsignal {
  * understands the legacy shape, so writing back the new shape is a
  * one-way migration without breaking older configs in the wild.
  * --------------------------------------------------------------------- */
-function SimulationTab({ draft }: { draft: unknown }) {
-  const dispatch = useAppDispatch();
+function SimulationTab({
+  simulation,
+  onSimulationChange,
+}: {
+  simulation: Record<string, unknown>;
+  onSimulationChange: (simulation: Record<string, unknown>) => void;
+}) {
   const { t } = useTranslation();
 
-  const enabled = boolField(draft, [...SIMULATION_PATH, "enabled"], true);
-  const mode = stringField(draft, [...SIMULATION_PATH, "mode"], "image");
+  const enabled = boolField(simulation, ["enabled"], true);
+  const mode = stringField(simulation, ["mode"], "image");
   const imageResolution = numberField(
-    draft, [...SIMULATION_PATH, "imageResolution"], 64
+    simulation, ["imageResolution"], 64
   );
-  const source = stringField(draft, [...SIMULATION_PATH, "source"], "pattern");
+  const source = stringField(simulation, ["source"], "pattern");
   const patternKind = stringField(
-    draft, [...SIMULATION_PATH, "patternKind"], "bullseye"
+    simulation, ["patternKind"], "bullseye"
   );
-  const invert = boolField(draft, [...SIMULATION_PATH, "invert"], false);
-  const seed = numberField(draft, [...SIMULATION_PATH, "seed"], 0);
+  const invert = boolField(simulation, ["invert"], false);
+  const seed = numberField(simulation, ["seed"], 0);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
-    dispatch(setDraft(writePath(draft, p, v)));
+    onSimulationChange(writePath(simulation, p, v) as Record<string, unknown>);
   }
 
   // Two derived gates. `imageMode` controls whether the source picker
@@ -1105,7 +1275,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
           label={t("settings.simulation.enabled")}
           help={<SettingsHelp topic="simulationEnabled" />}
           value={enabled}
-          onChange={(v) => set([...SIMULATION_PATH, "enabled"], v)}
+          onChange={(v) => set(["enabled"], v)}
         />
       </div>
 
@@ -1115,7 +1285,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
           <select
             className="select"
             value={mode}
-            onChange={(e) => set([...SIMULATION_PATH, "mode"], e.target.value)}
+            onChange={(e) => set(["mode"], e.target.value)}
           >
             <option value="image">{t("settings.simulation.mode.image")}</option>
             <option value="zeros">{t("settings.simulation.mode.zeros")}</option>
@@ -1126,7 +1296,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
           label={t("settings.simulation.imageResolution")}
           help={<SettingsHelp topic="simulationResolution" />}
           value={imageResolution}
-          onChange={(v) => set([...SIMULATION_PATH, "imageResolution"], v)}
+          onChange={(v) => set(["imageResolution"], v)}
         />
       </div>
 
@@ -1142,7 +1312,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
             className="select"
             value={source}
             disabled={!imageMode}
-            onChange={(e) => set([...SIMULATION_PATH, "source"], e.target.value)}
+            onChange={(e) => set(["source"], e.target.value)}
           >
             <option value="pattern">{t("settings.simulation.source.pattern")}</option>
             <option value="file">{t("settings.simulation.source.file")}</option>
@@ -1159,7 +1329,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
               className="select"
               value={patternKind}
               onChange={(e) =>
-                set([...SIMULATION_PATH, "patternKind"], e.target.value)
+                set(["patternKind"], e.target.value)
               }
             >
               <option value="ramp">{t("settings.simulation.patternKind.ramp")}</option>
@@ -1177,7 +1347,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
             label={t("settings.simulation.invert")}
             help={<SettingsHelp topic="simulationInvert" />}
             value={invert}
-            onChange={(v) => set([...SIMULATION_PATH, "invert"], v)}
+            onChange={(v) => set(["invert"], v)}
           />
         </div>
       )}
@@ -1188,7 +1358,7 @@ function SimulationTab({ draft }: { draft: unknown }) {
             label={t("settings.simulation.seed")}
             help={<SettingsHelp topic="simulationSeed" />}
             value={seed}
-            onChange={(v) => set([...SIMULATION_PATH, "seed"], v)}
+            onChange={(v) => set(["seed"], v)}
           />
         </div>
       )}
@@ -1210,9 +1380,13 @@ function FtpTab({
   const [passwordVisible, setPasswordVisible] = useState(false);
 
   const enabled = boolField(draft, [...FTP_PATH, "enabled"], true);
-  const host = stringField(draft, [...FTP_PATH, "host"], "localhost");
-  const username = stringField(draft, [...FTP_PATH, "username"], "vboxuser");
-  const password = stringField(draft, [...FTP_PATH, "password"], "ionbeam123");
+  // host/username/password normally hold ${IOBEAM_FTP_*} references to the
+  // server's secrets file. Typing a new value replaces the reference; the
+  // backend moves it into the secrets file when the configuration is saved.
+  const host = stringField(draft, [...FTP_PATH, "host"], "");
+  const username = stringField(draft, [...FTP_PATH, "username"], "");
+  const password = stringField(draft, [...FTP_PATH, "password"], "");
+  const passwordInSecretsFile = /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}$/.test(password);
   const folder = stringField(draft, [...FTP_PATH, "folder"], "/tmp/ftp");
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
@@ -1227,6 +1401,7 @@ function FtpTab({
   return (
     <div className="settings-form">
       <p className="settings-form__hint">{t("settings.ftp.hint")}</p>
+      <p className="settings-form__hint">{t("settings.ftp.secretsHint")}</p>
       {disabled && (
         <p className="settings-form__hint" style={{ color: "var(--c-danger)" }}>
           {t("settings.admin.privilegeRequired")}
@@ -1262,7 +1437,7 @@ function FtpTab({
           label={t("settings.ftp.password")}
           value={password}
           visible={passwordVisible}
-          configured={false}
+          configured={passwordInSecretsFile}
           revealLabel={t("settings.admin.db.password.show")}
           disabled={disabled || !enabled}
           onReveal={() => setPasswordVisible(true)}
@@ -1415,15 +1590,6 @@ interface AuditorRow {
   is_active: boolean;
 }
 
-interface EquipmentRow {
-  id: number | null;
-  name: string;
-  model: string;
-  serial_number: string;
-  site: string;
-  description: string;
-}
-
 interface CurrentAccountResponse {
   ok: boolean;
   user: { role?: number } | null;
@@ -1465,6 +1631,7 @@ interface FtpConnectionResponse {
 }
 
 const ADMIN_ROLE_OPTIONS = [
+  { value: 4, key: "settings.admin.role.audit" },
   { value: 3, key: "settings.admin.role.admin" },
   { value: 2, key: "settings.admin.role.developer" },
   { value: 1, key: "settings.admin.role.superUser" },
@@ -1473,7 +1640,7 @@ const ADMIN_ROLE_OPTIONS = [
 
 const ADMIN_ROLE = 3;
 const AUDITOR_ROLE = 4;
-type AdminSubTab = "configuration" | "users" | "equipment" | "allowedHosts" | "ftp";
+type AdminSubTab = "configuration" | "users" | "equipment" | "calibration" | "allowedHosts" | "ftp";
 
 function emptyAdminUser(nextId: number): AdminUserRow {
   return {
@@ -1489,6 +1656,11 @@ function emptyAdminUser(nextId: number): AdminUserRow {
     is_active: true,
     session_lifetime_limit_days: 1,
   };
+}
+
+function withEquipmentRows(data: unknown, equipment: EquipmentRow[]): unknown {
+  const next = writePath(data, ["equipments"], equipment);
+  return writePath(next, ["equipment"], equipment[0] ?? emptyEquipment(1));
 }
 
 function adminUsersFromDraft(draft: unknown): AdminUserRow[] {
@@ -1532,37 +1704,6 @@ function auditorsFromDraft(draft: unknown): AuditorRow[] {
     .map((u) => ({
       email: String(u.email ?? ""),
       is_active: typeof u.is_active === "boolean" ? u.is_active : true,
-    }));
-}
-
-function emptyEquipment(nextId: number): EquipmentRow {
-  return {
-    id: nextId,
-    name: "",
-    model: "",
-    serial_number: "",
-    site: "",
-    description: "",
-  };
-}
-
-function equipmentFromDraft(draft: unknown): EquipmentRow[] {
-  const equipment = readPath(draft, ["equipments"]);
-  const rawEquipment = Array.isArray(equipment)
-    ? equipment
-    : readPath(draft, ["equipment"]) && typeof readPath(draft, ["equipment"]) === "object"
-      ? [readPath(draft, ["equipment"])]
-      : [];
-
-  return rawEquipment
-    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
-    .map((row, index) => ({
-      id: typeof row.id === "number" ? row.id : index + 1,
-      name: String(row.name ?? ""),
-      model: String(row.model ?? ""),
-      serial_number: String(row.serial_number ?? ""),
-      site: String(row.site ?? ""),
-      description: String(row.description ?? ""),
     }));
 }
 
@@ -1630,19 +1771,8 @@ function adminUserRowKey(user: AdminUserRow, index: number): string {
   return `index:${index}`;
 }
 
-function equipmentRowKey(row: EquipmentRow, index: number): string {
-  if (row.id !== null) return `id:${row.id}`;
-  const serial = row.serial_number.trim().toLowerCase();
-  if (serial) return `serial:${serial}`;
-  return `index:${index}`;
-}
-
 function adminUserRowSignature(user: AdminUserRow): string {
   return JSON.stringify(user);
-}
-
-function equipmentRowSignature(row: EquipmentRow): string {
-  return JSON.stringify(row);
 }
 
 function adminRoleApprovalRecipients(draft: unknown): string[] {
@@ -1740,9 +1870,13 @@ function AdminTab({
   const [error, setLocalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [privilegeNotice, setPrivilegeNotice] = useState<string | null>(null);
+  const equipmentCsvInputRef = useRef<HTMLInputElement | null>(null);
+  const [equipmentCsvBusy, setEquipmentCsvBusy] = useState(false);
   const [currentAccountRole, setCurrentAccountRole] = useState<number | null>(null);
   const [dbPasswordVisible, setDbPasswordVisible] = useState(false);
   const [dbPasswordConfigured, setDbPasswordConfigured] = useState(false);
+  // Equipment is read from the database only; null while it is reachable.
+  const [equipmentError, setEquipmentError] = useState<string | null>(null);
   const [ftpSource, setFtpSource] = useState<unknown | null>(null);
   const [ftpDraft, setFtpDraft] = useState<unknown | null>(null);
   const [ftpConfigPath, setFtpConfigPath] = useState("");
@@ -1771,7 +1905,7 @@ function AdminTab({
   }, []);
 
   useEffect(() => {
-    if (mobilityMode && activeSubTab === "configuration") {
+    if (mobilityMode && (activeSubTab === "configuration" || activeSubTab === "calibration")) {
       onSelectSubTab("users");
     }
   }, [activeSubTab, mobilityMode, onSelectSubTab]);
@@ -1795,6 +1929,9 @@ function AdminTab({
         data = writeAdminDatabaseConnection(data, dbConnection.connection, false);
         setDbPasswordConfigured(dbConnection.connection.password_configured);
       }
+      setEquipmentError(info.equipment_source === "unavailable"
+        ? info.equipment_error || t("settings.admin.equipment.unavailable.unknown")
+        : null);
       setSource(info.data);
       setDraftLocal(data);
       setConfigPath(info.path);
@@ -1870,14 +2007,6 @@ function AdminTab({
     setDraftLocal(writePath(next, ["equipment"], equipment[0] ?? emptyEquipment(1)));
   }
 
-  function updateEquipment(index: number, field: keyof EquipmentRow, value: string | number | null) {
-    const equipment = equipmentFromDraft(draft);
-    const next = equipment.map((row, rowIndex) =>
-      rowIndex === index ? { ...row, [field]: value } : row
-    );
-    setEquipment(next);
-  }
-
   function addEquipment() {
     const equipment = equipmentFromDraft(draft);
     const maxId = equipment.reduce((max, row) => Math.max(max, row.id ?? 0), 0);
@@ -1888,14 +2017,114 @@ function AdminTab({
     setEquipment(equipmentFromDraft(draft).filter((_row, rowIndex) => rowIndex !== index));
   }
 
-  async function onSave() {
-    if (draft === null) return;
+  async function exportEquipmentCsv() {
+    if (!canManageAdminConfig) {
+      showPrivilegeNotice();
+      return;
+    }
+    setEquipmentCsvBusy(true);
+    setLocalError(null);
+    try {
+      const response = await fetch(apiUrl("/api/admin/iobeam/equipment/export.csv"), {
+        headers: scanAuthHeaders(),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "equipment.csv";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (err) {
+      setLocalError(t("settings.admin.equipment.export.error", {
+        detail: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setEquipmentCsvBusy(false);
+    }
+  }
+
+  async function importEquipmentCsv(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (!canManageAdminConfig) {
+      showPrivilegeNotice();
+      return;
+    }
+    if (busy || equipmentCsvBusy) return;
+
+    setEquipmentCsvBusy(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error("The CSV exceeds the 10 MB file limit.");
+      const validation = parseEquipmentCsv(await file.text());
+      const existingEquipment = equipmentFromDraft(draft);
+      const imported = [];
+      let skippedRows = validation.skippedRows.length;
+      const skippedColumns = validation.skippedColumns.length;
+      for (const row of validation.rows) {
+        const serialNumber = row.serial_number?.trim().toLowerCase() ?? "";
+        const existing = existingEquipment.find((candidate) =>
+          (row.id != null && candidate.id === row.id) ||
+          (serialNumber !== "" && candidate.serial_number.trim().toLowerCase() === serialNumber),
+        );
+        if (!existing && !SITE_OPTIONS.some((option) => option.value === row.site)) {
+          skippedRows++;
+          continue;
+        }
+        imported.push(row);
+      }
+      if (imported.length === 0) throw new Error(t("settings.admin.equipment.import.noneValid", { skipped: skippedRows }));
+      if (!window.confirm(t("settings.admin.equipment.import.confirm", {
+        rows: imported.length,
+        skipped: skippedRows,
+        columns: skippedColumns,
+        file: file.name,
+      }))) return;
+      const response = await fetch(apiUrl("/api/admin/iobeam/equipment/import"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...scanAuthHeaders() },
+        body: JSON.stringify({ equipment: imported }),
+      });
+      const result = await readJsonResponse<{
+        ok?: boolean;
+        equipment?: EquipmentRow[];
+        added?: number;
+        updated?: number;
+        error?: string;
+      }>(response, "equipment CSV import");
+      if (!response.ok || !Array.isArray(result.equipment)) {
+        throw new Error(result.error ?? `HTTP ${response.status}`);
+      }
+      setEquipment(result.equipment);
+      if (source !== null) setSource(withEquipmentRows(source, result.equipment));
+      setNotice(t("settings.admin.equipment.import.ok", {
+        added: result.added ?? 0,
+        updated: result.updated ?? 0,
+        skipped: skippedRows,
+        columns: skippedColumns,
+      }));
+    } catch (err) {
+      setLocalError(t("settings.admin.equipment.import.error", {
+        detail: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setEquipmentCsvBusy(false);
+    }
+  }
+
+  async function onSave(nextDraft: unknown = draft) {
+    if (nextDraft === null || nextDraft === undefined) return;
     setSaving(true);
     setLocalError(null);
     setNotice(null);
     try {
-      await saveAdminConfig(draft);
-      setSource(draft);
+      await saveAdminConfig(nextDraft);
+      setSource(nextDraft);
       setNotice(t("settings.admin.save.ok"));
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err));
@@ -2037,7 +2266,7 @@ function AdminTab({
           : "info";
 
   if (loading && draft === null) {
-    return <div className="settings-loading">{t("settings.admin.loading")}</div>;
+    return <LoadingSpinner className="settings-loading" label={t("settings.admin.loading")} />;
   }
 
   if (draft === null) {
@@ -2091,6 +2320,14 @@ function AdminTab({
           label={t("settings.admin.group.equipment")}
           onSelect={onSelectSubTab}
         />
+        {!mobilityMode && (
+          <AdminSubTabButton
+            tab="calibration"
+            active={activeSubTab}
+            label={t("settings.admin.group.calibration")}
+            onSelect={onSelectSubTab}
+          />
+        )}
         {!mobilityMode && (
           <AdminSubTabButton
             tab="configuration"
@@ -2246,7 +2483,7 @@ function AdminTab({
               {t("settings.admin.user.add")}
             </button>
           </div>
-          <AdminUsersTable
+          <UserAccountsGrid
             users={adminUsersFromDraft(draft)}
             sourceUsers={adminUsersFromDraft(source)}
             auditorEmails={adminRoleApprovalRecipients(draft)}
@@ -2254,8 +2491,16 @@ function AdminTab({
             disabled={busy || !canManageAdminConfig}
             actionDisabled={busy}
             canManage={canManageAdminConfig}
+            siteOptions={SITE_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))}
+            roleOptions={ADMIN_ROLE_OPTIONS.map((option) => ({ value: option.value, label: t(option.key) }))}
             onUpdate={updateUser}
-            onPersist={() => void onSave()}
+            onApplyChanges={async (index, updatedUser) => {
+              if (draft === null) return;
+              const users = adminUsersFromDraft(draft).map((user, rowIndex) => rowIndex === index ? updatedUser : user);
+              const next = writePath(writePath(draft, ["users"], users), ["user"], users[0] ?? emptyAdminUser(1));
+              setDraftLocal(next);
+              await onSave(next);
+            }}
             onDelete={deleteUser}
             onBlockedAction={showPrivilegeNotice}
             onRequestAdminApproval={(user, recipients) => {
@@ -2266,47 +2511,95 @@ function AdminTab({
               composeAdminRoleRequestEmail(user, recipients);
               setNotice(t("settings.admin.user.requestAdmin.composed"));
             }}
-            targetAccountId={targetAccountId}
-            targetLogin={targetLogin}
           />
         </>
       )}
 
       {activeSubTab === "equipment" && (
         <>
+          {equipmentError && (
+            <p className="settings-form__hint" role="alert" style={{ color: "var(--c-danger)" }}>
+              {t("settings.admin.equipment.unavailable", { error: equipmentError })}
+            </p>
+          )}
           <div className="settings-form__group-row">
             <h4 className="settings-form__group">{t("settings.admin.group.equipment")}</h4>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => {
-                if (!canManageAdminConfig) {
-                  showPrivilegeNotice();
-                  return;
-                }
-                addEquipment();
-              }}
-              disabled={busy}
-              aria-disabled={!canManageAdminConfig}
-              title={t("settings.admin.equipment.add.title")}
-            >
-              <Icon name="upload" tone="accent" />
-              {t("settings.admin.equipment.add")}
-            </button>
+            <div className="button-row">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={exportEquipmentCsv}
+                disabled={busy || equipmentCsvBusy || equipmentError !== null}
+                aria-disabled={!canManageAdminConfig}
+                aria-label={t("settings.admin.equipment.export")}
+                title={t("settings.admin.equipment.export.title")}
+              >
+                <Icon name="download" tone="accent" />
+                {t("settings.admin.equipment.export.button")}
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  if (!canManageAdminConfig) {
+                    showPrivilegeNotice();
+                    return;
+                  }
+                  equipmentCsvInputRef.current?.click();
+                }}
+                disabled={busy || equipmentCsvBusy || equipmentError !== null}
+                aria-disabled={!canManageAdminConfig}
+                aria-label={t("settings.admin.equipment.import")}
+                title={t("settings.admin.equipment.import.title")}
+              >
+                <Icon name="upload" tone="accent" />
+                {t("settings.admin.equipment.import.button")}
+              </button>
+              <input
+                ref={equipmentCsvInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                hidden
+                onChange={(event) => void importEquipmentCsv(event)}
+              />
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => {
+                  if (!canManageAdminConfig) {
+                    showPrivilegeNotice();
+                    return;
+                  }
+                  addEquipment();
+                }}
+                disabled={busy || equipmentCsvBusy || equipmentError !== null}
+                aria-disabled={!canManageAdminConfig}
+                title={t("settings.admin.equipment.add.title")}
+              >
+                <Icon name="upload" tone="accent" />
+                {t("settings.admin.equipment.add")}
+              </button>
+            </div>
           </div>
-          <EquipmentTable
+          <EquipmentGrid
             equipment={equipmentFromDraft(draft)}
-            sourceEquipment={equipmentFromDraft(source)}
-            disabled={busy || !canManageAdminConfig}
-            actionDisabled={busy}
+            disabled={busy || equipmentCsvBusy || !canManageAdminConfig || equipmentError !== null}
+            actionDisabled={busy || equipmentCsvBusy || equipmentError !== null}
             canManage={canManageAdminConfig}
-            onUpdate={updateEquipment}
-            onPersist={() => void onSave()}
             onDelete={deleteEquipment}
+            onApplyEdit={async (index, row) => {
+              if (draft === null) return;
+              const rows = equipmentFromDraft(draft).map((current, rowIndex) => rowIndex === index ? row : current);
+              const nextDraft = withEquipmentRows(draft, rows);
+              setDraftLocal(nextDraft);
+              await onSave(nextDraft);
+            }}
             onBlockedAction={showPrivilegeNotice}
           />
         </>
       )}
+
+      {activeSubTab === "calibration" && !mobilityMode && <CalibrationPanel />}
 
       {activeSubTab === "configuration" && (
         <div className="settings-footer__row">
@@ -2315,7 +2608,7 @@ function AdminTab({
             data-visible={busy ? "true" : "false"}
             aria-hidden={!busy}
           >
-            <span className="scan-busy__spinner" />
+            <LoadingSpinner inline size={20} ariaLabel={t("settings.admin.busy")} />
           </span>
           <button
             type="button"
@@ -2389,7 +2682,7 @@ function AdminTab({
           )}
 
           {ftpLoading && ftpDraft === null ? (
-            <div className="settings-loading">{t("settings.loading")}</div>
+            <LoadingSpinner className="settings-loading" label={t("settings.loading")} />
           ) : ftpDraft === null ? (
             <div className="settings-loading">{t("settings.empty")}</div>
           ) : (
@@ -2406,7 +2699,7 @@ function AdminTab({
               data-visible={ftpBusy ? "true" : "false"}
               aria-hidden={!ftpBusy}
             >
-              <span className="scan-busy__spinner" />
+              <LoadingSpinner inline size={20} ariaLabel={t("settings.admin.busy")} />
             </span>
             <button
               type="button"
@@ -2575,6 +2868,7 @@ function AllowedHostsTab({
 
       <h4 className="settings-form__group">{t("settings.admin.group.allowedHosts")}</h4>
       <p className="settings-form__hint">{t("settings.admin.allowedHosts.hint")}</p>
+      {loading && <LoadingSpinner label={t("settings.admin.allowedHosts.loading")} />}
 
       <div className="field-row">
         <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -2922,182 +3216,15 @@ function AdminUsersTable({
   );
 }
 
-function EquipmentTable({
-  equipment,
-  sourceEquipment,
-  disabled,
-  actionDisabled,
-  canManage,
-  onUpdate,
-  onPersist,
-  onDelete,
-  onBlockedAction,
-}: {
-  equipment: EquipmentRow[];
-  sourceEquipment: EquipmentRow[];
-  disabled: boolean;
-  actionDisabled: boolean;
-  canManage: boolean;
-  onUpdate: (index: number, field: keyof EquipmentRow, value: string | number | null) => void;
-  onPersist: (index: number) => void;
-  onDelete: (index: number) => void;
-  onBlockedAction: () => void;
-}) {
-  const { t } = useTranslation();
-  const sourceSignatureByKey = new Map(
-    sourceEquipment.map((row, index) => [
-      equipmentRowKey(row, index),
-      equipmentRowSignature(row),
-    ] as const),
-  );
-
-  return (
-    <div
-      className="settings-admin-table-wrap"
-      onPointerDownCapture={(event) => {
-        if (canManage) return;
-        const target = event.target instanceof HTMLElement ? event.target : null;
-        if (!target?.closest("input, select, button")) return;
-        onBlockedAction();
-      }}
-    >
-      <div className="settings-equipment-table" role="table">
-        <div className="settings-equipment-table__head" role="row">
-          <span role="columnheader">{t("settings.admin.equipment.id")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.name")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.model")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.serial")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.site")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.description")}</span>
-          <span role="columnheader">{t("settings.admin.equipment.actions")}</span>
-        </div>
-        {equipment.map((row, index) => {
-          const persistedSignature = sourceSignatureByKey.get(equipmentRowKey(row, index));
-          const rowExistsInDb = persistedSignature !== undefined;
-          const rowDirty = persistedSignature !== equipmentRowSignature(row);
-
-          return (
-          <div className="settings-equipment-table__row" role="row" key={`${row.id ?? "new"}-${index}`}>
-            <NumberStepperInput
-              value={row.id ?? ""}
-              disabled={disabled}
-              onValueChange={(value) =>
-                onUpdate(index, "id", value === "" ? null : Number(value))
-              }
-              step={1}
-              min={0}
-              inputMode="numeric"
-              ariaLabel={t("settings.admin.equipment.id")}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.name")}
-              className="input"
-              maxLength={100}
-              value={row.name}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "name", e.target.value)}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.model")}
-              className="input"
-              maxLength={100}
-              value={row.model}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "model", e.target.value)}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.serial")}
-              className="input"
-              maxLength={15}
-              value={row.serial_number}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "serial_number", e.target.value)}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.site")}
-              className="input"
-              maxLength={50}
-              value={row.site}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "site", e.target.value)}
-            />
-            <input
-              aria-label={t("settings.admin.equipment.description")}
-              className="input"
-              maxLength={1000}
-              value={row.description}
-              disabled={disabled}
-              onChange={(e) => onUpdate(index, "description", e.target.value)}
-            />
-            <div className="settings-admin-table__actions">
-              {rowExistsInDb ? (
-                <button
-                  type="button"
-                  className="modal__close"
-                  onClick={() => {
-                    if (!canManage) {
-                      onBlockedAction();
-                      return;
-                    }
-                    onPersist(index);
-                  }}
-                  disabled={actionDisabled || !rowDirty}
-                  aria-disabled={!canManage}
-                  aria-label={t("settings.admin.equipment.update")}
-                  title={t("settings.admin.equipment.update")}
-                >
-                  <Icon name="refresh" tone="accent" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="modal__close"
-                  onClick={() => {
-                    if (!canManage) {
-                      onBlockedAction();
-                      return;
-                    }
-                    onPersist(index);
-                  }}
-                  disabled={actionDisabled}
-                  aria-disabled={!canManage}
-                  aria-label={t("settings.admin.equipment.save")}
-                  title={t("settings.admin.equipment.save")}
-                >
-                  <Icon name="save" tone="success" />
-                </button>
-              )}
-              <button
-                type="button"
-                className="modal__close"
-                onClick={() => {
-                  if (!canManage) {
-                    onBlockedAction();
-                    return;
-                  }
-                  onDelete(index);
-                }}
-                disabled={actionDisabled || equipment.length <= 1}
-                aria-disabled={!canManage}
-                aria-label={t("settings.admin.equipment.delete")}
-                title={t("settings.admin.equipment.delete")}
-              >
-                <Icon name="trash" tone="danger" />
-              </button>
-            </div>
-          </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 type SettingsHelpTopic =
   | "generalVoltage"
   | "generalBuffer"
   | "generalAdcHalfPeriod"
   | "generalAdcSettleCycles"
+  | "generalAdcLatchCycles"
+  | "generalBusTurnaroundCycles"
+  | "generalDacDataSetupCycles"
+  | "generalDacLatchCycles"
   | "rasterPixels"
   | "rasterResolution"
   | "rasterAdcLatency"
@@ -3161,6 +3288,22 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, {
   generalAdcSettleCycles: {
     title: "settings.help.generalAdcSettleCycles.title",
     body: "settings.help.generalAdcSettleCycles.body",
+  },
+  generalAdcLatchCycles: {
+    title: "settings.help.generalAdcLatchCycles.title",
+    body: "settings.help.generalAdcLatchCycles.body",
+  },
+  generalBusTurnaroundCycles: {
+    title: "settings.help.generalBusTurnaroundCycles.title",
+    body: "settings.help.generalBusTurnaroundCycles.body",
+  },
+  generalDacDataSetupCycles: {
+    title: "settings.help.generalDacDataSetupCycles.title",
+    body: "settings.help.generalDacDataSetupCycles.body",
+  },
+  generalDacLatchCycles: {
+    title: "settings.help.generalDacLatchCycles.title",
+    body: "settings.help.generalDacLatchCycles.body",
   },
   rasterPixels: { title: "settings.help.rasterPixels.title" },
   rasterResolution: { title: "settings.help.rasterResolution.title" },
@@ -3233,10 +3376,11 @@ const SETTINGS_HELP_BODY: Partial<Record<SettingsHelpTopic, JSX.Element>> = {
   rasterDwell: (
     <>
       <p>
-        Number of 166.667 ns ADC sample periods accumulated per raster pixel
-        with the current revC3 timing configuration.
+        A dwell of N accumulates N + 1 ADC samples (125 ns each with the current
+        revC3 timing configuration) per raster pixel.
         Higher dwell improves noise averaging but increases frame time
-        linearly. Practical values are usually powers of two.
+        linearly. Practical values are 2^k − 1 (1, 3, 7, 15, 31, 63…) so that
+        every sample is used.
       </p>
     </>
   ),
@@ -3262,7 +3406,8 @@ const SETTINGS_HELP_BODY: Partial<Record<SettingsHelpTopic, JSX.Element>> = {
   vectorDwell: (
     <>
       <p>
-        Default-vector dwell in 166.667 ns revC3 sample periods. This only affects
+        Default-vector dwell: a dwell of N takes N + 1 ADC samples of 125 ns
+        each (revC3). This only affects
         the built-in default sweep. Custom point lists already carry a
         per-point <code>dwell</code> value in each <code>x, y, dwell</code>
         triple.
@@ -3502,15 +3647,18 @@ function NumberField({
 }
 
 function validAdcTiming(config: unknown): boolean {
-  const halfPeriod = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 4);
-  const settleCycles = numberField(config, [...ACTION_DATA_PATH, "adcSettleCycles"], 2);
-  return Number.isInteger(halfPeriod)
-    && Number.isInteger(settleCycles)
-    && halfPeriod >= 1
-    && halfPeriod <= 255
-    && settleCycles >= 1
-    && settleCycles <= 255
-    && (halfPeriod * 2) >= (settleCycles + 6);
+  const half = numberField(config, [...ACTION_DATA_PATH, "adcHalfPeriod"], 3);
+  const settle = numberField(config, [...ACTION_DATA_PATH, "adcSettleCycles"], 1);
+  const latch = numberField(config, [...ACTION_DATA_PATH, "adcLatchCycles"], 1);
+  const turnaround = numberField(config, [...ACTION_DATA_PATH, "busTurnaroundCycles"], 0);
+  const setup = numberField(config, [...ACTION_DATA_PATH, "dacDataSetupCycles"], 1);
+  const dacLatch = numberField(config, [...ACTION_DATA_PATH, "dacLatchCycles"], 1);
+  const values = [half, settle, latch, turnaround, setup, dacLatch];
+  return values.every((value) => Number.isInteger(value) && value <= 255)
+    && half >= 2 && settle >= 1 && latch >= 1 && turnaround >= 0
+    && setup >= 1 && dacLatch >= 1
+    && latch + settle <= half
+    && 2 * half >= settle + latch + turnaround + 2 * (setup + dacLatch);
 }
 
 function CheckboxField({
@@ -3518,17 +3666,20 @@ function CheckboxField({
   help,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   help?: JSX.Element;
   value: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="settings-checkbox vacuum-switch settings-switch">
       <input
         type="checkbox"
         checked={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
       <span className="vacuum-switch__track">
@@ -3624,7 +3775,7 @@ function ConfirmRow({
       <span className="spacer" />
       <button
         type="button"
-        className="btn btn--ghost"
+        className="btn btn--cancel"
         onClick={onCancel}
         disabled={disabled}
       >

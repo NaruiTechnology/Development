@@ -23,11 +23,21 @@ import { Header } from "./components/Header";
 import type { SignedInUser } from "./components/AuthDialog";
 import { apiUrl } from "./lib/backendUrl";
 import { readJsonResponse } from "./lib/readJsonResponse";
-import { shouldDisableScanPanel } from "./lib/vacuumPolicy";
+import { vacuumWindowState, type VacuumWindowState, vacuumIsReadyForControls, shouldDisableScanPanel, shouldShowVacuumControllerError } from "./lib/vacuumPolicy";
+import { dimensionBoundsFromGeometry, geometryFromConfig, toAppliedGeometry } from "./lib/scanGeometry";
+import { fetchScanGeometry } from "./lib/scanGeometryApi";
+import { fetchDimensionCalibrationRemote } from "./lib/dimensionCalibrationApi";
+import { selectedEquipmentId } from "./lib/adminActivity";
+import { placeCompletedScan, replaceCompletedScanPane, type ImagePanelLayout } from "./lib/imagePanelLayout";
+import { setScanGeometry, setStreamTransforms } from "./store/scanSlice";
+import { saveDimensionCalibration } from "./store/dimensionCalibrationSlice";
 import { Footer } from "./components/Footer";
 import { ScanControls } from "./components/ScanControls";
 import { RasterParameters } from "./components/RasterParameters";
+import { ScanModeHelp } from "./components/ScanModeHelp";
 import { VectorParameters } from "./components/VectorParameters";
+import { VectorScanExecutionSettings } from "./components/VectorScanExecutionSettings";
+import { RasterScanExecutionSettings } from "./components/RasterScanExecutionSettings";
 import { VectorScanPathField } from "./components/VectorScanPathField";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
@@ -44,6 +54,10 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
 import { VacuumDashboard } from "./components/VacuumDashboard";
 import { SampleStageDashboard } from "./components/SampleStageDashboard";
+import { AdcTestControls, AdcTimelineCanvas } from "./components/AdcTest";
+import { DacRampPanel } from "./components/DacRampTest";
+import { DacCheckHelp } from "./components/DacCheckHelp";
+import { useAdcTestStream } from "./hooks/useAdcTestStream";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
 import {
   formatGrayScaleSelection,
@@ -63,7 +77,6 @@ import { completedROIImagePatch } from "./lib/roiWorkflow";
 import {
   beginDimensionCalibration,
   applyPersistedDimensionCalibration,
-  restorePersistedDimensionCalibration,
   clearROISelection,
   clearROIScanImage,
   persistGrayScaleStepDelta,
@@ -81,11 +94,8 @@ import { useTranslation } from "./i18n";
 import { scanAuthHeaders } from "./lib/authIdentity";
 import {
   openDialog as openSettingsDialog,
-  readPath,
   setActiveTab,
-  VECTOR_PATH,
-  setDraft,
-  writePath,
+  clearDimensionCalNavigationRequest,
 } from "./store/settingsSlice";
 import { SCAN_TYPE_COLORS, type ScanType } from "./types/scanType";
 import type { VacuumSystemStatus } from "./types/api";
@@ -101,6 +111,29 @@ type LeftTopTab = "scan" | "calibrate";
 type ScanSubTab = "roi" | "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
 
+function CollapsibleScanParameters({ children }: { children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(true);
+  const { t } = useTranslation();
+  return (
+    <div className="card scan-parameters-card">
+      <div className="card__header">
+        <span className="card__title">{t("card.scanParameters")}</span>
+        <button
+          type="button"
+          className="card__collapse-btn"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? t("scanParameters.expand") : t("scanParameters.collapse")}
+          title={collapsed ? t("scanParameters.expand") : t("scanParameters.collapse")}
+          onClick={() => setCollapsed((value) => !value)}
+        >
+          <Icon name="chevronDown" />
+        </button>
+      </div>
+      <div hidden={collapsed}>{children}</div>
+    </div>
+  );
+}
+
 export function App() {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -110,14 +143,32 @@ export function App() {
   // corresponding popup without requiring an initial open/close cycle.
   const [vacuumMinimized, setVacuumMinimized] = useState(true);
   const [vacuumControllerBusy, setVacuumControllerBusy] = useState(false);
+  const [vacuumControllerError, setVacuumControllerError] = useState(true);
   const [sampleStageOpen, setSampleStageOpen] = useState(true);
   const [sampleStageMinimized, setSampleStageMinimized] = useState(true);
   const [sampleStageControllerBusy, setSampleStageControllerBusy] = useState(false);
+  // DAC check card starts collapsed — it's an occasional diagnostic,
+  // not part of the normal vector-scan flow, so it shouldn't compete
+  // with Controls/Run report for attention by default.
+  const [dacCheckCollapsed, setDacCheckCollapsed] = useState(true);
+  // Save results card starts collapsed. Collapsing only hides it —
+  // ValidationPanel stays mounted so the filename insert, chosen folder
+  // and auto-download keep working.
+  const [saveResultsCollapsed, setSaveResultsCollapsed] = useState(true);
+  // ADC test card (replaces the old ADC Test top tab). Starts collapsed;
+  // while expanded, the right-hand panel shows the ADC timeline instead
+  // of the scan canvas — the same view the old tab switched to.
+  const [adcTestCollapsed, setAdcTestCollapsed] = useState(true);
+  // Controls card (nested in the scan panel card) starts expanded.
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  // Slot at the bottom of the scan parameters card (under Validated run
+  // options) that ScanControls portals Run validated + Clear into.
+  const [validatedActionsHost, setValidatedActionsHost] = useState<HTMLDivElement | null>(null);
+  const [validationSummaryHost, setValidationSummaryHost] = useState<HTMLDivElement | null>(null);
   const handleVacuumActivityChange = useCallback((active: boolean) => {
     setVacuumControllerBusy(active);
-    setVacuumMinimized(!active);
   }, []);
-  const autoOpenedVacuumRef = useRef(false);
+  const previousVacuumWindowState = useRef<VacuumWindowState | null>(null);
   const serviceStatus = useAppSelector((s) => s.status.service);
   const vacuumEnabled = serviceStatus?.vacuum_enabled === true;
   const [isVacuumSystemReady, setIsVacuumSystemReady] = useState(false);
@@ -126,7 +177,15 @@ export function App() {
   const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
+  const previewMode = useAppSelector((s) => s.scan.preview);
+  useEffect(() => {
+    setSaveResultsCollapsed(previewMode);
+  }, [previewMode]);
+  // "<kind>:<scanId>" of the scan whose image currently occupies the target pane.
+  const completedImageRecordedScanRef = useRef<string | null>(null);
+  const completedImagePaneRef = useRef<Record<"raster" | "vector", number>>({ raster: 0, vector: 0 });
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
+  const adcTestEnabled = useAppSelector((s) => s.status.defaults?.adc_test !== false);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
   const rasterCursor = useAppSelector((s) => s.image.cursor);
   const vectorCursor = useAppSelector((s) => s.image.vectorCursor);
@@ -148,12 +207,56 @@ export function App() {
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
   const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
-  const settingsDraft = useAppSelector((s) => s.settings.draft);
-  const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("raster");
+  const dimensionCalNavigationRequest = useAppSelector((s) => s.settings.dimensionCalNavigationRequest);
+  const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("vector");
   const [lastLiveScanImage, setLastLiveScanImage] = useState<{
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
+  // Each scan kind keeps its own pane layout: splitting the vector view must not
+  // open empty panes on the raster view (and vice versa). Once any view has
+  // been split, the other one splits itself after its first completed scan.
+  const [imagePanelLayoutByKind, setImagePanelLayoutByKind] = useState<
+    Record<"raster" | "vector", ImagePanelLayout>
+  >({ raster: 1, vector: 1 });
+  const imagePanelLayout: ImagePanelLayout =
+    kind === "raster" || kind === "vector" ? imagePanelLayoutByKind[kind] : 1;
+  const imagePanelSplitActive =
+    imagePanelLayoutByKind.raster > 1 || imagePanelLayoutByKind.vector > 1;
+  const [imagePanelLocked, setImagePanelLocked] = useState(true);
+  const [singlePaneImages, setSinglePaneImages] = useState<Record<"raster" | "vector", string | null>>({ raster: null, vector: null });
+  const savedSplitRef = useRef<{
+    layouts: Record<"raster" | "vector", ImagePanelLayout>;
+    selected: Record<"raster" | "vector", number>;
+    targets: Record<"raster" | "vector", number>;
+    completed: Record<"raster" | "vector", number>;
+  } | null>(null);
+  const [selectedImagePane, setSelectedImagePane] = useState<
+    Record<"raster" | "vector", number>
+  >({ raster: 0, vector: 0 });
+  const [scanTargetImagePane, setScanTargetImagePane] = useState<
+    Record<"raster" | "vector", number>
+  >({ raster: 0, vector: 0 });
+  const previousScanPhaseRef = useRef(phase);
+  const [, setCompletedImageHistory] = useState<
+    Record<"raster" | "vector", string[]>
+  >({ raster: [], vector: [] });
+  const [imagePanelSlots, setImagePanelSlots] = useState<
+    Record<"raster" | "vector", Array<string | null>>
+  >({ raster: [], vector: [] });
+
+  useEffect(() => {
+    const scanStarted = phase === "running" && previousScanPhaseRef.current !== "running";
+    previousScanPhaseRef.current = phase;
+    if (scanStarted && (kind === "raster" || kind === "vector")) {
+      setSinglePaneImages((current) => ({ ...current, [kind]: null }));
+    }
+    if (!scanStarted || imagePanelLayout === 1 || (kind !== "raster" && kind !== "vector")) return;
+    const targetPane = imagePanelLocked ? selectedImagePane[kind] : imagePanelLayout - 1;
+    setScanTargetImagePane((current) =>
+      current[kind] === targetPane ? current : { ...current, [kind]: targetPane }
+    );
+  }, [imagePanelLayout, imagePanelLocked, kind, phase, selectedImagePane]);
   const suppressedROIScanImageUrlRef = useRef<string | null>(null);
   const previousROIImageRef = useRef({
     imageDataUrl: roiState.imageDataUrl,
@@ -201,21 +304,25 @@ export function App() {
   const settingsTarget = useMemo(() => parseSettingsTarget(window.location.search), []);
   const hasPartialROI = isPartialROISelection(roiState);
   const showROICalibrationInControls = kind === "roi" && roiState.calibration_enabled;
-  const showROIPreviewSideCard = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
+  const showROIPreviewSideCardBase = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
   const isSignedIn = Boolean(signedInUser);
-  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>(
-    kind === "mag" || roiState.calibration_enabled ? "calibrate" : "scan"
-  );
-  const [scanSubTab, setScanSubTab] = useState<ScanSubTab>(
-    kind === "raster" ? "raster" : kind === "vector" ? "vector" : "roi"
-  );
+  const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>("scan");
+  const [scanSubTab, setScanSubTab] = useState<ScanSubTab>("vector");
   const [calibrateSubTab, setCalibrateSubTab] = useState<CalibrateSubTab>(
     kind === "mag" ? "mag" : "dimension"
   );
+  const adcTest = useAdcTestStream();
+  const adcActive = adcTest.state.phase === "connecting" || adcTest.state.phase === "running";
+  const adcView = adcTestEnabled && !adcTestCollapsed;
+  const showROIPreviewSideCard = showROIPreviewSideCardBase && !adcView;
 
   useEffect(() => {
     dispatch(fetchDefaults());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!adcTestEnabled) setAdcTestCollapsed(true);
+  }, [adcTestEnabled]);
 
   const dimensionCalibrationRestoredRef = useRef(false);
   useEffect(() => {
@@ -223,8 +330,59 @@ export function App() {
     dimensionCalibrationRestoredRef.current = true;
     if (!hasPersistedDimensionCalibration) return;
     clearBitmapSelectionCache();
-    dispatch(restorePersistedDimensionCalibration(dimensionCalibration));
+    dispatch(applyPersistedDimensionCalibration(dimensionCalibration));
   }, [dimensionCalibration, dispatch, hasPersistedDimensionCalibration]);
+
+  // Dimension Cal also lives server-side, one row per equipment (see dimensionCalibrationApi.ts) so it's
+  // shared across browsers/operators instead of being stuck in whichever one last confirmed it. The local
+  // copy above applies instantly (works offline, no flash of defaults); if the backend has a row for the
+  // currently selected equipment, it supersedes the local copy once the fetch resolves.
+  const dimensionCalibrationRemoteSyncedRef = useRef(false);
+  useEffect(() => {
+    if (dimensionCalibrationRemoteSyncedRef.current) return;
+    dimensionCalibrationRemoteSyncedRef.current = true;
+    const equipmentId = selectedEquipmentId();
+    if (equipmentId === null) return;
+    fetchDimensionCalibrationRemote(equipmentId).then((remote) => {
+      if (!remote) return;
+      clearBitmapSelectionCache();
+      dispatch(saveDimensionCalibration(remote));
+      dispatch(applyPersistedDimensionCalibration(remote));
+    });
+  }, [dispatch]);
+
+  // CONFIGURATION > Admin > Calibration's "Go to Dimension Cal" shortcut dispatches closeDialog() +
+  // requestDimensionCalNavigation() together (it lives inside the settings modal's component tree, which
+  // has no direct line to this component's local tab state) — this is the other end of that handoff.
+  useEffect(() => {
+    if (dimensionCalNavigationRequest === 0) return;
+    if (route !== "control") navigateTo("control");
+    activateCalibrateSubTab("dimension");
+    dispatch(clearDimensionCalNavigationRequest());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dimensionCalNavigationRequest]);
+
+  // Rectified scan geometry (Admin > Calibration > Scan geometry): when one is applied, ROI / bitmap scans map world
+  // µm to DAC codes through it. Loaded once; on failure scans keep the linear ROI mapping.
+  const scanGeometryLoadedRef = useRef(false);
+  useEffect(() => {
+    if (scanGeometryLoadedRef.current) return;
+    scanGeometryLoadedRef.current = true;
+    fetchScanGeometry()
+      .then(({ config, stream }) => {
+        dispatch(setStreamTransforms({
+          xflip: stream.transforms?.xflip === true,
+          yflip: stream.transforms?.yflip === true,
+          rotate90: stream.transforms?.rotate90 === true,
+        }));
+        if (!config?.enabled) return;
+        const geometry = geometryFromConfig(config);
+        clearBitmapSelectionCache();
+        dispatch(setScanGeometry(toAppliedGeometry(geometry, config.profile_revision)));
+        dispatch(applyPersistedDimensionCalibration({ ...dimensionCalibration, ...dimensionBoundsFromGeometry(geometry) }));
+      })
+      .catch((err) => console.warn(`[scan-geometry] not loaded: ${err instanceof Error ? err.message : String(err)}`));
+  }, [dispatch, dimensionCalibration]);
 
   useEffect(() => {
     if (route !== "vacuum" || serviceStatus === null || vacuumEnabled) return;
@@ -232,16 +390,9 @@ export function App() {
   }, [route, serviceStatus, vacuumEnabled]);
 
   useEffect(() => {
-    // Open the dashboard once as soon as the enabled vacuum service is
-    // available. VacuumDashboard's mount lifecycle acquires the controller;
-    // the ref prevents closing it from immediately reopening it.
-    if (!vacuumEnabled || autoOpenedVacuumRef.current) return;
-    autoOpenedVacuumRef.current = true;
-    if (route !== "vacuum") navigateTo("vacuum");
-  }, [route, vacuumEnabled]);
-
-  useEffect(() => {
     if (!vacuumEnabled) {
+      previousVacuumWindowState.current = null;
+      setVacuumControllerError(false);
       setIsVacuumSystemReady(false);
       setHighVoltagePower(false);
       return;
@@ -250,22 +401,40 @@ export function App() {
     let cancelled = false;
     const controller = new AbortController();
 
+    setVacuumControllerError(true);
+
     async function refreshVacuumReadiness() {
       try {
         const response = await fetch(apiUrl("/api/vacuum"), {
           cache: "no-store",
           headers: scanAuthHeaders(),
-          signal: controller.signal,
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(3000)]),
         });
         if (!response.ok) throw new Error(`vacuum status: HTTP ${response.status}`);
         const status = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
         if (!cancelled) {
-          setIsVacuumSystemReady(status.isVacuumSystemReady === true);
-          setHighVoltagePower(status.high_voltage_power === true);
+          const invalid = shouldShowVacuumControllerError(status, null, null);
+          const windowState = vacuumWindowState(status);
+          if (windowState !== null && windowState !== previousVacuumWindowState.current) {
+            previousVacuumWindowState.current = windowState;
+            if (windowState === "pumping") {
+              setVacuumMinimized(false);
+              navigateTo("vacuum");
+            } else if (windowState === "ready") {
+              setVacuumMinimized(true);
+            }
+          }
+          setIsVacuumSystemReady(vacuumIsReadyForControls(status));
+          setVacuumControllerError(invalid);
+          setHighVoltagePower(!invalid && status.high_voltage_power === true);
         }
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
-        if (!cancelled) setIsVacuumSystemReady(false);
+        if (!cancelled) {
+          setIsVacuumSystemReady(false);
+          setVacuumControllerError(true);
+          setHighVoltagePower(false);
+        }
       }
     }
 
@@ -303,7 +472,7 @@ export function App() {
         throw new Error(detail || `${response.status} ${response.statusText}`);
       }
       const status = await readJsonResponse<VacuumSystemStatus>(response, "high-voltage power");
-      setIsVacuumSystemReady(status.isVacuumSystemReady === true);
+      setIsVacuumSystemReady(vacuumIsReadyForControls(status));
       setHighVoltagePower(status.high_voltage_power === true);
     } catch (cause) {
       setHighVoltageError(cause instanceof Error ? cause.message : String(cause));
@@ -417,11 +586,17 @@ export function App() {
 
   const scanActive = phase === "running" || phase === "stopping";
   const panelDisabled = shouldDisableScanPanel({
-    scanActive,
+    scanActive: scanActive || adcActive,
     signedIn: isSignedIn,
-    vacuumEnabled,
+    vacuumEnabled: serviceStatus === null ? null : vacuumEnabled,
     vacuumReady: isVacuumSystemReady,
   });
+  // A scan started while the ADC test card is open would draw behind the
+  // ADC timeline, so collapse the card to bring the scan canvas back.
+  useEffect(() => {
+    if (scanActive) setAdcTestCollapsed(true);
+  }, [scanActive]);
+  const vacuumControlsLocked = serviceStatus === null || (vacuumEnabled && !isVacuumSystemReady);
   const rasterVectorTabsDisabled = panelDisabled || roiActionLocked;
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
@@ -480,17 +655,6 @@ export function App() {
         <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
         {t("roi.showGrid")}
       </label>
-    ) : kind === "raster" ? (
-      <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
-        <input
-          type="checkbox"
-          checked={roiState.raster_show_grid}
-          disabled={panelDisabled}
-          onChange={(e) => dispatch(updateROI({ raster_show_grid: e.target.checked }))}
-        />
-        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-        {t("roi.showGrid")}
-      </label>
     ) : kind === "vector" ? (
       <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
         <input
@@ -504,14 +668,16 @@ export function App() {
       </label>
     ) : null;
   const scanPathToggle =
-    kind === "vector" || (kind === "roi" && hasPartialROI) ? (
+    kind === "vector" || kind === "raster" || (kind === "roi" && hasPartialROI) ? (
     <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-scan-path-toggle">
       <input
         type="checkbox"
-        checked={roiState.vector_show_scan_path}
+        checked={kind === "raster" ? roiState.raster_show_scan_path : roiState.vector_show_scan_path}
         disabled={panelDisabled}
         onChange={(e) =>
-          dispatch(updateROI({ vector_show_scan_path: e.target.checked }))
+          dispatch(updateROI(kind === "raster"
+            ? { raster_show_scan_path: e.target.checked }
+            : { vector_show_scan_path: e.target.checked }))
         }
       />
       <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
@@ -671,6 +837,7 @@ export function App() {
         updateROI({
           imageName: t("roi.imageName.lastScan"),
           imageDataUrl: roiState.scanImageDataUrl,
+          roiScanResultUrl: roiState.scanImageDataUrl,
           imageKind: "lastScan",
           scanImageDataUrl: null,
         })
@@ -702,7 +869,7 @@ export function App() {
   }, [activeROIScanImageUrl, dispatch, kind, phase, roiState.imageDataUrl, roiState.imageKind, roiState.scanImageDataUrl, t]);
 
   const handleRenderedImageChange = useCallback(
-    (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
+    (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null, scanId: number) => {
       if (
         kind === "roi" &&
         scanKind === "vector" &&
@@ -727,6 +894,67 @@ export function App() {
         }
         return;
       }
+      if (imageUrl) {
+        // A later image of the same scan (final chunks, a re-render) replaces
+        // that scan's entry; only a new scan pushes the previous result into
+        // a "Previous scan" pane.
+        const scanKey = `${scanKind}:${scanId}`;
+        const sameScan = completedImageRecordedScanRef.current === scanKey;
+        completedImageRecordedScanRef.current = scanKey;
+        setCompletedImageHistory((current) => {
+          const earlier = sameScan ? current[scanKind].slice(1) : current[scanKind];
+          return {
+            ...current,
+            [scanKind]: [imageUrl, ...earlier.filter((item) => item !== imageUrl)].slice(0, 4),
+          };
+        });
+        const scanKindLayout = imagePanelLayoutByKind[scanKind];
+        if (scanKindLayout > 1 && sameScan) {
+          // Address the scan by pane identity, never by identical PNG pixels.
+          const recordedPane = completedImagePaneRef.current[scanKind];
+          setImagePanelSlots((current) => ({
+            ...current,
+            [scanKind]: current[scanKind][recordedPane] === null
+              ? current[scanKind]
+              : replaceCompletedScanPane(current[scanKind], recordedPane, imageUrl),
+          }));
+        } else if (scanKindLayout === 1 && imagePanelSplitActive) {
+          // Split mode is on (another view was split) but this view has not
+          // been split yet: its first completed scan fills pane 1 and opens
+          // pane 2 as the empty target for the next scan.
+          completedImagePaneRef.current[scanKind] = 0;
+          setImagePanelSlots((current) => ({ ...current, [scanKind]: [imageUrl, null] }));
+          setImagePanelLayoutByKind((current) => ({ ...current, [scanKind]: 2 }));
+          setSelectedImagePane((current) => ({ ...current, [scanKind]: 1 }));
+          setScanTargetImagePane((current) => ({ ...current, [scanKind]: 1 }));
+        } else if (scanKindLayout > 1) {
+          // After the split, each completed scan opens the next empty pane
+          // automatically unless the operator locked the current layout.
+          completedImagePaneRef.current[scanKind] = imagePanelLocked
+            ? scanTargetImagePane[scanKind]
+            : scanKindLayout - 1;
+          const placement = placeCompletedScan({
+            slots: imagePanelSlots[scanKind],
+            layout: scanKindLayout,
+            selectedPane: scanTargetImagePane[scanKind],
+            locked: imagePanelLocked,
+            imageUrl,
+          });
+          setImagePanelSlots((current) => ({
+            ...current,
+            [scanKind]: placement.slots,
+          }));
+          setImagePanelLayoutByKind((current) => ({ ...current, [scanKind]: placement.layout }));
+          setSelectedImagePane((current) => ({
+            ...current,
+            [scanKind]: placement.selectedPane,
+          }));
+          setScanTargetImagePane((current) => ({
+            ...current,
+            [scanKind]: placement.selectedPane,
+          }));
+        }
+      }
       setLastLiveScanImage((current) => {
         if (!imageUrl) return current?.kind === scanKind ? null : current;
         if (current?.kind === scanKind && current.imageUrl === imageUrl) {
@@ -740,14 +968,89 @@ export function App() {
       kind,
       roiActionCanvasVisible,
       roiActionGrayFilterActive,
+      imagePanelLayoutByKind,
+      imagePanelLocked,
+      imagePanelSlots,
+      imagePanelSplitActive,
+      scanTargetImagePane,
+      selectedImagePane,
       t,
     ]
   );
+
+  // Image the current target pane is showing right now. It must come from the
+  // live canvas: an older scan kept in the history does not count once the
+  // live image has been cleared (new scan started, resolution changed, reload).
+  const liveScanImage =
+    lastLiveScanImage && lastLiveScanImage.kind === kind ? lastLiveScanImage.imageUrl : null;
+  const currentTargetImage =
+    (kind === "raster" || kind === "vector") && liveScanImage
+      ? imagePanelLayout === 1
+        ? liveScanImage
+        : imagePanelSlots[kind][imagePanelLayout - 1] ?? null
+      : null;
+  // Split is available before the first scan; an empty image opens empty panes.
+  const showSplitButton = kind === "raster" || kind === "vector";
+  const canSplitImagePanel = imagePanelLayout === 1;
+
+  const splitImagePanel = useCallback(() => {
+    if (!canSplitImagePanel || (kind !== "raster" && kind !== "vector")) return;
+    setImagePanelLocked(true);
+    const saved = savedSplitRef.current;
+    if (saved) {
+      setImagePanelLayoutByKind(saved.layouts);
+      setSelectedImagePane(saved.selected);
+      setScanTargetImagePane(saved.targets);
+      completedImagePaneRef.current = saved.completed;
+      setSinglePaneImages({ raster: null, vector: null });
+      savedSplitRef.current = null;
+      return;
+    }
+    completedImagePaneRef.current[kind] = 0;
+    // Preserve an existing image when available; otherwise open two empty panes.
+    const targetPane = currentTargetImage === null ? 0 : 1;
+    setImagePanelSlots((current) => ({ ...current, [kind]: [currentTargetImage, null] }));
+    setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
+    setSelectedImagePane((current) => ({ ...current, [kind]: targetPane }));
+    setScanTargetImagePane((current) => ({ ...current, [kind]: targetPane }));
+  }, [canSplitImagePanel, currentTargetImage, kind]);
 
   const handleMergedFigureChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
       setMergedFigureByKind((current) =>
         current[scanKind] === imageUrl ? current : { ...current, [scanKind]: imageUrl }
+      );
+    },
+    []
+  );
+
+  const handleImagePaneChange = useCallback(
+    (scanKind: Extract<ScanKind, "raster" | "vector">, pane: number, imageUrl: string) => {
+      setImagePanelSlots((current) => {
+        const slots = [...current[scanKind]];
+        slots[pane] = imageUrl;
+        return { ...current, [scanKind]: slots };
+      });
+    },
+    []
+  );
+
+  const handleImagePaneRecycle = useCallback(
+    (scanKind: "raster" | "vector", pane: number) => {
+      setImagePanelSlots((current) => ({
+        ...current,
+        [scanKind]: current[scanKind].map((image, index) => index === pane ? null : image),
+      }));
+      setSelectedImagePane((current) => ({ ...current, [scanKind]: pane }));
+      setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
+    },
+    [],
+  );
+
+  const handleImagePaneSelect = useCallback(
+    (scanKind: Extract<ScanKind, "raster" | "vector">, pane: number) => {
+      setSelectedImagePane((current) =>
+        current[scanKind] === pane ? current : { ...current, [scanKind]: pane }
       );
     },
     []
@@ -824,11 +1127,11 @@ export function App() {
 
   const applyVectorGrayLevelsToggle = useCallback((checked: boolean) => {
     setVectorGrayLevelsEnabled(checked);
+    // The operator's range and Spot/Skip choice survive toggling the filter
+    // off and on: scan requests only carry them while the filter is enabled,
+    // so nothing is reset here. Skip is only the default for a first use.
     if (checked) {
-      const defaultRange: [number, number] = [0, 255];
-      const nextSkipped = true;
-      setVectorGrayRange(defaultRange);
-      setVectorGrayScaleSkipped(nextSkipped);
+      setVectorGrayScaleSkipped((current) => current ?? true);
       // Adaptive feedback visits each coordinate twice (probe + action), so
       // starting it at the normal 2048 edge can leave the live canvas showing
       // only its first scan line for a long time. Initialize the filtered
@@ -839,26 +1142,13 @@ export function App() {
         pattern: "default",
         points: null,
       }));
-      return;
     }
-    setVectorGrayRange([0, 255]);
-    setVectorGrayScaleSkipped(null);
   }, [dispatch]);
 
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
-    if (settingsDraft !== null) {
-      dispatch(setDraft(writePath(settingsDraft, [...VECTOR_PATH, "PixelFallbackBlank"], checked)));
-    }
     setVectorGrayRangeCommitCount(0);
     applyVectorGrayLevelsToggle(checked);
-  }, [applyVectorGrayLevelsToggle, dispatch, settingsDraft]);
-
-  useEffect(() => {
-    if (settingsDraft === null) return;
-    const nextEnabled = readPath(settingsDraft, [...VECTOR_PATH, "PixelFallbackBlank"]) === true;
-    if (nextEnabled === vectorGrayLevelsEnabled) return;
-    applyVectorGrayLevelsToggle(nextEnabled);
-  }, [applyVectorGrayLevelsToggle, settingsDraft, vectorGrayLevelsEnabled]);
+  }, [applyVectorGrayLevelsToggle]);
 
   useEffect(() => {
     if (!vectorGrayLevelsEnabled || vectorLatencyBytes >= 8196) return;
@@ -910,6 +1200,14 @@ export function App() {
 
     if (nextScanKind && (currentScanKind === null || currentScanKind !== nextScanKind)) {
       dispatch(streamReset());
+      // A scan buffer belongs to the run that populated it. Merely changing
+      // tabs is not a new run, so do not present the previous raster/vector
+      // frame as live data for the newly selected mode.
+      if (nextScanKind === "raster") {
+        dispatch(resetRaster({ resolution: rasterResolution }));
+      } else {
+        dispatch(resetVector());
+      }
     }
 
     dispatch(setKind(nextKind));
@@ -945,7 +1243,37 @@ export function App() {
     selectKind("mag");
   }
 
+  function handleImagePanelLockChange(locked: boolean) {
+    setImagePanelLocked(locked);
+    if (locked) return;
+    savedSplitRef.current = {
+      layouts: imagePanelLayoutByKind,
+      selected: selectedImagePane,
+      targets: scanTargetImagePane,
+      completed: { ...completedImagePaneRef.current },
+    };
+    setSinglePaneImages({
+      raster: imagePanelSlots.raster[selectedImagePane.raster] ?? null,
+      vector: imagePanelSlots.vector[selectedImagePane.vector] ?? null,
+    });
+    setImagePanelLayoutByKind({ raster: 1, vector: 1 });
+    setSelectedImagePane({ raster: 0, vector: 0 });
+    setScanTargetImagePane({ raster: 0, vector: 0 });
+  }
+
+  // Unlocked layouts keep their original navigation behavior. A locked layout
+  // remains available while the operator visits another tab or route.
+  function closeImagePanelSplit() {
+    if (imagePanelLocked || savedSplitRef.current) return;
+    setImagePanelLayoutByKind({ raster: 1, vector: 1 });
+    completedImagePaneRef.current = { raster: 0, vector: 0 };
+    setImagePanelSlots({ raster: [], vector: [] });
+    setSelectedImagePane({ raster: 0, vector: 0 });
+    setScanTargetImagePane({ raster: 0, vector: 0 });
+  }
+
   function activateScanTopTab() {
+    closeImagePanelSplit();
     setActiveTopTab("scan");
     activateScanSubTab(scanSubTab);
   }
@@ -998,6 +1326,57 @@ export function App() {
       ? "card.calibration"
       : "card.selectROI";
 
+  // Raster and vector put the toolbar slot (gray level filter slider and
+  // Select, or the annotation toolbox) and the Split button on a second
+  // header row below the switches; ROI keeps its own header grid.
+  const headerSecondRow =
+    !adcView && (kind === "raster" || kind === "vector");
+  const toolbarSlot = (
+    <div
+      id="image-panel-toolbar-slot"
+      className={`card__header-toolbar-slot image-panel-card__toolbar-slot${kind === "vector" ? " image-panel-card__toolbar-slot--vector" : ""}`}
+    >
+      {kind === "vector" ? (
+        // Always shown on the vector tab; disabled while the Gray level
+        // filter switch is off.
+        <VectorGrayLevelSelector
+          enabled={vectorGrayLevelsEnabled}
+          range={vectorGrayRange}
+          disabled={panelDisabled || !vectorGrayLevelsEnabled}
+          onRangeChange={handleVectorGrayRangeChange}
+          onRangeCommit={handleVectorGrayRangeSelect}
+          onSelect={handleVectorGrayRangeSelect}
+        />
+      ) : showGraySpectrum &&
+        !(kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive) ? (
+        <GrayScaleSpectrum
+          selectedGrayScale={displayedROIGrayScaleSelection}
+          selectionAnchor={pendingGrayScaleAnchor}
+          levels={grayScaleLevels}
+          stepDelta={grayScaleStepDelta}
+          sourceLabel={grayScaleSourceLabel}
+          scopeNote={grayScaleScopeNote}
+          onSelect={handleGrayScaleSelect}
+          onStepDeltaChange={handleGrayScaleStepDeltaChange}
+        />
+      ) : null}
+      {shouldShowROIGrayScaleClear({
+        kind,
+        hasConfirmedGrayRange: committedGrayScaleSelection !== null,
+      }) && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+        <button
+          type="button"
+          className="btn btn--ghost image-panel-card__header-action"
+          disabled={panelDisabled}
+          onClick={handleClearROIGrayScaleValues}
+          title={t("scan.clear")}
+        >
+          {t("scan.clear")}
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="app-shell">
       <Header
@@ -1012,18 +1391,19 @@ export function App() {
         }}
         vacuumMinimized={vacuumMinimized}
         vacuumControllerBusy={vacuumControllerBusy}
+        vacuumControllerError={vacuumControllerError}
         onOpenSampleStage={() => {
           setSampleStageOpen(true);
           setSampleStageMinimized(false);
         }}
-        sampleStageMinimized={sampleStageMinimized}
         sampleStageControllerBusy={sampleStageControllerBusy}
         highVoltagePower={highVoltagePower}
         highVoltageReady={vacuumEnabled && isVacuumSystemReady}
         highVoltagePending={highVoltagePending}
         highVoltageError={highVoltageError}
         onToggleHighVoltage={() => void toggleHighVoltage()}
-        scanLocked={scanActive}
+        scanLocked={scanActive || adcActive}
+        adcTestActive={adcActive}
       />
 
       {grayScaleConfirmOpen && pendingGrayScaleSelection !== null && pendingGrayScaleAnchor === null && (
@@ -1057,22 +1437,29 @@ export function App() {
         style={layoutStyle}
       >
         {/* left column */}
-        <section>
+        <section
+          aria-disabled={vacuumControlsLocked}
+          {...(vacuumControlsLocked ? { inert: "" } : {})}
+          style={vacuumControlsLocked ? { opacity: 0.55 } : undefined}
+        >
           <div
             className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
             style={scanPanelStyle}
           >
             <div className="tabs tabs--top" role="tablist" aria-label={t("tabs.top.aria")}>
-              <button
-                role="tab"
-                className="tab tab--top"
-                aria-selected={activeTopTab === "scan"}
-                disabled={panelDisabled}
-                onClick={activateScanTopTab}
-              >
-                <Icon name="scan" tone="tab" />
-                {t("tabs.scan")}
-              </button>
+              <div className="tab-group tab-group--scan">
+                <button
+                  role="tab"
+                  className="tab tab--top"
+                  aria-selected={activeTopTab === "scan"}
+                  disabled={panelDisabled}
+                  onClick={activateScanTopTab}
+                >
+                  <Icon name="scan" tone="tab" />
+                  {t("tabs.scan")}
+                </button>
+                <ScanModeHelp />
+              </div>
               <button
                 role="tab"
                 className="tab tab--top"
@@ -1080,7 +1467,7 @@ export function App() {
                 disabled={panelDisabled}
                 onClick={activateCalibrateTopTab}
               >
-                <Icon name="ruler" tone="tab" />
+                <Icon name="calibrate" tone="tab" />
                 {t("tabs.calibrate")}
               </button>
             </div>
@@ -1101,7 +1488,10 @@ export function App() {
                   className="tab tab--sub"
                   aria-selected={scanSubTab === "raster"}
                   disabled={rasterVectorTabsDisabled}
-                  onClick={() => activateScanSubTab("raster")}
+                  onClick={() => {
+                    closeImagePanelSplit();
+                    activateScanSubTab("raster");
+                  }}
                 >
                   <Icon name="grid" tone="tab" />
                   {t("tabs.raster")}
@@ -1111,13 +1501,16 @@ export function App() {
                   className="tab tab--sub"
                   aria-selected={scanSubTab === "vector"}
                   disabled={rasterVectorTabsDisabled}
-                  onClick={() => activateScanSubTab("vector")}
+                  onClick={() => {
+                    closeImagePanelSplit();
+                    activateScanSubTab("vector");
+                  }}
                 >
                   <Icon name="route" tone="tab" />
                   {t("tabs.vector")}
                 </button>
               </div>
-            ) : (
+            ) : activeTopTab === "calibrate" ? (
               <div className="tabs tabs--sub" role="tablist" aria-label={t("tabs.calibrate.aria")}>
                 <button
                   role="tab"
@@ -1136,20 +1529,33 @@ export function App() {
                   disabled={panelDisabled}
                   onClick={() => activateCalibrateSubTab("mag")}
                 >
-                  <Icon name="tools" tone="tab" />
+                  <Icon name="magCal" tone="tab" />
                   {t("tabs.mag")}
                 </button>
               </div>
-            )}
+            ) : null}
             <div className="card__body">
               {activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
-                  <RasterParameters disabled={panelDisabled} />
+                  <CollapsibleScanParameters>
+                    <div className="card__body">
+                      <RasterParameters disabled={panelDisabled} />
+                      <div ref={setValidatedActionsHost} className="validated-run-actions" />
+                      <div ref={setValidationSummaryHost} className="validated-run-summary" />
+                    </div>
+                  </CollapsibleScanParameters>
                 ) : scanSubTab === "vector" ? (
-                  <VectorParameters
-                    disabled={panelDisabled}
-                    grayLevelFilterActive={vectorGrayLevelsEnabled}
-                  />
+                  <CollapsibleScanParameters>
+                    <div className="card__body">
+                      <VectorParameters
+                        disabled={panelDisabled}
+                        grayLevelFilterActive={vectorGrayLevelsEnabled}
+                        showScanPathSettings={false}
+                      />
+                      <div ref={setValidatedActionsHost} className="validated-run-actions" />
+                      <div ref={setValidationSummaryHost} className="validated-run-summary" />
+                    </div>
+                  </CollapsibleScanParameters>
                 ) : (
                   <>
                     <ROIEditor
@@ -1216,47 +1622,144 @@ export function App() {
                   </>
                 )
               )}
+              {(showROIActionControls || (activeTopTab === "scan" && scanSubTab === "roi")) && (
+                <>
+                  {kind !== "roi" && (
+                    <div className="card scan-controls-card">
+                      <div className="card__header">
+                        <span className="card__title">{t("card.controls")}</span>
+                        <button
+                          type="button"
+                          className="card__collapse-btn"
+                          aria-expanded={!controlsCollapsed}
+                          aria-label={controlsCollapsed ? t("controls.expand") : t("controls.collapse")}
+                          title={controlsCollapsed ? t("controls.expand") : t("controls.collapse")}
+                          onClick={() => setControlsCollapsed((collapsed) => !collapsed)}
+                        >
+                          <Icon name="chevronDown" />
+                        </button>
+                      </div>
+                      {/* hidden, not unmounted: ScanControls owns the live scan stream */}
+                      <div className="card__body" hidden={controlsCollapsed}>
+                        <ScanControls
+                          kind={actionScanKind}
+                          disabled={panelDisabled}
+                          scanActive={scanActive}
+                          repeat={repeat}
+                          onRepeatChange={setRepeat}
+                          showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
+                          vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
+                          vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                          firstRowContent={scanSubTab === "vector" ? (
+                            <VectorScanExecutionSettings
+                              disabled={panelDisabled}
+                              grayLevelFilterActive={vectorGrayLevelsEnabled}
+                            />
+                          ) : scanSubTab === "raster" ? (
+                            <RasterScanExecutionSettings disabled={panelDisabled} />
+                          ) : null}
+                          onScanRunStart={setActiveScanType}
+                          validatedActionsHost={validatedActionsHost}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className="card save-results-card">
+                    <div className="card__header">
+                      <span className="card__title">{t("card.runReport")}</span>
+                      <button
+                        type="button"
+                        className="card__collapse-btn"
+                        disabled={previewMode}
+                        aria-expanded={!saveResultsCollapsed}
+                        aria-label={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
+                        title={saveResultsCollapsed ? t("saveResults.expand") : t("saveResults.collapse")}
+                        onClick={() => setSaveResultsCollapsed((collapsed) => !collapsed)}
+                      >
+                        <Icon name="chevronDown" />
+                      </button>
+                    </div>
+                    <div hidden={saveResultsCollapsed}>
+                      <ValidationPanel
+                        disabled={panelDisabled}
+                        previewMode={previewMode}
+                        mergedFigureUrl={
+                          actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
+                        }
+                        liveFigureUrl={
+                          lastLiveScanImage && lastLiveScanImage.kind === actionScanKind
+                            ? lastLiveScanImage.imageUrl
+                            : null
+                        }
+                        kindOverride={actionScanKind}
+                        validationSummaryHost={validationSummaryHost}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+              {adcTestEnabled && activeTopTab === "scan" && scanSubTab === "vector" && (
+                <div className="card adc-test-card">
+                  <div className="card__header">
+                    <span className="card__title">{t("card.adcTest")}</span>
+                    <button
+                      type="button"
+                      className="card__collapse-btn"
+                      aria-expanded={!adcTestCollapsed}
+                      aria-label={adcTestCollapsed ? t("adcTest.expand") : t("adcTest.collapse")}
+                      title={adcTestCollapsed ? t("adcTest.expand") : t("adcTest.collapse")}
+                      // Same locks as the old tab: can't open during a scan,
+                      // can't close while the ADC stream is running.
+                      disabled={adcTestCollapsed ? scanActive : adcActive}
+                      onClick={() => setAdcTestCollapsed((collapsed) => !collapsed)}
+                    >
+                      <Icon name="chevronDown" />
+                    </button>
+                  </div>
+                  {!adcTestCollapsed && (
+                    <div className="card__body">
+                      <AdcTestControls
+                        state={adcTest.state}
+                        onStart={adcTest.start}
+                        onStop={adcTest.stop}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              {showROIActionControls && kind !== "roi" && (
+                <>
+                  {kind === "vector" && (
+                    <div className="card dac-check-card">
+                      <div className="card__header">
+                        <span className="card__title">
+                          {t("card.dacCheck")}
+                          <DacCheckHelp />
+                        </span>
+                        <button
+                          type="button"
+                          className="card__collapse-btn"
+                          aria-expanded={!dacCheckCollapsed}
+                          aria-label={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
+                          title={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
+                          onClick={() => setDacCheckCollapsed((collapsed) => !collapsed)}
+                        >
+                          <Icon name="chevronDown" />
+                        </button>
+                      </div>
+                      {!dacCheckCollapsed && (
+                        <div className="card__body">
+                          <DacRampPanel disabled={panelDisabled} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
-          {showROIActionControls && kind !== "roi" && (
-            <>
-              <div
-                className={`card scan-panel-card${activeScanColor ? " scan-panel-card--active" : ""}`}
-                style={scanPanelStyle}
-              >
-                <div className="card__header">
-                  <span className="card__title">{t("card.controls")}</span>
-                </div>
-                <div className="card__body">
-                  <ScanControls
-                    kind={actionScanKind}
-                    disabled={panelDisabled}
-                    scanActive={scanActive}
-                    repeat={repeat}
-                    onRepeatChange={setRepeat}
-                    showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
-                    vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
-                    vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
-                    onScanRunStart={setActiveScanType}
-                  />
-                </div>
-              </div>
-              <div className="card">
-                <div className="card__header">
-                  <span className="card__title">{t("card.runReport")}</span>
-                </div>
-                <ValidationPanel
-                  disabled={panelDisabled}
-                  mergedFigureUrl={
-                    actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
-                  }
-                  kindOverride={actionScanKind}
-                />
-              </div>
-              <ErrorWedge signedInUser={signedInUser} />
-            </>
-          )}
+          {showROIActionControls && kind !== "roi" && <ErrorWedge signedInUser={signedInUser} />}
         </section>
 
         <div
@@ -1290,16 +1793,23 @@ export function App() {
         {/* right column */}
         <section>
             <div className="card image-panel-card">
-              <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}`}>
+              <div className={`card__header image-panel-card__header${scanPathToggle ? " image-panel-card__header--scan-path" : ""}${kind === "roi" ? " image-panel-card__header--roi" : ""}${headerSecondRow ? " image-panel-card__header--two-row" : ""}`}>
                 <div className="image-panel-card__header-main">
                   <span className="card__title">{t(
-                    kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
+                    adcView
+                      ? "card.adcTimeline"
+                      : kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
                       ? "card.vectorPattern"
                       : imagePanelTitleKey
                   )}</span>
-                  {gridLineToggle}
-                  {scanPathToggle}
-                  {kind === "vector" && (
+                  {headerSecondRow && (
+                    // The vector View selector (Decimated / Native) is drawn
+                    // here by the image canvas, next to the title.
+                    <div id="image-panel-view-slot" className="image-panel-card__view-slot" />
+                  )}
+                  {!adcView && gridLineToggle}
+                  {!adcView && scanPathToggle}
+                  {!adcView && kind === "vector" && (
                     <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">
                       <input
                         type="checkbox"
@@ -1312,53 +1822,48 @@ export function App() {
                       <VectorGrayLevelHelp />
                     </label>
                   )}
-                  <div
-                    id="image-panel-toolbar-slot"
-                    className={`card__header-toolbar-slot image-panel-card__toolbar-slot${kind === "vector" ? " image-panel-card__toolbar-slot--vector" : ""}`}
-                  >
-                    {kind === "vector" ? (
-                      vectorGrayLevelsEnabled && (
-                        <VectorGrayLevelSelector
-                          enabled={vectorGrayLevelsEnabled}
-                          range={vectorGrayRange}
-                          disabled={panelDisabled}
-                          onRangeChange={handleVectorGrayRangeChange}
-                          onRangeCommit={handleVectorGrayRangeSelect}
-                          onSelect={handleVectorGrayRangeSelect}
+                  {!adcView && !headerSecondRow && toolbarSlot}
+                </div>
+                {headerSecondRow && (
+                  // Second header row, below the switches: the gray level
+                  // filter slider + Select (vector), the annotation toolbox,
+                  // and the Split button.
+                  <div className="image-panel-card__header-row">
+                    {toolbarSlot}
+                    {!adcView && activeTopTab === "scan" && showSplitButton && imagePanelSplitActive && (
+                      <label className="checkbox vacuum-switch app-switch image-panel-card__layout-lock">
+                        <input
+                          type="checkbox"
+                          checked={imagePanelLocked}
+                          disabled={scanActive}
+                          onChange={(event) => handleImagePanelLockChange(event.target.checked)}
                         />
-                      )
-                    ) : showGraySpectrum &&
-                      !(kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive) ? (
-                      <GrayScaleSpectrum
-                        selectedGrayScale={displayedROIGrayScaleSelection}
-                        selectionAnchor={pendingGrayScaleAnchor}
-                        levels={grayScaleLevels}
-                        stepDelta={grayScaleStepDelta}
-                        sourceLabel={grayScaleSourceLabel}
-                        scopeNote={grayScaleScopeNote}
-                        onSelect={handleGrayScaleSelect}
-                        onStepDeltaChange={handleGrayScaleStepDeltaChange}
-                      />
-                    ) : null}
-                    {shouldShowROIGrayScaleClear({
-                      kind,
-                      hasConfirmedGrayRange: committedGrayScaleSelection !== null,
-                    }) && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+                        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+                        {t("canvas.layout.lock")}
+                      </label>
+                    )}
+                    {!adcView && activeTopTab === "scan" && showSplitButton && (
                       <button
                         type="button"
-                        className="btn btn--ghost image-panel-card__header-action"
-                        disabled={panelDisabled}
-                        onClick={handleClearROIGrayScaleValues}
-                        title={t("scan.clear")}
+                        className="btn btn--primary image-panel-card__layout-button"
+                        aria-label={t("canvas.layout.cycle", { count: imagePanelLayout })}
+                        aria-pressed={imagePanelLayout > 1}
+                        aria-controls="image-panel-grid"
+                        disabled={scanActive || !canSplitImagePanel}
+                        title={t("canvas.layout.cycle", { count: imagePanelLayout })}
+                        onClick={splitImagePanel}
                       >
-                        {t("scan.clear")}
+                        <Icon name="quad" tone="accent" />
+                        <span>{t("canvas.layout.splitScreen")}</span>
                       </button>
                     )}
                   </div>
-                </div>
+                )}
             </div>
             <div className="card__body">
-                {kind === "roi" ? (
+                {adcView ? (
+                  <AdcTimelineCanvas state={adcTest.state} />
+                ) : kind === "roi" ? (
                   roiActionCanvasVisible &&
                   !roiActionGrayFilterActive &&
                   roiState.scanImageDataUrl === null ? (
@@ -1366,6 +1871,7 @@ export function App() {
                       kind="vector"
                       onRenderedImageChange={handleRenderedImageChange}
                       onMergedFigureChange={handleMergedFigureChange}
+                      ignoreTransforms
                     />
                   ) : (
                     <ROIEditor
@@ -1382,12 +1888,21 @@ export function App() {
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
               ) : (
-                <ImageCanvas
-                  kind={kind as ScanKind}
-                  onRenderedImageChange={handleRenderedImageChange}
-                  onMergedFigureChange={handleMergedFigureChange}
+                  <ImageCanvas
+                    kind={kind as ScanKind}
+                    onRenderedImageChange={handleRenderedImageChange}
+                    onMergedFigureChange={handleMergedFigureChange}
+                    onPaneImageChange={handleImagePaneChange}
+                    onPaneRecycle={handleImagePaneRecycle}
                   vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
                   vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
+                  singlePaneSourceIndex={savedSplitRef.current?.selected[kind as "raster" | "vector"] ?? 0}
+                  singlePaneImage={singlePaneImages[kind as "raster" | "vector"]}
+                  imageLayout={imagePanelLayout}
+                  imageSlots={imagePanelSlots[kind as "raster" | "vector"]}
+                  selectedPane={selectedImagePane[kind as "raster" | "vector"]}
+                  scanTargetPane={scanTargetImagePane[kind as "raster" | "vector"]}
+                  onSelectedPaneChange={handleImagePaneSelect}
                 />
               )}
             </div>
@@ -1409,7 +1924,11 @@ export function App() {
       </main>
       )}
 
-      <SettingsDialog targetAccountId={settingsTarget.accountId} targetLogin={settingsTarget.login} />
+      <SettingsDialog
+        targetAccountId={settingsTarget.accountId}
+        targetLogin={settingsTarget.login}
+        vectorGrayLevelsEnabled={vectorGrayLevelsEnabled}
+      />
       {vacuumEnabled && (
         <VacuumDashboard
           open={route === "vacuum"}
@@ -1548,7 +2067,7 @@ function GrayScaleConfirmDialog({
         <div className="settings-footer">
           <div className="settings-footer__row gray-scale-confirm__footer">
             <span className="spacer" />
-            <button type="button" className="btn btn--ghost" onClick={onClose}>
+            <button type="button" className="btn btn--cancel" onClick={onClose}>
               {t("settings.confirm.cancel")}
             </button>
             <button type="button" className="btn btn--primary" onClick={onConfirm}>
@@ -1604,8 +2123,7 @@ function VectorGrayLevelSelector({
   }
 
   return (
-    <div className="vector-gray-levels">
-      {enabled && (
+    <div className={`vector-gray-levels${enabled ? "" : " vector-gray-levels--off"}`} aria-disabled={disabled}>
         <div className="vector-gray-levels__panel">
           <div className="vector-gray-levels__actions">
             <div className="vector-gray-levels__slider-shell">
@@ -1677,7 +2195,6 @@ function VectorGrayLevelSelector({
             </button>
           </div>
         </div>
-      )}
     </div>
   );
 }

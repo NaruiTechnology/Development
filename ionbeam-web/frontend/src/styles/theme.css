@@ -360,6 +360,9 @@ body {
 }
 
 .card + .card { margin-top: 16px; }
+/* Cards nested in the scan panel card (Scan parameters, Controls, Save
+   results, ADC test, DAC check) stack with a tighter gap. */
+.scan-panel-card > .card__body > * + .card { margin-top: 12px; }
 
 .card__header {
   padding: 10px 14px;
@@ -403,7 +406,8 @@ body {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  width: 100%;
+  width: auto;
+  flex: 1 1 auto;
 }
 
 .image-panel-card__header--scan-path .image-panel-card__header-main {
@@ -429,6 +433,105 @@ body {
 
 .image-panel-card__toolbar-slot:empty {
   display: none;
+}
+
+/* Raster / vector: switches on the first row, then a second row with the
+   toolbar slot (gray level filter slider + Select, or the annotation
+   toolbox) and the Split button. */
+.image-panel-card__header--two-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.image-panel-card__header--two-row .image-panel-card__header-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+/* Title on the left; the vector View selector and the switches flow to the
+   right end of the row. */
+.image-panel-card__header--two-row .image-panel-card__header-main > .card__title {
+  margin-right: auto;
+}
+
+.image-panel-card__view-slot {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.image-panel-card__view-slot:empty {
+  display: none;
+}
+
+.canvas-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* In the card header, `.card__header .icon` would blow the help icon up to 2em. */
+.image-panel-card__view-slot .card__title .help-btn .icon {
+  width: 1em;
+  height: 1em;
+}
+
+.image-panel-card__view-slot .card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.image-panel-card__header--two-row .image-panel-card__header-main {
+  justify-content: flex-end;
+}
+
+.image-panel-card__header--two-row .image-panel-card__layout-lock {
+  flex: 0 0 auto;
+}
+
+.image-panel-card__header-row {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.image-panel-card__header-row > .image-panel-card__toolbar-slot {
+  flex: 1 1 auto;
+  width: auto;
+  margin-left: 0;
+}
+
+.image-panel-card__header-row > .image-panel-card__layout-button {
+  margin-left: 0;
+}
+
+/* Nothing to show on the second row (no slider, toolbox or Split). */
+.image-panel-card__header-row:not(:has(> button)):has(> .card__header-toolbar-slot:empty) {
+  display: none;
+}
+
+.image-panel-card__layout-button {
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+
+.image-panel-card__layout-lock {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.image-panel-card__header-row > .image-panel-card__layout-lock {
+  margin-left: auto;
+}
+
+.image-panel-card__layout-button > .icon--quad {
+  width: 18px;
+  height: 18px;
 }
 
 .image-panel-card__header-action {
@@ -735,15 +838,47 @@ body {
   white-space: nowrap;
 }
 
+/* Gray level filter switch off: the slider and Select stay visible but
+   dimmed and inactive. */
+.vector-gray-levels--off .vector-gray-levels__slider-shell {
+  opacity: 0.45;
+  filter: grayscale(0.85);
+}
+
+.vector-gray-levels--off .vector-gray-levels__range {
+  cursor: not-allowed;
+}
+
 .vector-gray-level-toggle {
   margin-left: 4px;
+}
+
+/* Gray level filter: amber (the theme's warning colour, like Preview). */
+.card__header .vector-gray-level-toggle {
+  color: var(--c-warn);
+}
+
+.card__header .vector-gray-level-toggle input:checked + .vacuum-switch__track {
+  border-color: color-mix(in srgb, var(--c-warn) 78%, white);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 48%),
+    linear-gradient(135deg, color-mix(in srgb, var(--c-warn) 38%, transparent), color-mix(in srgb, var(--c-warn) 12%, transparent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 0 10px color-mix(in srgb, var(--c-warn) 45%, transparent);
+}
+
+.card__header .vector-gray-level-toggle input:checked + .vacuum-switch__track .vacuum-switch__thumb {
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.92), transparent 24%),
+    linear-gradient(145deg, color-mix(in srgb, var(--c-warn) 70%, white), color-mix(in srgb, var(--c-warn) 80%, transparent));
 }
 
 .vector-gray-level-toggle .help-btn {
   width: 14px;
   height: 14px;
   font-size: 12px;
-  color: #ff5f5f;
+  color: var(--c-warn);
 }
 
 .vector-gray-level-toggle .help-btn .icon {
@@ -753,8 +888,8 @@ body {
 
 .vector-gray-level-toggle .help-btn:hover,
 .vector-gray-level-toggle .help-btn:focus-visible {
-  color: #ff8080;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #ff5f5f 34%, transparent);
+  color: color-mix(in srgb, var(--c-warn) 80%, white);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-warn) 34%, transparent);
 }
 
 .vector-gray-levels__panel {
@@ -997,6 +1132,172 @@ body {
   max-width: none;
 }
 
+.image-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.image-panel-grid--1 {
+  display: block;
+}
+
+.image-panel-grid__tile,
+.image-panel-grid__target {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-bg-elev);
+}
+
+.image-panel-grid__tile,
+.image-panel-grid__target {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.image-panel-grid__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  color: var(--c-text-dim);
+  font-size: 11px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.image-panel-grid__tile[data-selected="true"],
+.image-panel-grid__target[data-selected="true"] {
+  border-color: var(--c-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-accent) 55%, transparent), 0 0 0 1px color-mix(in srgb, var(--c-accent) 25%, transparent);
+}
+
+.image-panel-grid__image {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.image-panel-grid__visual {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+}
+
+.image-panel-grid__content {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.image-panel-grid__content > .image-panel-grid__visual {
+  flex: 1 1 0;
+  width: auto;
+}
+
+.image-panel-grid__brightness {
+  display: flex;
+  flex: 0 0 var(--wedge-w, 96px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--c-text-dim);
+  font-size: 10px;
+  user-select: none;
+}
+
+.image-panel-grid__brightness input[type="range"] {
+  width: 100px;
+  height: 22px;
+  margin: 38px -38px;
+  transform: rotate(-90deg);
+  accent-color: var(--c-accent);
+  cursor: ew-resize;
+}
+
+.image-panel-grid__brightness output {
+  font: 10px ui-monospace, monospace;
+}
+
+.image-panel-grid__visual > .image-panel-grid__empty {
+  width: 100%;
+  height: 100%;
+}
+
+.image-panel-grid__target-visual {
+  width: auto;
+}
+
+.image-panel-grid__grid-toggle {
+  flex: 0 0 auto;
+  gap: 6px;
+  margin: 0;
+  font-size: 10px;
+}
+
+.image-panel-grid__empty {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  place-items: center;
+  color: var(--c-text-dim);
+  font-size: 12px;
+}
+
+.image-panel-grid__target-image {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+}
+
+.image-panel-grid__target-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+}
+
+.image-panel-grid__target > * {
+  min-width: 0;
+}
+
+.image-panel-grid--1 > .image-panel-grid__target {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* A freshly added target pane keeps its full stage (axes, grid, level wedge,
+   tools) but shows no image until the next scan. Only the image layers are
+   hidden; the canvas stays mounted so the next completed scan can still be
+   captured from it. */
+.canvas-stage--parked .canvas-frame canvas,
+.canvas-stage--parked .canvas-frame .server-figure {
+  visibility: hidden;
+}
+
 .roi-preview-column {
   align-self: start;
 }
@@ -1030,6 +1331,17 @@ body {
   margin: 0;
   font-size: 12px;
 }
+
+.roi-calibration-card__source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--c-text-dim);
+}
+
+.roi-calibration-card__source--scanGeometry { color: var(--c-accent); }
 
 .roi-calibration-card__meta {
   display: grid;
@@ -1152,6 +1464,18 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.scan-parameters-card .card__header {
+  justify-content: space-between;
+}
+
+.field-row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-form__timing-row {
+  margin-top: 8px;
 }
 
 .input, .select {
@@ -1368,6 +1692,24 @@ body {
 
 .btn--warn   { border-color: var(--c-warn-border); color: var(--c-warn); }
 .btn--danger { border-color: var(--c-danger-border); color: var(--c-danger); }
+.btn--stop {
+  background: #b42318;
+  border-color: #b42318;
+  color: #fff;
+}
+.btn--stop:hover:not(:disabled) {
+  background: #912018;
+  border-color: #912018;
+}
+.btn--cancel {
+  background: var(--c-bg-elev-2);
+  border-color: var(--c-bg-elev-2);
+  color: var(--c-text);
+}
+.btn--cancel:hover:not(:disabled) {
+  background: var(--c-btn-hover);
+  border-color: var(--c-btn-hover);
+}
 .btn--orange {
   background: #f97316;
   border-color: #fb923c;
@@ -1402,8 +1744,26 @@ body {
 }
 
 .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.validation-download-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+.validation-download-controls > .btn,
+.validation-download-controls > .app-switch {
+  flex: 0 0 auto;
+}
+.scan-execution-settings { flex: 1 0 100%; min-width: 0; margin-bottom: 6px; }
+.scan-primary-controls { display: flex; flex: 1 0 100%; min-width: 0; gap: 6px; flex-wrap: nowrap; }
+.scan-primary-controls > .btn { flex: 1 1 0; min-width: 0; justify-content: center; }
 .roi-action-controls { margin-top: 12px; }
 .scan-action-with-help { display: inline-flex; align-items: center; gap: 4px; }
+/* Run validated + Clear, portalled from ScanControls to the bottom of the
+   scan parameters card, directly under Validated run options. */
+.validated-run-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.validated-run-actions:empty { display: none; }
+.validated-run-summary:not(:empty) { margin-top: 10px; }
 
 .scan-loop-controls {
   display: grid;
@@ -1560,7 +1920,15 @@ body {
 .scan-equipment-field {
   display: grid;
   gap: 4px;
-  min-width: 280px;
+  min-width: 0;
+}
+
+.scan-equipment-selectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 .scan-equipment-field span {
@@ -1641,18 +2009,9 @@ body {
   visibility: visible;
 }
 
-.scan-busy__spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid color-mix(in srgb, var(--c-accent) 28%, transparent);
-  border-top-color: var(--c-accent);
-  border-radius: 50%;
-  animation: spin 0.75s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+/* The busy indicator inside .scan-busy is the shared <LoadingSpinner> (assets/spinner.gif), the same animation the
+   CONFIGURATION > Admin tab uses while loading. */
+.scan-busy .loading-spinner { gap: 0; }
 
 .icon {
   display: inline-block;
@@ -1684,6 +2043,32 @@ body {
 .icon--tab { color: var(--c-tab-icon); }
 .icon--warn { color: var(--c-warn); }
 .icon--ruler { color: lawngreen; }
+.icon--calibrate { filter: brightness(1.6) saturate(1.15); }
+.icon--magCal { filter: brightness(1.6) saturate(1.15); }
+.icon--adcTest { filter: brightness(3) saturate(1.4) drop-shadow(0 0 4px rgba(255, 214, 64, .85)); }
+
+.calibration-line-readout {
+  position: absolute;
+  z-index: 1;
+  opacity: 0.7;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 9px;
+  transform: translate(-50%, -115%);
+  border: 1px solid rgba(180, 225, 255, 0.25);
+  border-radius: 7px;
+  background: linear-gradient(135deg, rgba(35, 75, 110, 0.28), rgba(5, 18, 35, 0.2));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.11);
+  backdrop-filter: blur(10px) saturate(145%);
+  -webkit-backdrop-filter: blur(10px) saturate(145%);
+  color: rgba(235, 248, 255, 0.96);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+}
 
 /* ---------- management report --------------------------------------- */
 
@@ -2315,6 +2700,39 @@ body {
   flex: 1 1 0;
 }
 
+.tab-group--scan {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.tab-group--scan .tab {
+  flex: 0 0 auto;
+}
+
+.tab-group--scan:has(.tab[aria-selected="true"])::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--c-warn);
+  content: "";
+  pointer-events: none;
+}
+
+.tab-group--scan .tab[aria-selected="true"] {
+  border-bottom-color: transparent;
+}
+
+.tab-group--scan > .help-btn {
+  flex: 0 0 auto;
+  margin: 0 4px 0 0;
+}
+
 .tabs--sub .tab {
   flex: 1 1 0;
   min-width: 0;
@@ -2613,16 +3031,269 @@ body {
   -webkit-user-drag: none;
 }
 
+.canvas-frame > canvas:first-child,
+.canvas-frame > .server-figure {
+  filter: brightness(1.15);
+}
+
+/* Canvas + level wedge (histogram / black-white levels) side by side.
+   The frame keeps its square aspect; the wedge stretches to the same height. */
+.canvas-stage {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.canvas-stage > .canvas-frame {
+  flex: 1 1 0;
+  width: auto;
+  max-width: 768px;
+  margin-inline: 0;
+  align-self: flex-start;
+}
+
+/* ROI canvas: same arrangement, the square wrap sizes itself from the free width. */
+.canvas-stage > .roi-canvas-wrap {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.level-wedge {
+  --wedge-w: 96px;
+  flex: 0 0 var(--wedge-w);
+  width: var(--wedge-w);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  color: var(--c-text-dim);
+  font-size: 11px;
+  user-select: none;
+}
+
+.level-wedge[data-disabled="true"] {
+  opacity: 0.55;
+}
+
+.level-wedge__plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 160px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  column-gap: 4px;
+}
+
+.level-wedge__axis {
+  position: relative;
+  border-right: 1px solid var(--c-border);
+}
+
+.level-wedge__tick {
+  position: absolute;
+  right: 4px;
+  transform: translateY(50%);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-muted);
+}
+
+.level-wedge__tick::after {
+  content: "";
+  position: absolute;
+  left: calc(100% + 1px);
+  top: 50%;
+  width: 3px;
+  border-top: 1px solid var(--c-border);
+}
+
+.level-wedge__hist-and-bar {
+  position: relative;
+  min-width: 0;
+  padding-right: 14px; /* room for the handle triangles */
+}
+
+.level-wedge__hist {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(100% - 14px - 22px);
+  height: 100%;
+}
+
+.level-wedge__hist path {
+  fill: var(--c-accent, #5aa9ff);
+  fill-opacity: 0.85;
+}
+
+.level-wedge__bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 14px;
+  width: 22px;
+  border: 1px solid var(--c-border);
+  background: #000;
+  overflow: hidden;
+}
+
+.level-wedge__gradient {
+  position: absolute;
+  inset: 0;
+}
+
+.level-wedge__region {
+  position: absolute;
+  right: 14px;
+  width: 22px;
+  cursor: ns-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.level-wedge__line {
+  position: absolute;
+  left: 0;
+  right: 14px;
+  height: 0;
+  border-top: 1px solid var(--c-warn);
+  pointer-events: none;
+}
+
+.level-wedge__handle {
+  position: absolute;
+  right: 0;
+  width: 14px;
+  height: 16px;
+  transform: translateY(50%);
+  cursor: ns-resize;
+  touch-action: none;
+  outline: none;
+}
+
+/* Triangles pointing at the bar, like pyqtgraph's level markers. */
+.level-wedge__handle::before {
+  content: "";
+  position: absolute;
+  inset: 2px 0 2px 0;
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+  background: var(--c-warn);
+}
+
+.level-wedge__handle::after {
+  content: "";
+  position: absolute;
+  inset: 4px 2px 4px 3px;
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+
+.level-wedge__handle--high::after {
+  background: #fff;
+}
+
+.level-wedge__handle--low::after {
+  background: #000;
+}
+
+.level-wedge__handle:focus-visible::before {
+  background: var(--c-accent-hot);
+}
+
+.level-wedge__readout {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text);
+}
+
+.level-wedge__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.level-wedge__auto {
+  padding: 2px 6px;
+  font-size: 11px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm, 4px);
+  background: transparent;
+  color: var(--c-text-dim);
+  cursor: pointer;
+}
+
+.level-wedge__auto[aria-pressed="true"] {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+.level-wedge__auto:disabled {
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .level-wedge {
+    --wedge-w: 78px;
+  }
+}
+
 .canvas-scan-path-overlay {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 12;
   width: 100%;
   height: 100%;
   pointer-events: none;
   overflow: visible;
   image-rendering: pixelated;
   background: transparent !important;
+}
+
+/* Scan-settings chip drawn over a completed image (annotation layer).
+   It ignores the pointer so the editor tools underneath keep working. */
+.canvas-scan-params {
+  position: absolute;
+  left: 12%;
+  bottom: 8%;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  max-width: 76%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.16);
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.55);
+  opacity: 0.78;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 120ms ease;
+}
+
+.canvas-frame:hover .canvas-scan-params,
+.image-panel-grid__visual:hover .canvas-scan-params {
+  opacity: 0.95;
+}
+
+.canvas-scan-params__item {
+  white-space: nowrap;
+}
+
+.canvas-scan-params__label {
+  margin-right: 3px;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .canvas-axis-overlay {
@@ -2636,20 +3307,14 @@ body {
 
 .canvas-axis-overlay__grid {
   position: absolute;
-  background: rgba(95, 184, 255, 0.14);
-  z-index: 9999;
-}
-
-.canvas-axis-overlay__grid--x {
-  top: 0;
-  bottom: 0;
-  width: 1px;
-}
-
-.canvas-axis-overlay__grid--y {
-  left: 0;
-  right: 0;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke: rgba(95, 184, 255, 0.22);
+  stroke-width: 1px;
+  pointer-events: none;
 }
 
 .canvas-axis-overlay__axis {
@@ -2926,6 +3591,29 @@ body {
   cursor: not-allowed;
 }
 
+.canvas-toolbox__action--pending {
+  border-radius: 3px;
+  animation: canvas-save-pending 1.4s ease-in-out infinite;
+}
+
+@keyframes canvas-save-pending {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 2px var(--c-success, #45c982);
+  }
+  50% {
+    opacity: 0.5;
+    box-shadow: 0 0 6px 2px var(--c-success, #45c982);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-toolbox__action--pending {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--c-success, #45c982);
+  }
+}
+
 .canvas-toolbox__field {
   display: inline-flex;
   align-items: center;
@@ -2987,12 +3675,18 @@ body {
 .canvas-editor-layer {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 20;
   cursor: crosshair;
 }
 
 .canvas-editor-layer[data-tool="comment"] {
   cursor: text;
+}
+
+.canvas-editor-layer--preview,
+.canvas-editor-layer--preview * {
+  pointer-events: none;
+  cursor: default;
 }
 
 .canvas-editor__annotation {
@@ -3126,15 +3820,26 @@ body {
 .canvas-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-top: 10px;
+  align-items: center;
+  gap: 2px 8px;
+  margin-top: 8px;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.10);
+  -webkit-backdrop-filter: blur(8px) saturate(115%);
+  backdrop-filter: blur(8px) saturate(115%);
   font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--c-text-dim);
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.6);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.55);
+  opacity: 0.9;
 }
 
 .canvas-meta b {
-  color: var(--c-text);
+  color: rgba(255, 255, 255, 0.76);
   font-weight: 500;
 }
 
@@ -3509,16 +4214,53 @@ body {
 
 .roi-tooltip {
   position: fixed;
-  z-index: 50;
+  z-index: 10000;
   pointer-events: none;
-  padding: 4px 6px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.78);
-  color: #fff;
-  font: 12px var(--font-mono);
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 7px 10px;
+  border: 1px solid rgba(190, 232, 255, 0.42);
+  border-radius: 7px;
+  background: linear-gradient(135deg, rgba(48, 91, 126, 0.30), rgba(9, 21, 36, 0.27));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 10px 18px rgba(0, 0, 0, 0.56), 0 22px 44px rgba(0, 0, 0, 0.46), 0 2px 5px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  color: rgba(244, 250, 255, 0.98);
+  font: 500 12px/1.4 var(--font-sans);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  white-space: normal;
 }
 
 /* ---------- progress bar --------------------------------------------- */
+
+.app-tooltip {
+  position: fixed;
+  box-sizing: border-box;
+  z-index: 10000;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 7px 10px;
+  border: 1px solid rgba(190, 232, 255, 0.42);
+  border-radius: 7px;
+  background: linear-gradient(135deg, rgba(48, 91, 126, 0.30), rgba(9, 21, 36, 0.27));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 10px 18px rgba(0, 0, 0, 0.56), 0 22px 44px rgba(0, 0, 0, 0.46), 0 2px 5px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  color: rgba(244, 250, 255, 0.98);
+  font: 500 12px/1.4 var(--font-sans);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  animation: app-tooltip-in 120ms ease-out both;
+}
+
+.app-tooltip--above { transform: translate(-50%, -100%); }
+.app-tooltip--below { transform: translate(-50%, 0); }
+
+@keyframes app-tooltip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 .progress {
   height: 6px;
@@ -3958,6 +4700,30 @@ body {
   animation: controller-icon-busy-blink 0.8s ease-in-out infinite;
 }
 
+.app-header__controller--error,
+.app-header__controller--error:hover {
+  position: relative;
+  border-color: var(--c-danger);
+  background: color-mix(in srgb, var(--c-danger) 16%, var(--c-bg-elev));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--c-danger) 40%, transparent);
+}
+
+.app-header__controller-error-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--c-danger);
+  color: var(--c-bg);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 @keyframes controller-icon-busy-blink {
   0%, 100% {
     opacity: 1;
@@ -4127,6 +4893,12 @@ body {
 .settings-modal {
   max-width: 880px;
   width: 100%;
+}
+.settings-modal--equipment {
+  width: min(1600px, 99vw);
+  max-width: min(1600px, 99vw);
+  height: min(98vh, 1100px);
+  max-height: 98vh;
 }
 
 /* ---------- SBC vacuum dashboard ---------------------------------- */
@@ -4789,6 +5561,7 @@ body {
 
 .vacuum-workflow {
   display: grid;
+  /* Default for three stages; VacuumDashboard sets the real template per groupName stage. */
   grid-template-columns: minmax(190px, 1fr) 54px minmax(190px, 1fr) 54px minmax(390px, 1.8fr);
   align-items: center;
   gap: 10px;
@@ -5184,6 +5957,7 @@ body {
 .settings-modal__body {
   min-height: 260px;
 }
+.settings-modal__body--equipment { min-height: 0; }
 
 .settings-path-strip {
   display: flex;
@@ -5502,6 +6276,37 @@ body {
   gap: 4px;
   min-width: 0;
 }
+.settings-user-grid .settings-admin-table__actions { gap: 0; justify-content: flex-start; }
+.settings-user-grid .settings-admin-table__actions .modal__close { width: 24px; height: 24px; }
+
+.user-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 58%);
+  backdrop-filter: blur(3px);
+}
+.user-edit-dialog { width: min(620px, calc(100vw - 40px)); max-height: min(760px, calc(100vh - 40px)); display: flex; flex-direction: column; }
+.user-edit-dialog__body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.user-edit-dialog__body label { display: flex; flex-direction: column; gap: 4px; color: var(--c-text-dim); font-size: 11px; }
+.user-edit-dialog__body .input, .user-edit-dialog__body .select { width: 100%; margin: 0; }
+.user-edit-dialog__active { align-self: end; min-height: 32px; }
+.user-edit-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--c-border-soft); }
+@media (max-width: 620px) { .user-edit-dialog__body { grid-template-columns: minmax(0, 1fr); } }
+
+.equipment-edit-backdrop { position: fixed; inset: 0; z-index: 220; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgb(0 0 0 / 58%); backdrop-filter: blur(3px); }
+.equipment-edit-dialog { width: min(820px, calc(100vw - 40px)); max-height: min(820px, calc(100vh - 40px)); display: flex; flex-direction: column; }
+.equipment-edit-dialog__body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.equipment-edit-dialog__body label { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--c-text-dim); font-size: 11px; }
+.equipment-edit-dialog__body .input { width: 100%; min-width: 0; margin: 0; }
+.equipment-edit-dialog__description { grid-column: 1 / -1; }
+.equipment-edit-dialog__description textarea { resize: vertical; }
+.equipment-edit-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--c-border-soft); }
+@media (max-width: 620px) { .equipment-edit-dialog__body { grid-template-columns: minmax(0, 1fr); } .equipment-edit-dialog__description { grid-column: auto; } }
 
 .settings-admin-hosts__textarea {
   min-height: 160px;
@@ -5577,4 +6382,629 @@ body {
 
 .settings-confirm .spacer {
   flex: 1 1 auto;
+}
+
+/* ---------- isolated ADC test ----------------------------------------- */
+
+.adc-test-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.adc-test-seed {
+  position: relative;
+}
+
+.adc-test-seed__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.adc-test-seed__header label {
+  color: var(--c-accent);
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.adc-test-seed__hint {
+  padding: 2px 6px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 999px;
+  background: var(--c-bg-elev-2);
+  color: var(--c-text-muted);
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+
+.adc-test-seed__control {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 42px;
+  align-items: center;
+  min-height: 34px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--c-accent) 45%, var(--c-border));
+  border-radius: 7px;
+  background: var(--c-bg-input);
+}
+
+.adc-test-seed__prefix,
+.adc-test-seed__unit {
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+
+.adc-test-seed__prefix {
+  color: var(--c-accent);
+  border-right: 1px solid var(--c-border-soft);
+}
+
+.adc-test-seed__unit {
+  padding: 5px 4px;
+  border-left: 1px solid var(--c-border-soft);
+  letter-spacing: .05em;
+}
+
+.adc-test-seed__input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--c-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .08em;
+}
+
+.adc-test-seed__input::-webkit-inner-spin-button,
+.adc-test-seed__input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.adc-test-seed__input {
+  -moz-appearance: textfield;
+}
+
+.adc-test-seed__control:focus-within {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-accent) 22%, transparent);
+}
+
+.adc-test-mode-note {
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--c-accent-hot) 45%, var(--c-border-soft));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c-accent-hot) 9%, var(--c-bg-elev-2));
+  color: var(--c-text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.adc-test-settings,
+.adc-test-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 14px;
+  padding: 12px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 8px;
+  background: var(--c-bg-elev-2);
+  font-size: 12px;
+}
+
+.adc-test-status span {
+  grid-column: 1 / -1;
+}
+
+.adc-test-status[data-phase="running"] b {
+  color: var(--c-accent);
+}
+
+.adc-timeline {
+  position: relative;
+  min-height: 460px;
+  height: min(70vh, 760px);
+  overflow: hidden;
+  border-radius: 8px;
+  background: #050a14;
+}
+
+.adc-timeline canvas {
+  display: block;
+}
+
+.adc-timeline__summary {
+  position: absolute;
+  right: 12px;
+  bottom: 7px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.dac-ramp-body {
+  display: grid;
+  gap: 12px;
+}
+
+.dac-ramp-body__hint {
+  margin: -4px 0 0;
+  color: var(--c-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.dac-ramp-body__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.dac-ramp-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 8px;
+  background: var(--c-bg-elev-2);
+  font-size: 12px;
+}
+
+.dac-ramp-status span {
+  grid-column: 1 / -1;
+}
+
+.dac-ramp-status[data-phase="running"] b,
+.dac-ramp-status[data-phase="connecting"] b {
+  color: var(--c-accent);
+}
+
+.dac-ramp-status[data-phase="error"] b {
+  color: var(--c-accent-hot);
+}
+
+.dac-ramp-waveform {
+  position: relative;
+  min-height: 260px;
+  height: min(36vh, 420px);
+  overflow: hidden;
+  border-radius: 8px;
+  background: #050a14;
+}
+
+.dac-ramp-waveform canvas {
+  display: block;
+}
+
+.dac-ramp-waveform__summary {
+  position: absolute;
+  right: 12px;
+  bottom: 7px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.dac-check-card .card__header,
+.save-results-card .card__header,
+.adc-test-card .card__header,
+.scan-controls-card .card__header {
+  justify-content: space-between;
+}
+
+.dac-check-card .card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The card title is small (12px, uppercase, letterspaced) compared to
+   the body-text contexts .help-btn normally sits in (e.g. "Run
+   validated ⓘ" at ~13px regular weight), so the same fixed 16px icon
+   reads as oversized here. Scale it down to match the title's rhythm.
+   Also override .card__header .icon's 2em sizing (meant for the big
+   nav/tab icons that live in card headers elsewhere) — without this,
+   that rule wins on specificity and the SVG renders at 2x the
+   surrounding button's font-size regardless of the button's own
+   width/height below, which is why the first attempt at this had no
+   visible effect. */
+.dac-check-card .card__title .help-btn {
+  width: 14px;
+  height: 14px;
+  font-size: 12px;
+}
+
+.dac-check-card .card__title .help-btn .icon {
+  width: 1em;
+  height: 1em;
+}
+
+.card__collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text-dim);
+  cursor: pointer;
+}
+
+.card__collapse-btn .icon {
+  width: 14px;
+  height: 14px;
+  transition: transform .15s ease;
+}
+
+.card__collapse-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.card__collapse-btn[aria-expanded="false"] .icon {
+  transform: rotate(-90deg);
+}
+
+.card__collapse-btn:hover {
+  color: var(--c-accent);
+  background: var(--c-btn-hover);
+}
+
+.card__collapse-btn:focus-visible {
+  outline: none;
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px rgba(95, 184, 255, 0.28);
+}
+
+/* ---------- Admin > Calibration parameters ------------------------- */
+
+.settings-modal--wide { max-width: min(1240px, calc(100vw - 32px)); }
+
+.calib { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; min-width: 0; }
+.calib-muted { color: var(--c-text-dim); font-size: 12px; margin: 0; }
+.calib__typehelp { margin: -4px 0 0; }
+
+.calib__head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.calib__field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--c-text-dim); min-width: 0; }
+.calib__field .select { min-width: 260px; max-width: 100%; }
+.calib__profile { font-size: 12px; line-height: 1.35; min-width: 150px; }
+.calib__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.calib__actions .btn[aria-pressed="true"] {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent) 18%, var(--c-bg-elev-2));
+  box-shadow: inset 0 -2px 0 var(--c-accent);
+}
+.calib-go-to-dimension { display: flex; align-items: center; gap: 8px; }
+
+.calib-seg { display: inline-flex; border: 1px solid var(--c-border-soft); border-radius: 6px; padding: 2px; background: var(--c-bg-elev-1); }
+.calib-seg__btn {
+  border: 0; border-radius: 4px; padding: 6px 16px; background: transparent; color: var(--c-text-dim);
+  font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer;
+}
+.calib-seg__btn[aria-selected="true"] { background: var(--c-bg-elev-2); color: var(--c-text); box-shadow: inset 0 0 0 1px var(--c-accent); }
+.calib-seg__btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+
+.calib-banner { margin: 0; padding: 7px 10px; border-radius: 6px; font-size: 12px; border: 1px solid var(--c-border-soft); background: var(--c-bg-elev-1); }
+.calib-banner--info { color: var(--c-text-dim); }
+.calib-banner--warn { border-color: var(--c-warn-border); color: var(--c-warn); }
+.calib-banner--error { border-color: var(--c-danger-border); color: var(--c-danger); }
+.calib-banner--ok { color: var(--c-success); }
+.calib-banner .btn { padding: 2px 8px; margin-left: 6px; }
+
+.calib__body { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 12px; align-items: start; min-width: 0; }
+.calib__nav {
+  border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-elev-1);
+  max-height: 62vh; overflow: auto; padding: 4px 0;
+}
+.calib__main { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.calib__toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.calib__search { flex: 1 1 200px; min-width: 160px; }
+
+.calib-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--c-text-dim); cursor: pointer; }
+
+.calib-tree__list { list-style: none; margin: 0; padding: 0; }
+.calib-tree__row { display: flex; align-items: center; }
+.calib-tree__twisty { width: 16px; flex: none; border: 0; background: transparent; color: var(--c-text-dim); font-size: 11px; cursor: pointer; padding: 0; }
+.calib-tree__item {
+  flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border: 0; background: transparent; color: var(--c-text); font: inherit; font-size: 12px; text-align: left;
+  padding: 5px 8px 5px 2px; border-radius: 4px; cursor: pointer;
+}
+.calib-tree__item--all { width: calc(100% - 8px); margin: 2px 4px 4px; padding-left: 8px; font-weight: 700; }
+.calib-tree__item:hover { background: var(--c-btn-hover); }
+.calib-tree__item[aria-current="true"] { background: var(--c-bg-elev-2); box-shadow: inset 2px 0 0 var(--c-accent); }
+.calib-tree__item:focus-visible, .calib-tree__twisty:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.calib-tree__item--table { color: var(--c-text-dim); }
+.calib-tree__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calib-tree__counts { display: inline-flex; gap: 6px; flex: none; color: var(--c-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.calib-tree__warn { color: var(--c-warn); font-weight: 700; }
+.calib-tree__warn::before { content: "⚠ "; }
+
+.calib-list { border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-elev-1); overflow: hidden; }
+.calib-list__head, .calib-row {
+  display: grid; grid-template-columns: minmax(180px, 1.3fr) minmax(170px, 1fr) 56px 96px; gap: 8px 12px; align-items: center; padding: 6px 10px;
+}
+.calib-list__head { font-size: 11px; color: var(--c-text-dim); text-transform: uppercase; letter-spacing: 0.05em; background: var(--c-bg-elev-2); }
+.calib-list__empty, .calib-list__more { margin: 8px 10px; }
+.calib-row { border-top: 1px solid var(--c-border-soft); }
+.calib-row[data-dirty="true"] { background: color-mix(in srgb, var(--c-accent) 9%, transparent); box-shadow: inset 3px 0 0 var(--c-accent); }
+.calib-row[data-invalid="true"] { box-shadow: inset 3px 0 0 var(--c-danger); }
+.calib-row[data-undocumented="true"] .calib-row__name { color: var(--c-warn); }
+.calib-row[data-locked="true"] .calib-row__editor { opacity: 0.8; }
+.calib-row__label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.calib-row__name { font-size: 13px; overflow-wrap: anywhere; }
+.calib-row__key { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-text-muted); overflow-wrap: anywhere; }
+.calib-row__badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.calib-row__badges:empty { display: none; }
+.calib-row__editor { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.calib-row__unit { font-size: 12px; color: var(--c-text-dim); }
+.calib-row__actions { display: flex; justify-content: flex-end; gap: 2px; }
+.calib-row__error { color: var(--c-danger); font-size: 11px; margin: 0; }
+.calib-row__hint { color: var(--c-text-muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.calib-row__details { grid-column: 1 / -1; padding: 6px 0 4px; border-top: 1px dashed var(--c-border-soft); }
+.calib-input { width: 100%; min-width: 0; font-variant-numeric: tabular-nums; }
+.calib-input--compact { padding: 3px 5px; font-size: 12px; text-align: right; }
+.calib-readonly { font-variant-numeric: tabular-nums; color: var(--c-text-dim); font-size: 13px; }
+
+.calib-badge {
+  display: inline-block; padding: 1px 6px; border-radius: 9px; font-size: 10px; font-weight: 700; letter-spacing: 0.03em;
+  border: 1px solid var(--c-border); color: var(--c-text-dim);
+}
+.calib-badge--warn { border-color: var(--c-warn-border); color: var(--c-warn); }
+.calib-badge--info { color: var(--c-accent); }
+.calib-badge--ok { color: var(--c-success); }
+
+.calib-details { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 12px; }
+.calib-details dt { color: var(--c-text-dim); }
+.calib-details dd { margin: 0; overflow-wrap: anywhere; }
+.calib-details code, .calib-history code, .calib-import code { font-family: var(--font-mono); font-size: 11px; }
+.calib-details__warn { color: var(--c-warn); }
+.calib-details__form { display: flex; flex-direction: column; gap: 6px; }
+.calib-details__form label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--c-text-dim); }
+.calib-details__form .calib-check { flex-direction: row; }
+.calib-details__buttons { display: flex; gap: 8px; margin-top: 4px; }
+
+.calib-matrix__title { margin: 0 0 4px; font-size: 13px; }
+.calib-matrix__note { margin: 0 0 6px; font-size: 12px; color: var(--c-text-dim); }
+.calib-matrix__actions { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.calib-matrix__scroll { overflow: auto; max-height: 60vh; border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-elev-1); }
+.calib-matrix__table { border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.calib-matrix__table th {
+  position: sticky; top: 0; z-index: 2; background: var(--c-bg-elev-2); color: var(--c-text-dim); font-weight: 600;
+  padding: 4px 6px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--c-border-soft);
+}
+.calib-matrix__table th small { display: block; font-weight: 400; color: var(--c-text-muted); }
+.calib-matrix__table tbody th { position: sticky; left: 0; z-index: 1; text-align: left; border-right: 1px solid var(--c-border-soft); border-bottom: 0; top: auto; }
+.calib-matrix__table th.calib-matrix__corner { left: 0; z-index: 3; text-align: left; }
+.calib-matrix__table td { padding: 2px 3px; border-bottom: 1px solid var(--c-border-soft); min-width: 84px; }
+.calib-matrix__table td[data-dirty="true"] { background: color-mix(in srgb, var(--c-accent) 14%, transparent); }
+.calib-matrix__table td[data-invalid="true"] { background: color-mix(in srgb, var(--c-danger) 16%, transparent); }
+.calib-matrix__table td[data-risk="true"] .calib-input { border-color: var(--c-warn-border); }
+
+/* AG Grid replacements for the equipment matrix and the calibration table layout (see EquipmentGrid.tsx,
+   CalibrationMatrixGrid.tsx). AG Grid renders its own cell/row DOM, so these target the class names we pass
+   via cellClass/cellRenderer instead of the old [data-dirty]/[data-risk]/[data-invalid] <td> attributes. */
+.settings-equipment-grid { width: 100%; min-width: 0; height: min(66vh, 680px); min-height: 320px; }
+.settings-equipment-grid .ag-root-wrapper { width: 100%; height: 100%; }
+.settings-equipment-grid .ag-cell { display: flex; align-items: center; }
+.settings-equipment-grid__id-cell { color: var(--c-text-dim); font-variant-numeric: tabular-nums; }
+.settings-equipment-grid .settings-admin-table__actions { gap: 0; justify-content: flex-start; }
+.settings-equipment-grid .settings-admin-table__actions .modal__close { width: 28px; height: 28px; }
+
+.calib-matrix-grid {
+  width: 100%;
+  height: min(60vh, 480px);
+  border: 1px solid var(--c-border-soft);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.calib-matrix-grid .ag-cell { display: flex; align-items: center; padding-left: 4px; padding-right: 4px; }
+.calib-matrix-grid__row-header { font-weight: 600; justify-content: flex-start !important; }
+.calib-matrix-grid__cell--empty { background: var(--c-bg-elev); }
+.calib-matrix-grid__cell--dirty { background: color-mix(in srgb, var(--c-accent) 14%, transparent); }
+.calib-matrix-grid__cell--invalid { background: color-mix(in srgb, var(--c-danger) 16%, transparent); }
+.calib-matrix-grid__cell--risk .calib-input { border-color: var(--c-warn-border); }
+
+.calib-history, .calib-import { display: flex; flex-direction: column; gap: 8px; }
+.calib-history__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.calib-history__head h4 { margin: 0; font-size: 13px; }
+.calib-history__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.calib-history__item { border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-elev-1); padding: 8px 10px; font-size: 12px; }
+.calib-history__line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.calib-history__reason { margin-top: 4px; }
+.calib-history__changes { margin: 6px 0 0; padding-left: 18px; font-size: 12px; max-height: 220px; overflow: auto; }
+.calib-confirm { margin-top: 8px; padding: 8px; border: 1px solid var(--c-warn-border); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+.calib-confirm p { margin: 0; }
+
+.calib-import__pick { display: flex; align-items: center; gap: 10px; }
+.calib-import__preview { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.calib-import__preview p { margin: 0; }
+.calib-import__problems ul, .calib-import__changes ul { margin: 4px 0 0; padding-left: 18px; max-height: 200px; overflow: auto; }
+.calib-import__done { color: var(--c-success); margin: 0; }
+
+.calib-savebar {
+  position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 8px 12px; border: 1px solid var(--c-accent); border-radius: 6px; background: var(--c-bg-elev-2);
+  box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.25);
+}
+.calib-savebar__count { font-size: 12px; font-weight: 700; }
+.calib-savebar__reason { flex: 1 1 220px; min-width: 160px; }
+.calib-savebar__buttons { display: inline-flex; gap: 8px; margin-left: auto; flex: 0 0 auto; }
+
+/* Risk acknowledgement in the save bar: a warning chip with a custom checkbox; turns green once ticked. */
+.calib-ack {
+  flex: 1 1 360px; min-width: 240px; display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px 7px 9px; border: 1px solid var(--c-warn-border); border-radius: 6px;
+  background: color-mix(in srgb, var(--c-warn) 9%, transparent);
+  color: var(--c-warn); font-size: 12px; line-height: 1.35; cursor: pointer; user-select: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+.calib-ack:hover { border-color: var(--c-warn); background: color-mix(in srgb, var(--c-warn) 14%, transparent); }
+.calib-ack .icon { flex: 0 0 auto; }
+.calib-ack__text { flex: 1 1 auto; min-width: 0; }
+.calib-ack__box {
+  appearance: none; -webkit-appearance: none; flex: 0 0 auto; display: grid; place-content: center;
+  width: 18px; height: 18px; margin: 0; border: 2px solid var(--c-warn); border-radius: 4px;
+  background: var(--c-bg-input); cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.calib-ack__box::before {
+  content: ""; width: 9px; height: 5px; margin-top: -3px;
+  border-left: 2px solid var(--c-bg); border-bottom: 2px solid var(--c-bg);
+  transform: rotate(-45deg) scale(0); transition: transform 0.12s ease-out;
+}
+.calib-ack__box:checked { background: var(--c-success); border-color: var(--c-success); }
+.calib-ack__box:checked::before { transform: rotate(-45deg) scale(1); }
+.calib-ack__box:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.calib-ack[data-checked="true"] {
+  border-color: color-mix(in srgb, var(--c-success) 50%, transparent);
+  background: color-mix(in srgb, var(--c-success) 9%, transparent); color: var(--c-text);
+}
+[data-theme="light"] .calib-ack__box::before { border-color: #fff; }
+@media (prefers-reduced-motion: reduce) { .calib-ack, .calib-ack__box, .calib-ack__box::before { transition: none; } }
+
+@media (max-width: 760px) {
+  .calib__body { grid-template-columns: minmax(0, 1fr); }
+  .calib__nav { max-height: 200px; }
+  .calib-list__head { display: none; }
+  .calib-row { grid-template-columns: minmax(0, 1fr) 56px; }
+  .calib-row__editor { grid-column: 1 / 2; }
+  .calib-row__actions { grid-column: 2 / 3; grid-row: 1; }
+}
+.calib__toolbar .select { width: auto; flex: 0 0 auto; min-width: 150px; }
+
+/* ---------- Admin > Calibration > Scan geometry ------------------------- */
+
+.calib-geom { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.calib-geom__head { display: flex; align-items: center; gap: 10px; }
+.calib-geom__head .spacer, .calib-geom__apply .spacer { flex: 1 1 auto; }
+.calib-geom__h { margin: 8px 0 0; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--c-text); }
+.calib-geom__h-row { display: flex; align-items: center; gap: 8px; }
+.calib-geom__h-row .calib-geom__h { margin: 8px 0 0; }
+.calib-geom__table { border: 1px solid var(--c-border-soft); border-radius: 6px; background: var(--c-bg-elev-1); }
+.calib-geom__tr {
+  display: grid; grid-template-columns: minmax(160px, 1.3fr) minmax(120px, 1fr) minmax(80px, 0.7fr) auto;
+  gap: 8px; align-items: center; padding: 4px 10px; font-size: 12px; border-top: 1px solid var(--c-border-soft);
+}
+.calib-geom__tr:first-child { border-top: 0; }
+.calib-geom__tr code { font-family: var(--font-mono); font-size: 11px; color: var(--c-text-dim); overflow: hidden; text-overflow: ellipsis; }
+.calib-geom__tr .btn { padding: 2px 8px; }
+.calib-geom__num { font-family: var(--font-mono); font-size: 12px; text-align: right; }
+.calib-geom__warn { margin: 0; padding-left: 18px; font-size: 12px; color: var(--c-warn); }
+.calib-geom__form { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 12px; align-items: end; }
+.calib-geom__form label:not(.calib-check) { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--c-text-dim); }
+.calib-geom__results { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(200px, 0.9fr); gap: 12px; align-items: start; }
+.calib-geom__goto { margin-top: 10px; display: flex; justify-content: flex-end; }
+.calib-geom__import { margin-top: 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.calib-geom__grid { width: 100%; border-collapse: collapse; font-size: 12px; }
+.calib-geom__grid th, .calib-geom__grid td { padding: 3px 6px; border-bottom: 1px solid var(--c-border-soft); }
+.calib-geom__grid th { text-align: left; font-weight: 500; color: var(--c-text-dim); }
+.calib-geom__grid td { text-align: right; font-family: var(--font-mono); }
+.calib-geom__dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: 12px; }
+.calib-geom__dl dt { color: var(--c-text-dim); }
+.calib-geom__dl dd { margin: 0; font-family: var(--font-mono); }
+.calib-geom__corners { display: flex; flex-direction: column; gap: 2px; }
+.calib-geom__preview { margin: 0; border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-bg-elev); padding: 6px; max-width: 220px; justify-self: start; }
+.calib-geom__preview svg { display: block; width: 100%; aspect-ratio: 1 / 1; color: var(--c-text-dim); }
+.calib-geom__fid { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; }
+.calib-geom__fid-row {
+  display: grid; grid-template-columns: 22px 92px repeat(4, minmax(80px, 1fr)) 90px 34px; gap: 6px; align-items: center; min-width: 620px;
+}
+.calib-geom__fid-row .input, .calib-geom__fid-row .select { min-width: 0; width: 100%; }
+.calib-geom__fid-head { font-size: 11px; color: var(--c-text-dim); }
+.calib-geom__apply { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--c-border-soft); }
+@media (max-width: 980px) { .calib-geom__results { grid-template-columns: minmax(0, 1fr); } }
+
+/* Wide help modal (screenshots) and the Calibration "how to save" help next to History */
+.modal--help-wide { max-width: min(1760px, calc(100vw - 32px)); }
+.calib__actions > .help-btn { align-self: center; width: 22px; height: 22px; font-size: 16px; margin-right: 2px; }
+.calib-save-help { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.calib-save-help img { display: block; width: 100%; height: auto; border: 1px solid var(--c-border-soft); border-radius: 6px; }
+.calib-save-help figcaption { font-size: 12px; color: var(--c-text-dim); }
+
+/* ---------- Calibration tab: every ordinary checkbox --------------------------------------------------
+ * Custom box in the accent colour. Excludes the risk acknowledgement (.calib-ack__box, yellow/green) and the
+ * "Undocumented only" filter, which is drawn as a sliding switch (.vacuum-switch). */
+.calib input[type="checkbox"]:not(.calib-ack__box):not(.vacuum-switch > input) {
+  appearance: none; -webkit-appearance: none; flex: 0 0 auto; display: inline-grid; place-content: center;
+  width: 16px; height: 16px; margin: 0; border: 1.5px solid var(--c-text-dim); border-radius: 4px;
+  background: var(--c-bg-input); cursor: pointer; vertical-align: middle;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.calib input[type="checkbox"]:not(.calib-ack__box):not(.vacuum-switch > input)::before {
+  content: ""; width: 8px; height: 4px; margin-top: -3px;
+  border-left: 2px solid var(--c-bg); border-bottom: 2px solid var(--c-bg);
+  transform: rotate(-45deg) scale(0); transition: transform 0.12s ease-out;
+}
+.calib input[type="checkbox"]:not(.calib-ack__box):not(.vacuum-switch > input):hover:not(:disabled) { border-color: var(--c-accent); }
+.calib input[type="checkbox"]:not(.calib-ack__box):not(.vacuum-switch > input):checked { background: var(--c-accent); border-color: var(--c-accent); }
+.calib input[type="checkbox"]:not(.calib-ack__box):not(.vacuum-switch > input):checked::before { transform: rotate(-45deg) scale(1); }
+.calib input[type="checkbox"]:not(.calib-ack__box):not(.vacuum-switch > input):focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.calib input[type="checkbox"]:not(.calib-ack__box):not(.vacuum-switch > input):disabled { opacity: 0.45; cursor: not-allowed; }
+[data-theme="light"] .calib input[type="checkbox"]:not(.calib-ack__box):not(.vacuum-switch > input)::before { border-color: #fff; }
+
+/* label next to an ordinary checkbox: brighter on hover and while ticked */
+.calib-check { gap: 8px; transition: color 0.15s ease; }
+.calib-check:hover, .calib-check:has(> input:checked) { color: var(--c-text); }
+.calib-check:has(> input:disabled) { cursor: not-allowed; }
+
+/* the risk acknowledgement inside History / Import panels sits on its own line, not stretched in a row */
+.calib-ack--inline { flex: 0 1 auto; align-self: flex-start; max-width: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .calib input[type="checkbox"], .calib input[type="checkbox"]::before, .calib-check { transition: none; }
+}
+
+/* ---------- Loading spinner (assets/spinner.gif): scanning, CONFIGURATION, canvas merge --------------------------------------------------------- */
+.loading-spinner { display: inline-flex; align-items: center; gap: 10px; color: var(--c-text-dim); font-size: 13px; }
+.loading-spinner--block { display: flex; justify-content: center; padding: 24px 0; width: 100%; }
+.loading-spinner--inline { gap: 6px; font-size: 12px; vertical-align: middle; }
+.loading-spinner__gif { display: block; flex: 0 0 auto; image-rendering: auto; user-select: none; }
+.calib__nav .loading-spinner--block { padding: 16px 0; }
+.calib-reloading { margin: 0 0 6px; }
+.btn .loading-spinner--inline { margin-right: 2px; }
+
+/* ---------- Calibration export: CSV button + export folder ---------------------------------------------------------------- */
+.calib-export { display: inline-flex; align-items: center; gap: 2px; }
+.calib-export__folder { max-width: 220px; }
+.calib-export__folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calib-export__clear { padding-left: 6px; padding-right: 6px; }
+
+/* ---------- Calibration import: validation findings ---------------------------------------------------------------------- */
+.calib-import__problems--invalid {
+  border: 1px solid color-mix(in srgb, var(--c-danger) 45%, var(--c-border));
+  border-radius: 6px; padding: 8px 10px; font-size: 12px;
+  background: color-mix(in srgb, var(--c-danger) 8%, transparent);
+}
+.calib-import__problems--invalid p { margin: 6px 0 0; }
+.calib-import__keys { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+
+.scan-transform-card { flex: 1 0 100%; min-width: 0; margin-top: 6px; }
+.scan-transform-card .card__body[hidden] { display: none; }
+
+.scan-transform-switches { display: flex; flex-wrap: nowrap; gap: 12px; padding: 10px 8px; }
+.scan-transform-switches > .app-switch { flex: 1 1 auto; min-width: max-content; justify-content: flex-start; }
+.scan-transform-switches .vacuum-switch__track { flex-shrink: 0; }
+
+.scan-transform-label--nowrap { white-space: nowrap; }
+
+.image-panel-grid__recycle {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  min-height: 22px;
+  margin-left: auto;
+}
+
+.image-panel-grid__recycle:hover {
+  color: var(--c-danger);
 }

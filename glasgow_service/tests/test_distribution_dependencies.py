@@ -1,13 +1,18 @@
 import importlib.util
 import json
+import marshal
+import py_compile
+import zipfile
 from pathlib import Path
+
+import pytest
 
 
 DEVELOPMENT_ROOT = Path(__file__).parents[2]
 
 
 def load_distribution_builder():
-    path = DEVELOPMENT_ROOT / "buidCompiledDist.py"
+    path = DEVELOPMENT_ROOT / "buildCompiledDist.py"
     spec = importlib.util.spec_from_file_location("iobeam_distribution_builder", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -59,7 +64,7 @@ def test_distribution_deploy_verifies_installed_client_imports():
         if "installPipRequirements" in action
     )
 
-    assert install_action["actionData"]["verifyImports"] == ["gpiozero", "httpx", "redis"]
+    assert {"gpiozero", "httpx", "redis"} <= set(install_action["actionData"]["verifyImports"])
 
 
 def test_distribution_installs_raspberry_pi_gpio_os_runtime_conditionally():
@@ -81,3 +86,53 @@ def test_distribution_installs_raspberry_pi_gpio_os_runtime_conditionally():
     assert action["requireRaspberryPi"] is True
     assert action["aptPackages"] == ["python3-gpiozero", "python3-lgpio"]
     assert action["verifyImports"] == ["gpiozero", "lgpio"]
+
+
+def isolated_builder(monkeypatch, tmp_path):
+    builder = load_distribution_builder()
+    # Exercise real compilation, directory traversal and archive production;
+    # omit unrelated web/assets/dependency requirements from the tiny fixture.
+    for name in ("validate_glasgow_runtime_dependencies",
+                 "validate_local_redis_distribution_workflow",
+                 "copy_source_trees", "copy_preserved_files",
+                 "copy_matching_assets", "validate_packaged_local_system_manager",
+                 "validate_dist_contents", "write_dist_manifest",
+                 "verify_built_archive"):
+        monkeypatch.setattr(builder, name, lambda *args, **kwargs: None)
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "source"
+    source.mkdir()
+    # Keep the real credential gate active without adding scanner files to
+    # the miniature archive whose exact contents are asserted below.
+    scanner = builder.load_secretstore(str(DEVELOPMENT_ROOT.parent))
+    monkeypatch.setattr(builder, "load_secretstore", lambda src_dir: scanner)
+    return builder, source
+
+
+def test_compiled_archive_uses_source_not_stale_or_orphan_caches(monkeypatch, tmp_path):
+    builder, source = isolated_builder(monkeypatch, tmp_path)
+    (source / "controller.py").write_text("ADC_FSM = True\n")
+    cache = source / "__pycache__"
+    cache.mkdir()
+    stale = tmp_path / "old.py"
+    stale.write_text("ADC_FSM = False\n")
+    for tag in ("310", "313", "999"):
+        py_compile.compile(str(stale), cfile=str(cache / f"controller.cpython-{tag}.pyc"))
+    py_compile.compile(str(stale), cfile=str(cache / "deleted.cpython-313.pyc"))
+    builder.build_compiled_dist(str(source), str(tmp_path / "dist"))
+    with zipfile.ZipFile(tmp_path / "dist_app.zip") as archive:
+        assert archive.namelist() == ["controller.pyc"]
+        namespace = {}
+        exec(marshal.loads(archive.read("controller.pyc")[16:]), namespace)
+        assert namespace["ADC_FSM"] is True
+
+
+def test_compile_failure_stops_archive_instead_of_shipping_old_bytecode(monkeypatch, tmp_path):
+    builder, source = isolated_builder(monkeypatch, tmp_path)
+    module = source / "controller.py"
+    module.write_text("ADC_FSM = True\n")
+    py_compile.compile(str(module), doraise=True)
+    module.write_text("def broken(:\n")
+    with pytest.raises(py_compile.PyCompileError):
+        builder.build_compiled_dist(str(source), str(tmp_path / "dist"))
+    assert not (tmp_path / "dist_app.zip").exists()

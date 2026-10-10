@@ -1,12 +1,11 @@
 import re
-import os
 import time
 import struct
 import logging
 import asyncio
 import threading
 import importlib.resources
-import sysconfig
+import sys
 from pathlib import Path
 
 import usb1
@@ -20,32 +19,23 @@ __all__ = ["GlasgowDevice"]
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TRANSFER_TIMEOUT_S = 30.0
-TRANSFER_TIMEOUT_ENV = "GLASGOW_USB_TRANSFER_TIMEOUT_S"
-_DEFAULT_TRANSFER_TIMEOUT = object()
-
-
-def _transfer_timeout_s():
-    value = os.environ.get(TRANSFER_TIMEOUT_ENV)
-    if value is None:
-        return DEFAULT_TRANSFER_TIMEOUT_S
-    try:
-        timeout = float(value)
-    except ValueError:
-        logger.warning("Ignoring invalid %s=%r; using %.1fs",
-                       TRANSFER_TIMEOUT_ENV, value, DEFAULT_TRANSFER_TIMEOUT_S)
-        return DEFAULT_TRANSFER_TIMEOUT_S
-    if timeout <= 0:
-        logger.warning("Ignoring non-positive %s=%r; using %.1fs",
-                       TRANSFER_TIMEOUT_ENV, value, DEFAULT_TRANSFER_TIMEOUT_S)
-        return DEFAULT_TRANSFER_TIMEOUT_S
-    return timeout
-
 
 VID_QIHW         = 0x20b7
 PID_GLASGOW      = 0x9db1
 
-CUR_API_LEVEL    = 0x05
+# Must match the API level compiled into firmware.ihex (see firmware/glasgow.h, CUR_API_LEVEL).
+# The firmware.ihex shipped here is the one installed by Open-Beam-Interface (Glasgow rev 8b02130),
+# which is API level 4. This is the firmware that is loaded into a device that has none.
+CUR_API_LEVEL    = 0x04
+
+# API levels this host can use without reloading firmware. A device is only found if its level is
+# in this set, so being too strict makes a present, working device "not found": a level mismatch
+# sends it down the reload path, which claims every interface (skipped as busy if another process
+# holds one) and makes the device re-enumerate on the bus (which may not complete in a VM with USB
+# passthrough). Upstream's only change from API 4 to 5 is REQ_TEST_PULLS, a revC self-test request
+# that this host never issues, so a device already running API 5 firmware (for example one flashed
+# with the previous firmware.ihex) is used as it is.
+COMPATIBLE_API_LEVELS = frozenset({CUR_API_LEVEL, 0x05})
 
 REQ_EEPROM       = 0x10
 REQ_FPGA_CFG     = 0x11
@@ -111,10 +101,10 @@ def _safe_ascii_string_descriptor(handle, device, descriptor, fallback_label):
 class GlasgowDevice:
     @classmethod
     def firmware_file(cls):
-        # Prefer the active environment's installed firmware while supporting
-        # Windows Lib\site-packages and Unix lib/pythonX.Y/site-packages.
-        installed = (Path(sysconfig.get_path("purelib")) /
-                     "glasgow" / "hardware" / "firmware.ihex")
+        # Prefer the firmware installed in the Operations virtualenv exactly as the
+        # reference IobeamTech checkout does; its API level must equal CUR_API_LEVEL above.
+        installed = (Path(sys.prefix) / "lib" / "python3.13" /
+                     "site-packages" / "glasgow" / "hardware" / "firmware.ihex")
         if installed.is_file():
             return installed
         return importlib.resources.files(__package__).joinpath("firmware.ihex")
@@ -157,34 +147,31 @@ class GlasgowDevice:
                 continue
             if api_level == 0:
                 logger.debug("found rev%s device without firmware", revision)
-            elif api_level != CUR_API_LEVEL:
+            elif api_level not in COMPATIBLE_API_LEVELS:
                 for config in handle.getDevice().iterConfigurations():
                     if config.getConfigurationValue() == handle.getConfiguration():
                         break
                 try:
-                    # `handle` is getting closed either way, so explicit release isn't necessary.
                     for intf_num in range(config.getNumInterfaces()):
                         handle.claimInterface(intf_num)
-                    logger.info("found rev%s device with API level %d (supported API level is %d)",
-                                revision, api_level, CUR_API_LEVEL)
-                    # Updating the firmware is not strictly required. However, re-enumeration tends
-                    # to expose all kinds of issues related to hotplug (especially on Windows,
-                    # where libusb does not listen to hotplug events) and the more you do it,
-                    # the more likely it is to eventually cause misery.
+                    logger.info("found rev%s device with API level %d (supported API levels are %s)",
+                                revision, api_level,
+                                ", ".join(str(level) for level in sorted(COMPATIBLE_API_LEVELS)))
                     serial = _safe_ascii_string_descriptor(
                         handle, device, device.getSerialNumberDescriptor(), "glasgow")
-                    logger.warning(f"please run `glasgow flash` to update firmware of device "
-                                   f"{serial}")
+                    logger.warning("please run `glasgow flash` to update firmware of device %s",
+                                   serial)
                 except usb1.USBErrorBusy:
                     logger.debug("found busy rev%s device with unsupported API level %d",
                                  revision, api_level)
                     handle.close()
                     continue
-            else: # api_level == CUR_API_LEVEL
+            else: # api_level in COMPATIBLE_API_LEVELS
                 serial = _safe_ascii_string_descriptor(
                     handle, device, device.getSerialNumberDescriptor(), "glasgow")
                 if serial not in devices_by_serial:
-                    logger.debug("found rev%s device with serial %s", revision, serial)
+                    logger.debug("found rev%s device with serial %s (API level %d)",
+                                 revision, serial, api_level)
                     devices_by_serial[serial] = (revision, device)
                 handle.close()
                 continue
@@ -299,8 +286,7 @@ class GlasgowDevice:
         self.usb_poller.stop()
         self.usb_context.close()
 
-    async def _do_transfer(self, is_read, setup,
-                           timeout_s=_DEFAULT_TRANSFER_TIMEOUT):
+    async def _do_transfer(self, is_read, setup):
         # libusb transfer cancellation is asynchronous, and moreover, it is necessary to wait for
         # all transfers to finish cancelling before closing the event loop. To do this, use
         # separate futures for result and cancel.
@@ -330,6 +316,8 @@ class GlasgowDevice:
                     endpoint_dir = "OUT"
                 logger.info("USB: %s EP%d %s (cancelled)",
                              transfer_type, endpoint & 0x7f, endpoint_dir)
+                # libusb may deliver a late or duplicate cancellation
+                # callback while shutdown is already resolving this transfer.
                 if not cancel_future.done():
                     cancel_future.set_result(None)
             elif result_future.cancelled():
@@ -337,7 +325,8 @@ class GlasgowDevice:
             elif status == usb1.TRANSFER_COMPLETED:
                 if not result_future.done():
                     if is_read:
-                        result_future.set_result(transfer.getBuffer()[:transfer.getActualLength()])
+                        result_future.set_result(
+                            transfer.getBuffer()[:transfer.getActualLength()])
                     else:
                         result_future.set_result(None)
             elif status == usb1.TRANSFER_STALL:
@@ -345,7 +334,8 @@ class GlasgowDevice:
                     result_future.set_exception(usb1.USBErrorPipe())
             elif status == usb1.TRANSFER_NO_DEVICE:
                 if not result_future.done():
-                    result_future.set_exception(GlasgowDeviceError("device disconnected"))
+                    result_future.set_exception(
+                        GlasgowDeviceError("device disconnected"))
             else:
                 if not result_future.done():
                     result_future.set_exception(GlasgowDeviceError(
@@ -361,20 +351,7 @@ class GlasgowDevice:
         transfer.setCallback(lambda transfer: loop.call_soon_threadsafe(usb_callback, transfer))
         handle_usb_error(lambda: transfer.submit())
         try:
-            # Streaming bulk-IN transfers are submitted as a standing queue
-            # long before the scan reaches them. Giving those queued reads an
-            # absolute deadline makes every pending transfer expire together
-            # during otherwise healthy scans whose total duration exceeds the
-            # deadline. Their no-data watchdog belongs at GlasgowStream.read(),
-            # where it is renewed for every consumed scan chunk.
-            if timeout_s is None:
-                return await result_future
-            timeout = (
-                _transfer_timeout_s()
-                if timeout_s is _DEFAULT_TRANSFER_TIMEOUT
-                else float(timeout_s)
-            )
-            return await asyncio.wait_for(result_future, timeout=timeout)
+            return await asyncio.wait_for(result_future, timeout=10.0)
         finally:
             if result_future.cancelled():
                 try:
@@ -405,7 +382,7 @@ class GlasgowDevice:
     async def bulk_read(self, endpoint, length):
         logger.info("USB: BULK EP%d IN length=%d (submit)", endpoint & 0x7f, length)
         data = await self._do_transfer(is_read=True, setup=lambda transfer:
-            transfer.setBulk(endpoint|usb1.ENDPOINT_IN, length), timeout_s=None)
+            transfer.setBulk(endpoint|usb1.ENDPOINT_IN, length))
         logger.info("USB: BULK EP%d IN data=<%s> (completed)", endpoint & 0x7f, dump_hex(data))
         return data
 
@@ -578,6 +555,14 @@ class GlasgowDevice:
         bitstream = await plan.get_bitstream()
         if bitstream:
             await self.download_bitstream(bitstream, plan.bitstream_id)
+            running_id = await self.bitstream_id()
+            if running_id != plan.bitstream_id:
+                expected = plan.bitstream_id.hex()
+                actual = "none" if running_id is None else running_id.hex()
+                raise GlasgowDeviceError(
+                    f"FPGA bitstream verification failed: expected {expected}, "
+                    f"device reports {actual}")
+            logger.info("verified running FPGA bitstream ID %s", running_id.hex())
             return True
         return False
             

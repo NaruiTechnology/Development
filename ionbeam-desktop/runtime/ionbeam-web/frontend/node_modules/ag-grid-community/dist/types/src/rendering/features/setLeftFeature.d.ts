@@ -1,0 +1,18 @@
+import { BeanStub } from '../../context/beanStub';
+import type { BeanCollection } from '../../context/context';
+import type { AgColumn } from '../../entities/agColumn';
+import type { AgColumnGroup } from '../../entities/agColumnGroup';
+export declare class SetLeftFeature extends BeanStub {
+    private readonly columnOrGroup;
+    private readonly eCell;
+    private readonly ariaEl;
+    private actualLeft;
+    constructor(columnOrGroup: AgColumn | AgColumnGroup, eCell: HTMLElement, beans: BeanCollection);
+    getColumnOrGroup(): AgColumn | AgColumnGroup;
+    postConstruct(): void;
+    private setLeftFirstTime;
+    private animateInLeft;
+    private onLeftChanged;
+    private setLeft;
+    private setHorizontalPosition;
+}

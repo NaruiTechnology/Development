@@ -1,219 +1,172 @@
-import asyncio
-import importlib.util
 import json
+import importlib.util
 import os
+import shlex
 import sys
 import tempfile
 import unittest
+import asyncio
+import zipfile
+from unittest.mock import AsyncMock, Mock, patch
 from pathlib import Path
 from types import SimpleNamespace
-from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from workstates.exportEnv_state import exportEnv_state
+from archive_fixtures import write_manifested_archive
 from workstates.unzipDistribution_state import unzipDistribution_state
-from workstates.createDeployFolder_state import createDeployFolder_state
-from workstates.manageLocalSystem_state import manageLocalSystem_state
 from workthreads.DistributionDeployThread import DistributionDeployThread
+from workstates.createDeployFolder_state import createDeployFolder_state
+from workstates.stopLocalSystem_state import stopLocalSystem_state
+from workstates.programFpgaRam_state import programFpgaRam_state
+from workstates.setupIonbeamWeb_state import setupIonbeamWeb_state
+
+
+class DeploymentGateTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stop_uses_incoming_script_and_failure_preserves_installation(self):
+        for succeeds in (False, True):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                deploy = root / "IobeamPlatform"
+                deploy.mkdir()
+                marker = deploy / "old.pyc"
+                marker.touch()
+                archive = root / "dist_app.zip"
+                write_manifested_archive(archive, {
+                    "Development/Scripts/manage-local-system.sh": b"#!/bin/bash\n# incoming manager\n",
+                    "Development/Scripts/program-fpga-ram.py": b"# helper\n",
+                })
+                config = SimpleNamespace(Actions=[{"unzipDistribution": {"actionData": {"zip": str(archive)}}}])
+                thread = SimpleNamespace(deployRoot=str(deploy), workRoot=str(root), GetStateConfig=lambda _: {})
+                state = stopLocalSystem_state(thread)
+                state.Config = config
+
+                async def run(command, cwd, verbose):
+                    self.assertIn("./Development/Scripts/manage-local-system.sh stop", command)
+                    self.assertIn(str(deploy), command)
+                    self.assertIn("incoming manager", (Path(cwd) / "Development/Scripts/manage-local-system.sh").read_text())
+                    return succeeds
+
+                state.commandAsyncio = AsyncMock(side_effect=run)
+                await state.DoWork()
+                self.assertEqual(state._success, succeeds)
+                self.assertEqual(thread._localSystemStopped, succeeds)
+                self.assertTrue(marker.exists())
+                self.assertEqual(thread._distributionZip, str(archive))
+
+    async def test_extraction_does_not_clear_prepared_directory_again(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            deploy = root / "IobeamPlatform"
+            deploy.mkdir()
+            marker = deploy / "prepared-marker"
+            marker.touch()
+            archive = root / "dist_app.zip"
+            archive.touch()
+            config = {"actionData": {"zip": str(archive), "dest": "."}}
+            thread = SimpleNamespace(deployRoot=str(deploy), workRoot=str(root),
+                                     _deployRootPrepared=True, _distributionZip=str(archive),
+                                     GetStateConfig=lambda _: config, activateVirtualEnv=lambda: None)
+            state = unzipDistribution_state(thread)
+            state._run = AsyncMock(return_value=True)
+            await state.DoWork()
+            self.assertTrue(state._success)
+            self.assertTrue(marker.exists())
+
+    async def test_fpga_subprocess_failure_blocks_completion(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in (".venv/bin/python", "Development/Scripts/program-fpga-ram.py", "scan.json"):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            thread = SimpleNamespace(deployRoot=str(root), venvDir=".venv", glasgowConfig=str(root / "scan.json"),
+                                     _localSystemStopped=True, GetStateConfig=lambda _: {})
+            state = programFpgaRam_state(thread)
+            state.commandAsyncio = AsyncMock(return_value=False)
+            await state.DoWork()
+            self.assertFalse(state._success)
+            self.assertEqual(shlex.split(state.commandAsyncio.call_args.args[0]), [
+                str(root / ".venv/bin/python"),
+                str(root / "Development/Scripts/program-fpga-ram.py"),
+                "--config", str(root / "scan.json"),
+            ])
 
 
 class DeployRootSafetyTests(unittest.TestCase):
-    def test_only_named_deployment_root_is_clearable(self):
-        driveRoot = Path(Path.cwd().anchor)
-        self.assertFalse(unzipDistribution_state._isSafeDeployRoot(str(driveRoot)))
-        self.assertFalse(unzipDistribution_state._isSafeDeployRoot(str(Path.home())))
-        self.assertFalse(unzipDistribution_state._isSafeDeployRoot(
-            str(Path(tempfile.gettempdir()) / "random")))
-        self.assertTrue(unzipDistribution_state._isSafeDeployRoot(
-            str(Path(tempfile.gettempdir()) / "IobeamPlatform")))
+    def test_root_symlink_is_rejected_without_touching_destination(self):
+        with tempfile.TemporaryDirectory() as parent:
+            outside = Path(parent) / "outside"
+            outside.mkdir()
+            marker = outside / "keep"
+            marker.touch()
+            deploy = Path(parent) / "IobeamPlatform"
+            deploy.symlink_to(outside, target_is_directory=True)
+            self.assertFalse(unzipDistribution_state(None)._prepareDeployRoot(str(deploy)))
+            self.assertTrue(marker.exists())
 
-    def test_guarded_clear_does_not_follow_directory_links(self):
+    def test_replaces_root_itself_and_removes_hidden_stale_files(self):
+        with tempfile.TemporaryDirectory() as parent:
+            deploy = Path(parent) / "IobeamPlatform"
+            deploy.mkdir(mode=0o700)
+            (deploy / ".stale.pyc").touch()
+            with patch("workstates.unzipDistribution_state.shutil.rmtree", wraps=__import__('shutil').rmtree) as remove:
+                self.assertTrue(unzipDistribution_state(None)._prepareDeployRoot(str(deploy)))
+                remove.assert_called_once_with(str(deploy))
+            self.assertEqual(list(deploy.iterdir()), [])
+
+    def test_deletion_requires_successful_stop(self):
+        with tempfile.TemporaryDirectory() as parent:
+            deploy = Path(parent) / "IobeamPlatform"
+            deploy.mkdir()
+            marker = deploy / "keep"
+            marker.touch()
+            thread = SimpleNamespace(deployRoot=str(deploy), GetStateConfig=lambda _: {})
+            state = createDeployFolder_state(thread)
+            asyncio.run(state.DoWork())
+            self.assertFalse(state._success)
+            self.assertTrue(marker.exists())
+
+    def test_only_named_deployment_root_is_clearable(self):
+        self.assertFalse(unzipDistribution_state._isSafeDeployRoot("/"))
+        self.assertFalse(unzipDistribution_state._isSafeDeployRoot(str(Path.home())))
+        self.assertFalse(unzipDistribution_state._isSafeDeployRoot("/tmp/random"))
+        self.assertTrue(unzipDistribution_state._isSafeDeployRoot("/tmp/IobeamPlatform"))
+
+    def test_guarded_clear_does_not_follow_directory_symlinks(self):
         with tempfile.TemporaryDirectory() as parent:
             deploy = Path(parent) / "IobeamPlatform"
             outside = Path(parent) / "outside"
             deploy.mkdir()
             outside.mkdir()
             marker = outside / "keep.txt"
-            marker.write_text("keep", encoding="utf-8")
-            try:
-                (deploy / "link").symlink_to(outside, target_is_directory=True)
-            except OSError as exc:
-                self.skipTest("Windows symbolic-link privilege unavailable: {}".format(exc))
+            marker.write_text("keep")
+            (deploy / "link").symlink_to(outside, target_is_directory=True)
 
             state = unzipDistribution_state(None)
             self.assertTrue(state._prepareDeployRoot(str(deploy)))
             self.assertTrue(marker.exists())
             self.assertFalse((deploy / "link").exists())
 
-
-class DeployRootLifecycleTests(unittest.TestCase):
-    def test_running_stack_is_stopped_before_deploy_root_is_cleared(self):
+    def test_all_extracted_shell_scripts_become_executable(self):
         with tempfile.TemporaryDirectory() as parent:
             deploy = Path(parent) / "IobeamPlatform"
-            deploy.mkdir()
-            parentThread = SimpleNamespace(
-                deployRoot=str(deploy),
-                GetStateConfig=lambda _state: {"timeout": 30.0},
-            )
-            state = createDeployFolder_state(parentThread)
+            scripts = deploy / "nested"
+            scripts.mkdir(parents=True)
+            shell_script = scripts / "runtime.sh"
+            shell_script.write_text("#!/usr/bin/env bash\n")
+            shell_script.chmod(0o644)
+            ordinary_file = scripts / "settings.json"
+            ordinary_file.write_text("{}")
+            ordinary_file.chmod(0o644)
 
-            events = []
-
-            async def stopStack(_deployRoot, _timeout):
-                events.append("stop")
-                return True
-
-            def clearDeployRoot(_deployRoot):
-                events.append("clear")
-                return True
-
-            with mock.patch.object(
-                state,
-                "_stopManagedWindowsStack",
-                side_effect=stopStack,
-            ), mock.patch.object(
-                unzipDistribution_state,
-                "_prepareDeployRoot",
-                side_effect=clearDeployRoot,
-            ):
-                asyncio.run(state.DoWork())
-
-            self.assertEqual(events, ["stop", "clear"])
-            self.assertTrue(state.Success)
-
-    def test_unmanaged_deploy_processes_are_stopped_after_manager(self):
-        state = createDeployFolder_state(None)
-        managerProcess = SimpleNamespace()
-
-        with mock.patch(
-            "workstates.createDeployFolder_state.os.name", "nt"
-        ), mock.patch.object(
-            state,
-            "_findLocalSystemManager",
-            return_value=r"C:\deploy\manage-local-system.ps1",
-        ), mock.patch(
-            "workstates.createDeployFolder_state.asyncio.create_subprocess_exec",
-            new=mock.AsyncMock(return_value=managerProcess),
-        ), mock.patch.object(
-            state,
-            "_waitForStopProcess",
-            new=mock.AsyncMock(return_value=True),
-        ) as waitForStop, mock.patch.object(
-            state,
-            "_stopDeployRootProcesses",
-            new=mock.AsyncMock(return_value=True),
-        ) as stopDeployProcesses:
-            success = asyncio.run(
-                state._stopManagedWindowsStack(r"C:\Project\Iobeam\Deploy", 30))
-
-        self.assertTrue(success)
-        waitForStop.assert_awaited_once_with(
-            managerProcess, 30, "existing Windows stack")
-        stopDeployProcesses.assert_awaited_once_with(
-            r"C:\Project\Iobeam\Deploy", 30)
-
-    def test_deploy_process_cleanup_receives_root_without_shell_interpolation(self):
-        state = createDeployFolder_state(None)
-        cleanupProcess = SimpleNamespace()
-
-        with mock.patch(
-            "workstates.createDeployFolder_state.asyncio.create_subprocess_exec",
-            new=mock.AsyncMock(return_value=cleanupProcess),
-        ) as launch, mock.patch.object(
-            state,
-            "_waitForStopProcess",
-            new=mock.AsyncMock(return_value=True),
-        ):
-            success = asyncio.run(
-                state._stopDeployRootProcesses(r"C:\Project\Iobeam\Deploy", 30))
-
-        self.assertTrue(success)
-        args = launch.await_args.args
-        kwargs = launch.await_args.kwargs
-        command = "\n".join(args)
-        self.assertIn("Get-Process", command)
-        self.assertIn("taskkill.exe", command)
-        self.assertNotIn(r"C:\Project\Iobeam\Deploy", args)
-        self.assertEqual(
-            kwargs["env"]["IOBEAM_DEPLOY_ROOT_TO_STOP"],
-            r"C:\Project\Iobeam\Deploy",
-        )
-
-
-class LocalSystemManagerTests(unittest.TestCase):
-    def test_windows_manager_runs_sample_stage_controller(self):
-        manager = (ROOT.parents[2] / "Scripts" / "manage-local-system.ps1").read_text()
-
-        self.assertIn('$env:SAMPLE_STAGE_CONFIG', manager)
-        self.assertIn('$env:SAMPLE_STAGE_STATE', manager)
-        self.assertIn('Start-Managed "sample-stage"', manager)
-        self.assertIn('glasgow_service.sample_stage_app:app', manager)
-        self.assertIn('http://127.0.0.1:8790/status', manager)
-
-    def test_manager_output_uses_file_instead_of_asyncio_pipes(self):
-        with tempfile.TemporaryDirectory() as parent:
-            deploy = Path(parent) / "IobeamPlatform"
-            deploy.mkdir()
-            parentThread = SimpleNamespace(deployRoot=str(deploy))
-            state = manageLocalSystem_state(parentThread)
-            fakeProcess = SimpleNamespace(
-                returncode=0,
-                pid=123,
-                wait=mock.AsyncMock(return_value=0),
-            )
-            args = ["powershell.exe", "-NoProfile", "stop"]
-
-            launcher = mock.AsyncMock(return_value=fakeProcess)
-            with mock.patch(
-                "workstates.manageLocalSystem_state.asyncio.create_subprocess_exec",
-                new=launcher,
-            ):
-                success = asyncio.run(state._runManager(args, timeout=1.0))
-
-            self.assertTrue(success)
-            kwargs = launcher.await_args.kwargs
-            self.assertIsNot(kwargs["stdout"], asyncio.subprocess.PIPE)
-            self.assertEqual(kwargs["stderr"], asyncio.subprocess.STDOUT)
-            self.assertTrue((deploy / "Logs" / "manage-local-system.log").is_file())
-
-
-class ExportEnvironmentTests(unittest.TestCase):
-    def test_stale_values_are_removed_before_exports_are_written(self):
-        parentThread = SimpleNamespace(
-            GetStateConfig=lambda _state: {
-                "actionData": {
-                    "remove": ["IOBEAM_TEST_STALE"],
-                    "exports": {"IOBEAM_TEST_KEEP": "C:\\fresh"},
-                },
-            },
-        )
-        state = exportEnv_state(parentThread)
-        registryKey = mock.MagicMock()
-        registryContext = mock.MagicMock()
-        registryContext.__enter__.return_value = registryKey
-
-        with mock.patch.dict(
-            os.environ,
-            {"IOBEAM_TEST_STALE": "old"},
-            clear=False,
-        ), mock.patch(
-            "workstates.exportEnv_state.winreg.CreateKey",
-            return_value=registryContext,
-        ), mock.patch(
-            "workstates.exportEnv_state.winreg.DeleteValue",
-        ) as deleteValue, mock.patch(
-            "workstates.exportEnv_state.winreg.SetValueEx",
-        ) as setValue:
-            asyncio.run(state.DoWork())
-            self.assertNotIn("IOBEAM_TEST_STALE", os.environ)
-            self.assertEqual(os.environ["IOBEAM_TEST_KEEP"], "C:\\fresh")
-
-        deleteValue.assert_called_once_with(registryKey, "IOBEAM_TEST_STALE")
-        self.assertEqual(setValue.call_args.args[-1], "C:\\fresh")
-        self.assertTrue(state.Success)
+            state = unzipDistribution_state(None)
+            self.assertEqual(state._makeShellScriptsExecutable(str(deploy)), 1)
+            self.assertTrue(shell_script.stat().st_mode & 0o111)
+            self.assertFalse(ordinary_file.stat().st_mode & 0o111)
 
 
 class WorkflowContractTests(unittest.TestCase):
@@ -226,10 +179,7 @@ class WorkflowContractTests(unittest.TestCase):
     def config(self, actions):
         return SimpleNamespace(
             Actions=actions,
-            Deployment={
-                "WorkRoot": str(ROOT),
-                "DeployRoot": str(Path(tempfile.gettempdir()) / "IobeamPlatform"),
-            },
+            Deployment={"WorkRoot": str(ROOT), "DeployRoot": "/tmp/IobeamPlatform"},
             LogName="deployment-test",
         )
 
@@ -251,30 +201,85 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIsNone(thread._workflowError)
         self.assertTrue(thread._workflowSucceeded)
 
-    def test_config_uses_windows_manager_not_detached_launches(self):
+    def test_config_uses_systemd_manager_not_detached_launches(self):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
         actions = {name: cfg for item in payload["Actions"] for name, cfg in item.items()}
         self.assertFalse(actions["manageLocalSystem"]["skip"])
+        self.assertFalse(actions["setupGlasgow"]["skip"])
+        self.assertTrue(actions["programFpgaRam"]["skip"])
         for legacy in (
             "launchGlasgowService",
+            "verifyGlasgowService",
             "launchIonbeamWebBackend",
             "launchIonbeamWebFrontend",
         ):
             self.assertTrue(actions[legacy]["skip"])
 
-    def test_admin_environment_is_cleared_for_backend_dotenv(self):
+    def test_web_setup_installs_and_builds_backend_and_frontend(self):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
         actions = {name: cfg for item in payload["Actions"] for name, cfg in item.items()}
-        actionData = actions["exportEnv"]["actionData"]
-        removals = set(actionData["remove"])
-
-        self.assertIn("IOBEAM_ADMIN_CONFIG", removals)
-        self.assertIn("IOBEAM_ADMIN_DB_CONFIG", removals)
-        self.assertIn("IOBEAM_ADMIN_DB_HOST", removals)
-        self.assertFalse(
-            any(name.startswith("IOBEAM_ADMIN_")
-                for name in actionData["exports"])
+        action_data = actions["setupIonbeamWeb"]["actionData"]
+        self.assertTrue(action_data["npmBuild"])
+        commands = setupIonbeamWeb_state._projectCommands(
+            "/deploy/backend",
+            "/deploy/frontend",
+            action_data["npmInstall"],
+            action_data["npmBuild"],
+            backendBuildCommand=action_data["backendBuildCommand"],
+            frontendBuildCommand=action_data["frontendBuildCommand"],
         )
+        self.assertEqual(commands, [
+            ("backend-install", "/deploy/backend", "npm install"),
+            ("frontend-install", "/deploy/frontend", "npm install"),
+            ("backend-build", "/deploy/backend", "npm run build"),
+            ("frontend-build", "/deploy/frontend", "npm run build"),
+        ])
+
+    def test_generated_backend_env_uses_deployed_vacuum_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            backend = root / "Development/ionbeam-web/backend"
+            backend.mkdir(parents=True)
+            state = setupIonbeamWeb_state(SimpleNamespace(deployRoot=str(root)))
+            state._readAdminDbConfig = Mock(return_value={})
+            state._writeBackendEnv(str(backend / ".env"), str(backend), {})
+            env = dict(line.split("=", 1) for line in (backend / ".env").read_text().splitlines() if "=" in line)
+            self.assertEqual(env["SBC_VACUUM_CONFIG"], str(root / "Development/GlasgowDataIO/Json/vacuumSystem.json"))
+            self.assertEqual(env["VACUUM_CONTROLLER_URL"], "http://127.0.0.1:8780")
+
+    def test_stop_gate_cannot_be_skipped_or_reused(self):
+        for flag in ("skip", "transactionComplete"):
+            payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+            next(a["stopLocalSystem"] for a in payload["Actions"]
+                 if "stopLocalSystem" in a)[flag] = True
+            thread = DistributionDeployThread(self.config(payload["Actions"]))
+            self.assertIsNone(thread.IntialWork())
+            self.assertIsNotNone(thread._workflowError)
+
+    def test_fpga_gate_can_be_explicitly_skipped_without_hardware(self):
+        payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+        next(a["programFpgaRam"] for a in payload["Actions"]
+             if "programFpgaRam" in a)["skip"] = True
+        thread = DistributionDeployThread(self.config(payload["Actions"]))
+        self.assertIsNotNone(thread.IntialWork())
+        self.assertIsNone(thread._workflowError)
+
+    def test_failure_aborts_before_next_state(self):
+        payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+        thread = DistributionDeployThread(self.config(payload["Actions"]))
+        state = thread.IntialWork()
+        self.assertIsInstance(state, stopLocalSystem_state)
+        self.assertIsNone(thread.StateFactory(state))
+        self.assertFalse(thread._workflowSucceeded)
+
+    def test_fpga_precedes_remaining_installation_and_restart(self):
+        payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
+        names = [name for action in payload["Actions"] for name in action]
+        self.assertEqual(names[:4], ["stopLocalSystem", "provisionSecrets", "createDeployFolder", "unzipDistribution"])
+        for prerequisite in ("installPipRequirements", "installToolchain", "setupGlasgow"):
+            self.assertLess(names.index(prerequisite), names.index("programFpgaRam"))
+        for remaining in ("installPostgreSQL", "setupIonbeamWeb", "manageLocalSystem"):
+            self.assertLess(names.index("programFpgaRam"), names.index(remaining))
 
     def test_every_enabled_action_has_an_importable_workstate(self):
         payload = json.loads((ROOT / "Json" / "DistributionDeploy.json").read_text())
@@ -284,16 +289,53 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIsNotNone(first)
         self.assertIsNone(thread._workflowError)
 
-    def test_builder_packages_windows_manager_and_scripts(self):
-        builder_path = ROOT.parents[2] / "buidCompiledDist.py"
-        spec = importlib.util.spec_from_file_location(
-            "distribution_builder", builder_path)
+    def test_builder_packages_system_manager_and_templates(self):
+        builder_path = ROOT.parents[2] / "buildCompiledDist.py"
+        spec = importlib.util.spec_from_file_location("distribution_builder", builder_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        expected = ("Scripts", os.path.join("Development", "Scripts"))
-        self.assertIn(expected, module.COPY_TREES)
-        self.assertIn("*.ps1", module.ASSET_PATTERNS)
-        self.assertNotIn("*.service.in", module.ASSET_PATTERNS)
+        self.assertIn("Scripts", module.COPY_TREES)
+        self.assertIn("*.service.in", module.ASSET_PATTERNS)
+        self.assertIn("*.env.in", module.ASSET_PATTERNS)
+        self.assertIn("*.rules", module.ASSET_PATTERNS)
+
+    def test_builder_makes_every_shell_script_executable(self):
+        builder_path = ROOT.parents[2] / "buildCompiledDist.py"
+        spec = importlib.util.spec_from_file_location("distribution_builder", builder_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as parent:
+            root = Path(parent)
+            first = root / "first.sh"
+            second = root / "nested" / "second.sh"
+            second.parent.mkdir()
+            first.write_text("#!/bin/sh\n")
+            second.write_text("#!/bin/sh\n")
+            first.chmod(0o644)
+            second.chmod(0o600)
+
+            self.assertEqual(module.make_shell_scripts_executable(str(root)), 2)
+            self.assertTrue(first.stat().st_mode & 0o111)
+            self.assertTrue(second.stat().st_mode & 0o111)
+
+    def test_builder_prefers_development_scripts_over_stale_workspace_scripts(self):
+        builder_path = ROOT.parents[2] / "buildCompiledDist.py"
+        spec = importlib.util.spec_from_file_location("distribution_builder", builder_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            old = root / "Scripts"
+            fresh = root / "Development/Scripts"
+            old.mkdir()
+            fresh.mkdir(parents=True)
+            (old / "manage-local-system.sh").write_text("stale")
+            (fresh / "manage-local-system.sh").write_text("fresh")
+            (fresh / "program-fpga-ram.py").write_text("programmer")
+            output = root / "out"
+            module.copy_source_trees(str(root), str(output), ["Scripts"])
+            self.assertEqual((output / "Development/Scripts/manage-local-system.sh").read_text(), "fresh")
+            module.validate_packaged_local_system_manager(str(output))
 
 
 if __name__ == "__main__":

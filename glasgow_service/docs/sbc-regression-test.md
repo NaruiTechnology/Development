@@ -10,7 +10,7 @@ pytest -q --ignore=tests/test_wet_run.py
 cd ../ionbeam-web/backend && npm run build
 cd ../frontend && npm run build
 cd ../../..
-python3 Development/buidCompiledDist.py --raw
+python3 Development/buildCompiledDist.py --raw
 ```
 
 Expected results: all Python tests pass, both TypeScript builds complete, and

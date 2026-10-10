@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   clearROIImage,
@@ -28,10 +28,30 @@ import {
 } from "../lib/roiGeometry";
 import { useTranslation, type TranslationApi, type TranslationKey } from "../i18n";
 import { Icon } from "./Icon";
+import { LevelWedge } from "./LevelWedge";
 import { NumberStepperInput } from "./NumberStepperField";
+import { useLevelSetting } from "../hooks/useLevelSetting";
+import {
+  AUTO_LEVELS,
+  ROI_GRAY_FULL_SCALE,
+  ROI_GRAY_SAMPLE_SCALE,
+  grayLevelLut,
+  type LevelHistogram,
+  type ResolvedLevels,
+} from "../lib/displayLevels";
+import {
+  ROI_LEVEL_KEY,
+  applyLevelsToCanvas,
+  measureGrayImage,
+  resolveRoiLevels,
+} from "../lib/grayImageLevels";
 
 type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
 type ROISelectionCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+type CalibrationLine = {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+};
 
 const UNITS = [
   { value: "um", label: "μm" },
@@ -42,6 +62,17 @@ const UNITS = [
 
 const ROI_DRAG_THRESHOLD = 8;
 const ROI_CORNER_DRAG_THRESHOLD = 18;
+
+function composeOverlayCounterTransform(
+  counterTransform: string,
+  baseTransform = "",
+): string {
+  const counter = counterTransform === "none" ? "" : counterTransform.trim();
+  const base = baseTransform.trim();
+  return [counter, base].filter(Boolean).join(" ") || "none";
+}
+
+const NO_CANVAS_TRANSFORMS = { xflip: false, yflip: false, rotate90: false } as const;
 
 export function ROIEditor({
   disabled,
@@ -72,6 +103,32 @@ export function ROIEditor({
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
+  const streamTransforms = useAppSelector((s) => s.scan.streamTransforms);
+  // The transform settings describe how scan data is oriented. A file the
+  // operator loaded and an ROI scan (its live preview and its result) are
+  // shown in source orientation: the canvas (and everything drawn on it, so
+  // overlays stay aligned) is not flipped or rotated, and pointer positions
+  // are not un-oriented either. Only a plain last-scan image keeps them.
+  const showingLoadedFile = roi.scanImageDataUrl === null && roi.imageKind === "file";
+  const showingROIScan =
+    liveVectorPreview ||
+    roi.scanImageDataUrl !== null ||
+    (roi.roiScanResultUrl !== null && roi.imageDataUrl === roi.roiScanResultUrl);
+  const canvasTransforms =
+    showingLoadedFile || showingROIScan ? NO_CANVAS_TRANSFORMS : streamTransforms;
+  const canvasOrientation = [
+    canvasTransforms.xflip ? "scaleX(-1)" : "",
+    canvasTransforms.yflip ? "scaleY(-1)" : "",
+    canvasTransforms.rotate90 ? "rotate(90deg)" : "",
+  ].filter(Boolean).join(" ");
+  // Keep the axis notation upright while the canvas is flipped or rotated.
+  // Derive the inverse from the exact CSS transform string so the text stays
+  // correct for every combination and transform order.
+  const axisTextCounterTransform = canvasOrientation
+    ? new DOMMatrix(canvasOrientation).inverse().toString()
+    : "none";
+  const uprightOverlayTransform = (baseTransform = "") =>
+    composeOverlayCounterTransform(axisTextCounterTransform, baseTransform);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -80,6 +137,38 @@ export function ROIEditor({
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  // Untouched copy of the image at canvas size. The base canvas shows it
+  // stretched by the wedge levels, but gray-level selection, the live beam
+  // overlay and the captured scan image always work on these raw gray values.
+  const rawCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rawImageRef = useRef<HTMLImageElement | null>(null);
+  const [grayHist, setGrayHist] = useState<LevelHistogram | null>(null);
+  const [levelSetting, setLevelSetting] = useLevelSetting(ROI_LEVEL_KEY);
+  const levels = useMemo(() => resolveRoiLevels(grayHist, levelSetting), [grayHist, levelSetting]);
+  const lut = useMemo(() => grayLevelLut(levels), [levels]);
+  // Repaint at most once per animation frame while a wedge handle is dragged.
+  const pendingLevelRef = useRef<ResolvedLevels | null>(null);
+  const levelFrameRef = useRef<number | null>(null);
+  const handleWedgeChange = useCallback(
+    (next: ResolvedLevels) => {
+      pendingLevelRef.current = next;
+      if (levelFrameRef.current !== null) return;
+      levelFrameRef.current = window.requestAnimationFrame(() => {
+        levelFrameRef.current = null;
+        const pending = pendingLevelRef.current;
+        pendingLevelRef.current = null;
+        if (pending) setLevelSetting({ mode: "manual", low: pending.low, high: pending.high });
+      });
+    },
+    [setLevelSetting],
+  );
+  const handleWedgeAuto = useCallback(() => setLevelSetting(AUTO_LEVELS), [setLevelSetting]);
+  useEffect(
+    () => () => {
+      if (levelFrameRef.current !== null) window.cancelAnimationFrame(levelFrameRef.current);
+    },
+    [],
+  );
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const resizeCornerRef = useRef<ROISelectionCorner | null>(null);
   const resizeSelectionRef = useRef<ROIRequest | null>(null);
@@ -90,7 +179,19 @@ export function ROIEditor({
     corner: ROISelectionCorner;
     point: { x: number; y: number };
   } | null>(null);
+  const [calibrationLine, setCalibrationLine] = useState<CalibrationLine | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [calibrationCorrection, setCalibrationCorrection] = useState<{
+    x1: string;
+    x2: string;
+    y1: string;
+    y2: string;
+  } | null>(null);
+  const [calibrationCorrectionBasis, setCalibrationCorrectionBasis] = useState<{
+    original: { x1: number; x2: number; y1: number; y2: number };
+    measured: { x1: number; x2: number; y1: number; y2: number };
+  } | null>(null);
+  const [calibrationCorrectionError, setCalibrationCorrectionError] = useState<string | null>(null);
   const [ctrlCursor, setCtrlCursor] = useState<{ x: number; y: number; captured: boolean } | null>(null);
   const [suppressedBackgroundUrl, setSuppressedBackgroundUrl] = useState<string | null>(null);
   const [activeHandle, setActiveHandle] = useState<CalibrationHandle | null>(null);
@@ -250,6 +351,8 @@ export function ROIEditor({
     bytesReceived,
     chunksReceived,
     resizeTrace,
+    calibrationLine,
+    lut,
   ]);
 
   useEffect(() => {
@@ -293,7 +396,9 @@ export function ROIEditor({
     if (capturedCompletedVectorRef.current === captureKey) return;
 
     const frame = window.requestAnimationFrame(() => {
-      const base = canvasRef.current;
+      // Capture the raw image, not the wedge-stretched display, so the stored
+      // scan image is never stretched twice.
+      const base = imageRef.current && rawCanvasRef.current ? rawCanvasRef.current : canvasRef.current;
       const mask = maskCanvasRef.current;
       const live = liveCanvasRef.current;
       if (!base || !mask || !live) return;
@@ -385,6 +490,13 @@ export function ROIEditor({
       x: clampViewportCoordinate(((clientX - r.left) / r.width) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
       y: clampViewportCoordinate(((clientY - r.top) / r.height) * ROI_CANVAS_EDGE, 0, ROI_CANVAS_EDGE),
     };
+    // Pointer coordinates arrive in the oriented display space. Convert them
+    // back to the image's source space before mapping to ROI/world coordinates.
+    if (canvasTransforms.xflip) raw.x = ROI_CANVAS_EDGE - raw.x;
+    if (canvasTransforms.yflip) raw.y = ROI_CANVAS_EDGE - raw.y;
+    if (canvasTransforms.rotate90) {
+      [raw.x, raw.y] = [raw.y, ROI_CANVAS_EDGE - raw.x];
+    }
     return clampToSelection ? clampCanvasPointToViewport(raw, viewportBounds(roi)) : raw;
   }
 
@@ -398,6 +510,10 @@ export function ROIEditor({
 
   function toDut(point: { x: number; y: number }) {
     return canvasPointToWorld(point, imageWorldBounds(roi), viewportBounds(roi));
+  }
+
+  function calibrationWorldPoint(point: { x: number; y: number }) {
+    return canvasPointToWorld(point, imageWorldBounds(roi), viewportBounds(roi, "draft"));
   }
 
   function rectFromPoints(a: { x: number; y: number }, b: { x: number; y: number }): ROIRequest {
@@ -550,13 +666,29 @@ export function ROIEditor({
     ctx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
 
     const img = imageRef.current;
+    syncRawImage(img);
     if (img) {
       ctx.drawImage(img, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      applyLevelsToCanvas(canvas, levels);
     } else {
       ctx.fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
       ctx.fillRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
     }
 
+  }
+
+  /** Keep the raw copy and the wedge histogram in step with the current image. */
+  function syncRawImage(img: HTMLImageElement | null) {
+    if (rawImageRef.current === img) return;
+    rawImageRef.current = img;
+    if (!img) {
+      setGrayHist(null);
+      return;
+    }
+    const raw = rawCanvasRef.current ?? document.createElement("canvas");
+    rawCanvasRef.current = raw;
+    const measured = measureGrayImage(img, raw);
+    setGrayHist(measured ? measured.histogram : null);
   }
 
   function drawHighlightMask() {
@@ -599,9 +731,14 @@ export function ROIEditor({
         continue;
       }
 
-      const tinted = spotMode
-        ? tintBeamHitPixel(data[i], data[i + 1], data[i + 2])
-        : tintHighlighterPixel(data[i], data[i + 1], data[i + 2]);
+      // Selection above used the raw gray value; the tint is computed from the
+      // gray the operator sees (wedge-stretched) so it blends with the display.
+      const isGray = data[i] === data[i + 1] && data[i] === data[i + 2];
+      const shown = isGray ? lut[value] : value;
+      const sr = isGray ? shown : data[i];
+      const sg = isGray ? shown : data[i + 1];
+      const sb = isGray ? shown : data[i + 2];
+      const tinted = spotMode ? tintBeamHitPixel(sr, sg, sb) : tintHighlighterPixel(sr, sg, sb);
       data[i] = tinted.r;
       data[i + 1] = tinted.g;
       data[i + 2] = tinted.b;
@@ -640,7 +777,8 @@ export function ROIEditor({
     const worldYSpan = Math.max(1e-6, selection.y_end - selection.y_start);
     const pointXSpan = Math.max(1e-6, pointBounds.x1 - pointBounds.x0);
     const pointYSpan = Math.max(1e-6, pointBounds.y1 - pointBounds.y0);
-    const sourceCanvas = canvasRef.current;
+    // Beam-on decisions use the raw gray values, not the wedge-stretched display.
+    const sourceCanvas = imageRef.current && rawCanvasRef.current ? rawCanvasRef.current : canvasRef.current;
     const sourceCtx = sourceCanvas?.getContext("2d");
     if (!sourceCanvas || !sourceCtx) return;
     const sourceData = sourceCtx.getImageData(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE).data;
@@ -911,6 +1049,14 @@ export function ROIEditor({
     ctx.strokeStyle = "lawngreen";
     ctx.lineWidth = 0.2;
     ctx.strokeRect(bounds.left, bounds.top, bounds.width, bounds.height);
+    if (calibrationLine) {
+      ctx.strokeStyle = "#ff0000";
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(calibrationLine.start.x, calibrationLine.start.y);
+      ctx.lineTo(calibrationLine.end.x, calibrationLine.end.y);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1056,7 +1202,6 @@ export function ROIEditor({
             <select
               className="select"
               value={roi.scale_unit}
-              disabled
               onChange={(e) => dispatch(updateROI({ scale_unit: e.target.value }))}
             >
               {UNITS.map((u) => (
@@ -1202,7 +1347,12 @@ export function ROIEditor({
       )}
 
       {(variant === "canvas" || variant === "all") && (
-        <div ref={canvasWrapRef} className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}>
+        <div className="canvas-stage roi-canvas-stage">
+        <div
+          ref={canvasWrapRef}
+          className={`roi-canvas-wrap${roi.calibration_enabled ? " roi-canvas-wrap--calibrating" : ""}`}
+          style={canvasOrientation ? { transform: canvasOrientation, transformOrigin: "center" } : undefined}
+        >
           <div className="roi-canvas-mode" aria-live="polite">
             {!roi.calibration_enabled && <span className="roi-source-pill">{roiModeLabel}</span>}
           </div>
@@ -1214,8 +1364,16 @@ export function ROIEditor({
           <div
             className={`roi-canvas-layer roi-canvas-layer--base${disabled ? " is-disabled" : ""}${ctrlCursor ? " roi-canvas-layer--ctrl-cursor" : ""}`}
             onPointerDown={(e) => {
-              if (disabled || roi.calibration_enabled) return;
               if (e.button !== 0) return;
+              if (disabled) return;
+              if (roi.calibration_enabled) {
+                if (e.target instanceof Element && e.target.closest("button")) return;
+                e.preventDefault();
+                const point = rawCanvasPoint(e);
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setCalibrationLine({ start: point, end: point });
+                return;
+              }
               e.preventDefault();
               const p = canvasPoint(e);
               setDraft(null);
@@ -1238,7 +1396,15 @@ export function ROIEditor({
             }}
             onPointerMove={(e) => {
               if (resizeCornerRef.current) return;
-              if (disabled || roi.calibration_enabled) return;
+              if (disabled) return;
+              if (roi.calibration_enabled) {
+                if (!calibrationLine) return;
+                e.preventDefault();
+                setCalibrationLine((current) =>
+                  current ? { ...current, end: rawCanvasPoint(e) } : current
+                );
+                return;
+              }
               e.preventDefault();
               const p = canvasPoint(e);
               const d = toDut(p);
@@ -1261,7 +1427,40 @@ export function ROIEditor({
             }}
             onPointerUp={(e) => {
               if (resizeCornerRef.current) return;
-              if (disabled || roi.calibration_enabled) return;
+              if (disabled) return;
+              if (roi.calibration_enabled) {
+                const line = calibrationLine;
+                if (!line) return;
+                e.preventDefault();
+                const end = rawCanvasPoint(e);
+                const startWorld = calibrationWorldPoint(line.start);
+                const endWorld = calibrationWorldPoint(end);
+                const deltaX = Math.abs(endWorld.x - startWorld.x);
+                const deltaY = Math.abs(endWorld.y - startWorld.y);
+                setCalibrationCorrection({
+                  x1: formatOneDecimal(startWorld.x),
+                  x2: formatOneDecimal(startWorld.x + deltaX),
+                  y1: formatOneDecimal(startWorld.y),
+                  y2: formatOneDecimal(startWorld.y + deltaY),
+                });
+                setCalibrationCorrectionBasis({
+                  original: {
+                    x1: roi.calibration_x_origin,
+                    x2: roi.calibration_x_end,
+                    y1: roi.calibration_y_origin,
+                    y2: roi.calibration_y_end,
+                  },
+                  measured: {
+                    x1: startWorld.x,
+                    x2: startWorld.x + deltaX,
+                    y1: startWorld.y,
+                    y2: startWorld.y + deltaY,
+                  },
+                });
+                setCalibrationCorrectionError(null);
+                setCalibrationLine(null);
+                return;
+              }
               e.preventDefault();
               const nextPoint = canvasPoint(e);
               const start = dragStartRef.current;
@@ -1382,10 +1581,36 @@ export function ROIEditor({
               aria-hidden="true"
             />
           )}
-          {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} />}
+          {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} textCounterTransform={axisTextCounterTransform} />}
           {roi.calibration_enabled && (
-            <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} />
+            <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} textCounterTransform={axisTextCounterTransform} />
           )}
+          {roi.calibration_enabled && calibrationLine && (() => {
+            const startWorld = calibrationWorldPoint(calibrationLine.start);
+            const endWorld = calibrationWorldPoint(calibrationLine.end);
+            const x1 = startWorld.x;
+            const y1 = startWorld.y;
+            const xLength = Math.abs(endWorld.x - startWorld.x);
+            const yLength = Math.abs(endWorld.y - startWorld.y);
+            const x2 = x1 + xLength;
+            const y2 = y1 + yLength;
+            const left = ((calibrationLine.start.x + calibrationLine.end.x) / 2 / ROI_CANVAS_EDGE) * 100;
+            const top = ((calibrationLine.start.y + calibrationLine.end.y) / 2 / ROI_CANVAS_EDGE) * 100;
+            return (
+              <div
+                className="calibration-line-readout"
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  transform: uprightOverlayTransform("translate(-50%, -115%)"),
+                }}
+                aria-live="polite"
+              >
+                <span>X1: {formatDimensionValue(x1, roi.scale_unit)} | Y1: {formatDimensionValue(y1, roi.scale_unit)}</span>
+                <span>X2: {formatDimensionValue(x2, roi.scale_unit)} | Y2: {formatDimensionValue(y2, roi.scale_unit)}</span>
+              </div>
+            );
+          })()}
           {roi.calibration_enabled && (
             <>
               <div className="roi-calibration-ruler roi-calibration-ruler--top">
@@ -1405,7 +1630,10 @@ export function ROIEditor({
                 />
                 <span
                   className="roi-calibration-handle-value roi-calibration-handle-value--top-start"
-                  style={{ left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%` }}
+                  style={{
+                    left: `${draftBounds.left / ROI_CANVAS_EDGE * 100}%`,
+                    transform: uprightOverlayTransform("translate(8px, 16px)"),
+                  }}
                 >
                   {formatDimensionValue(calibrationXValueAt(roi, draftBounds.left), roi.scale_unit)}
                 </span>
@@ -1421,7 +1649,10 @@ export function ROIEditor({
                 />
                 <span
                   className="roi-calibration-handle-value roi-calibration-handle-value--top-end"
-                  style={{ left: `${draftBounds.right / ROI_CANVAS_EDGE * 100}%` }}
+                  style={{
+                    left: `${draftBounds.right / ROI_CANVAS_EDGE * 100}%`,
+                    transform: uprightOverlayTransform("translate(-100%, 16px)"),
+                  }}
                 >
                   {formatDimensionValue(calibrationXValueAt(roi, draftBounds.right), roi.scale_unit)}
                 </span>
@@ -1443,7 +1674,10 @@ export function ROIEditor({
                 />
                 <span
                   className="roi-calibration-handle-value roi-calibration-handle-value--left-start"
-                  style={{ top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%` }}
+                  style={{
+                    top: `${draftBounds.top / ROI_CANVAS_EDGE * 100}%`,
+                    transform: uprightOverlayTransform("translate(16px, -50%)"),
+                  }}
                 >
                   {formatDimensionValue(calibrationYValueAt(roi, draftBounds.top), roi.scale_unit)}
                 </span>
@@ -1459,7 +1693,10 @@ export function ROIEditor({
                 />
                 <span
                   className="roi-calibration-handle-value roi-calibration-handle-value--left-end"
-                  style={{ top: `${draftBounds.bottom / ROI_CANVAS_EDGE * 100}%` }}
+                  style={{
+                    top: `${draftBounds.bottom / ROI_CANVAS_EDGE * 100}%`,
+                    transform: uprightOverlayTransform("translate(16px, -100%)"),
+                  }}
                 >
                   {formatDimensionValue(calibrationYValueAt(roi, draftBounds.bottom), roi.scale_unit)}
                 </span>
@@ -1469,6 +1706,7 @@ export function ROIEditor({
                 style={{
                   left: `${(draftBounds.left + draftBounds.width / 2) / ROI_CANVAS_EDGE * 100}%`,
                   top: `${(draftBounds.top + 8) / ROI_CANVAS_EDGE * 100}%`,
+                  transform: uprightOverlayTransform("translate(-50%, 0)"),
                 }}
               >
                 {formatAxisSpanLabel(
@@ -1482,6 +1720,7 @@ export function ROIEditor({
                 style={{
                   left: `${Math.max(0, draftBounds.left - 2) / ROI_CANVAS_EDGE * 100}%`,
                   top: `${(draftBounds.top + draftBounds.height / 2) / ROI_CANVAS_EDGE * 100}%`,
+                  transform: uprightOverlayTransform("translate(-100%, -50%) rotate(-90deg)"),
                 }}
               >
                 {formatAxisSpanLabel(
@@ -1546,6 +1785,118 @@ export function ROIEditor({
               <span>Spot beam-on pixels</span>
             </div>
           )}
+        </div>
+        <LevelWedge
+          histogram={grayHist}
+          levels={levels}
+          auto={levelSetting.mode === "auto"}
+          onChange={handleWedgeChange}
+          onAuto={handleWedgeAuto}
+          disabled={!grayHist || grayHist.total <= 0 || roi.calibration_enabled}
+          fullScale={ROI_GRAY_FULL_SCALE}
+          codeDivisor={ROI_GRAY_SAMPLE_SCALE}
+        />
+        </div>
+      )}
+      {calibrationCorrection && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="calibration-correction-title">
+            <div className="modal__header">
+              <h3 id="calibration-correction-title">Correct calibration values</h3>
+            </div>
+            <div className="modal__body">
+              <p className="muted">Review the delta-derived coordinates before applying them.</p>
+              <div className="field-row">
+                <label className="field">
+                  <span>X1 ({unitLabel(roi.scale_unit)})</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={calibrationCorrection.x1}
+                    onChange={(event) =>
+                      setCalibrationCorrection({ ...calibrationCorrection, x1: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>X2 ({unitLabel(roi.scale_unit)})</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={calibrationCorrection.x2}
+                    onChange={(event) =>
+                      setCalibrationCorrection({ ...calibrationCorrection, x2: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="field-row">
+                <label className="field">
+                  <span>Y1 ({unitLabel(roi.scale_unit)})</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={calibrationCorrection.y1}
+                    onChange={(event) =>
+                      setCalibrationCorrection({ ...calibrationCorrection, y1: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Y2 ({unitLabel(roi.scale_unit)})</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={calibrationCorrection.y2}
+                    onChange={(event) =>
+                      setCalibrationCorrection({ ...calibrationCorrection, y2: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              {calibrationCorrectionError && <div className="field-warning">{calibrationCorrectionError}</div>}
+            </div>
+            <div className="modal__footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn--cancel" onClick={() => {
+                setCalibrationCorrection(null);
+                setCalibrationCorrectionBasis(null);
+              }}>
+                <Icon name="x" tone="danger" />
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  const x1 = Number(calibrationCorrection.x1);
+                  const x2 = Number(calibrationCorrection.x2);
+                  const y1 = Number(calibrationCorrection.y1);
+                  const y2 = Number(calibrationCorrection.y2);
+                  if (![x1, x2, y1, y2].every(Number.isFinite)) {
+                    setCalibrationCorrectionError("Enter valid numeric X1, X2, Y1, and Y2 values.");
+                    return;
+                  }
+                  if (x2 <= x1 || y2 <= y1) {
+                    setCalibrationCorrectionError("X2 must be greater than X1 and Y2 must be greater than Y1.");
+                    return;
+                  }
+                  const basis = calibrationCorrectionBasis;
+                  if (!basis) return;
+                  dispatch(updateROI({
+                    calibration_x_origin: basis.original.x1 + (x1 - basis.measured.x1),
+                    calibration_x_end: basis.original.x2 + (x2 - basis.measured.x2),
+                    calibration_y_origin: basis.original.y1 + (y1 - basis.measured.y1),
+                    calibration_y_end: basis.original.y2 + (y2 - basis.measured.y2),
+                  }));
+                  setCalibrationCorrection(null);
+                  setCalibrationCorrectionBasis(null);
+                }}
+              >
+                <Icon name="check" tone="success" />
+                Apply
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1824,7 +2175,7 @@ function drawScale(
   ctx.restore();
 }
 
-function ROIAxisOverlay({ roi }: { roi: ROIState }) {
+function ROIAxisOverlay({ roi, textCounterTransform }: { roi: ROIState; textCounterTransform: string }) {
   const { t } = useTranslation();
   const ticks = Array.from({ length: 21 }, (_, i) => {
     const ratio = i / 20;
@@ -1843,7 +2194,13 @@ function ROIAxisOverlay({ roi }: { roi: ROIState }) {
         <span
           key={`x-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
-          style={{ left: `${tick.ratio * 100}%` }}
+          style={{
+            left: `${tick.ratio * 100}%`,
+            transform: composeOverlayCounterTransform(
+              textCounterTransform,
+              `translateX(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"})`,
+            ),
+          }}
         >
           {tick.xLabel}
         </span>
@@ -1852,18 +2209,24 @@ function ROIAxisOverlay({ roi }: { roi: ROIState }) {
         <span
           key={`y-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
-          style={{ top: `${tick.ratio * 100}%` }}
+          style={{
+            top: `${tick.ratio * 100}%`,
+            transform: composeOverlayCounterTransform(
+              textCounterTransform,
+              `translateY(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"})`,
+            ),
+          }}
         >
           {tick.yLabel}
         </span>
       ))}
-      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--start">
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--start" style={{ transform: textCounterTransform }}>
         {t("roi.canvas.start", {
           point: `(${formatOneDecimal(roi.x_origin)}, ${formatOneDecimal(roi.y_origin)})`,
           unit: unitLabel(roi.scale_unit),
         })}
       </span>
-      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end">
+      <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end" style={{ transform: textCounterTransform }}>
         {t("roi.canvas.end", {
           point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
           unit: unitLabel(roi.scale_unit),
@@ -1876,9 +2239,11 @@ function ROIAxisOverlay({ roi }: { roi: ROIState }) {
 function ROICalibrationAxisOverlay({
   roi,
   showGrid,
+  textCounterTransform,
 }: {
   roi: ROIState;
   showGrid: boolean;
+  textCounterTransform: string;
 }) {
   const { t } = useTranslation();
   const draftBounds = viewportBounds(roi, "draft");
@@ -1888,8 +2253,14 @@ function ROICalibrationAxisOverlay({
       key: i,
       ratio,
       major: i % 5 === 0,
-      xLabel: `${Math.round(ratio * 100)}%`,
-      yLabel: `${Math.round(ratio * 100)}%`,
+      xLabel: `${formatOneDecimal(
+        roi.calibration_x_origin +
+          (roi.calibration_x_end - roi.calibration_x_origin) * ratio
+      )} ${unitLabel(roi.scale_unit)}`,
+      yLabel: `${formatOneDecimal(
+        roi.calibration_y_origin +
+          (roi.calibration_y_end - roi.calibration_y_origin) * ratio
+      )} ${unitLabel(roi.scale_unit)}`,
       x: `${ratio * 100}%`,
       y: `${ratio * 100}%`,
     };
@@ -1947,7 +2318,14 @@ function ROICalibrationAxisOverlay({
         <span
           key={`x-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--x"
-          style={{ left: tick.x, top: "16px" }}
+          style={{
+            left: tick.x,
+            top: "16px",
+            transform: composeOverlayCounterTransform(
+              textCounterTransform,
+              `translateX(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"})`,
+            ),
+          }}
         >
           {tick.xLabel}
         </span>
@@ -1956,7 +2334,14 @@ function ROICalibrationAxisOverlay({
         <span
           key={`y-${tick.key}`}
           className="canvas-axis-overlay__value canvas-axis-overlay__value--y"
-          style={{ left: "14px", top: tick.y }}
+          style={{
+            left: "14px",
+            top: tick.y,
+            transform: composeOverlayCounterTransform(
+              textCounterTransform,
+              `translateY(${tick.ratio === 0 ? "0" : tick.ratio === 1 ? "-100%" : "-50%"})`,
+            ),
+          }}
         >
           {tick.yLabel}
         </span>
@@ -1968,6 +2353,7 @@ function ROICalibrationAxisOverlay({
           top: "12px",
           right: "auto",
           bottom: "auto",
+          transform: textCounterTransform,
         }}
       >
         {t("roi.canvas.start", {
@@ -1982,7 +2368,7 @@ function ROICalibrationAxisOverlay({
           top: "34px",
           right: "auto",
           bottom: "auto",
-          transform: "none",
+          transform: textCounterTransform,
         }}
       >
         {t("roi.canvas.end", {

@@ -1,41 +1,43 @@
-from amaranth import *
-from amaranth.build import *
-from amaranth.lib import enum, data, io, wiring
-from amaranth.lib.wiring import In, Out, flipped
-from GlasgowDataIO.IobeamControl.commands.structs import CmdType, BeamType, OutputMode, Transforms
-#from . import StreamSignature, BusSignature, BlankRequest, SuperDACStream, Transforms
-from GlasgowDataIO.IobeamControl.applet import * #StreamSignature, BusSignature, BlankRequest
-from GlasgowDataIO.IobeamControl.applet.skidBuffer import SkidBuffer
+"""Configurable bus FSM with the upstream OBI sequence as its default.
 
+Adapted from nanographs/Open-Beam-Interface modules/bus_controller.py.
+Retains the application\'s 16-bit container for right-aligned 14-bit ADC data.
+"""
+from amaranth import *
+from amaranth.lib import data, wiring
+from amaranth.lib.wiring import In, Out, flipped
+from GlasgowDataIO.IobeamControl.commands.structs import Transforms
+from . import StreamSignature, SuperDACStream, BusSignature, BlankRequest
+from .adcTiming import AdcTiming
+from .skidBuffer import SkidBuffer
+from .upstreamBusController import UpstreamBusController
 
 class BusController(wiring.Component):
     # FPGA-side interface
-    dac_stream: In(StreamSignature(SuperDACStream)) # type: ignore
+    dac_stream: In(StreamSignature(SuperDACStream))
 
-    ADC_STREAM_SIGNATURE = StreamSignature(data.StructLayout({
+    adc_stream: Out(StreamSignature(data.StructLayout({
         "adc_code": 16,
         "last":     1,
-    }))
-    adc_stream: Out(ADC_STREAM_SIGNATURE) # type: ignore
+    })))
 
     # IO-side interface
-    bus: Out(BusSignature) # type: ignore
-    inline_blank: Out(BlankRequest) # type: ignore
+    bus: Out(BusSignature)
+    inline_blank: Out(BlankRequest)
 
-    def __init__(self, *, adc_half_period: int, adc_latency: int,
-                 adc_settle_cycles: int = 2,
-                 transforms: Transforms = Transforms(False,False,False)):
-        assert adc_settle_cycles >= 1, \
-            "ADC bus must settle for at least one cycle"
-        # One enable cycle, adc_settle_cycles - 1 additional settling
-        # cycles, one capture cycle, one stream cycle, and four DAC cycles.
-        required_period = adc_settle_cycles + 6
-        assert (adc_half_period * 2) >= required_period, \
-            "ADC period must contain the settle, capture, read, and DAC states"
+    def __init__(self, *, adc_half_period: int, adc_latency: int, transforms: Transforms = Transforms(False,False,False),
+                 adc_settle_cycles=1, adc_latch_cycles=1,
+                 bus_turnaround_cycles=0, dac_data_setup_cycles=1,
+                 dac_latch_cycles=1):
+        self.timing = AdcTiming(
+            adc_half_period, adc_settle_cycles, adc_latch_cycles,
+            bus_turnaround_cycles, dac_data_setup_cycles, dac_latch_cycles)
+        self.timing.validate_scan()
+        if adc_latency < 1:
+            raise ValueError("adc_latency must be at least 1")
         self.adc_half_period = adc_half_period
         self.adc_latency     = adc_latency
-        self.adc_settle_cycles = adc_settle_cycles
-        self.transforms = transforms
+        self.transforms = transforms or Transforms(False, False, False)
 
         super().__init__()
 
@@ -43,6 +45,10 @@ class BusController(wiring.Component):
         self.dac_y_code_transformed = Signal.like(self.dac_stream.payload.dac_y_code)
 
     def elaborate(self, platform):
+        if self.timing.uses_upstream_sequence:
+            # Execute the pinned upstream FSM itself. Diagnostic stretches
+            # below are explicitly outside the reference path.
+            return UpstreamBusController.elaborate(self, platform)
         m = Module()
 
         adc_cycles = Signal(range(self.adc_half_period))
@@ -61,12 +67,19 @@ class BusController(wiring.Component):
         # Queue; as above
         last_sample = Signal(self.adc_latency)
 
+        # The ADC is pipelined: up to `adc_latency` samples are already in flight when
+        # `skid_buffer.i.ready` deasserts (USB IN backpressure), and those samples are
+        # written unconditionally. The FIFO must hold the ready threshold (1) plus every
+        # in-flight sample, otherwise samples are silently dropped, the averaging window
+        # (`last`) desynchronizes and pixels are lost from the image stream.
         m.submodules.skid_buffer = skid_buffer = \
-            SkidBuffer(self.adc_stream.payload.shape(), depth=self.adc_latency)
+            SkidBuffer(self.adc_stream.payload.shape(), depth=self.adc_latency + 2)
         wiring.connect(m, flipped(self.adc_stream), skid_buffer.o)
 
         adc_stream_data = Signal.like(self.adc_stream.payload) # FIXME: will not be needed after FIFOs have shapes
         m.d.comb += [
+            # Cat(adc_stream_data.adc_code,
+            #     adc_stream_data.adc_ovf).eq(self.bus.i),
             adc_stream_data.last.eq(last_sample[self.adc_latency-1]),
             skid_buffer.i.payload.eq(adc_stream_data),
         ]
@@ -76,88 +89,110 @@ class BusController(wiring.Component):
         x = Signal.like(self.dac_x_code_transformed)
         y = Signal.like(self.dac_y_code_transformed)
 
-        # Register the external bus before exposing it to the stream. This
-        # prevents the sample from changing when the ADC-side transceiver is
-        # released and the shared bus turns around for the DAC writes.
-        self.adc_sample = Signal.like(self.bus.data_i)
-        m.d.comb += adc_stream_data.adc_code.eq(self.adc_sample)
+        # The skid buffer captures this value at the end of the final ADC read
+        # cycle, before the configurable shared-bus turnaround/DAC sequence.
+        m.d.comb += adc_stream_data.adc_code.eq(self.bus.data_i)
 
-        settle_counter = Signal(range(max(2, self.adc_settle_cycles)))
+        latch_remaining = Signal(range(max(2, self.timing.latch_cycles + 1)))
+        settle_remaining = Signal(range(max(2, self.timing.settle_cycles + 1)))
+        turnaround_remaining = Signal(range(max(2, self.timing.bus_turnaround_cycles + 1)))
+        dac_setup_remaining = Signal(range(max(2, self.timing.dac_data_setup_cycles + 1)))
+        dac_latch_remaining = Signal(range(max(2, self.timing.dac_latch_cycles + 1)))
 
-        stalled = Signal()
+        def read_adc_and_accept_dac():
+            """Emit the one-cycle OBI ADC_Read transaction."""
+            m.d.comb += skid_buffer.i.valid.eq(accept_sample[self.adc_latency-1])
+            with m.If(self.dac_stream.valid & skid_buffer.i.ready):
+                m.d.comb += self.dac_stream.ready.eq(1)
+                m.d.sync += dac_stream_data.eq(self.dac_stream.payload)
+                if self.transforms.rotate90:
+                    m.d.comb += [
+                        x.eq(self.dac_stream.payload.dac_y_code),
+                        y.eq(self.dac_stream.payload.dac_x_code),
+                    ]
+                else:
+                    m.d.comb += [
+                        x.eq(self.dac_stream.payload.dac_x_code),
+                        y.eq(self.dac_stream.payload.dac_y_code),
+                    ]
+                if self.transforms.xflip:
+                    m.d.sync += self.dac_x_code_transformed.eq(16383 - x)
+                else:
+                    m.d.sync += self.dac_x_code_transformed.eq(x)
+                if self.transforms.yflip:
+                    m.d.sync += self.dac_y_code_transformed.eq(16383 - y)
+                else:
+                    m.d.sync += self.dac_y_code_transformed.eq(y)
+                m.d.comb += self.inline_blank.eq(self.dac_stream.payload.blank)
+                m.d.sync += [
+                    accept_sample.eq(Cat(1, accept_sample)),
+                    last_sample.eq(Cat(self.dac_stream.payload.last, last_sample)),
+                ]
+            with m.Else():
+                m.d.sync += [
+                    accept_sample.eq(Cat(0, accept_sample)),
+                    last_sample.eq(Cat(0, last_sample)),
+                ]
 
         with m.FSM():
             with m.State("ADC_Wait"):
                 with m.If(self.bus.adc_clk & (adc_cycles == 0)):
-                    m.d.comb += self.bus.adc_le_clk.eq(1)
-                    m.d.comb += self.bus.adc_oe.eq(1)
-                    m.d.sync += settle_counter.eq(self.adc_settle_cycles - 1)
-                    if self.adc_settle_cycles == 1:
-                        m.next = "ADC_Capture"
+                    m.d.comb += [
+                        self.bus.adc_le_clk.eq(1),
+                        self.bus.adc_oe.eq(1),
+                    ]
+                    if self.timing.latch_cycles == 1:
+                        m.d.sync += settle_remaining.eq(self.timing.settle_cycles)
+                        m.next = "ADC_Read"
                     else:
-                        m.next = "ADC_Settle"
+                        m.d.sync += latch_remaining.eq(self.timing.latch_cycles - 1)
+                        m.next = "ADC_Latch"
 
-            with m.State("ADC_Settle"):
-                m.d.comb += self.bus.adc_oe.eq(1)
-                with m.If(settle_counter == 1):
-                    m.next = "ADC_Capture"
+            with m.State("ADC_Latch"):
+                m.d.comb += [
+                    self.bus.adc_le_clk.eq(1),
+                    self.bus.adc_oe.eq(1),
+                ]
+                with m.If(latch_remaining == 1):
+                    m.d.sync += settle_remaining.eq(self.timing.settle_cycles)
+                    m.next = "ADC_Read"
                 with m.Else():
-                    m.d.sync += settle_counter.eq(settle_counter - 1)
-
-            with m.State("ADC_Capture"):
-                m.d.comb += self.bus.adc_oe.eq(1)
-                m.d.sync += self.adc_sample.eq(self.bus.data_i)
-                m.next = "ADC_Read"
+                    m.d.sync += latch_remaining.eq(latch_remaining - 1)
 
             with m.State("ADC_Read"):
-                # Keep the ADC-side transceiver enabled while the registered
-                # sample is submitted. It is released on entry to X_DAC_Write.
                 m.d.comb += self.bus.adc_oe.eq(1)
-                # buffers up to self.adc_latency samples if skid_buffer.i.ready
-                m.d.comb += skid_buffer.i.valid.eq(accept_sample[self.adc_latency-1])
-                with m.If(self.dac_stream.valid & skid_buffer.i.ready):
-                    # Latch DAC codes from input stream.
-                    m.d.comb += self.dac_stream.ready.eq(1)
-                    m.d.sync += dac_stream_data.eq(self.dac_stream.payload)
-                    # Transforms
-                    # Rotate first so that x is x and y is y, then flip x and y as needed
-                    if self.transforms is not None and self.transforms.rotate90:
-                        m.d.comb += x.eq(self.dac_stream.payload.dac_y_code)
-                        m.d.comb += y.eq(self.dac_stream.payload.dac_x_code)
+                with m.If(settle_remaining == 1):
+                    read_adc_and_accept_dac()
+                    if self.timing.bus_turnaround_cycles == 0:
+                        m.d.sync += dac_setup_remaining.eq(
+                            self.timing.dac_data_setup_cycles)
+                        m.next = "X_DAC_Write"
                     else:
-                        m.d.comb += x.eq(self.dac_stream.payload.dac_x_code)
-                        m.d.comb += y.eq(self.dac_stream.payload.dac_y_code)
-
-                    if self.transforms is not None and self.transforms.xflip:
-                        m.d.sync += self.dac_x_code_transformed.eq(16383-x)
-                    else:
-                        m.d.sync += self.dac_x_code_transformed.eq(x)
-
-                    if self.transforms is not None and self.transforms.yflip:
-                        m.d.sync += self.dac_y_code_transformed.eq(16383-y)
-                    else:
-                        m.d.sync += self.dac_y_code_transformed.eq(y)
-
-                    # Transmit blanking state from input stream
-                    m.d.comb += self.inline_blank.eq(self.dac_stream.payload.blank)
-                    # Schedule ADC sample for these DAC codes to be output.
-                    m.d.sync += accept_sample.eq(Cat(1, accept_sample))
-                    # Carry over the flag for last sample [of averaging window] to the output.
-                    m.d.sync += last_sample.eq(Cat(self.dac_stream.payload.last, last_sample))
+                        m.d.sync += turnaround_remaining.eq(
+                            self.timing.bus_turnaround_cycles)
+                        m.next = "Bus_Turnaround"
                 with m.Else():
-                    # Leave DAC codes as they are.
-                    # Schedule ADC sample for these DAC codes to be discarded.
-                    m.d.sync += accept_sample.eq(Cat(0, accept_sample))
-                    # The value of this flag is discarded, so it doesn't matter what it is.
-                    m.d.sync += last_sample.eq(Cat(0, last_sample))
-                m.next = "X_DAC_Write"
+                    m.d.sync += settle_remaining.eq(settle_remaining - 1)
+
+            with m.State("Bus_Turnaround"):
+                with m.If(turnaround_remaining == 1):
+                    m.d.sync += dac_setup_remaining.eq(
+                        self.timing.dac_data_setup_cycles)
+                    m.next = "X_DAC_Write"
+                with m.Else():
+                    m.d.sync += turnaround_remaining.eq(turnaround_remaining - 1)
 
             with m.State("X_DAC_Write"):
                 m.d.comb += [
                     self.bus.data_o.eq(self.dac_x_code_transformed),
                     self.bus.data_oe.eq(1),
                 ]
-                m.next = "X_DAC_Write_2"
+                with m.If(dac_setup_remaining == 1):
+                    m.d.sync += dac_latch_remaining.eq(
+                        self.timing.dac_latch_cycles)
+                    m.next = "X_DAC_Write_2"
+                with m.Else():
+                    m.d.sync += dac_setup_remaining.eq(dac_setup_remaining - 1)
 
             with m.State("X_DAC_Write_2"):
                 m.d.comb += [
@@ -165,14 +200,24 @@ class BusController(wiring.Component):
                     self.bus.data_oe.eq(1),
                     self.bus.dac_x_le_clk.eq(1),
                 ]
-                m.next = "Y_DAC_Write"
+                with m.If(dac_latch_remaining == 1):
+                    m.d.sync += dac_setup_remaining.eq(
+                        self.timing.dac_data_setup_cycles)
+                    m.next = "Y_DAC_Write"
+                with m.Else():
+                    m.d.sync += dac_latch_remaining.eq(dac_latch_remaining - 1)
 
             with m.State("Y_DAC_Write"):
                 m.d.comb += [
                     self.bus.data_o.eq(self.dac_y_code_transformed),
                     self.bus.data_oe.eq(1),
                 ]
-                m.next = "Y_DAC_Write_2"
+                with m.If(dac_setup_remaining == 1):
+                    m.d.sync += dac_latch_remaining.eq(
+                        self.timing.dac_latch_cycles)
+                    m.next = "Y_DAC_Write_2"
+                with m.Else():
+                    m.d.sync += dac_setup_remaining.eq(dac_setup_remaining - 1)
 
             with m.State("Y_DAC_Write_2"):
                 m.d.comb += [
@@ -180,6 +225,9 @@ class BusController(wiring.Component):
                     self.bus.data_oe.eq(1),
                     self.bus.dac_y_le_clk.eq(1),
                 ]
-                m.next = "ADC_Wait"
+                with m.If(dac_latch_remaining == 1):
+                    m.next = "ADC_Wait"
+                with m.Else():
+                    m.d.sync += dac_latch_remaining.eq(dac_latch_remaining - 1)
 
         return m

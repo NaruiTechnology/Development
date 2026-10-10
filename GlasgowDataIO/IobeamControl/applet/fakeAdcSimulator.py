@@ -1,5 +1,5 @@
 """
-fakeAdcSimulator.py  v9  (ROM-based combinatorial Elaboratable)
+fakeAdcSimulator.py  v10  (block-RAM-backed synchronous ROM)
 
 Root-cause fix
 --------------
@@ -8,10 +8,11 @@ v7/v8 used a Python yield-loop process that wrote to adc_out_signal every
 ADC timing, so the sample latched at each adc_oe edge is from several
 pixels in the future, producing the characteristic diagonal-skew artefact.
 
-v9 replaces the process with a combinatorial ROM Elaboratable.  The
-loopback_value output is driven continuously from the live DAC codes, and the
-PipelinedLoopbackAdapter samples it on the exact adc_oe rising edge in sync
-with the BusController, giving zero skew by construction.
+v10 stores the image in a synchronous ROM so arbitrary images infer iCE40
+block RAM rather than thousands of LUTs. The DAC coordinates are stable for
+several clocks before the conversion edge, so the ROM's one-clock read
+latency is hidden inside the existing DAC setup interval. PipelinedLoopbackAdapter
+samples on the logical falling ADC clock edge, independently of output-enable.
 
 Interface (matches iobeamDataSubtarget.py hard-wiring)
 -------------------------------------------------------
@@ -31,22 +32,23 @@ ROM layout
     x_idx     = dac_x_code >> shift   # 0 .. N-1
     y_idx     = dac_y_code >> shift   # 0 .. N-1
     addr      = Cat(x_idx, y_idx)     # = y_idx*N + x_idx  (row-major)
-    rom[addr] = image_data[addr]       # native 16-bit grayscale source
+    rom[addr] = image_data[addr]       # native 14-bit ADC sample
 """
 
 from amaranth import *
 from amaranth.lib import wiring
+from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import In, Out
 
 
 class FakeAdcSimulator(wiring.Component):
     """
-    Combinatorial ROM-based simulated ADC for Amaranth hardware simulations.
+    Synchronous block-ROM-based simulated ADC for gateware simulation.
 
     Parameters
     ----------
     image_data : list[int]
-        Flat 1-D list of 16-bit pixel values (0-65535), row-major:
+        Flat 1-D list of native 14-bit ADC samples (0-16383), row-major:
         image_data[y * image_resolution + x].
     image_resolution : int
         Side length N of the square image (power of 2, 2 <= N <= 16384).
@@ -60,6 +62,7 @@ class FakeAdcSimulator(wiring.Component):
 
     DAC_BITS: int = 14
     ADC_BITS: int = 16
+    ADC_VALUE_BITS: int = 14
 
     dac_x_code:     In(14)   # type: ignore
     dac_y_code:     In(14)   # type: ignore
@@ -81,8 +84,12 @@ class FakeAdcSimulator(wiring.Component):
         self._bits  = (N - 1).bit_length()          # index width (e.g. 6 for N=64)
         self._shift = self.DAC_BITS - self._bits    # e.g. 8 for N=64
 
-        # Preserve 16-bit grayscale values end-to-end.
-        self._rom = [min(int(v), (1 << self.ADC_BITS) - 1) for v in image_data]
+        # The wire remains 16 bits wide, but simulated values use the same
+        # 14-bit full scale as the physical ADC and UI display path.
+        self._rom = [
+            max(0, min(int(v), (1 << self.ADC_VALUE_BITS) - 1))
+            for v in image_data
+        ]
 
         super().__init__()
 
@@ -104,7 +111,17 @@ class FakeAdcSimulator(wiring.Component):
             addr.eq(Cat(x_idx, y_idx)),
         ]
 
-        rom = Array(Const(v, self.ADC_BITS) for v in self._rom)
-        m.d.comb += self.loopback_value.eq(rom[addr])
+        m.submodules.rom = rom = Memory(
+            shape=self.ADC_BITS,
+            depth=N * N,
+            init=self._rom,
+            attrs={"rom_style": "block"},
+        )
+        read_port = rom.read_port(domain="sync")
+        m.d.comb += [
+            read_port.addr.eq(addr),
+            read_port.en.eq(1),
+            self.loopback_value.eq(read_port.data),
+        ]
 
         return m

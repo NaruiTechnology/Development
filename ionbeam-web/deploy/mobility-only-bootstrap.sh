@@ -210,6 +210,8 @@ ensure_user() {
 build_frontend() {
   cd "${APP_ROOT}/frontend"
   npm ci
+  # Do not carry Vite's optimized-dependency cache across dependency changes.
+  rm -rf -- node_modules/.vite
   npm run sync:allowed-hosts
   npm run build:mobility
 }

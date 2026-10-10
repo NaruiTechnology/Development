@@ -99,7 +99,7 @@ class installPipRequirements_state(distributionDeploy_state):
                 if not os.path.isabs(targetPath):
                     targetPath = os.path.join(root, targetPath)
                 targetPath = os.path.abspath(targetPath)
-                cmd = "{} install -e {}".format(pipPrefix, shlex.quote(targetPath))
+                cmd = "{} install -e {}".format(pipPrefix, subprocess.list2cmdline([targetPath]) if os.name == "nt" else shlex.quote(targetPath))
                 if pipPrefix.startswith("python3 ") and breakSys:
                     cmd += " --break-system-packages"
 
@@ -124,13 +124,13 @@ class installPipRequirements_state(distributionDeploy_state):
                                        .format(type(self).__name__, executable))
                             allOk = False
                             break
-                        executablePath = os.path.join(venvDir, "bin", str(executable))
+                        executablePath = os.path.join(venvDir, "Scripts" if os.name == "nt" else "bin", str(executable) + (".exe" if os.name == "nt" else ""))
                         if os.path.isfile(executablePath) and os.access(executablePath, os.X_OK):
                             self.info("[{}] verified venv executable: {}"
                                       .format(type(self).__name__, executablePath))
                             continue
                         cmd = "{} install --ignore-installed {}".format(
-                            pipPrefix, shlex.quote(str(packageSpec)))
+                            pipPrefix, (subprocess.list2cmdline([str(packageSpec)]) if os.name == "nt" else shlex.quote(str(packageSpec))))
                         self.info("[{}] materializing venv executable {} >> {}"
                                   .format(type(self).__name__, executable, cmd))
                         ok = await self._runWithTimeout(cmd, self.deployRoot(), timeout)

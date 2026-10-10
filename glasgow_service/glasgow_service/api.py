@@ -16,7 +16,8 @@ from typing import Literal
 
 from .service import DeviceService, DeviceBusy, DeviceNotReady
 from .models  import (
-    RasterRequest, VectorRequest, ScanResult, ServiceStatus,
+    RasterRequest, VectorRequest, AdcTestRequest, DacRampRequest,
+    ScanResult, ServiceStatus,
 )
 from .auth    import require_token
 from .config  import find_config_path
@@ -100,12 +101,46 @@ async def run_raster(req: RasterRequest):
         raise HTTPException(503, str(e))
 
 
+@app.post(
+    "/scan/dac_ramp/run",
+    response_model=ScanResult,
+    tags=["scan"],
+    summary="Run a single-axis DAC ramp/linearity check (blocking)",
+    description=(
+        "Sweeps one DAC axis across its full 14-bit range while the other "
+        "axis is held at `fixed_code`, mirroring upstream OBI's "
+        "manual_dac_ctrl.RampControl test. Use this — not "
+        "`/scan/vector/run` with the default `scan_path` — to verify DAC "
+        "output against a reference OBI capture: vertical_raster's default "
+        "axis order makes the slow axis look like a staircase on a scope, "
+        "which is a scan-pattern artifact, not a DAC fault."
+    ),
+    responses={
+        409: {"description": "Device busy — another scan is running"},
+        503: {"description": "Device not ready (disconnected or error state)"},
+    },
+    dependencies=[Depends(require_token)],
+)
+async def run_dac_ramp(req: DacRampRequest):
+    try:
+        return await svc.run_dac_ramp(req)
+    except DeviceBusy:
+        raise HTTPException(409, "device busy")
+    except DeviceNotReady as e:
+        raise HTTPException(503, str(e))
+
+
 @app.websocket("/scan/raster/stream")
 async def stream_raster(ws: WebSocket):
     """Client sends RasterRequest as JSON, then receives binary chunk frames,
     terminated by `{"event":"done","chunks":N}` or an error event.
     The validate flag in the request is ignored here; the live stream is
-    cached for /scan/last/* downloads."""
+    cached for /scan/last/* downloads.
+
+    With `continuous: true` (Infinite / live scan) the service keeps one
+    FPGA command stream open and scans frame after frame until
+    POST /scan/abort; pixels stream without a gap at frame boundaries and
+    `done` is sent only after Stop (the last complete frame is cached)."""
     await _stream_scan(ws, lambda p: svc.raster_scan(RasterRequest(**p)))
 
 
@@ -143,6 +178,62 @@ async def run_vector(req: VectorRequest):
 @app.websocket("/scan/vector/stream")
 async def stream_vector(ws: WebSocket):
     await _stream_scan(ws, lambda p: svc.vector_scan(VectorRequest(**p)))
+
+
+@app.websocket("/scan/dac_ramp/stream")
+async def stream_dac_ramp(ws: WebSocket):
+    """Live counterpart of /scan/dac_ramp/run, for the Vector panel's
+    DAC Ramp toggle. Same frame shape as /scan/raster/stream and
+    /scan/vector/stream (binary uint16-BE sample chunks, then a
+    `{"event":"done",...}` control frame), so the browser side reuses
+    the existing decode path."""
+    await _stream_scan(ws, lambda p: svc.dac_ramp_scan(DacRampRequest(**p)))
+
+
+@app.websocket("/adc/stream")
+async def stream_adc(ws: WebSocket):
+    """Stream uint16 ADC samples from the DAC-free diagnostic image."""
+    await ws.accept()
+    gen = None
+    chunks = 0
+    metadata_sent = False
+    try:
+        req = AdcTestRequest(**(await ws.receive_json()))
+        gen = svc.adc_stream(req)
+        async for chunk in gen:
+            if not metadata_sent:
+                await ws.send_json({
+                    "event": "metadata",
+                    "duration_minutes": req.duration_minutes,
+                    "simulation": req.simulation,
+                    "sample_bits": 14,
+                    "wire_format": "uint16-be",
+                })
+                metadata_sent = True
+            await ws.send_bytes(chunk)
+            chunks += 1
+        await ws.send_json({"event": "done", "chunks": chunks})
+    except DeviceBusy:
+        await ws.send_json({"event": "error", "code": "busy"})
+    except DeviceNotReady as exc:
+        await ws.send_json({
+            "event": "error", "code": "not_ready", "detail": str(exc),
+        })
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.exception("ADC stream error")
+        try:
+            await ws.send_json({"event": "error", "message": repr(exc)})
+        except Exception:
+            pass
+    finally:
+        if gen is not None:
+            await gen.aclose()
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 @app.post("/scan/abort", tags=["scan"], dependencies=[Depends(require_token)])
@@ -247,7 +338,24 @@ async def _stream_scan(ws: WebSocket, make_gen):
     except DeviceBusy:
         await ws.send_json({"event": "error", "code": "busy"})
     except DeviceNotReady as e:
-        await ws.send_json({"event": "error", "code": "not_ready", "detail": str(e)})
+        detail = str(e)
+        if detail in {"", "ECONNRESET", "read ECONNRESET", "Connection reset by peer"}:
+            detail = "ADC/subtarget presence check failed: device transport reset while reading; verify the physical ADC subtarget and OE/LE/data wiring"
+        payload = {"event": "error", "code": "not_ready", "detail": detail}
+        if detail.startswith("ADC/subtarget presence check failed:"):
+            payload.update({
+                "severity": "warning",
+                "code": "adc_subtarget_disconnected",
+                "validation": {
+                    "passed": False,
+                    "checks": [{
+                        "name": "adc_subtarget_presence",
+                        "passed": False,
+                        "detail": detail,
+                    }],
+                },
+            })
+        await ws.send_json(payload)
     except WebSocketDisconnect:
         pass
     except asyncio.TimeoutError:

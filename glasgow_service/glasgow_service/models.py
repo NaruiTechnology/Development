@@ -60,6 +60,17 @@ class VacuumPumpState(BaseModel):
     ready: bool = False
     group: Optional[str] = None
     simulation_read: bool = False
+    # Board mode: False = the pump's "healthy" input is open (fault); None
+    # when no fault input is configured for this pump.
+    fault: Optional[bool] = None
+    # Isolation valve of this pump ("V2"); None when the hardware has no
+    # valve for it.  ``valve_open`` is the controller's valve state (board:
+    # read back from the solenoid driver).  The dashboard slide switch shows it.
+    valve: Optional[str] = None
+    valve_open: bool = False
+    # True while the pump runs but its reading has risen above its value
+    # after it had been ready (vacuum excursion): valve closed, card red.
+    excursion: bool = False
 
 
 class VacuumSystemStatus(BaseModel):
@@ -67,30 +78,51 @@ class VacuumSystemStatus(BaseModel):
     voltage: float
     connected: bool
     simulation: bool
-    control_transport: Literal["sbc-simulation", "raspberry-pi-gpio"]
+    # IsProduction from vacuumSystem.json (false: emulator or simulator only).
+    is_production: bool = True
+    control_transport: Literal[
+        "sbc-simulation", "raspberry-pi-gpio", "rpi5-vacuum-io", "rpi5-vacuum-io-emulator"
+    ]
     running: bool
     runtime_seconds: float = 0.0
     cascade_stopped: bool
+    # A backing-pump restart (power cycle) is in progress.
+    restarting: bool = False
     isVacuumSystemReady: bool = False
     high_voltage_power: bool = False
     last_error: Optional[str] = None
     updated_at: Optional[str] = None
     pumps: List[VacuumPumpState]
+    # Active interlock conditions (E-stop, output rail, pump faults). These
+    # are not communication errors, so they do not affect ``connected``.
+    alarms: List[str] = Field(default_factory=list)
+    # Vacuum I/O board readback (rails, all 16 inputs, relays, solenoids).
+    board: Optional[dict] = None
 
 
 # ---------- requests -------------------------------------------------------
 
 class RasterRequest(BaseModel):
     resolution:    int  = Field(512,   ge=1, le=2048, description="DAC range (NxN).")
-    dwell:         int  = Field(2,     ge=1, le=65535, description="ADC sample periods (166.667 ns each with the current revC3 timing).")
+    dwell:         int  = Field(2,     ge=0, le=65535, description="A dwell of N averages N + 1 ADC samples (125 ns each with the current revC3 timing); 0 is the upstream OBI one-sample setting.")
     latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
     frame_blank:   bool = False
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
     # New in scan-params refactor. Was previously hardcoded to SixteenBit
     # inside the macro because the API had no field for it.
     output_mode:   str  = Field("SixteenBit", description="SixteenBit or EightBit.")
+    adc_valid:     bool = Field(True, description="Run the production ADC presence/saturation check.")
     beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
+    continuous: bool = Field(
+        False,
+        description=(
+            "WebSocket stream only (Infinite / live scan): keep scanning frame after "
+            "frame on one synchronized FPGA command stream until /scan/abort, like "
+            "OBI's live scan. Pixels stream continuously and wrap at the frame end; "
+            "the `done` event is sent only after Stop. Ignored by /scan/raster/run."
+        ),
+    )
 
     # Wet-run extras (REST only; WebSocket streaming ignores these):
     do_validate: bool = Field(True, description="Run chunk-count / size checks and return the report.")
@@ -104,6 +136,10 @@ class RasterRequest(BaseModel):
             "Optional browser-provided grayscale crop for simulation-only raster scans. "
             "Ignored for production hardware."
         ),
+    )
+    simulation: Optional[dict] = Field(
+        default=None,
+        description="Browser-session simulation override. Ignored in production mode.",
     )
 
     model_config = {
@@ -120,6 +156,56 @@ class RasterRequest(BaseModel):
             ]
         }
     }
+
+
+class DacRampAxis(str, Enum):
+    x = "x"
+    y = "y"
+
+
+class DacRampRequest(BaseModel):
+    """Single-axis DAC linearity/ramp check.
+
+    Production port of upstream OBI's manual_dac_ctrl.RampControl, which
+    this fork never carried over. Sweeps one DAC axis across its full
+    14-bit range while the other axis is held at `fixed_code`, using the
+    same RasterScanCommand / UpstreamBusController path as
+    `/scan/raster/run` — not a separate diagnostic implementation that can
+    drift out of sync with production.
+
+    Use this (not `/scan/vector/run` with its default `scan_path`) to
+    check DAC output against a reference OBI capture: vertical_raster's
+    default axis order makes the slow axis look like a staircase on a
+    scope, which is a scan-pattern artifact, not a DAC fault.
+    """
+    axis:          DacRampAxis = DacRampAxis.x
+    fixed_code:    int  = Field(8192, ge=0, le=16383,
+                                 description="DAC code held on the non-swept axis.")
+    dwell:         int  = Field(500,  ge=0, le=65535,
+                                 description="ADC cycles per DAC code (OBI RampControl default: 500).")
+    latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
+    cookie:        int  = Field(123, ge=0, le=0xFFFF)
+    beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
+    external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
+    adc_valid:     bool = Field(True, description="Run the production ADC presence/saturation check.")
+
+
+class AdcTestRequest(BaseModel):
+    """Bounded, DAC-free ADC acquisition request."""
+    duration_minutes: Literal[5, 10, 15, 20] = 5
+    simulation: bool = Field(
+        False,
+        description="Use the seeded FPGA random source instead of physical ADC pins.",
+    )
+    seed: int = Field(42, ge=1, le=0x3FFF)
+    chunk_bytes: int = Field(65536, ge=1024, le=1024 * 1024)
+
+    @field_validator("chunk_bytes")
+    @classmethod
+    def _chunk_bytes_are_even(cls, value: int) -> int:
+        if value & 1:
+            raise ValueError("chunk_bytes must be even for uint16 samples")
+        return value
 
 
 class VectorPattern(str, Enum):
@@ -142,7 +228,7 @@ class VectorFeedbackMode(str, Enum):
 class VectorPoint(BaseModel):
     x: int = Field(..., ge=0, le=16383)
     y: int = Field(..., ge=0, le=16383)
-    dwell: int = Field(..., ge=1, le=65535)
+    dwell: int = Field(..., ge=0, le=65535)
     blank: Optional[bool] = None
     passIndex: Optional[int] = Field(None, ge=1, le=2)
 
@@ -174,7 +260,14 @@ class SimulationBitmapPixel(BaseModel):
 
 class VectorRequest(BaseModel):
     pattern:        VectorPattern = VectorPattern.default
-    scan_path:      VectorScanPath = VectorScanPath.vertical_raster
+    # Default matches the frontend's VECTOR_SCAN_PATHS ordering (see
+    # ionbeam-web/frontend/src/lib/vectorScanPath.ts): horizontal paths
+    # (X fast/inner axis) sweep the axis a scope probe is usually on
+    # continuously, matching a reference OBI capture. vertical_raster
+    # (the old default) makes X the slow/outer axis, which looks like a
+    # staircase on a scope even though nothing is actually wrong with the
+    # DAC — see /scan/dac_ramp/run for the dedicated single-axis check.
+    scan_path:      VectorScanPath = VectorScanPath.horizontal_sawtooth
     points:         Optional[List[Union[
         Tuple[int, int, int],
         Tuple[int, int, int, Optional[bool]],
@@ -202,12 +295,13 @@ class VectorRequest(BaseModel):
     )
     dwell:          int  = Field(
         1,
-        ge=1,
+        ge=0,
         le=65535,
-        description="Default-pattern ADC sample periods (166.667 ns each with the current revC3 timing). Ignored when pattern=custom.",
+        description="Default-pattern dwell: N averages N + 1 ADC samples (125 ns each with the current revC3 timing). Ignored when pattern=custom.",
     )
     latency_bytes:  int  = Field(8196, ge=2, description="Matches `vectorScan.latency` in streamData.json.")
     output_mode:    str  = Field("SixteenBit", description="SixteenBit or EightBit.")
+    adc_valid:      bool = Field(True, description="Run the production ADC presence/saturation check.")
     feedback_mode:  VectorFeedbackMode = Field(
         VectorFeedbackMode.standard,
         description="Vector blanking mode. adaptive_gray_feedback enables host-side feedback blanking.",
@@ -223,6 +317,16 @@ class VectorRequest(BaseModel):
     beam_type:      str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
     cookie:         int  = Field(123, ge=0, le=0xFFFF)
+    continuous:     bool = Field(
+        False,
+        description=(
+            "WebSocket stream only (Infinite / live scan): replay the point list pass "
+            "after pass on one synchronized FPGA command stream until /scan/abort, "
+            "like OBI's live scan. Samples stream continuously and wrap at the pass "
+            "end; `done` is sent only after Stop. Ignored by /scan/vector/run and "
+            "with feedback_mode=adaptive_gray_feedback."
+        ),
+    )
 
     # Wet-run extras (REST only):
     pre_process:    bool = Field(False, description="Call _pre_process_chunks before transfer; time it separately.")
@@ -237,6 +341,10 @@ class VectorRequest(BaseModel):
             "Optional browser-provided grayscale crop for simulation-only vector scans. "
             "Ignored for production hardware."
         ),
+    )
+    simulation: Optional[dict] = Field(
+        default=None,
+        description="Browser-session simulation override. Ignored in production mode.",
     )
 
     @field_validator("vector_resolution")

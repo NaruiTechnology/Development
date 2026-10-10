@@ -20,7 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 examples = ["websockets>=12"]
 tests    = ["pytest>=8"]
-sbc      = ["gpiozero>=2.0"]
+sbc      = ["gpiozero>=2.0", "smbus2>=0.4", "pyserial>=3.5"]
 
 [tool.setuptools.packages.find]
 include = ["glasgow_service*"]

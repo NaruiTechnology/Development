@@ -15,9 +15,8 @@ The top-level Amaranth Elaboratable that ties everything together:
 
 What changed (vs. the previous version)
 ---------------------------------------
-1. Resources come from `pin_config`, not a hard-coded list. Anything
-   missing from the config is silently skipped - no PCF errors from
-   placeholder strings.
+1. Resources come from `pin_config`. Physical scans validate the complete
+   upstream OBI bus mapping before building; simulation may omit resources.
 2. New `sim_image` / `sim_image_resolution` constructor params. When
    loopback=True AND sim_image is provided, FakeAdcSimulator drives the
    loopback adapter instead of the historical "DAC-loopback" debug path
@@ -31,12 +30,12 @@ What changed (vs. the previous version)
 
 from amaranth import *
 from amaranth.build import *
-from amaranth.lib import enum, data, io, wiring
-from amaranth.lib.wiring import In, Out, flipped
+from amaranth.lib import io, wiring
+from amaranth.lib.wiring import flipped
 from amaranth.hdl import Elaboratable, Module
 
 from GlasgowDataIO.IobeamControl.commands.structs import (
-    CmdType, BeamType, OutputMode, Transforms,
+    CmdType, BeamType, Transforms,
 )
 from GlasgowDataIO.IobeamControl.applet.commandParser    import CommandParser
 from GlasgowDataIO.IobeamControl.applet.commandExecutor  import CommandExecutor
@@ -44,7 +43,9 @@ from GlasgowDataIO.IobeamControl.applet.imageSerializer  import ImageSerializer
 from GlasgowDataIO.IobeamControl.applet.pipelinedLoopbackAdapter \
     import PipelinedLoopbackAdapter
 from GlasgowDataIO.IobeamControl.applet.fakeAdcSimulator import FakeAdcSimulator
-from GlasgowDataIO.IobeamControl.applet import build_iobeam_resources
+from GlasgowDataIO.IobeamControl.applet import (
+    build_iobeam_resources, validate_obi_pin_config,
+)
 
 
 # All bus strobes BusController generates. Order is irrelevant; the names
@@ -68,18 +69,30 @@ _BUS_STROBES = (
 _ZERO_FILL = ("__iobeam_zero_fill_sentinel__",)
 
 
+# Idle time (sync cycles, 48 MHz -> ~21 us) after which a partial IN packet is
+# committed.  Must stay well above the byte-to-byte gap of the fastest stream
+# (2 bytes per 17 samples * 6 cycles = ~51 cycles per byte at dwell 16).
+IN_FLUSH_IDLE_CYCLES = 1024
+
+
 class IobeamDataSubtarget(Elaboratable):
     def __init__(self, *, ports, out_fifo, in_fifo, led=None, control=None,
                  data=None,
                  ext_switch_delay=0, transforms: Transforms = None,
                  benchmark_counters=None, loopback=False, out_only=False,
-                 adc_half_period=4, adc_settle_cycles=2,
+                 adc_half_period=3, adc_settle_cycles=1,
+                 adc_latch_cycles=1,
+                 bus_turnaround_cycles=0, dac_data_setup_cycles=1,
+                 dac_latch_cycles=1,
                  pin_config=None,
                  sim_image=None,
                  sim_image_resolution=64,
                  **kwargs):
         super().__init__()
         self._addr_reset = kwargs.get("_addr_reset", None)
+        self.bus_ownership_status = kwargs.get("bus_ownership_status", None)
+        self.bus_ownership_clear = kwargs.get("bus_ownership_clear", None)
+        self.power_good_status = kwargs.get("power_good_status", None)
         self.ports               = ports
         self.out_fifo            = out_fifo
         self.in_fifo             = in_fifo
@@ -92,6 +105,10 @@ class IobeamDataSubtarget(Elaboratable):
         self.out_only            = out_only
         self.adc_half_period     = adc_half_period
         self.adc_settle_cycles   = adc_settle_cycles
+        self.adc_latch_cycles    = adc_latch_cycles
+        self.bus_turnaround_cycles = bus_turnaround_cycles
+        self.dac_data_setup_cycles = dac_data_setup_cycles
+        self.dac_latch_cycles = dac_latch_cycles
         self.pin_config          = pin_config or {}
         self.sim_image           = sim_image
         self.sim_image_resolution= sim_image_resolution
@@ -125,12 +142,37 @@ class IobeamDataSubtarget(Elaboratable):
             out_only=self.out_only,
             adc_half_period=self.adc_half_period,
             adc_settle_cycles=self.adc_settle_cycles,
+            adc_latch_cycles=self.adc_latch_cycles,
+            bus_turnaround_cycles=self.bus_turnaround_cycles,
+            dac_data_setup_cycles=self.dac_data_setup_cycles,
+            dac_latch_cycles=self.dac_latch_cycles,
             ext_switch_delay=self.ext_switch_delay,
             transforms=self.transforms)
         m.submodules.serializer = serializer = ImageSerializer()
 
         wiring.connect(m, parser.cmd_stream, executor.cmd_stream)
         wiring.connect(m, executor.img_stream, serializer.img_stream)
+
+        # Sticky observations exported through FPGA registers for host-side
+        # diagnostics. Bits record that each ownership state occurred at
+        # least once; contention is retained until explicitly cleared.
+        #   bit 0: ADC driving   (adc_oe=1, data_oe=0)
+        #   bit 1: FPGA driving  (adc_oe=0, data_oe=1)
+        #   bit 2: contention    (adc_oe=1, data_oe=1)
+        #   bit 3: turnaround    (adc_oe=0, data_oe=0)
+        if self.bus_ownership_status is not None:
+            ownership_now = Cat(
+                executor.bus.adc_oe & ~executor.bus.data_oe,
+                ~executor.bus.adc_oe & executor.bus.data_oe,
+                executor.bus.adc_oe & executor.bus.data_oe,
+                ~executor.bus.adc_oe & ~executor.bus.data_oe,
+                Const(0, 4),
+            )
+            with m.If(self.bus_ownership_clear):
+                m.d.sync += self.bus_ownership_status.eq(0)
+            with m.Else():
+                m.d.sync += self.bus_ownership_status.eq(
+                    self.bus_ownership_status | ownership_now)
 
         # Wire executor.output_mode to serializer.output_mode at module
         # level so the sync cookie response and image bytes aren't
@@ -151,11 +193,43 @@ class IobeamDataSubtarget(Elaboratable):
             serializer.usb_stream.ready.eq(self.in_fifo.w_rdy & run_enable),
         ]
 
+        # IN packet boundaries.  The FX2 crossbar treats `flush` as a LEVEL:
+        # while it is high and the FPGA-side FIFO is empty, any incomplete
+        # packet is committed as-is (PKTEND).  Glasgow's default
+        # (auto_flush=True) holds it high permanently, so a scan producing
+        # 2 bytes every ~2 us commits a few-byte packet each time the FIFO
+        # drains.  Every short packet also ends the host's 16 KB bulk IN
+        # transfer, so the host pays one libusb callback + asyncio round trip
+        # per FIFO-full of data (~1.9 ms per 512 B in the VM) and the FPGA
+        # output FIFO backs up: the beam parks and the DAC shows a staircase
+        # instead of a continuous ramp.  Upstream OBI drives `flush` only
+        # from the executor (Synchronize / Abort / Flush commands) so packets
+        # stay full-size (512 B) while streaming.
+        #
+        # We do the same, plus an idle timeout so a lone result (adaptive
+        # single-pixel reads, or data still in the pipeline when the
+        # executor's flush pulse passed) is committed shortly after the
+        # stream stops.  At the scan rates in use the gap between bytes is
+        # far below the timeout, so streaming never trips it.
+        if hasattr(self.in_fifo, "flush"):
+            idle = Signal(range(IN_FLUSH_IDLE_CYCLES + 1))
+            with m.If(self.in_fifo.w_en & self.in_fifo.w_rdy):
+                m.d.sync += idle.eq(0)
+            with m.Elif(idle != IN_FLUSH_IDLE_CYCLES):
+                m.d.sync += idle.eq(idle + 1)
+            m.d.comb += self.in_fifo.flush.eq(
+                executor.flush | (idle == IN_FLUSH_IDLE_CYCLES))
+
         # ------------------------------------------------------------------ #
         # Resources: built dynamically from pin_config
         # ------------------------------------------------------------------ #
+        # Match the upstream OBI top-level contract on the physical path.
+        # An incomplete/misnamed JSON mapping must not silently synthesize
+        # an image with an undriven ADC bus.
+        if not self.loopback:
+            validate_obi_pin_config(self.pin_config)
         resources = build_iobeam_resources(self.pin_config)
-        if resources:
+        if resources and platform is not None:
             platform.add_resources(resources)
 
         # Helper: does the platform actually carry a Resource named `name`?
@@ -181,17 +255,30 @@ class IobeamDataSubtarget(Elaboratable):
         present_strobes = set()
         if platform is not None and _has_resource("control"):
             ctrl_res = next(r for r in resources if r.name == "control")
+            # Request raw ports and instantiate output buffers explicitly,
+            # as OBI does. The former dir="o" request also inserted an
+            # output PinBuffer; both forms apply the resource's inversion.
             ctrl_dirs = {sub.name: "-" for sub in ctrl_res.ios}
             self.control = platform.request("control", dir=ctrl_dirs)
             for sub in ctrl_res.ios:
                 if hasattr(self.control, sub.name):
                     present_strobes.add(sub.name)
-                    buf = io.Buffer("o", getattr(self.control, sub.name))
-                    m.submodules[f"{sub.name}_buffer"] = buf
                     # Map known names to executor.bus signals; ignore others
                     # (e.g. d_clock, a_clock from the legacy resource).
                     if sub.name in _BUS_STROBES:
-                        m.d.comb += buf.o.eq(getattr(executor.bus, sub.name))
+                        # io.Buffer applies Pins(..., invert=True) once.
+                        buffer = io.Buffer("o", getattr(self.control, sub.name))
+                        m.submodules[f"control_{sub.name}_buffer"] = buffer
+                        m.d.comb += buffer.o.eq(getattr(executor.bus, sub.name))
+                    elif sub.name == "power_good":
+                        buffer = io.Buffer("i", self.control.power_good)
+                        m.submodules.power_good_buffer = buffer
+                        if self.power_good_status is not None:
+                            # bit 1 means configured, bit 0 is synchronized PG.
+                            from amaranth.lib.cdc import FFSynchronizer
+                            pg = Signal()
+                            m.submodules.power_good_sync = FFSynchronizer(buffer.i, pg)
+                            m.d.comb += self.power_good_status.eq(Cat(pg, Const(1, 1)))
 
         # ------------------------------------------------------------------ #
         # Optional data bus
@@ -248,9 +335,10 @@ class IobeamDataSubtarget(Elaboratable):
                     m.d.comb += loopback_adapter.loopback_stream.eq(
                         executor.supersampler.super_dac_stream.payload.dac_x_code)
         elif data_buf is not None:
-            # Real ADC path: external chip drives data bus during
-            # ADC_Wait/ADC_Read (data_oe == 0). data.i is the latched
-            # value from the input buffer.
+            # As upstream, the skid FIFO captures Buffer.i in ADC_Read
+            # while the ADC owns the bus (data_oe == 0).
+            # Cat appends two MSB zeros: raw 14-bit samples are right-aligned
+            # in our 16-bit stream, unlike OBI's post-averaging << 2 format.
             m.d.comb += executor.bus.data_i.eq(Cat(data_buf.i, Const(0, 2)))
         else:
             # No loopback, no data pins -> tie data_i low. The design
@@ -267,21 +355,24 @@ class IobeamDataSubtarget(Elaboratable):
                         m.submodules[f"{pin_name}_buffer"] = \
                             io.Buffer("o", self.ports[pin_name])
                     pins = m.submodules[f"{pin_name}_buffer"].o
-                    signal = Value.cast(signal)
-                    for index, pin in enumerate(pins):
-                        if len(signal) == 1:
-                            m.d.comb += pin.eq(signal)
-                        elif index < len(signal):
-                            m.d.comb += pin.eq(signal[index])
-                        else:
-                            m.d.comb += pin.eq(0)
+                    # Every pad in a pair carries the same logical control;
+                    # per-pin inversion creates a complementary physical pair.
+                    # ext_ctrl_enable is currently a 2-bit internal field, but
+                    # only its low bit is the enable, not a per-pad vector.
+                    for pin in pins:
+                        m.d.comb += pin.eq(Value.cast(signal)[0])
 
-        connect_pins("ebeam_scan_enable",  executor.ext_ctrl_enable)
+        connect_pins("ebeam_scan_enable",  1)
         connect_pins("ibeam_scan_enable",  executor.ext_ctrl_enable)
         connect_pins("ebeam_blank_enable", executor.ext_ctrl_enable)
         connect_pins("ibeam_blank_enable", executor.ext_ctrl_enable)
 
-        with m.If(executor.beam_type == BeamType.NoBeam):
+        with m.If(executor.ext_ctrl_enabled == 0):
+            # Match OBI: release blanking to the instrument while external
+            # control is disabled. Resource inversion defines physical levels.
+            connect_pins("ebeam_blank", 0)
+            connect_pins("ibeam_blank", 0)
+        with m.Elif(executor.beam_type == BeamType.NoBeam):
             connect_pins("ebeam_blank", 1)
             connect_pins("ibeam_blank", 1)
         with m.Elif(executor.beam_type == BeamType.Electron):

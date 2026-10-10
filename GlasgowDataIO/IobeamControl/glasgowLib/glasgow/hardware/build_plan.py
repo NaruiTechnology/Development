@@ -25,18 +25,6 @@ class GatewareBuildError(Exception):
     pass
 
 
-def _write_build_file(path: Path, filename: str, content):
-    if isinstance(content, bytes):
-        with open(path, "wb") as f:
-            f.write(content)
-        return
-
-    suffix = Path(filename).suffix.lower()
-    newline = "\r\n" if os.name == "nt" and suffix in (".bat", ".cmd") else "\n"
-    with open(path, "w", encoding="utf-8", newline=newline) as f:
-        f.write(content)
-
-
 class GlasgowBuildPlan:
     def __init__(self, inner: BuildPlan, toolchain: Toolchain):
         self._inner = ToolchainBuildPlan(inner)
@@ -113,13 +101,15 @@ class GlasgowBuildPlan:
             for filename, content in self._inner.files.items():
                 path = build_dir / filename
                 path.parent.mkdir(parents=True, exist_ok=True)
-                _write_build_file(path, filename, content)
+                mode = 'wb' if isinstance(content, bytes) else 'w'
+                with open(path, mode) as f:
+                    f.write(content)
                 # Make ANY shell script executable, regardless of extension.
                 # Amaranth names its script "build" (no .sh) on Linux.
                 if filename == self._inner.script or filename.endswith('.sh'):
                     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-            script_name = self._inner.script
+            script_name = self._inner.script  # "build" from Amaranth iCE40 platform
             script_path = build_dir / script_name
             if not script_path.exists():
                 raise GatewareBuildError(
@@ -127,15 +117,26 @@ class GlasgowBuildPlan:
                     f"Files present: {sorted(self._inner.files.keys())}")
 
             logger.debug("Running build script '%s' in %s", script_name, build_dir)
-            env = os.environ.copy()
-            env.update(self._toolchain.env_vars)
+            # The generated build script locates each tool (yosys, nextpnr-ice40,
+            # icepack) via environment variables such as NEXTPNR_ICE40, which
+            # ToolchainBuildPlan.env_vars exposes. Without passing them through,
+            # the subprocess falls back to bare command names on PATH, which
+            # breaks whenever a tool (e.g. the WASM/yowasp nextpnr-ice40) is only
+            # reachable via its env var and not installed system-wide.
+            build_env = dict(os.environ)
+            build_env.update(self._inner.env_vars)
+            # The selected Glasgow Toolchain is authoritative. Some Amaranth
+            # BuildPlan versions expose fallback variables containing bare
+            # executable names; allowing those to win makes a clean host fail
+            # while a host with a cached bitstream appears healthy.
+            build_env.update(self._toolchain.env_vars)
             proc = subprocess.run(
-                self._script_command(script_path),
+                [f"./{script_name}"],
                 cwd=build_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                env=env
+                env=build_env,
             )
 
             if proc.returncode != 0:
@@ -172,35 +173,13 @@ class GlasgowBuildPlan:
             if not debug:
                 shutil.rmtree(build_dir, ignore_errors=True)
 
-    def _script_command(self, script_path: Path):
-        suffix = script_path.suffix.lower()
-        if os.name == "nt":
-            if suffix in (".bat", ".cmd"):
-                return ["cmd.exe", "/c", str(script_path)]
-            if suffix == ".sh":
-                bash = shutil.which("bash")
-                if bash:
-                    return [bash, str(script_path)]
-                raise GatewareBuildError(
-                    f"Build plan only provided a shell script ({script_path.name}), "
-                    "but bash is not available on Windows.")
-            return ["cmd.exe", "/c", str(script_path)]
-        return [f"./{script_path.name}"]
-
     @staticmethod
     def check_toolchain():
-        if os.name == "nt":
-            required_tools = {
-                'yowasp-yosys':         ['--version', 'Yosys'],
-                'yowasp-nextpnr-ice40': ['--version', 'nextpnr-ice40'],
-                'yowasp-icepack':       ['--version', 'icepack'],
-            }
-        else:
-            required_tools = {
-                'yosys':         ['--version', 'Yosys'],
-                'nextpnr-ice40': ['--version', 'nextpnr-ice40'],
-                'icepack':       ['--version', 'icepack'],
-            }
+        required_tools = {
+            'yosys':         ['--version', 'Yosys'],
+            'nextpnr-ice40': ['--version', 'nextpnr-ice40'],
+            'icepack':       ['--version', 'icepack'],
+        }
         missing = []
         for cmd, (flag, marker) in required_tools.items():
             try:
@@ -210,14 +189,9 @@ class GlasgowBuildPlan:
             except FileNotFoundError:
                 missing.append(cmd)
         if missing:
-            windows_hint = (
-                "On Windows: install Python packages yowasp-yosys and "
-                "yowasp-nextpnr-ice40, then set GLASGOW_TOOLCHAIN=builtin."
-            )
-            linux_hint = "On Ubuntu/Debian: sudo apt install yosys nextpnr-ice40 fpga-icestorm"
             raise GatewareBuildError(
                 f"Missing required tools: {', '.join(missing)}\n"
-                f"{windows_hint if os.name == 'nt' else linux_hint}")
+                "On Ubuntu/Debian: sudo apt install yosys nextpnr-ice40 fpga-icestorm")
 
     async def get_bitstream(self, *, debug=False) -> bytes:
         """
@@ -278,32 +252,24 @@ class ToolchainBuildPlan:
                 "passing it to GlasgowBuildPlan.")
 
         self.files = inner.files
-        # Amaranth's BuildPlan.script gives a stem such as "build_top"; the
-        # actual file can be build_top.sh on Unix or build_top.bat on Windows.
-        # Resolve to the platform-native script first, while retaining fallback
-        # support for older plans that only emitted a bare or shell script.
+        # Amaranth sets BuildPlan.script to "build" for iCE40 (no .sh extension on Linux).
+        #-- self.script = getattr(inner, 'script', 'build')
+        # Amaranth's BuildPlan.script gives the stem ("build_top"), but on Linux
+        # the actual file written is "build_top.sh".  Resolve to whichever variant
+        # is present in the file dict, preferring the bare name for back-compat.
         raw_script = getattr(inner, 'script', 'build_top')
-        candidates = (
-            [raw_script + ".bat", raw_script + ".cmd", raw_script, raw_script + ".sh"]
-            if os.name == "nt"
-            else [raw_script, raw_script + ".sh", raw_script + ".bat", raw_script + ".cmd"]
-        )
-        for candidate in candidates:
-            if candidate in self.files:
-                self.script = candidate
-                break
+        if raw_script in self.files:
+            self.script = raw_script
+        elif raw_script + ".sh" in self.files:
+            self.script = raw_script + ".sh"
         else:
-            scripts = [
-                f for f in self.files
-                if f.endswith((".sh", ".bat", ".cmd")) or os.path.basename(f).startswith("build")
-            ]
-            if scripts:
-                native = [f for f in scripts if f.endswith((".bat", ".cmd"))]
-                self.script = (native or scripts)[0] if os.name == "nt" else scripts[0]
+            # Last resort: pick any .sh file in the plan
+            sh_files = [f for f in self.files if f.endswith('.sh')]
+            if sh_files:
+                self.script = sh_files[0]
             else:
-                tried = ", ".join(repr(c) for c in candidates)
                 raise GatewareBuildError(
-                    f"Cannot find build script (tried {tried}). "
+                    f"Cannot find build script (tried '{raw_script}', '{raw_script}.sh'). "
                     f"Files present: {sorted(self.files.keys())}")
 
     @property
@@ -323,7 +289,9 @@ class ToolchainBuildPlan:
         for filename, content in self.files.items():
             file_path = Path(build_dir) / filename
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            _write_build_file(file_path, filename, content)
+            mode = 'wb' if isinstance(content, bytes) else 'w'
+            with open(file_path, mode) as f:
+                f.write(content)
             if filename == self.script or filename.endswith('.sh'):
                 file_path.chmod(file_path.stat().st_mode | stat.S_IEXEC)
 

@@ -32,7 +32,14 @@ export interface VacuumPumpState {
   read: string;
   border: VacuumBorderState;
   ready: boolean;
+  /** Cascade stage from the pump's groupName in vacuumSystem.json. */
   group: string | null;
+  /** Isolation valve of this pump ("V2"); null when the hardware has none. */
+  valve?: string | null;
+  /** Controller's valve state; the card's slide switch shows it. */
+  valve_open?: boolean;
+  /** Running, but the reading rose above its value after being ready. */
+  excursion?: boolean;
 }
 
 export interface VacuumSystemStatus {
@@ -40,6 +47,7 @@ export interface VacuumSystemStatus {
   voltage: number;
   connected: boolean;
   simulation: boolean;
+  is_production?: boolean;
   control_transport: "sbc-simulation" | "raspberry-pi-gpio";
   running: boolean;
   runtime_seconds: number;
@@ -47,13 +55,14 @@ export interface VacuumSystemStatus {
   isVacuumSystemReady: boolean;
   high_voltage_power: boolean;
   last_error: string | null;
+  alarms?: string[];
   updated_at: string | null;
   pumps: VacuumPumpState[];
 }
 
 export interface RasterRequest {
   resolution: number;     // 1..2048
-  dwell: number;          // 1..65535
+  dwell: number;          // 0..65535; 0 is one ADC sample/pixel
   latency_bytes: number;  // >= 2
   frame_blank: boolean;
   cookie: number;         // 0..65535
@@ -62,11 +71,19 @@ export interface RasterRequest {
    *  "SixteenBit" when omitted, so this field is optional for frontends
    *  that don't expose a control for it. */
   output_mode?: "SixteenBit" | "EightBit";
+  adc_valid: boolean;
   do_validate: boolean;
+  /** Infinite / live scan (WebSocket only): the service keeps one FPGA
+   *  command stream open and scans frame after frame until Stop, like
+   *  OBI's live scan. Samples wrap at the frame end; `done` arrives only
+   *  after Stop. */
+  continuous?: boolean;
   roi?: ROIRequest | null;
   /** Browser-provided grayscale crop for simulation-only raster scans.
    *  Production hardware ignores it and uses the DAC ROI normally. */
   simulation_bitmap?: SimulationBitmap | null;
+  /** Browser-session simulator settings. Used only for non-production scans. */
+  simulation?: Record<string, unknown>;
 }
 
 export type VectorPattern = "default" | "custom";
@@ -97,15 +114,20 @@ export interface VectorRequest {
   scan_path: VectorScanPath;
   points: Array<VectorPointTuple | VectorPoint> | null;
   preview?: boolean;
+  /** Infinite / live scan (WebSocket only): the service replays the point
+   *  list pass after pass on one FPGA command stream until Stop. Samples
+   *  wrap at the pass end; `done` arrives only after Stop. */
+  continuous?: boolean;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */
   vector_resolution: number;
-  /** Default-pattern dwell in 125 ns units. Ignored when pattern=custom,
+  /** Default-pattern dwell: N takes N + 1 ADC samples of 125 ns each. Ignored when pattern=custom,
    *  because custom points already carry per-point dwell values. */
   dwell: number;
   latency_bytes: number;
   output_mode: "SixteenBit" | "EightBit";
+  adc_valid: boolean;
   feedback_mode?: VectorFeedbackMode;
   /** Confirmed gray interval in 8-bit UI units (0..255). */
   gray_level_range?: [number, number] | null;
@@ -118,6 +140,26 @@ export interface VectorRequest {
   /** Browser-provided grayscale crop for simulation-only vector scans.
    *  Production hardware ignores it and uses the DAC points normally. */
   simulation_bitmap?: SimulationBitmap | null;
+  /** Browser-session simulator settings. Used only for non-production scans. */
+  simulation?: Record<string, unknown>;
+}
+
+export type DacRampAxis = "x" | "y";
+
+/** Single-axis DAC linearity/ramp check — production port of upstream
+ *  OBI's manual_dac_ctrl.RampControl. Sweeps one DAC axis across its
+ *  full 14-bit range while the other is held at `fixed_code`, unlike
+ *  RasterRequest/VectorRequest which always cover both axes. Maps 1:1
+ *  to glasgow_service.models.DacRampRequest. */
+export interface DacRampRequest {
+  axis: DacRampAxis;
+  fixed_code: number;   // 0..16383
+  dwell: number;        // 0..65535; 0 is one ADC sample/pixel
+  latency_bytes: number; // >= 2
+  cookie: number;        // 0..65535
+  beam_type: "NoBeam" | "Electron" | "Ion";
+  external_control: boolean;
+  adc_valid: boolean;
 }
 
 export interface SimulationBitmap {
@@ -222,11 +264,13 @@ export interface ServerDefaults {
   raster: Record<string, unknown>;
   vector: Record<string, unknown>;
   simulation?: Record<string, unknown>;
+  adc?: Record<string, unknown>;
   mag_calibration?: Record<string, unknown>;
   ev?: number;
   raster_params?: Record<string, unknown>;
   vector_params?: Record<string, unknown>;
   selected_beam?: "ebeam" | "ion";
   is_production?: boolean;
+  adc_test?: boolean;
   version?: string;
 }

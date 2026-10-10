@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useLevelSetting } from "../hooks/useLevelSetting";
+import type { LevelHistogram, ResolvedLevels } from "../lib/displayLevels";
+import { ROI_LEVEL_KEY, applyLevelsToCanvas, measureGrayImage, resolveRoiLevels } from "../lib/grayImageLevels";
+
 import { useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
 import type { ROIState } from "../store/scanSlice";
@@ -22,6 +26,8 @@ export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: str
   const roi = useAppSelector((s) => s.scan.roi);
   const { t } = useTranslation();
   const [zoomIndex, setZoomIndex] = useState(ROI_PREVIEW_DEFAULT_ZOOM_INDEX);
+  // Same black/white levels as the ROI canvas (shared wedge setting).
+  const [levelSetting] = useLevelSetting(ROI_LEVEL_KEY);
   const zoom = ROI_PREVIEW_ZOOM_LEVELS[zoomIndex];
   const imageSource =
     roi.scanImageDataUrl ?? (roi.imageKind === "lastScan"
@@ -31,23 +37,25 @@ export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: str
   useEffect(() => {
     let cancelled = false;
     if (!imageSource) {
-      drawPreview(canvasRef.current, roi.selection, roi, null);
+      drawPreview(canvasRef.current, roi.selection, roi, null, null);
       return;
     }
 
     const img = new Image();
     img.onload = () => {
-      if (!cancelled) drawPreview(canvasRef.current, roi.selection, roi, img);
+      if (cancelled) return;
+      const levels = resolveRoiLevels(histogramFor(imageSource, img), levelSetting);
+      drawPreview(canvasRef.current, roi.selection, roi, img, levels);
     };
     img.onerror = () => {
-      if (!cancelled) drawPreview(canvasRef.current, roi.selection, roi, null);
+      if (!cancelled) drawPreview(canvasRef.current, roi.selection, roi, null, null);
     };
     img.src = imageSource;
 
     return () => {
       cancelled = true;
     };
-  }, [imageSource, roi]);
+  }, [imageSource, roi, levelSetting]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -105,11 +113,23 @@ export function ROIScanPreview({ backgroundImageUrl }: { backgroundImageUrl: str
   );
 }
 
+// The histogram only depends on the image, so keep the last one instead of
+// re-measuring on every selection change.
+let histogramCache: { source: string; histogram: LevelHistogram | null } | null = null;
+
+function histogramFor(source: string, img: HTMLImageElement): LevelHistogram | null {
+  if (histogramCache?.source === source) return histogramCache.histogram;
+  const histogram = measureGrayImage(img)?.histogram ?? null;
+  histogramCache = { source, histogram };
+  return histogram;
+}
+
 function drawPreview(
   canvas: HTMLCanvasElement | null,
   selection: ROIRequest | null,
   roi: ROIState,
   image: HTMLImageElement | null,
+  levels: ResolvedLevels | null,
 ) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -125,6 +145,7 @@ function drawPreview(
 
   if (image) {
     ctx.drawImage(image, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    if (levels) applyLevelsToCanvas(canvas, levels);
   }
 
   if (!selection) {

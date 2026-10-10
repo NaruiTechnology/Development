@@ -17,6 +17,11 @@ import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 import type { DimensionCalibrationValues } from "../lib/dimensionCalibrationPersistence";
+import type { AppliedScanGeometry } from "../lib/scanGeometry";
+import { estimateRevC3ScanTiming } from "../lib/scanTiming";
+import { summarizeScanParams, type ScanParamSummary } from "../lib/scanParamChip";
+
+const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
 
 export type ScanKind = "raster" | "vector" | "roi" | "mag";
 export type ScanPhase =
@@ -27,6 +32,11 @@ export type ScanPhase =
   | "error";
 
 export type VectorRenderMode = "native" | "decimated";
+export interface StreamTransforms {
+  xflip: boolean;
+  yflip: boolean;
+  rotate90: boolean;
+}
 const ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY = "ionbeam.roiGrayScaleStepDelta";
 
 interface ScanState {
@@ -63,6 +73,11 @@ interface ScanState {
    *  persisted to localStorage — because the right choice depends on the
    *  current scan, not a long-term preference. */
   vectorRenderMode: VectorRenderMode;
+  /** Orientation applied to live and exported scan images. */
+  streamTransforms: StreamTransforms;
+  /** Settings of the most recently started scan, shown as a chip on the
+   *  live image once that scan completes. */
+  lastScanParams: ScanParamSummary | null;
 }
 
 export interface ROIState {
@@ -90,6 +105,7 @@ export interface ROIState {
   show_grid: boolean;
   raster_show_grid: boolean;
   vector_show_grid: boolean;
+  raster_show_scan_path: boolean;
   vector_show_scan_path: boolean;
   selection: ROIRequest | null;
   imageName: string;
@@ -98,6 +114,14 @@ export interface ROIState {
   /** Physical world bounds represented by the current image; null means the full hardware FOV. */
   imageBounds: ROIRequest | null;
   scanImageDataUrl: string | null;
+  /** The image an ROI scan produced, once it becomes the ROI image. Shown in
+   *  source orientation (the transform settings are not applied to it). */
+  roiScanResultUrl: string | null;
+  /**
+   * Rectified DAC <-> world (µm) transform from CONFIGURATION > Admin > Calibration > Scan geometry. When set and
+   * enabled, ROI selections are mapped to DAC codes through it instead of the linear x_origin..x_end mapping.
+   */
+  scanGeometry?: AppliedScanGeometry | null;
 }
 
 const defaultRaster: RasterRequest = {
@@ -107,24 +131,31 @@ const defaultRaster: RasterRequest = {
   frame_blank: false,
   cookie: 123,
   output_mode: "SixteenBit",
+  adc_valid: true,
   do_validate: true,
 };
 
 const defaultVector: VectorRequest = {
   pattern: "default",
-  scan_path: "vertical_raster",
+  // horizontal_sawtooth: X is the fast/inner axis, matching a reference
+  // OBI DAC capture. The previous default, vertical_raster, makes X the
+  // slow/outer axis, which reads as a staircase on a scope even though
+  // the DAC is fine — see glasgow_service's /scan/dac_ramp/run for a
+  // dedicated single-axis linearity check.
+  scan_path: "horizontal_sawtooth",
   points: null,
   vector_resolution: 2048,
   dwell: 16,
   latency_bytes: 8196,
   output_mode: "SixteenBit",
+  adc_valid: true,
   cookie: 123,
   pre_process: true,
   do_validate: true,
 };
 
 const initialState: ScanState = {
-  kind: "roi",
+  kind: "vector",
   phase: "idle",
   bytesReceived: 0,
   chunksReceived: 0,
@@ -159,6 +190,7 @@ const initialState: ScanState = {
     show_grid: true,
     raster_show_grid: true,
     vector_show_grid: true,
+    raster_show_scan_path: false,
     vector_show_scan_path: false,
     selection: null,
     imageName: "No image selected",
@@ -166,12 +198,15 @@ const initialState: ScanState = {
     imageKind: "none",
     imageBounds: null,
     scanImageDataUrl: null,
+    roiScanResultUrl: null,
   },
   beamEnergyEv: 1000.0,
   roiGrayScaleSelection: null,
   roiGrayScaleSkipped: null,
   roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
   vectorRenderMode: "decimated",
+  streamTransforms: { xflip: false, yflip: false, rotate90: false },
+  lastScanParams: null,
 };
 
 function numberDefault(value: unknown, fallback: number): number {
@@ -195,11 +230,6 @@ function booleanDefault(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
-function outputModeDefault(value: unknown, fallback: VectorRequest["output_mode"] | undefined): VectorRequest["output_mode"] {
-  if (value === "EightBit" || value === "SixteenBit") return value;
-  return fallback ?? "SixteenBit";
-}
-
 function vectorScanPathDefault(value: unknown, fallback: VectorScanPath): VectorScanPath {
   switch (value) {
     case "vertical_raster":
@@ -213,7 +243,7 @@ function vectorScanPathDefault(value: unknown, fallback: VectorScanPath): Vector
 }
 
 function dwellDefault(value: unknown, fallback: number): number {
-  return Math.max(16, numberDefault(value, fallback));
+  return Math.max(0, numberDefault(value, fallback));
 }
 
 function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
@@ -257,10 +287,11 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
         raster.doValidate,
       state.raster.do_validate
     ),
-    output_mode: outputModeDefault(
-      rasterParams.output_mode ?? raster.output_mode ?? raster.outputMode,
-      state.raster.output_mode ?? "SixteenBit"
+    adc_valid: booleanDefault(
+      rasterParams.adc_valid ?? raster.adc_valid ?? raster.adcValid,
+      state.raster.adc_valid
     ),
+    output_mode: "SixteenBit",
   };
 
   state.vector = {
@@ -280,9 +311,10 @@ function applyServerDefaults(state: ScanState, defaults: ServerDefaults): void {
       vectorParams.latency_bytes ?? vector.latency_bytes ?? vector.latency,
       state.vector.latency_bytes
     ),
-    output_mode: outputModeDefault(
-      vectorParams.output_mode ?? vector.output_mode ?? vector.outputMode,
-      state.vector.output_mode
+    output_mode: "SixteenBit",
+    adc_valid: booleanDefault(
+      vectorParams.adc_valid ?? vector.adc_valid ?? vector.adcValid,
+      state.vector.adc_valid
     ),
     pre_process: booleanDefault(
       vectorParams.pre_process ??
@@ -311,6 +343,9 @@ function normalizeRasterPatch(
     ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
       ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
       : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "adc_valid")
+      ? { adc_valid: booleanDefault(patch.adc_valid, current.adc_valid) }
+      : {}),
   };
 }
 
@@ -325,6 +360,9 @@ function normalizeVectorPatch(
       : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, "do_validate")
       ? { do_validate: booleanDefault(patch.do_validate, current.do_validate) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "adc_valid")
+      ? { adc_valid: booleanDefault(patch.adc_valid, current.adc_valid) }
       : {}),
   };
 }
@@ -343,6 +381,9 @@ function normalizeROIPatch(
       : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_grid")
       ? { vector_show_grid: booleanDefault(patch.vector_show_grid, current.vector_show_grid) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "raster_show_scan_path")
+      ? { raster_show_scan_path: booleanDefault(patch.raster_show_scan_path, current.raster_show_scan_path) }
       : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, "vector_show_scan_path")
       ? {
@@ -465,6 +506,13 @@ const slice = createSlice({
     updateBeamEnergyEv(s, a: PayloadAction<number>) {
       s.beamEnergyEv = floatDefault(a.payload, s.beamEnergyEv);
     },
+    setStreamTransforms(s, a: PayloadAction<StreamTransforms>) {
+      s.streamTransforms = {
+        xflip: a.payload.xflip === true,
+        yflip: a.payload.yflip === true,
+        rotate90: a.payload.rotate90 === true,
+      };
+    },
     updateROI(s, a: PayloadAction<Partial<ROIState>>) {
       s.roi = { ...s.roi, ...normalizeROIPatch(a.payload, s.roi) };
       if (calibrationPatchTouchesConfirmedMapping(a.payload)) {
@@ -477,6 +525,13 @@ const slice = createSlice({
           s.roi.vector_show_scan_path = true;
         }
       }
+    },
+    setScanGeometry(s, a: PayloadAction<AppliedScanGeometry | null>) {
+      s.roi.scanGeometry = a.payload && a.payload.enabled ? a.payload : null;
+      // A selection made under the previous mapping would now point somewhere else.
+      s.roi.selection = null;
+      s.raster.roi = null;
+      s.vector.roi = null;
     },
     beginROICalibration(s) {
       s.roi.calibration_enabled = true;
@@ -654,6 +709,9 @@ const slice = createSlice({
       s.phase = "error";
       s.errorMessage = a.payload;
     },
+    scanParamsCaptured(s, a: PayloadAction<ScanParamSummary>) {
+      s.lastScanParams = a.payload;
+    },
     streamReset(s) {
       s.phase = "idle";
       s.bytesReceived = 0;
@@ -663,7 +721,8 @@ const slice = createSlice({
     },
   },
   extraReducers: (b) => {
-    b.addCase(runRasterValidated.pending, (s) => {
+    b.addCase(runRasterValidated.pending, (s, a) => {
+      s.lastScanParams = summarizeScanParams("raster", a.meta.arg, { beamEnergyEv: s.beamEnergyEv, samplePeriodNs: SAMPLE_PERIOD_NS });
       s.phase = "running";
       s.bytesReceived = 0;
       s.chunksReceived = 0;
@@ -689,7 +748,8 @@ const slice = createSlice({
       s.phase = "error";
       s.errorMessage = a.error.message ?? "raster run failed";
     });
-    b.addCase(runVectorValidated.pending, (s) => {
+    b.addCase(runVectorValidated.pending, (s, a) => {
+      s.lastScanParams = summarizeScanParams("vector", a.meta.arg, { beamEnergyEv: s.beamEnergyEv, samplePeriodNs: SAMPLE_PERIOD_NS });
       s.phase = "running";
       s.bytesReceived = 0;
       s.chunksReceived = 0;
@@ -728,9 +788,11 @@ export const {
   updateVector,
   setPreview,
   updateBeamEnergyEv,
+  setStreamTransforms,
   updateROI,
   beginROICalibration,
   beginDimensionCalibration,
+  setScanGeometry,
   applyPersistedDimensionCalibration,
   restorePersistedDimensionCalibration,
   confirmROICalibration,
@@ -742,6 +804,7 @@ export const {
   clearLastOutput,
   setVectorRenderMode,
   streamStarted,
+  scanParamsCaptured,
   streamProgress,
   streamStopping,
   streamCompleted,

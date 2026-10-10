@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import mechanicalPumpImage from "../assets/MechanicalVacuumPump.png";
@@ -9,6 +9,7 @@ import { useTranslation } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
+import { vacuumReadingsAreFresh, vacuumStatusForDisplay } from "../lib/vacuumPolicy";
 import type { VacuumPumpState, VacuumSystemStatus } from "../types/api";
 
 const MECHANICAL_PUMP = "MechanicalVacuumPump";
@@ -17,6 +18,10 @@ const PUMP_IMAGES: Record<string, string> = {
   TurboVacuumPump: turboPumpImage,
   UHVacuumPump_1: uhPump1Image,
   UHVacuumPump_2: uhPump2Image,
+};
+const GROUP_PUMP_IMAGES: Record<string, string> = {
+  TurboVacuum: turboPumpImage,
+  UltraHighVacuum: uhPump1Image,
 };
 
 export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onActivityChange: (active: boolean) => void; onClose: () => void }) {
@@ -27,8 +32,6 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
   const mutationRef = useRef(false);
   const statusVersionRef = useRef(0);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -91,19 +94,20 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     if (mutationRef.current) return;
     const statusVersion = statusVersionRef.current;
     try {
-      const response = await fetch(apiUrl("/api/vacuum"), { headers: scanAuthHeaders(), signal });
-      if (response.status === 404) {
-        onCloseRef.current();
-        return;
-      }
+      const response = await fetch(apiUrl("/api/vacuum"), {
+        cache: "no-store", headers: scanAuthHeaders(),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000),
+      });
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
       const refreshed = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
-      setStatus(refreshed);
-      setError(null);
+      setStatus(vacuumStatusForDisplay(refreshed));
+      setError(!vacuumReadingsAreFresh(refreshed.updated_at) && !refreshed.last_error
+        ? "Vacuum readings are unavailable or stale" : null);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
+      setStatus(null);
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }, []);
@@ -156,38 +160,64 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     }
   }
 
+  async function resumeController() {
+    mutationRef.current = true;
+    statusVersionRef.current += 1;
+    setPending("resume");
+    setError(null);
+    try {
+      const response = await fetch(apiUrl("/api/vacuum/resume"), {
+        method: "POST", headers: scanAuthHeaders(), signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      setStatus(vacuumStatusForDisplay(await readJsonResponse<VacuumSystemStatus>(response, "vacuum resume")));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      mutationRef.current = false;
+      setPending(null);
+      void refresh();
+    }
+  }
+
   if (!open) return null;
 
-  const mechanicalPump = status?.pumps.find((pump) => pump.name === MECHANICAL_PUMP);
-  const turboPump = status?.pumps.find((pump) => pump.name === "TurboVacuumPump");
-  const uhPumps = status?.pumps.filter((pump) => pump.group === "ultra-high-vacuum") ?? [];
-  const workflowNames = new Set([
-    MECHANICAL_PUMP,
-    "TurboVacuumPump",
-    ...uhPumps.map((pump) => pump.name),
-  ]);
-  const otherPumps = status?.pumps.filter((pump) => !workflowNames.has(pump.name)) ?? [];
+  // Cascade stages come from each pump's groupName (reported as `group`),
+  // in configuration order.  No equipment names are hard-coded here.
+  const stages = status ? groupStages(status.pumps) : [];
+  const showWorkflow = stages.length > 1 && stages[0].pumps[0]?.name === MECHANICAL_PUMP;
+  const workflowColumns = stages
+    .map((stage) => (stage.pumps.length > 1 ? "minmax(390px, 1.8fr)" : "minmax(190px, 1fr)"))
+    .join(" 54px ");
 
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
+    const pumpImage = PUMP_IMAGES[pump.name] ?? GROUP_PUMP_IMAGES[pump.group ?? ""];
+    // The header slide switch shows the pump's isolation valve (controller
+    // managed). Older services without valve data fall back to the ready input.
+    const valveOpen = pump.valve_open ?? pump.port_b_value === status?.voltage;
+    const valveTitle = t("vacuum.valveState", {
+      valve: pump.valve ?? "",
+      state: t(valveOpen ? "vacuum.valveOpen" : "vacuum.valveClosed"),
+    });
     return (
       <article key={pump.name} className="card vacuum-card" data-border={pump.border}>
         <div className="card__header vacuum-card__header">
           <span className="card__title">{pump.name}</span>
-          <label className="vacuum-switch" title={mechanical ? t("vacuum.mechanicalAlwaysOn") : pump.name}>
+          <label className="vacuum-switch" title={valveTitle}>
             <input
               type="checkbox"
-              checked={pump.port_b_value === status?.voltage}
+              checked={valveOpen}
               disabled
-              aria-label={`${pump.name} ${t("vacuum.power")}`}
+              aria-label={valveTitle}
             />
             <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
           </label>
         </div>
         <div className="card__body vacuum-card__body">
-          {PUMP_IMAGES[pump.name] && (
+          {pumpImage && (
             <div className="vacuum-card__image-wrap">
-              <img className="vacuum-card__image" src={PUMP_IMAGES[pump.name]} alt="" />
+              <img className="vacuum-card__image" src={pumpImage} alt="" />
             </div>
           )}
           <div className="vacuum-card__reading"><span>{t("vacuum.threshold")}</span><strong>{formatVacuumValue(pump.threshold)}</strong></div>
@@ -199,7 +229,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
                 type="button"
                 className="vacuum-power-button"
                 data-state={pump.power ? "on" : "off"}
-                disabled={mechanical || !status?.running || pending !== null}
+                disabled={mechanical || !status?.running || !status.connected || pending !== null}
                 aria-pressed={pump.power}
                 aria-label={`${pump.name} ${t("vacuum.power")}`}
                 title={`${t("vacuum.power")} ${pump.power ? "off" : "on"}`}
@@ -236,23 +266,32 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
           </div>
         </div>
 
-        {!minimized && <><div className="modal__body vacuum-dashboard__body">
+        <><div className="modal__body vacuum-dashboard__body">
           {error && <div className="vacuum-dashboard__error" role="alert">{error}</div>}
+          {status?.last_error && <div className="vacuum-dashboard__error" role="alert">{status.last_error}</div>}
+          {status?.alarms?.map((alarm) => <div key={alarm} className="vacuum-dashboard__error" role="alert">{alarm}</div>)}
           {!status ? (
             <div className="vacuum-dashboard__loading">
               {pending === "acquire" ? t("vacuum.acquiring") : t("vacuum.loading")}
             </div>
           ) : (
-            mechanicalPump && turboPump && uhPumps.length > 0 && otherPumps.length === 0 ? (
-              <div className="vacuum-workflow">
-                <div className="vacuum-workflow__stage">{renderPumpCard(mechanicalPump)}</div>
-                <WorkflowArrow state={mechanicalPump.border} />
-                <div className="vacuum-workflow__stage">{renderPumpCard(turboPump)}</div>
-                <WorkflowArrow state={turboPump.border} grouped />
-                <div className="vacuum-workflow__group" data-state={groupState(uhPumps)}>
-                  <div className="vacuum-workflow__group-title">{t("vacuum.uhGroup")}</div>
-                  {uhPumps.map(renderPumpCard)}
-                </div>
+            showWorkflow ? (
+              <div className="vacuum-workflow" style={{ gridTemplateColumns: workflowColumns }}>
+                {stages.map((stage, index) => (
+                  <Fragment key={stage.group}>
+                    {index > 0 && (
+                      <WorkflowArrow state={groupState(stages[index - 1].pumps)} grouped={stage.pumps.length > 1} />
+                    )}
+                    {stage.pumps.length === 1 ? (
+                      <div className="vacuum-workflow__stage">{renderPumpCard(stage.pumps[0])}</div>
+                    ) : (
+                      <div className="vacuum-workflow__group" data-state={groupState(stage.pumps)}>
+                        <div className="vacuum-workflow__group-title">{t("vacuum.groupedStage", { group: stage.group })}</div>
+                        {stage.pumps.map(renderPumpCard)}
+                      </div>
+                    )}
+                  </Fragment>
+                ))}
               </div>
             ) : (
               <div className="vacuum-dashboard__grid">{status.pumps.map(renderPumpCard)}</div>
@@ -261,8 +300,13 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
         </div>
 
         <div className="vacuum-dashboard__footer">
-          <span>{status?.cascade_stopped ? t("vacuum.cascadeStopped") : t("vacuum.cascadeRunning")}</span>
-        </div></>}
+          {status && <span>{status.cascade_stopped ? t("vacuum.cascadeStopped") : t("vacuum.cascadeRunning")}</span>}
+          {status?.running && status.cascade_stopped && (
+            <button type="button" className="button" disabled={pending !== null} onClick={() => void resumeController()}>
+              {t("scan.resume")}
+            </button>
+          )}
+        </div></>
       </section>}
     </div>
   );
@@ -275,6 +319,20 @@ function WorkflowArrow({ state, grouped = false }: { state: VacuumPumpState["bor
       <span className="vacuum-workflow__arrowhead" />
     </div>
   );
+}
+
+type VacuumStage = { group: string; pumps: VacuumPumpState[] };
+
+/** Consecutive pumps with the same groupName form one cascade stage. */
+export function groupStages(pumps: VacuumPumpState[]): VacuumStage[] {
+  const stages: VacuumStage[] = [];
+  for (const pump of pumps) {
+    const group = pump.group ?? pump.name;
+    const last = stages[stages.length - 1];
+    if (last && last.group === group) last.pumps.push(pump);
+    else stages.push({ group, pumps: [pump] });
+  }
+  return stages;
 }
 
 function groupState(pumps: VacuumPumpState[]): VacuumPumpState["border"] {

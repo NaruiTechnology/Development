@@ -1,4 +1,3 @@
-
 import asyncio
 from pathlib import Path
 
@@ -31,15 +30,11 @@ def make_config():
 
 def make_device(config):
     return SimulatedVacuumDevice(
-        [
-            *(pump.write for pump in config.pumps),
-            config.high_voltage_transformer.write,
-        ],
+        [*(pump.write for pump in config.pumps), config.high_voltage_transformer.write],
         [pump.read for pump in config.pumps],
         gauge_channels={
             pump.read: (pump.write, pump.threshold) for pump in config.pumps
         },
-        error_range=config.error_range,
     )
 
 

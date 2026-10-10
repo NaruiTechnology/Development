@@ -1,0 +1,28 @@
+[Unit]
+Description=Local Raspberry Pi vacuum controller (hardware or emulator)
+After=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=@SERVICE_ROOT@
+Environment=PYTHONPATH=@OPERATIONS_ROOT@/Development:@SERVICE_ROOT@
+Environment=SBC_VACUUM_HOST=127.0.0.1
+Environment=SBC_VACUUM_PORT=8766
+Environment=GLASGOW_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/streamData.json
+Environment=SBC_VACUUM_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/vacuumSystem.json
+Environment=SBC_REQUIRE_FENCING=false
+Environment=SBC_FENCING_STATE=%t/sbc-vacuum-fencing-token.json
+EnvironmentFile=-@SERVICE_ROOT@/examples/sbc-vacuum.local.env
+# Credentials (GLASGOW_TOKEN, DB, FTP): owner-only file outside the deploy root.
+EnvironmentFile=-@SECRETS_FILE@
+ExecStart=@PYTHON_BIN@ -m glasgow_service.sbc_vacuum_app
+StandardOutput=append:@LOG_DIR@/sbc-vacuum.log
+StandardError=append:@LOG_DIR@/sbc-vacuum.log
+Restart=always
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=15
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

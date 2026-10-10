@@ -1,5 +1,4 @@
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -29,12 +28,9 @@ forbidden = [name for name in sys.modules
              or name.startswith('glasgow.hardware')]
 raise SystemExit(1 if forbidden else 0)
 """
-    package_root = str(Path(__file__).parents[1])
-    env = os.environ.copy()
-    env["PYTHONPATH"] = package_root + os.pathsep + env.get("PYTHONPATH", "")
     result = subprocess.run(
         [sys.executable, "-c", code],
+        cwd=Path(__file__).resolve().parents[1],
         check=False,
-        env=env,
     )
     assert result.returncode == 0

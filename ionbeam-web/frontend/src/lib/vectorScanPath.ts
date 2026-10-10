@@ -1,10 +1,17 @@
 import type { VectorScanPath } from "../types/api";
 
+// Horizontal paths (X fast/inner axis) listed first, with
+// horizontal_sawtooth as the practical default: a scope probe on the X
+// DAC output sees a continuous per-line ramp, matching a reference OBI
+// capture. vertical_* paths make X the slow/outer axis instead, which
+// looks like a staircase on a scope even though the DAC itself is fine
+// (X only steps once per full column) — see VectorScanPathField's
+// default selection and /scan/dac_ramp/run for a true single-axis check.
 export const VECTOR_SCAN_PATHS: readonly VectorScanPath[] = [
-  "vertical_raster",
-  "vertical_serpentine",
   "horizontal_sawtooth",
   "horizontal_triangle",
+  "vertical_raster",
+  "vertical_serpentine",
 ];
 
 export function vectorScanSampleCount(edge: number, path: VectorScanPath): number {

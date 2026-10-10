@@ -28,6 +28,8 @@ function saveCachedDefaults(defaults: ServerDefaults) {
 interface StatusState {
   service: ServiceStatus | null;
   defaults: ServerDefaults | null;
+  /** Browser-session override sent with raster/vector requests. Never cached. */
+  sessionSimulation: Record<string, unknown> | null;
   fetching: boolean;
   lastError: string | null;
 }
@@ -35,6 +37,7 @@ interface StatusState {
 const initialState: StatusState = {
   service: null,
   defaults: loadCachedDefaults(),
+  sessionSimulation: null,
   fetching: false,
   lastError: null,
 };
@@ -90,6 +93,9 @@ const slice = createSlice({
   name: "status",
   initialState,
   reducers: {
+    setSessionSimulation(s, a: PayloadAction<Record<string, unknown>>) {
+      s.sessionSimulation = { ...a.payload };
+    },
     previewConfigDefaults(
       s,
       a: PayloadAction<{
@@ -150,6 +156,6 @@ const slice = createSlice({
   },
 });
 
-export const { previewConfigDefaults } = slice.actions;
+export const { previewConfigDefaults, setSessionSimulation } = slice.actions;
 
 export default slice.reducer;

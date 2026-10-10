@@ -1,5 +1,3 @@
-
-
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
 from buildingblocks.workflow.work_thread import WorkThread
@@ -39,8 +37,7 @@ class DistributionDeployThread(WorkThread):
         self._venvDir = deployment.get("VenvDir", ".venv")
         self._glasgowConfig = self._resolveFromDeployRoot(
             deployment.get("GlasgowConfig", ""))
-        self._glasgowLog = deployment.get(
-            "GlasgowLog", os.path.join(self._deployRoot, "Logs", "glasgow.log"))
+        self._glasgowLog = deployment.get("GlasgowLog", "/tmp/glasgow.log")
         self._isProduction = self._truthy(deployment.get("IsProduction", False))
         self._workflowSucceeded = False
         self._workflowError = None
@@ -145,6 +142,37 @@ class DistributionDeployThread(WorkThread):
     def IntialWork(self):
         state = None
         self._queue = queue.Queue()
+        actions = {key: value for action in self._config.Actions for key, value in action.items()}
+        if "createDeployFolder" in actions:
+            # Stopping the running installation, replacing it from the
+            # validated archive, and verifying what was extracted are
+            # mandatory clean-deploy gates. FPGA
+            # programming is hardware-dependent, so an explicit skip must be
+            # honored for development/VM deployments where no Glasgow is
+            # attached.
+            required = ("stopLocalSystem", "createDeployFolder", "unzipDistribution", "verifyDistribution")
+            names = list(actions)
+            if (any(name not in actions or actions[name].get(Consts.SKIP, False)
+                    or actions[name].get(TRANSACTION_COMPLETE, False) for name in required)
+                    or [names.index(name) for name in required] != sorted(names.index(name) for name in required)):
+                self._workflowError = "clean deployment requires stop, recreate, extract, and verify in order; reset completion flags for a new run"
+                self._logger.error(self._workflowError)
+                return None
+            # A clean replacement invalidates every old installation receipt.
+            if any(value.get(TRANSACTION_COMPLETE, False) and not value.get(Consts.SKIP, False)
+                   for value in actions.values()):
+                self._workflowError = "clean deployment cannot reuse completed installation states; reset completion flags"
+                self._logger.error(self._workflowError)
+                return None
+            fpga_enabled = ("programFpgaRam" in actions
+                            and not actions["programFpgaRam"].get(Consts.SKIP, False))
+            for name in ("manageLocalSystem", "launchGlasgowService", "launchIonbeamWebBackend", "launchIonbeamWebFrontend"):
+                if (fpga_enabled and name in actions
+                        and not actions[name].get(Consts.SKIP, False)
+                        and names.index(name) < names.index("programFpgaRam")):
+                    self._workflowError = "FPGA verification must precede service startup"
+                    self._logger.error(self._workflowError)
+                    return None
         for action in self._config.Actions:
             for key, val in action.items():
                 actionConfig = val
@@ -212,9 +240,24 @@ class DistributionDeployThread(WorkThread):
         return str(value).strip().lower() in ("1", "true", "yes", "on")
 
     def activateVirtualEnv(self):
-        if self._venvPath is not None:
-            scriptsDir = os.path.join(self._venvPath, "Scripts")
-            os.environ["VIRTUAL_ENV"] = self._venvPath
-            os.environ["PATH"] = scriptsDir + os.pathsep + os.environ.get("PATH", "")
-            self._logger.info(
-                "Activated Windows virtual environment: {}".format(self._venvPath))
+        """Ensure subprocesses use the deployment virtualenv by adjusting
+        the current process environment (PATH and VIRTUAL_ENV). This is
+        inherited by commands launched via the workstates.
+        """
+        try:
+            if self._venvPath is None:
+                # fallback to configured venv dir relative to deploy root
+                candidate = os.path.join(self._deployRoot, self._venvDir)
+                if os.path.isdir(candidate):
+                    self._venvPath = candidate
+            if self._venvPath is not None and os.path.isdir(self._venvPath):
+                venv_bin = os.path.join(self._venvPath, "bin")
+                old_path = os.environ.get('PATH', '')
+                if not old_path.startswith(venv_bin):
+                    os.environ['PATH'] = venv_bin + os.pathsep + old_path
+                os.environ['VIRTUAL_ENV'] = self._venvPath
+                self._logger.info(f"Activated virtualenv: {self._venvPath}")
+            else:
+                self._logger.info("No virtualenv path set; skipping activation")
+        except Exception:
+            self._logger.warning("Failed to activate virtualenv; continuing without it")

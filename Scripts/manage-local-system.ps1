@@ -1,7 +1,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet("install", "start", "start-sample-stage", "restart", "stop", "status", "logs")]
+    [ValidateSet("install", "start", "start-sample-stage", "restart", "restart-controllers", "stop", "status", "logs")]
     [string]$Operation = "restart"
 )
 
@@ -29,6 +29,8 @@ New-Item -ItemType Directory -Path $runtimeRoot, $logRoot -Force | Out-Null
 
 function Assert-Prerequisites {
     if (-not (Test-Path -LiteralPath $python)) { throw "Virtual-environment Python was not found at $python." }
+    & $python -c "import fastapi, pydantic, uvicorn, redis, httpx"
+    if ($LASTEXITCODE -ne 0) { throw "Missing service dependencies. Run: `"$python`" -m pip install -r `"$serviceRoot\requirements.txt`"" }
     if (-not $npmCommand) { throw "npm.cmd was not found. Install Node.js LTS or add it to PATH." }
     foreach ($path in @($serviceRoot, $backendRoot, $frontendRoot)) {
         if (-not (Test-Path -LiteralPath $path)) { throw "Required application directory was not found: $path" }
@@ -120,9 +122,18 @@ function Start-SampleStage {
     Wait-Http "sample stage" "http://127.0.0.1:8790/status"
 }
 
-function Start-Stack {
+function Start-Controllers {
     Assert-Prerequisites
     $env:PYTHONPATH = "$developmentRoot;$serviceRoot"
+    # Use the application parser; keep credential values out of terminal output.
+    $secretJson = & $python -c "import json, secretstore; print(json.dumps(secretstore.read_file()))"
+    if ($LASTEXITCODE -ne 0) { throw 'Could not load the runtime secrets file.' }
+    $secrets = $secretJson | ConvertFrom-Json
+    foreach ($property in $secrets.PSObject.Properties) {
+        if (-not [Environment]::GetEnvironmentVariable($property.Name, 'Process')) {
+            [Environment]::SetEnvironmentVariable($property.Name, [string]$property.Value, 'Process')
+        }
+    }
     $env:GLASGOW_CONFIG = Join-Path $dataRoot "Json\streamData.json"
     $env:SBC_VACUUM_CONFIG = Join-Path $dataRoot "Json\vacuumSystem.json"
     if (-not $env:VACUUM_REDIS_SENTINELS) { $env:VACUUM_REDIS_SENTINELS = "127.0.0.1:26379" }
@@ -135,9 +146,13 @@ function Start-Stack {
     Wait-Http "SBC vacuum" "http://127.0.0.1:8766/health/ready"
     Start-Managed "glasgow" $python @("-m", "uvicorn", "glasgow_service.api:app", "--host", "127.0.0.1", "--port", "8765") $serviceRoot
     Wait-Http "Glasgow" "http://127.0.0.1:8765/status"
-    Start-SampleStage
     Start-Managed "vacuum-executor" $python @("-m", "glasgow_service.vacuum_executor_app") $serviceRoot
     Wait-Http "vacuum executor" "http://127.0.0.1:8780/health/live"
+}
+
+function Start-Stack {
+    Start-Controllers
+    Start-SampleStage
     Start-Managed "ionbeam-backend" $npmCommand.Source @("run", "dev") $backendRoot
     Wait-Http "web backend" "http://127.0.0.1:4000/api/status"
     Start-Managed "ionbeam-frontend" $npmCommand.Source @("run", "dev", "--", "--host", "127.0.0.1") $frontendRoot
@@ -155,6 +170,11 @@ switch ($Operation) {
     "start" { Start-Stack; Show-Status }
     "start-sample-stage" { Start-SampleStage; Show-Status }
     "restart" { Stop-Stack; Start-Stack; Show-Status }
+    "restart-controllers" {
+        foreach ($name in @("vacuum-executor", "glasgow", "sbc-vacuum")) { Stop-Managed $name }
+        Start-Controllers
+        Show-Status
+    }
     "stop" { Stop-Stack }
     "status" { Show-Status }
     "logs" {

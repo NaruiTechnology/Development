@@ -27,6 +27,8 @@ the applet falls back to loopback=True with no image (same behaviour as
 before, minus the dead PCF pins).
 """
 
+from .adcTiming import AdcTiming
+
 import struct
 
 from GlasgowDataIO.IobeamControl.glasgowLib.glasgow.applet import GlasgowApplet
@@ -34,6 +36,7 @@ from GlasgowDataIO.IobeamControl.applet.iobeamDataSubtarget import IobeamDataSub
 from GlasgowDataIO.IobeamControl.applet.imageSource import get_image_data
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 from AutomationPy.buildingblocks.definitions import Consts
+from GlasgowDataIO.IobeamControl.scanConfiguration import BEAM_PORTS, configure_scan_args
 
 
 # Sentinel object used by _resolve_simulation() to tell the subtarget
@@ -44,6 +47,9 @@ from AutomationPy.buildingblocks.definitions import Consts
 # across modules.
 from GlasgowDataIO.IobeamControl.applet.iobeamDataSubtarget import _ZERO_FILL
 import AutomationPy.buildingblocks.utils as util
+
+
+IN_FIFO_DEPTH = 2048
 
 
 class DataStreamApplet(GlasgowApplet):
@@ -196,34 +202,56 @@ class DataStreamApplet(GlasgowApplet):
     
     def build(self, target, args):
         args.pipes = "PQ"
+        action_data = util.GetStateConfigByName(
+            self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
+        configure_scan_args(self._config, action_data, args)
 
         self.magic_reg, self.addr_magic = target.registers.add_ro(8, init=0xa5)
         self.reset_reg, addr_reset = target.registers.add_rw(8, init=0)
         self.addr_reset = addr_reset
+        self.power_good_reg, self.addr_power_good = target.registers.add_ro(8, init=0)
+        self.bus_ownership_reg, self.addr_bus_ownership = \
+            target.registers.add_ro(8, init=0)
+        self.bus_ownership_clear_reg, self.addr_bus_ownership_clear = \
+            target.registers.add_rw(1, init=0)
 
         self.mux_interface = iface = target.multiplexer.claim_interface(
             self, args)
 
         # Claim FIFOs ONCE here.
         out_fifo = iface.get_out_fifo()
-        in_fifo  = iface.get_in_fifo()
+        # auto_flush=False: `flush` is driven by IobeamDataSubtarget (executor
+        # flush + idle timeout).  With Glasgow's default (auto_flush=True) every
+        # FIFO drain commits a few-byte USB packet, which throttles a scan to
+        # one host transfer per FIFO-full and shows up as a DAC staircase.
+        # Depth 2048 (4 BRAM) rides out host-side scheduling jitter.
+        in_fifo  = iface.get_in_fifo(depth=IN_FIFO_DEPTH, auto_flush=False)
 
-        ports = iface.get_port_group()
+        ports = iface.get_port_group(**{name: getattr(args, name) for name in BEAM_PORTS})
 
         pin_config, sim_image, sim_res, loopback = self._resolve_simulation()
         action_data = util.GetStateConfigByName(
             self._config, Consts.STREAM_DATA).get(Consts.ACTION_DATA, {}) or {}
-        adc_half_period = int(action_data.get("adcHalfPeriod", 4))
-        adc_settle_cycles = int(action_data.get("adcSettleCycles", 2))
+        timing = AdcTiming.from_action(action_data)
 
         subtarget = IobeamDataSubtarget(
             ports                = ports,
             in_fifo              = in_fifo,
             out_fifo             = out_fifo,
             _addr_reset          = self.reset_reg,
+            bus_ownership_status = self.bus_ownership_reg,
+            bus_ownership_clear  = self.bus_ownership_clear_reg,
+            power_good_status    = self.power_good_reg,
             loopback             = loopback,
-            adc_half_period      = adc_half_period,
-            adc_settle_cycles    = adc_settle_cycles,
+            adc_half_period      = timing.half_period,
+            adc_settle_cycles    = timing.settle_cycles,
+            adc_latch_cycles     = timing.latch_cycles,
+            bus_turnaround_cycles = timing.bus_turnaround_cycles,
+            dac_data_setup_cycles = timing.dac_data_setup_cycles,
+            dac_latch_cycles      = timing.dac_latch_cycles,
+            transforms           = args.transforms,
+            ext_switch_delay     = args.ext_switch_delay_cycles,
+            out_only             = getattr(args, "out_only", False),
             pin_config           = pin_config,
             sim_image            = sim_image,
             sim_image_resolution = sim_res,
@@ -233,7 +261,7 @@ class DataStreamApplet(GlasgowApplet):
     async def run(self, device, args):
         await device.write_register(self.addr_reset, 0x01)
         return await device.demultiplexer.claim_interface(
-            self, self.mux_interface, args)
+            self, self.mux_interface, args, pull_high=args.beam_pull_high)
 
     async def run_handshake(self, iface):
         if self.logger:

@@ -25,6 +25,7 @@ export type HelpKey =
   | "outputMode"
   | "frameBlank"
   | "validation"
+  | "adcValid"
   | "runValidated"
   | "pattern"
   | "vectorResolution"
@@ -34,35 +35,68 @@ export type HelpKey =
   | "grayScale"
   | "vectorGrayLevelFilter"
   | "scanModes"
-  | "magCalibration";
+  | "magCalibration"
+  | "dacCheck"
+  | "scanGeometry"
+  | "geometryFit"
+  | "rectifyFiducials";
 
 export const helpBodies: Record<HelpKey, () => ReactNode> = {
+  adcValid: () => (
+    <p>When enabled, production scans monitor the ADC stream for sustained full-scale values that indicate a disconnected or undriven ADC bus. Turn it off only for deliberate raw diagnostic captures.</p>
+  ),
+  dacCheck: () => (
+    <>
+      <p>
+        Turning the switch on runs <strong>one</strong> configuration: it
+        sweeps the selected <strong>Axis</strong> across its full 0–16383
+        range while the other axis stays parked at <strong>Fixed code</strong>.
+        That's why a default run only ever shows one continuous ramp of
+        16384 samples — the switch doesn't cycle through anything else on
+        its own.
+      </p>
+      <p>To check a different configuration, change the fields <em>before</em> turning the switch on:</p>
+      <ul>
+        <li><strong>Axis</strong> — set to Y to sweep the vertical DAC instead of X. The axis you're <em>not</em> sweeping is the one held at Fixed code.</li>
+        <li><strong>Fixed code</strong> — the DAC code (0–16383) the non-swept axis is parked at. Try a few different values (e.g. near 0, mid-range, near 16383) to check linearity isn't only clean around the midpoint.</li>
+        <li><strong>Dwell</strong> — ADC samples averaged per DAC code. Higher values give a less noisy trace at the cost of a slower sweep; the default (500) matches upstream OBI's reference test.</li>
+      </ul>
+      <p>
+        Each time the switch goes from off to on, it starts a fresh
+        16384-sample sweep with whatever Axis / Fixed code / Dwell are set
+        at that moment — turn it off, change a field, then turn it back on
+        to run the next check.
+      </p>
+    </>
+  ),
   dwell: () => (
     <>
       <div className="dwell-help__rule">
-        <strong>revC3 hardware floor: 166.667 ns.</strong> The 48 MHz FPGA
-        clock and the configured eight-clock ADC/DAC transaction limit dwell 1
-        to 6 MPix/s. A 10 ns dwell is not achievable with the current gateware;
+        <strong>revC3 hardware floor: one 125 ns ADC sample.</strong> The 48 MHz FPGA
+        clock and the configured six-clock ADC/DAC transaction limit one sample
+        to 125 ns (8 MS/s). A dwell of N takes N + 1 samples, so the shortest
+        pixel the UI can request (dwell 1) is 250 ns, or 4 MPix/s. A 10 ns dwell
+        is not achievable with the current gateware;
         even one FPGA clock is 20.833 ns.
       </div>
 
       <div className="dwell-help__rule">
         <strong>Sample rate and output-pixel rate are different.</strong> The
-        ADC conversion rate remains 6.0 MSamples/s. Dwell 2 combines two ADC
-        samples into one output pixel, so the output ceiling is 3.0 MPixels/s;
-        dwell 4 combines four, so it is 1.5 MPixels/s. In general: output
-        pixel rate = 6.0 MSamples/s ÷ samples per pixel. These are theoretical
+        ADC conversion rate remains 8.0 MSamples/s. Dwell 1 combines two ADC
+        samples into one output pixel, so the output ceiling is 4.0 MPixels/s;
+        dwell 3 combines four, so it is 2.0 MPixels/s. In general: samples per
+        pixel = dwell + 1 and output pixel rate = 8.0 MSamples/s ÷ samples per pixel. These are theoretical
         acquisition ceilings; transport and host overhead can only add time.
       </div>
 
       <div className="dwell-help__rule">
-        <strong>Pick powers of two.</strong> If your effective sample
-        count per pixel isn&apos;t a power of two, the gateware only
+        <strong>Pick dwell = 2^k − 1.</strong> The sample count per pixel
+        is dwell + 1. If it isn&apos;t a power of two, the gateware only
         averages the last power of two samples and the remaining ones
         are thrown away. A pixel with 7 samples averages 4 of them;
-        with 9 samples, 8 of them. So always pick{" "}
-        <code>dwell_time</code> so the resulting sample count per
-        pixel is 2, 4, 8, 16, 32, 64, ….
+        with 9 samples, 8 of them; dwell 16 takes 17 samples and averages 16.
+        So pick <code>dwell</code> = 1, 3, 7, 15, 31, 63, … so that the sample
+        count per pixel is 2, 4, 8, 16, 32, 64, ….
       </div>
 
       <div className="dwell-help__rule">
@@ -79,14 +113,13 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
 
       <ul className="dwell-help__list">
-        <li><code>"dwell": 1</code> → supersampler does nothing, fastest scan, 6 MPix/s theoretical rate</li>
-        <li><code>"dwell": 2</code> → 2× averaging (3 MPix/s), √2 SNR gain</li>
-        <li><code>"dwell": 4</code> → 4× averaging (1.5 MPix/s), 2× SNR gain</li>
-        <li><code>"dwell": 8</code> → 8× averaging (750 kPix/s), ~2.8× SNR gain</li>
-        <li><code>"dwell": 16</code> → 16× averaging (375 kPix/s), 4× SNR gain</li>
-        <li><code>"dwell": 32</code> → 32× averaging (187.5 kPix/s), ~5.7× SNR gain</li>
-        <li><code>"dwell": 64</code> → 64× averaging (93.75 kPix/s), 8× SNR gain</li>
-        <li>… up to <code>dwell = 65535</code> (≈ 10.92 ms per pixel)</li>
+        <li><code>"dwell": 1</code> → fastest scan the UI allows (2 samples averaged) (4 MPix/s)</li>
+        <li><code>"dwell": 3</code> → 4 samples averaged (2 MPix/s), √2 SNR gain vs dwell 1</li>
+        <li><code>"dwell": 7</code> → 8 samples averaged (1 MPix/s), 2× SNR gain</li>
+        <li><code>"dwell": 15</code> → 16 samples averaged (500 kPix/s), ~2.8× SNR gain</li>
+        <li><code>"dwell": 31</code> → 32 samples averaged (250 kPix/s), 4× SNR gain</li>
+        <li><code>"dwell": 63</code> → 64 samples averaged (125 kPix/s), ~5.7× SNR gain</li>
+        <li>… up to <code>dwell = 65535</code> (≈ 8.19 ms per pixel)</li>
       </ul>
 
       <div className="dwell-help__table-wrap">
@@ -99,13 +132,12 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>1</td><td>1</td><td>6.0 MS/s</td><td>6.0 MPix/s</td><td>1.00×</td><td>175 ms</td></tr>
-            <tr><td>2</td><td>2</td><td>6.0 MS/s</td><td>3.0 MPix/s</td><td>1.41×</td><td>350 ms</td></tr>
-            <tr><td>4</td><td>4</td><td>6.0 MS/s</td><td>1.5 MPix/s</td><td>2.00×</td><td>699 ms</td></tr>
-            <tr><td>8</td><td>8</td><td>6.0 MS/s</td><td>750 kPix/s</td><td>2.83×</td><td>1.40 s</td></tr>
-            <tr><td>16</td><td>16</td><td>6.0 MS/s</td><td>375 kPix/s</td><td>4.00×</td><td>2.80 s</td></tr>
-            <tr><td>32</td><td>32</td><td>6.0 MS/s</td><td>187.5 kPix/s</td><td>5.66×</td><td>5.59 s</td></tr>
-            <tr><td>64</td><td>64</td><td>6.0 MS/s</td><td>93.75 kPix/s</td><td>8.00×</td><td>11.18 s</td></tr>
+            <tr><td>1</td><td>2</td><td>8.0 MS/s</td><td>4.0 MPix/s</td><td>1.00×</td><td>262 ms</td></tr>
+            <tr><td>3</td><td>4</td><td>8.0 MS/s</td><td>2.0 MPix/s</td><td>1.41×</td><td>524 ms</td></tr>
+            <tr><td>7</td><td>8</td><td>8.0 MS/s</td><td>1.0 MPix/s</td><td>2.00×</td><td>1.05 s</td></tr>
+            <tr><td>15</td><td>16</td><td>8.0 MS/s</td><td>500 kPix/s</td><td>2.83×</td><td>2.10 s</td></tr>
+            <tr><td>31</td><td>32</td><td>8.0 MS/s</td><td>250 kPix/s</td><td>4.00×</td><td>4.19 s</td></tr>
+            <tr><td>63</td><td>64</td><td>8.0 MS/s</td><td>125 kPix/s</td><td>5.66×</td><td>8.39 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -133,7 +165,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>Resolution drives three quantities you usually care about:</p>
 
       <ul className="dwell-help__list">
-        <li><strong>Frame time</strong> — scales as <code>N² × dwell × 166.667 ns</code> with the current revC3 timing. Doubling the resolution quadruples the time.</li>
+        <li><strong>Frame time</strong> — scales as <code>N² × (dwell + 1) × 125 ns</code> with the current revC3 timing. Doubling the resolution quadruples the time.</li>
         <li><strong>Pixel count for the CSV / figure</strong> — <code>N²</code> values. A 2048² 16-bit raster is 8 MB on the wire and ~32 MB once expanded to a CSV.</li>
         <li><strong>Spatial sampling rate</strong> — finer grid resolves smaller features but with the same total dwell budget, higher resolution means proportionally less time per pixel unless you also raise dwell.</li>
       </ul>
@@ -148,17 +180,17 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             </tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>64</td><td>65 536</td><td>175 ms</td><td>128 KB</td></tr>
-            <tr><td>512</td><td>32</td><td>262 144</td><td>699 ms</td><td>512 KB</td></tr>
-            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.80 s</td><td>2 MB</td></tr>
-            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>11.18 s</td><td>8 MB</td></tr>
+            <tr><td>256</td><td>64</td><td>65 536</td><td>139 ms</td><td>128 KB</td></tr>
+            <tr><td>512</td><td>32</td><td>262 144</td><td>557 ms</td><td>512 KB</td></tr>
+            <tr><td>1024</td><td>16</td><td>1 048 576</td><td>2.23 s</td><td>2 MB</td></tr>
+            <tr><td>2048</td><td>8</td><td>4 194 304</td><td>8.91 s</td><td>8 MB</td></tr>
           </tbody>
         </table>
       </div>
 
       <p>
         Frame times above assume continuous streaming at the
-        revC3 gateware&apos;s 6 MSPS theoretical sample rate. Real-world numbers
+        revC3 gateware&apos;s 8 MSPS theoretical sample rate. Real-world numbers
         are slightly longer due to per-chunk USB overhead and the
         pipeline-drain padding at the tail of each scan.
       </p>
@@ -268,7 +300,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit</strong> — 2 bytes per pixel. The raw 14-bit ADC reading is zero-extended into a uint16, little-endian. This is the only mode where you can recover the full ADC dynamic range in post-processing.</li>
+        <li><strong>SixteenBit</strong> — 2 bytes per pixel. The raw 14-bit ADC reading is left-aligned into a uint16, big-endian (high byte first), matching OBI. This is the only mode where you can recover the full ADC dynamic range in post-processing.</li>
         <li><strong>EightBit</strong> — 1 byte per pixel. The FPGA discards the bottom 6 bits and sends only the top 8. Halves the USB bandwidth, but you lose 6 bits of dynamic range — you can&apos;t recover faint features that needed those low bits.</li>
       </ul>
 
@@ -286,7 +318,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <p>Picking between them:</p>
 
       <ul className="dwell-help__list">
-        <li><strong>SixteenBit, default</strong> — when you care about image quality at all. Quantitative SEM, EBIC, anything where you&apos;ll do contrast adjustment or noise analysis in post.</li>
+        <li><strong>SixteenBit</strong> — when you care about image quality at all. Quantitative SEM, EBIC, anything where you&apos;ll do contrast adjustment or noise analysis in post.</li>
         <li><strong>EightBit</strong> — when USB bandwidth is the bottleneck and you only need a preview. Large vector scans (millions of points) at high dwell rates where the scan would otherwise outrun the 480 Mbps USB 2.0 link. The on-screen image still looks fine; you just can&apos;t quantitatively recover faint signal.</li>
       </ul>
 
@@ -361,7 +393,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <div className="dwell-help__rule">
         <strong>The validation report drives the result panel.</strong>{" "}
         When disabled, you still get the chunk count and timing in the
-        run report, but the per-check pass/fail list is omitted and
+        Save results panel, but the per-check pass/fail list is omitted and
         the Run pane shows just &ldquo;validation: off&rdquo;.
       </div>
 
@@ -397,7 +429,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         regular <code>Run</code> button streams chunks live and does
         not wait for the validation payload. <code>Run validated</code>{" "}
         is the path that produces the post-scan checks shown in the
-        Run report panel.
+        Save results panel.
       </div>
 
       <p>
@@ -481,10 +513,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
             <tr><th>Resolution</th><th>Stride</th><th>Total points</th><th>Approx scan time<br /><span className="muted">(dwell=1)</span></th></tr>
           </thead>
           <tbody>
-            <tr><td>256</td><td>8</td><td>65 536</td><td>~11 ms</td></tr>
-            <tr><td>512</td><td>4</td><td>262 144</td><td>~44 ms</td></tr>
-            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~175 ms</td></tr>
-            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~699 ms</td></tr>
+            <tr><td>256</td><td>8</td><td>65 536</td><td>~16 ms</td></tr>
+            <tr><td>512</td><td>4</td><td>262 144</td><td>~66 ms</td></tr>
+            <tr><td>1024</td><td>2</td><td>1 048 576</td><td>~262 ms</td></tr>
+            <tr><td>2048</td><td>1</td><td>4 194 304</td><td>~1.05 s</td></tr>
           </tbody>
         </table>
       </div>
@@ -527,7 +559,7 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <ul className="dwell-help__list">
         <li><strong><code>x</code>, <code>y</code></strong> — DAC code, inclusive 0..16383. Values outside the range get clamped on the device but won&apos;t produce useful output.</li>
-        <li><strong><code>dwell</code></strong> — same units as raster dwell: number of 166.667 ns revC3 sample periods. 1 is the fastest (no supersampling), 2/4/8/16/… are the practical values for SNR averaging. Up to 65535 (≈ 10.92 ms per pixel).</li>
+        <li><strong><code>dwell</code></strong> — same convention as raster dwell: a dwell of N takes N + 1 ADC samples of 125 ns each (revC3). 1 is the fastest the UI allows (2 samples); 3/7/15/31/… are the practical values for SNR averaging. Up to 65535 (≈ 8.19 ms per pixel).</li>
       </ul>
 
       <div className="dwell-help__rule">
@@ -772,6 +804,154 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
         The chart is drawn on log-log axes because FOV normally changes
         approximately inversely with magnification. CSV import/export
         uses two data columns: magnification and FOV meters.
+      </p>
+    </>
+  ),
+  scanGeometry: () => (
+    <>
+      <p>
+        This maps a scan to real-world coordinates (µm) by combining the
+        selected equipment&apos;s calibration-profile values with the
+        measured magnification calibration for the current beam. Nothing
+        changes for actual scans until you press <strong>Apply to scans</strong>.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>1 · Values from the calibration profile.</strong> Pixel
+        count, rotation offset, Y/X aspect, beam tilt, spot park and the
+        vendor dwell reference, read from CONFIGURATION &gt; Admin &gt;
+        Calibration for this equipment and column. A value shown as{" "}
+        <em>not set</em> falls back to a built-in default — click{" "}
+        <strong>Edit</strong> next to it to give it a real, measured value.
+      </div>
+
+      <ul className="dwell-help__list">
+        <li><strong>Magnification</strong> is set on the instrument itself, not by this software — enter what the microscope is actually showing.</li>
+        <li><strong>HFOV override / Pixels X / Pixels Y</strong> replace what the profile or magnification calibration would otherwise supply for this operating point only.</li>
+        <li><strong>Scan rotation</strong> and <strong>Stage X/Y</strong> describe the frame you&apos;re about to scan: its rotation and the stage position at its centre, in µm.</li>
+        <li><strong>Tilt correction</strong> compensates the Y scale when the stage is tilted toward the beam (enter the stage tilt in degrees once enabled).</li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>3 · Results.</strong> The computed scan frame for that
+        operating point: pixel size, scale factor (µm per DAC code), field
+        of view, frame centre and its four corners in world coordinates —
+        plus rotation, shear and frame time. This is the number to trust
+        once the profile above holds real, calibrated values rather than
+        defaults.
+      </div>
+
+      <p>
+        The small square next to the results plots that frame: a dashed
+        outline is the nominal (uncorrected) frame, the filled outline is
+        the rectified one, the dot marks DAC (0, 0), rings mark fiducials
+        you&apos;ve entered, and a red line from a ring is that
+        fiducial&apos;s residual — how far the fit is from matching it —
+        exaggerated ×20 so small errors are visible. With no fiducials or
+        fit yet, the two outlines coincide, so it's just a plain square —
+        that's expected, not an error.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>4 · Rectify with fiducials.</strong> For a feature whose
+        real-world position you know (a grid line, a marker, a stage
+        move), enter where it lands in the image — pixel or DAC — and its
+        true position in µm. Add at least 3 points (affine fit) or 2
+        (similarity fit, no shear/independent scale) spread across the
+        field, then press <strong>Fit</strong>. The residual column and
+        preview show how far each point still is from where the fit
+        predicts it.
+      </div>
+
+      <p>
+        <strong>Apply to scans</strong> needs SuperUser or higher, writes
+        the result to <code>streamData.json</code>, and switches the ROI /
+        bitmap scan paths to use this rectified mapping. A stale badge
+        means the calibration profile changed revision since this was
+        applied — review and re-apply. <strong>Fold scale into HFOV</strong>{" "}
+        (shown once a fit is applied) bakes any fitted scale correction
+        into the saved magnification-calibration curve instead of keeping
+        it as a separate correction, so future scans at this magnification
+        start from the corrected value directly.
+      </p>
+    </>
+  ),
+  geometryFit: () => (
+    <>
+      <p>
+        Fitting computes the small correction — scale (X/Y), rotation, and
+        (for an affine fit) shear — that best lines up the nominal
+        (uncalibrated) frame with the fiducials you've entered: enabled
+        rows with both a pixel/DAC position and a known world position.
+        It's a least-squares fit, so it doesn't change anything by itself;
+        press <strong>Apply to scans</strong> afterwards to actually use it.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>Affine vs. similarity.</strong> Affine solves for
+        independent X/Y scale plus shear — needs at least 3 points — and
+        fits real optical distortion best. Similarity only solves for a
+        single scale and rotation (no shear) — needs at least 2 — and is
+        the safer choice with few fiducials, since it can't "explain away"
+        noise as shear.
+      </div>
+
+      <p>
+        With the minimum number of points the fit is exact (zero
+        residual) by construction — that isn't a quality signal, it just
+        means there's nothing left to check the fit against. Add a point
+        or two beyond the minimum, spread across the field rather than
+        clustered, before trusting the residual column or the preview's
+        red lines as a real measure of fit quality.
+      </p>
+    </>
+  ),
+  rectifyFiducials: () => (
+    <>
+      <p>
+        This gives a handful of points where you know both where they land
+        in a scan and their true real-world position, so the fit can solve
+        for rotation/shear error beyond what the calibration profile alone
+        gives you. It's entirely optional — sections 1–3 already give a
+        working, uncorrected frame without it.
+      </p>
+
+      <div className="dwell-help__rule">
+        <strong>1 · Pick reference features with a known position.</strong>{" "}
+        Grid lines on a calibration standard, a marker you moved the stage
+        to a specific offset for, a stage move of a known distance —
+        something whose real-world (µm) position you're already certain
+        of from outside the system. That's the ground truth the fit checks
+        everything against.
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>2 · Fill in each row.</strong> <em>Measured in</em>: pixel
+        if you're reading the feature off a captured image (column/row in
+        pixels), or DAC if you already know its raw beam-position code
+        (0–16383) directly. <em>Column/X</em> and <em>Row/Y</em>: where
+        that feature actually appears. <em>World X/Y (µm)</em>: its true,
+        known position — your ground truth from step 1, not anything the
+        tool computes. A row only counts once both positions are filled
+        in; unchecking a row excludes it without deleting it.
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>3 · Add enough points, spread out.</strong> At least 3 for
+        an affine fit (independent X/Y scale, rotation and shear) or 2 for
+        a similarity fit (single scale + rotation, no shear — safer with
+        few points). Spread them across the frame: corners and edges
+        constrain the fit far better than points bunched together.
+      </div>
+
+      <p>
+        Press <strong>Fit</strong> to compute the correction and see it in
+        the preview and Residual column — this alone changes nothing for
+        actual scans. At the minimum point count the fit is exact (zero
+        residual) by construction, which isn't a quality signal; add a
+        point or two beyond the minimum before trusting the residuals.
+        Only <strong>Apply to scans</strong> makes it live, and will warn
+        first if it's about to replace a manual Dimension Cal measurement.
       </p>
     </>
   ),
