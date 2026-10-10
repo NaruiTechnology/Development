@@ -6,6 +6,7 @@ import asyncio
 import threading
 import importlib.resources
 import sys
+import os
 from pathlib import Path
 
 import usb1
@@ -18,6 +19,16 @@ from . import quirks
 __all__ = ["GlasgowDevice"]
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_TRANSFER_TIMEOUT_S = 30.0
+TRANSFER_TIMEOUT_ENV = "GLASGOW_USB_TRANSFER_TIMEOUT_S"
+
+def _transfer_timeout_s():
+    try:
+        value = float(os.environ.get(TRANSFER_TIMEOUT_ENV, DEFAULT_TRANSFER_TIMEOUT_S))
+        return value if value > 0 else DEFAULT_TRANSFER_TIMEOUT_S
+    except (TypeError, ValueError):
+        return DEFAULT_TRANSFER_TIMEOUT_S
 
 
 VID_QIHW         = 0x20b7
