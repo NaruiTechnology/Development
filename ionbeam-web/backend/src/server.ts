@@ -70,6 +70,13 @@ import { normalizeScanGeometry, readScanGeometry, writeScanGeometry } from "./sc
 // `write EOF` on the output stream unless the stream has an error listener.
 process.stdout.on("error", () => undefined);
 process.stderr.on("error", () => undefined);
+process.on("uncaughtException", (err) => {
+  // Node 24 can surface a client-aborted Windows HTTP write as an
+  // uncaught `write EOF`. Keep the API process alive; other exceptions still
+  // terminate normally so real defects are not hidden.
+  if ((err as NodeJS.ErrnoException).code === "EOF") return;
+  throw err;
+});
 import {
   ConfigError,
   type RestartResult,
