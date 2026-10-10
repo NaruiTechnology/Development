@@ -977,8 +977,6 @@ export function App() {
   // Image the current target pane is showing right now. It must come from the
   // live canvas: an older scan kept in the history does not count once the
   // live image has been cleared (new scan started, resolution changed, reload).
-  // Panes are only added while the target shows a scan, so an empty pane is
-  // never pushed into the history.
   const liveScanImage =
     lastLiveScanImage && lastLiveScanImage.kind === kind ? lastLiveScanImage.imageUrl : null;
   const currentTargetImage =
@@ -987,10 +985,9 @@ export function App() {
         ? liveScanImage
         : imagePanelSlots[kind][imagePanelLayout - 1] ?? null
       : null;
-  // Keep the split button visible for raster/vector scans; it becomes enabled
-  // as soon as the live target contains an image to preserve in the first pane.
+  // Split is available before the first scan; an empty image opens empty panes.
   const showSplitButton = kind === "raster" || kind === "vector";
-  const canSplitImagePanel = imagePanelLayout === 1 && (savedSplitRef.current !== null || currentTargetImage !== null);
+  const canSplitImagePanel = imagePanelLayout === 1;
 
   const splitImagePanel = useCallback(() => {
     if (!canSplitImagePanel || (kind !== "raster" && kind !== "vector")) return;
@@ -1006,11 +1003,12 @@ export function App() {
       return;
     }
     completedImagePaneRef.current[kind] = 0;
-    // Pane 1 keeps the first scan; pane 2 is the empty target for the next scan.
+    // Preserve an existing image when available; otherwise open two empty panes.
+    const targetPane = currentTargetImage === null ? 0 : 1;
     setImagePanelSlots((current) => ({ ...current, [kind]: [currentTargetImage, null] }));
     setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
-    setSelectedImagePane((current) => ({ ...current, [kind]: 1 }));
-    setScanTargetImagePane((current) => ({ ...current, [kind]: 1 }));
+    setSelectedImagePane((current) => ({ ...current, [kind]: targetPane }));
+    setScanTargetImagePane((current) => ({ ...current, [kind]: targetPane }));
   }, [canSplitImagePanel, currentTargetImage, kind]);
 
   const handleMergedFigureChange = useCallback(
