@@ -1,4 +1,5 @@
 {
+    "Enable": true,
     "VacuumPumps": [
         {
             "name": "MechanicalVacuumPump",
@@ -189,7 +190,7 @@
     ],
     "IsProduction": false,
     "Simulate": true,
-    "Enable": false,
+    "Enable": true,
     "LogName": "VacummDashboard",
     "Verbose": false
 }
