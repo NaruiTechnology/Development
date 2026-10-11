@@ -1,7 +1,9 @@
 import asyncio
+import glob
 import json
 import os
 import secrets
+import shutil
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -132,6 +134,11 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             self._success = False
 
     async def _ensureVboxUser(self, timeout):
+        if os.name == "nt":
+            self.info("[{}][ensure-vboxuser] Linux vboxuser account is not required on Windows."
+                      .format(type(self).__name__))
+            return True
+
         cmd = ["getent", "passwd"]
         self.info("[{}][ensure-vboxuser] >> {}".format(type(self).__name__, " ".join(cmd)))
         ok, stdout, stderr = await self._runExec(cmd, timeout)
@@ -168,10 +175,30 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                   .format(type(self).__name__))
         return True
 
+    def _psqlExecutable(self):
+        executable = shutil.which("psql.exe") or shutil.which("psql")
+        if executable:
+            return executable
+        program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+        candidates = glob.glob(os.path.join(
+            program_files, "PostgreSQL", "*", "bin", "psql.exe"))
+        if candidates:
+            return sorted(candidates)[-1]
+        raise FileNotFoundError("psql.exe was not found on PATH or under Program Files")
+
+    def _adminPsqlCommand(self, database, *arguments):
+        if os.name == "nt":
+            deployment = self.deploymentConfig()
+            port = int(deployment.get("DatabasePort") or 5432)
+            user = os.environ.get("IOBEAM_POSTGRES_USER", "postgres")
+            return [self._psqlExecutable(), "-h", "127.0.0.1", "-p", str(port),
+                    "-U", user, "-d", database, *arguments]
+        return ["sudo", "-u", "postgres", "psql", "-d", database, *arguments]
+
     async def _ensureDatabase(self, dbName, timeout):
         sql = "SELECT 1 FROM pg_database WHERE datname = '{}'".format(
             dbName.replace("'", "''"))
-        query = ["sudo", "-u", "postgres", "psql", "-d", "postgres", "-Atqc", sql]
+        query = self._adminPsqlCommand("postgres", "-Atqc", sql)
         self.info("[{}][ensure-db] >> {}".format(type(self).__name__, " ".join(query)))
         ok, stdout, stderr = await self._runExec(query, timeout)
         if not ok:
@@ -184,7 +211,12 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                 type(self).__name__, dbName))
             return True
 
-        createDb = ["sudo", "-u", "postgres", "createdb", dbName]
+        createDb = (
+            self._adminPsqlCommand(
+                "postgres", "-c", "CREATE DATABASE {};".format(self._quoteIdent(dbName)))
+            if os.name == "nt"
+            else ["sudo", "-u", "postgres", "createdb", dbName]
+        )
         self.info("[{}][ensure-db] >> {}".format(type(self).__name__, " ".join(createDb)))
         ok, _, stderr = await self._runExec(createDb, timeout)
         if not ok:
@@ -196,6 +228,24 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         return True
 
     async def _ensurePostgreSQLInstalled(self, timeout, actionData):
+        if os.name == "nt":
+            psql = self._psqlExecutable()
+            service_script = (
+                "$service = Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue "
+                "| Sort-Object Name -Descending | Select-Object -First 1; "
+                "if (-not $service) { throw 'PostgreSQL service was not found' }; "
+                "if ($service.Status -ne 'Running') { Start-Service -Name $service.Name }"
+            )
+            ok, _, stderr = await self._runExec(
+                ["powershell.exe", "-NoProfile", "-Command", service_script], timeout)
+            if not ok:
+                self.error("[{}][install-db] PostgreSQL service could not be started.\n{}"
+                           .format(type(self).__name__, stderr or "<no stderr>"))
+                return False
+            self.info("[{}][install-db] PostgreSQL client and service are available: {}"
+                      .format(type(self).__name__, psql))
+            return True
+
         check = ["bash", "-lc", "command -v psql >/dev/null 2>&1"]
         ok, _, _ = await self._runExec(check, timeout)
         if ok:
@@ -235,8 +285,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             return False
 
         loadSchema = [
-            "sudo", "-u", "postgres", "psql",
-            "-d", dbName,
+            *self._adminPsqlCommand(dbName),
             "-v", "ON_ERROR_STOP=1",
         ]
         self.info("[{}][load-schema] >> {} < {} + {}".format(
@@ -260,7 +309,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             return False
 
         sql = self._ownerRoleSql(dbName, ownerRole, memberRoles)
-        cmd = ["sudo", "-u", "postgres", "psql", "-d", dbName, "-v", "ON_ERROR_STOP=1"]
+        cmd = self._adminPsqlCommand(dbName, "-v", "ON_ERROR_STOP=1")
         self.info("[{}][ensure-owner] >> {} < SQL".format(type(self).__name__, " ".join(cmd)))
         ok, _, stderr = await self._runExec(cmd, timeout, sql)
         if not ok:
@@ -273,7 +322,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
 
     async def _ensureDatabaseAccess(self, dbName, ownerRole, roleNames, timeout):
         sql = self._databaseAccessSql(dbName, ownerRole, roleNames)
-        cmd = ["sudo", "-u", "postgres", "psql", "-d", "postgres", "-v", "ON_ERROR_STOP=1"]
+        cmd = self._adminPsqlCommand("postgres", "-v", "ON_ERROR_STOP=1")
         self.info("[{}][database-access] >> {} < SQL".format(type(self).__name__, " ".join(cmd)))
         ok, _, stderr = await self._runExec(cmd, timeout, sql)
         if not ok:
@@ -288,7 +337,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         if not ownerRole:
             return True
         sql = self._assignOwnershipSql(ownerRole)
-        cmd = ["sudo", "-u", "postgres", "psql", "-d", dbName, "-v", "ON_ERROR_STOP=1"]
+        cmd = self._adminPsqlCommand(dbName, "-v", "ON_ERROR_STOP=1")
         self.info("[{}][assign-owner] >> {} < SQL".format(type(self).__name__, " ".join(cmd)))
         ok, _, stderr = await self._runExec(cmd, timeout, sql)
         if not ok:
@@ -307,7 +356,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             return False
 
         sql = self._roleGrantSql(dbName, roleName, ownerRole, password)
-        grantRole = ["sudo", "-u", "postgres", "psql", "-d", dbName, "-v", "ON_ERROR_STOP=1"]
+        grantRole = self._adminPsqlCommand(dbName, "-v", "ON_ERROR_STOP=1")
         self.info("[{}][ensure-role] >> {} < SQL".format(
             type(self).__name__, " ".join(grantRole)))
         ok, _, stderr = await self._runExec(grantRole, timeout, sql)
@@ -326,7 +375,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             return True
 
         sql = self._readRoleGrantSql(dbName, roleName)
-        grantRole = ["sudo", "-u", "postgres", "psql", "-d", dbName, "-v", "ON_ERROR_STOP=1"]
+        grantRole = self._adminPsqlCommand(dbName, "-v", "ON_ERROR_STOP=1")
         self.info("[{}][ensure-read-role] >> {} < SQL".format(
             type(self).__name__, " ".join(grantRole)))
         ok, _, stderr = await self._runExec(grantRole, timeout, sql)
@@ -361,21 +410,26 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         if host in ("", "/var/run/postgresql"):
             host = "localhost"
 
-        command = (
-            "psql -h {} -p {} -U {} -d {} -Atqc {}".format(
-                self._shellQuote(host),
-                self._shellQuote(str(dbPort)),
-                self._shellQuote(dbRole),
-                self._shellQuote(dbName),
-                self._shellQuote("SELECT current_user || ':' || current_database();"),
+        query = "SELECT current_user || ':' || current_database();"
+        if os.name == "nt":
+            command = [self._psqlExecutable(), "-h", host, "-p", str(dbPort),
+                       "-U", dbRole, "-d", dbName, "-Atqc", query]
+        else:
+            command = (
+                "psql -h {} -p {} -U {} -d {} -Atqc {}".format(
+                    self._shellQuote(host),
+                    self._shellQuote(str(dbPort)),
+                    self._shellQuote(dbRole),
+                    self._shellQuote(dbName),
+                    self._shellQuote(query),
+                )
             )
-        )
         # The password travels in the child's environment only; a
         # PGPASSWORD=... prefix in the command string is visible in `ps`.
         env = dict(os.environ, PGPASSWORD=dbPassword)
         if sslMode:
             env["PGSSLMODE"] = sslMode
-        cmd = ["bash", "-lc", command]
+        cmd = command if os.name == "nt" else ["bash", "-lc", command]
         self.info("[{}][verify-runtime-role] >> psql -h {} -p {} -U {} -d {}"
                   .format(type(self).__name__, host, dbPort, dbRole, dbName))
         ok, stdout, stderr = await self._runExec(cmd, timeout, env=env)
@@ -546,6 +600,14 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         return roles
 
     async def _runExec(self, argv, timeout, stdin=None, env=None):
+        if os.name == "nt":
+            child_env = dict(os.environ) if env is None else dict(env)
+            admin_password = (os.environ.get("IOBEAM_POSTGRES_PASSWORD")
+                              or os.environ.get("IOBEAM_ADMIN_DB_PASSWORD"))
+            if admin_password and not child_env.get("PGPASSWORD"):
+                child_env["PGPASSWORD"] = admin_password
+            env = child_env
+
         proc = await asyncio.create_subprocess_exec(
             *argv,
             cwd=self.resolveDeployPath("."),

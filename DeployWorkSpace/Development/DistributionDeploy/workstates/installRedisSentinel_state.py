@@ -48,10 +48,35 @@ class installRedisSentinel_state(distributionDeploy_state):
                         "Docker Desktop installed, but docker.exe is not available yet. "
                         "Start Docker Desktop and rerun the workflow.")
 
-            ok, _, stderr = await self._runExec([docker, "info"], 60.0)
+            ok, _, stderr = await self._runExec(
+                [docker, "info"], min(30.0, timeout))
             if not ok:
-                raise RuntimeError(
-                    "Docker Desktop is installed but its engine is not ready: {}".format(stderr))
+                desktop = actionData.get("dockerDesktopExecutable") or self._findDockerDesktop()
+                if not desktop:
+                    raise RuntimeError(
+                        "Docker Desktop is installed but its engine is not ready, "
+                        "and Docker Desktop.exe was not found. Start Docker Desktop "
+                        "manually. Last error: {}".format(stderr))
+                self.info("[{}] starting Docker Desktop: {}".format(
+                    type(self).__name__, desktop))
+                os.startfile(desktop)
+
+                readyTimeout = float(actionData.get(
+                    "engineReadyTimeoutSeconds", min(timeout, 300.0)) or 0.0)
+                pollInterval = max(0.1, float(actionData.get(
+                    "enginePollIntervalSeconds", 5.0) or 5.0))
+                deadline = asyncio.get_running_loop().time() + readyTimeout
+                while asyncio.get_running_loop().time() < deadline:
+                    remaining = deadline - asyncio.get_running_loop().time()
+                    await asyncio.sleep(min(pollInterval, remaining))
+                    ok, _, stderr = await self._runExec(
+                        [docker, "info"], min(30.0, max(1.0, remaining)))
+                    if ok:
+                        break
+                if not ok:
+                    raise RuntimeError(
+                        "Docker Desktop engine did not become ready within {:.0f}s: {}"
+                        .format(readyTimeout, stderr))
             self.info("[{}] Docker Desktop is ready for Redis/Sentinel"
                       .format(type(self).__name__))
             self._success = True
@@ -68,6 +93,16 @@ class installRedisSentinel_state(distributionDeploy_state):
         candidate = os.path.join(
             programFiles, "Docker", "Docker", "resources", "bin", "docker.exe")
         return candidate if os.path.isfile(candidate) else None
+
+    @staticmethod
+    def _findDockerDesktop():
+        candidates = [
+            os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"),
+                         "Docker", "Docker", "Docker Desktop.exe"),
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs",
+                         "DockerDesktop", "Docker Desktop.exe"),
+        ]
+        return next((path for path in candidates if path and os.path.isfile(path)), None)
 
     async def _runExec(self, argv, timeout):
         proc = await asyncio.create_subprocess_exec(

@@ -22,13 +22,20 @@ from workthreads.DistributionDeployThread import DistributionDeployThread
 
 
 class SudoCredentialKeepalive:
-    """Authenticate once in the parent terminal and refresh sudo while deploying."""
+    """Keep deployment authorization valid for the current operating system."""
     def __init__(self, interval=60.0):
         self.interval = interval
         self._stop = threading.Event()
         self._thread = None
 
     def start(self):
+        if os.name == "nt":
+            if not _is_windows_admin():
+                raise RuntimeError(
+                    "Administrator privileges are required; rerun PowerShell as Administrator")
+            print("Deployment is running with Windows administrator access.")
+            return
+
         print("Deployment requires administrative access; authenticating sudo...")
         result = subprocess.run(["sudo", "-v"])
         if result.returncode != 0:
@@ -50,6 +57,11 @@ class SudoCredentialKeepalive:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+
+
+def _is_windows_admin():
+    import ctypes
+    return bool(ctypes.windll.shell32.IsUserAnAdmin())
 
 
 def main():

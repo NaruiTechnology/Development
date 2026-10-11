@@ -13,11 +13,21 @@ import shlex
 import subprocess
 import tempfile
 import re
+import sys
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
 
 from .distributionDeploy_state import distributionDeploy_state
+
+
+def _verification_imports(action_data, platform=None):
+    platform = sys.platform if platform is None else platform
+    imports = list(action_data.get("verifyImports", []) or [])
+    platform_imports = (action_data.get("verifyImportsByPlatform", {}) or {}).get(
+        platform, []) or []
+    imports.extend(platform_imports)
+    return imports
 
 
 class installPipRequirements_state(distributionDeploy_state):
@@ -42,7 +52,7 @@ class installPipRequirements_state(distributionDeploy_state):
             breakSys = bool(actionData.get("useBreakSystemPackages", False))
             editableInstall = bool(actionData.get("editableInstall", False))
             editableTarget = actionData.get("editableTarget", ".")
-            verifyImports = actionData.get("verifyImports", []) or []
+            verifyImports = _verification_imports(actionData)
             requiredExecutables = actionData.get("requiredExecutables", {}) or {}
 
             reqFiles = [os.path.join(root, requirementsName)]

@@ -19,24 +19,29 @@ $ErrorActionPreference = "Stop"
 $DeployRoot = $env:IOBEAM_DEPLOY_ROOT_TO_STOP
 $separator = [IO.Path]::DirectorySeparatorChar
 $rootPrefix = [IO.Path]::GetFullPath($DeployRoot).TrimEnd([char[]]"\/") + $separator
-$targets = @(Get-Process | Where-Object {
+$targets = @(Get-CimInstance Win32_Process | Where-Object {
     try {
-        $imagePath = $_.Path
-        $imagePath -and
-            [IO.Path]::GetFullPath($imagePath).StartsWith(
-                $rootPrefix, [StringComparison]::OrdinalIgnoreCase)
+        foreach ($candidate in @($_.ExecutablePath, $_.CommandLine)) {
+            if ($candidate -and $candidate.Replace('/', '\').IndexOf(
+                    $rootPrefix, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                return $true
+            }
+        }
+        return $false
     } catch {
         $false
     }
 })
 
 foreach ($target in $targets) {
+    $processId = [int]$target.ProcessId
     Write-Output ("Stopping deploy-root process {0} ({1})" -f
-        $target.Id, $target.Path)
-    & taskkill.exe /PID $target.Id /T /F | Out-Null
+        $processId, $target.ExecutablePath)
+    & taskkill.exe /PID $processId /T /F | Out-Null
     if ($LASTEXITCODE -ne 0 -and
-            (Get-Process -Id $target.Id -ErrorAction SilentlyContinue)) {
-        throw "Could not stop deploy-root process $($target.Id)."
+            (Get-CimInstance Win32_Process -Filter "ProcessId = $processId" `
+                -ErrorAction SilentlyContinue)) {
+        throw "Could not stop deploy-root process $processId."
     }
 }
 """
@@ -46,6 +51,7 @@ foreach ($target in $targets) {
 
     @overrides(distributionDeploy_state)
     async def DoWork(self):
+        self.ParentWorkThread._deployRootPrepared = False
         try:
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             deployRoot = self.deployRoot()
@@ -71,6 +77,7 @@ foreach ($target in $targets) {
             helper.Logger = self.Logger
             self._success = helper._prepareDeployRoot(deployRoot)
             if self._success:
+                self.ParentWorkThread._deployRootPrepared = True
                 self.info("[{}] safely prepared {}".format(
                     type(self).__name__, deployRoot))
         except Exception as e:
@@ -107,8 +114,10 @@ foreach ($target in $targets) {
         # The manager can only stop PIDs it recorded. Services launched by a
         # dedicated restart script still load native modules from .venv and
         # keep them locked on Windows, so stop any remaining process whose
-        # executable is actually inside this guarded deploy root. taskkill /T
-        # also terminates the base-Python child created by a venv launcher.
+        # executable or command line is tied to this guarded deploy root.
+        # Node is installed outside the tree, so command-line matching is
+        # needed to find web processes whose scripts and dependencies are here.
+        # taskkill /T also terminates children created by launch wrappers.
         return await self._stopDeployRootProcesses(deployRoot, timeout)
 
     async def _stopDeployRootProcesses(self, deployRoot, timeout):

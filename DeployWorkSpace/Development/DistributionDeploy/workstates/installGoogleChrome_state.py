@@ -1,5 +1,7 @@
 """Install Google Chrome, make it the default browser and pin it to the dock."""
 import asyncio
+import os
+import shutil
 import shlex
 
 from buildingblocks.decorators import overrides
@@ -18,6 +20,10 @@ class installGoogleChrome_state(distributionDeploy_state):
             stateConfig = self.ParentWorkThread.GetStateConfig(self)
             actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 900.0) or 900.0)
+            if os.name == "nt":
+                self._success = await self._setupWindowsChrome(actionData, timeout)
+                return
+
             policyPath = str(actionData.get(
                 "downloadPolicyPath", "/etc/opt/chrome/policies/managed/iobeam-downloads.json"))
 
@@ -93,3 +99,70 @@ PIN_CHROME
         except Exception as exc:
             self.error("[{}] error: {}".format(type(self).__name__, exc))
             self._success = False
+
+    async def _setupWindowsChrome(self, actionData, timeout):
+        chrome = self._findWindowsChrome()
+        if not chrome:
+            winget = shutil.which("winget.exe") or shutil.which("winget")
+            if not winget:
+                raise RuntimeError(
+                    "Google Chrome is not installed and winget.exe was not found")
+            package = str(actionData.get("windowsPackage", "Google.Chrome"))
+            command = [
+                winget, "install", "--id", package, "--exact", "--silent",
+                "--accept-source-agreements", "--accept-package-agreements",
+            ]
+            self.info("[{}] installing {} with winget"
+                      .format(type(self).__name__, package))
+            ok, stderr = await self._runWindows(command, timeout)
+            if not ok:
+                self.error("[{}] Chrome installation failed: {}"
+                           .format(type(self).__name__, stderr or "<no stderr>"))
+                return False
+            chrome = self._findWindowsChrome()
+            if not chrome:
+                raise RuntimeError(
+                    "Chrome installed, but chrome.exe is not available yet")
+
+        self._configureWindowsDownloadPolicy()
+        self.info("[{}] Chrome is available at {}; download-location prompt enabled. "
+                  "Default browser selection remains controlled by Windows."
+                  .format(type(self).__name__, chrome))
+        return True
+
+    @staticmethod
+    def _findWindowsChrome():
+        found = shutil.which("chrome.exe")
+        if found:
+            return found
+        roots = [
+            os.environ.get("ProgramFiles", r"C:\Program Files"),
+            os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+            os.environ.get("LOCALAPPDATA", ""),
+        ]
+        candidates = [os.path.join(root, "Google", "Chrome", "Application", "chrome.exe")
+                      for root in roots if root]
+        return next((path for path in candidates if os.path.isfile(path)), None)
+
+    @staticmethod
+    def _configureWindowsDownloadPolicy():
+        import winreg
+        policy = r"SOFTWARE\Policies\Google\Chrome"
+        with winreg.CreateKeyEx(
+                winreg.HKEY_LOCAL_MACHINE, policy, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(
+                key, "PromptForDownloadLocation", 0, winreg.REG_DWORD, 1)
+
+    async def _runWindows(self, argv, timeout):
+        self.info("[{}] >> {}".format(type(self).__name__, " ".join(argv)))
+        proc = await asyncio.create_subprocess_exec(
+            *argv, cwd=self.deployRoot(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE)
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            return False, "timeout"
+        return proc.returncode == 0, stderr.decode(errors="replace")

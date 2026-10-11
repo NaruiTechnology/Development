@@ -135,7 +135,10 @@
                     "skipPrivateGitEditable": true,
                     "editableInstall": true,
                     "editableTarget": ".",
-                    "verifyImports": ["amaranth", "gpiozero", "smbus2", "serial", "httpx", "redis", "uvicorn", "numpy", "PyQt6.QtCore"],
+                    "verifyImports": ["amaranth", "gpiozero", "serial", "httpx", "redis", "uvicorn", "numpy", "PyQt6.QtCore"],
+                    "verifyImportsByPlatform": {
+                        "linux": ["smbus2"]
+                    },
                     "requiredExecutables": {
                         "uvicorn": "uvicorn[standard]>=0.27"
                     },
@@ -447,11 +450,8 @@
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "aptPackages": [
-                        "redis-server",
-                        "redis-sentinel",
-                        "redis-tools"
-                    ]
+                    "requiredExecutable": "docker.exe",
+                    "packageId": "Docker.DockerDesktop"
                 },
                 "timeout": 600.0
             }

@@ -551,6 +551,26 @@ class WorkflowWiringTests(unittest.TestCase):
 
 
 class AppEntryPointTests(unittest.TestCase):
+    def test_windows_admin_session_does_not_invoke_sudo(self):
+        import distributionDeployApp as app
+        keepalive = app.SudoCredentialKeepalive()
+        with patch.object(app.os, "name", "nt"), \
+             patch.object(app, "_is_windows_admin", return_value=True), \
+             patch.object(app.subprocess, "run") as run:
+            keepalive.start()
+            keepalive.stop()
+        run.assert_not_called()
+
+    def test_windows_non_admin_session_gets_actionable_error(self):
+        import distributionDeployApp as app
+        keepalive = app.SudoCredentialKeepalive()
+        with patch.object(app.os, "name", "nt"), \
+             patch.object(app, "_is_windows_admin", return_value=False), \
+             patch.object(app.subprocess, "run") as run:
+            with self.assertRaisesRegex(RuntimeError, "PowerShell as Administrator"):
+                keepalive.start()
+        run.assert_not_called()
+
     def test_default_config_is_found_regardless_of_working_directory(self):
         import distributionDeployApp as app
         seen = {}
@@ -573,6 +593,8 @@ class AppEntryPointTests(unittest.TestCase):
             try:
                 with patch.object(app, "AutomationConfig", FakeConfig), \
                      patch.object(app, "DistributionDeployThread", FakeThread), \
+                     patch.object(app.SudoCredentialKeepalive, "start"), \
+                     patch.object(app.SudoCredentialKeepalive, "stop"), \
                      patch.object(sys, "argv", ["distributionDeployApp.py"]):
                     self.assertEqual(app.main(), 0)
             finally:

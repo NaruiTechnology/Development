@@ -326,7 +326,7 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             return {}
 
     def _wrapNodeCommand(self, cmd, useNvm):
-        if not useNvm:
+        if not useNvm or os.name == "nt":
             return cmd
         return (
             "bash -lc 'export NVM_DIR=\"$HOME/.nvm\" && "

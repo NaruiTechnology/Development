@@ -21,6 +21,7 @@ import fnmatch
 import shutil
 import subprocess
 import shlex
+import zipfile
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -88,19 +89,27 @@ class unzipDistribution_state(executeShellCommand_state):
                 raise RuntimeError("deploy root must be recreated by createDeployFolder first")
 
             destPath = self.resolveDeployPath(dest)
-            cmd = commandFormat.format(shlex.quote(zipPath), shlex.quote(destPath))
-            self.info("[{}] >> {}".format(type(self).__name__, cmd))
-
             self.ParentWorkThread.activateVirtualEnv()
 
-            timeout = float(stateConfig.get(Consts.TIMEOUT, 0.0) or 0.0)
-            self._success = await self._run(cmd, timeout)
+            if os.name == "nt":
+                self.info("[{}] extracting archive with Python ZIP support: {}"
+                          .format(type(self).__name__, zipPath))
+                with zipfile.ZipFile(zipPath) as archive:
+                    archive.extractall(destPath)
+                self._success = True
+            else:
+                cmd = commandFormat.format(
+                    shlex.quote(zipPath), shlex.quote(destPath))
+                self.info("[{}] >> {}".format(type(self).__name__, cmd))
+                timeout = float(stateConfig.get(Consts.TIMEOUT, 0.0) or 0.0)
+                self._success = await self._run(cmd, timeout)
 
             if self._success:
-                self._makeDeployTreeReadable(deployRoot)
-                scriptCount = self._makeShellScriptsExecutable(deployRoot)
-                self.info("[{}] granted executable permission to {} shell script(s)"
-                          .format(type(self).__name__, scriptCount))
+                if os.name != "nt":
+                    self._makeDeployTreeReadable(deployRoot)
+                    scriptCount = self._makeShellScriptsExecutable(deployRoot)
+                    self.info("[{}] granted executable permission to {} shell script(s)"
+                              .format(type(self).__name__, scriptCount))
                 self.info("[{}] OK".format(type(self).__name__))
             else:
                 self.error("[{}] FAILED. stderr:\n{}"
@@ -253,7 +262,10 @@ class unzipDistribution_state(executeShellCommand_state):
         if not path or path == os.path.abspath(os.sep):
             return False
         path = os.path.abspath(os.path.expanduser(str(path)))
-        return (os.path.basename(path) == "IobeamPlatform"
+        allowed_names = {"IobeamPlatform"}
+        if os.name == "nt":
+            allowed_names.add("Deploy")
+        return (os.path.basename(path) in allowed_names
                 and os.path.realpath(path) == path
                 and not os.path.islink(path)
                 and not os.path.ismount(path))

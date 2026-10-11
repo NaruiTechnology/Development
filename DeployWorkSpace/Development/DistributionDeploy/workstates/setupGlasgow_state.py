@@ -24,16 +24,16 @@ class setupGlasgow_state(distributionDeploy_state):
             pythonExe = os.path.join(venvDir, "Scripts", "python.exe")
             if not os.path.isfile(pythonExe):
                 pythonExe = sys.executable
-            icepackExe = os.path.join(
-                os.path.dirname(pythonExe), "yowasp-icepack.exe")
+            toolBin = os.path.dirname(pythonExe)
+            icepackExe = os.path.join(toolBin, "yowasp-icepack.exe")
             os.environ["GLASGOW_TOOLCHAIN"] = str(
                 actionData.get("toolchain", "builtin"))
 
             commands = actionData.get("verifyCommands") or [
                 [pythonExe, "-c",
                  "import fx2, usb1, usb.core, amaranth, yowasp_yosys"],
-                ["yowasp-yosys.exe", "--version"],
-                ["yowasp-nextpnr-ice40.exe", "--version"],
+                [os.path.join(toolBin, "yowasp-yosys.exe"), "--version"],
+                [os.path.join(toolBin, "yowasp-nextpnr-ice40.exe"), "--version"],
                 ["powershell.exe", "-NoProfile", "-Command",
                  "if (Test-Path -LiteralPath '{}') {{ exit 0 }} else {{ exit 1 }}"
                  .format(icepackExe.replace("'", "''"))],

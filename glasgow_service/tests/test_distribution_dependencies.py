@@ -42,10 +42,34 @@ def test_distribution_manifests_include_ha_runtime_clients():
         assert required <= requirement_names(manifest), manifest
 
 
+def test_uvloop_is_excluded_from_windows_requirements():
+    requirements = (DEVELOPMENT_ROOT / "requirements.txt").read_text().splitlines()
+    uvloop = [line.strip() for line in requirements
+              if line.strip().lower().startswith("uvloop")]
+
+    assert len(uvloop) == 1
+    assert '; sys_platform != "win32"' in uvloop[0]
+
+
+def test_smbus2_is_linux_only_requirement():
+    requirements = (DEVELOPMENT_ROOT / "glasgow_service" / "requirements.txt").read_text().splitlines()
+    smbus2 = [line.strip() for line in requirements
+              if line.strip().lower().startswith("smbus2")]
+
+    assert len(smbus2) == 1
+    assert '; sys_platform == "linux"' in smbus2[0]
+
+
 def test_archive_builder_validates_glasgow_dependency_metadata():
     builder = load_distribution_builder()
 
     builder.validate_glasgow_runtime_dependencies(DEVELOPMENT_ROOT)
+
+
+def test_archive_builder_validates_windows_redis_docker_workflow():
+    builder = load_distribution_builder()
+
+    builder.validate_local_redis_distribution_workflow(DEVELOPMENT_ROOT)
 
 
 def test_distribution_deploy_verifies_installed_client_imports():
