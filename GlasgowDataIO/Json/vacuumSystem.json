@@ -1,5 +1,5 @@
 {
-    "Enable": false,
+    "Enable": true,
     "VacuumPumps": [
         {
             "name": "MechanicalVacuumPump",

@@ -257,8 +257,8 @@
             "installPostgreSQL": {
                 "skip": false,
                 "transactionComplete": false,
-                "actionData": {},
-                "timeout": 900.0
+                "actionData": {"windowsPackage": "PostgreSQL.PostgreSQL.17"},
+                "timeout": 1800.0
             }
         },
         {

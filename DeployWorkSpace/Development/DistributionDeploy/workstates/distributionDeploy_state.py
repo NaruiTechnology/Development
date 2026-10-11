@@ -94,8 +94,10 @@ class distributionDeploy_state(WorkState):
                 process.communicate(), timeout=timeout or None)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             process.kill()
-            await process.communicate()
+            self._stdout, self._stderr = await process.communicate()
+            self._returncode = process.returncode
             raise
+        self._returncode = process.returncode
         return process.returncode == 0
 
     def workRoot(self):

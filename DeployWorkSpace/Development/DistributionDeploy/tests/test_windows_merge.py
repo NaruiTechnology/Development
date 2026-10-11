@@ -201,21 +201,26 @@ class WindowsMergeTests(unittest.IsolatedAsyncioTestCase):
             psql = Path(temp) / "PostgreSQL" / "bin" / "psql.exe"
             psql.parent.mkdir(parents=True)
             psql.touch()
+            (psql.parent / "postgres.exe").touch()
             action = {"actionData": {"windowsPackage": "PostgreSQL.PostgreSQL"}}
             state = installPostgreSQL_state(SimpleNamespace(
                 deployRoot=temp, GetStateConfig=lambda _: action))
             state._findPsql = Mock(side_effect=[None, str(psql)])
             state.runArguments = AsyncMock(return_value=True)
+            state._isAdministrator = Mock(return_value=True)
             with patch("workstates.installPostgreSQL_state.shutil.which",
                        return_value="winget.exe"):
                 await state.DoWork()
 
             self.assertTrue(state._success)
-            self.assertEqual(state.runArguments.call_args.args[0], [
-                "winget.exe", "install", "--id", "PostgreSQL.PostgreSQL",
+            command = state.runArguments.call_args.args[0]
+            self.assertEqual(command[:9], [
+                "winget.exe", "install", "--id", "PostgreSQL.PostgreSQL.17",
                 "--exact", "--silent", "--accept-source-agreements",
-                "--accept-package-agreements",
+                "--accept-package-agreements", "--source",
             ])
+            self.assertIn("--disable-interactivity", command)
+            self.assertIn("--log", command)
             self.assertIn(str(psql.parent), os.environ["PATH"])
 
     async def test_admin_database_skips_linux_vbox_user_on_windows(self):
