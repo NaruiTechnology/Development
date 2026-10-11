@@ -49,7 +49,8 @@
                     "Comment": [
                         "Creates/completes ~/.config/iobeam/secrets.env (mode 600) before",
                         "DeployRoot is deleted, without asking. Sources, first match wins:",
-                        "--secrets-file FILE, the existing secrets file, exported variables,",
+                        "the packaged secrets.env (--secrets-file FILE at build time), the",
+                        "existing secrets file, exported variables,",
                         "what earlier releases left on this host (the installation in",
                         "DeployRoot, DeployWorkspace_* archives, ~/.bashrc, /etc/glasgow-svc.env),",
                         "then generated values. Anything still unknown is reported at the end;",
@@ -57,6 +58,7 @@
                         "See DEPLOYMENT_RUNBOOK.md section 4a."
                     ],
                     "secretsFile": "",
+                    "seedPath": "secrets.env",
                     "harvestFromDeployRoot": true,
                     "prompt": false
                 },
@@ -265,6 +267,7 @@
                 "actionData": {
                     "databaseName": "iobeam_admin",
                     "databaseRole": "iobeam_admin_app",
+                    "allowLocalFallbackOnRemoteFailure": true,
                     "databaseOwnerRole": "iobeam_admin_owner",
                     "databaseOwnerMembers": [
                         "lyh1154@gmail.com",
@@ -282,6 +285,36 @@
                     "installCommand": "sudo apt-get -o DPkg::Lock::Timeout=600 update && sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client"
                 },
                 "timeout": 900.0
+            }
+        },
+        {
+            "provisionLocalAdminDb": {
+                "skip": true,
+                "transactionComplete": false,
+                "actionData": {
+                    "Comment": [
+                        "Optional local admin DB fallback, skipped by default.",
+                        "Set skip=false to provision it and refresh its contents from the remote admin DB when reachable.",
+                        "Runtime admin DB requests retry localhost only after a remote connectivity failure."
+                    ],
+                    "provisionLocal": true,
+                    "syncFromRemote": true,
+                    "localDatabaseName": "iobeam_admin",
+                    "databaseName": "iobeam_admin",
+                    "databaseRole": "iobeam_admin_app",
+                    "databaseOwnerRole": "iobeam_admin_owner",
+                    "databaseOwnerMembers": [
+                        "lyh1154@gmail.com",
+                        "yuyao.jiang@ionbeamtech.com",
+                        "yiping.xy@ionbeamtech.com"
+                    ],
+                    "adminConfigFile": "Development/IobeamAdmin/Json/IobeamAdmin.json",
+                    "adminDbConfigFile": "Development/IobeamAdmin/Json/IobeamAdminDb.json",
+                    "schemaFile": "Development/IobeamAdmin/Sql/001_schema.sql",
+                    "seedFile": "Development/IobeamAdmin/Sql/002_seed_root_user.sql",
+                    "installCommand": "sudo apt-get -o DPkg::Lock::Timeout=600 update && sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client"
+                },
+                "timeout": 1800.0
             }
         },
         {

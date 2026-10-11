@@ -7,6 +7,8 @@ import fnmatch
 import argparse
 import importlib.util
 import json
+import hashlib
+import zipfile
 from datetime import datetime
 
 try:
@@ -286,6 +288,32 @@ def validate_local_redis_distribution_workflow(src_dir):
             ', '.join(missing_packages))
     print('Validated local Redis/Sentinel distribution workflow: ' +
           ', '.join(REQUIRED_LOCAL_REDIS_APT_PACKAGES))
+
+
+def validate_local_admin_database_workflow(src_dir):
+    """Require the opt-in local fallback DB state to be wired into the manifest."""
+    workflow_root = _development_relative_path(
+        src_dir, 'DeployWorkSpace', 'Development', 'DistributionDeploy')
+    config_path = os.path.join(workflow_root, 'Json', 'DistributionDeploy.json')
+    state_path = os.path.join(workflow_root, 'workstates', 'provisionLocalAdminDb_state.py')
+    if not os.path.isfile(state_path):
+        raise FileNotFoundError('Missing optional local admin DB state: ' + state_path)
+    with open(config_path, 'r', encoding='utf-8') as stream:
+        config = json.load(stream)
+    actions = config.get('Actions', [])
+    by_name = {next(iter(action), None): next(iter(action.values())) for action in actions}
+    if 'setupIobeamAdminDb' not in by_name or 'provisionLocalAdminDb' not in by_name:
+        raise ValueError('DistributionDeploy.json must include both admin DB workstates')
+    local = by_name['provisionLocalAdminDb']
+    if not isinstance(local.get('skip'), bool):
+        raise ValueError('provisionLocalAdminDb.skip must be a boolean')
+    action_data = local.get('actionData', {})
+    if not action_data.get('provisionLocal') or not action_data.get('syncFromRemote'):
+        raise ValueError('provisionLocalAdminDb must provision locally and sync from remote')
+    names = [next(iter(action), None) for action in actions]
+    if names.index('provisionLocalAdminDb') >= names.index('setupIonbeamWeb'):
+        raise ValueError('provisionLocalAdminDb must run before setupIonbeamWeb')
+    print('Validated optional local admin DB provisioning and remote sync workflow.')
 
 
 def resolve_workspace(script_path):
@@ -576,6 +604,7 @@ def compile_distribution_file(source, destination):
 def build_compiled_dist(src_dir, dist_dir, deliver_raw=False, package_roots=None):
     validate_glasgow_runtime_dependencies(src_dir)
     validate_local_redis_distribution_workflow(src_dir)
+    validate_local_admin_database_workflow(src_dir)
     # Compile each included source directly to its destination below. Do not
     # sweep __pycache__: it can contain stale copies for several interpreters.
     if deliver_raw:
@@ -805,7 +834,36 @@ def zip_folder(folder, archive_base=None):
     return final_path
 
 
-def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_base=None):
+def write_handoff_manifest(workspace_dir, archive_path):
+    """Inventory the finished handoff archive, including its separately supplied seed."""
+    manifest_path = os.path.join(workspace_dir, 'handoff_manifest.json')
+    files = {}
+    archive_root = os.path.basename(os.path.normpath(workspace_dir))
+    with zipfile.ZipFile(archive_path, 'r') as archive:
+        for info in archive.infolist():
+            if info.is_dir():
+                continue
+            digest = hashlib.sha256()
+            with archive.open(info, 'r') as stream:
+                for block in iter(lambda: stream.read(1 << 20), b''):
+                    digest.update(block)
+            rel = info.filename.removeprefix(archive_root + '/')
+            if rel == 'handoff_manifest.json':
+                continue
+            files[rel] = {'sha256': digest.hexdigest(), 'size': info.file_size}
+    with open(manifest_path, 'w', encoding='utf-8') as stream:
+        json.dump({'schema': 1, 'files': files}, stream, indent=1, sort_keys=True)
+        stream.write('\n')
+    try:
+        with zipfile.ZipFile(archive_path, 'a', compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.write(manifest_path, arcname=archive_root + '/handoff_manifest.json')
+    finally:
+        os.remove(manifest_path)
+    return archive_path
+
+
+def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_base=None,
+                      secrets_file=None):
     """Post-build pipeline run after a successful build:
        1. clear any existing .zip files from deploy_dir
        2. move <zip_name>.zip into deploy_dir
@@ -826,23 +884,38 @@ def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_bas
     print(f"\n--- Post-build: clearing zips in {deploy_dir} ---")
     clear_zips_in(deploy_dir)
 
-    # 2. Move freshly built archive into the deploy slot
+    # Carry target credentials as a separate, manifest-referenced item in the
+    # handoff. Never add them to dist_app.zip or leave a copy in the checkout.
+    staged_secrets = os.path.join(deploy_dir, 'secrets.env')
+    if secrets_file:
+        shutil.copyfile(secrets_file, staged_secrets)
+        os.chmod(staged_secrets, 0o600)
+
     moved_path = os.path.join(deploy_dir, archive_name)
-    shutil.move(archive_name, moved_path)
-    print(f"Moved {archive_name} -> {moved_path}")
+    try:
+        # 2. Move freshly built archive into the deploy slot
+        shutil.move(archive_name, moved_path)
+        print(f"Moved {archive_name} -> {moved_path}")
 
-    # 3. Strip bytecode droppings from the workspace before zipping it
-    print(f"\n--- Post-build: cleaning bytecode under {workspace_dir} ---")
-    clean_pycache_under(workspace_dir)
+        # 3. Strip bytecode droppings from the workspace before zipping it
+        print(f"\n--- Post-build: cleaning bytecode under {workspace_dir} ---")
+        clean_pycache_under(workspace_dir)
 
-    # 4. Zip the entire workspace for handoff
-    final_archive = zip_folder(workspace_dir, archive_base=workspace_archive_base)
+        # 4. Zip the workspace, then inventory the exact archive contents.
+        final_archive = zip_folder(workspace_dir, archive_base=workspace_archive_base)
+        write_handoff_manifest(workspace_dir, final_archive)
+        if secrets_file:
+            os.chmod(final_archive, 0o600)
 
-    # Keep the intermediate archive on packaging failure so the build can
-    # be recovered. The successful handoff already contains this archive.
-    os.remove(moved_path)
-    print(f"Removed intermediate archive: {moved_path}")
-    return final_archive
+        # Keep the intermediate archive on packaging failure so the build can
+        # be recovered. The successful handoff already contains this archive.
+        os.remove(moved_path)
+        print(f"Removed intermediate archive: {moved_path}")
+        return final_archive
+    finally:
+        if secrets_file and os.path.exists(staged_secrets):
+            os.remove(staged_secrets)
+            print("Removed staged secrets copy from the workspace.")
 
 
 def main(argv=None, script_path=None):
@@ -851,9 +924,19 @@ def main(argv=None, script_path=None):
                         help="Deliver raw python code (skip byte-compilation)", default=False)
     parser.add_argument('--verify', metavar='ZIP', dest='verify',
                         help="Verify an existing distribution archive and exit")
+    parser.add_argument('--secrets-file', metavar='FILE',
+                        help="Include this prepared KEY=VALUE file in the final handoff package")
     args = parser.parse_args(argv)
     script_path = script_path or __file__
     workspace = resolve_workspace(script_path)
+
+    secrets_file = None
+    if args.secrets_file:
+        secrets_file = os.path.abspath(os.path.expanduser(args.secrets_file))
+        if not os.path.isfile(secrets_file):
+            parser.error("secrets file not found: " + secrets_file)
+        if os.name == 'posix' and os.stat(secrets_file).st_mode & 0o077:
+            parser.error("secrets file must be mode 600 (run chmod 600 FILE first)")
 
     if args.verify:
         try:
@@ -887,7 +970,8 @@ def main(argv=None, script_path=None):
         try:
             assert_no_literal_credentials('.', workspace_dir, 'DeployWorkSpace handoff')
             final_archive = post_build_deploy(
-                zip_name, deploy_dir, workspace_dir, workspace_archive_base)
+                zip_name, deploy_dir, workspace_dir, workspace_archive_base,
+                secrets_file=secrets_file)
         finally:
             # The vendored copy exists only inside the handoff archive.
             shutil.rmtree(os.path.dirname(vendor_dir), ignore_errors=True)

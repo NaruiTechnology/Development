@@ -22,15 +22,17 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
             deployment = self.deploymentConfig()
 
-            dbName = str(
-                deployment.get("DatabaseName")
-                or actionData.get("databaseName")
-                or "iobeam_admin"
-            ).strip()
             dbHost = str(
                 deployment.get("DatabaseHost")
                 or actionData.get("databaseHost")
                 or "localhost"
+            ).strip()
+            localHost = self._isLocalHost(dbHost)
+            dbName = str(
+                (actionData.get("databaseName") if localHost else None)
+                or deployment.get("DatabaseName")
+                or actionData.get("databaseName")
+                or "iobeam_admin"
             ).strip()
             dbRole = str(
                 deployment.get("DatabaseUser")
@@ -57,6 +59,7 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                           .format(type(self).__name__))
             dbMemberRoles = self._databaseOwnerMembers(actionData, dbRole)
             dbReadRoles = self._databaseReadMembers(actionData, dbMemberRoles)
+            provisionLocal = bool(actionData.get("provisionLocal", False))
             schemaFile = self._resolveSqlFile(actionData.get(
                 "schemaFile", "Development/IobeamAdmin/Sql/001_schema.sql"))
             seedFile = self._resolveSqlFile(actionData.get(
@@ -68,63 +71,32 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
 
             isLocalDb = self._isLocalHost(dbHost)
             if isLocalDb:
-                if not await self._ensurePostgreSQLInstalled(timeout, actionData):
+                if not self._writeDbConfig(dbConfigFile, dbName, "localhost", dbRole, dbPassword, actionData):
                     self._success = False
                     return
 
-            if isLocalDb:
-                if not await self._ensureDatabase(dbName, timeout):
+            if isLocalDb and provisionLocal:
+                provision = getattr(self, "_provisionLocalDatabase", None)
+                if provision is None or not await provision(
+                        dbName, dbRole, dbPassword, dbOwnerRole, dbMemberRoles,
+                        dbReadRoles, schemaFile, seedFile, timeout, actionData):
                     self._success = False
                     return
-
-                if not await self._ensureOwnerRoleAndMembership(dbName, dbOwnerRole, dbMemberRoles, timeout):
-                    self._success = False
-                    return
-
-                if not await self._ensureDatabaseAccess(dbName, dbOwnerRole, dbMemberRoles + dbReadRoles, timeout):
-                    self._success = False
-                    return
-
-                for roleName in dbMemberRoles:
-                    rolePassword = dbPassword if roleName == dbRole else None
-                    if not await self._ensureRoleAndGrants(dbName, roleName, timeout, dbOwnerRole, rolePassword):
-                        self._success = False
-                        return
-
-            if not self._writeDbConfig(dbConfigFile, dbName, dbHost, dbRole, dbPassword, actionData):
-                self._success = False
-                return
-
-            if isLocalDb:
-                if not await self._assignAdminOwnership(dbName, dbOwnerRole, timeout):
-                    self._success = False
-                    return
-
-                if not await self._loadSchema(dbName, schemaFile, seedFile, timeout):
-                    self._success = False
-                    return
-
-                if not await self._assignAdminOwnership(dbName, dbOwnerRole, timeout):
-                    self._success = False
-                    return
-
-                for roleName in dbMemberRoles:
-                    rolePassword = dbPassword if roleName == dbRole else None
-                    if not await self._ensureRoleAndGrants(dbName, roleName, timeout, dbOwnerRole, rolePassword):
-                        self._success = False
-                        return
-
-                for roleName in dbReadRoles:
-                    if not await self._ensureReadRoleAndGrants(dbName, roleName, timeout):
-                        self._success = False
-                        return
+            elif isLocalDb:
+                self.info("[{}] local DB provisioning is delegated to provisionLocalAdminDb."
+                          .format(type(self).__name__))
             else:
-                self.info("[{}] remote DB host detected; skipping local PostgreSQL provisioning and schema load."
+                self.info("[{}] remote DB host detected; leaving the local runtime config as the fallback."
                           .format(type(self).__name__))
 
-            if not await self._verifyRuntimeRoleCanConnect(dbName, dbHost, dbRole, dbPassword, timeout, actionData):
-                self._success = False
-                return
+            if not isLocalDb and not await self._verifyRuntimeRoleCanConnect(
+                    dbName, dbHost, dbRole, dbPassword, timeout, actionData):
+                if actionData.get("allowLocalFallbackOnRemoteFailure", False):
+                    self.warn("[{}] remote DB is unavailable; continuing so the local fallback can be used."
+                              .format(type(self).__name__))
+                else:
+                    self._success = False
+                    return
 
             self._success = True
         except Exception as e:

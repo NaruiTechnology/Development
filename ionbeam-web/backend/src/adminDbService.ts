@@ -415,6 +415,6 @@ function connectionKey(connection: PgConnection): string {
   return `${connection.host}:${connection.port}:${connection.database}:${connection.user}`;
 }
 
-function isDbConnectivityError(message: string): boolean {
-  return /timed out after|could not connect to server|connection refused|timeout/i.test(message);
+export function isDbConnectivityError(message: string): boolean {
+  return /timed out after|could not connect to server|could not translate host name|connection refused|connect ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ECONNRESET|no route to host|timeout/i.test(message);
 }

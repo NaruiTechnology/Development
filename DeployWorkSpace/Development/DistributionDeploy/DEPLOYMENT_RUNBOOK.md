@@ -39,6 +39,25 @@ directory does not matter:
 python3 Development/buildCompiledDist.py
 ```
 
+To carry the target's prepared credentials in the handoff package, pass a
+mode-600 secrets file explicitly:
+
+```bash
+chmod 600 ~/iobeam-secrets.env
+python3 Development/buildCompiledDist.py --secrets-file ~/iobeam-secrets.env
+```
+
+The final `DeployWorkspace_*.zip` then contains
+`DeployWorkSpace/Development/DistributionDeploy/secrets.env`, referenced by
+the `provisionSecrets` action in `Json/DistributionDeploy.json` and listed in
+the package's `DeployWorkSpace/handoff_manifest.json`. The deploy
+copies those values into the target account's `~/.config/iobeam/secrets.env`
+before removing or replacing the installation. The build removes its staged
+copy from the workspace after packaging and sets the final archive to mode
+600. The handoff archive contains the credentials in readable form; transfer
+and store it with the same access controls as the secrets file. Without
+`--secrets-file`, no credentials file is added to the package.
+
 For an internal diagnostic package containing raw Python instead of bytecode:
 
 ```bash
@@ -88,9 +107,11 @@ Edit `Json/DistributionDeploy.json` and confirm at least:
 
 ## 4a. Credentials (secrets file)
 
-No password, login, token or connection string is stored in the repository,
-`dist_app.zip`, or the DeployWorkspace archive; the build fails if one is
-found. Every component reads them from one owner-only file on the target:
+No password, login, token or connection string is stored in the repository or
+`dist_app.zip`; the build fails if one is found there. When the package is
+built with `--secrets-file`, the prepared credentials are included as a
+separate `secrets.env` item in the DeployWorkspace archive. Every component
+reads them from one owner-only file on the target:
 
 ```text
 ~/.config/iobeam/secrets.env        (mode 600, directory 700; override: IOBEAM_SECRETS_FILE)
@@ -102,7 +123,8 @@ completes it right after `stopLocalSystem`, **before anything is deleted, and
 without asking the installer anything**. For each value the first available
 source wins:
 
-1. a prepared file given with `--secrets-file FILE` (replaces stored values);
+1. a prepared file bundled as `DistributionDeploy/secrets.env`, or one given
+   at deploy time with `--secrets-file FILE` (replaces stored values);
 2. the existing secrets file (so later deployments reuse it);
 3. the deploy shell's environment (`export IOBEAM_FTP_PASSWORD=...`);
 4. what earlier releases left on this host:
@@ -119,14 +141,29 @@ values over with no input. Anything still unknown does **not** stop the
 deployment: the installation runs without it and the log ends with a
 "Not configured" summary:
 
-- no shared admin database login: the app uses the local admin database
-  this deployment creates (seeded with the root account and the equipment
-  registry);
+- no shared admin database login: the application resolves to its local
+  fallback. The fallback database is provisioned only when
+  `provisionLocalAdminDb.skip` is set to `false` in
+  `Json/DistributionDeploy.json`;
 - no FTP login: scan upload to FTP is disabled.
 
 Set them later without redeploying, in the web app (Settings > Admin >
 Database or FTP) or with `python3 -m secretstore set NAME` followed by
 `Development/Scripts/manage-local-system.sh restart`.
+
+### Optional local admin database fallback
+
+The `provisionLocalAdminDb` workstate is skipped by default. Set its `skip`
+value to `false` when this target should keep a local fallback for the remote
+admin database. The installer creates the local database and roles, then
+refreshes its contents from the remote database when that connection is
+available. A remote connection failure leaves the initialized local database
+in place. At runtime, admin database operations retry against the local
+fallback after a remote connectivity failure. Refreshing the local database
+replaces its matching objects and data with the remote snapshot.
+With the state skipped, deployment installs the PostgreSQL client for remote
+checks and snapshot export, but does not install or start the local PostgreSQL
+server.
 
 To provide values up front on a host that has none of the above, prepare a
 file readable only by you and pass it:
@@ -150,9 +187,9 @@ To be asked for missing values instead, set `"prompt": true` in the
 
 | Variable | Required | Used by |
 | --- | --- | --- |
-| `IOBEAM_ADMIN_CONFIG_DB_HOST`, `_USER`, `_PASSWORD` | no (local admin DB when unset) | shared admin DB the app queries: `IobeamAdmin.json` Database block (Settings, Database); users, equipment, reports |
+| `IOBEAM_ADMIN_CONFIG_DB_HOST`, `_USER`, `_PASSWORD` | no (uses local fallback when provisioned) | shared admin DB the app queries: `IobeamAdmin.json` Database block (Settings, Database); users, equipment, reports |
 | `GLASGOW_TOKEN` | yes (generated) | bearer token shared by glasgow_service and the backend |
-| `IOBEAM_ADMIN_DB_PASSWORD` | generated | local runtime role created by `setupIobeamAdminDb` (`IobeamAdminDb.json`) |
+| `IOBEAM_ADMIN_DB_PASSWORD` | generated | local runtime role created by `provisionLocalAdminDb` (`IobeamAdminDb.json`) |
 | `IOBEAM_FTP_HOST`, `IOBEAM_FTP_USER`, `IOBEAM_FTP_PASSWORD` | no | scan CSV/PNG upload (`streamData.json` ftp); empty disables upload |
 | `IOBEAM_ADMIN_DB_HOST`/`_USER`, `IOBEAM_OPERATION_DB_*` | written by the deploy | runtime role and operation telemetry DB |
 | `SMTP_USER`, `SMTP_PASSWORD`, `TWILIO_*` | no | optional notification providers |

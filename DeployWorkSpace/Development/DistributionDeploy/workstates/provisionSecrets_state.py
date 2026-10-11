@@ -64,9 +64,16 @@ class provisionSecrets_state(distributionDeploy_state):
                 name, secretsFile, "exists" if os.path.isfile(secretsFile) else "will be created"))
 
             seed = None
-            seedFile = os.environ.get(ENV_SEED_FILE) or actionData.get("secretsSeedFile") or ""
+            seedFile = os.environ.get(ENV_SEED_FILE) or actionData.get("seedPath") or ""
             if seedFile:
-                seedFile = os.path.abspath(os.path.expanduser(seedFile))
+                seedFile = os.path.expanduser(seedFile)
+                if not os.path.isabs(seedFile):
+                    seedFile = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                            seedFile)
+                seedFile = os.path.abspath(seedFile)
+                if not os.path.isfile(seedFile):
+                    seedFile = ""
+            if seedFile:
                 seed = store.read_seed(seedFile)
                 self.info("[{}] using {} value(s) from {}".format(name, len(seed), seedFile))
 

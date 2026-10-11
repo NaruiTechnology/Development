@@ -129,6 +129,7 @@ DistributionDeploy/
     ├── installPostgreSQL_state.py
     ├── setupGlasgow_state.py
     ├── setupIobeamAdminDb_state.py
+    ├── provisionLocalAdminDb_state.py
     └── exportEnv_state.py
 ```
 
@@ -360,8 +361,13 @@ list.
   (`installUuidRuntime`) and as part of `installToolchain.aptPackages`. The
   former is kept for parity with the spec; the latter is the practical
   fallback. Either one is idempotent against apt.
-* **PostgreSQL** is installed by `installPostgreSQL` and the `IobeamAdmin`
-  schema is bootstrapped by `setupIobeamAdminDb`. The SQL scripts live under
+* **PostgreSQL** client tools are installed by `installPostgreSQL`; the server
+  is installed only when local fallback provisioning is enabled. The
+  `setupIobeamAdminDb` state checks the configured remote connection; the optional
+  `provisionLocalAdminDb` state is skipped by default. Enable it to provision
+  a local fallback and refresh it from the remote database when reachable.
+  Runtime admin queries retry the local connection after remote connectivity
+  failures. The SQL scripts live under
   `Development/IobeamAdmin/Sql/` and create the `user`, `session`, and
   `activity` tables plus their stored procedures.
 * For interactive DB administration, use `pgAdmin 4` if you want a
