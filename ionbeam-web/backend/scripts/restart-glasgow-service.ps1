@@ -52,8 +52,18 @@ function Resolve-GlasgowConfigPath {
 $glasgowConfig = Resolve-GlasgowConfigPath $env:GLASGOW_CONFIG
 $logFile = if ($env:GLASGOW_RESTART_LOG) { $env:GLASGOW_RESTART_LOG } else { Join-Path $workdir "uvicorn.log" }
 $errLogFile = "$logFile.err"
-$pythonBin = if ($env:GLASGOW_PYTHON) { $env:GLASGOW_PYTHON } else { Join-Path $repoRoot ".venv\Scripts\python.exe" }
-$venvRoot = if ($env:VIRTUAL_ENV) { $env:VIRTUAL_ENV } else { Join-Path $repoRoot ".venv" }
+$venvRoot = $env:VIRTUAL_ENV
+if (-not $venvRoot) {
+    $venvCandidates = @(
+        (Join-Path $repoRoot ".venv"),
+        (Join-Path (Split-Path -Parent $repoRoot) ".venv")
+    )
+    $venvRoot = $venvCandidates | Where-Object {
+        Test-Path -LiteralPath (Join-Path $_ "Scripts\python.exe")
+    } | Select-Object -First 1
+    if (-not $venvRoot) { $venvRoot = $venvCandidates[0] }
+}
+$pythonBin = if ($env:GLASGOW_PYTHON) { $env:GLASGOW_PYTHON } else { Join-Path $venvRoot "Scripts\python.exe" }
 $portNumber = [int]$port
 
 if (-not (Test-Path -LiteralPath $pythonBin)) {
