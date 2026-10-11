@@ -13,6 +13,7 @@ class BuildPlanToolchainEnvironmentTestCase(unittest.TestCase):
         inner = SimpleNamespace(
             files={
                 "build": "#!/bin/sh\nprintf '%s' \"$NEXTPNR_ICE40\" > top.bin\n",
+                "build.bat": '@echo off\n>top.bin <nul set /p "=%NEXTPNR_ICE40%"\nexit /b 0\n',
             },
             script="build",
             env_vars={"NEXTPNR_ICE40": "nextpnr-ice40"},

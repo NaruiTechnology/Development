@@ -50,6 +50,10 @@ function Resolve-GlasgowConfigPath {
 }
 
 $glasgowConfig = Resolve-GlasgowConfigPath $env:GLASGOW_CONFIG
+if (-not (Test-Path -LiteralPath $glasgowConfig -PathType Leaf)) {
+    $defaultConfig = Join-Path $projectRoot "GlasgowDataIO\Json\streamData.json"
+    throw "Glasgow configuration does not exist: $glasgowConfig. Set GLASGOW_CONFIG to an existing file (local default: $defaultConfig) before restarting. The existing service has not been stopped."
+}
 $logFile = if ($env:GLASGOW_RESTART_LOG) { $env:GLASGOW_RESTART_LOG } else { Join-Path $workdir "uvicorn.log" }
 $errLogFile = "$logFile.err"
 $venvRoot = $env:VIRTUAL_ENV
@@ -208,7 +212,14 @@ function Start-UvicornProcess {
 $oldPids = @(Get-GlasgowProcessIds)
 if ($oldPids.Count -gt 0) {
     $oldPids | ForEach-Object {
-        Stop-Process -Id $_ -ErrorAction SilentlyContinue
+        $processId = $_
+        try {
+            Stop-Process -Id $processId -ErrorAction Stop
+        } catch {
+            if (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
+                throw "Could not stop Glasgow process ${processId}: $($_.Exception.Message). If it was started elevated, stop that process from an Administrator PowerShell, then restart Glasgow from your ordinary shell."
+            }
+        }
     }
 
     if (-not (Wait-UntilStopped -ProcessIds $oldPids -Tries 30)) {

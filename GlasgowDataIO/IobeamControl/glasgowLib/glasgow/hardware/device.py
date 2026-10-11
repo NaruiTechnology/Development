@@ -297,7 +297,7 @@ class GlasgowDevice:
         self.usb_poller.stop()
         self.usb_context.close()
 
-    async def _do_transfer(self, is_read, setup):
+    async def _do_transfer(self, is_read, setup, *, timeout_s=10.0):
         # libusb transfer cancellation is asynchronous, and moreover, it is necessary to wait for
         # all transfers to finish cancelling before closing the event loop. To do this, use
         # separate futures for result and cancel.
@@ -362,7 +362,7 @@ class GlasgowDevice:
         transfer.setCallback(lambda transfer: loop.call_soon_threadsafe(usb_callback, transfer))
         handle_usb_error(lambda: transfer.submit())
         try:
-            return await asyncio.wait_for(result_future, timeout=10.0)
+            return await asyncio.wait_for(result_future, timeout=timeout_s)
         finally:
             if result_future.cancelled():
                 try:
@@ -393,7 +393,7 @@ class GlasgowDevice:
     async def bulk_read(self, endpoint, length):
         logger.info("USB: BULK EP%d IN length=%d (submit)", endpoint & 0x7f, length)
         data = await self._do_transfer(is_read=True, setup=lambda transfer:
-            transfer.setBulk(endpoint|usb1.ENDPOINT_IN, length))
+            transfer.setBulk(endpoint|usb1.ENDPOINT_IN, length), timeout_s=None)
         logger.info("USB: BULK EP%d IN data=<%s> (completed)", endpoint & 0x7f, dump_hex(data))
         return data
 

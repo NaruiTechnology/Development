@@ -1302,6 +1302,7 @@ class DeviceService:
                 raise DeviceNotReady(
                     "GlasgowConnection._connect() reported not connected")
         except Exception as e:
+            logger.exception("Glasgow connection setup failed")
             self._conn = None
             self._status.state = DeviceState.ERROR
             self._status.last_error = repr(e)

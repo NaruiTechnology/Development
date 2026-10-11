@@ -101,9 +101,10 @@ class GlasgowBuildPlan:
             for filename, content in self._inner.files.items():
                 path = build_dir / filename
                 path.parent.mkdir(parents=True, exist_ok=True)
-                mode = 'wb' if isinstance(content, bytes) else 'w'
-                with open(path, mode) as f:
-                    f.write(content)
+                # Preserve Amaranth's UTF-8/LF output on Windows too. Text
+                # mode translates LF to CRLF, which Yosys' RTLIL parser rejects.
+                with open(path, 'wb') as f:
+                    f.write(content if isinstance(content, bytes) else content.encode('utf-8'))
                 # Make ANY shell script executable, regardless of extension.
                 # Amaranth names its script "build" (no .sh) on Linux.
                 if filename == self._inner.script or filename.endswith('.sh'):
@@ -130,8 +131,11 @@ class GlasgowBuildPlan:
             # executable names; allowing those to win makes a clean host fail
             # while a host with a cached bitstream appears healthy.
             build_env.update(self._toolchain.env_vars)
+            command = ([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "call", ".\\" + script_name]
+                       if os.name == "nt"
+                       else ["sh", script_name])
             proc = subprocess.run(
-                [f"./{script_name}"],
+                command,
                 cwd=build_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -258,7 +262,14 @@ class ToolchainBuildPlan:
         # the actual file written is "build_top.sh".  Resolve to whichever variant
         # is present in the file dict, preferring the bare name for back-compat.
         raw_script = getattr(inner, 'script', 'build_top')
-        if raw_script in self.files:
+        if os.name == "nt":
+            windows_script = raw_script if raw_script.endswith('.bat') else raw_script + '.bat'
+            if windows_script not in self.files:
+                raise GatewareBuildError(
+                    f"Windows build script '{windows_script}' is missing. "
+                    f"Files present: {sorted(self.files.keys())}")
+            self.script = windows_script
+        elif raw_script in self.files:
             self.script = raw_script
         elif raw_script + ".sh" in self.files:
             self.script = raw_script + ".sh"
@@ -289,9 +300,8 @@ class ToolchainBuildPlan:
         for filename, content in self.files.items():
             file_path = Path(build_dir) / filename
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            mode = 'wb' if isinstance(content, bytes) else 'w'
-            with open(file_path, mode) as f:
-                f.write(content)
+            with open(file_path, 'wb') as f:
+                f.write(content if isinstance(content, bytes) else content.encode('utf-8'))
             if filename == self.script or filename.endswith('.sh'):
                 file_path.chmod(file_path.stat().st_mode | stat.S_IEXEC)
 

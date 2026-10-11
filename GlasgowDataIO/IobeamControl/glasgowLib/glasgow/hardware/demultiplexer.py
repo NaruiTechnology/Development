@@ -1,5 +1,6 @@
 import math
 import asyncio
+import sys
 
 import usb1
 
@@ -7,7 +8,7 @@ from ..support.logging import *
 from ..support.chunked_fifo import *
 from ..support.task_queue import *
 from ..access import AccessDemultiplexer, AccessDemultiplexerInterface, AccessMultiplexer
-from .device import GlasgowDeviceError
+from .device import GlasgowDeviceError, ST_FPGA_RDY
 import logging
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,17 @@ class DirectDemultiplexer(AccessDemultiplexer):
         current_config_val = device.usb_handle.getConfiguration()
 
         target_config = None
+        # Windows USB drivers cannot select the second configuration. The
+        # active four-interface configuration also supports a one-pipe applet.
+        if sys.platform == "win32":
+            for cfg in device.usb_handle.getDevice().iterConfigurations():
+                if (cfg.getConfigurationValue() == current_config_val and
+                        cfg.getNumInterfaces() >= target_iface_count):
+                    target_config = cfg
+                    break
         for cfg in device.usb_handle.getDevice().iterConfigurations():
+            if target_config is not None:
+                break
             if cfg.getNumInterfaces() == target_iface_count:
                 target_config = cfg
                 break
@@ -88,11 +99,15 @@ class DirectDemultiplexer(AccessDemultiplexer):
         return 0
 
     async def claim_interface(self, applet, mux_interface, args,
-                              pull_low=set(), pull_high=set(), **kwargs):
+                              pull_low=set(), pull_high=set(), activate=True, **kwargs):
         assert mux_interface._pipe_num not in self._claimed
         self._claimed.add(mux_interface._pipe_num)
 
+        if activate:
+            await self._check_fpga_ready("before USB interface claiming")
         iface = DirectDemultiplexerInterface(self.device, applet, mux_interface, **kwargs)
+        if activate:
+            await self._check_fpga_ready("after USB interface claiming")
         self._interfaces.append(iface)
 
         if hasattr(args, "mirror_voltage") and args.mirror_voltage:
@@ -106,6 +121,9 @@ class DirectDemultiplexer(AccessDemultiplexer):
                                ", ".join(sorted(args.port_spec)), args.voltage)
         elif hasattr(args, "keep_voltage") and args.keep_voltage:
             applet.logger.info("port voltage unchanged")
+
+        if activate:
+            await self._check_fpga_ready("after I/O voltage setup")
 
         device_pull_low  = set()
         device_pull_high = set()
@@ -125,6 +143,8 @@ class DirectDemultiplexer(AccessDemultiplexer):
             elif hasattr(args, "port_spec"):
                 await self.device.set_pulls(
                     args.port_spec, device_pull_low, device_pull_high)
+                if activate:
+                    await self._check_fpga_ready("after I/O pull-resistor setup")
                 device_pull_desc = []
                 if device_pull_high:
                     device_pull_desc.append(
@@ -137,7 +157,8 @@ class DirectDemultiplexer(AccessDemultiplexer):
                 applet.logger.debug("port(s) %s pull resistors: %s",
                                     ", ".join(sorted(args.port_spec)),
                                     "; ".join(device_pull_desc))
-            await iface._activate()
+            if activate:
+                await iface._activate()
 
         elif device_pull_low or device_pull_high:
             if device_pull_low:
@@ -150,11 +171,20 @@ class DirectDemultiplexer(AccessDemultiplexer):
                     "port(s) %s requires external pull-up resistors on pins %s",
                     ", ".join(sorted(args.port_spec)),
                     ", ".join(map(str, device_pull_high)))
-            await iface.reset()
+            if activate:
+                await iface.reset()
         else:
-            await iface._activate()
+            if activate:
+                await iface._activate()
 
         return iface
+
+    async def _check_fpga_ready(self, stage):
+        status = await self.device._status()
+        logger.info("FPGA readiness %s: status=0x%02x", stage, status)
+        if not status & ST_FPGA_RDY:
+            raise GlasgowDeviceError(
+                f"FPGA is not configured {stage} (status=0x{status:02x})")
 
 
 class DirectDemultiplexerInterface(AccessDemultiplexerInterface):

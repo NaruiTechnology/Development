@@ -119,12 +119,23 @@ class IobeamLauncher:
             getattr(applet_args, "voltage", "<unchanged>"),
         )
         plan = target.build_plan()
+        # Select USB configuration before programming the FPGA; releasing
+        # interfaces or resetting USB configuration can invalidate device state.
+        device.demultiplexer = DirectDemultiplexer(
+            device, target.multiplexer.pipe_count)
+        # Pull-control setup can clear FPGA configuration on the attached
+        # device. Finish USB/VIO/pull setup before loading the bitstream.
+        iface = await device.demultiplexer.claim_interface(
+            applet, applet.mux_interface, applet_args,
+            read_buffer_size=applet_args.buffer_size,
+            write_buffer_size=applet_args.buffer_size,
+            pull_high=getattr(applet_args, "beam_pull_high", []),
+            activate=False,
+        )
         self._logger.info("launcher: building bitstream %s", plan.bitstream_id.hex())
         image_programmed = await device.download_target(plan, reload=True)
         self._logger.info("launcher: loaded bitstream %s (build_dir=%s)",
                           plan.bitstream_id.hex(), plan.buildDir)
-        device.demultiplexer = DirectDemultiplexer(
-            device, target.multiplexer.pipe_count)
         if image_programmed:
             await asyncio.sleep(3.0)
         status = await device._status()
@@ -137,12 +148,8 @@ class IobeamLauncher:
             await asyncio.sleep(1.2)
         if prepare is not None:
             await prepare(device)
-        iface = await device.demultiplexer.claim_interface(
-            applet, applet.mux_interface, applet_args,
-            read_buffer_size=applet_args.buffer_size,
-            write_buffer_size=applet_args.buffer_size,
-            pull_high=getattr(applet_args, "beam_pull_high", []),
-        )
+        await device.demultiplexer._check_fpga_ready("before FIFO activation")
+        await iface._activate()
         return iface, image_programmed
 
 
