@@ -277,6 +277,12 @@ export function runPsql(
       stderr += chunk;
     });
     if (stdin !== undefined) {
+      child.stdin?.on("error", (err: NodeJS.ErrnoException) => {
+        // psql may exit before consuming SQL (for example on a connection
+        // failure). Its close handler reports stderr and the exit status.
+        if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") return;
+        finish(() => reject(err));
+      });
       child.stdin?.setDefaultEncoding("utf8");
       child.stdin?.end(stdin);
     }
