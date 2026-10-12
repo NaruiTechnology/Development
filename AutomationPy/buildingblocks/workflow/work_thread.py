@@ -122,6 +122,21 @@ class WorkThread(Thread):
         else:
             return self._shutdownEvent.is_set()
 
+    def _hasPendingStates(self):
+        try:
+            return self._queue is not None and not self._queue.empty()
+        except Exception:
+            return False
+
+    def _idleWait(self, seconds):
+        # Wake early on shutdown instead of always sleeping the full interval.
+        if seconds is None or seconds <= 0:
+            return
+        if self._shutdownEvent is not None:
+            self._shutdownEvent.wait(seconds)
+        else:
+            time.sleep(seconds)
+
     def run(self, verbose=False):
         # Create ONE persistent loop for this thread's entire lifetime
         loop = asyncio.new_event_loop()
@@ -146,10 +161,16 @@ class WorkThread(Thread):
                 else:
                     if verbose:
                         print("No more states to execute. Thread is idle.")
-                    self._isTerminated = True                   
-                
-                # Use the loop to sleep asynchronously or use standard sleep
-                time.sleep(self._recurringInterval)
+                    self._isTerminated = True
+
+                if self._isTerminated:
+                    break
+
+                # Hand off to the next queued state immediately; only pause
+                # (recurring / infinite polling) when nothing is waiting.
+                if self._hasPendingStates():
+                    continue
+                self._idleWait(self._recurringInterval)
         except Exception as e:
             print(f"Execution Error: {e}")
             self._isTerminated = True
