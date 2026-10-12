@@ -50,6 +50,7 @@ def make_workspace(base):
         "glasgow_service/requirements.txt": DEVELOPMENT / "glasgow_service/requirements.txt",
         "glasgow_service/pyproject.toml": DEVELOPMENT / "glasgow_service/pyproject.toml",
         "glasgow_service/deploy/setup-redis-sentinel.sh": DEVELOPMENT / "glasgow_service/deploy/setup-redis-sentinel.sh",
+        "glasgow_service/deploy/prepare-docker-wsl.ps1": DEVELOPMENT / "glasgow_service/deploy/prepare-docker-wsl.ps1",
         "requirements.txt": DEVELOPMENT / "requirements.txt",
         "IobeamAdmin/Sql/006_equipment_csv_functions.sql": DEVELOPMENT / "IobeamAdmin/Sql/006_equipment_csv_functions.sql",
         "buildCompiledDist.py": BUILDER_SOURCE,
@@ -64,6 +65,11 @@ def make_workspace(base):
                 "distributionManifest.py"):
         (slot / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, slot / rel)
+    # Generic packaging fixtures deploy locally and need no real remote login.
+    manifest_path = slot / 'Json/DistributionDeploy.json'
+    fixture_manifest = json.loads(manifest_path.read_text())
+    fixture_manifest['Deployment']['DatabaseHost'] = 'localhost'
+    manifest_path.write_text(json.dumps(fixture_manifest))
     stubs = {
         "GlasgowDataIO/Json/streamData.json": '{"Version": "0.8.0"}',
         "GlasgowDataIO/IobeamControl/IobeamLauncher.py": "LAUNCHER = 1\n",
@@ -77,6 +83,7 @@ def make_workspace(base):
         "GlasgowDataIO/IobeamControl/macros/vector.py": "SCAN_PATH = 1\n",
         "GlasgowDataIO/IobeamControl/transfer/linkStats.py": "SCAN_PATH = 1\n",
         "glasgow_service/glasgow_service/service.py": "SERVICE = 1\n",
+        "glasgow_service/scripts/vacuum_excursion_test.py": "# required diagnostic\n",
         "Scripts/manage-local-system.ps1": "# Windows manager\n",
         "Scripts/manage-local-system.sh": "#!/bin/sh\n",
         "Scripts/program-fpga-ram.py": "# programmer\n",

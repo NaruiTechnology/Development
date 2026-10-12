@@ -66,19 +66,22 @@ class WindowsMergeTests(unittest.IsolatedAsyncioTestCase):
         state._findDocker = Mock(return_value=r"C:\Docker\docker.exe")
         state._findDockerDesktop = Mock(
             return_value=r"C:\Program Files\Docker\Docker\Docker Desktop.exe")
+        state._prepareBackend = AsyncMock()
         state._runExec = AsyncMock(side_effect=[
             (False, "", "engine starting"),
+            (True, "", ""),
             (True, "ready", ""),
+            (True, "linux", ""),
         ])
-        with patch("os.startfile") as start_desktop, \
+        with patch("workstates.installRedisSentinel_state.subprocess.Popen") as start_desktop, \
              patch("workstates.installRedisSentinel_state.asyncio.sleep",
                    new_callable=AsyncMock):
             await state.DoWork()
 
         self.assertTrue(state._success)
-        start_desktop.assert_called_once_with(
-            r"C:\Program Files\Docker\Docker\Docker Desktop.exe")
-        self.assertEqual(state._runExec.await_count, 2)
+        start_desktop.assert_not_called()
+        state._prepareBackend.assert_awaited_once()
+        self.assertEqual(state._runExec.await_count, 4)
 
     async def test_chrome_setup_uses_winget_and_registry_on_windows(self):
         action = {"timeout": 30, "actionData": {"windowsPackage": "Google.Chrome"}}
@@ -196,59 +199,8 @@ class WindowsMergeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("-NoDesktopEntry", args)
         state._ensureAptPackages.assert_not_called()
 
-    async def test_postgresql_installer_uses_winget_and_verifies_psql(self):
-        with tempfile.TemporaryDirectory() as temp:
-            psql = Path(temp) / "PostgreSQL" / "bin" / "psql.exe"
-            psql.parent.mkdir(parents=True)
-            psql.touch()
-            (psql.parent / "postgres.exe").touch()
-            action = {"actionData": {"windowsPackage": "PostgreSQL.PostgreSQL"}}
-            state = installPostgreSQL_state(SimpleNamespace(
-                deployRoot=temp, GetStateConfig=lambda _: action))
-            state._findPsql = Mock(side_effect=[None, str(psql)])
-            state.runArguments = AsyncMock(return_value=True)
-            state._isAdministrator = Mock(return_value=True)
-            with patch("workstates.installPostgreSQL_state.shutil.which",
-                       return_value="winget.exe"):
-                await state.DoWork()
 
-            self.assertTrue(state._success)
-            command = state.runArguments.call_args.args[0]
-            self.assertEqual(command[:9], [
-                "winget.exe", "install", "--id", "PostgreSQL.PostgreSQL.17",
-                "--exact", "--silent", "--accept-source-agreements",
-                "--accept-package-agreements", "--source",
-            ])
-            self.assertIn("--disable-interactivity", command)
-            self.assertIn("--log", command)
-            self.assertIn(str(psql.parent), os.environ["PATH"])
 
-    async def test_admin_database_skips_linux_vbox_user_on_windows(self):
-        state = setupIobeamAdminDb_state(SimpleNamespace(deployRoot="C:/Deploy"))
-        state._runExec = AsyncMock()
-
-        self.assertTrue(await state._ensureVboxUser(30))
-        state._runExec.assert_not_awaited()
-
-    async def test_admin_database_uses_native_psql_and_password_environment(self):
-        state = setupIobeamAdminDb_state(SimpleNamespace(deployRoot="C:/Deploy"))
-        state._psqlExecutable = Mock(return_value=r"C:\Program Files\PostgreSQL\17\bin\psql.exe")
-        state.deploymentConfig = Mock(return_value={"DatabasePort": 5440})
-        state._runExec = AsyncMock(return_value=(True, "iobeam_admin_app:iobeam_admin", ""))
-
-        self.assertTrue(await state._verifyRuntimeRoleCanConnect(
-            "iobeam_admin", "localhost", "iobeam_admin_app", "runtime-secret", 30, {}))
-
-        argv, timeout = state._runExec.call_args.args[:2]
-        self.assertEqual(argv[:8], [
-            r"C:\Program Files\PostgreSQL\17\bin\psql.exe",
-            "-h", "localhost", "-p", "5440", "-U", "iobeam_admin_app",
-            "-d",
-        ])
-        self.assertEqual(argv[8], "iobeam_admin")
-        self.assertEqual(argv[-2:], ["-Atqc", "SELECT current_user || ':' || current_database();"])
-        self.assertEqual(timeout, 30)
-        self.assertEqual(state._runExec.call_args.kwargs["env"]["PGPASSWORD"], "runtime-secret")
 
     async def test_glasgow_checks_tools_from_deployment_venv(self):
         with tempfile.TemporaryDirectory(prefix="glasgow venv ") as temp:

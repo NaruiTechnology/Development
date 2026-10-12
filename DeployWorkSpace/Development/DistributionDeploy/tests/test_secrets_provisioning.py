@@ -47,6 +47,35 @@ class SecretsFileTestCase(unittest.TestCase):
 
 
 class ProvisionSecretsTests(SecretsFileTestCase):
+    def test_legacy_prompt_setting_cannot_ask_installer_for_password(self):
+        config = {'actionData': {'prompt': True, 'harvestFromDeployRoot': False,
+                                'variables': [{'name': 'IOBEAM_ADMIN_CONFIG_DB_PASSWORD', 'required': True}]}}
+        state = provisionSecrets_state(SimpleNamespace(deployRoot=str(self.root / 'fresh'),
+            GetStateConfig=lambda _: config))
+        state.Logger = Mock()
+        with patch.object(store, 'prompt', side_effect=AssertionError('must not prompt')):
+            asyncio.run(state.DoWork())
+        self.assertFalse(state._success)
+        self.assertIn('required credentials are missing', str(state.Logger.error.mock_calls))
+
+    def test_sidecar_import_preserves_existing_target_secrets(self):
+        store.write({'GLASGOW_TOKEN': 'keep-token', 'IOBEAM_FTP_PASSWORD': 'keep-ftp'}, str(self.secrets))
+        installer = self.root / 'installer'
+        installer.mkdir()
+        (installer / 'remote-database.env').write_text(
+            'IOBEAM_ADMIN_CONFIG_DB_HOST=db\nIOBEAM_ADMIN_CONFIG_DB_USER=deployworkspace\n'
+            'IOBEAM_ADMIN_CONFIG_DB_PASSWORD=remote-existing\n')
+        state = self.make_state(self.root / 'fresh', store.VARIABLES)
+        with patch('workstates.provisionSecrets_state.__file__', str(installer / 'workstates' / 'provisionSecrets_state.py')), \
+             patch.dict(os.environ, {'IOBEAM_SECRETS_SEED': ''}):
+            asyncio.run(state.DoWork())
+        self.assertTrue(state._success, state.Logger.error.mock_calls)
+        values = self.file_values()
+        self.assertEqual(values['IOBEAM_ADMIN_CONFIG_DB_PASSWORD'], 'remote-existing')
+        self.assertEqual(values['GLASGOW_TOKEN'], 'keep-token')
+        self.assertEqual(values['IOBEAM_FTP_PASSWORD'], 'keep-ftp')
+        self.assertNotIn('remote-existing', str(state.Logger.mock_calls))
+
     def make_state(self, deploy, variables, deployment=None):
         config = {"actionData": {"variables": variables, "prompt": False}}
         thread = SimpleNamespace(deployRoot=str(deploy), workRoot=str(self.root),
@@ -343,32 +372,6 @@ if __name__ == "__main__":
 class FreshHostCommandTests(unittest.TestCase):
     """Commands that only run on a host that has never been deployed to."""
 
-    @unittest.skipIf(os.name == "nt", "POSIX shell fixture; Windows paths covered separately")
-    def test_postgresql_install_command_succeeds_when_its_tools_succeed(self):
-        import subprocess
-        from workstates.installPostgreSQL_state import installPostgreSQL_state
-        commands = []
-
-        async def fake_run(command, timeout):
-            commands.append(command)
-            return False  # first call: "already installed?" -> no
-
-        state = installPostgreSQL_state(SimpleNamespace(deployRoot=str(ROOT), GetStateConfig=lambda _: {}))
-        state.Logger = Mock()
-        state._run = fake_run
-        asyncio.run(state.DoWork())
-        install = commands[1]
-        with tempfile.TemporaryDirectory() as bin_dir:
-            for tool in ("sudo", "apt-get", "systemctl", "psql"):
-                path = Path(bin_dir) / tool
-                # sudo runs its command (env handles VAR=value prefixes); the rest succeed.
-                sudo = ('#!/bin/sh\nwhile [ $# -gt 0 ]; do case "$1" in -u) shift 2 ;; -*) shift ;; '
-                        '*) break ;; esac; done\nexec env "$@"\n')
-                path.write_text(sudo if tool == "sudo" else "#!/bin/sh\nexit 0\n")
-                path.chmod(0o755)
-            env = dict(os.environ, PATH=bin_dir + os.pathsep + "/bin:/usr/bin")
-            result = subprocess.run(["bash", "-c", install], env=env, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_no_state_passes_doubled_braces_to_the_shell(self):
         import ast
@@ -384,5 +387,7 @@ class FreshHostCommandTests(unittest.TestCase):
                     formatted.update(id(sub) for sub in node.values)
             problems += ["{}:{}".format(path.name, node.lineno) for node in ast.walk(tree)
                          if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                         # Docker --format is a Go template passed directly as argv.
+                         and node.value != '{{.OSType}}'
                          and "{{" in node.value and id(node) not in formatted]
         self.assertEqual(problems, [])

@@ -7,6 +7,7 @@ import fnmatch
 import argparse
 import importlib.util
 import json
+import zipfile
 from datetime import datetime
 
 try:
@@ -280,6 +281,9 @@ def validate_local_redis_distribution_workflow(src_dir):
 
     install_action = actions[install_index]['installRedisSentinel']
     if config.get('Header', {}).get('TargetEnv', '').startswith('Windows'):
+        prerequisite_script = os.path.join(src_dir, 'Development', 'glasgow_service', 'deploy', 'prepare-docker-wsl.ps1')
+        if not os.path.isfile(prerequisite_script):
+            raise FileNotFoundError('Windows Docker prerequisite script is missing: ' + prerequisite_script)
         setup_script = actions[setup_index]['setupLocalRedis'].get('actionData', {}).get('script', '')
         if not setup_script.endswith('setup-redis-sentinel.ps1'):
             raise ValueError('Windows Redis setup must use setup-redis-sentinel.ps1')
@@ -855,6 +859,41 @@ def post_build_deploy(zip_name, deploy_dir, workspace_dir, workspace_archive_bas
     return final_archive
 
 
+def remote_database_handoff(src_dir):
+    """Resolve only the existing remote DB login for this target's installer."""
+    manifest = os.path.join(src_dir, 'Development', 'DeployWorkSpace', 'Development',
+                            'DistributionDeploy', 'Json', 'DistributionDeploy.json')
+    if not os.path.isfile(manifest):
+        return None
+    with open(manifest, encoding='utf-8') as handle:
+        deployment = json.load(handle).get('Deployment', {})
+    store = load_secretstore(src_dir)
+    host = str(store.expand(deployment.get('DatabaseHost', ''), strict=True)).strip()
+    if host.lower() in ('', 'localhost', '127.0.0.1', '::1', '/var/run/postgresql'):
+        return None
+    values = {
+        'IOBEAM_ADMIN_CONFIG_DB_HOST': host,
+        'IOBEAM_ADMIN_CONFIG_DB_USER': store.expand(deployment.get('DatabaseUser', ''), strict=True),
+        'IOBEAM_ADMIN_CONFIG_DB_PASSWORD': store.expand(deployment.get('DatabasePassword', ''), strict=True),
+    }
+    for name, value in values.items():
+        if not value or '\n' in value or '\r' in value:
+            raise RuntimeError('Remote deployment requires a valid source-host credential: ' + name)
+    return ''.join(name + '=' + store.quote(value) + '\n' for name, value in values.items())
+
+
+def append_remote_database_handoff(archive, payload):
+    if payload is None:
+        return
+    # Only the target-specific outer installer receives credentials. Neither
+    # the source tree nor the reusable inner application archive contains them.
+    with zipfile.ZipFile(archive, 'a', compression=zipfile.ZIP_DEFLATED) as handle:
+        info = zipfile.ZipInfo('DeployWorkSpace/remote-database.env')
+        info.external_attr = 0o100600 << 16
+        handle.writestr(info, payload)
+    print('Target-specific installer contains remote database credentials; transfer privately.')
+
+
 def main(argv=None, script_path=None):
     parser = argparse.ArgumentParser(description='Build the deployable distribution.')
     parser.add_argument('-r', '--raw', action='store_true', dest='raw',
@@ -879,6 +918,8 @@ def main(argv=None, script_path=None):
     os.chdir(workspace)
     exit_code = 0
     try:
+        # Fail on missing source credentials before doing an expensive build.
+        remote_handoff = remote_database_handoff('.')
         build_compiled_dist('.', './dist_app', deliver_raw=bool(args.raw),
                             package_roots=['Development'])
         mode = "raw source" if args.raw else "compiled .pyc"
@@ -898,6 +939,7 @@ def main(argv=None, script_path=None):
             assert_no_literal_credentials('.', workspace_dir, 'DeployWorkSpace handoff')
             final_archive = post_build_deploy(
                 zip_name, deploy_dir, workspace_dir, workspace_archive_base)
+            append_remote_database_handoff(final_archive, remote_handoff)
         finally:
             # The vendored copy exists only inside the handoff archive.
             shutil.rmtree(os.path.dirname(vendor_dir), ignore_errors=True)

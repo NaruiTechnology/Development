@@ -19,12 +19,11 @@
 #          and dist_app.zip)
 #        - ~/.bashrc  (export GLASGOW_TOKEN=... appended by exportEnv)
 #        - /etc/glasgow-svc.env
-#   5. generated: GLASGOW_TOKEN, the local runtime DB password
-#   6. only if actionData.prompt is true and stdin is a terminal: a prompt
+#   5. generated tokens; database credentials must already exist remotely
+# Interactive credential prompts are disabled for unattended deployment.
 #
-# A value that is still unknown does not stop the deployment: the
-# installation runs without it (local admin database, FTP upload off) and the
-# log ends with a summary of what is not configured and how to set it later.
+# Missing required remote credentials stop deployment before replacement.
+# Optional features such as FTP can remain unconfigured.
 # No secret value is ever logged.
 #-------------------------------------------------------------------------------
 import os
@@ -66,6 +65,15 @@ class provisionSecrets_state(distributionDeploy_state):
 
             seed = None
             seedFile = os.environ.get(ENV_SEED_FILE) or actionData.get("secretsSeedFile") or ""
+            if not seedFile:
+                # A separate credential handoff accompanies the extracted
+                # installer, never the public distribution archive.
+                installerDir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                for directory in (installerDir, os.path.dirname(os.path.dirname(installerDir))):
+                    candidate = os.path.join(directory, "remote-database.env")
+                    if os.path.isfile(candidate):
+                        seedFile = candidate
+                        break
             if seedFile:
                 seedFile = os.path.abspath(os.path.expanduser(seedFile))
                 seed = store.read_seed(seedFile)
@@ -76,8 +84,9 @@ class provisionSecrets_state(distributionDeploy_state):
                 harvested = self._harvestEverything(store, variables, secretsFile, seed or {})
 
             ask = None
-            if actionData.get("prompt", False) and sys.stdin.isatty():
-                ask = store.prompt
+            if actionData.get("prompt", False):
+                self.info("[{}] interactive credential prompts are disabled for unattended "
+                             "deployment; use a prepared secrets file.".format(name))
 
             result = store.provision(secretsFile, variables, seed=seed, harvested=harvested, ask=ask)
             for variable in sorted(result.sources):

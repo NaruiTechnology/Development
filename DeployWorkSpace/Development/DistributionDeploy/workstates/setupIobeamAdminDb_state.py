@@ -1,458 +1,78 @@
 import asyncio
-import glob
 import json
 import os
-import secrets
-import shutil
-
-from buildingblocks.decorators import overrides
-from buildingblocks.definitions import Consts
 
 from .distributionDeploy_state import distributionDeploy_state
 
 
 class setupIobeamAdminDb_state(distributionDeploy_state):
-    def __init__(self, parent):
-        super(setupIobeamAdminDb_state, self).__init__(parent)
+    """Configure and verify an existing remote database; never provision one."""
 
-    @overrides(distributionDeploy_state)
     async def DoWork(self):
+        self._success = False
         try:
-            stateConfig = self.ParentWorkThread.GetStateConfig(self)
-            stateConfig = self.resolvedStateConfig(stateConfig)
-            actionData = (stateConfig or {}).get(Consts.ACTION_DATA, {}) or {}
-            timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 0.0) or 0.0)
+            config = self.ParentWorkThread.GetStateConfig(self) or {}
+            data = self.resolvedActionData(config)
             deployment = self.deploymentConfig()
-
-            dbName = str(
-                deployment.get("DatabaseName")
-                or actionData.get("databaseName")
-                or "iobeam_admin"
-            ).strip()
-            dbHost = str(
-                deployment.get("DatabaseHost")
-                or actionData.get("databaseHost")
-                or "localhost"
-            ).strip()
-            dbRole = str(
-                deployment.get("DatabaseUser")
-                or actionData.get("databaseRole")
-                or actionData.get("adminDbUser")
-                or "iobeam_admin_app"
-            ).strip()
-            dbPassword = str(
-                deployment.get("DatabasePassword")
-                or actionData.get("adminDbPassword")
-                or ""
-            ).strip()
-            dbOwnerRole = str(
-                deployment.get("DatabaseOwnerRole")
-                or actionData.get("databaseOwnerRole")
-                or "iobeam_admin_owner"
-            ).strip()
-            dbConfigFile = self.resolveDeployPath(actionData.get(
-                "adminDbConfigFile", "Development/IobeamAdmin/Json/IobeamAdminDb.json"))
-            dbPassword = dbPassword or self._readDbPassword(dbConfigFile) or ""
-            if not dbPassword and self._isLocalHost(dbHost):
-                dbPassword = self._generatePassword()
-                self.info("[{}] generated a password for the local runtime role"
-                          .format(type(self).__name__))
-            dbMemberRoles = self._databaseOwnerMembers(actionData, dbRole)
-            dbReadRoles = self._databaseReadMembers(actionData, dbMemberRoles)
-            schemaFile = self._resolveSqlFile(actionData.get(
-                "schemaFile", "Development/IobeamAdmin/Sql/001_schema.sql"))
-            seedFile = self._resolveSqlFile(actionData.get(
-                "seedFile", "Development/IobeamAdmin/Sql/002_seed_root_user.sql"))
-
-            if not await self._ensureVboxUser(timeout):
-                self._success = False
+            host = str(deployment.get('DatabaseHost') or '').strip()
+            name = str(deployment.get('DatabaseName') or '').strip()
+            user = str(deployment.get('DatabaseUser') or '').strip()
+            password = deployment.get('DatabasePassword') or ''
+            if host.lower() in ('', 'localhost', '127.0.0.1', '::1', '/var/run/postgresql'):
+                raise RuntimeError('An existing remote DatabaseHost is required. Local database setup has been removed.')
+            if not name or not user or not password:
+                raise RuntimeError('Remote DatabaseName, DatabaseUser and DatabasePassword are required; credentials are imported by provisionSecrets.')
+            timeout = float(config.get('timeout', 60) or 60)
+            if not await self._verifyRuntimeRoleCanConnect(name, host, user, password, timeout, data):
                 return
-
-            isLocalDb = self._isLocalHost(dbHost)
-            if isLocalDb:
-                if not await self._ensurePostgreSQLInstalled(timeout, actionData):
-                    self._success = False
-                    return
-
-            if isLocalDb:
-                if not await self._ensureDatabase(dbName, timeout):
-                    self._success = False
-                    return
-
-                if not await self._ensureOwnerRoleAndMembership(dbName, dbOwnerRole, dbMemberRoles, timeout):
-                    self._success = False
-                    return
-
-                if not await self._ensureDatabaseAccess(dbName, dbOwnerRole, dbMemberRoles + dbReadRoles, timeout):
-                    self._success = False
-                    return
-
-                for roleName in dbMemberRoles:
-                    rolePassword = dbPassword if roleName == dbRole else None
-                    if not await self._ensureRoleAndGrants(dbName, roleName, timeout, dbOwnerRole, rolePassword):
-                        self._success = False
-                        return
-
-            if not self._writeDbConfig(dbConfigFile, dbName, dbHost, dbRole, dbPassword, actionData):
-                self._success = False
-                return
-
-            if isLocalDb:
-                if not await self._assignAdminOwnership(dbName, dbOwnerRole, timeout):
-                    self._success = False
-                    return
-
-                if not await self._loadSchema(dbName, schemaFile, seedFile, timeout):
-                    self._success = False
-                    return
-
-                if not await self._assignAdminOwnership(dbName, dbOwnerRole, timeout):
-                    self._success = False
-                    return
-
-                for roleName in dbMemberRoles:
-                    rolePassword = dbPassword if roleName == dbRole else None
-                    if not await self._ensureRoleAndGrants(dbName, roleName, timeout, dbOwnerRole, rolePassword):
-                        self._success = False
-                        return
-
-                for roleName in dbReadRoles:
-                    if not await self._ensureReadRoleAndGrants(dbName, roleName, timeout):
-                        self._success = False
-                        return
-            else:
-                self.info("[{}] remote DB host detected; skipping local PostgreSQL provisioning and schema load."
-                          .format(type(self).__name__))
-
-            if not await self._verifyRuntimeRoleCanConnect(dbName, dbHost, dbRole, dbPassword, timeout, actionData):
-                self._success = False
-                return
-
-            self._success = True
-        except Exception as e:
-            self.error("[{}] error: {}".format(type(self).__name__, e))
-            self._success = False
-
-    async def _ensureVboxUser(self, timeout):
-        if os.name == "nt":
-            self.info("[{}][ensure-vboxuser] Linux vboxuser account is not required on Windows."
-                      .format(type(self).__name__))
-            return True
-
-        cmd = ["getent", "passwd"]
-        self.info("[{}][ensure-vboxuser] >> {}".format(type(self).__name__, " ".join(cmd)))
-        ok, stdout, stderr = await self._runExec(cmd, timeout)
-        if not ok:
-            self.error("[{}][ensure-vboxuser] failed to list local users.\n{}"
-                       .format(type(self).__name__, stderr or "<no stderr>"))
-            return False
-
-        users = []
-        for line in stdout.splitlines():
-            name = line.split(":", 1)[0].strip()
-            if name:
-                users.append(name)
-        self.info("[{}][ensure-vboxuser] local users: {}"
-                  .format(type(self).__name__, ", ".join(users) or "<none>"))
-
-        if "vboxuser" in users:
-            self.info("[{}][ensure-vboxuser] user 'vboxuser' already exists."
-                      .format(type(self).__name__))
-            return True
-
-        createCmd = (
-            "sudo useradd -m -G sudo vboxuser && "
-            "sudo usermod -a -G plugdev vboxuser"
-        )
-        self.info("[{}][ensure-vboxuser] >> {}".format(type(self).__name__, createCmd))
-        ok, _, stderr = await self._runExec(["bash", "-lc", createCmd], timeout)
-        if not ok:
-            self.error("[{}][ensure-vboxuser] failed to create 'vboxuser'.\n{}"
-                       .format(type(self).__name__, stderr or "<no stderr>"))
-            return False
-
-        self.info("[{}][ensure-vboxuser] created 'vboxuser' and added sudo/plugdev groups."
-                  .format(type(self).__name__))
-        return True
-
-    def _psqlExecutable(self):
-        executable = shutil.which("psql.exe") or shutil.which("psql")
-        if executable:
-            return executable
-        program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
-        candidates = glob.glob(os.path.join(
-            program_files, "PostgreSQL", "*", "bin", "psql.exe"))
-        if candidates:
-            return sorted(candidates)[-1]
-        raise FileNotFoundError("psql.exe was not found on PATH or under Program Files")
-
-    def _adminPsqlCommand(self, database, *arguments):
-        if os.name == "nt":
-            deployment = self.deploymentConfig()
-            port = int(deployment.get("DatabasePort") or 5432)
-            user = os.environ.get("IOBEAM_POSTGRES_USER", "postgres")
-            return [self._psqlExecutable(), "-h", "127.0.0.1", "-p", str(port),
-                    "-U", user, "-d", database, *arguments]
-        return ["sudo", "-u", "postgres", "psql", "-d", database, *arguments]
-
-    async def _ensureDatabase(self, dbName, timeout):
-        sql = "SELECT 1 FROM pg_database WHERE datname = '{}'".format(
-            dbName.replace("'", "''"))
-        query = self._adminPsqlCommand("postgres", "-Atqc", sql)
-        self.info("[{}][ensure-db] >> {}".format(type(self).__name__, " ".join(query)))
-        ok, stdout, stderr = await self._runExec(query, timeout)
-        if not ok:
-            self.error("[{}][ensure-db] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-
-        if stdout.strip() == "1":
-            self.info("[{}][ensure-db] '{}' already exists.".format(
-                type(self).__name__, dbName))
-            return True
-
-        createDb = (
-            self._adminPsqlCommand(
-                "postgres", "-c", "CREATE DATABASE {};".format(self._quoteIdent(dbName)))
-            if os.name == "nt"
-            else ["sudo", "-u", "postgres", "createdb", dbName]
-        )
-        self.info("[{}][ensure-db] >> {}".format(type(self).__name__, " ".join(createDb)))
-        ok, _, stderr = await self._runExec(createDb, timeout)
-        if not ok:
-            self.error("[{}][ensure-db] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-
-        self.info("[{}][ensure-db] created '{}'.".format(type(self).__name__, dbName))
-        return True
-
-    async def _ensurePostgreSQLInstalled(self, timeout, actionData):
-        if os.name == "nt":
-            psql = self._psqlExecutable()
-            service_script = (
-                "$service = Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue "
-                "| Sort-Object Name -Descending | Select-Object -First 1; "
-                "if (-not $service) { throw 'PostgreSQL service was not found' }; "
-                "if ($service.Status -ne 'Running') { Start-Service -Name $service.Name }"
-            )
-            ok, _, stderr = await self._runExec(
-                ["powershell.exe", "-NoProfile", "-Command", service_script], timeout)
-            if not ok:
-                self.error("[{}][install-db] PostgreSQL service could not be started.\n{}"
-                           .format(type(self).__name__, stderr or "<no stderr>"))
-                return False
-            self.info("[{}][install-db] PostgreSQL client and service are available: {}"
-                      .format(type(self).__name__, psql))
-            return True
-
-        check = ["bash", "-lc", "command -v psql >/dev/null 2>&1"]
-        ok, _, _ = await self._runExec(check, timeout)
-        if ok:
-            self.info("[{}][install-db] PostgreSQL client already installed.".format(
-                type(self).__name__))
-            return True
-
-        installCmd = actionData.get(
-            "installCommand",
-            "sudo apt-get -o DPkg::Lock::Timeout=600 update && sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client dbeaver-ce || sudo DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y postgresql postgresql-contrib postgresql-client"
-        )
-        cmd = ["bash", "-lc", installCmd]
-        self.info("[{}][install-db] >> {}".format(type(self).__name__, installCmd))
-        ok, _, stderr = await self._runExec(cmd, timeout)
-        if not ok:
-            self.error("[{}][install-db] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-
-        enableCmd = ["bash", "-lc", "sudo systemctl enable --now postgresql"]
-        ok, _, stderr = await self._runExec(enableCmd, timeout)
-        if not ok:
-            self.error("[{}][install-db] service start FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-        return True
-
-    async def _loadSchema(self, dbName, schemaFile, seedFile, timeout):
-        try:
-            with open(schemaFile, "r", encoding="utf-8") as f:
-                schemaSql = f.read()
-            with open(seedFile, "r", encoding="utf-8") as f:
-                seedSql = f.read()
-        except OSError as e:
-            self.error("[{}][load-schema] cannot read SQL file: {}".format(
-                type(self).__name__, e))
-            return False
-
-        loadSchema = [
-            *self._adminPsqlCommand(dbName),
-            "-v", "ON_ERROR_STOP=1",
-        ]
-        self.info("[{}][load-schema] >> {} < {} + {}".format(
-            type(self).__name__, " ".join(loadSchema), schemaFile, seedFile))
-        ok, _, stderr = await self._runExec(
-            loadSchema,
-            timeout,
-            "{}\n{}".format(schemaSql, seedSql),
-        )
-        if not ok:
-            self.error("[{}][load-schema] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-        self.info("[{}][load-schema] OK".format(type(self).__name__))
-        return True
-
-    async def _ensureOwnerRoleAndMembership(self, dbName, ownerRole, memberRoles, timeout):
-        if not ownerRole:
-            self.error("[{}][ensure-owner] no database owner role name available".format(
-                type(self).__name__))
-            return False
-
-        sql = self._ownerRoleSql(dbName, ownerRole, memberRoles)
-        cmd = self._adminPsqlCommand(dbName, "-v", "ON_ERROR_STOP=1")
-        self.info("[{}][ensure-owner] >> {} < SQL".format(type(self).__name__, " ".join(cmd)))
-        ok, _, stderr = await self._runExec(cmd, timeout, sql)
-        if not ok:
-            self.error("[{}][ensure-owner] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-        self.info("[{}][ensure-owner] ensured owner role '{}' for members: {}".format(
-            type(self).__name__, ownerRole, ", ".join(memberRoles)))
-        return True
-
-    async def _ensureDatabaseAccess(self, dbName, ownerRole, roleNames, timeout):
-        sql = self._databaseAccessSql(dbName, ownerRole, roleNames)
-        cmd = self._adminPsqlCommand("postgres", "-v", "ON_ERROR_STOP=1")
-        self.info("[{}][database-access] >> {} < SQL".format(type(self).__name__, " ".join(cmd)))
-        ok, _, stderr = await self._runExec(cmd, timeout, sql)
-        if not ok:
-            self.error("[{}][database-access] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-        self.info("[{}][database-access] ensured database owner and CONNECT grants for '{}'."
-                  .format(type(self).__name__, dbName))
-        return True
-
-    async def _assignAdminOwnership(self, dbName, ownerRole, timeout):
-        if not ownerRole:
-            return True
-        sql = self._assignOwnershipSql(ownerRole)
-        cmd = self._adminPsqlCommand(dbName, "-v", "ON_ERROR_STOP=1")
-        self.info("[{}][assign-owner] >> {} < SQL".format(type(self).__name__, " ".join(cmd)))
-        ok, _, stderr = await self._runExec(cmd, timeout, sql)
-        if not ok:
-            self.error("[{}][assign-owner] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-        self.info("[{}][assign-owner] transferred iobeam_admin object ownership to '{}'.".format(
-            type(self).__name__, ownerRole))
-        return True
-
-    async def _ensureRoleAndGrants(self, dbName, roleName, timeout, ownerRole=None, password=None):
-        roleName = str(roleName or "").strip()
-        if not roleName:
-            self.error("[{}][ensure-role] no database role name available".format(
-                type(self).__name__))
-            return False
-
-        sql = self._roleGrantSql(dbName, roleName, ownerRole, password)
-        grantRole = self._adminPsqlCommand(dbName, "-v", "ON_ERROR_STOP=1")
-        self.info("[{}][ensure-role] >> {} < SQL".format(
-            type(self).__name__, " ".join(grantRole)))
-        ok, _, stderr = await self._runExec(grantRole, timeout, sql)
-        if not ok:
-            self.error("[{}][ensure-role] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-
-        self.info("[{}][ensure-role] ensured PostgreSQL role '{}' and grants.".format(
-            type(self).__name__, roleName))
-        return True
-
-    async def _ensureReadRoleAndGrants(self, dbName, roleName, timeout):
-        roleName = str(roleName or "").strip()
-        if not roleName:
-            return True
-
-        sql = self._readRoleGrantSql(dbName, roleName)
-        grantRole = self._adminPsqlCommand(dbName, "-v", "ON_ERROR_STOP=1")
-        self.info("[{}][ensure-read-role] >> {} < SQL".format(
-            type(self).__name__, " ".join(grantRole)))
-        ok, _, stderr = await self._runExec(grantRole, timeout, sql)
-        if not ok:
-            self.error("[{}][ensure-read-role] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-
-        self.info("[{}][ensure-read-role] ensured PostgreSQL role '{}' and read grants.".format(
-            type(self).__name__, roleName))
-        return True
+            config_file = self.resolveDeployPath(data.get('adminDbConfigFile', 'Development/IobeamAdmin/Json/IobeamAdminDb.json'))
+            self._success = self._writeDbConfig(config_file, name, host, user, password, data)
+        except Exception as error:
+            self.error('[setupIobeamAdminDb_state] ' + str(error))
 
     async def _verifyRuntimeRoleCanConnect(self, dbName, dbHost, dbRole, dbPassword, timeout, actionData):
         deployment = self.deploymentConfig()
-        dbPort = int(
-            deployment.get("DatabasePort")
-            or actionData.get("databasePort")
-            or actionData.get("adminDbPort")
-            or 5432
-        )
-        sslMode = str(
-            deployment.get("DatabaseSslMode")
-            or actionData.get("adminDbSslMode")
-            or ""
-        ).strip()
-        host = str(
-            deployment.get("DatabaseHost")
-            or actionData.get("adminDbHost")
-            or dbHost
-            or "localhost"
-        ).strip()
-        if host in ("", "/var/run/postgresql"):
-            host = "localhost"
-
-        query = "SELECT current_user || ':' || current_database();"
-        if os.name == "nt":
-            command = [self._psqlExecutable(), "-h", host, "-p", str(dbPort),
-                       "-U", dbRole, "-d", dbName, "-Atqc", query]
-        else:
-            command = (
-                "psql -h {} -p {} -U {} -d {} -Atqc {}".format(
-                    self._shellQuote(host),
-                    self._shellQuote(str(dbPort)),
-                    self._shellQuote(dbRole),
-                    self._shellQuote(dbName),
-                    self._shellQuote(query),
-                )
-            )
-        # The password travels in the child's environment only; a
-        # PGPASSWORD=... prefix in the command string is visible in `ps`.
-        env = dict(os.environ, PGPASSWORD=dbPassword)
-        if sslMode:
-            env["PGSSLMODE"] = sslMode
-        cmd = command if os.name == "nt" else ["bash", "-lc", command]
-        self.info("[{}][verify-runtime-role] >> psql -h {} -p {} -U {} -d {}"
-                  .format(type(self).__name__, host, dbPort, dbRole, dbName))
-        ok, stdout, stderr = await self._runExec(cmd, timeout, env=env)
+        env = dict(os.environ, PGHOST=dbHost, PGDATABASE=dbName, PGUSER=dbRole, PGPASSWORD=dbPassword,
+                   PGPORT=str(deployment.get('DatabasePort') or actionData.get('databasePort') or 5432),
+                   PGSSLMODE=str(deployment.get('DatabaseSslMode') or actionData.get('adminDbSslMode') or 'prefer'))
+        venv = self.resolveDeployPath(deployment.get('VenvDir') or '.venv')
+        python = os.path.join(venv, 'Scripts', 'python.exe') if os.name == 'nt' else os.path.join(venv, 'bin', 'python')
+        # Only SELECT is issued. Credentials stay in the child environment.
+        script = """
+import os, ssl, sys
+import pg8000.native
+mode = os.environ['PGSSLMODE']
+context = None
+if mode == 'disable':
+    context = False
+elif mode in ('require', 'verify-ca', 'verify-full'):
+    context = ssl.create_default_context()
+    if mode == 'verify-ca':
+        context.check_hostname = False
+    elif mode == 'require':
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+elif mode not in ('prefer', 'allow'):
+    sys.exit('Unsupported DatabaseSslMode: ' + mode)
+connection = None
+try:
+    connection = pg8000.native.Connection(user=os.environ['PGUSER'], host=os.environ['PGHOST'],
+        database=os.environ['PGDATABASE'], port=int(os.environ['PGPORT']),
+        password=os.environ['PGPASSWORD'], timeout=30, ssl_context=context)
+    print(connection.run("SELECT current_user || ':' || current_database()")[0][0])
+except Exception as error:
+    print(str(error).replace(os.environ['PGPASSWORD'], '[redacted]'), file=sys.stderr)
+    sys.exit(1)
+finally:
+    if connection is not None:
+        connection.close()
+"""
+        self.info('[setupIobeamAdminDb_state] verifying remote database {}:{}/{} as {}'.format(
+            dbHost, env['PGPORT'], dbName, dbRole))
+        ok, stdout, stderr = await self._runExec([python, '-c', script], min(timeout, 60), env=env)
         if not ok:
-            self.error("[{}][verify-runtime-role] FAILED.\n{}".format(
-                type(self).__name__, stderr or "<no stderr>"))
-            return False
-        self.info("[{}][verify-runtime-role] OK: {}".format(
-            type(self).__name__, stdout.strip() or "<connected>"))
-        return True
-
-    def _readDbPassword(self, configFile):
-        try:
-            with open(configFile, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            db = data.get("Database") if isinstance(data.get("Database"), dict) else data
-            db = self.expandSecrets(db)
-            return str(db.get("Password") or db.get("password") or "").strip()
-        except Exception:
-            return ""
-
-    def _generatePassword(self):
-        return secrets.token_urlsafe(32)
+            self.error('[setupIobeamAdminDb_state] remote connection failed: ' + (stderr or '<no details>').replace(dbPassword, '[redacted]'))
+        return ok
 
     def _writeDbConfig(self, configFile, dbName, dbHost, dbRole, dbPassword, actionData):
         deployment = self.deploymentConfig()
@@ -522,92 +142,19 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
                        .format(type(self).__name__, configFile, e))
             return False
 
-    def _resolveSqlFile(self, configuredPath):
-        path = self.resolveDeployPath(configuredPath)
-        if os.path.isfile(path):
-            return path
 
-        expanded = str(configuredPath or "")
-        if not expanded.startswith("Development/"):
-            fallback = self.resolveDeployPath(
-                os.path.join("Development", expanded))
-            if os.path.isfile(fallback):
-                self.warn("[{}][load-schema] using SQL file under Development/: {}"
-                          .format(type(self).__name__, fallback))
-                return fallback
-        return path
-
-    def _isLocalHost(self, host):
-        return host in ("", "localhost", "127.0.0.1", "::1", "/var/run/postgresql")
-
-    def _databaseOwnerMembers(self, actionData, installerRole):
-        roles = []
-        for roleName in [installerRole] + list(actionData.get("databaseOwnerMembers", []) or []):
-            roleName = str(roleName or "").strip()
-            if roleName and roleName not in roles:
-                roles.append(roleName)
-
-        adminConfigPath = actionData.get(
-            "adminConfigFile", "Development/IobeamAdmin/Json/IobeamAdmin.json")
-        adminConfigPath = self.resolveDeployPath(adminConfigPath)
+    def _readDbPassword(self, configFile):
         try:
-            with open(adminConfigPath, "r", encoding="utf-8") as f:
-                adminConfig = json.load(f)
-            auditors = adminConfig.get("auditors")
-            if not isinstance(auditors, list):
-                auditor = adminConfig.get("auditor")
-                auditors = [auditor] if isinstance(auditor, dict) else []
-            for auditor in auditors:
-                if not isinstance(auditor, dict) or auditor.get("is_active") is False:
-                    continue
-                roleName = str(auditor.get("db_role") or auditor.get("email") or "").strip()
-                if roleName and roleName not in roles:
-                    roles.append(roleName)
-        except Exception as e:
-            self.warn("[{}][ensure-owner] could not read auditor DB roles from {}: {}"
-                      .format(type(self).__name__, adminConfigPath, e))
+            with open(configFile, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            db = data.get("Database") if isinstance(data.get("Database"), dict) else data
+            db = self.expandSecrets(db)
+            return str(db.get("Password") or db.get("password") or "").strip()
+        except Exception:
+            return ""
 
-        return roles
-
-    def _databaseReadMembers(self, actionData, fullGrantRoles):
-        fullGrantRoles = set(str(roleName or "").strip() for roleName in fullGrantRoles)
-        roles = []
-        for roleName in list(actionData.get("databaseReadRoles", []) or []):
-            roleName = str(roleName or "").strip()
-            if roleName and roleName not in fullGrantRoles and roleName not in roles:
-                roles.append(roleName)
-
-        adminConfigPath = actionData.get(
-            "adminConfigFile", "Development/IobeamAdmin/Json/IobeamAdmin.json")
-        adminConfigPath = self.resolveDeployPath(adminConfigPath)
-        try:
-            with open(adminConfigPath, "r", encoding="utf-8") as f:
-                adminConfig = json.load(f)
-            users = adminConfig.get("users")
-            if not isinstance(users, list):
-                user = adminConfig.get("user")
-                users = [user] if isinstance(user, dict) else []
-            for user in users:
-                if not isinstance(user, dict) or user.get("is_active") is False:
-                    continue
-                roleName = str(user.get("db_role") or user.get("login_name") or "").strip()
-                if roleName and roleName not in fullGrantRoles and roleName not in roles:
-                    roles.append(roleName)
-        except Exception as e:
-            self.warn("[{}][ensure-read-role] could not read user DB roles from {}: {}"
-                      .format(type(self).__name__, adminConfigPath, e))
-
-        return roles
 
     async def _runExec(self, argv, timeout, stdin=None, env=None):
-        if os.name == "nt":
-            child_env = dict(os.environ) if env is None else dict(env)
-            admin_password = (os.environ.get("IOBEAM_POSTGRES_PASSWORD")
-                              or os.environ.get("IOBEAM_ADMIN_DB_PASSWORD"))
-            if admin_password and not child_env.get("PGPASSWORD"):
-                child_env["PGPASSWORD"] = admin_password
-            env = child_env
-
         proc = await asyncio.create_subprocess_exec(
             *argv,
             cwd=self.resolveDeployPath("."),
@@ -636,187 +183,14 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         stdoutText = stdout.decode(errors="replace")
         stderrText = stderr.decode(errors="replace")
         if proc.returncode != 0:
+            if os.name == "nt" and "password authentication failed" in stderrText:
+                stderrText += (
+                    "\nPostgreSQL is installed, but database authentication failed. "
+                    "For administrator setup, supply the actual postgres password "
+                    "in IOBEAM_POSTGRES_PASSWORD (or PGPASSWORD). "
+                    "IOBEAM_ADMIN_DB_PASSWORD belongs to the application role "
+                    "and is not an administrator-password fallback.\n")
             return False, stdoutText, stderrText
         return True, stdoutText, stderrText
 
-    def _ownerRoleSql(self, dbName, ownerRole, memberRoles):
-        ownerIdent = self._quoteIdent(ownerRole)
-        ownerLiteral = self._quoteLiteral(ownerRole)
-        lines = [
-            "DO $$",
-            "BEGIN",
-            f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {ownerLiteral}) THEN",
-            f"    EXECUTE 'CREATE ROLE ' || quote_ident({ownerLiteral}) || ' NOLOGIN';",
-            "  END IF;",
-            "END",
-            "$$;",
-            f"CREATE SCHEMA IF NOT EXISTS iobeam_admin AUTHORIZATION {ownerIdent};",
-            f"CREATE SCHEMA IF NOT EXISTS ionbeam_asset AUTHORIZATION {ownerIdent};",
-            f"ALTER SCHEMA iobeam_admin OWNER TO {ownerIdent};",
-            f"ALTER SCHEMA ionbeam_asset OWNER TO {ownerIdent};",
-        ]
-        for roleName in memberRoles:
-            roleIdent = self._quoteIdent(roleName)
-            roleLiteral = self._quoteLiteral(roleName)
-            lines.extend([
-                "DO $$",
-                "BEGIN",
-                f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {roleLiteral}) THEN",
-                f"    EXECUTE 'CREATE ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
-                "  ELSE",
-                f"    EXECUTE 'ALTER ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
-                "  END IF;",
-                "END",
-                "$$;",
-                f"GRANT {ownerIdent} TO {roleIdent};",
-            ])
-        return "\n".join(lines)
 
-    def _databaseAccessSql(self, dbName, ownerRole, roleNames):
-        dbIdent = self._quoteIdent(dbName)
-        ownerIdent = self._quoteIdent(ownerRole)
-        lines = [
-            f"ALTER DATABASE {dbIdent} OWNER TO {ownerIdent};",
-            f"GRANT CONNECT, TEMPORARY ON DATABASE {dbIdent} TO {ownerIdent};",
-        ]
-        seen = set()
-        for roleName in roleNames:
-            roleName = str(roleName or "").strip()
-            if not roleName or roleName in seen:
-                continue
-            seen.add(roleName)
-            roleIdent = self._quoteIdent(roleName)
-            roleLiteral = self._quoteLiteral(roleName)
-            lines.extend([
-                "DO $$",
-                "BEGIN",
-                f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {roleLiteral}) THEN",
-                f"    EXECUTE 'CREATE ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
-                "  ELSE",
-                f"    EXECUTE 'ALTER ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
-                "  END IF;",
-                "END",
-                "$$;",
-                f"GRANT CONNECT, TEMPORARY ON DATABASE {dbIdent} TO {roleIdent};",
-            ])
-        return "\n".join(lines)
-
-    def _assignOwnershipSql(self, ownerRole):
-        ownerIdent = self._quoteIdent(ownerRole)
-        ownerLiteral = self._quoteLiteral(ownerRole)
-        return "\n".join([
-            f"ALTER SCHEMA iobeam_admin OWNER TO {ownerIdent};",
-            f"ALTER SCHEMA ionbeam_asset OWNER TO {ownerIdent};",
-            "DO $$",
-            "DECLARE",
-            "  obj record;",
-            "BEGIN",
-            "  FOR obj IN",
-            "    SELECT format('%I.%I', schemaname, tablename) AS name",
-            "      FROM pg_tables",
-            "     WHERE schemaname IN ('iobeam_admin', 'ionbeam_asset')",
-            "  LOOP",
-            f"    EXECUTE 'ALTER TABLE ' || obj.name || ' OWNER TO ' || quote_ident({ownerLiteral});",
-            "  END LOOP;",
-            "",
-            "  FOR obj IN",
-            "    SELECT format('%I.%I', sequence_schema, sequence_name) AS name",
-            "      FROM information_schema.sequences",
-            "     WHERE sequence_schema IN ('iobeam_admin', 'ionbeam_asset')",
-            "  LOOP",
-            f"    EXECUTE 'ALTER SEQUENCE ' || obj.name || ' OWNER TO ' || quote_ident({ownerLiteral});",
-            "  END LOOP;",
-            "",
-            "  FOR obj IN",
-            "    SELECT p.prokind,",
-            "           format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) AS signature",
-            "      FROM pg_proc p",
-            "      JOIN pg_namespace n ON n.oid = p.pronamespace",
-            "     WHERE n.nspname IN ('iobeam_admin', 'ionbeam_asset')",
-            "  LOOP",
-            "    IF obj.prokind = 'p' THEN",
-            f"      EXECUTE 'ALTER PROCEDURE ' || obj.signature || ' OWNER TO ' || quote_ident({ownerLiteral});",
-            "    ELSE",
-            f"      EXECUTE 'ALTER FUNCTION ' || obj.signature || ' OWNER TO ' || quote_ident({ownerLiteral});",
-            "    END IF;",
-            "  END LOOP;",
-            "END",
-            "$$;",
-        ])
-
-    def _roleGrantSql(self, dbName, roleName, ownerRole=None, password=None):
-        dbIdent = self._quoteIdent(dbName)
-        roleIdent = self._quoteIdent(roleName)
-        roleLiteral = self._quoteLiteral(roleName)
-        lines = [
-            "DO $$",
-            "BEGIN",
-            f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {roleLiteral}) THEN",
-            f"    EXECUTE 'CREATE ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
-            "  ELSE",
-            f"    EXECUTE 'ALTER ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
-            "  END IF;",
-            "END",
-            "$$;",
-        ]
-        if password:
-            lines.append(f"ALTER ROLE {roleIdent} PASSWORD {self._quoteLiteral(password)};")
-        lines.extend([
-            f"GRANT CONNECT ON DATABASE {dbIdent} TO {roleIdent};",
-            f"GRANT USAGE, CREATE ON SCHEMA public TO {roleIdent};",
-            f"GRANT USAGE, CREATE ON SCHEMA iobeam_admin TO {roleIdent};",
-            f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iobeam_admin TO {roleIdent};",
-            f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA iobeam_admin TO {roleIdent};",
-            f"GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA iobeam_admin TO {roleIdent};",
-            f"GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA iobeam_admin TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT EXECUTE ON FUNCTIONS TO {roleIdent};",
-            f"GRANT USAGE, CREATE ON SCHEMA ionbeam_asset TO {roleIdent};",
-            f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ionbeam_asset TO {roleIdent};",
-            f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA ionbeam_asset TO {roleIdent};",
-            f"GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ionbeam_asset TO {roleIdent};",
-            f"GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA ionbeam_asset TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT EXECUTE ON FUNCTIONS TO {roleIdent};",
-        ])
-        if ownerRole:
-            lines.append(f"GRANT {self._quoteIdent(ownerRole)} TO {roleIdent};")
-        return "\n".join(lines)
-
-    def _readRoleGrantSql(self, dbName, roleName):
-        dbIdent = self._quoteIdent(dbName)
-        roleIdent = self._quoteIdent(roleName)
-        roleLiteral = self._quoteLiteral(roleName)
-        return "\n".join([
-            "DO $$",
-            "BEGIN",
-            f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {roleLiteral}) THEN",
-            f"    EXECUTE 'CREATE ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
-            "  ELSE",
-            f"    EXECUTE 'ALTER ROLE ' || quote_ident({roleLiteral}) || ' LOGIN';",
-            "  END IF;",
-            "END",
-            "$$;",
-            f"GRANT CONNECT ON DATABASE {dbIdent} TO {roleIdent};",
-            f"GRANT USAGE ON SCHEMA iobeam_admin TO {roleIdent};",
-            f"GRANT SELECT ON ALL TABLES IN SCHEMA iobeam_admin TO {roleIdent};",
-            f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA iobeam_admin TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT SELECT ON TABLES TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA iobeam_admin GRANT USAGE, SELECT ON SEQUENCES TO {roleIdent};",
-            f"GRANT USAGE ON SCHEMA ionbeam_asset TO {roleIdent};",
-            f"GRANT SELECT ON ALL TABLES IN SCHEMA ionbeam_asset TO {roleIdent};",
-            f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ionbeam_asset TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT SELECT ON TABLES TO {roleIdent};",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA ionbeam_asset GRANT USAGE, SELECT ON SEQUENCES TO {roleIdent};",
-        ])
-
-    def _quoteIdent(self, value):
-        return '"' + str(value).replace('"', '""') + '"'
-
-    def _quoteLiteral(self, value):
-        return "'" + str(value).replace("'", "''") + "'"
-
-    def _shellQuote(self, value):
-        return "'" + str(value).replace("'", "'\"'\"'") + "'"

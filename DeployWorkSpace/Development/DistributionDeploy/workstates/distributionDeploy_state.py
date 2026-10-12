@@ -115,6 +115,12 @@ class distributionDeploy_state(WorkState):
         """Return the Deployment block exactly as written in the manifest."""
         thread = self.ParentWorkThread
         config = getattr(thread, "Config", None) if thread is not None else None
+        if config is None:
+            # DistributionDeployThread assigns the manifest to every state's
+            # Config; WorkThread has no public Config property.
+            config = self.Config
+        if config is None and thread is not None:
+            config = getattr(thread, "_config", None)
         if isinstance(config, dict):
             deployment = config.get("Deployment", {})
         else:

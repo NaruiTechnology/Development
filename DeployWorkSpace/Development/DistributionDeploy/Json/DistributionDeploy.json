@@ -19,11 +19,11 @@
         "GlasgowPort": 8765,
         "ProxyTargetHttp": "http://127.0.0.1:8765",
         "ProxyTargetWs": "ws://127.0.0.1:8765",
-        "DatabaseHost": "${IOBEAM_ADMIN_CONFIG_DB_HOST:-}",
+        "DatabaseHost": "${IOBEAM_ADMIN_CONFIG_DB_HOST:-124.221.175.89}",
         "DatabasePort": 5432,
-        "DatabaseName": "postgres",
-        "DatabaseUser": "${IOBEAM_ADMIN_CONFIG_DB_USER:-}",
-        "DatabasePassword": "${IOBEAM_ADMIN_CONFIG_DB_PASSWORD:-}",
+        "DatabaseName": "ionbeam_admin_db",
+        "DatabaseUser": "${IOBEAM_ADMIN_CONFIG_DB_USER:-deployworkspace}",
+        "DatabasePassword": "${IOBEAM_ADMIN_CONFIG_DB_PASSWORD}",
         "GlasgowLog": "Logs\\glasgow.log",
         "GlasgowServiceLog": "Logs\\glasgow.log",
         "GlasgowRepoUrl": "https://github.com/GlasgowEmbedded/glasgow",
@@ -32,7 +32,6 @@
         "IonbeamWebDir": "ionbeam-web"
     },
     "Actions": [
-        
         {
             "stopLocalSystem": {
                 "skip": false,
@@ -94,6 +93,22 @@
             }
         },
         {
+            "prepareDockerWsl": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {},
+                "timeout": 600.0
+            }
+        },
+        {
+            "prepareDockerWsl": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {},
+                "timeout": 600.0
+            }
+        },
+        {
             "setupVirtualEnv": {
                 "skip": false,
                 "transactionComplete": false,
@@ -113,7 +128,10 @@
                 "actionData": {
                     "packages": [],
                     "venvDir": ".venv",
-                    "verifyImports": ["gpiozero", "lgpio"],
+                    "verifyImports": [
+                        "gpiozero",
+                        "lgpio"
+                    ],
                     "requireRaspberryPi": true
                 },
                 "timeout": 600.0
@@ -135,9 +153,21 @@
                     "skipPrivateGitEditable": true,
                     "editableInstall": true,
                     "editableTarget": ".",
-                    "verifyImports": ["amaranth", "gpiozero", "serial", "httpx", "redis", "uvicorn", "numpy", "PyQt6.QtCore"],
+                    "verifyImports": [
+                        "amaranth",
+                        "pg8000.native",
+                        "gpiozero",
+                        "serial",
+                        "httpx",
+                        "redis",
+                        "uvicorn",
+                        "numpy",
+                        "PyQt6.QtCore"
+                    ],
                     "verifyImportsByPlatform": {
-                        "linux": ["smbus2"]
+                        "linux": [
+                            "smbus2"
+                        ]
                     },
                     "requiredExecutables": {
                         "uvicorn": "uvicorn[standard]>=0.27"
@@ -148,7 +178,6 @@
                 "timeout": 1200.0
             }
         },
-
         {
             "installToolchain": {
                 "skip": false,
@@ -156,7 +185,10 @@
                 "actionData": {
                     "commandFormat": "iterative",
                     "aptOptions": "-y --no-install-recommends",
-                    "packages": ["yowasp-yosys", "yowasp-nextpnr-ice40"],
+                    "packages": [
+                        "yowasp-yosys",
+                        "yowasp-nextpnr-ice40"
+                    ],
                     "pipxBootstrap": [],
                     "pipPackages": [
                         "Cython",
@@ -254,37 +286,13 @@
             }
         },
         {
-            "installPostgreSQL": {
-                "skip": false,
-                "transactionComplete": false,
-                "actionData": {"windowsPackage": "PostgreSQL.PostgreSQL.17"},
-                "timeout": 1800.0
-            }
-        },
-        {
             "setupIobeamAdminDb": {
                 "skip": false,
                 "transactionComplete": false,
                 "actionData": {
-                    "databaseName": "iobeam_admin",
-                    "databaseRole": "iobeam_admin_app",
-                    "databaseOwnerRole": "iobeam_admin_owner",
-                    "databaseOwnerMembers": [
-                        "lyh1154@gmail.com",
-                        "yuyao.jiang@ionbeamtech.com"
-                    ],
-                    "adminConfigFile": "Development/IobeamAdmin/Json/IobeamAdmin.json",
-                    "adminDbConfigFile": "Development/IobeamAdmin/Json/IobeamAdminDb.json",
-                    "schemaFile": "Development/IobeamAdmin/Sql/001_schema.sql",
-                    "seedFile": "Development/IobeamAdmin/Sql/002_seed_root_user.sql",
-                    "ProductionConfig": {
-                        "databaseHost": "",
-                        "adminDbPort": "",
-                        "adminDbSslMode": ""
-                    },
-                    "installCommand": "winget install --id PostgreSQL.PostgreSQL --exact --silent"
+                    "adminDbConfigFile": "Development/IobeamAdmin/Json/IobeamAdminDb.json"
                 },
-                "timeout": 900.0
+                "timeout": 60
             }
         },
         {
@@ -473,7 +481,18 @@
                 "actionData": {
                     "installer": "Development/ionbeam-native/scripts/install_windows.ps1",
                     "venvDir": ".venv",
-                    "aptPackages": ["libegl1", "libgl1", "libxkbcommon0", "libxkbcommon-x11-0", "libfontconfig1", "libdbus-1-3", "libxcb-cursor0", "libxcb-icccm4", "libxcb-keysyms1", "libxcb-shape0"],
+                    "aptPackages": [
+                        "libegl1",
+                        "libgl1",
+                        "libxkbcommon0",
+                        "libxkbcommon-x11-0",
+                        "libfontconfig1",
+                        "libdbus-1-3",
+                        "libxcb-cursor0",
+                        "libxcb-icccm4",
+                        "libxcb-keysyms1",
+                        "libxcb-shape0"
+                    ],
                     "desktopEntry": true,
                     "runSmokeTest": true
                 },
@@ -571,33 +590,33 @@
                 "timeout": 45.0
             }
         },
-	{
-	    "installGoogleChrome": {
-		"skip": false,
-		"transactionComplete": false,
-		"actionData": {
-		    "downloadPolicyPath": "/etc/opt/chrome/policies/managed/iobeam-downloads.json"
-		},
-		"timeout": 900.0
-	    }
-	},
-	{
-	    "launchUI": {
-		"skip": false,
-		"transactionComplete": false,
-		"actionData": {
-		    "commandFormat": "internal",
-		    "url": "http://localhost:5173/control",
-		    "readinessTimeout": 30.0,
-		    "pollInterval": 0.5,
-		    "failOnNotReady": false,
-		    "ProductionConfig": {
-		        "url": "https://ionbeamtech.com/control"
-		    }
-		},
-		"timeout": 60.0
-	    }
-	}
+        {
+            "installGoogleChrome": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "downloadPolicyPath": "/etc/opt/chrome/policies/managed/iobeam-downloads.json"
+                },
+                "timeout": 900.0
+            }
+        },
+        {
+            "launchUI": {
+                "skip": false,
+                "transactionComplete": false,
+                "actionData": {
+                    "commandFormat": "internal",
+                    "url": "http://localhost:5173/control",
+                    "readinessTimeout": 30.0,
+                    "pollInterval": 0.5,
+                    "failOnNotReady": false,
+                    "ProductionConfig": {
+                        "url": "https://ionbeamtech.com/control"
+                    }
+                },
+                "timeout": 60.0
+            }
+        }
     ],
     "LogName": "DistributionDeploy"
 }

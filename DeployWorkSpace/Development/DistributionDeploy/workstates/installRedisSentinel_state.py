@@ -2,6 +2,7 @@
 import asyncio
 import os
 import shutil
+import subprocess
 
 from buildingblocks.decorators import overrides
 from buildingblocks.definitions import Consts
@@ -26,7 +27,11 @@ class installRedisSentinel_state(distributionDeploy_state):
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 900.0) or 900.0)
             executable = str(actionData.get("requiredExecutable", "docker.exe"))
             docker = self._findDocker(executable)
+            prerequisitesReady = bool(getattr(self.ParentWorkThread, '_dockerWslPrepared', False))
             if not docker:
+                if not prerequisitesReady:
+                    await self._prepareBackend(timeout)
+                prerequisitesReady = True
                 packageId = str(actionData.get(
                     "packageId", "Docker.DockerDesktop")).strip()
                 winget = shutil.which("winget.exe") or shutil.which("winget")
@@ -36,6 +41,8 @@ class installRedisSentinel_state(distributionDeploy_state):
                 command = [
                     winget, "install", "--id", packageId, "--exact", "--silent",
                     "--accept-package-agreements", "--accept-source-agreements",
+                    "--source", "winget", "--disable-interactivity",
+                    "--custom", "--accept-license --backend=wsl-2",
                 ]
                 self.info("[{}] installing {} with winget".format(
                     type(self).__name__, packageId))
@@ -51,15 +58,20 @@ class installRedisSentinel_state(distributionDeploy_state):
             ok, _, stderr = await self._runExec(
                 [docker, "info"], min(30.0, timeout))
             if not ok:
+                if not prerequisitesReady:
+                    await self._prepareBackend(timeout)
+                started, _, _ = await self._runExec(
+                    [docker, "desktop", "start", "--detach"], min(30.0, timeout))
                 desktop = actionData.get("dockerDesktopExecutable") or self._findDockerDesktop()
-                if not desktop:
+                if not started and not desktop:
                     raise RuntimeError(
                         "Docker Desktop is installed but its engine is not ready, "
                         "and Docker Desktop.exe was not found. Start Docker Desktop "
                         "manually. Last error: {}".format(stderr))
-                self.info("[{}] starting Docker Desktop: {}".format(
-                    type(self).__name__, desktop))
-                os.startfile(desktop)
+                if not started:
+                    self.info("[{}] starting Docker Desktop: {}".format(
+                        type(self).__name__, desktop))
+                    subprocess.Popen([desktop], creationflags=subprocess.CREATE_NO_WINDOW)
 
                 readyTimeout = float(actionData.get(
                     "engineReadyTimeoutSeconds", min(timeout, 300.0)) or 0.0)
@@ -77,6 +89,11 @@ class installRedisSentinel_state(distributionDeploy_state):
                     raise RuntimeError(
                         "Docker Desktop engine did not become ready within {:.0f}s: {}"
                         .format(readyTimeout, stderr))
+            engineOk, engineType, engineError = await self._runExec(
+                [docker, 'info', '--format', '{{.OSType}}'], 30.0)
+            if not engineOk or engineType.strip() != 'linux':
+                raise RuntimeError('Redis/Sentinel requires the Docker Linux containers engine. '
+                                   'Current engine: {}. {}'.format(engineType.strip(), engineError))
             self.info("[{}] Docker Desktop is ready for Redis/Sentinel"
                       .format(type(self).__name__))
             self._success = True
@@ -93,6 +110,19 @@ class installRedisSentinel_state(distributionDeploy_state):
         candidate = os.path.join(
             programFiles, "Docker", "Docker", "resources", "bin", "docker.exe")
         return candidate if os.path.isfile(candidate) else None
+
+    async def _prepareBackend(self, timeout):
+        script = self.resolveDeployPath('Development/glasgow_service/deploy/prepare-docker-wsl.ps1')
+        if not os.path.isfile(script):
+            raise FileNotFoundError('Docker prerequisite script is missing: ' + script)
+        ok, stdout, stderr = await self._runExec(
+            ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script], timeout)
+        if self._returncode == 3010:
+            raise RuntimeError('Docker requires a Windows restart. Restart Windows, then rerun OneKeyDeploy.bat; initialization will continue automatically.')
+        if not ok:
+            raise RuntimeError('Docker WSL 2 prerequisite initialization failed: ' + (stderr or stdout))
+        if stdout.strip():
+            self.info('[{}] {}'.format(type(self).__name__, stdout.strip()))
 
     @staticmethod
     def _findDockerDesktop():
@@ -116,9 +146,11 @@ class installRedisSentinel_state(distributionDeploy_state):
         except asyncio.TimeoutError:
             proc.kill()
             await proc.communicate()
+            self._returncode = proc.returncode
             return False, "", "timeout"
+        self._returncode = proc.returncode
         return (
             proc.returncode == 0,
-            stdout.decode(errors="replace"),
-            stderr.decode(errors="replace"),
+            stdout.decode(errors="replace").replace('\x00', ''),
+            stderr.decode(errors="replace").replace('\x00', ''),
         )
