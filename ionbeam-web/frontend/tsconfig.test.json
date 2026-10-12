@@ -25,6 +25,8 @@
     "src/lib/levelStore.ts",
     "src/lib/scanTiming.ts",
     "src/lib/vacuumPolicy.ts",
+    "src/lib/beamHoldAnalysis.ts",
+    "src/lib/takeoverTiming.ts",
     "src/lib/vectorScanPath.ts"
   ]
 }

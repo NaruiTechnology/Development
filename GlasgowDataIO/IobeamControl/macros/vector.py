@@ -153,6 +153,7 @@ class VectorScanCommand(BaseCommand):
         continuous: bool                = False,
         points_factory=None,
         frame_blank: bool = True,
+        max_passes: int | None          = None,
     ):
         """
         Args:
@@ -186,6 +187,12 @@ class VectorScanCommand(BaseCommand):
             points_factory (callable, optional): Returns a fresh iterable of
                 points for each pass in continuous mode. When omitted,
                 ``iter_points`` is materialized once and replayed.
+            max_passes (int, optional): End the session by itself after this
+                many passes (Repeat N), keeping external control held from the
+                first pass to the last. Applies to continuous mode and to
+                adaptive gray feedback (each pass still decides per point on
+                the host, but all passes share one command stream). ``None``:
+                continuous runs until Stop, adaptive runs one pass.
         """
         # Avoid the mutable-default trap: Python evaluates defaults once
         # at class-definition time, so a second VectorScanCommand in the
@@ -197,6 +204,18 @@ class VectorScanCommand(BaseCommand):
         self.frame_blank = bool(frame_blank)
         self._adaptive_gray_feedback = adaptive_gray_feedback
         self.continuous = bool(continuous) and adaptive_gray_feedback is None
+        if max_passes is not None and int(max_passes) < 1:
+            raise ValueError(f"max_passes must be >= 1, got {max_passes}")
+        self._max_passes = None if max_passes is None else int(max_passes)
+        # Adaptive feedback replays its points once per pass.
+        self._adaptive_passes = (
+            self._max_passes or 1) if adaptive_gray_feedback is not None else 1
+        if self._adaptive_passes > 1 and points_factory is None:
+            replay = list(iter_points)
+            points_factory = lambda: iter(replay)
+            iter_points = iter(replay)   # the first pass, from the same list
+        self._adaptive_points_factory = (
+            points_factory if self._adaptive_passes > 1 else None)
         if self.continuous and points_factory is None:
             replay = list(iter_points)
             points_factory = lambda: iter(replay)
@@ -307,7 +326,19 @@ class VectorScanCommand(BaseCommand):
         # Discard the FFFF + cookie reply.
         await stream.read(4)
 
-        points_iter = self._iter_adaptive_points()
+        def adaptive_passes():
+            yield self._iter_adaptive_points()
+            for _ in range(self._adaptive_passes - 1):
+                yield (_normalize_point(point)
+                       for point in self._adaptive_points_factory())
+
+        def adaptive_points():
+            for pass_points in adaptive_passes():
+                if self.abort.is_set():
+                    return
+                yield from pass_points
+
+        points_iter = adaptive_points()
 
         # Same-coordinate adaptive mode:
         #   1. Probe each logical point with a single unblanked sample.
@@ -386,13 +417,15 @@ class VectorScanCommand(BaseCommand):
         await FlushCommand().transfer(stream)
 
     def _iter_passes(self):
-        """Point iterables to scan: one pass, or (continuous) passes forever."""
+        """Point iterables to scan: one pass, N passes, or passes forever."""
         if not self.continuous:
             yield self._iter_points
             return
         yield self._iter_points          # first pass (already created)
-        while True:
+        passes = 1
+        while self._max_passes is None or passes < self._max_passes:
             yield self._points_factory()
+            passes += 1
 
     def _iter_chunks(self, latency):
         if self._processed:

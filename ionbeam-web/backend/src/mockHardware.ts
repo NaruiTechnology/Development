@@ -44,6 +44,8 @@ interface RasterParams {
   simulation?: Record<string, unknown>;
   /** Live (Infinite) scan: repeat frames until the client closes. */
   continuous?: boolean;
+  /** Repeat N: with continuous, stop after this many frames. */
+  frames?: number | null;
 }
 
 interface VectorParams {
@@ -61,6 +63,8 @@ interface VectorParams {
   simulation?: Record<string, unknown>;
   /** Live (Infinite) scan: replay the pass until the client closes. */
   continuous?: boolean;
+  /** Repeat N: with continuous, stop after this many passes. */
+  frames?: number | null;
 }
 
 type VectorScanPath =
@@ -391,10 +395,16 @@ export async function streamMockRaster(
   const simulationImage = loadSimulationImage(p.simulation);
   const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
+  const frameLimit = p.continuous === true && p.frames ? Math.max(1, Math.trunc(p.frames)) : null;
+  let framesDone = 0;
   while (sent < total || p.continuous === true) {
     if (ws.readyState !== ws.OPEN) return;
     // Live scan: wrap to the next frame on the same socket (Stop closes it).
-    if (sent >= total) sent = 0;
+    if (sent >= total) {
+      framesDone++;
+      if (frameLimit !== null && framesDone >= frameLimit) break;
+      sent = 0;
+    }
 
     const n = Math.min(pixelsPerChunk, total - sent);
     const buf = Buffer.alloc(n * 2);
@@ -465,10 +475,16 @@ export async function streamMockVector(
   const simulationImage = loadSimulationImage(p.simulation);
   const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
+  const passLimit = p.continuous === true && p.frames ? Math.max(1, Math.trunc(p.frames)) : null;
+  let passesDone = 0;
   while (i < pts.length || (p.continuous === true && pts.length > 0)) {
     if (ws.readyState !== ws.OPEN) return;
     // Live scan: wrap to the next pass on the same socket (Stop closes it).
-    if (i >= pts.length) i = 0;
+    if (i >= pts.length) {
+      passesDone++;
+      if (passLimit !== null && passesDone >= passLimit) break;
+      i = 0;
+    }
     const slice = pts.slice(i, i + valuesPerChunk);
     const buf = Buffer.alloc(slice.length * 2);
     for (let k = 0; k < slice.length; k++) {
@@ -563,6 +579,71 @@ export async function streamMockDacRamp(
   }
 }
 
+export interface BeamHoldParams {
+  beam: "on" | "blanked";
+  dwell: number;
+  duration_s: number;
+  external_control: boolean;
+  /** The scan the hold reproduces; its frames set the duration. */
+  match?: { frame_pixels: number; dwell: number; frames?: number; frame_blank?: boolean | null } | null;
+}
+
+/**
+ * Mock counterpart of glasgow_service's /scan/beam_hold/stream, for UI
+ * development without hardware. Streams a parked-beam signal in real time
+ * with SYNTHETIC 1.5 ms dark dips every 195 ms (the black-line signature),
+ * so the card's dip analysis has something to find. It says nothing about
+ * the real instrument.
+ */
+export async function streamMockBeamHold(
+  ws: WebSocket,
+  p: BeamHoldParams,
+): Promise<void> {
+  const conversionHz = 8_000_000;
+  const dwell = Math.max(0, Math.min(65535, Math.trunc(p.dwell)));
+  const periodUs = ((dwell + 1) * 1e6) / conversionHz;
+  const m = p.match;
+  const durationS = m && Number(m.frame_pixels) > 0
+    ? (Math.max(1, Math.trunc(Number(m.frames) || 1)) * Number(m.frame_pixels) * (Math.trunc(Number(m.dwell) || 0) + 1)) / conversionHz
+    : Math.max(0.1, Math.min(600, Number(p.duration_s) || 30));
+  ws.send(JSON.stringify({
+    event: "metadata",
+    sample_period_us: periodUs,
+    conversion_hz: conversionHz,
+    duration_s: durationS,
+    beam: p.beam,
+    external_control: p.external_control,
+    mock: true,
+  }));
+
+  const tickMs = 20;
+  const perTick = Math.max(1, Math.round((tickMs * 1000) / periodUs));
+  const total = Math.round((durationS * 1e6) / periodUs);
+  const level = p.beam === "blanked" ? 600 : 9000;
+  let sent = 0;
+  let chunks = 0;
+  let noise = 12345;
+  while (sent < total) {
+    if (ws.readyState !== ws.OPEN) return;
+    const n = Math.min(perTick, total - sent);
+    const buf = Buffer.alloc(n * 2);
+    for (let k = 0; k < n; k++) {
+      const tMs = ((sent + k) * periodUs) / 1000;
+      const inDip = tMs % 195 >= 50 && tMs % 195 < 51.5;
+      noise = (noise * 1103515245 + 12345) & 0x7fffffff;
+      const value = (inDip ? 300 : level) + ((noise >> 16) % 160) - 80;
+      writeSampleBE(buf, k, Math.max(0, Math.min(16383, value)));
+    }
+    ws.send(buf);
+    sent += n;
+    chunks++;
+    await sleep(tickMs);
+  }
+  if (ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify({ event: "done", chunks }));
+  }
+}
+
 function vectorScanPoints(p: VectorParams): VectorPointTuple[] {
   const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 2048));
   const path = p.scan_path ?? "vertical_raster";
@@ -614,6 +695,10 @@ export const mockRest = {
     const voltage = finiteNumber(action.voltage, 2.5);
     return {
       is_production: false,
+      takeover: {
+        ext_switch_delay_ms: finiteNumber(
+          (action.timings as Record<string, unknown> | undefined)?.ext_switch_delay_ms, 20),
+      },
       adc_test: streamDataConfig.AdcTest !== false && action.AdcTest !== false,
       ev,
       voltage,

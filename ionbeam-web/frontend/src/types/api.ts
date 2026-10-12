@@ -78,6 +78,9 @@ export interface RasterRequest {
    *  OBI's live scan. Samples wrap at the frame end; `done` arrives only
    *  after Stop. */
   continuous?: boolean;
+  /** Repeat N (with continuous): the session ends by itself after this many
+   *  frames, holding external control from the first to the last. */
+  frames?: number | null;
   roi?: ROIRequest | null;
   /** Browser-provided grayscale crop for simulation-only raster scans.
    *  Production hardware ignores it and uses the DAC ROI normally. */
@@ -118,6 +121,10 @@ export interface VectorRequest {
    *  list pass after pass on one FPGA command stream until Stop. Samples
    *  wrap at the pass end; `done` arrives only after Stop. */
   continuous?: boolean;
+  /** Repeat N (with continuous): the session ends by itself after this many
+   *  passes, holding external control from the first to the last. Adaptive
+   *  gray feedback runs that many host-decided passes on one stream. */
+  frames?: number | null;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */
@@ -158,6 +165,36 @@ export interface DacRampRequest {
   latency_bytes: number; // >= 2
   cookie: number;        // 0..65535
   beam_type: "NoBeam" | "Electron" | "Ion";
+  external_control: boolean;
+  adc_valid: boolean;
+}
+
+export type BeamHoldBeam = "on" | "blanked";
+
+/** Blank takeover check: park the beam and record the detector. Maps 1:1
+ *  to glasgow_service.models.BeamHoldRequest. */
+/** The scan a beam hold reproduces (glasgow_service BeamHoldScanPlan). */
+export interface BeamHoldScanPlan {
+  frame_pixels: number;
+  dwell: number;
+  frames: number;
+  /** null: the service default, as a vector scan uses. */
+  frame_blank: boolean | null;
+}
+
+export interface BeamHoldRequest {
+  x_code: number;        // 0..16383
+  y_code: number;        // 0..16383
+  beam: BeamHoldBeam;
+  dwell: number;         // sampling dwell of the trace (dwell + 1 conversions)
+  /** Reproduce this scan's takeover: frames, frame time, Frame blank. */
+  match?: BeamHoldScanPlan;
+  /** Without `match` only: stop after this many seconds. */
+  duration_s?: number;
+  /** Session simulation override; the hold runs only when scans use the hardware. */
+  simulation?: Record<string, unknown>;
+  latency_bytes: number;
+  cookie: number;
   external_control: boolean;
   adc_valid: boolean;
 }
@@ -271,6 +308,8 @@ export interface ServerDefaults {
   vector_params?: Record<string, unknown>;
   selected_beam?: "ebeam" | "ion";
   is_production?: boolean;
+  /** Relay switch delay at takeover and at hand-back. */
+  takeover?: { ext_switch_delay_ms?: number };
   adc_test?: boolean;
   version?: string;
 }

@@ -57,6 +57,7 @@ import { VacuumDashboard } from "./components/VacuumDashboard";
 import { SampleStageDashboard } from "./components/SampleStageDashboard";
 import { AdcTestControls, AdcTimelineCanvas } from "./components/AdcTest";
 import { DacRampPanel } from "./components/DacRampTest";
+import { BeamHoldPanel } from "./components/BeamHoldPanel";
 import { DacCheckHelp } from "./components/DacCheckHelp";
 import { useAdcTestStream } from "./hooks/useAdcTestStream";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
@@ -152,6 +153,7 @@ export function App() {
   // not part of the normal vector-scan flow, so it shouldn't compete
   // with Controls/Run report for attention by default.
   const [dacCheckCollapsed, setDacCheckCollapsed] = useState(true);
+  const [beamHoldCollapsed, setBeamHoldCollapsed] = useState(true);
   // Save results card starts collapsed. Collapsing only hides it —
   // ValidationPanel stays mounted so the filename insert, chosen folder
   // and auto-download keep working.
@@ -1751,6 +1753,30 @@ export function App() {
                       )}
                     </div>
                   )}
+                  <div className="card beam-hold-card">
+                    <div className="card__header">
+                      <span className="card__title">{t("card.beamHold")}</span>
+                      <button
+                        type="button"
+                        className="card__collapse-btn"
+                        aria-expanded={!beamHoldCollapsed}
+                        aria-label={beamHoldCollapsed ? t("beamHold.expand") : t("beamHold.collapse")}
+                        title={beamHoldCollapsed ? t("beamHold.expand") : t("beamHold.collapse")}
+                        onClick={() => setBeamHoldCollapsed((collapsed) => !collapsed)}
+                      >
+                        <Icon name="chevronDown" />
+                      </button>
+                    </div>
+                    {!beamHoldCollapsed && (
+                      <div className="card__body">
+                        <BeamHoldPanel
+                          disabled={panelDisabled}
+                          kind={kind === "raster" ? "raster" : "vector"}
+                          repeat={repeat}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>

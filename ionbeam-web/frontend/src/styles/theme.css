@@ -6673,6 +6673,7 @@ body {
 }
 
 .dac-check-card .card__header,
+.beam-hold-card .card__header,
 .save-results-card .card__header,
 .adc-test-card .card__header,
 .scan-controls-card .card__header {
@@ -7100,4 +7101,82 @@ body {
   gap: 10px;
   padding: 12px 16px;
   border-top: 1px solid var(--c-border-soft);
+}
+
+
+/* Beam hold (blank takeover check) — same look as the DAC Ramp check. */
+.beam-hold-body {
+  display: grid;
+  gap: 12px;
+}
+
+.takeover-estimate {
+  color: var(--c-text-muted);
+  font-size: 11px;
+}
+
+.beam-hold-body__hint {
+  margin: -4px 0 0;
+  color: var(--c-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.beam-hold-body__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.beam-hold-body__control {
+  font-size: 12px;
+}
+
+.beam-hold-verdict {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.beam-hold-verdict p {
+  margin: 4px 0 0;
+}
+
+.beam-hold-verdict[data-verdict="periodic"] {
+  border-color: var(--c-danger-border);
+}
+
+.beam-hold-verdict[data-verdict="periodic"] b {
+  color: var(--c-danger);
+}
+
+.beam-hold-verdict[data-verdict="irregular"] {
+  border-color: var(--c-warn-border);
+}
+
+.beam-hold-verdict[data-verdict="irregular"] b {
+  color: var(--c-warn);
+}
+
+/* The trace keeps its hint below the plot instead of over it. */
+.beam-hold-trace {
+  height: auto;
+  min-height: 0;
+  padding-bottom: 8px;
+}
+
+.beam-hold-trace .dac-ramp-waveform__summary {
+  position: static;
+  padding: 4px 12px 0;
+  line-height: 1.4;
+}
+
+@media (max-width: 720px) {
+  .beam-hold-body__fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

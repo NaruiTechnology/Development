@@ -214,8 +214,11 @@ export function useScanStream() {
       // service replays the pass and the image wraps at the pass end.
       const continuous = options?.continuous === true || req.continuous === true;
       if (continuous) req = { ...req, continuous: true };
-      // A live scan always overwrites the current image in place (OBI).
-      const preserveImage = options?.preserveFrame === true || continuous;
+      // A live scan always overwrites the current image in place (OBI). A
+      // Repeat N session (finite `frames`) starts clean like a single run
+      // unless the caller asks to keep the image.
+      const finiteSession = continuous && req.frames != null;
+      const preserveImage = options?.preserveFrame ?? continuous;
       stopExisting(wsRef);
       discardPendingSamples(pendingVectorRef.current);
       activeScanRef.current = { kind: "vector", req };
@@ -290,8 +293,9 @@ export function useScanStream() {
           dispatch,
           sawDoneRef,
           // A live scan keeps painting in raw scan order across passes;
-          // rolling the image at Stop would misalign the next live run.
-          continuous ? 0 : vectorLineShiftPerXRow,
+          // rolling the image at Stop would misalign the next live run. A
+          // finite Repeat session ends like a single run, so it is rolled.
+          continuous && !finiteSession ? 0 : vectorLineShiftPerXRow,
         );
         if (!valid) {
           activeScanRef.current = null;

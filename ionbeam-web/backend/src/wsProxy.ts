@@ -27,7 +27,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { URL } from "node:url";
 import { Buffer } from "node:buffer";
 import { config } from "./config";
-import { streamMockRaster, streamMockVector, streamMockDacRamp } from "./mockHardware";
+import { streamMockRaster, streamMockVector, streamMockDacRamp, streamMockBeamHold } from "./mockHardware";
 import { recordActivityInDb } from "./adminDbRepository";
 import type { AdminUser } from "./adminDbRepository";
 import { recordInputSetupInDb, recordOutputDataInDb } from "./operationDataRepository";
@@ -37,8 +37,12 @@ type ScanKind = "raster" | "vector";
 // "dac_ramp" is deliberately NOT part of ScanKind: it's a hardware
 // diagnostic (single-axis DAC linearity check), not a real scan, so it's
 // excluded from activity/FTP recording below exactly like "adc" is —
-// see the `kind !== "adc"` guards.
-type StreamKind = ScanKind | "adc" | "dac_ramp";
+// see the `kind !== "adc"` guards. "beam_hold" (blank takeover check)
+// is the same kind of diagnostic.
+type StreamKind = ScanKind | "adc" | "dac_ramp" | "beam_hold";
+function isDiagnostic(kind: StreamKind): kind is Exclude<StreamKind, ScanKind> {
+  return kind === "adc" || kind === "dac_ramp" || kind === "beam_hold";
+}
 type RawData = Buffer | ArrayBuffer | Buffer[];
 type ScanUpgradeAuthorization =
   | { ok: true; actor?: AdminUser }
@@ -52,6 +56,7 @@ const STREAM_PATHS: Record<string, StreamKind> = {
   "/ws/scan/vector/stream": "vector",
   "/ws/adc/stream": "adc",
   "/ws/scan/dac_ramp/stream": "dac_ramp",
+  "/ws/scan/beam_hold/stream": "beam_hold",
 };
 const VECTOR_TRACE_LOG_FILE = "/tmp/ionbeam-vector-trace.log";
 
@@ -120,8 +125,8 @@ function handleProxy(
   const upstreamUrl = kind === "adc"
     ? `${config.proxyTargetWs}/adc/stream`
     : `${config.proxyTargetWs}/scan/${kind}/stream`;
-  // (dac_ramp falls through to the second branch: /scan/dac_ramp/stream,
-  // matching the FastAPI route added in glasgow_service/api.py.)
+  // (dac_ramp and beam_hold fall through to the second branch:
+  // /scan/<kind>/stream, matching the FastAPI routes in glasgow_service/api.py.)
   const headers: Record<string, string> = {};
   if (config.glasgowToken) {
     headers["Authorization"] = `Bearer ${config.glasgowToken}`;
@@ -175,7 +180,7 @@ function handleProxy(
             simulation_bitmap: parsed.simulation_bitmap != null,
           });
         }
-        if (kind !== "adc" && kind !== "dac_ramp" && actor && !previewScan) {
+        if (!isDiagnostic(kind) && actor && !previewScan) {
           activityIdPromise = recordScanStart(kind, actor, parsed).catch((err) => {
             console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
             return null;
@@ -214,7 +219,7 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed?.event === "done") {
         completionHandled = true;
-        if (kind === "adc" || kind === "dac_ramp") {
+        if (isDiagnostic(kind)) {
           // Diagnostic streams: relay "done" as-is, no activity/FTP
           // enrichment (same treatment as "adc" — see the ScanKind note
           // above StreamKind).
@@ -325,7 +330,7 @@ function handleMock(
     scanRequest = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
     if (scanRequest) {
       previewScan = isPreviewScan(scanRequest);
-      if (kind !== "adc" && kind !== "dac_ramp" && actor && !previewScan) {
+      if (!isDiagnostic(kind) && actor && !previewScan) {
         activityIdPromise = recordScanStart(kind, actor, scanRequest).catch((err) => {
           console.warn(`[operation-data] failed to record ${kind} scan start:`, err);
           return null;
@@ -342,6 +347,14 @@ function handleMock(
           dwell: Number(body.dwell ?? 500),
           latency_bytes: Number(body.latency_bytes ?? 16384),
         });
+      } else if (kind === "beam_hold") {
+        await streamMockBeamHold(client, {
+          beam: body.beam === "blanked" ? "blanked" : "on",
+          dwell: Number(body.dwell ?? 7),
+          duration_s: Number(body.duration_s ?? 30),
+          external_control: body.external_control !== false,
+          match: body.match && typeof body.match === "object" ? body.match : null,
+        });
       } else if (kind === "raster") {
         await streamMockRaster(client, {
           resolution: Number(body.resolution ?? 256),
@@ -350,6 +363,7 @@ function handleMock(
           simulation_bitmap: body.simulation_bitmap ?? undefined,
           simulation: body.simulation && typeof body.simulation === "object" ? body.simulation : undefined,
           continuous: body.continuous === true,
+          frames: Number.isFinite(Number(body.frames)) && Number(body.frames) > 0 ? Number(body.frames) : null,
         });
       } else {
         await streamMockVector(client, {
@@ -365,6 +379,7 @@ function handleMock(
             ? Number(body.vector_resolution)
             : undefined,
           continuous: body.continuous === true,
+          frames: Number.isFinite(Number(body.frames)) && Number(body.frames) > 0 ? Number(body.frames) : null,
         });
       }
     } catch (e: any) {
@@ -372,7 +387,7 @@ function handleMock(
         client.send(JSON.stringify({ event: "error", message: String(e) }));
       }
     } finally {
-      if (kind !== "adc" && kind !== "dac_ramp" && scanRequest) {
+      if (!isDiagnostic(kind) && scanRequest) {
         void recordAndMaybePersistScanCompletion(
           kind,
           scanRequest,

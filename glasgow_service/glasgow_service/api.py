@@ -16,7 +16,7 @@ from typing import Literal
 from .service import DeviceService, DeviceBusy, DeviceNotReady
 from .models  import (
     RasterRequest, VectorRequest, AdcTestRequest, DacRampRequest,
-    ScanResult, ServiceStatus,
+    BeamHoldRequest, ScanResult, ServiceStatus,
 )
 from .auth    import require_token
 from .config  import find_config_path
@@ -189,6 +189,21 @@ async def stream_dac_ramp(ws: WebSocket):
     await _stream_scan(ws, lambda p: svc.dac_ramp_scan(DacRampRequest(**p)))
 
 
+@app.websocket("/scan/beam_hold/stream")
+async def stream_beam_hold(ws: WebSocket):
+    """Blank takeover diagnostic: park the beam, take over the relays and
+    stream ADC samples until `duration_s` or Stop, then hand back.
+
+    First frame is a `{"event":"metadata","sample_period_us":...}` text
+    frame; then binary uint16-BE sample chunks and a `done` event, the same
+    shape as /scan/dac_ramp/stream."""
+    def start(p):
+        req = BeamHoldRequest(**p)
+        svc.check_beam_hold_allowed(req)   # hardware only: refuse before metadata
+        return svc.beam_hold_scan(req), svc.beam_hold_metadata(req)
+    await _stream_scan(ws, start)
+
+
 @app.websocket("/adc/stream")
 async def stream_adc(ws: WebSocket):
     """Stream uint16 ADC samples from the DAC-free diagnostic image."""
@@ -330,6 +345,10 @@ async def _stream_scan(ws: WebSocket, make_gen):
     try:
         payload = await ws.receive_json()
         gen = make_gen(payload)
+        if isinstance(gen, tuple):
+            # (generator, metadata): a stream that announces its timing first.
+            gen, metadata = gen
+            await ws.send_json(metadata)
         async for chunk in gen:
             await ws.send_bytes(chunk)
             chunks += 1

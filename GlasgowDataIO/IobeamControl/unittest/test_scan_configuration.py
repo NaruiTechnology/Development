@@ -55,12 +55,28 @@ class ScanConfigurationTest(unittest.TestCase):
         args = configure_scan_args(config, GetStateConfigByName(config, "streamData")["actionData"],
                                    SimpleNamespace())
         self.assertEqual(args.port_spec, "AB")
-        self.assertEqual([pin.number for pin in args.ebeam_scan_enable], [0, 1])
+        # Single ion column: the scan-select relay is the ion role, so it
+        # follows external control instead of the constant electron enable.
+        self.assertEqual([pin.number for pin in args.ibeam_scan_enable], [0, 1])
+        self.assertIsNone(args.ebeam_scan_enable)
+        self.assertIsNone(args.ebeam_blank_enable)
+        self.assertIsNone(args.ebeam_blank)
         self.assertEqual([pin.number for pin in args.ibeam_blank_enable], [4, 5])
         self.assertEqual([(pin.number, pin.invert) for pin in args.ibeam_blank], [(2, True), (3, False)])
         self.assertEqual((args.xflip, args.yflip, args.rotate90), (False, True, False))
         self.assertEqual(args.ext_switch_delay_cycles, 960000)
         self.assertEqual(args.voltage, 3.3)
+
+    def test_factory_default_matches_single_ion_harness_and_voltage(self):
+        # streamData_default.json is the restore target for Settings; it must
+        # carry the same beam roles and the 3.3 V differential blanker level.
+        config = AutomationConfig(str(DEVELOPMENT / "GlasgowDataIO/Json/streamData_default.json"))
+        action = GetStateConfigByName(config, "streamData")["actionData"]
+        args = configure_scan_args(config, action, SimpleNamespace())
+        self.assertEqual(set(action["beam"]), {"ion"})
+        self.assertEqual([pin.number for pin in args.ibeam_scan_enable], [0, 1])
+        self.assertEqual([(pin.number, pin.invert) for pin in args.ibeam_blank], [(2, True), (3, False)])
+        self.assertEqual(action["voltage"], 3.3)
 
     def test_b_only_pins_use_indices_relative_to_claimed_port(self):
         args = configure_scan_args(None, {"beam": {"ion": {"pinout": {"blank": "B2#,B3"}}}},

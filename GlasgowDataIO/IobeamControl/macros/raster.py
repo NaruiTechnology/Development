@@ -81,6 +81,7 @@ class RasterScanCommand(BaseCommand):
         padding_dwell: int              = DEFAULT_PADDING_DWELL,
         # --- live scan --------------------------------------------------
         continuous: bool                = False,
+        max_frames: int | None          = None,
     ):
         """
         Scan a frame and return data using a combination of
@@ -126,6 +127,12 @@ class RasterScanCommand(BaseCommand):
                 no host round trip, no re-sync, no drain padding and no USB
                 teardown between frames. Padding, fly-back and teardown run
                 once, after Stop. Default False (single frame, unchanged).
+            max_frames (int, optional): With ``continuous``, end the session
+                by itself after this many frames (Repeat N), keeping external
+                control held from the first frame to the last. ``None`` runs
+                until Stop. Fixed at construction: the sender and the
+                receiver each walk ``_iter_chunks`` and must agree on where
+                the session ends.
         """
         self._x_range     = x_range
         self._y_range     = y_range
@@ -141,6 +148,9 @@ class RasterScanCommand(BaseCommand):
         self._padding_ratio_denominator = int(padding_ratio_denominator)
         self._padding_dwell             = int(padding_dwell)
         self.continuous                 = bool(continuous)
+        if max_frames is not None and int(max_frames) < 1:
+            raise ValueError(f"max_frames must be >= 1, got {max_frames}")
+        self._max_frames = None if max_frames is None else int(max_frames)
 
         self.abort = asyncio.Event()
 
@@ -163,7 +173,7 @@ class RasterScanCommand(BaseCommand):
         return sum(1 for _ in self._iter_frame_chunks(latency, last_frame=False))
 
     def _iter_chunks(self, latency):
-        """Chunks for the whole command: one frame, or frames forever.
+        """Chunks for the whole command: one frame, N frames, or frames forever.
 
         In continuous mode every frame after the first starts with an
         in-band ``RasterRegionCommand`` (the first frame's region is sent
@@ -178,7 +188,8 @@ class RasterScanCommand(BaseCommand):
         region = bytes(RasterRegionCommand(
             x_range=self._x_range, y_range=self._y_range))
         first = True
-        while True:
+        frames = 0
+        while self._max_frames is None or frames < self._max_frames:
             for n, (commands, pixel_count) in enumerate(
                     self._iter_frame_chunks(latency, last_frame=self.frame_blank)):
                 if n == 0 and not first:
@@ -186,6 +197,7 @@ class RasterScanCommand(BaseCommand):
                                              if self.frame_blank else b"")
                 yield (commands, pixel_count)
             first = False
+            frames += 1
 
     def _iter_frame_chunks(self, latency, *, last_frame: bool):
         commands = bytearray()
@@ -242,6 +254,10 @@ class RasterScanCommand(BaseCommand):
         tokens = self._max_pipeline
         token_fut = asyncio.Future()
         total_pixels = self._x_range.count * self._y_range.count
+        # A finite live session (Repeat N) ends by itself after N frames.
+        session_pixels = (total_pixels * self._max_frames
+                          if self.continuous and self._max_frames is not None
+                          else None if self.continuous else total_pixels)
         stats = LinkStats(
             "raster", dwell=self._dwell,
             beam_hz=getattr(self, "link_beam_hz", None),
@@ -356,7 +372,7 @@ class RasterScanCommand(BaseCommand):
                 t_read = time.perf_counter()
                 res = await self.recv_res(pixel_count, stream, self._output_mode)
                 stats.received(time.perf_counter() - t_read, pixel_count)
-                if not self.continuous and stats.pixels_recv >= total_pixels:
+                if session_pixels is not None and stats.pixels_recv >= session_pixels:
                     # Last chunk: log now.  The consumer normally stops
                     # iterating after it, so code after the final `yield`
                     # (including `finally`) may not run until GC/teardown.

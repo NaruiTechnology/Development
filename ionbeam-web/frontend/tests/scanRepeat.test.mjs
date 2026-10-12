@@ -52,3 +52,15 @@ test("retains only the final ROI gray-feedback cycle for any repeat count", () =
     );
   }
 });
+
+test("Repeat N becomes one held session of N passes", async () => {
+  const { repeatSessionRequest, MAX_REPEAT_FRAMES } = await import("../.test-dist/lib/scanRepeat.js");
+  const base = { pattern: "default", dwell: 16 };
+  assert.equal(repeatSessionRequest(base, 1), null);
+  assert.equal(repeatSessionRequest(base, 0), null);
+  const s = repeatSessionRequest(base, 7);
+  assert.deepEqual(s, { req: { ...base, continuous: true, frames: 7 }, frames: 7 });
+  assert.equal(base.continuous, undefined, "the caller's request is not mutated");
+  assert.equal(repeatSessionRequest(base, 3.9).frames, 3);
+  assert.equal(repeatSessionRequest(base, 999).frames, MAX_REPEAT_FRAMES);
+});

@@ -6,7 +6,9 @@ import struct
 
 logger = logging.getLogger()
 
-from GlasgowDataIO.IobeamControl.commands.low_level_commands import SynchronizeCommand, FlushCommand
+from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
+    SynchronizeCommand, FlushCommand, BlankCommand, ExternalCtrlCommand,
+)
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
 from AutomationPy.buildingblocks.automation_log import AutomationLog
 
@@ -240,6 +242,65 @@ class Connection(metaclass=ABCMeta):
         self._synchronized = True
         self._logger.debug("synchronization complete")
 
+    #: Upper bound for the hand-back handshake. It covers the relay switch
+    #: delay (20 ms by default) plus draining pixels still queued in the
+    #: FPGA after a Stop, which the host has stopped reading.
+    RELEASE_TIMEOUT_S = 5.0
+
+    async def _release_external_control(self, command) -> None:
+        """Hand the beam back to the instrument after a scan.
+
+        A scan command takes external control (scan-select and blank-enable
+        relays) and leaves the beam blanked after its last pixel. Without this
+        the FPGA keeps holding the instrument after USB is closed, until the
+        next connection pulses the gateware reset.
+
+        Sends Blank(on) -> ExternalCtrl(off) -> Synchronize. The gateware
+        keeps the beam blanked for ext_switch_delay while the relays fall
+        back, then releases the blank pins. Waiting for the FFFF+cookie
+        reply proves the FPGA executed the release, and reading up to it
+        drains any queued pixels so backpressure cannot stall the release.
+
+        Never raises: it runs in `finally` paths, including after USB errors.
+        """
+        if not getattr(command, "_external_control", False):
+            return
+        if not self.connected:
+            self._logger.warning(
+                "external control not released: connection already closed; "
+                "the next connection's gateware reset will release it")
+            return
+        cookie, self._next_cookie = self._next_cookie, (self._next_cookie + 2) & 0xffff
+        cmd = bytearray()
+        cmd.extend(bytes(BlankCommand(enable=True, inline=False)))
+        cmd.extend(bytes(ExternalCtrlCommand(enable=False)))
+        cmd.extend(bytes(SynchronizeCommand(raster=True, output=OutputMode.SixteenBit, cookie=cookie)))
+        cmd.extend(bytes(FlushCommand()))
+        res = struct.pack(">HH", 0xffff, cookie)
+
+        async def handshake():
+            await self._stream.write(cmd)
+            await self._stream.flush()
+            return await self._stream.readuntil(res)
+
+        try:
+            data = await asyncio.wait_for(handshake(), timeout=self.RELEASE_TIMEOUT_S)
+        except asyncio.CancelledError:
+            self._logger.warning(
+                "external control release interrupted by cancellation; "
+                "the next connection's gateware reset will release it")
+            raise
+        except Exception as exc:
+            self._logger.warning(
+                f"external control release failed ({type(exc).__name__}: {exc}); "
+                "the next connection's gateware reset will release it")
+            return
+        if bytes(data).endswith(res):
+            self._logger.info("external control released to the instrument")
+        else:
+            self._logger.warning(
+                f"external control release not confirmed: no reply cookie {cookie:#06x}")
+
     def _handle_incomplete_read(self, exc):
         self._disconnect()
         raise TransferError("connection closed") from exc
@@ -258,7 +319,10 @@ class Connection(metaclass=ABCMeta):
         except asyncio.IncompleteReadError as e:
             self._handle_incomplete_read(e)
         finally:
-            await self._post_transfer_cleanup()
+            try:
+                await self._release_external_control(command)
+            finally:
+                await self._post_transfer_cleanup()
 
     async def transfer_multiple(self, command, **kwargs):
         """Stream chunks from `command` and (best-effort) save a PNG.
@@ -314,7 +378,13 @@ class Connection(metaclass=ABCMeta):
                 if command_iter is not None:
                     await command_iter.aclose()
             finally:
-                await self._post_transfer_cleanup()
+                try:
+                    # Scan end, Stop (/scan/abort), WebSocket close and
+                    # errors all pass here: hand the instrument back
+                    # before USB is closed.
+                    await self._release_external_control(command)
+                finally:
+                    await self._post_transfer_cleanup()
 
     async def transfer_raw(self, command, flush: bool = False, **kwargs):
         self._logger.debug(f"transfer {command!r}")
