@@ -21,7 +21,7 @@
                     },
                     "transforms": {
                         "xflip": false,
-                        "yflip": true,
+                        "yflip": false,
                         "rotate90": false
                     },
                     "timings": {
@@ -190,7 +190,7 @@
     "AdcTest": true,
     "transforms": {
         "xflip": false,
-        "yflip": true,
+        "yflip": false,
         "rotate90": false
     }
 }
