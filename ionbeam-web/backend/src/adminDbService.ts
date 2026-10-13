@@ -62,28 +62,36 @@ export function pgConnectionFromOperationRuntimeConfig(source: Config = config):
 export function pgConnectionFromAdminConfig(data: unknown, fallback: PgConnection = pgConnectionFromRuntimeConfig()): PgConnection {
   // IobeamAdmin.json holds ${VAR} placeholders; resolve them from the secrets file.
   const db = expandPlaceholders(readRecord(data, ["Database"]));
-  // No shared admin server configured (no host and no login resolved, e.g. a
-  // fresh host whose installer had no credentials): use the local admin
-  // database the deployment created, as a whole, rather than mixing the local
-  // login with the shared server's database name.
+  const rawDb = readRecord(data, ["Database"]);
+  const sharedPlaceholderKeys = ["Host", "host", "User", "user", "Username", "username", "ConnectionString", "connectionString"];
+  const requiresSharedConfig = sharedPlaceholderKeys.some((key) =>
+    typeof rawDb[key] === "string" && /\$\{IOBEAM_ADMIN_CONFIG_DB_/.test(rawDb[key] as string));
   if (!stringValue(db.Host ?? db.host) && !stringValue(db.User ?? db.user ?? db.Username ?? db.username)
       && !stringValue(db.ConnectionString ?? db.connectionString)) {
+    if (requiresSharedConfig) {
+      throw new Error("Shared admin database is not configured. Set IOBEAM_ADMIN_CONFIG_DB_HOST, IOBEAM_ADMIN_CONFIG_DB_USER and IOBEAM_ADMIN_CONFIG_DB_PASSWORD in the private secrets file, or provide IOBEAM_ADMIN_CONFIG_DB_URL. Local database fallback is disabled for shared configuration.");
+    }
     return { ...fallback };
   }
   const connectionString = stringValue(db.ConnectionString ?? db.connectionString);
   const parsed = connectionString ? parsePostgresConnectionString(connectionString) : null;
+  const host = stringValue(db.Host ?? db.host) || parsed?.host;
+  const user = stringValue(db.User ?? db.user ?? db.Username ?? db.username) || parsed?.user;
+  if (requiresSharedConfig && (!host || !user)) {
+    throw new Error("Shared admin database configuration is incomplete: both host and user must resolve from the private secrets file or connection URL.");
+  }
   return {
-    host: stringValue(db.Host ?? db.host) || parsed?.host || fallback.host,
+    host: host || fallback.host,
     port: numberValue(db.Port ?? db.port) || parsed?.port || fallback.port,
     database:
       stringValue(db.DatabaseName ?? db.databaseName ?? db.Database ?? db.database) ||
       parsed?.database ||
       fallback.database,
-    user: stringValue(db.User ?? db.user ?? db.Username ?? db.username) || parsed?.user || fallback.user,
+    user: user || fallback.user,
     password:
       stringValue(db.Password ?? db.password) ||
       parsed?.password ||
-      fallback.password,
+      (requiresSharedConfig ? null : fallback.password),
     sslMode: stringValue(db.SslMode ?? db.sslMode) || parsed?.sslMode || fallback.sslMode || null,
     commandTimeoutMs:
       numberValue(db.CommandTimeoutMs ?? db.commandTimeoutMs) ||

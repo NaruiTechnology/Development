@@ -1,6 +1,5 @@
 import {
   applyAdminDatabaseSetup,
-  isDbConnectivityError,
   pgConnectionFromAdminConfig,
   pgConnectionFromRuntimeConfig,
   runPsql,
@@ -273,32 +272,13 @@ async function executeStored(sqlTemplate: string, payload: unknown = null): Prom
 }
 
 async function queryStored(sqlTemplate: string, payload: unknown = null, fallback = ""): Promise<string> {
-  const primary = await resolveCurrentAdminDbConnection();
-  const localFallback = pgConnectionFromRuntimeConfig();
-  const targets = connectionKey(primary) === connectionKey(localFallback)
-    ? [primary]
-    : [primary, localFallback];
+  const connection = await resolveCurrentAdminDbConnection();
   const payloadSql = jsonbLiteral(payload);
   // A replacer *function*: String.replace() would otherwise expand "$&", "$'" ... sequences found inside the JSON payload.
   const sql = `SET search_path TO iobeam_admin, ionbeam_asset, public;\n${sqlTemplate.replace("$$payload$$", () => payloadSql)}`;
-  for (let index = 0; index < targets.length; index += 1) {
-    const connection = targets[index];
-    try {
-      await ensureAdminSchema(connection);
-      const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
-      if (index > 0) {
-        console.warn(`[admin-db] remote connection failed; using local fallback at ${connection.host}`);
-      }
-      return out.trim() || fallback;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (index === 0 && targets.length > 1 && isDbConnectivityError(message)) {
-        continue;
-      }
-      throw error;
-    }
-  }
-  return fallback;
+  await ensureAdminSchema(connection);
+  const out = await runPsql(["-Atq", "-v", "ON_ERROR_STOP=1"], connection.database, sql, connection);
+  return out.trim() || fallback;
 }
 
 /** Run a whole SQL script (e.g. a seed file) against the admin database. */

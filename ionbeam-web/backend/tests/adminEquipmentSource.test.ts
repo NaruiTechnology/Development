@@ -30,10 +30,10 @@ test("writeAdminConfig keeps everything except equipment rows", async () => {
   }
 });
 
-test("without a shared admin server the local admin database is used as a whole", async () => {
+test("shared admin configuration never silently selects local credentials", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "admin-fallback-"));
   process.env.IOBEAM_SECRETS_FILE = path.join(dir, "secrets.env");
-  for (const name of ["IOBEAM_ADMIN_CONFIG_DB_HOST", "IOBEAM_ADMIN_CONFIG_DB_USER", "IOBEAM_ADMIN_CONFIG_DB_PASSWORD"]) {
+  for (const name of ["IOBEAM_ADMIN_CONFIG_DB_HOST", "IOBEAM_ADMIN_CONFIG_DB_USER", "IOBEAM_ADMIN_CONFIG_DB_PASSWORD", "IOBEAM_ADMIN_CONFIG_DB_URL"]) {
     delete process.env[name];
   }
   try {
@@ -43,14 +43,16 @@ test("without a shared admin server the local admin database is used as a whole"
     const config = { Database: { DatabaseName: "ionbeam_admin_db", Host: "${IOBEAM_ADMIN_CONFIG_DB_HOST}",
       User: "${IOBEAM_ADMIN_CONFIG_DB_USER}", Password: "${IOBEAM_ADMIN_CONFIG_DB_PASSWORD}",
       ConnectionString: "${IOBEAM_ADMIN_CONFIG_DB_URL:-}", Port: 5432 } };
-    assert.deepEqual(pgConnectionFromAdminConfig(config, local), local);
+    assert.throws(() => pgConnectionFromAdminConfig(config, local), /Shared admin database is not configured/);
     process.env.IOBEAM_ADMIN_CONFIG_DB_HOST = "shared.example";
+    assert.throws(() => pgConnectionFromAdminConfig(config, local), /configuration is incomplete/);
     process.env.IOBEAM_ADMIN_CONFIG_DB_USER = "cfg";
+    assert.equal(pgConnectionFromAdminConfig(config, local).password, null);
     process.env.IOBEAM_ADMIN_CONFIG_DB_PASSWORD = "cfg-pass";
     const shared = pgConnectionFromAdminConfig(config, local);
     assert.deepEqual([shared.host, shared.user, shared.database], ["shared.example", "cfg", "ionbeam_admin_db"]);
   } finally {
-    for (const name of ["IOBEAM_ADMIN_CONFIG_DB_HOST", "IOBEAM_ADMIN_CONFIG_DB_USER", "IOBEAM_ADMIN_CONFIG_DB_PASSWORD"]) {
+    for (const name of ["IOBEAM_ADMIN_CONFIG_DB_HOST", "IOBEAM_ADMIN_CONFIG_DB_USER", "IOBEAM_ADMIN_CONFIG_DB_PASSWORD", "IOBEAM_ADMIN_CONFIG_DB_URL"]) {
       delete process.env[name];
     }
     fs.rmSync(dir, { recursive: true, force: true });
