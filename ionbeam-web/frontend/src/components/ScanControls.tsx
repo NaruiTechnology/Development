@@ -359,7 +359,7 @@ export function ScanControls({
     }
   }, [vectorPasses]);
 
-  async function onRun() {
+  async function startRunRequest() {
     if (disabled || (kind === "roi" && !roiAction)) return;
     // The WebSocket upgrade checks the current session and scan privilege on
     // the server. Avoid a duplicate account round trip before starting Run.
@@ -457,7 +457,7 @@ export function ScanControls({
     }
   }
 
-  async function onInfinite() {
+  async function startInfiniteRequest() {
     if ((kind !== "raster" && kind !== "vector") || disabled || infiniteScanActiveRef.current) return;
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
@@ -513,7 +513,7 @@ export function ScanControls({
     else dispatch(resetVector());
   }
 
-  async function onRunValidated() {
+  async function startValidatedRunRequest() {
     if (disabled || kind === "roi") return;
     const allowed = await refreshScanPrivilege();
     if (!allowed) {
@@ -575,6 +575,26 @@ export function ScanControls({
     if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }
+
+  // One click must start exactly one stream. The handlers await the request
+  // build (bitmap selection, privilege check) before startVector/startRaster
+  // marks the stream "running", and the Run button stays enabled for that
+  // window. A second click then opened a second stream that closed the
+  // first one's socket: the service kept that unattended scan, rejected the
+  // second as "busy", and the first scan's real result was never shown.
+  const runStartingRef = useRef(false);
+  const guardRunStart = (start: () => Promise<void>) => async () => {
+    if (runStartingRef.current) return;
+    runStartingRef.current = true;
+    try {
+      await start();
+    } finally {
+      runStartingRef.current = false;
+    }
+  };
+  const onRun = guardRunStart(startRunRequest);
+  const onInfinite = guardRunStart(startInfiniteRequest);
+  const onRunValidated = guardRunStart(startValidatedRunRequest);
 
   const runDisabled =
     controlsDisabled ||

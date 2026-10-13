@@ -7,6 +7,7 @@ Swagger UI:   http://127.0.0.1:8765/docs
 ReDoc:        http://127.0.0.1:8765/redoc
 OpenAPI JSON: http://127.0.0.1:8765/openapi.json
 """
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -94,8 +95,8 @@ async def get_defaults():
 async def run_raster(req: RasterRequest):
     try:
         return await svc.run_raster(req)
-    except DeviceBusy:
-        raise HTTPException(409, "device busy")
+    except DeviceBusy as e:
+        raise HTTPException(409, str(e) or "device busy")
     except DeviceNotReady as e:
         raise HTTPException(503, str(e))
 
@@ -123,8 +124,8 @@ async def run_raster(req: RasterRequest):
 async def run_dac_ramp(req: DacRampRequest):
     try:
         return await svc.run_dac_ramp(req)
-    except DeviceBusy:
-        raise HTTPException(409, "device busy")
+    except DeviceBusy as e:
+        raise HTTPException(409, str(e) or "device busy")
     except DeviceNotReady as e:
         raise HTTPException(503, str(e))
 
@@ -168,8 +169,8 @@ async def run_vector(req: VectorRequest):
         return await svc.run_vector(req)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    except DeviceBusy:
-        raise HTTPException(409, "device busy")
+    except DeviceBusy as e:
+        raise HTTPException(409, str(e) or "device busy")
     except DeviceNotReady as e:
         raise HTTPException(503, str(e))
 
@@ -227,8 +228,9 @@ async def stream_adc(ws: WebSocket):
             await ws.send_bytes(chunk)
             chunks += 1
         await ws.send_json({"event": "done", "chunks": chunks})
-    except DeviceBusy:
-        await ws.send_json({"event": "error", "code": "busy"})
+    except DeviceBusy as e:
+        await ws.send_json({"event": "error", "code": "busy",
+                            "detail": str(e) or "device busy"})
     except DeviceNotReady as exc:
         await ws.send_json({
             "event": "error", "code": "not_ready", "detail": str(exc),
@@ -338,12 +340,34 @@ async def get_last_figure(
 
 # ---------- shared WS plumbing --------------------------------------------
 
+async def _watch_client_disconnect(ws: WebSocket, owner) -> None:
+    """Stop this stream's scan as soon as its client goes away.
+
+    The scan generator only notices a closed socket on its next send, and
+    during connection set-up (bitstream load, first chunk: ~8-12 s) it sends
+    nothing. Without this, a browser that restarted or navigated away left
+    an unattended scan holding the device, and the next Run was rejected as
+    "busy" while that scan's own result was never delivered."""
+    try:
+        while True:
+            message = await ws.receive()
+            if message.get("type") == "websocket.disconnect":
+                break
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    if svc.abort_active_scan(owner=owner):
+        logger.info("scan stream client disconnected; stopping its scan")
+
+
 async def _stream_scan(ws: WebSocket, make_gen):
     await ws.accept()
     gen = None
+    watcher = None
     chunks = 0
     try:
         payload = await ws.receive_json()
+        watcher = asyncio.create_task(
+            _watch_client_disconnect(ws, asyncio.current_task()))
         gen = make_gen(payload)
         if isinstance(gen, tuple):
             # (generator, metadata): a stream that announces its timing first.
@@ -353,8 +377,9 @@ async def _stream_scan(ws: WebSocket, make_gen):
             await ws.send_bytes(chunk)
             chunks += 1
         await ws.send_json({"event": "done", "chunks": chunks})
-    except DeviceBusy:
-        await ws.send_json({"event": "error", "code": "busy"})
+    except DeviceBusy as e:
+        await ws.send_json({"event": "error", "code": "busy",
+                            "detail": str(e) or "device busy"})
     except DeviceNotReady as e:
         detail = str(e)
         if detail in {"", "ECONNRESET", "read ECONNRESET", "Connection reset by peer"}:
@@ -381,6 +406,8 @@ async def _stream_scan(ws: WebSocket, make_gen):
         try: await ws.send_json({"event": "error", "message": repr(e)})
         except Exception: pass
     finally:
+        if watcher is not None:
+            watcher.cancel()
         if gen is not None:
             await gen.aclose()
         try: await ws.close()

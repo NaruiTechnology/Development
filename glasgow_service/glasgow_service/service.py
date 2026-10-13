@@ -98,6 +98,11 @@ def _obi_aligned_np(raw14):
 
 _ADC_PRESENCE_MIN_SAMPLES = 256
 _ADC_DIAGNOSTIC_UNIQUE_LIMIT = 64
+# A scan whose Stop was already requested (operator Stop, or the browser
+# closing its stream) is only finishing its hardware cleanup. A new scan that
+# arrives in that window waits this long for the lock instead of failing with
+# "busy": gateware load cannot be interrupted, so cleanup can take ~10 s.
+_BUSY_WAIT_AFTER_ABORT_S = 20.0
 _ADC_FULL_SCALE_ARRAY = np.array(sorted(_ADC_FULL_SCALE_VALUES), dtype=np.int64)
 
 
@@ -919,6 +924,12 @@ class DeviceService:
         # Created lazily by the _device_lock property.
         self._active_command = None
         self._abort_requested = False
+        # Who holds `_lock` (kind, transport, start time, owning task) and
+        # whether Stop was requested for that scan. Unlike
+        # `_abort_requested`, `_scan_aborted` survives `_deactivate_command`
+        # so the scan-end bookkeeping can report the run as cancelled.
+        self._active_scan: Optional[dict] = None
+        self._scan_aborted = False
         self._lock = asyncio.Lock()
         self._status = ServiceStatus(state=DeviceState.IDLE)  # IDLE = "ready, not yet connected"
 
@@ -991,16 +1002,37 @@ class DeviceService:
     def status(self) -> ServiceStatus:
         return self._status.model_copy()
 
-    def abort_active_scan(self) -> bool:
-        """Cooperatively stop the active FPGA command without closing USB."""
+    def abort_active_scan(self, owner=None) -> bool:
+        """Cooperatively stop the active FPGA command without closing USB.
+
+        `owner` (the task that started the scan) restricts the abort to that
+        scan, so a stream whose client went away cannot stop a newer scan."""
         if not self._lock.locked():
             return False
+        active = getattr(self, "_active_scan", None)
+        if owner is not None and (active is None or active.get("owner") is not owner):
+            return False
         self._abort_requested = True
+        self._scan_aborted = True
         abort = getattr(self._active_command, "abort", None)
         if abort is not None:
             abort.set()
-        logger.info("scan abort requested")
+        logger.info("scan abort requested (%s)",
+                    "command signalled" if abort is not None
+                    else "connection still initialising; applied when the command starts")
         return True
+
+    def _busy_detail(self) -> str:
+        """Human-readable reason for DeviceBusy: who holds the device."""
+        active = getattr(self, "_active_scan", None)
+        if not active:
+            return f"device busy: service state is {self._status.state.value}"
+        elapsed = time.monotonic() - active["started"]
+        detail = (f"device busy: a {active['kind']} scan ({active['transport']}) "
+                  f"started {elapsed:.1f} s ago is still running")
+        if getattr(self, "_scan_aborted", False):
+            detail += "; Stop was requested and hardware cleanup has not finished"
+        return detail
 
     async def adc_stream(self, req: AdcTestRequest) -> AsyncIterator[bytes]:
         """Stream from the ADC-only image while holding the global device lock.
@@ -1367,6 +1399,8 @@ class DeviceService:
             self._activate_command(cmd)
             adc_monitor = _AdcPresenceMonitor(
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
+            logger.info("[raster] ADC presence check %s (adc_valid=%s)",
+                        "enabled" if adc_monitor.enabled else "disabled", req.adc_valid)
             adc_presence_fault = False
             try:
                 async for chunk in conn.transfer_multiple(
@@ -1381,6 +1415,11 @@ class DeviceService:
                     if fault is not None:
                         logger.warning("production ADC presence warning: %s", fault)
                         adc_presence_fault = True
+                        if getattr(self, "_scan_aborted", False):
+                            # Stop already requested: end as a cancellation,
+                            # not a device fault nobody is waiting for.
+                            logger.info("ADC presence fault ignored: scan was stopped")
+                            break
                         raise DeviceNotReady(fault)
                     yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
@@ -1441,6 +1480,8 @@ class DeviceService:
                 cmd, latency=latency)
             adc_monitor = _AdcPresenceMonitor(
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
+            logger.info("[vector] ADC presence check %s (adc_valid=%s)",
+                        "enabled" if adc_monitor.enabled else "disabled", req.adc_valid)
             adc_presence_fault = False
             try:
                 async for chunk in transfer_iter:
@@ -1453,11 +1494,18 @@ class DeviceService:
                     fault = adc_monitor.observe(chunk)
                     if fault is not None:
                         logger.warning("production ADC presence warning: %s", fault)
+                        adc_presence_fault = True
+                        if getattr(self, "_scan_aborted", False):
+                            # Stop already requested: end as a cancellation,
+                            # not a device fault nobody is waiting for.
+                            logger.info("ADC presence fault ignored: scan was stopped")
+                            break
                         raise DeviceNotReady(fault)
                     yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
-                adc_presence_fault = isinstance(e, DeviceNotReady) and \
-                    str(e).startswith("ADC/subtarget presence check failed:")
+                adc_presence_fault = adc_presence_fault or (
+                    isinstance(e, DeviceNotReady) and
+                    str(e).startswith("ADC/subtarget presence check failed:"))
                 self._drop_conn_on_error(e)
                 raise
             finally:
@@ -2637,14 +2685,35 @@ class DeviceService:
         svc = self
         class _Ctx:
             async def __aenter__(self):
+                acquired = False
                 if svc._lock.locked() or svc._status.state is DeviceState.BUSY:
-                    raise DeviceBusy("a scan is already running")
+                    # The previous scan was told to stop (operator Stop, or
+                    # its browser stream closed) and is only cleaning up:
+                    # wait for it instead of reporting a bare "busy".
+                    if not (svc._lock.locked() and getattr(svc, "_scan_aborted", False)):
+                        raise DeviceBusy(svc._busy_detail())
+                    logger.info("scan start kind=%s waiting up to %.0fs for the stopped "
+                                "scan to release the device (%s)", kind,
+                                _BUSY_WAIT_AFTER_ABORT_S, svc._busy_detail())
+                    try:
+                        await asyncio.wait_for(svc._lock.acquire(), _BUSY_WAIT_AFTER_ABORT_S)
+                    except asyncio.TimeoutError:
+                        raise DeviceBusy(svc._busy_detail()) from None
+                    acquired = True
                 # IDLE, ERROR, DISCONNECTED are all OK to start from — the
                 # _ensure_conn() call inside the scan will (re)open as needed.
                 if svc._status.state is DeviceState.CONNECTING:
+                    if acquired:
+                        svc._lock.release()
                     raise DeviceNotReady("device is connecting")
-                await svc._lock.acquire()
+                if not acquired:
+                    await svc._lock.acquire()
                 svc._abort_requested = False
+                svc._scan_aborted = False
+                svc._active_scan = {
+                    "kind": kind, "transport": transport,
+                    "started": time.monotonic(), "owner": asyncio.current_task(),
+                }
                 svc._status.state = DeviceState.BUSY
                 svc._status.last_error = None
                 svc._status.chunks_in_flight = 0
@@ -2660,6 +2729,11 @@ class DeviceService:
                 # owns hardware cleanup.
                 cancelled = exc_type is not None and issubclass(
                     exc_type, (GeneratorExit, asyncio.CancelledError))
+                # An operator Stop (/scan/abort or the client closing the
+                # stream) that ended the scan normally is a cancellation too;
+                # without this a stopped live scan logged cancelled=False.
+                aborted = bool(getattr(svc, "_scan_aborted", False))
+                cancelled = cancelled or (aborted and exc is None)
                 if exc is None:
                     svc._status.scans_completed += 1
                 elif cancelled:
@@ -2675,6 +2749,8 @@ class DeviceService:
                 chunks = svc._status.chunks_in_flight
                 svc._status.chunks_in_flight = 0
                 svc._release_device_if_idle()
+                svc._active_scan = None
+                svc._scan_aborted = False
                 svc._lock.release()
                 logger.info("scan end kind=%s ok=%s cancelled=%s elapsed=%.3fs "
                             "transport=%s chunks=%d error=%s",
