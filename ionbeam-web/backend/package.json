@@ -6,18 +6,18 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "dev:mobility": "IONBEAM_MOBILITY_ONLY=1 tsx watch src/server.ts",
+    "dev:mobility": "set \"IONBEAM_MOBILITY_ONLY=1\" && tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/calibrationVendorFile.test.ts tests/calibrationCsvFile.test.ts tests/scanGeometryConfig.test.ts tests/vacuumConfig.test.ts tests/settingsVacuumControl.test.ts tests/configReset.test.ts tests/serviceReset.test.ts tests/secretStore.test.ts tests/adminEquipmentSource.test.ts",
     "db:migrate:update-date": "tsx src/scripts/applyUpdateDateMigration.ts",
     "db:seed:calibration": "tsx src/scripts/seedCalibrationCatalog.ts",
-    "deploy": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json",
-    "deploy:local": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json",
-    "deploy:production": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --production",
-    "deploy:mobility": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --mobility",
-    "deploy:production-mobility": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python3 distributionDeployApp.py -j ./Json/DistributionDeploy.json --production --mobility"
+    "deploy": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python distributionDeployApp.py -j ./Json/DistributionDeploy.json",
+    "deploy:local": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python distributionDeployApp.py -j ./Json/DistributionDeploy.json",
+    "deploy:production": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python distributionDeployApp.py -j ./Json/DistributionDeploy.json --production",
+    "deploy:mobility": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python distributionDeployApp.py -j ./Json/DistributionDeploy.json --mobility",
+    "deploy:production-mobility": "cd ../../DeployWorkSpace/Development/DistributionDeploy && python distributionDeployApp.py -j ./Json/DistributionDeploy.json --production --mobility"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

@@ -106,7 +106,7 @@ class RasterRequest(BaseModel):
     resolution:    int  = Field(512,   ge=1, le=2048, description="DAC range (NxN).")
     dwell:         int  = Field(2,     ge=0, le=65535, description="A dwell of N averages N + 1 ADC samples (125 ns each with the current revC3 timing); 0 is the upstream OBI one-sample setting.")
     latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
-    frame_blank:   bool = False
+    frame_blank:   bool = True
     cookie:        int  = Field(123, ge=0, le=0xFFFF)
     # New in scan-params refactor. Was previously hardcoded to SixteenBit
     # inside the macro because the API had no field for it.
@@ -121,6 +121,16 @@ class RasterRequest(BaseModel):
             "frame on one synchronized FPGA command stream until /scan/abort, like "
             "OBI's live scan. Pixels stream continuously and wrap at the frame end; "
             "the `done` event is sent only after Stop. Ignored by /scan/raster/run."
+        ),
+    )
+
+    frames: Optional[int] = Field(
+        None, ge=1, le=100000,
+        description=(
+            "With `continuous`: end the session by itself after this many frames "
+            "(Repeat N). External control is taken once at the start and held for "
+            "every frame, then handed back after the last. The caller computes N; "
+            "null runs until /scan/abort."
         ),
     )
 
@@ -188,6 +198,60 @@ class DacRampRequest(BaseModel):
     beam_type:     str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
     adc_valid:     bool = Field(True, description="Run the production ADC presence/saturation check.")
+
+
+class BeamHoldState(str, Enum):
+    on = "on"            # beam unblanked: checks the blank takeover
+    blanked = "blanked"  # beam held blanked by us: checks the blank level
+
+
+class BeamHoldScanPlan(BaseModel):
+    """The scan a beam hold reproduces: same frames, frame time and Frame
+    blank, with the beam parked. Sent by the UI from the current scan
+    settings, so the takeover lasts exactly as long as that scan's would."""
+    frame_pixels: int  = Field(..., ge=1, le=268_435_456,
+                               description="Pixels (raster) or points (vector) in one frame/pass.")
+    dwell:        int  = Field(..., ge=0, le=65535, description="The scan's dwell (dwell + 1 conversions per pixel).")
+    frames:       int  = Field(1, ge=1, le=100_000, description="Frames in the session (Repeat N).")
+    frame_blank:  Optional[bool] = Field(
+        None, description="The scan's Frame blank; null uses the service default, as a vector scan does.")
+
+
+class BeamHoldRequest(BaseModel):
+    """Park the beam on one DAC position and record the detector over time.
+
+    Diagnostic for the blank takeover. It runs exactly when a scan with the
+    same settings would use the hardware: IsProduction=true, or
+    IsProduction=false with simulation switched off (a bench setup).
+    With `external_control` the scan and blank-enable relays switch to
+    Glasgow exactly as for a scan; the beam is held unblanked (`beam=on`) or
+    blanked (`beam=blanked`) with X/Y frozen, so any periodic dark dip in the
+    recorded signal comes from outside our scan: typically the instrument's
+    own blanker still reaching the column. With `external_control=false`
+    nothing is taken over, which records the instrument's own behaviour.
+
+    With `match` (the UI always sends it) the hold reproduces that scan's
+    takeover: the same number of frames, each lasting as long as one scan
+    frame, with the scan's Frame blank between them. It ends by itself after
+    the last frame, like the scan, and hands control back. No timer.
+    Without `match`, `duration_s` bounds the hold instead.
+    """
+    x_code:        int  = Field(8192, ge=0, le=16383, description="DAC code the beam is parked on (X).")
+    y_code:        int  = Field(8192, ge=0, le=16383, description="DAC code the beam is parked on (Y).")
+    beam:          BeamHoldState = BeamHoldState.on
+    dwell:         int  = Field(7, ge=0, le=65535,
+                                description="Sampling dwell of the recorded trace; 7 gives ~1 us at 8 MHz.")
+    match:         Optional[BeamHoldScanPlan] = Field(
+        None, description="Reproduce this scan's takeover (frames, frame time, Frame blank).")
+    duration_s:    Optional[float] = Field(
+        None, gt=0, le=600, description="Without `match`: stop after this many seconds (default 30).")
+    latency_bytes: int  = Field(16384, ge=2, description="`latency` passed to transfer_multiple.")
+    cookie:        int  = Field(125, ge=0, le=0xFFFF)
+    external_control: bool = Field(True, description="Take over the scan and blank-enable relays while holding.")
+    adc_valid:     bool = Field(True, description="Run the production ADC presence/saturation check.")
+    simulation:    Optional[dict] = Field(
+        None, description="The browser's session simulation override, as scan requests carry it. "
+                          "Beam hold runs only when a scan with the same settings would use the hardware.")
 
 
 class AdcTestRequest(BaseModel):
@@ -325,6 +389,17 @@ class VectorRequest(BaseModel):
             "like OBI's live scan. Samples stream continuously and wrap at the pass "
             "end; `done` is sent only after Stop. Ignored by /scan/vector/run and "
             "with feedback_mode=adaptive_gray_feedback."
+        ),
+    )
+
+    frames: Optional[int] = Field(
+        None, ge=1, le=100000,
+        description=(
+            "With `continuous`: end the session by itself after this many passes "
+            "(Repeat N); with adaptive_gray_feedback, runs that many host-decided "
+            "passes on one command stream. External control is taken once at the start and held for "
+            "every pass, then handed back after the last. The caller computes N; "
+            "null runs until /scan/abort."
         ),
     )
 

@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import { Header } from "./components/Header";
+import { HelpPopover } from "./components/HelpPopover";
 import type { SignedInUser } from "./components/AuthDialog";
 import { apiUrl } from "./lib/backendUrl";
 import { readJsonResponse } from "./lib/readJsonResponse";
@@ -56,6 +57,7 @@ import { VacuumDashboard } from "./components/VacuumDashboard";
 import { SampleStageDashboard } from "./components/SampleStageDashboard";
 import { AdcTestControls, AdcTimelineCanvas } from "./components/AdcTest";
 import { DacRampPanel } from "./components/DacRampTest";
+import { BeamHoldPanel } from "./components/BeamHoldPanel";
 import { DacCheckHelp } from "./components/DacCheckHelp";
 import { useAdcTestStream } from "./hooks/useAdcTestStream";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
@@ -151,6 +153,7 @@ export function App() {
   // not part of the normal vector-scan flow, so it shouldn't compete
   // with Controls/Run report for attention by default.
   const [dacCheckCollapsed, setDacCheckCollapsed] = useState(true);
+  const [beamHoldCollapsed, setBeamHoldCollapsed] = useState(true);
   // Save results card starts collapsed. Collapsing only hides it —
   // ValidationPanel stays mounted so the filename insert, chosen folder
   // and auto-download keep working.
@@ -1754,6 +1757,30 @@ export function App() {
                       )}
                     </div>
                   )}
+                  <div className="card beam-hold-card">
+                    <div className="card__header">
+                      <span className="card__title">{t("card.beamHold")}</span>
+                      <button
+                        type="button"
+                        className="card__collapse-btn"
+                        aria-expanded={!beamHoldCollapsed}
+                        aria-label={beamHoldCollapsed ? t("beamHold.expand") : t("beamHold.collapse")}
+                        title={beamHoldCollapsed ? t("beamHold.expand") : t("beamHold.collapse")}
+                        onClick={() => setBeamHoldCollapsed((collapsed) => !collapsed)}
+                      >
+                        <Icon name="chevronDown" />
+                      </button>
+                    </div>
+                    {!beamHoldCollapsed && (
+                      <div className="card__body">
+                        <BeamHoldPanel
+                          disabled={panelDisabled}
+                          kind={kind === "raster" ? "raster" : "vector"}
+                          repeat={repeat}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -1808,6 +1835,17 @@ export function App() {
                     <div id="image-panel-view-slot" className="image-panel-card__view-slot" />
                   )}
                   {!adcView && gridLineToggle}
+                  {!adcView && kind === "roi" && roiState.calibration_enabled && (
+                    <HelpPopover title={t("roi.calibration.helpTitle")} ariaLabel={t("roi.calibration.helpTitle")}>
+                      <ol>
+                        <li>{t("roi.calibration.helpImage")}</li>
+                        <li>{t("roi.calibration.helpBounds")}</li>
+                        <li>{t("roi.calibration.helpCoordinates")}</li>
+                        <li>{t("roi.calibration.helpGrid")}</li>
+                        <li>{t("roi.calibration.helpConfirm")}</li>
+                      </ol>
+                    </HelpPopover>
+                  )}
                   {!adcView && scanPathToggle}
                   {!adcView && kind === "vector" && (
                     <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">

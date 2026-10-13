@@ -2,13 +2,13 @@
 manufacturer='FEI'
 model='FIB 200'
 
-[beam.electron]
-[beam.electron.pinout]
-scan_enable = "A0:1"
-
+# Single ion column. The scan-select relay follows external control, so it
+# must be the ion role: the gateware drives electron scan_enable constantly.
+# Blanker input is differential (A2 inverted, A3 normal) at 3.3 V.
 [beam.ion]
 
 [beam.ion.pinout]
+scan_enable = "A0:1"
 blank_enable = "A4:5"
 blank = "A2#,A3"
 

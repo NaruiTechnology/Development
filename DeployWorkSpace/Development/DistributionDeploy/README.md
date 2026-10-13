@@ -90,3 +90,12 @@ The Iobeam admin config is:
 ## Toolchain
 
 This Windows deployment intentionally uses Python-provided FPGA tools instead of system package-manager or USB-rule setup steps. The FPGA build path uses the bundled Python packages listed above. The Glasgow build code prefers Windows build scripts (`.bat` or `.cmd`) when Amaranth provides them.
+
+## Prepared credential handoff
+
+To include a prepared credential file in the installer, build with
+`python buildCompiledDist.py --secrets-file C:\Secure\iobeam-secrets.env`.
+The installer imports the packaged `secrets.env` automatically; explicit
+`IOBEAM_SECRETS_SEED_FILE`, `secretsSeedFile`, or `seedPath` overrides it.
+The handoff manifest inventories the packaged credentials. Restrict the file
+and handoff archive to authorized Windows accounts using Windows ACLs.

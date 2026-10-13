@@ -113,6 +113,20 @@ render() {
 }
 
 install_units() {
+  local template
+  for template in \
+    "${GLASGOW_UNIT}" "${EXECUTOR_UNIT}" "${SBC_UNIT}" \
+    "${BACKEND_UNIT}" "${FRONTEND_UNIT}"; do
+    template="${DEPLOY_DIR}/${template%.service}.local.service.in"
+    if [[ ! -s "${template}" ]] || ! grep -q '^ExecStart=' "${template}"; then
+      echo "Missing or invalid service template: ${template}" >&2
+      exit 1
+    fi
+  done
+  [[ -s "${DEPLOY_DIR}/${POLKIT_RULE}" ]] || {
+    echo "Missing or empty restart permission rule: ${DEPLOY_DIR}/${POLKIT_RULE}" >&2
+    exit 1
+  }
   [[ -x "${PYTHON_BIN}" && -x "${UVICORN_BIN}" ]] || {
     echo "Missing virtual environment executables under ${VENV_DIR}" >&2
     exit 1

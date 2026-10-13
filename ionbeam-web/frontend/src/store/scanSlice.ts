@@ -128,7 +128,7 @@ const defaultRaster: RasterRequest = {
   resolution: 512,
   dwell: 16,
   latency_bytes: 16384,
-  frame_blank: false,
+  frame_blank: true,
   cookie: 123,
   output_mode: "SixteenBit",
   adc_valid: true,
@@ -179,10 +179,10 @@ const initialState: ScanState = {
     calibration_x_end: 100,
     calibration_y_origin: 0,
     calibration_y_end: 100,
-    calibration_viewport_x_start: 0,
-    calibration_viewport_x_end: 640,
-    calibration_viewport_y_start: 0,
-    calibration_viewport_y_end: 640,
+    calibration_viewport_x_start: 64,
+    calibration_viewport_x_end: 558,
+    calibration_viewport_y_start: 196,
+    calibration_viewport_y_end: 451,
     calibration_confirmed: false,
     x_scale_length: 100,
     y_scale_length: 100,
@@ -552,10 +552,10 @@ const slice = createSlice({
       s.roi.calibration_x_end = a.payload.x_end;
       s.roi.calibration_y_origin = a.payload.y_origin;
       s.roi.calibration_y_end = a.payload.y_end;
-      s.roi.calibration_viewport_x_start = a.payload.viewport_x_start;
-      s.roi.calibration_viewport_x_end = a.payload.viewport_x_end;
-      s.roi.calibration_viewport_y_start = a.payload.viewport_y_start;
-      s.roi.calibration_viewport_y_end = a.payload.viewport_y_end;
+      s.roi.calibration_viewport_x_start = 64;
+      s.roi.calibration_viewport_x_end = 558;
+      s.roi.calibration_viewport_y_start = 196;
+      s.roi.calibration_viewport_y_end = 451;
       s.roi.scale_unit = a.payload.scale_unit;
     },
     applyPersistedDimensionCalibration(s, a: PayloadAction<DimensionCalibrationValues>) {
@@ -565,17 +565,17 @@ const slice = createSlice({
       s.roi.calibration_x_end = values.x_end;
       s.roi.calibration_y_origin = values.y_origin;
       s.roi.calibration_y_end = values.y_end;
-      s.roi.calibration_viewport_x_start = values.viewport_x_start;
-      s.roi.calibration_viewport_x_end = values.viewport_x_end;
-      s.roi.calibration_viewport_y_start = values.viewport_y_start;
-      s.roi.calibration_viewport_y_end = values.viewport_y_end;
+      s.roi.calibration_viewport_x_start = 64;
+      s.roi.calibration_viewport_x_end = 558;
+      s.roi.calibration_viewport_y_start = 196;
+      s.roi.calibration_viewport_y_end = 451;
       s.roi.x_origin = values.x_origin;
       s.roi.x_end = values.x_end;
       s.roi.y_origin = values.y_origin;
       s.roi.y_end = values.y_end;
       // Match the manual Confirm transition: the entered dimensions become
-      // the full active canvas mapping, while the saved wedge positions stay
-      // available in the calibration draft for later refinement.
+      // the full active canvas mapping. Start the editable border at the
+      // reference rectangle even when saved wedge positions differ.
       s.roi.viewport_x_start = 0;
       s.roi.viewport_x_end = 640;
       s.roi.viewport_y_start = 0;
@@ -593,10 +593,10 @@ const slice = createSlice({
       s.roi.calibration_x_end = values.x_end;
       s.roi.calibration_y_origin = values.y_origin;
       s.roi.calibration_y_end = values.y_end;
-      s.roi.calibration_viewport_x_start = values.viewport_x_start;
-      s.roi.calibration_viewport_x_end = values.viewport_x_end;
-      s.roi.calibration_viewport_y_start = values.viewport_y_start;
-      s.roi.calibration_viewport_y_end = values.viewport_y_end;
+      s.roi.calibration_viewport_x_start = 64;
+      s.roi.calibration_viewport_x_end = 558;
+      s.roi.calibration_viewport_y_start = 196;
+      s.roi.calibration_viewport_y_end = 451;
       s.roi.x_origin = values.x_origin;
       s.roi.x_end = values.x_end;
       s.roi.y_origin = values.y_origin;

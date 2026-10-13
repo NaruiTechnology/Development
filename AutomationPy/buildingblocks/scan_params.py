@@ -49,7 +49,7 @@ from typing import Any, List, Optional, Tuple
 DEFAULT_RASTER_RESOLUTION              = 512
 DEFAULT_RASTER_DWELL                   = 2
 DEFAULT_RASTER_LATENCY_BYTES           = 16384
-DEFAULT_RASTER_FRAME_BLANK             = False
+DEFAULT_RASTER_FRAME_BLANK             = True
 DEFAULT_RASTER_COOKIE                  = 123
 DEFAULT_RASTER_OUTPUT_MODE             = "SixteenBit"
 DEFAULT_RASTER_ADC_VALID               = True

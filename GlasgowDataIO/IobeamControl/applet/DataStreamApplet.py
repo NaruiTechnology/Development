@@ -251,6 +251,8 @@ class DataStreamApplet(GlasgowApplet):
             dac_latch_cycles      = timing.dac_latch_cycles,
             transforms           = args.transforms,
             ext_switch_delay     = args.ext_switch_delay_cycles,
+            blank_when_released  = getattr(args, "blank_when_released", True),
+            stall_blank_cycles   = getattr(args, "stall_blank_cycles", 0),
             out_only             = getattr(args, "out_only", False),
             pin_config           = pin_config,
             sim_image            = sim_image,

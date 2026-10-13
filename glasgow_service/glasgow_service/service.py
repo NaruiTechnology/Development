@@ -61,7 +61,7 @@ from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 from .device_lock import DeviceHeld, DeviceLock
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
-    DacRampRequest, DacRampAxis,
+    DacRampRequest, DacRampAxis, BeamHoldRequest, BeamHoldState,
     VectorPattern, VectorScanPath,
     ScanResult, ScanValidation, ValidationCheck,
 )
@@ -98,6 +98,11 @@ def _obi_aligned_np(raw14):
 
 _ADC_PRESENCE_MIN_SAMPLES = 256
 _ADC_DIAGNOSTIC_UNIQUE_LIMIT = 64
+# A scan whose Stop was already requested (operator Stop, or the browser
+# closing its stream) is only finishing its hardware cleanup. A new scan that
+# arrives in that window waits this long for the lock instead of failing with
+# "busy": gateware load cannot be interrupted, so cleanup can take ~10 s.
+_BUSY_WAIT_AFTER_ABORT_S = 20.0
 _ADC_FULL_SCALE_ARRAY = np.array(sorted(_ADC_FULL_SCALE_VALUES), dtype=np.int64)
 
 
@@ -332,6 +337,15 @@ DEFAULT_MIN_CHUNK_BEAM_TIME_MS   = 100.0
 # max_pipeline chunks in flight stay well under the ~1.5 MB where bulk writes
 # were seen to stall (see VectorScanCommand.transfer).
 VECTOR_MAX_CHUNK_POINTS          = 32_768
+
+
+def _session_frames(req, continuous: bool) -> Optional[int]:
+    """Repeat N: frame/pass count for a live session, or None (until Stop).
+
+    Only meaningful on the streaming path with ``continuous``; a blocking
+    run or a single-frame stream always scans exactly once."""
+    frames = getattr(req, "frames", None)
+    return int(frames) if continuous and frames is not None else None
 
 
 def _command_dwell(cmd) -> int:
@@ -910,6 +924,12 @@ class DeviceService:
         # Created lazily by the _device_lock property.
         self._active_command = None
         self._abort_requested = False
+        # Who holds `_lock` (kind, transport, start time, owning task) and
+        # whether Stop was requested for that scan. Unlike
+        # `_abort_requested`, `_scan_aborted` survives `_deactivate_command`
+        # so the scan-end bookkeeping can report the run as cancelled.
+        self._active_scan: Optional[dict] = None
+        self._scan_aborted = False
         self._lock = asyncio.Lock()
         self._status = ServiceStatus(state=DeviceState.IDLE)  # IDLE = "ready, not yet connected"
 
@@ -982,16 +1002,37 @@ class DeviceService:
     def status(self) -> ServiceStatus:
         return self._status.model_copy()
 
-    def abort_active_scan(self) -> bool:
-        """Cooperatively stop the active FPGA command without closing USB."""
+    def abort_active_scan(self, owner=None) -> bool:
+        """Cooperatively stop the active FPGA command without closing USB.
+
+        `owner` (the task that started the scan) restricts the abort to that
+        scan, so a stream whose client went away cannot stop a newer scan."""
         if not self._lock.locked():
             return False
+        active = getattr(self, "_active_scan", None)
+        if owner is not None and (active is None or active.get("owner") is not owner):
+            return False
         self._abort_requested = True
+        self._scan_aborted = True
         abort = getattr(self._active_command, "abort", None)
         if abort is not None:
             abort.set()
-        logger.info("scan abort requested")
+        logger.info("scan abort requested (%s)",
+                    "command signalled" if abort is not None
+                    else "connection still initialising; applied when the command starts")
         return True
+
+    def _busy_detail(self) -> str:
+        """Human-readable reason for DeviceBusy: who holds the device."""
+        active = getattr(self, "_active_scan", None)
+        if not active:
+            return f"device busy: service state is {self._status.state.value}"
+        elapsed = time.monotonic() - active["started"]
+        detail = (f"device busy: a {active['kind']} scan ({active['transport']}) "
+                  f"started {elapsed:.1f} s ago is still running")
+        if getattr(self, "_scan_aborted", False):
+            detail += "; Stop was requested and hardware cleanup has not finished"
+        return detail
 
     async def adc_stream(self, req: AdcTestRequest) -> AsyncIterator[bytes]:
         """Stream from the ADC-only image while holding the global device lock.
@@ -1079,6 +1120,7 @@ class DeviceService:
         # Live raster (Infinite): repeat frames back to back on the same
         # stream until Stop, exactly like the hardware continuous command.
         continuous = pace and bool(getattr(req, "continuous", False))
+        frames_left = _session_frames(req, continuous)
         while True:
             if bitmap_chunks is not None:
                 source = _paced_chunks(bitmap_chunks, abort=command.abort, interval=interval)
@@ -1092,7 +1134,9 @@ class DeviceService:
                     transforms=transforms)
             async for chunk in source:
                 yield chunk
-            if not continuous or command.abort.is_set():
+            if frames_left is not None:
+                frames_left -= 1
+            if not continuous or command.abort.is_set() or frames_left == 0:
                 return
             # Keep the chunk cadence across the frame boundary.
             await asyncio.sleep(interval)
@@ -1188,6 +1232,9 @@ class DeviceService:
                 "ebeam" if bool(self._action_defaults.get("enableEbeam", False)) else "ion"
             ),
             "is_production": bool(getattr(self._config, "IsProduction", True)),
+            # Relay switch delay at takeover and at hand-back, for the
+            # calculated takeover time shown before Run.
+            "takeover": {"ext_switch_delay_ms": self._switch_delay_ms()},
             "adc_test": bool(getattr(
                 self._config, "AdcTest", self._action_defaults.get("AdcTest", True)
             )),
@@ -1206,7 +1253,8 @@ class DeviceService:
             resolution    = req.resolution,
             dwell         = req.dwell,
             latency_bytes = req.latency_bytes,
-            frame_blank   = req.frame_blank,
+            frame_blank   = (req.frame_blank if "frame_blank" in req.model_fields_set
+                             else self._raster_params_defaults.frame_blank),
             cookie        = req.cookie,
             adc_valid     = req.adc_valid,
             output_mode   = req.output_mode,
@@ -1310,7 +1358,7 @@ class DeviceService:
                 raise DeviceNotReady(str(e)) from e
             raise
 
-        self._status.state = DeviceState.IDLE
+        self._status.state = DeviceState.BUSY if self._lock.locked() else DeviceState.IDLE
         self._status.last_error = None
         return self._conn
 
@@ -1352,6 +1400,8 @@ class DeviceService:
             self._activate_command(cmd)
             adc_monitor = _AdcPresenceMonitor(
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
+            logger.info("[raster] ADC presence check %s (adc_valid=%s)",
+                        "enabled" if adc_monitor.enabled else "disabled", req.adc_valid)
             adc_presence_fault = False
             try:
                 async for chunk in conn.transfer_multiple(
@@ -1366,6 +1416,11 @@ class DeviceService:
                     if fault is not None:
                         logger.warning("production ADC presence warning: %s", fault)
                         adc_presence_fault = True
+                        if getattr(self, "_scan_aborted", False):
+                            # Stop already requested: end as a cancellation,
+                            # not a device fault nobody is waiting for.
+                            logger.info("ADC presence fault ignored: scan was stopped")
+                            break
                         raise DeviceNotReady(fault)
                     yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
@@ -1408,12 +1463,16 @@ class DeviceService:
             cmd = self._build_vector_cmd(
                 req, continuous=bool(getattr(req, "continuous", False)))
             latency = self._chunk_latency("vector", req.latency_bytes, cmd)
-            if getattr(cmd, "continuous", False):
-                # Live scan: keep only the most recent pass for /scan/last/*.
+            multi_pass_adaptive = getattr(cmd, "_adaptive_passes", 1) > 1
+            if getattr(cmd, "continuous", False) or multi_pass_adaptive:
+                # Live scan or Repeat N: keep only the most recent pass for
+                # /scan/last/*, like a single run would leave.
                 pass_pixels = getattr(cmd, "pass_pixels", None) or cmd.frame_pixels
                 captured = _FrameRing(pass_pixels)
-                logger.info("[vector] continuous live scan: %d samples/pass (%s)",
-                            pass_pixels, type(cmd).__name__)
+                logger.info("[vector] %s: %d samples/pass (%s), passes=%s",
+                            "adaptive repeat session" if multi_pass_adaptive else "continuous live scan",
+                            pass_pixels, type(cmd).__name__,
+                            getattr(cmd, "_max_passes", None) or getattr(cmd, "_max_frames", None) or "until Stop")
             self._activate_command(cmd)
             if (req.pre_process and hasattr(cmd, "_pre_process_chunks")
                     and not getattr(cmd, "continuous", False)):
@@ -1422,6 +1481,8 @@ class DeviceService:
                 cmd, latency=latency)
             adc_monitor = _AdcPresenceMonitor(
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
+            logger.info("[vector] ADC presence check %s (adc_valid=%s)",
+                        "enabled" if adc_monitor.enabled else "disabled", req.adc_valid)
             adc_presence_fault = False
             try:
                 async for chunk in transfer_iter:
@@ -1434,11 +1495,18 @@ class DeviceService:
                     fault = adc_monitor.observe(chunk)
                     if fault is not None:
                         logger.warning("production ADC presence warning: %s", fault)
+                        adc_presence_fault = True
+                        if getattr(self, "_scan_aborted", False):
+                            # Stop already requested: end as a cancellation,
+                            # not a device fault nobody is waiting for.
+                            logger.info("ADC presence fault ignored: scan was stopped")
+                            break
                         raise DeviceNotReady(fault)
                     yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
             except BaseException as e:
-                adc_presence_fault = isinstance(e, DeviceNotReady) and \
-                    str(e).startswith("ADC/subtarget presence check failed:")
+                adc_presence_fault = adc_presence_fault or (
+                    isinstance(e, DeviceNotReady) and
+                    str(e).startswith("ADC/subtarget presence check failed:"))
                 self._drop_conn_on_error(e)
                 raise
             finally:
@@ -1518,6 +1586,153 @@ class DeviceService:
                         "latency_bytes": latency,
                         "source": "stream",
                     })
+
+    # -------- beam hold (blank takeover diagnostic) -----------------------
+
+    #: Samples per parked "frame" for a duration-bounded hold (no `match`).
+    #: The frame only bounds how often the gateware re-arms the region.
+    BEAM_HOLD_FRAME = 256
+    BEAM_HOLD_DEFAULT_DURATION_S = 30.0
+    _DAC_AXIS_MAX = 16384
+
+    def _switch_delay_ms(self) -> float:
+        timings = self._action_defaults.get("timings", {}) or {}
+        try:
+            return float(timings.get("ext_switch_delay_ms", 20))
+        except (TypeError, ValueError):
+            return 20.0
+
+    def check_beam_hold_allowed(self, req=None) -> None:
+        """Beam hold takes over a real instrument, so it runs exactly when a
+        scan with the same settings would use the hardware (the scan rule,
+        _hardware_free): IsProduction=true, or IsProduction=false with
+        simulation switched off. A simulated scan touches nothing, so a
+        simulated hold would take over nothing and prove nothing."""
+        if self._hardware_free(req):
+            raise DeviceNotReady(
+                "Beam hold takes over the instrument, so it runs only when scans "
+                "use the hardware (IsProduction=true, or simulation switched off); "
+                "simulation has no takeover")
+
+    def _beam_hold_geometry(self, req: BeamHoldRequest):
+        """(x_count, y_count, sample_dwell, frames, frame_blank) for the hold.
+
+        With `match`, each hold frame lasts as long as one frame of that scan
+        (frame_pixels x (dwell + 1) conversions), sampled at the finer
+        `req.dwell` so millisecond dips stay visible: the hold has the scan's
+        frame count, frame time and Frame blank, so its takeover matches the
+        scan's. The pixel count is factored into two DAC-range counts; the
+        rounding adds at most one row per frame."""
+        plan = req.match
+        if plan is None:
+            n = self.BEAM_HOLD_FRAME
+            return n, n, req.dwell, None, False
+        sample_dwell = min(req.dwell, plan.dwell)
+        conversions = plan.frame_pixels * (plan.dwell + 1)
+        while True:
+            pixels = max(1, round(conversions / (sample_dwell + 1)))
+            x = min(self._DAC_AXIS_MAX, max(1, math.isqrt(pixels - 1) + 1))
+            y = -(-pixels // x)
+            if y <= self._DAC_AXIS_MAX:
+                break
+            sample_dwell = sample_dwell * 2 + 1      # coarser samples, same time
+        frame_blank = (plan.frame_blank if plan.frame_blank is not None
+                       else bool(self._raster_params_defaults.frame_blank))
+        return x, y, sample_dwell, plan.frames, frame_blank
+
+    def beam_hold_metadata(self, req: BeamHoldRequest) -> dict:
+        """First frame of /scan/beam_hold/stream: sample timing and the
+        calculated takeover, so the browser can measure dips and show how
+        long control will be held."""
+        hz = self._conversion_hz or 8_000_000.0
+        x, y, sample_dwell, frames, frame_blank = self._beam_hold_geometry(req)
+        frame_s = x * y * (sample_dwell + 1) / hz
+        switch_s = 2 * self._switch_delay_ms() / 1000.0
+        duration = (frames * frame_s if frames is not None
+                    else (req.duration_s or self.BEAM_HOLD_DEFAULT_DURATION_S))
+        return {
+            "event": "metadata",
+            "sample_period_us": (sample_dwell + 1) * 1e6 / hz,
+            "conversion_hz": hz,
+            "duration_s": duration,
+            "takeover_s": duration + switch_s,
+            "frames": frames,
+            "frame_s": frame_s if frames is not None else None,
+            "frame_blank": frame_blank,
+            "beam": req.beam.value,
+            "external_control": req.external_control,
+        }
+
+    def _build_beam_hold_cmd(self, req: BeamHoldRequest) -> RasterScanCommand:
+        """A live raster over a step-0 region: every sample lands on
+        (x_code, y_code), so the DACs stay frozen while the ADC keeps
+        streaming. Same RasterScanCommand path as a real scan, so the relay
+        takeover, switch delay, unblank on the first sample, Frame blank
+        between frames and hand-back are exactly those of a scan.
+
+        beam=blanked uses BeamType.NoBeam: external control still switches
+        the relays, the gateware holds the blank asserted, and the macro
+        sends no unblank."""
+        x, y, sample_dwell, frames, frame_blank = self._beam_hold_geometry(req)
+        beam_type = BeamType.NoBeam if req.beam == BeamHoldState.blanked else BeamType.Ion
+        return RasterScanCommand(
+            cookie=req.cookie,
+            x_range=DACCodeRange(start=req.x_code, count=x, step=0),
+            y_range=DACCodeRange(start=req.y_code, count=y, step=0),
+            dwell_time=sample_dwell,
+            beam_type=beam_type,
+            external_control=req.external_control,
+            frame_blank=frame_blank,
+            continuous=True,
+            max_frames=frames,
+        )
+
+    async def beam_hold_scan(self, req: BeamHoldRequest, *, native_samples: bool = False):
+        """Stream ADC samples with the beam parked until `duration_s` has
+        passed or Stop is pressed. No simulation branch: like the DAC ramp,
+        this checks the physical instrument by definition."""
+        self.check_beam_hold_allowed(req)
+        async with self._acquire("beam_hold"):
+            conn = await self._ensure_conn()
+            cmd = self._build_beam_hold_cmd(req)
+            latency = self._chunk_latency("beam_hold", req.latency_bytes, cmd)
+            self._activate_command(cmd)
+            meta = self.beam_hold_metadata(req)
+            logger.info("[beam_hold] x=%d y=%d beam=%s frames=%s frame=%.3fs frame_blank=%s "
+                        "takeover=%.3fs external_control=%s",
+                        req.x_code, req.y_code, req.beam.value, meta["frames"],
+                        meta["frame_s"] or 0.0, meta["frame_blank"], meta["takeover_s"],
+                        req.external_control)
+
+            async def stop_after_duration(seconds):
+                await asyncio.sleep(seconds)
+                logger.info("[beam_hold] duration reached; stopping")
+                cmd.abort.set()
+
+            # Matching a scan, the hold ends with its last frame like the
+            # scan does; only a duration-bounded hold needs a timer.
+            timer = (asyncio.create_task(stop_after_duration(meta["duration_s"]))
+                     if req.match is None else None)
+            adc_monitor = _AdcPresenceMonitor(
+                enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
+            transfer_iter = conn.transfer_multiple(cmd, latency=latency)
+            try:
+                async for chunk in transfer_iter:
+                    self._status.chunks_in_flight += 1
+                    fault = adc_monitor.observe(chunk)
+                    if fault is not None:
+                        logger.warning("beam_hold ADC presence warning: %s", fault)
+                        raise DeviceNotReady(fault)
+                    yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
+            except BaseException as e:
+                self._drop_conn_on_error(e)
+                raise
+            finally:
+                if timer is not None:
+                    timer.cancel()
+                self._deactivate_command(cmd)
+                # Closing the transfer runs the hand-back to the instrument.
+                await transfer_iter.aclose()
 
     # -------- blocking wet-run (for REST + pytest) ------------------------
 
@@ -1845,6 +2060,7 @@ class DeviceService:
             padding_ratio_denominator=params.padding_ratio_denominator,
             padding_dwell=params.padding_dwell,
             continuous=continuous,
+            max_frames=_session_frames(req, continuous),
         )
 
     def _build_dac_ramp_cmd(self, req: DacRampRequest) -> RasterScanCommand:
@@ -1919,12 +2135,13 @@ class DeviceService:
                 output_mode=self._parse_output_mode(params.output_mode),
                 beam_type=self._parse_beam_type(params.beam_type),
                 external_control=params.external_control,
-                frame_blank=False,
+                frame_blank=raster.frame_blank,
                 max_pipeline=raster.max_pipeline,
                 padding_min_pixels=raster.padding_min_pixels,
                 padding_ratio_denominator=raster.padding_ratio_denominator,
                 padding_dwell=raster.padding_dwell,
                 continuous=continuous,
+                max_frames=_session_frames(req, continuous),
             )
 
         if req.pattern is VectorPattern.custom:
@@ -1953,6 +2170,10 @@ class DeviceService:
             )
             pass_pixels = params.vector_resolution * params.vector_resolution
         iter_points = points_factory()
+        # Repeat N: a live session of N passes. Adaptive feedback cannot
+        # stream passes blindly (each point is decided on the host), but it
+        # can still run its N passes on one command stream.
+        session_passes = _session_frames(req, continuous)
         # Live passes re-generate their points; adaptive feedback stays per pass.
         continuous = continuous and adaptive_feedback is None
 
@@ -1977,6 +2198,7 @@ class DeviceService:
             beam_type=beam_type,
             external_control=params.external_control,
             iter_points=iter_points,
+            frame_blank=self._raster_params_defaults.frame_blank,
             drain_floor_pixels=params.effective_drain_floor_pixels,
             adaptive_gray_feedback=adaptive_feedback,
             max_pipeline=params.max_pipeline,
@@ -1985,6 +2207,7 @@ class DeviceService:
             sender_drain_timeout_s=params.sender_drain_timeout_s,
             continuous=continuous,
             points_factory=points_factory if continuous else None,
+            max_passes=session_passes,
         )
         cmd.link_dwell = params.dwell
         cmd.pass_pixels = pass_pixels
@@ -2463,14 +2686,35 @@ class DeviceService:
         svc = self
         class _Ctx:
             async def __aenter__(self):
-                if svc._status.state is DeviceState.BUSY:
-                    raise DeviceBusy("a scan is already running")
+                acquired = False
+                if svc._lock.locked() or svc._status.state is DeviceState.BUSY:
+                    # The previous scan was told to stop (operator Stop, or
+                    # its browser stream closed) and is only cleaning up:
+                    # wait for it instead of reporting a bare "busy".
+                    if not (svc._lock.locked() and getattr(svc, "_scan_aborted", False)):
+                        raise DeviceBusy(svc._busy_detail())
+                    logger.info("scan start kind=%s waiting up to %.0fs for the stopped "
+                                "scan to release the device (%s)", kind,
+                                _BUSY_WAIT_AFTER_ABORT_S, svc._busy_detail())
+                    try:
+                        await asyncio.wait_for(svc._lock.acquire(), _BUSY_WAIT_AFTER_ABORT_S)
+                    except asyncio.TimeoutError:
+                        raise DeviceBusy(svc._busy_detail()) from None
+                    acquired = True
                 # IDLE, ERROR, DISCONNECTED are all OK to start from — the
                 # _ensure_conn() call inside the scan will (re)open as needed.
                 if svc._status.state is DeviceState.CONNECTING:
+                    if acquired:
+                        svc._lock.release()
                     raise DeviceNotReady("device is connecting")
-                await svc._lock.acquire()
+                if not acquired:
+                    await svc._lock.acquire()
                 svc._abort_requested = False
+                svc._scan_aborted = False
+                svc._active_scan = {
+                    "kind": kind, "transport": transport,
+                    "started": time.monotonic(), "owner": asyncio.current_task(),
+                }
                 svc._status.state = DeviceState.BUSY
                 svc._status.last_error = None
                 svc._status.chunks_in_flight = 0
@@ -2486,6 +2730,11 @@ class DeviceService:
                 # owns hardware cleanup.
                 cancelled = exc_type is not None and issubclass(
                     exc_type, (GeneratorExit, asyncio.CancelledError))
+                # An operator Stop (/scan/abort or the client closing the
+                # stream) that ended the scan normally is a cancellation too;
+                # without this a stopped live scan logged cancelled=False.
+                aborted = bool(getattr(svc, "_scan_aborted", False))
+                cancelled = cancelled or (aborted and exc is None)
                 if exc is None:
                     svc._status.scans_completed += 1
                 elif cancelled:
@@ -2501,6 +2750,8 @@ class DeviceService:
                 chunks = svc._status.chunks_in_flight
                 svc._status.chunks_in_flight = 0
                 svc._release_device_if_idle()
+                svc._active_scan = None
+                svc._scan_aborted = False
                 svc._lock.release()
                 logger.info("scan end kind=%s ok=%s cancelled=%s elapsed=%.3fs "
                             "transport=%s chunks=%d error=%s",

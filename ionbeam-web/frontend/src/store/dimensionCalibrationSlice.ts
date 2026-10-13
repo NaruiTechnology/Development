@@ -7,13 +7,14 @@ import {
 
 const defaults: DimensionCalibrationValues = {
   x_origin: 0,
-  x_end: 100,
+  x_end: 7000,
   y_origin: 0,
-  y_end: 100,
-  viewport_x_start: 0,
-  viewport_x_end: 640,
-  viewport_y_start: 0,
-  viewport_y_end: 640,
+  y_end: 5000,
+  // Inset 494 × 255 starting rectangle matching the canvas reference (640 px).
+  viewport_x_start: 64,
+  viewport_x_end: 558,
+  viewport_y_start: 196,
+  viewport_y_end: 451,
   scale_unit: "um",
 };
 

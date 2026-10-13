@@ -277,6 +277,12 @@ export function runPsql(
       stderr += chunk;
     });
     if (stdin !== undefined) {
+      child.stdin?.on("error", (err: NodeJS.ErrnoException) => {
+        // psql may exit before consuming SQL (for example on a connection
+        // failure). Its close handler reports stderr and the exit status.
+        if (err.code === "EPIPE" || err.code === "EOF" || err.code === "ERR_STREAM_DESTROYED") return;
+        finish(() => reject(err));
+      });
       child.stdin?.setDefaultEncoding("utf8");
       child.stdin?.end(stdin);
     }
@@ -415,6 +421,6 @@ function connectionKey(connection: PgConnection): string {
   return `${connection.host}:${connection.port}:${connection.database}:${connection.user}`;
 }
 
-function isDbConnectivityError(message: string): boolean {
-  return /timed out after|could not connect to server|connection refused|timeout/i.test(message);
+export function isDbConnectivityError(message: string): boolean {
+  return /timed out after|could not connect to server|could not translate host name|connection refused|connect ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ECONNRESET|no route to host|timeout/i.test(message);
 }

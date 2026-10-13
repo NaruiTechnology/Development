@@ -26,6 +26,8 @@
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
+import { createPortal } from "react-dom";
+
 import { useTranslation, type TranslationKey } from "../i18n";
 import { useAppDispatch, useAppSelector, type AppDispatch } from "../store";
 import {
@@ -655,6 +657,8 @@ function GeneralTab({
   const isProduction = boolField(draft, ["IsProduction"], false);
   const vacuumEnabled = useAppSelector((s) => s.settings.draftVacuumEnabled);
   const dumpData = boolField(draft, ["DumpData"], false);
+  const frameBlank = boolField(draft, [...RASTER_PATH, "frameBlank"], true);
+  const [confirmFrameBlankOff, setConfirmFrameBlankOff] = useState(false);
 
   // Glasgow / Device0 id.
   const deviceId = stringField(draft, ["Glasgow", "Device0", "Id"], "");
@@ -726,6 +730,15 @@ function GeneralTab({
 
   return (
     <div className="settings-form">
+      {confirmFrameBlankOff && (
+        <FrameBlankConfirmation
+          onCancel={() => setConfirmFrameBlankOff(false)}
+          onConfirm={() => {
+            set([...RASTER_PATH, "frameBlank"], false);
+            setConfirmFrameBlankOff(false);
+          }}
+        />
+      )}
       <h4 className="settings-form__group">{t("settings.general.group.runtime")}</h4>
 
       <div className="field-row">
@@ -751,6 +764,18 @@ function GeneralTab({
           label={t("settings.general.isProduction")}
           value={isProduction}
           onChange={(v) => set(["IsProduction"], v)}
+        />
+        <CheckboxField
+          label={t("settings.raster.frameBlank")}
+          help={<SettingsHelp topic="rasterFrameBlank" />}
+          value={frameBlank}
+          onChange={(value) => {
+            if (!value) {
+              setConfirmFrameBlankOff(true);
+              return;
+            }
+            set([...RASTER_PATH, "frameBlank"], true);
+          }}
         />
         <CheckboxField
           label={t("settings.general.activeVacuumControl")}
@@ -789,6 +814,7 @@ function GeneralTab({
           onChange={(v) => set([...ACTION_DATA_PATH, "bufferSize"], v)}
         />
       </div>
+
 
       <h4 className="settings-form__group">
         {t("settings.general.group.adcTiming")}
@@ -886,13 +912,66 @@ function GeneralTab({
   );
 }
 
+function FrameBlankConfirmation({ onCancel, onConfirm }: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    cancelRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, []);
+
+  return createPortal(
+    <div className="modal-backdrop frame-blank-confirm-backdrop"
+      onClick={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+      <div className="modal frame-blank-confirm" role="alertdialog" aria-modal="true"
+        aria-labelledby="frame-blank-confirm-title" aria-describedby="frame-blank-confirm-message"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            onCancel();
+          } else if (event.key === "Tab") {
+            event.preventDefault();
+            event.stopPropagation();
+            (document.activeElement === cancelRef.current ? confirmRef : cancelRef).current?.focus();
+          }
+        }}>
+        <div className="modal__header">
+          <div className="modal__title" id="frame-blank-confirm-title">
+            <Icon name="alertTriangle" tone="warn" />
+            {t("settings.confirm.frameBlankOff.title")}
+          </div>
+        </div>
+        <div className="modal__body">
+          <p id="frame-blank-confirm-message">{t("settings.confirm.frameBlankOff")}</p>
+        </div>
+        <div className="frame-blank-confirm__actions">
+          <button ref={cancelRef} type="button" className="btn btn--cancel" onClick={onCancel}>
+            <Icon name="x" />
+            {t("settings.confirm.cancel")}
+          </button>
+          <button ref={confirmRef} type="button" className="btn btn--orange" onClick={onConfirm}>
+            <Icon name="check" />
+            {t("settings.confirm.frameBlankOff.yes")}
+          </button>
+        </div>
+      </div>
+    </div>, document.body,
+  );
+}
+
 /* Raster tab - Actions[0].streamData.actionData.rasterScan */
 function RasterTab({ draft }: { draft: unknown }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
   const pixels = numberField(draft, [...RASTER_PATH, "pixels"], 0);
-  const frameBlank = boolField(draft, [...RASTER_PATH, "frameBlank"], false);
   const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 512);
   const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 8);
   const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 16);
@@ -941,14 +1020,6 @@ function RasterTab({ draft }: { draft: unknown }) {
         />
       </div>
 
-      <div className="settings-flags">
-        <CheckboxField
-          label={t("settings.raster.frameBlank")}
-          help={<SettingsHelp topic="rasterFrameBlank" />}
-          value={frameBlank}
-          onChange={(v) => set([...RASTER_PATH, "frameBlank"], v)}
-        />
-      </div>
     </div>
   );
 }
@@ -3309,7 +3380,10 @@ const SETTINGS_HELP_META: Record<SettingsHelpTopic, {
   rasterResolution: { title: "settings.help.rasterResolution.title" },
   rasterAdcLatency: { title: "settings.help.rasterAdcLatency.title" },
   rasterDwell: { title: "settings.help.rasterDwell.title" },
-  rasterFrameBlank: { title: "settings.help.rasterFrameBlank.title" },
+  rasterFrameBlank: {
+    title: "settings.help.rasterFrameBlank.title",
+    body: "settings.help.rasterFrameBlank.body",
+  },
   vectorResolution: { title: "settings.help.vectorResolution.title" },
   vectorDwell: { title: "settings.help.vectorDwell.title" },
   vectorLatency: { title: "settings.help.vectorLatency.title" },

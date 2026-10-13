@@ -11,13 +11,9 @@
                 "actionData": {
                     "ev": 1000,
                     "beam": {
-                        "electron": {
-                            "pinout": {
-                                "scan_enable": "A0:1"
-                            }
-                        },
                         "ion": {
                             "pinout": {
+                                "scan_enable": "A0:1",
                                 "blank_enable": "A4:5",
                                 "blank": "A2#,A3"
                             }
@@ -25,7 +21,7 @@
                     },
                     "transforms": {
                         "xflip": false,
-                        "yflip": true,
+                        "yflip": false,
                         "rotate90": false
                     },
                     "timings": {
@@ -44,7 +40,7 @@
                     "rasterScan": {
                         "minChunkBeamTimeMs": 100,
                         "pixels": 8192,
-                        "frameBlank": false,
+                        "frameBlank": true,
                         "beamType": "Ion",
                         "externalControl": true,
                         "resolution": 1024,
@@ -194,7 +190,7 @@
     "AdcTest": true,
     "transforms": {
         "xflip": false,
-        "yflip": true,
+        "yflip": false,
         "rotate90": false
     }
 }

@@ -171,54 +171,56 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         ).strip()
         dbConfig = self._readAdminDbConfig(actionData)
         dbHost = str(
-            deployment.get("DatabaseHost")
+            dbConfig.get("Host")
             or actionData.get("adminDbHost")
-            or dbConfig.get("Host")
+            or deployment.get("DatabaseHost")
             or "localhost"
         ).strip()
         dbPort = int(
-            deployment.get("DatabasePort")
+            dbConfig.get("Port")
             or actionData.get("adminDbPort")
-            or dbConfig.get("Port")
+            or deployment.get("DatabasePort")
             or 5432
         )
         dbName = str(
-            deployment.get("DatabaseName")
+            dbConfig.get("DatabaseName")
             or actionData.get("adminDbName")
-            or dbConfig.get("DatabaseName")
+            or deployment.get("DatabaseName")
             or "iobeam_admin"
         ).strip()
         dbUser = str(
-            deployment.get("DatabaseUser")
+            dbConfig.get("User")
             or actionData.get("adminDbUser")
-            or dbConfig.get("User")
+            or deployment.get("DatabaseUser")
             or "iobeam_admin_app"
         ).strip()
         dbPassword = str(
-            deployment.get("DatabasePassword")
+            dbConfig.get("Password")
             or actionData.get("adminDbPassword")
-            or dbConfig.get("Password")
+            or deployment.get("DatabasePassword")
             or ""
         ).strip()
         dbSslMode = str(
-            deployment.get("DatabaseSslMode")
+            dbConfig.get("SslMode")
             or actionData.get("adminDbSslMode")
-            or dbConfig.get("SslMode")
+            or deployment.get("DatabaseSslMode")
             or ""
         ).strip()
         dbTimeout = int(
-            deployment.get("DatabaseCommandTimeoutMs")
+            dbConfig.get("CommandTimeoutMs")
             or actionData.get("adminDbCommandTimeoutMs")
-            or dbConfig.get("CommandTimeoutMs")
+            or deployment.get("DatabaseCommandTimeoutMs")
             or 30000
         )
         opDbHost = str(
             actionData.get("operationDbHost")
+            or deployment.get("DatabaseHost")
             or dbConfig.get("Host")
             or dbHost
         ).strip()
         opDbPort = int(
             actionData.get("operationDbPort")
+            or deployment.get("DatabasePort")
             or dbConfig.get("Port")
             or dbPort
         )
@@ -228,21 +230,25 @@ class setupIonbeamWeb_state(distributionDeploy_state):
         ).strip()
         opDbUser = str(
             actionData.get("operationDbUser")
+            or deployment.get("DatabaseUser")
             or dbConfig.get("User")
             or dbUser
         ).strip()
         opDbPassword = str(
             actionData.get("operationDbPassword")
+            or deployment.get("DatabasePassword")
             or dbConfig.get("Password")
             or dbPassword
         ).strip()
         opDbSslMode = str(
             actionData.get("operationDbSslMode")
+            or deployment.get("DatabaseSslMode")
             or dbConfig.get("SslMode")
             or dbSslMode
         ).strip()
         opDbTimeout = int(
             actionData.get("operationDbCommandTimeoutMs")
+            or deployment.get("DatabaseCommandTimeoutMs")
             or dbConfig.get("CommandTimeoutMs")
             or dbTimeout
         )

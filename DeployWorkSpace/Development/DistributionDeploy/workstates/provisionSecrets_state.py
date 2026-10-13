@@ -64,7 +64,10 @@ class provisionSecrets_state(distributionDeploy_state):
                 name, secretsFile, "exists" if os.path.isfile(secretsFile) else "will be created"))
 
             seed = None
-            seedFile = os.environ.get(ENV_SEED_FILE) or actionData.get("secretsSeedFile") or ""
+            seedFile = os.environ.get(ENV_SEED_FILE) or actionData.get("secretsSeedFile") or actionData.get("seedPath") or ""
+            installerDir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if not seedFile and os.path.isfile(os.path.join(installerDir, "secrets.env")):
+                seedFile = os.path.join(installerDir, "secrets.env")
             if not seedFile:
                 # A separate credential handoff accompanies the extracted
                 # installer, never the public distribution archive.
@@ -75,7 +78,14 @@ class provisionSecrets_state(distributionDeploy_state):
                         seedFile = candidate
                         break
             if seedFile:
-                seedFile = os.path.abspath(os.path.expanduser(seedFile))
+                seedFile = os.path.expanduser(seedFile)
+                if not os.path.isabs(seedFile):
+                    seedFile = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                            seedFile)
+                seedFile = os.path.abspath(seedFile)
+                if not os.path.isfile(seedFile):
+                    seedFile = ""
+            if seedFile:
                 seed = store.read_seed(seedFile)
                 self.info("[{}] using {} value(s) from {}".format(name, len(seed), seedFile))
 
@@ -198,8 +208,8 @@ class provisionSecrets_state(distributionDeploy_state):
             lines.append("  - {}: {}".format(", ".join(names), effect))
         lines += [
             "Set them later without redeploying: in the web app (Settings > Admin > Database or",
-            "FTP), or with  python3 -m secretstore set NAME  from DistributionDeploy/vendor,",
-            "then  Development/Scripts/manage-local-system.sh restart .",
+            "FTP), or with  python -m secretstore set NAME  from DistributionDeploy/vendor,",
+            "then  powershell -NoProfile -ExecutionPolicy Bypass -File Development/Scripts/manage-local-system.ps1 restart .",
         ]
         self.warn("[{}] {}".format(type(self).__name__, "\n".join(lines)))
 

@@ -5,7 +5,7 @@ import mechanicalPumpImage from "../assets/MechanicalVacuumPump.png";
 import turboPumpImage from "../assets/TurboVacuumPump.png";
 import uhPump1Image from "../assets/UHVacuumPump_1.png";
 import uhPump2Image from "../assets/UHVacuumPump_2.png";
-import { useTranslation } from "../i18n";
+import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
@@ -22,6 +22,17 @@ const PUMP_IMAGES: Record<string, string> = {
 const GROUP_PUMP_IMAGES: Record<string, string> = {
   TurboVacuum: turboPumpImage,
   UltraHighVacuum: uhPump1Image,
+};
+const PUMP_TRANSLATION_KEYS: Record<string, TranslationKey> = {
+  MechanicalVacuumPump: "vacuum.pump.mechanical",
+  TurboVacuumPump: "vacuum.pump.turbo",
+  UHVacuumPump_1: "vacuum.pump.uh.1",
+  UHVacuumPump_2: "vacuum.pump.uh.2",
+};
+const GROUP_TRANSLATION_KEYS: Record<string, TranslationKey> = {
+  MechanicalVacuum: "vacuum.group.mechanical",
+  TurboVacuum: "vacuum.group.turbo",
+  UltraHighVacuum: "vacuum.group.uh",
 };
 
 export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: { open: boolean; minimized: boolean; onMinimizedChange: (minimized: boolean) => void; onActivityChange: (active: boolean) => void; onClose: () => void }) {
@@ -192,6 +203,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
 
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
+    const pumpLabel = PUMP_TRANSLATION_KEYS[pump.name] ? t(PUMP_TRANSLATION_KEYS[pump.name]) : pump.name;
     const pumpImage = PUMP_IMAGES[pump.name] ?? GROUP_PUMP_IMAGES[pump.group ?? ""];
     // The header slide switch shows the pump's isolation valve (controller
     // managed). Older services without valve data fall back to the ready input.
@@ -203,7 +215,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     return (
       <article key={pump.name} className="card vacuum-card" data-border={pump.border}>
         <div className="card__header vacuum-card__header">
-          <span className="card__title">{pump.name}</span>
+          <span className="card__title">{pumpLabel}</span>
           <label className="vacuum-switch" title={valveTitle}>
             <input
               type="checkbox"
@@ -231,7 +243,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
                 data-state={pump.power ? "on" : "off"}
                 disabled={mechanical || !status?.running || !status.connected || pending !== null}
                 aria-pressed={pump.power}
-                aria-label={`${pump.name} ${t("vacuum.power")}`}
+                aria-label={`${pumpLabel} ${t("vacuum.power")}`}
                 title={`${t("vacuum.power")} ${pump.power ? "off" : "on"}`}
                 onClick={() => void updatePower(pump.name, !pump.power)}
               >
@@ -286,7 +298,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
                       <div className="vacuum-workflow__stage">{renderPumpCard(stage.pumps[0])}</div>
                     ) : (
                       <div className="vacuum-workflow__group" data-state={groupState(stage.pumps)}>
-                        <div className="vacuum-workflow__group-title">{t("vacuum.groupedStage", { group: stage.group })}</div>
+                        <div className="vacuum-workflow__group-title">{t("vacuum.groupedStage", { group: GROUP_TRANSLATION_KEYS[stage.group] ? t(GROUP_TRANSLATION_KEYS[stage.group]) : stage.group })}</div>
                         {stage.pumps.map(renderPumpCard)}
                       </div>
                     )}

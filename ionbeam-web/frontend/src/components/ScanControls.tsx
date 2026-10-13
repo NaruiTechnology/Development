@@ -40,6 +40,7 @@ import { ROIActionWedges } from "./ROIActionWedges";
 import { RunValidatedHelp } from "./RunValidatedHelp";
 import { HelpPopover } from "./HelpPopover";
 import { NumberStepperInput } from "./NumberStepperField";
+import { ScanTakeoverEstimate } from "./TakeoverEstimate";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { SITE_OPTIONS } from "../lib/sites";
@@ -50,11 +51,7 @@ type InfiniteScanEntry =
   | { kind: "raster"; req: RasterRequest }
   | { kind: "vector"; req: VectorRequest; scanType: ScanType };
 import type { ROIState } from "../store/scanSlice";
-import {
-  repeatCountdownDisplay,
-  shouldClearROIFeedbackBeforeRepeat,
-  shouldRetainROIFeedbackOnComplete,
-} from "../lib/scanRepeat";
+import { repeatCountdownDisplay, repeatSessionRequest } from "../lib/scanRepeat";
 
 interface EquipmentOption {
   id: number | null;
@@ -147,9 +144,11 @@ export function ScanControls({
   // Vector scan (with the scan type its progress/feedback handling needs).
   const infiniteScanRef = useRef<InfiniteScanEntry | null>(null);
   const infiniteScanActiveRef = useRef(false);
-  // Repeated ROI action scans need a longer settle window between runs
-  // so blank/spot updates are fully reflected before the next loop starts.
-  const actionLoopGapMs = 750;
+  // Repeat N runs as ONE live session of N passes (`continuous` + `frames`):
+  // external control is taken once at Run and held for every pass, then
+  // handed back after the last. Separate runs reconnected between passes,
+  // which reset the FPGA and returned blanking to the instrument each time.
+  const vectorPasses = useAppSelector((s) => s.image.vectorPasses);
   const [actionLoopIteration, setActionLoopIteration] = useState(0);
   const [actionLoopActive, setActionLoopActive] = useState(false);
   const [infiniteScanActive, setInfiniteScanActive] = useState(false);
@@ -326,59 +325,44 @@ export function ScanControls({
     );
   }, [onScanRunStart, preview, stream]);
 
-  const startRepeatActionRun = useCallback(
-    (entry: { req: VectorRequest; preview: boolean; scanType: ScanType }) => {
-      actionLoopCompletionPendingRef.current = true;
-      onScanRunStart?.(entry.scanType);
-      stream.startVector({ ...entry.req, preview: entry.preview });
-    },
-    [onScanRunStart, stream]
-  );
-
-  const startActionLoop = useCallback((req: VectorRequest, scanType: ScanType) => {
+  /** Start Repeat N bookkeeping for a session of `frames` passes. */
+  const startActionLoop = useCallback((req: VectorRequest, scanType: ScanType, frames: number) => {
     clearActionLoopState();
     actionLoopRequestRef.current = { req, preview, scanType };
-    actionLoopRemainingRef.current = Math.max(0, Math.min(50, Math.trunc(repeat)));
-    actionLoopIterationRef.current = actionLoopRemainingRef.current;
+    actionLoopRemainingRef.current = frames;
+    actionLoopIterationRef.current = frames;
     actionLoopCompletionPendingRef.current = true;
-    setActionLoopIteration(actionLoopIterationRef.current);
+    setActionLoopIteration(frames);
     actionLoopActiveRef.current = true;
     setActionLoopActive(true);
-  }, [clearActionLoopState, preview, repeat]);
+  }, [clearActionLoopState, preview]);
 
-  const scheduleNextActionRun = useCallback(() => {
-    clearActionLoopTimer();
-    if (!actionLoopActiveRef.current || actionLoopRemainingRef.current <= 0) {
-      return;
+  /** Run a Vector request: one pass, or Repeat N as one held session. */
+  const startVectorRun = useCallback((req: VectorRequest, scanType: ScanType) => {
+    const session = repeatSessionRequest({ ...req, preview }, repeat);
+    if (session) {
+      startActionLoop(req, scanType, session.frames);
+      stream.startVector(session.req, { continuous: true, preserveFrame: false });
+    } else {
+      clearActionLoopState();
+      stream.startVector({ ...req, preview });
     }
-    actionLoopTimerRef.current = window.setTimeout(() => {
-      actionLoopTimerRef.current = null;
-      if (!actionLoopActiveRef.current || actionLoopRemainingRef.current <= 0) {
-        return;
-      }
-      const entry = actionLoopRequestRef.current;
-      if (!entry) {
-        return;
-      }
-      if (shouldClearROIFeedbackBeforeRepeat(entry.scanType, actionLoopRemainingRef.current)) {
-        dispatch(resetVector());
-        dispatch(updateROI({ scanImageDataUrl: null }));
-      }
-      dispatch(
-        setRetainVectorFeedbackOnComplete(
-          shouldRetainROIFeedbackOnComplete(entry.scanType, actionLoopRemainingRef.current)
-        )
-      );
-      startRepeatActionRun(entry);
-    }, actionLoopGapMs);
-  }, [actionLoopGapMs, clearActionLoopTimer, dispatch, startRepeatActionRun]);
+  }, [clearActionLoopState, preview, repeat, startActionLoop, stream]);
 
-  async function onRun() {
+  // Countdown: passes left in the running Repeat session.
+  useEffect(() => {
+    if (!actionLoopActiveRef.current) return;
+    const left = Math.max(1, actionLoopRemainingRef.current - vectorPasses);
+    if (left !== actionLoopIterationRef.current) {
+      actionLoopIterationRef.current = left;
+      setActionLoopIteration(left);
+    }
+  }, [vectorPasses]);
+
+  async function startRunRequest() {
     if (disabled || (kind === "roi" && !roiAction)) return;
-    const allowed = await refreshScanPrivilege();
-    if (!allowed) {
-      return;
-    }
+    // The WebSocket upgrade checks the current session and scan privilege on
+    // the server. Avoid a duplicate account round trip before starting Run.
     if (roiAction) {
       try {
         if (roiEbeamDisabled) {
@@ -411,17 +395,12 @@ export function ScanControls({
           const grayFilterScanType = adaptiveProductionFilter
             ? ScanType.VECTOR_ADAPTIVE_GRAN_FEED_BLANK
             : ScanType.CUSTOM_GRAY_FEEDBACK_BLANK;
-          if (Math.trunc(repeat) > 1) {
-            startActionLoop(req, grayFilterScanType);
-            dispatch(setRetainVectorFeedbackOnComplete(false));
-          } else {
-            clearActionLoopState();
-            dispatch(setRetainVectorFeedbackOnComplete(true));
-          }
+          // One session completes once, so its feedback is always kept.
+          dispatch(setRetainVectorFeedbackOnComplete(true));
           dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
           onScanRunStart?.(grayFilterScanType);
-          stream.startVector({ ...req, preview });
+          startVectorRun(req, grayFilterScanType);
         } else {
           const req = await vectorRequestWithBitmapSelection(
             { ...vector, roi },
@@ -470,20 +449,15 @@ export function ScanControls({
           resolveVectorBranch(req),
         );
         const scanType = resolveVectorScanType(req);
-        if (Math.trunc(repeat) > 1) {
-          startActionLoop(req, scanType);
-        } else {
-          clearActionLoopState();
-        }
         onScanRunStart?.(scanType);
-        stream.startVector({ ...req, preview });
+        startVectorRun(req, scanType);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
     }
   }
 
-  async function onInfinite() {
+  async function startInfiniteRequest() {
     if ((kind !== "raster" && kind !== "vector") || disabled || infiniteScanActiveRef.current) return;
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
@@ -539,7 +513,7 @@ export function ScanControls({
     else dispatch(resetVector());
   }
 
-  async function onRunValidated() {
+  async function startValidatedRunRequest() {
     if (disabled || kind === "roi") return;
     const allowed = await refreshScanPrivilege();
     if (!allowed) {
@@ -601,6 +575,26 @@ export function ScanControls({
     if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }
+
+  // One click must start exactly one stream. The handlers await the request
+  // build (bitmap selection, privilege check) before startVector/startRaster
+  // marks the stream "running", and the Run button stays enabled for that
+  // window. A second click then opened a second stream that closed the
+  // first one's socket: the service kept that unattended scan, rejected the
+  // second as "busy", and the first scan's real result was never shown.
+  const runStartingRef = useRef(false);
+  const guardRunStart = (start: () => Promise<void>) => async () => {
+    if (runStartingRef.current) return;
+    runStartingRef.current = true;
+    try {
+      await start();
+    } finally {
+      runStartingRef.current = false;
+    }
+  };
+  const onRun = guardRunStart(startRunRequest);
+  const onInfinite = guardRunStart(startInfiniteRequest);
+  const onRunValidated = guardRunStart(startValidatedRunRequest);
 
   const runDisabled =
     controlsDisabled ||
@@ -695,25 +689,8 @@ export function ScanControls({
       actionLoopActiveRef.current &&
       actionLoopCompletionPendingRef.current
     ) {
+      // The Repeat session ran all N passes (or was stopped) in one stream.
       actionLoopCompletionPendingRef.current = false;
-      if (actionLoopRemainingRef.current > 0) {
-        actionLoopRemainingRef.current -= 1;
-        actionLoopIterationRef.current = actionLoopRemainingRef.current;
-        setActionLoopIteration(actionLoopIterationRef.current);
-      }
-      if (actionLoopRemainingRef.current > 0) {
-        clearBitmapSelectionCache();
-        const scanType = actionLoopRequestRef.current?.scanType;
-        if (
-          scanType !== undefined &&
-          shouldClearROIFeedbackBeforeRepeat(scanType, actionLoopRemainingRef.current)
-        ) {
-          dispatch(resetVector());
-          dispatch(updateROI({ scanImageDataUrl: null }));
-        }
-        scheduleNextActionRun();
-        return;
-      }
       clearActionLoopState();
     }
     if (completedNow && infiniteScanActiveRef.current) {
@@ -728,7 +705,7 @@ export function ScanControls({
       clearActionLoopState();
       clearInfiniteScanState();
     }
-  }, [clearActionLoopState, clearInfiniteScanState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, scheduleNextActionRun, startInfiniteScanRun]);
+  }, [clearActionLoopState, clearInfiniteScanState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, startInfiniteScanRun]);
 
   useEffect(() => {
     clearActionLoopState();
@@ -1010,6 +987,9 @@ export function ScanControls({
             onRepeatChange={onRepeatChange}
           />
         </div>
+      )}
+      {(kind === "raster" || kind === "vector") && (
+        <ScanTakeoverEstimate kind={kind} repeat={kind === "vector" ? repeat : 1} />
       )}
       {visibleError && (
         <div className="scan-inline-error" role="alert" aria-live="assertive">
