@@ -1325,7 +1325,7 @@ class DeviceService:
                 raise DeviceNotReady(str(e)) from e
             raise
 
-        self._status.state = DeviceState.IDLE
+        self._status.state = DeviceState.BUSY if self._lock.locked() else DeviceState.IDLE
         self._status.last_error = None
         return self._conn
 
@@ -2637,7 +2637,7 @@ class DeviceService:
         svc = self
         class _Ctx:
             async def __aenter__(self):
-                if svc._status.state is DeviceState.BUSY:
+                if svc._lock.locked() or svc._status.state is DeviceState.BUSY:
                     raise DeviceBusy("a scan is already running")
                 # IDLE, ERROR, DISCONNECTED are all OK to start from — the
                 # _ensure_conn() call inside the scan will (re)open as needed.

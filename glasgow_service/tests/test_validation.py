@@ -7,6 +7,7 @@ from unittest.mock import patch
 from glasgow_service.models import DeviceState, ServiceStatus
 from glasgow_service.service import (
     DeviceService,
+    DeviceBusy,
     DeviceNotReady,
     _AdcPresenceMonitor,
     _assert_production_adc_present,
@@ -17,6 +18,47 @@ from glasgow_service.service import (
 
 class GlasgowDeviceError(Exception):
     pass
+
+
+def test_scan_remains_busy_after_lazy_connection():
+    async def run():
+        svc = object.__new__(DeviceService)
+        svc._lock = asyncio.Lock()
+        await svc._lock.acquire()
+        svc._status = ServiceStatus(state=DeviceState.BUSY)
+        svc._conn = None
+        svc._config = SimpleNamespace()
+        svc._claim_device = lambda: None
+
+        class Connection:
+            connected = False
+
+            def __init__(self, config):
+                pass
+
+            async def _connect(self):
+                self.connected = True
+
+        with patch("glasgow_service.service.GlasgowConnection", Connection):
+            await svc._ensure_conn()
+        assert svc._status.state is DeviceState.BUSY
+        svc._lock.release()
+
+    asyncio.run(run())
+
+
+def test_overlapping_scan_is_rejected_during_connection():
+    async def run():
+        svc = object.__new__(DeviceService)
+        svc._lock = asyncio.Lock()
+        await svc._lock.acquire()
+        svc._status = ServiceStatus(state=DeviceState.CONNECTING)
+        with unittest.TestCase().assertRaises(DeviceBusy):
+            async with svc._acquire("vector"):
+                raise AssertionError("overlapping scan must not start")
+        svc._lock.release()
+
+    asyncio.run(run())
 
 
 def test_raster_validation_allows_zero_valued_full_chunks():
