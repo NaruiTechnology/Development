@@ -15,6 +15,28 @@ def builder():
     return module
 
 
+def test_real_remote_manifest_passes_build_validation():
+    module = builder()
+    module.validate_remote_admin_database_workflow(Path(__file__).resolve().parents[5])
+
+
+@pytest.mark.parametrize('actions, error', [
+    ([{'setupIonbeamWeb': {}}], 'must include'),
+    ([{'setupIobeamAdminDb': {'skip': True}}, {'setupIonbeamWeb': {}}], 'skip must be false'),
+    ([{'setupIonbeamWeb': {}}, {'setupIobeamAdminDb': {'skip': False}}], 'must run before'),
+    ([{'provisionLocalAdminDb': {'skip': False}},
+      {'setupIobeamAdminDb': {'skip': False}}, {'setupIonbeamWeb': {}}], 'must not run'),
+])
+def test_invalid_remote_workflow_is_rejected(tmp_path, actions, error):
+    root = tmp_path / 'Development/DeployWorkSpace/Development/DistributionDeploy'
+    (root / 'Json').mkdir(parents=True)
+    (root / 'workstates').mkdir()
+    (root / 'workstates/setupIobeamAdminDb_state.py').touch()
+    (root / 'Json/DistributionDeploy.json').write_text(json.dumps({'Actions': actions}))
+    with pytest.raises(ValueError, match=error):
+        builder().validate_remote_admin_database_workflow(tmp_path)
+
+
 def test_remote_handoff_only_enters_outer_archive(tmp_path):
     module = builder()
     archive = tmp_path / 'installer.zip'

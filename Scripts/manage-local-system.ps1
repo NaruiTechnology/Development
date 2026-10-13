@@ -53,7 +53,43 @@ function Get-ManagedProcess {
         return $null
     }
     $process = Get-Process -Id ([int]$storedPid) -ErrorAction SilentlyContinue
-    if (-not $process) { Remove-Item -LiteralPath $pidPath -Force }
+    if (-not $process) {
+        Remove-Item -LiteralPath $pidPath -Force
+        return $null
+    }
+    $allowedNames = if ($Name -in @('ionbeam-backend', 'ionbeam-frontend')) {
+        @('node', 'cmd')
+    } else { @('python', 'pythonw', 'uvicorn') }
+    if ($process.ProcessName -notin $allowedNames -or
+        $process.StartTime.ToUniversalTime() -gt (Get-Item -LiteralPath $pidPath).LastWriteTimeUtc) {
+        Write-Host "Discarding stale PID file for $Name (PID $storedPid belongs to $($process.ProcessName))."
+        Remove-Item -LiteralPath $pidPath -Force
+        return $null
+    }
+    $identity = Get-CimInstance Win32_Process -Filter "ProcessId = $storedPid" -ErrorAction Stop
+    if (-not $identity) {
+        Remove-Item -LiteralPath $pidPath -Force
+        return $null
+    }
+    if (-not $identity.CommandLine) {
+        throw "Cannot verify the identity of $Name (PID $storedPid). Run PowerShell as the process owner or administrator."
+    }
+    $expected = switch ($Name) {
+        'glasgow' { 'glasgow_service.api:app' }
+        'sample-stage' { 'glasgow_service.sample_stage_app:app' }
+        'vacuum-executor' { 'glasgow_service.vacuum_executor_app' }
+        'sbc-vacuum' { 'glasgow_service.sbc_vacuum_app' }
+        'ionbeam-backend' { Join-Path $backendRoot 'dist\server.js' }
+        'ionbeam-frontend' { Join-Path $frontendRoot 'node_modules\vite\bin\vite.js' }
+        default { throw "Unknown managed service: $Name" }
+    }
+    $command = $identity.CommandLine.Replace('/', '\')
+    $expected = $expected.Replace('/', '\')
+    if ($command.IndexOf($expected, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        Write-Host "Discarding stale PID file for $Name (PID $storedPid has a different command)."
+        Remove-Item -LiteralPath $pidPath -Force
+        return $null
+    }
     return $process
 }
 
@@ -80,6 +116,31 @@ function Start-Managed {
     Write-Host "Started $Name (PID $($process.Id))."
 }
 
+function Invoke-ManagedTaskKill {
+    param([int]$ProcessId)
+    # Windows PowerShell turns native stderr into a terminating error under
+    # ErrorActionPreference=Stop, even when redirected to $null. Capture it
+    # directly so taskkill's exit code and the surviving processes decide success.
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = 'taskkill.exe'
+    $startInfo.Arguments = "/PID $ProcessId /T /F"
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $killer = New-Object System.Diagnostics.Process
+    $killer.StartInfo = $startInfo
+    try {
+        [void]$killer.Start()
+        $stdout = $killer.StandardOutput.ReadToEndAsync()
+        $stderr = $killer.StandardError.ReadToEndAsync()
+        $killer.WaitForExit()
+        return [pscustomobject]@{ ExitCode = $killer.ExitCode; Detail = $stderr.Result }
+    } finally {
+        $killer.Dispose()
+    }
+}
+
 function Stop-Managed {
     param([string]$Name)
     $process = Get-ManagedProcess $Name
@@ -87,8 +148,34 @@ function Stop-Managed {
         Write-Host "$Name is not running."
         return
     }
-    & taskkill.exe /PID $process.Id /T /F *> $null
-    if ($LASTEXITCODE -ne 0) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    # Keep track of children even if their parent exits during taskkill.
+    $tree = @([pscustomobject]@{ Id = $process.Id; StartTime = $process.StartTime })
+    $processTable = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+    for ($index = 0; $index -lt $tree.Count; $index++) {
+        foreach ($child in $processTable) {
+            if ($child.ParentProcessId -eq $tree[$index].Id -and $child.ProcessId -notin $tree.Id) {
+                $childProcess = Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue
+                if ($childProcess) {
+                    $tree += [pscustomobject]@{ Id = $childProcess.Id; StartTime = $childProcess.StartTime }
+                }
+            }
+        }
+    }
+    $result = Invoke-ManagedTaskKill $process.Id
+    $survivors = @()
+    [array]::Reverse($tree)
+    foreach ($member in $tree) {
+        $current = Get-Process -Id $member.Id -ErrorAction SilentlyContinue
+        # A recycled PID belongs to another process and must not be stopped.
+        if ($current -and $current.StartTime -eq $member.StartTime) {
+            Stop-Process -Id $member.Id -Force -ErrorAction SilentlyContinue
+            $current = Get-Process -Id $member.Id -ErrorAction SilentlyContinue
+            if ($current -and $current.StartTime -eq $member.StartTime) { $survivors += $member.Id }
+        }
+    }
+    if ($survivors.Count) {
+        throw "Could not stop $Name (remaining PIDs: $($survivors -join ', ')). $($result.Detail.Trim())"
+    }
     Remove-Item -LiteralPath (Get-PidPath $Name) -Force -ErrorAction SilentlyContinue
     Write-Host "Stopped $Name."
 }

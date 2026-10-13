@@ -62,6 +62,7 @@ def make_workspace(base):
         shutil.copy2(src, dev / rel)
     slot = dev / "DeployWorkSpace/Development/DistributionDeploy"
     for rel in ("Json/DistributionDeploy.json", "workstates/installRedisSentinel_state.py",
+                "workstates/setupIobeamAdminDb_state.py",
                 "distributionManifest.py"):
         (slot / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, slot / rel)

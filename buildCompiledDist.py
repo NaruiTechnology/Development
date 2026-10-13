@@ -303,30 +303,29 @@ def validate_local_redis_distribution_workflow(src_dir):
           ', '.join(REQUIRED_LOCAL_REDIS_APT_PACKAGES))
 
 
-def validate_local_admin_database_workflow(src_dir):
-    """Require the opt-in local fallback DB state to be wired into the manifest."""
+def validate_remote_admin_database_workflow(src_dir):
+    """Require remote database configuration before web setup."""
     workflow_root = _development_relative_path(
         src_dir, 'DeployWorkSpace', 'Development', 'DistributionDeploy')
     config_path = os.path.join(workflow_root, 'Json', 'DistributionDeploy.json')
-    state_path = os.path.join(workflow_root, 'workstates', 'provisionLocalAdminDb_state.py')
+    state_path = os.path.join(workflow_root, 'workstates', 'setupIobeamAdminDb_state.py')
     if not os.path.isfile(state_path):
-        raise FileNotFoundError('Missing optional local admin DB state: ' + state_path)
+        raise FileNotFoundError('Missing remote admin DB state: ' + state_path)
     with open(config_path, 'r', encoding='utf-8') as stream:
         config = json.load(stream)
     actions = config.get('Actions', [])
     by_name = {next(iter(action), None): next(iter(action.values())) for action in actions}
-    if 'setupIobeamAdminDb' not in by_name or 'provisionLocalAdminDb' not in by_name:
-        raise ValueError('DistributionDeploy.json must include both admin DB workstates')
-    local = by_name['provisionLocalAdminDb']
-    if not isinstance(local.get('skip'), bool):
-        raise ValueError('provisionLocalAdminDb.skip must be a boolean')
-    action_data = local.get('actionData', {})
-    if not action_data.get('provisionLocal') or not action_data.get('syncFromRemote'):
-        raise ValueError('provisionLocalAdminDb must provision locally and sync from remote')
+    if 'setupIobeamAdminDb' not in by_name or 'setupIonbeamWeb' not in by_name:
+        raise ValueError('DistributionDeploy.json must include setupIobeamAdminDb and setupIonbeamWeb')
+    if by_name['setupIobeamAdminDb'].get('skip') is not False:
+        raise ValueError('setupIobeamAdminDb.skip must be false')
+    for name in ('installPostgreSQL', 'provisionLocalAdminDb'):
+        if name in by_name and by_name[name].get('skip') is not True:
+            raise ValueError('Remote admin DB workflow must not run ' + name)
     names = [next(iter(action), None) for action in actions]
-    if names.index('provisionLocalAdminDb') >= names.index('setupIonbeamWeb'):
-        raise ValueError('provisionLocalAdminDb must run before setupIonbeamWeb')
-    print('Validated optional local admin DB provisioning and remote sync workflow.')
+    if names.index('setupIobeamAdminDb') >= names.index('setupIonbeamWeb'):
+        raise ValueError('setupIobeamAdminDb must run before setupIonbeamWeb')
+    print('Validated existing remote admin DB configuration workflow.')
 
 
 def resolve_workspace(script_path):
@@ -617,7 +616,7 @@ def compile_distribution_file(source, destination):
 def build_compiled_dist(src_dir, dist_dir, deliver_raw=False, package_roots=None):
     validate_glasgow_runtime_dependencies(src_dir)
     validate_local_redis_distribution_workflow(src_dir)
-    validate_local_admin_database_workflow(src_dir)
+    validate_remote_admin_database_workflow(src_dir)
     # Compile each included source directly to its destination below. Do not
     # sweep __pycache__: it can contain stale copies for several interpreters.
     if deliver_raw:
