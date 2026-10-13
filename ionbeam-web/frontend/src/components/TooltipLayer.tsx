@@ -33,6 +33,8 @@ export function TooltipLayer() {
   useEffect(() => {
     let active: HTMLElement | null = null;
     let timer: number | undefined;
+    const isButton = (target: EventTarget | null) => target instanceof Element
+      && Boolean(target.closest("button, [role='button'], input[type='button'], input[type='submit'], input[type='reset']"));
 
     const normalize = (root: ParentNode) => {
       const nodes = root instanceof HTMLElement && root.hasAttribute("title")
@@ -45,6 +47,7 @@ export function TooltipLayer() {
     };
 
     const position = (node: HTMLElement, delay: number) => {
+      if (isButton(node)) return;
       const text = node.dataset.tooltip;
       if (!text) return;
       active = node;
@@ -76,6 +79,10 @@ export function TooltipLayer() {
     observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["title"] });
 
     const onPointerOver = (event: PointerEvent) => {
+      if (isButton(event.target)) {
+        if (active) dismiss();
+        return;
+      }
       const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-tooltip]") : null;
       if (target && target !== active) position(target, 350);
     };
@@ -84,6 +91,11 @@ export function TooltipLayer() {
       if (target && !target.contains(event.relatedTarget as Node | null)) dismiss(target);
     };
     const onFocus = (event: FocusEvent) => {
+      // Mouse clicks focus buttons too; do not start a tooltip on either path.
+      if (isButton(event.target)) {
+        if (active) dismiss();
+        return;
+      }
       const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-tooltip]") : null;
       if (target) position(target, 0);
     };
@@ -94,9 +106,13 @@ export function TooltipLayer() {
     const onViewportChange = () => {
       if (active) position(active, 0);
     };
+    const onPointerDown = () => {
+      if (active) dismiss();
+    };
 
     document.addEventListener("pointerover", onPointerOver);
     document.addEventListener("pointerout", onPointerOut);
+    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("focusin", onFocus);
     document.addEventListener("focusout", onBlur);
     window.addEventListener("resize", onViewportChange);
@@ -105,6 +121,7 @@ export function TooltipLayer() {
       observer.disconnect();
       document.removeEventListener("pointerover", onPointerOver);
       document.removeEventListener("pointerout", onPointerOut);
+      document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("focusin", onFocus);
       document.removeEventListener("focusout", onBlur);
       window.removeEventListener("resize", onViewportChange);

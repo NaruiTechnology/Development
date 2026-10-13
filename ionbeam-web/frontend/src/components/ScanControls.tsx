@@ -361,10 +361,8 @@ export function ScanControls({
 
   async function onRun() {
     if (disabled || (kind === "roi" && !roiAction)) return;
-    const allowed = await refreshScanPrivilege();
-    if (!allowed) {
-      return;
-    }
+    // The WebSocket upgrade checks the current session and scan privilege on
+    // the server. Avoid a duplicate account round trip before starting Run.
     if (roiAction) {
       try {
         if (roiEbeamDisabled) {
