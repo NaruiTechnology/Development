@@ -57,6 +57,13 @@ class CommandExecutor(wiring.Component):
 
         self.out_only = out_only
         super().__init__()
+        #: High for one cycle each time a pixel is handed to the DAC path,
+        #: i.e. the beam is being moved. Feeds the stall watchdog in
+        #: IobeamDataSubtarget (fail-safe blanking).
+        self.pixel_submitted = Signal()
+        #: High while an ExternalCtrl command waits out the relay switch
+        #: delay (takeover or hand-back): the relays are moving.
+        self.ext_switching = Signal()
 
     def elaborate(self, platform):
         m = Module()
@@ -107,6 +114,7 @@ class CommandExecutor(wiring.Component):
         submit_pixel = Signal()
         retire_pixel = Signal()
         m.d.sync += in_flight_pixels.eq(in_flight_pixels + submit_pixel - retire_pixel)
+        m.d.comb += self.pixel_submitted.eq(submit_pixel)
 
         # Upstream aligns blanking changes to the DAC clock, not every sync
         # edge. Preserve this relationship for inline per-pixel blanking.
@@ -179,6 +187,7 @@ class CommandExecutor(wiring.Component):
                             m.d.sync += delay_counter.eq(delay_counter + 1)
 
                     with m.Case(CmdType.ExternalCtrl):
+                        m.d.comb += self.ext_switching.eq(1)
                         with m.If(self.supersampler.dac_stream.ready):
                             m.d.sync += self.ext_ctrl_enable.eq(command.payload.external_ctrl.enable)
                             with m.If(command.payload.external_ctrl.enable):

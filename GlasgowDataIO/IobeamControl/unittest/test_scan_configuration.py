@@ -167,3 +167,35 @@ class RuntimePowerTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BlankFailsafeConfigurationTest(unittest.TestCase):
+    """safety.blank_when_released / safety.stall_blank_ms (glasgow_service/docs/blank-failsafe.md)."""
+
+    def args(self, safety=None):
+        action = {"beam": {"ion": {"pinout": {"blank": "A2#,A3"}}}}
+        if safety is not None:
+            action["safety"] = safety
+        return configure_scan_args(None, action, SimpleNamespace())
+
+    def test_safe_by_default(self):
+        args = self.args()
+        self.assertIs(args.blank_when_released, True)
+        self.assertEqual(args.stall_blank_cycles, 100 * 48_000)
+
+    def test_settings(self):
+        args = self.args({"blank_when_released": False, "stall_blank_ms": 0})
+        self.assertIs(args.blank_when_released, False)
+        self.assertEqual(args.stall_blank_cycles, 0)
+        self.assertEqual(self.args({"stall_blank_ms": 2.5}).stall_blank_cycles, 120_000)
+
+    def test_bad_values_are_refused(self):
+        for safety in ({"blank_when_released": "yes"}, {"stall_blank_ms": -1},
+                       {"stall_blank_ms": 20_000}, {"stall_blank_ms": True}, "on"):
+            with self.subTest(safety=safety), self.assertRaises(ValueError):
+                self.args(safety)
+
+    def test_applet_passes_the_settings_to_the_gateware(self):
+        source = (DEVELOPMENT / "GlasgowDataIO/IobeamControl/applet/DataStreamApplet.py").read_text()
+        self.assertIn('blank_when_released  = getattr(args, "blank_when_released", True)', source)
+        self.assertIn('stall_blank_cycles   = getattr(args, "stall_blank_cycles", 0)', source)

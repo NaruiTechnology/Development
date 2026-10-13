@@ -100,6 +100,14 @@ class IobeamDataSubtarget(Elaboratable):
         self.control             = control
         self.data                = data
         self.ext_switch_delay    = ext_switch_delay
+        # Fail-safe blanking (glasgow_service/docs/blank-failsafe.md):
+        #   blank_when_released: drive "blanked" whenever we do not hold
+        #     external control, instead of upstream OBI's "beam on".
+        #   stall_blank_cycles: while we hold control, blank if no pixel has
+        #     been issued for this many cycles (host gone, USB stalled).
+        #     0 turns the watchdog off.
+        self.blank_when_released = bool(kwargs.get("blank_when_released", True))
+        self.stall_blank_cycles  = int(kwargs.get("stall_blank_cycles", 0) or 0)
         self.transforms          = transforms
         self.loopback            = loopback
         self.out_only            = out_only
@@ -367,25 +375,54 @@ class IobeamDataSubtarget(Elaboratable):
         connect_pins("ebeam_blank_enable", executor.ext_ctrl_enable)
         connect_pins("ibeam_blank_enable", executor.ext_ctrl_enable)
 
+        # Stall watchdog. While we hold external control the beam is only
+        # safe while it moves: if no pixel is issued for stall_blank_cycles
+        # (host crashed, service killed, USB stalled mid-scan) the last pixel
+        # would otherwise stay unblanked on one spot. Blank until the next
+        # pixel is issued.
+        stall_blank = Signal()
+        if self.stall_blank_cycles > 0:
+            stall_count = Signal(range(self.stall_blank_cycles + 1))
+            holding = executor.ext_ctrl_enable[0] & executor.ext_ctrl_enabled[0]
+            with m.If(~holding | executor.pixel_submitted):
+                m.d.sync += [stall_count.eq(0), stall_blank.eq(0)]
+            with m.Elif(stall_count == self.stall_blank_cycles):
+                m.d.sync += stall_blank.eq(1)
+            with m.Else():
+                m.d.sync += stall_count.eq(stall_count + 1)
+        self.stall_blank = stall_blank
+
+        # Blank level while external control is released. Upstream OBI drives
+        # "beam on" here and relies on the blank-select relay to hand the
+        # column the instrument's own blank. If that relay path is bypassed
+        # (instrument BLANK unplugged, our blank wired straight in), "beam on"
+        # parks an unblanked ion beam between scans, so drive "blanked".
+        released_blank = 1 if self.blank_when_released else 0
+
+        # Blank while the relays are moving, in both directions, and from the
+        # moment the host commands the hand-back (ext_ctrl_enable low). The
+        # host's Blank(on) only reaches the blank register on the next DAC
+        # clock edge, and a pixel still in the pipeline can carry an inline
+        # "unblank" behind it; either would otherwise leave a short "beam on"
+        # while the relay switches our output in or out.
+        force_blank = Signal()
+        if self.blank_when_released:
+            m.d.comb += force_blank.eq(stall_blank | executor.ext_switching
+                                       | ~executor.ext_ctrl_enable[0])
+        else:
+            m.d.comb += force_blank.eq(stall_blank)
+
         with m.If(executor.ext_ctrl_enabled == 0):
-            # Match OBI: release blanking to the instrument while external
-            # control is disabled. Resource inversion defines physical levels.
-            connect_pins("ebeam_blank", 0)
-            connect_pins("ibeam_blank", 0)
+            connect_pins("ebeam_blank", released_blank)
+            connect_pins("ibeam_blank", released_blank)
         with m.Elif(executor.beam_type == BeamType.NoBeam):
             connect_pins("ebeam_blank", 1)
             connect_pins("ibeam_blank", 1)
         with m.Elif(executor.beam_type == BeamType.Electron):
-            with m.If(executor.ext_ctrl_enabled):
-                connect_pins("ebeam_blank", executor.blank_enable)
-            with m.Else():
-                connect_pins("ebeam_blank", 1)
+            connect_pins("ebeam_blank", executor.blank_enable | force_blank)
             connect_pins("ibeam_blank", 1)
         with m.Elif(executor.beam_type == BeamType.Ion):
-            with m.If(executor.ext_ctrl_enabled):
-                connect_pins("ibeam_blank", executor.blank_enable)
-            with m.Else():
-                connect_pins("ibeam_blank", 1)
+            connect_pins("ibeam_blank", executor.blank_enable | force_blank)
             connect_pins("ebeam_blank", 1)
 
         # ------------------------------------------------------------------ #

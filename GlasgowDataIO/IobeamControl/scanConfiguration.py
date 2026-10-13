@@ -10,6 +10,12 @@ BEAM_PORTS = tuple(f"{beam}_{role}" for beam in ("ebeam", "ibeam")
                    for role in ("scan_enable", "blank_enable", "blank"))
 
 
+#: Blank after this long without a new pixel while we hold external control.
+#: Long against normal gaps (one pixel's dwell is at most ~8.2 ms), short
+#: against milling a pit (minutes).
+DEFAULT_STALL_BLANK_MS = 100
+
+
 def configure_scan_args(config, action, args):
     """Resolve pin roles, transforms and timing once, before building hardware.
 
@@ -73,6 +79,21 @@ def configure_scan_args(config, action, args):
         raise ValueError("external switch delay must fit the 24-bit 48 MHz counter")
     args.ext_switch_delay_cycles = round(delay * 48000)
     args.beam_pull_high = [pin for name in BEAM_PORTS for pin in (getattr(args, name) or [])]
+    # Fail-safe blanking (glasgow_service/docs/blank-failsafe.md). Both on by default.
+    safety = instrument.get("safety", {})
+    if safety is None:
+        safety = {}
+    if not isinstance(safety, dict):
+        raise ValueError("safety must be an object")
+    released = safety.get("blank_when_released", True)
+    if not isinstance(released, bool):
+        raise ValueError("safety.blank_when_released must be boolean")
+    args.blank_when_released = released
+    stall_ms = safety.get("stall_blank_ms", DEFAULT_STALL_BLANK_MS)
+    if isinstance(stall_ms, bool) or not isinstance(stall_ms, (int, float)) \
+            or not math.isfinite(stall_ms) or not 0 <= stall_ms <= 10_000:
+        raise ValueError("safety.stall_blank_ms must be between 0 (off) and 10000")
+    args.stall_blank_cycles = round(stall_ms * 48000)
     # This driver consumes voltage, not the newer assembly API's voltage_map.
     voltage = float(action.get("voltage", getattr(args, "voltage", 3.3)))
     if not math.isfinite(voltage) or not 1.8 <= voltage <= 5.0:

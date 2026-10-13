@@ -4,7 +4,8 @@ The gateware resets with the beam blanked (blank_enable init=1).  Upstream OBI
 clients send BlankCommand(enable=False, inline=True) (opcode 0x52) before every
 frame; a raster scan without it leaves the ion beam off, so the ADC only reads
 its zero level and the image is flat gray.  Order seen on the wire from OBI:
-0x42 (beam select ion), 0x31 (external ctrl on), 0x52 (unblank), sync, region.
+0x42 (beam select ion), 0x51 (blank, added for fail-safe blanking),
+0x31 (external ctrl on), 0x52 (unblank), sync, region.
 """
 import asyncio
 import unittest
@@ -45,8 +46,8 @@ class RasterUnblankTest(unittest.TestCase):
         first_pixel_run = next(i for i, w in enumerate(writes) if w[:1] == b"\xc0")
         self.assertLess(writes.index(unblank), first_pixel_run)
         # beam select, external ctrl, unblank, then synchronize
-        self.assertEqual(writes[:3], [b"\x42", b"\x31", unblank])
-        self.assertEqual(writes[3][:1], b"\x01")
+        self.assertEqual(writes[:4], [b"\x42", b"\x51", b"\x31", unblank])
+        self.assertEqual(writes[4][:1], b"\x01")
 
     def test_no_beam_is_not_unblanked(self):
         writes = asyncio.run(_run(BeamType.NoBeam))

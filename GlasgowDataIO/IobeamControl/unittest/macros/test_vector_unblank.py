@@ -37,8 +37,8 @@ class VectorUnblankTest(unittest.TestCase):
     def test_unblank_precedes_sync_and_points(self):
         writes = asyncio.run(_run(BeamType.Ion))
         unblank = bytes(BlankCommand(enable=False, inline=True))
-        self.assertEqual(writes[:3], [b"\x42", b"\x31", unblank])
-        self.assertEqual(writes[3][:1], b"\x00")     # synchronize (raster=False)
+        self.assertEqual(writes[:4], [b"\x42", b"\x51", b"\x31", unblank])
+        self.assertEqual(writes[4][:1], b"\x00")     # synchronize (raster=False)
 
     def test_no_beam_is_not_unblanked(self):
         writes = asyncio.run(_run(BeamType.NoBeam))

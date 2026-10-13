@@ -329,6 +329,11 @@ class RasterScanCommand(BaseCommand):
             await FlushCommand().transfer(stream)
 
         await BeamSelectCommand(beam_type=self._beam_type).transfer(stream)
+        # Blank before taking over, so the relay never switches our output in
+        # while it still says "beam on" (left over from a session that died
+        # without its hand-back). The first pixel's inline unblank below
+        # turns the beam on. See glasgow_service/docs/blank-failsafe.md.
+        await BlankCommand(enable=True, inline=False).transfer(stream)
         await ExternalCtrlCommand(enable=self._external_control).transfer(stream)
         # The gateware resets with the beam BLANKED (blank_enable init=1) and
         # nothing else unblanks it on this path, so without this command the

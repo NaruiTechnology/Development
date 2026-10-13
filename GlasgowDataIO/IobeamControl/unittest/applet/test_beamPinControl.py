@@ -50,13 +50,23 @@ class BeamPinControlTest(unittest.TestCase):
         sim.run()
 
     def test_beam_selection_blanking_inversion_and_disable_delay(self):
+        # Default: blanked whenever external control is released.
+        self._beam_selection(blank_when_released=True)
+
+    def test_upstream_release_level_is_still_available(self):
+        # safety.blank_when_released = false restores upstream OBI's "beam on".
+        self._beam_selection(blank_when_released=False)
+
+    def _beam_selection(self, *, blank_when_released):
+        released = blank_when_released
         pads = {name: io.SimulationPort("o", 2, invert=(True, False)
                                        if name == "ibeam_blank" else False)
                 for name in BEAM_PORTS}
         tx = SimpleNamespace(r_data=Signal(8), r_rdy=Signal(), r_en=Signal())
         rx = SimpleNamespace(w_data=Signal(8), w_rdy=Signal(init=1), w_en=Signal())
         dut = IobeamDataSubtarget(ports=PortGroup(**pads), out_fifo=tx,
-                                 in_fifo=rx, loopback=True, ext_switch_delay=8)
+                                 in_fifo=rx, loopback=True, ext_switch_delay=8,
+                                 blank_when_released=blank_when_released)
         sim = Simulator(dut)
         sim.add_clock(1/48e6)
 
@@ -87,7 +97,7 @@ class BeamPinControlTest(unittest.TestCase):
             await ctx.tick()
             self.assertEqual(value("ebeam_scan_enable"), 3)
             self.assertEqual(value("ibeam_scan_enable"), 0)
-            check_blank(False, False)
+            check_blank(released, released)
             await send(ExternalCtrlCommand(True))
             self.assertEqual(value("ibeam_scan_enable"), 3)
             check_blank(True, True)  # NoBeam
@@ -104,7 +114,7 @@ class BeamPinControlTest(unittest.TestCase):
                     delayed += 1
                 await ctx.tick()
             self.assertGreaterEqual(delayed, 8)
-            check_blank(False, False)
+            check_blank(released, released)
             self.assertEqual(value("ebeam_scan_enable"), 3)
             self.assertEqual(value("ibeam_scan_enable"), 0)
 
