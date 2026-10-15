@@ -86,6 +86,10 @@ class VacuumSystemStatus(BaseModel):
     running: bool
     runtime_seconds: float = 0.0
     cascade_stopped: bool
+    # Why the cascade is stopped: device_error (clears itself after healthy
+    # polls), restart, operator or safety (both need /vacuum/resume); None
+    # while the cascade runs automatically.
+    cascade_latch: Optional[str] = None
     # A backing-pump restart (power cycle) is in progress.
     restarting: bool = False
     isVacuumSystemReady: bool = False

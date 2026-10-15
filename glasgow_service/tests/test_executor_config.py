@@ -23,3 +23,11 @@ def test_executor_config_requires_instance_id(monkeypatch):
     monkeypatch.delenv("VACUUM_EXECUTOR_ID", raising=False)
     with pytest.raises(ValueError, match="EXECUTOR_ID"):
         ExecutorConfig.from_environment()
+
+
+def test_executor_does_not_release_the_sbc_on_stop_by_default(monkeypatch):
+    monkeypatch.setenv("VACUUM_EXECUTOR_ID", "sbc-a")
+    monkeypatch.delenv("VACUUM_EXECUTOR_RELEASE_ON_STOP", raising=False)
+    assert ExecutorConfig.from_environment().release_on_stop is False
+    monkeypatch.setenv("VACUUM_EXECUTOR_RELEASE_ON_STOP", "true")
+    assert ExecutorConfig.from_environment().release_on_stop is True

@@ -11,6 +11,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .execution_authority import AuthorityDenied, remote_authority_from_environment
@@ -26,7 +27,7 @@ from .vacuum import (
     find_vacuum_config_path,
     load_runtime_vacuum_config,
 )
-from .vacuum_health import sbc_controller_is_ready
+from .vacuum_health import sbc_controller_is_ready, vacuum_service_problems
 
 
 def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
@@ -62,6 +63,10 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         finally:
             try:
                 await controller.close()
+                # Let the "controller stopped" alert leave before exit.
+                flush = getattr(controller, "flush_alerts", None)
+                if flush is not None:
+                    await asyncio.to_thread(flush)
             finally:
                 try:
                     if emulator is not None:
@@ -151,7 +156,43 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
             "status": "ready",
             "connected": status.connected,
             "equipment_count": len(status.pumps),
+            "cascade_latch": status.cascade_latch,
         }
+
+    @app.get("/health/vacuum")
+    async def vacuum_health():
+        """Continuous-service health for monitoring and alerting.
+
+        200 while the controller runs and the cascade is free to advance;
+        503 with the reasons while it is latched, alarmed, restarting,
+        disconnected or stopped.  ``/health/ready`` stays a process-readiness
+        check so deploy scripts are unaffected.
+        """
+        target = holder.get("controller")
+        if target is None:
+            if not activation["enabled"]:
+                return {"status": "disabled", "vacuum_enabled": False}
+            return JSONResponse(status_code=503, content={
+                "status": "starting", "problems": ["controller is starting"]})
+        status = target.status()
+        problems = vacuum_service_problems(
+            connected=status.connected,
+            running=status.running,
+            cascade_latch=status.cascade_latch,
+            restarting=status.restarting,
+            alarms=status.alarms,
+        )
+        body = {
+            "status": "degraded" if problems else "ok",
+            "problems": problems,
+            "cascade_latch": status.cascade_latch,
+            "isVacuumSystemReady": status.isVacuumSystemReady,
+            "running": status.running,
+            "connected": status.connected,
+            "runtime_seconds": status.runtime_seconds,
+            "updated_at": status.updated_at,
+        }
+        return JSONResponse(status_code=503 if problems else 200, content=body)
 
     @app.get("/vacuum", response_model=VacuumSystemStatus)
     async def vacuum_status():

@@ -14,11 +14,19 @@ class VacuumFailoverRuntime:
         self,
         executor: FailoverExecutor,
         sbc: SbcVacuumClient,
+        *,
+        release_on_stop: bool = False,
     ) -> None:
         if sbc.executor is not executor:
             raise ValueError("SBC client and runtime must use the same executor")
         self.executor = executor
         self.sbc = sbc
+        #: ``POST /vacuum/release`` powers the whole system down (every
+        #: output off, expanders held in reset).  By default a stopping
+        #: executor only lets its lease lapse, so a restart, deploy or
+        #: hand-over to the standby keeps the vacuum up; the SBC interlocks
+        #: keep acting on their own while no executor holds a lease.
+        self.release_on_stop = release_on_stop
         self._acquired_token: int | None = None
         self.last_error: str | None = None
         self.logger = logging.getLogger(__name__)
@@ -79,7 +87,15 @@ class VacuumFailoverRuntime:
                 await self.sbc.acquire()
                 self._acquired_token = token
             else:
-                await self.sbc.renew_leadership()
+                status = await self.sbc.renew_leadership()
+                if isinstance(status, dict) and status.get("running") is False:
+                    # The SBC process restarted (or was released) under the
+                    # same term: with fencing on it waits for an executor to
+                    # start the controller, so start it again.
+                    self.logger.warning(
+                        "SBC controller is not running; re-acquiring",
+                        extra={"event": "reacquire"})
+                    await self.sbc.acquire()
         except SbcClientError:
             self.last_error = "SBC lease or hardware request failed"
             self.logger.exception("SBC downstream safety fault", extra={"event": "fence"})
@@ -102,7 +118,8 @@ class VacuumFailoverRuntime:
 
     async def stop(self) -> None:
         if (
-            self.executor.lifecycle.state is ExecutorState.ACTIVE
+            self.release_on_stop
+            and self.executor.lifecycle.state is ExecutorState.ACTIVE
             and self.executor.may_execute
             and self._acquired_token is not None
         ):

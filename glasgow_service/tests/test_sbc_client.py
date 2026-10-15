@@ -102,7 +102,7 @@ def test_runtime_acquires_renews_and_stops_sbc_before_releasing_lease():
         client = SbcVacuumClient(
             "http://sbc.local:8765", executor, http_client=http, clock=clock
         )
-        runtime = VacuumFailoverRuntime(executor, client)
+        runtime = VacuumFailoverRuntime(executor, client, release_on_stop=True)
 
         await executor.start()
         await runtime.step()
@@ -134,5 +134,57 @@ def test_runtime_fences_executor_when_sbc_rejects_authority():
         await runtime.step()
         assert executor.lifecycle.state is ExecutorState.FENCED
         assert executor.may_execute is False
+
+    asyncio.run(scenario())
+
+
+def test_runtime_stop_keeps_the_vacuum_up_by_default():
+    """A restart, deploy or hand-over must not power the vacuum system down."""
+    async def scenario():
+        clock = ManualClock()
+        coordinator, executor = make_executor(clock)
+        http = FakeHttpClient()
+        client = SbcVacuumClient(
+            "http://sbc.local:8765", executor, http_client=http, clock=clock
+        )
+        runtime = VacuumFailoverRuntime(executor, client)
+
+        await executor.start()
+        await runtime.step()
+        await runtime.stop()
+        assert not any(url.endswith("/vacuum/release") for _m, url, _k in http.requests)
+        assert executor.lifecycle.state is ExecutorState.STOPPED
+        # The Redis lease is still released, so the standby takes over at once.
+        assert await coordinator.current_lease() is None
+
+    asyncio.run(scenario())
+
+
+def test_runtime_reacquires_when_the_sbc_restarted_under_the_same_term():
+    """With fencing on, a restarted SBC waits idle until an executor acquires."""
+    async def scenario():
+        clock = ManualClock()
+        _coordinator, executor = make_executor(clock)
+        http = FakeHttpClient()
+        client = SbcVacuumClient(
+            "http://sbc.local:8765", executor, http_client=http, clock=clock
+        )
+        runtime = VacuumFailoverRuntime(executor, client)
+
+        await executor.start()
+        await runtime.step()
+        assert http.requests[-1][1].endswith("/vacuum/acquire")
+
+        http.next_response = FakeResponse(200, {"running": False})
+        clock.advance(1.0)
+        await runtime.step()
+        urls = [url for _m, url, _k in http.requests[-2:]]
+        assert urls[0].endswith("/vacuum/leadership/renew")
+        assert urls[1].endswith("/vacuum/acquire")
+
+        http.next_response = FakeResponse(200, {"running": True})
+        clock.advance(1.0)
+        await runtime.step()
+        assert http.requests[-1][1].endswith("/vacuum/leadership/renew")
 
     asyncio.run(scenario())

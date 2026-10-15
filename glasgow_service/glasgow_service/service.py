@@ -919,6 +919,11 @@ class DeviceService:
 
         self._conn: Optional[GlasgowConnection] = None
         self._adc_conn: Optional[AdcConnection] = None
+        # A connection dropped after a USB error.  It still owns the USB
+        # interface until it is hard-closed, which happens before the next
+        # connect (see _close_stale_conn); opening a new GlasgowDevice
+        # first fails with LIBUSB_ERROR_BUSY.
+        self._stale_conn: Optional[GlasgowConnection] = None
         # Cross-process USB ownership (see device_lock.py): the native desktop
         # app and this service must not claim the Glasgow at the same time.
         # Created lazily by the _device_lock property.
@@ -972,8 +977,8 @@ class DeviceService:
         logger.debug("service ready (lazy connect on first scan)")
 
     async def stop(self) -> None:
-        """Best-effort: drop the reference. The library has no clean USB
-        teardown, so we rely on process exit / GC for actual release."""
+        """Close every connection and release the device lock."""
+        await self._close_stale_conn()
         if self._adc_conn is not None:
             await self._adc_conn.close()
             self._adc_conn = None
@@ -988,6 +993,7 @@ class DeviceService:
     async def reconnect(self) -> None:
         """Drop the current connection so the next scan opens a fresh one."""
         async with self._lock:
+            await self._close_stale_conn()
             if self._adc_conn is not None:
                 await self._adc_conn.close()
                 self._adc_conn = None
@@ -1043,6 +1049,7 @@ class DeviceService:
         releases the USB interface.
         """
         async with self._acquire("adc"):
+            await self._close_stale_conn()
             if self._conn is not None:
                 await self._conn._hard_close()
                 self._conn = None
@@ -1340,6 +1347,13 @@ class DeviceService:
         if self._conn is not None and self._conn.connected:
             return self._conn
 
+        # A connection dropped after an error still claims the USB interface:
+        # release it first, or the new GlasgowDevice fails with BUSY.
+        await self._close_stale_conn()
+        if self._conn is not None:
+            # Present but no longer connected: close it before replacing it.
+            await self._hard_close_quietly(self._conn, "disconnected connection")
+            self._conn = None
         logger.debug("opening Glasgow connection")
         self._claim_device()
         self._status.state = DeviceState.CONNECTING
@@ -1350,7 +1364,9 @@ class DeviceService:
                 raise DeviceNotReady(
                     "GlasgowConnection._connect() reported not connected")
         except Exception as e:
-            self._conn = None
+            failed, self._conn = self._conn, None
+            if failed is not None:
+                await self._hard_close_quietly(failed, "failed connection")
             self._status.state = DeviceState.ERROR
             self._status.last_error = repr(e)
             if _is_fatal_usb_error(e):
@@ -1367,7 +1383,29 @@ class DeviceService:
         if _is_fatal_usb_error(exc):
             logger.warning("dropping connection after %s: %s",
                         type(exc).__name__, exc)
-            self._conn = None
+            stale, self._conn = self._conn, None
+            if stale is not None:
+                # Called from synchronous exception paths (some inside async
+                # generators), so the close is deferred to the next connect.
+                previous = getattr(self, "_stale_conn", None)
+                if previous is not None and previous is not stale:
+                    logger.warning("a previous stale connection was still open")
+                self._stale_conn = stale
+
+    async def _close_stale_conn(self) -> None:
+        stale = getattr(self, "_stale_conn", None)
+        self._stale_conn = None
+        if stale is not None:
+            await self._hard_close_quietly(stale, "connection dropped after an error")
+
+    @staticmethod
+    async def _hard_close_quietly(conn, what: str) -> None:
+        try:
+            await conn._hard_close()
+            logger.info("released the Glasgow USB interface held by the %s", what)
+        except Exception as exc:  # noqa: BLE001 - best effort; keep going
+            logger.warning("closing the %s raised %s: %s",
+                           what, type(exc).__name__, exc)
 
     # -------- streaming (for WebSocket) -----------------------------------
 

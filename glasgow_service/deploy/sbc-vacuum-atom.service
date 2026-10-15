@@ -2,6 +2,10 @@
 Description=Local simulated Raspberry Pi vacuum GPIO controller
 After=network-online.target
 Wants=network-online.target
+# Keep restarting for 24/7 service: the default start limit (5 starts in
+# 10 s) would leave the unit failed for good after a short crash loop,
+# for example while the I2C expanders come up at boot.
+StartLimitIntervalSec=0
 
 [Service]
 Type=exec
@@ -15,6 +19,8 @@ RestartSec=2
 KillSignal=SIGINT
 TimeoutStopSec=15
 NoNewPrivileges=true
+# Persistent home for the fencing token (/var/lib/sbc-vacuum).
+StateDirectory=sbc-vacuum
 
 [Install]
 WantedBy=multi-user.target

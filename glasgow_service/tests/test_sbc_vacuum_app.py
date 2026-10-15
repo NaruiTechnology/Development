@@ -290,3 +290,43 @@ def test_restart_endpoint_only_restarts_the_backing_pump(tmp_path, monkeypatch):
         assert not any(p["power"] or p["valve_open"] for p in state["pumps"])
         assert client.post("/vacuum/pumps/MechanicalVacuumPump/restart",
                            json={}).status_code == 409                # already restarting
+
+
+def test_vacuum_health_reports_a_latched_cascade_that_ready_does_not(tmp_path, monkeypatch):
+    payload = json.loads(CONFIG_PATH.read_text())
+    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    source = tmp_path / "vacuum.json"
+    source.write_text(json.dumps(payload))
+    monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
+    monkeypatch.setenv("SBC_REQUIRE_FENCING", "false")
+    monkeypatch.setenv("SBC_VACUUM_TOKEN", "test-token")
+    headers = {"Authorization": "Bearer test-token"}
+
+    with TestClient(create_app(config_loader=load_vacuum_config)) as client:
+        healthy = client.get("/health/vacuum")
+        assert healthy.status_code == 200
+        assert healthy.json()["status"] == "ok" and healthy.json()["problems"] == []
+
+        assert client.post("/vacuum/stop", headers=headers).status_code == 200
+        degraded = client.get("/health/vacuum")
+        assert degraded.status_code == 503
+        assert degraded.json()["cascade_latch"] == "operator"
+        assert degraded.json()["problems"] == ["cascade stopped (operator)"]
+        # Process readiness (used by deploy checks) is unchanged.
+        ready = client.get("/health/ready")
+        assert ready.status_code == 200 and ready.json()["cascade_latch"] == "operator"
+
+        assert client.post("/vacuum/resume", headers=headers).status_code == 200
+        assert client.get("/health/vacuum").status_code == 200
+
+
+def test_vacuum_health_when_disabled_is_not_an_alarm(tmp_path, monkeypatch):
+    payload = json.loads(CONFIG_PATH.read_text())
+    payload.update(Enable=False)
+    source = tmp_path / "vacuum.json"
+    source.write_text(json.dumps(payload))
+    monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
+    with TestClient(create_app(config_loader=load_vacuum_config)) as client:
+        response = client.get("/health/vacuum")
+        assert response.status_code == 200
+        assert response.json()["status"] == "disabled"

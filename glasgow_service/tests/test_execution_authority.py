@@ -90,14 +90,19 @@ def test_leadership_loss_blocks_automatic_cascade_and_direct_commands():
             await executor.step()
             assert executor.lifecycle.state is ExecutorState.FENCED
 
+            history_length = len(device.history)
             await controller.poll_once()
             turbo = controller._states["TurboVacuumPump"]
-            # A denied automatic transition makes the poll fail closed: no
-            # previously computed readiness is retained on the fenced node.
-            assert mechanical.ready is False
-            assert mechanical.border == "error"
+            # Without leadership the fenced node energizes nothing: the
+            # cascade does not advance even though the backing stage reads
+            # ready.  Losing the lease is not a device error, so the poll
+            # keeps reporting measured readiness and does not latch.
+            assert mechanical.ready is True
             assert turbo.power is False
-            assert "does not hold active leadership" in controller.status().last_error
+            assert not [entry for entry in device.history[history_length:]
+                        if entry[0] == "write" and entry[2] is True]
+            assert controller.status().last_error is None
+            assert controller.status().cascade_latch is None
 
             history_length = len(device.history)
             with pytest.raises(AuthorityDenied):

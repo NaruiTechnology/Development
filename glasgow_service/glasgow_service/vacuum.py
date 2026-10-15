@@ -16,10 +16,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .models import VacuumPumpState, VacuumSystemStatus
 from .execution_authority import (
+    AuthorityDenied,
     ExecutionAuthority,
     ExecutionPermit,
     RemoteExecutionAuthority,
 )
+from .vacuum_alerts import VacuumAlerts, alerts_from_environment
 from .vacuum_device import (
     SimulatedVacuumDevice,
     SimulatedVacuumDeviceControl,
@@ -45,6 +47,17 @@ DEFAULT_VACUUM_CONFIG = Path(
 )
 GPIO_PIN_RE = re.compile(r"^[AB]([0-7])$")
 MECHANICAL_PUMP = "MechanicalVacuumPump"
+
+#: Why the cascade is latched (stopped).  Only ``device_error`` clears itself:
+#: the others need an operator ``/vacuum/resume`` (or end on their own, for a
+#: backing-pump restart).  A higher-priority reason replaces a lower one, so a
+#: transient device error never downgrades an operator stop or a safety trip.
+LATCH_DEVICE_ERROR = "device_error"
+LATCH_RESTART = "restart"
+LATCH_OPERATOR = "operator"
+LATCH_SAFETY = "safety"
+_LATCH_PRIORITY = {LATCH_DEVICE_ERROR: 0, LATCH_RESTART: 1, LATCH_OPERATOR: 2, LATCH_SAFETY: 3}
+AUTO_RESUME_POLLS_ENV = "SBC_VACUUM_AUTO_RESUME_POLLS"
 #: ``groupName`` values: one identifier per cascade stage.
 GROUP_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 
@@ -440,6 +453,19 @@ def emulator_for_config(config: VacuumConfig):
 emulator_from_environment = emulator_for_config
 
 
+def _auto_resume_polls_from_environment(default: int) -> int:
+    raw = os.environ.get(AUTO_RESUME_POLLS_ENV, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{AUTO_RESUME_POLLS_ENV} must be an integer") from exc
+    if value < 0:
+        raise ValueError(f"{AUTO_RESUME_POLLS_ENV} must be 0 (disabled) or positive")
+    return value
+
+
 class VacuumController:
     POLL_INTERVAL_SECONDS = 1.0
     READING_MAX_AGE_SECONDS = 5.0
@@ -448,6 +474,9 @@ class VacuumController:
     BACKING_RESTART_OFF_SECONDS = 3.0
     #: Float rounding only; not an operating tolerance (see _reading_reached).
     READING_MATCH_RTOL = 1e-9
+    #: Consecutive healthy polls after which a ``device_error`` latch clears
+    #: itself (``SBC_VACUUM_AUTO_RESUME_POLLS``; 0 disables auto-resume).
+    AUTO_RESUME_HEALTHY_POLLS = 10
 
     def __init__(
         self,
@@ -455,8 +484,14 @@ class VacuumController:
         device: VacuumDevice | None = None,
         authority: ExecutionAuthority | None = None,
         emulator=None,
+        alerts: VacuumAlerts | None = None,
     ):
         self.config = config
+        #: Webhook alerts for unattended operation (disabled unless
+        #: SBC_VACUUM_ALERT_WEBHOOK is set; see vacuum_alerts.py).
+        self._alerts = alerts if alerts is not None else alerts_from_environment()
+        self._latch_since: float | None = None
+        self._last_reminder: float | None = None
         self._authority = authority
         self._last_permit: ExecutionPermit | None = None
         if device is None and emulator is None:
@@ -536,7 +571,10 @@ class VacuumController:
         self._last_error: Optional[str] = None
         self._updated_at: Optional[str] = None
         self._last_poll_monotonic: float | None = None
-        self._cascade_stopped = False
+        self._latch_reason: Optional[str] = None
+        self._healthy_polls = 0
+        self._auto_resume_polls = _auto_resume_polls_from_environment(
+            self.AUTO_RESUME_HEALTHY_POLLS)
         self._running = False
         self._started_at: float | None = None
         self._simulation_reads = {pump.name: False for pump in config.pumps}
@@ -597,6 +635,132 @@ class VacuumController:
             self._log(logging.INFO, "vacuum.mode",
                       f"no real equipment is driven; {detail}")
 
+    # --------------------------------------------------------------- latch
+    @property
+    def _cascade_stopped(self) -> bool:
+        return self._latch_reason is not None
+
+    @_cascade_stopped.setter
+    def _cascade_stopped(self, stopped: bool) -> None:
+        # Existing call sites stop or release the cascade without a reason:
+        # a plain stop is an operator/manual latch.
+        if stopped:
+            self._latch(LATCH_OPERATOR)
+        else:
+            self._set_latch(None, source="operator")
+
+    def _latch(self, reason: str) -> None:
+        current = self._latch_reason
+        if current is None or _LATCH_PRIORITY[reason] >= _LATCH_PRIORITY[current]:
+            self._set_latch(reason)
+
+    #: Alert severity when the cascade stops for each reason.
+    _LATCH_SEVERITY = {
+        LATCH_DEVICE_ERROR: "critical",
+        LATCH_SAFETY: "critical",
+        LATCH_OPERATOR: "warning",
+        LATCH_RESTART: "info",
+    }
+
+    def _set_latch(self, reason: Optional[str], *, source: str = "controller") -> None:
+        previous = self._latch_reason
+        self._latch_reason = reason
+        if reason == previous:
+            return
+        if reason is None:
+            self._latch_since = None
+            self._last_reminder = None
+            self._alert("cascade_resumed", "info",
+                        f"cascade resumed ({source}) after a {previous} stop")
+            return
+        if previous is None:
+            self._latch_since = time.monotonic()
+            self._last_reminder = None
+        needs = ("clears by itself after healthy polls" if reason == LATCH_DEVICE_ERROR
+                 else "ends by itself" if reason == LATCH_RESTART
+                 else "needs POST /vacuum/resume")
+        self._alert("cascade_stopped", self._LATCH_SEVERITY[reason],
+                    f"cascade stopped ({reason}); downstream pumps are off; {needs}")
+
+    def _alert(self, event: str, severity: str, message: str) -> None:
+        """Report to the alert webhook; never raises."""
+        try:
+            self._alerts.emit(
+                event, severity, message,
+                device_id=self.config.device.id,
+                mode=self.run_mode,
+                cascade_latch=self._latch_reason,
+                alarms=list(self._alarms),
+                last_error=self._last_error,
+                running=self._running,
+            )
+        except Exception:  # noqa: BLE001 - alerting must never affect control
+            log.exception("vacuum alert %s failed", event)
+
+    def _remind_if_still_latched(self) -> None:
+        """Repeat the alert while the cascade stays stopped (not for restarts)."""
+        remind = getattr(self._alerts, "remind_seconds", 0.0)
+        if (remind <= 0 or self._latch_reason in (None, LATCH_RESTART)
+                or self._latch_since is None):
+            return
+        now = time.monotonic()
+        since = self._last_reminder or self._latch_since
+        if now - since < remind:
+            return
+        self._last_reminder = now
+        minutes = (now - self._latch_since) / 60.0
+        self._alert("cascade_still_stopped", self._LATCH_SEVERITY[self._latch_reason],
+                    f"cascade still stopped ({self._latch_reason}) after {minutes:.0f} min")
+
+    @property
+    def cascade_latch(self) -> Optional[str]:
+        """Why the cascade is stopped, or None while it runs automatically."""
+        return self._latch_reason
+
+    def _backing_pump_energized(self) -> bool:
+        mechanical = self._states.get(MECHANICAL_PUMP)
+        if mechanical is None:
+            return False
+        try:
+            return bool(self.gpio.output_level(mechanical.write))
+        except Exception:
+            return False
+
+    def _safety_chain_ok(self) -> bool:
+        """E-stop loop closed and output rail up (always true off the board).
+
+        A pump-fault alarm alone does not block auto-resume: a faulted pump
+        is never started, exactly as after an operator resume.
+        """
+        if not self._is_board:
+            return True
+        try:
+            estop_ok, rail_ok = self.gpio.read_safety()
+        except Exception:
+            return False
+        return bool(estop_ok and rail_ok)
+
+    def _maybe_auto_resume(self) -> None:
+        """Clear a ``device_error`` latch after enough consecutive healthy polls.
+
+        Only communication glitches resume by themselves.  Operator stops,
+        E-stop / rail / keep-alive / fault trips and backing-pump restarts
+        keep their existing manual behaviour.  If the hardware already
+        dropped the backing pump (expander reset or brown-out) nothing is
+        re-energized automatically: that still needs an operator resume.
+        """
+        if (self._latch_reason != LATCH_DEVICE_ERROR
+                or self._auto_resume_polls <= 0
+                or self._healthy_polls < self._auto_resume_polls
+                or self.restarting
+                or not self._safety_chain_ok()
+                or not self._backing_pump_energized()):
+            return
+        self._log(logging.WARNING, "vacuum.resume",
+                  f"auto-resume: {self._healthy_polls} consecutive healthy polls after a "
+                  "device error; cascade re-enabled from the measured state")
+        self._set_latch(None, source="auto-resume")
+
     @property
     def requires_remote_authority(self) -> bool:
         return isinstance(self._authority, RemoteExecutionAuthority)
@@ -628,6 +792,7 @@ class VacuumController:
         self._require_authority()
         self._running = True
         self._last_poll_monotonic = None
+        self._healthy_polls = 0
         self._started_at = time.monotonic()
         try:
             if self.config.simulate:
@@ -660,9 +825,13 @@ class VacuumController:
             self._log(logging.INFO, "vacuum.start",
                       "controller started" + (": expanders reset, watchdog heartbeat running"
                                               if self._is_board else ""))
+            self._alert("controller_started", "info",
+                        "vacuum controller started; cascade starting from the backing pump")
         except BaseException as exc:
             self._running = False
             self._log(logging.ERROR, "vacuum.start", f"controller failed to start: {exc}")
+            self._alert("controller_start_failed", "critical",
+                        f"vacuum controller failed to start: {exc}")
             await self.gpio.close()
             raise
 
@@ -689,8 +858,14 @@ class VacuumController:
                 await self._set_valve(state, False, reason="controller stop")
             except Exception:
                 pass    # the board reset below drops every solenoid anyway
-        await self.gpio.close()
-        self._log(logging.INFO, "vacuum.stop", "controller stopped: all managed outputs off")
+        try:
+            await self.gpio.close()
+        finally:
+            self._log(logging.INFO, "vacuum.stop",
+                      "controller stopped: all managed outputs off")
+            self._alert("controller_stopped", "critical",
+                        "vacuum controller stopped: every managed output is off, "
+                        "including the backing pump")
 
     @property
     def isVacuumSystemReady(self) -> bool:
@@ -738,6 +913,7 @@ class VacuumController:
                 if self._running and self._started_at is not None else 0.0
             ),
             cascade_stopped=self._cascade_stopped,
+            cascade_latch=self._latch_reason,
             restarting=self.restarting,
             isVacuumSystemReady=self.isVacuumSystemReady,
             high_voltage_power=self._high_voltage_power,
@@ -793,8 +969,12 @@ class VacuumController:
             async with self._io_lock:
                 # Validate immediately before the side effect. This catches a
                 # lease lost while the caller was waiting for another GPIO
-                # operation to release the lock.
-                self._require_authority()
+                # operation to release the lock.  The controller's own
+                # interlocks may always de-energize: fencing stops a stale
+                # executor from *driving* hardware, never the SBC from
+                # making it safe while no executor holds a lease.
+                if power or not automatic:
+                    self._require_authority()
                 await self.gpio.write(state.write, power)
                 if self.config.simulate and not power:
                     await self.gpio.set_gauge_ready(state.read, False)
@@ -854,7 +1034,7 @@ class VacuumController:
         self._log(logging.WARNING, "vacuum.restart",
                   f"{MECHANICAL_PUMP} restart requested: stopping every pump, closing every "
                   f"valve, OFF for {off:g} s")
-        self._cascade_stopped = True          # nothing advances while restarting
+        self._latch(LATCH_RESTART)            # nothing advances while restarting
         if self._high_voltage_power:
             await self._set_high_voltage_output(False)
         for stage in reversed(self._stages[1:]):
@@ -1039,9 +1219,15 @@ class VacuumController:
             await self._enforce_interlocks()
             if self._high_voltage_power and not self.isVacuumSystemReady:
                 await self._set_high_voltage_output(False)
-            if not self._cascade_stopped:
+            self._healthy_polls += 1
+            self._maybe_auto_resume()
+            # Without a live lease (executor failover in progress) the
+            # interlocks above still act, but nothing new is energized or
+            # opened and the gap is not treated as a device error.
+            authorized = self._authorized()
+            if not self._cascade_stopped and authorized:
                 await self._advance_cascade()
-            await self._apply_valves()
+            await self._apply_valves(allow_open=authorized)
         except Exception as exc:
             errors = [str(exc)]
             if self._high_voltage_power:
@@ -1056,7 +1242,7 @@ class VacuumController:
                     continue
                 try:
                     async with self._io_lock:
-                        self._require_authority()
+                        # Safe-direction write: allowed without a lease.
                         await self.gpio.write(state.write, False)
                     state.power = False
                     state.port_a_value = 0.0
@@ -1071,12 +1257,15 @@ class VacuumController:
                 except Exception as valve_exc:
                     errors.append(f"failed to close {state.valve or 'valve'} of "
                                   f"{state.name}: {valve_exc}")
-            self._cascade_stopped = True
+            self._healthy_polls = 0
+            self._latch(LATCH_DEVICE_ERROR)
             self._last_error = "; ".join(errors)
             if self._last_error != self._logged_error:
                 # Logged once per distinct error, not on every 1 s poll.
                 self._log(logging.ERROR, "vacuum.poll",
                           f"device error, downstream outputs de-energized: {self._last_error}")
+                self._alert("device_error", "critical",
+                            f"device error, downstream outputs de-energized: {self._last_error}")
                 self._logged_error = self._last_error
             for state in self._states.values():
                 state.value = None
@@ -1100,7 +1289,7 @@ class VacuumController:
         that restoring power does not restart equipment by itself.
         """
         async with self._io_lock:
-            self._require_authority()
+            # Safe-direction write: allowed without a lease.
             await self.gpio.write(state.write, False)
         if state.power:
             self._log(logging.WARNING, "vacuum.output",
@@ -1146,11 +1335,13 @@ class VacuumController:
         for alarm in alarms:
             if alarm not in self._alarms:
                 self._log(logging.WARNING, "vacuum.alarm", f"ALARM raised: {alarm}")
+                self._alert("alarm_raised", "critical", f"ALARM raised: {alarm}")
         for alarm in self._alarms:
             if alarm not in alarms:
                 self._log(logging.INFO, "vacuum.alarm", f"alarm cleared: {alarm}")
+                self._alert("alarm_cleared", "info", f"alarm cleared: {alarm}")
         if tripped or (set(alarms) - set(self._alarms)):
-            self._cascade_stopped = True
+            self._latch(LATCH_SAFETY)
         self._alarms = alarms
 
     def _reading_reached(self, state: VacuumPumpState) -> bool:
@@ -1213,9 +1404,14 @@ class VacuumController:
             return
         await self._enforce_stage_interlocks()
 
-    async def _apply_valves(self) -> None:
-        """Each pump's isolation valve is open exactly while it is ready."""
+    async def _apply_valves(self, *, allow_open: bool = True) -> None:
+        """Each pump's isolation valve is open exactly while it is ready.
+
+        ``allow_open=False`` (no live lease): close where needed, open nothing.
+        """
         for state in self._states.values():
+            if state.ready and not allow_open and not state.valve_open:
+                continue
             await self._set_valve(state, state.ready, reason=(
                 "ready" if state.ready else
                 "vacuum excursion" if state.excursion else "not ready"))
@@ -1229,7 +1425,10 @@ class VacuumController:
             return
         if board_valve:
             async with self._io_lock:
-                self._require_authority()
+                if open_:
+                    # Opening needs the lease; closing is a safe-direction
+                    # write the controller may always make.
+                    self._require_authority()
                 await self.gpio.write_valve(state.read, open_)
             open_ = bool(self.gpio.valve_level(state.read))
         if state.valve_open != open_:
@@ -1253,7 +1452,24 @@ class VacuumController:
     async def _poll_worker(self) -> None:
         while True:
             await self.poll_once()
+            self._remind_if_still_latched()
             await asyncio.sleep(self.POLL_INTERVAL_SECONDS)
+
+    def flush_alerts(self, timeout: float = 2.0) -> None:
+        """Deliver queued alerts before the process exits (blocking, bounded)."""
+        close = getattr(self._alerts, "close", None)
+        if close is not None:
+            close(timeout)
+
+    def _authorized(self) -> bool:
+        """True when fencing is off or a live executor lease is held."""
+        if self._authority is None:
+            return True
+        try:
+            self._authority.require()
+        except AuthorityDenied:
+            return False
+        return True
 
     def _require_authority(self) -> ExecutionPermit | None:
         """Return the live executor permit, if fencing is enabled."""
