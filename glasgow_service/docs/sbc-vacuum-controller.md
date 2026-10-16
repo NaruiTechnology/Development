@@ -255,6 +255,9 @@ actual Pi model, carrier schematic, and wiring drawing. Bind the API to a
 trusted control network or localhost/reverse proxy; bearer authentication does
 not provide TLS or network isolation.
 
+To install the controller on a Raspberry Pi 4B or 5 (OS settings, service user, unit, profile,
+wired connection map and preflight), see [`../deploy/sbc/README.md`](../deploy/sbc/README.md).
+
 For ownership rules, the 24/7 commissioning checks and keeping the backing
 pump running across restarts, see [`vacuum-24x7-commissioning.md`](vacuum-24x7-commissioning.md).
 

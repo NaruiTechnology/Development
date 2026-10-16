@@ -13,9 +13,16 @@ StartLimitIntervalSec=0
 Type=notify
 NotifyAccess=main
 WatchdogSec=20
+# For a Raspberry Pi install, prefer deploy/sbc/ (install_sbc.py), which
+# writes an equivalent unit plus the user, groups and config.txt it needs.
 User=vacuum
-Group=gpio
-WorkingDirectory=/opt/ionbeam/Development/glasgow_service
+Group=vacuum
+# /dev/gpiochip* (gpio), /dev/i2c-1 (i2c), /dev/ttyAMA* (dialout).
+SupplementaryGroups=gpio i2c dialout
+# lgpio creates notification pipes (.lgd-nfy*) in its working directory, and
+# /opt is read-only under ProtectSystem=strict: run from the state directory.
+WorkingDirectory=/var/lib/sbc-vacuum
+Environment=LG_WD=/var/lib/sbc-vacuum
 EnvironmentFile=/etc/sbc-vacuum.env
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/ionbeam/.venv/bin/python -m glasgow_service.sbc_vacuum_app

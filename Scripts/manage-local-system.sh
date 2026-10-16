@@ -29,9 +29,10 @@ usage() {
 Usage: manage-local-system.sh [start|restart|stop|status|logs|install]
        manage-local-system.sh [stop-vacuum|restart-vacuum] --yes
 
-  start/restart  Install location-aware units, reload systemd, and (re)start the
-                 host stack. The SBC vacuum controller is only started when it is
-                 not running; a running controller is never restarted.
+  start           Install location-aware units and start the host stack. The SBC
+                  vacuum controller starts only when it is not already running.
+  restart         Install/reload units and restart the host stack, including the
+                  SBC vacuum controller. Its outputs may drop during restart.
   stop           Stop the host stack. The SBC vacuum controller keeps running.
   status         Show a non-paged summary of every service
   logs           Follow logs for all five services (Ctrl-C exits)
@@ -41,8 +42,9 @@ Usage: manage-local-system.sh [start|restart|stop|status|logs|install]
   restart-vacuum Restart the SBC vacuum controller.  backing pump too, unless the
                  board keeps it (KeepBackingPumpOnRestart). Both require --yes.
 
-The SBC vacuum controller owns the vacuum system once it runs; the host stack
-only starts it and reads its status.
+The SBC vacuum controller owns the vacuum system once it runs. The host stack
+starts it when down, and a full `restart` operation restarts it to load the
+deployed profile; both actions wait for its health endpoint.
 
 Log files are written under OPERATIONS_ROOT/logs.
 Environment overrides: OPERATIONS_ROOT, OPERATIONS_VENV, OPERATIONS_LOG_DIR, ADMIN_USER,
@@ -268,9 +270,10 @@ wait_http() {
   return 1
 }
 
-# The SBC controller owns the vacuum system once it runs.  Host stack
-# operations start it when it is down and otherwise leave it alone:
-# restarting or stopping it powers every pump down, the backing pump included.
+# The SBC controller owns the vacuum system once it runs. A normal start leaves
+# an already-running controller alone. A deployment restart deliberately
+# restarts it to load the deployed profile; restarting may power every pump
+# down, including the backing pump, unless KeepBackingPumpOnRestart is set.
 ensure_sbc_running() {
   if user_systemctl is-active --quiet "${SBC_UNIT}"; then
     echo "${SBC_UNIT} is running; left untouched (it owns the vacuum system)"
@@ -286,6 +289,13 @@ ensure_sbc_running() {
     echo "Starting ${SBC_UNIT}"
     user_systemctl start "${SBC_UNIT}" || return 1
   fi
+  wait_http "SBC vacuum" "http://127.0.0.1:8766/health/live"
+}
+
+restart_sbc_vacuum() {
+  echo "Restarting ${SBC_UNIT} to load the deployed vacuum profile; outputs may drop during restart."
+  # Equivalent to: systemctl --user restart sbc-vacuum.service
+  user_systemctl restart "${SBC_UNIT}" || return 1
   wait_http "SBC vacuum" "http://127.0.0.1:8766/health/live"
 }
 
@@ -326,7 +336,12 @@ case "${ACTION}" in
     stack_failed=0
     sudo_cmd systemctl stop "${EXECUTOR_UNIT}" "${GLASGOW_UNIT}" || true
     stop_stale_glasgow
-    if ! ensure_sbc_running; then
+    if [[ "${ACTION}" == "restart" ]]; then
+      if ! restart_sbc_vacuum; then
+        stack_failed=1
+        echo "Check ${LOG_DIR}/sbc-vacuum.log. Active vacuum control requires real SBC hardware; set Enable to false in the SBC's vacuum profile (SBC_VACUUM_CONFIG) when hardware is unavailable." >&2
+      fi
+    elif ! ensure_sbc_running; then
       stack_failed=1
       echo "Check ${LOG_DIR}/sbc-vacuum.log. Active vacuum control requires real SBC hardware; set Enable to false in the SBC's vacuum profile (SBC_VACUUM_CONFIG) when hardware is unavailable." >&2
     fi

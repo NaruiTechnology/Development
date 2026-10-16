@@ -1,0 +1,725 @@
+{
+  "schema": "sbc-wiring-map/1",
+  "board": "RPi5VacuumIO-A",
+  "revision": "A.1",
+  "source": "GlasgowDataIO/Hardware/VacuumController/RPi5VacuumIO (design.py, WIRING.md)",
+  "note": "Site record of how this controller is wired. If the cabinet is wired differently, edit /etc/sbc-vacuum/wiring-map.json on the Pi; the preflight checks the vacuum profile against it.",
+  "ribbon": {
+    "from": "Raspberry Pi 40-pin header",
+    "to": "J3",
+    "cable": "40-way IDC, female-female, 15-20 cm, pin 1 to pin 1"
+  },
+  "header": [
+    {
+      "pin": 1,
+      "name": "3V3",
+      "bcm": null,
+      "net": "3V3",
+      "kind": "power",
+      "function": "Board logic supply (3.3 V from the Pi)"
+    },
+    {
+      "pin": 2,
+      "name": "5V",
+      "bcm": null,
+      "net": null,
+      "kind": "nc",
+      "function": "Not connected on J3 (deliberate)"
+    },
+    {
+      "pin": 3,
+      "name": "GPIO2",
+      "bcm": 2,
+      "net": "SDA1",
+      "kind": "i2c",
+      "function": "I2C1 data: U1 0x20, U3 0x21, U9 0x48, U10 0x49"
+    },
+    {
+      "pin": 4,
+      "name": "5V",
+      "bcm": null,
+      "net": null,
+      "kind": "nc",
+      "function": "Not connected on J3 (deliberate)"
+    },
+    {
+      "pin": 5,
+      "name": "GPIO3",
+      "bcm": 3,
+      "net": "SCL1",
+      "kind": "i2c",
+      "function": "I2C1 clock"
+    },
+    {
+      "pin": 6,
+      "name": "GND",
+      "bcm": null,
+      "net": "GND",
+      "kind": "ground",
+      "function": "Ground"
+    },
+    {
+      "pin": 8,
+      "name": "GPIO14",
+      "bcm": 14,
+      "net": "485_TXD",
+      "kind": "uart",
+      "function": "UART0 TX to MAX3485 (RS-485, J4)"
+    },
+    {
+      "pin": 9,
+      "name": "GND",
+      "bcm": null,
+      "net": "GND",
+      "kind": "ground",
+      "function": "Ground"
+    },
+    {
+      "pin": 10,
+      "name": "GPIO15",
+      "bcm": 15,
+      "net": "485_RXD",
+      "kind": "uart",
+      "function": "UART0 RX from MAX3485"
+    },
+    {
+      "pin": 12,
+      "name": "GPIO18",
+      "bcm": 18,
+      "net": "RS485_DE",
+      "kind": "output",
+      "function": "MAX3485 DE/RE; R14 10k pull-down (receive)"
+    },
+    {
+      "pin": 13,
+      "name": "GPIO27",
+      "bcm": 27,
+      "net": "DI_INT",
+      "kind": "input",
+      "function": "U3 INTA, open drain, R12 10k pull-up"
+    },
+    {
+      "pin": 14,
+      "name": "GND",
+      "bcm": null,
+      "net": "GND",
+      "kind": "ground",
+      "function": "Ground"
+    },
+    {
+      "pin": 15,
+      "name": "GPIO22",
+      "bcm": 22,
+      "net": "IO_RESET_N",
+      "kind": "output",
+      "function": "MCP23017 reset; R10 10k pull-down holds both expanders in reset (all outputs off)"
+    },
+    {
+      "pin": 16,
+      "name": "GPIO23",
+      "bcm": 23,
+      "net": "ADC_ALRT",
+      "kind": "input",
+      "function": "ADS1115 ALERT/RDY wired-AND, R13 10k pull-up"
+    },
+    {
+      "pin": 17,
+      "name": "3V3",
+      "bcm": null,
+      "net": "3V3",
+      "kind": "power",
+      "function": "Board logic supply"
+    },
+    {
+      "pin": 20,
+      "name": "GND",
+      "bcm": null,
+      "net": "GND",
+      "kind": "ground",
+      "function": "Ground"
+    },
+    {
+      "pin": 25,
+      "name": "GND",
+      "bcm": null,
+      "net": "GND",
+      "kind": "ground",
+      "function": "Ground"
+    },
+    {
+      "pin": 29,
+      "name": "GPIO5",
+      "bcm": 5,
+      "net": "ESTOP_OK_N",
+      "kind": "input",
+      "function": "Opto: low = +24V_ESTOP rail live (K9 closed)"
+    },
+    {
+      "pin": 30,
+      "name": "GND",
+      "bcm": null,
+      "net": "GND",
+      "kind": "ground",
+      "function": "Ground"
+    },
+    {
+      "pin": 31,
+      "name": "GPIO6",
+      "bcm": 6,
+      "net": "SAFE_OK_N",
+      "kind": "input",
+      "function": "Opto: low = +24V_SAFE output rail live (K10 closed)"
+    },
+    {
+      "pin": 32,
+      "name": "GPIO12",
+      "bcm": 12,
+      "net": "232_TXD",
+      "kind": "uart",
+      "function": "RS-232 TX to MAX3232 (J5)"
+    },
+    {
+      "pin": 33,
+      "name": "GPIO13",
+      "bcm": 13,
+      "net": "232_RXD",
+      "kind": "uart",
+      "function": "RS-232 RX from MAX3232"
+    },
+    {
+      "pin": 34,
+      "name": "GND",
+      "bcm": null,
+      "net": "GND",
+      "kind": "ground",
+      "function": "Ground"
+    },
+    {
+      "pin": 35,
+      "name": "GPIO19",
+      "bcm": 19,
+      "net": "HEARTBEAT",
+      "kind": "output",
+      "function": "1 kHz square wave into the K10 charge-pump watchdog"
+    },
+    {
+      "pin": 37,
+      "name": "GPIO26",
+      "bcm": 26,
+      "net": "RUN_LED",
+      "kind": "output",
+      "function": "Blue RUN LED D11"
+    },
+    {
+      "pin": 39,
+      "name": "GND",
+      "bcm": null,
+      "net": "GND",
+      "kind": "ground",
+      "function": "Ground"
+    }
+  ],
+  "i2c": {
+    "bus": 1,
+    "devices": [
+      {
+        "address": "0x20",
+        "ref": "U1",
+        "chip": "MCP23017",
+        "role": "GPA -> ULN2803A -> K1..K8; GPB -> AO3400A -> V1..V8",
+        "reset": "IO_RESET_N"
+      },
+      {
+        "address": "0x21",
+        "ref": "U3",
+        "chip": "MCP23017",
+        "role": "DI1..DI16 through TLP291 optos (active low)",
+        "reset": "IO_RESET_N"
+      },
+      {
+        "address": "0x48",
+        "ref": "U9",
+        "chip": "ADS1115",
+        "role": "AI1..AI4 (68k/22k divider)"
+      },
+      {
+        "address": "0x49",
+        "ref": "U10",
+        "chip": "ADS1115",
+        "role": "AI5..AI8 (68k/22k divider)"
+      }
+    ]
+  },
+  "serial": {
+    "RS485": {
+      "connector": "J4",
+      "pins": {
+        "485A": 1,
+        "485B": 2,
+        "GND": 3
+      },
+      "bcm": [
+        14,
+        15
+      ],
+      "driver_enable_bcm": 18,
+      "models": {
+        "4B": {
+          "node": "/dev/ttyAMA0",
+          "requires": [
+            "enable_uart=1",
+            "dtoverlay=disable-bt"
+          ]
+        },
+        "5": {
+          "node": "/dev/ttyAMA0",
+          "requires": [
+            "enable_uart=1"
+          ]
+        }
+      }
+    },
+    "RS232": {
+      "connector": "J5",
+      "pins": {
+        "232TX": 1,
+        "232RX": 2,
+        "GND": 3
+      },
+      "bcm": [
+        12,
+        13
+      ],
+      "models": {
+        "4B": {
+          "node": null,
+          "dt_node": "serial@7e201a00",
+          "requires": [
+            "dtoverlay=uart5"
+          ],
+          "comment": "uart5; the tty number depends on the other UARTs enabled - resolved on the Pi"
+        },
+        "5": {
+          "node": "/dev/ttyAMA4",
+          "requires": [
+            "dtoverlay=uart4-pi5"
+          ]
+        }
+      }
+    }
+  },
+  "config_txt": {
+    "4B": [
+      "dtparam=i2c_arm=on",
+      "enable_uart=1",
+      "dtoverlay=disable-bt",
+      "dtoverlay=uart5"
+    ],
+    "5": [
+      "dtparam=i2c_arm=on",
+      "enable_uart=1",
+      "dtoverlay=uart4-pi5"
+    ]
+  },
+  "terminals": {
+    "K1": {
+      "connector": "J11",
+      "pins": {
+        "COM": 1,
+        "NO": 2,
+        "NC": 3
+      },
+      "rail": "estop"
+    },
+    "K2": {
+      "connector": "J12",
+      "pins": {
+        "COM": 1,
+        "NO": 2,
+        "NC": 3
+      },
+      "rail": "safe"
+    },
+    "K3": {
+      "connector": "J13",
+      "pins": {
+        "COM": 1,
+        "NO": 2,
+        "NC": 3
+      },
+      "rail": "safe"
+    },
+    "K4": {
+      "connector": "J14",
+      "pins": {
+        "COM": 1,
+        "NO": 2,
+        "NC": 3
+      },
+      "rail": "safe"
+    },
+    "K5": {
+      "connector": "J15",
+      "pins": {
+        "COM": 1,
+        "NO": 2,
+        "NC": 3
+      },
+      "rail": "safe"
+    },
+    "K6": {
+      "connector": "J16",
+      "pins": {
+        "COM": 1,
+        "NO": 2,
+        "NC": 3
+      },
+      "rail": "safe"
+    },
+    "K7": {
+      "connector": "J17",
+      "pins": {
+        "COM": 1,
+        "NO": 2,
+        "NC": 3
+      },
+      "rail": "safe"
+    },
+    "K8": {
+      "connector": "J18",
+      "pins": {
+        "COM": 1,
+        "NO": 2,
+        "NC": 3
+      },
+      "rail": "safe"
+    },
+    "V1": {
+      "connector": "J21",
+      "pins": {
+        "+24": 1,
+        "OUT-": 2
+      },
+      "rail": "safe"
+    },
+    "V2": {
+      "connector": "J21",
+      "pins": {
+        "+24": 3,
+        "OUT-": 4
+      },
+      "rail": "safe"
+    },
+    "V3": {
+      "connector": "J22",
+      "pins": {
+        "+24": 1,
+        "OUT-": 2
+      },
+      "rail": "safe"
+    },
+    "V4": {
+      "connector": "J22",
+      "pins": {
+        "+24": 3,
+        "OUT-": 4
+      },
+      "rail": "safe"
+    },
+    "V5": {
+      "connector": "J23",
+      "pins": {
+        "+24": 1,
+        "OUT-": 2
+      },
+      "rail": "safe"
+    },
+    "V6": {
+      "connector": "J23",
+      "pins": {
+        "+24": 3,
+        "OUT-": 4
+      },
+      "rail": "safe"
+    },
+    "V7": {
+      "connector": "J24",
+      "pins": {
+        "+24": 1,
+        "OUT-": 2
+      },
+      "rail": "safe"
+    },
+    "V8": {
+      "connector": "J24",
+      "pins": {
+        "+24": 3,
+        "OUT-": 4
+      },
+      "rail": "safe"
+    },
+    "DI1": {
+      "connector": "J31",
+      "pins": {
+        "IN": 1,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI2": {
+      "connector": "J31",
+      "pins": {
+        "IN": 2,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI3": {
+      "connector": "J31",
+      "pins": {
+        "IN": 3,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI4": {
+      "connector": "J31",
+      "pins": {
+        "IN": 4,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI5": {
+      "connector": "J32",
+      "pins": {
+        "IN": 1,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI6": {
+      "connector": "J32",
+      "pins": {
+        "IN": 2,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI7": {
+      "connector": "J32",
+      "pins": {
+        "IN": 3,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI8": {
+      "connector": "J32",
+      "pins": {
+        "IN": 4,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI9": {
+      "connector": "J33",
+      "pins": {
+        "IN": 1,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI10": {
+      "connector": "J33",
+      "pins": {
+        "IN": 2,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI11": {
+      "connector": "J33",
+      "pins": {
+        "IN": 3,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI12": {
+      "connector": "J33",
+      "pins": {
+        "IN": 4,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI13": {
+      "connector": "J34",
+      "pins": {
+        "IN": 1,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI14": {
+      "connector": "J34",
+      "pins": {
+        "IN": 2,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI15": {
+      "connector": "J34",
+      "pins": {
+        "IN": 3,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "DI16": {
+      "connector": "J34",
+      "pins": {
+        "IN": 4,
+        "COM": 5,
+        "+24": 6
+      }
+    },
+    "AI1": {
+      "connector": "J41",
+      "pins": {
+        "AI": 1,
+        "0V": 2
+      }
+    },
+    "AI2": {
+      "connector": "J41",
+      "pins": {
+        "AI": 3,
+        "0V": 4
+      }
+    },
+    "AI3": {
+      "connector": "J41",
+      "pins": {
+        "AI": 5,
+        "0V": 6
+      }
+    },
+    "AI4": {
+      "connector": "J41",
+      "pins": {
+        "AI": 7,
+        "0V": 8
+      }
+    },
+    "AI5": {
+      "connector": "J42",
+      "pins": {
+        "AI": 1,
+        "0V": 2
+      }
+    },
+    "AI6": {
+      "connector": "J42",
+      "pins": {
+        "AI": 3,
+        "0V": 4
+      }
+    },
+    "AI7": {
+      "connector": "J42",
+      "pins": {
+        "AI": 5,
+        "0V": 6
+      }
+    },
+    "AI8": {
+      "connector": "J42",
+      "pins": {
+        "AI": 7,
+        "0V": 8
+      }
+    }
+  },
+  "devices": {
+    "MechanicalVacuumPump": {
+      "output": "K1",
+      "ready": "DI1",
+      "fault": "DI5",
+      "gauge": "AI1",
+      "valve": "V1",
+      "wire_to": "Mechanical pump remote-enable input (or a rated 24 V contactor coil)"
+    },
+    "TurboVacuumPump": {
+      "output": "K2",
+      "ready": "DI2",
+      "fault": "DI6",
+      "gauge": "AI2",
+      "valve": "V2",
+      "speed": "AI5",
+      "rs485_address": 1,
+      "wire_to": "Turbo controller remote START input; ready = at-speed contact"
+    },
+    "UHVacuumPump_1": {
+      "output": "K3",
+      "ready": "DI3",
+      "fault": "DI7",
+      "gauge": "AI3",
+      "valve": "V4",
+      "speed": "AI6",
+      "rs485_address": 2,
+      "wire_to": "UH pump 1 controller remote START input"
+    },
+    "UHVacuumPump_2": {
+      "output": "K4",
+      "ready": "DI4",
+      "fault": "DI8",
+      "gauge": "AI4",
+      "valve": "V5",
+      "speed": "AI7",
+      "rs485_address": 3,
+      "wire_to": "UH pump 2 controller remote START input"
+    },
+    "HighVoltageTransformer": {
+      "output": "K5",
+      "wire_to": "In series with the tool's HV enable / interlock loop"
+    }
+  },
+  "field_inputs": {
+    "DI9": "V2 chamber valve open switch",
+    "DI10": "V2 chamber valve closed switch",
+    "DI11": "V4 UH isolation valve open switch",
+    "DI12": "V4 UH isolation valve closed switch",
+    "DI13": "Chamber door closed",
+    "DI14": "Compressed air OK",
+    "DI15": "N2 vent gas OK",
+    "DI16": "Cooling water flow OK"
+  },
+  "field_outputs": {
+    "V3": "Vent valve (dry N2)",
+    "V6": "Bypass / chamber roughing valve",
+    "V7": "Pneumatic cylinder",
+    "V8": "Spare",
+    "K6": "Gauge HV on (suggested)",
+    "K7": "Spare",
+    "K8": "Spare"
+  },
+  "power": {
+    "J1": {
+      "pins": {
+        "+24V": 1,
+        "0V": 2
+      },
+      "supply": "24 V DC, 60-100 W DIN-rail PSU; 0 V bonded to PE at one point"
+    },
+    "J2": {
+      "pins": {
+        "LOOP_OUT": 1,
+        "LOOP_RETURN": 2
+      },
+      "function": "E-stop NC loop or safety-relay output contact -> K9"
+    }
+  }
+}

@@ -255,7 +255,11 @@ The workflow now:
    against its built-in Glasgow emulator (no hardware is touched). Skipped on
    production (remote) hosts. `desktopEntry` / `runSmokeTest` in the action's
    `actionData` turn those parts off.
-9. Calls `Scripts/manage-local-system.sh restart`.
+9. Calls `Scripts/manage-local-system.sh restart`, which runs
+   `systemctl --user restart sbc-vacuum.service` in the service account's
+   systemd session so the SBC vacuum controller loads the deployed profile.
+   This can briefly power down every pump, including the backing pump unless
+   `KeepBackingPumpOnRestart` is set.
 10. Verifies Glasgow (`8765`), SBC vacuum (`8766`), executor (`8780`), backend
     (`4000`), frontend (`5173`), and administrative API endpoints.
 
@@ -300,7 +304,7 @@ Glasgow, and vacuum processes are already supervised by systemd.
 
 ```bash
 cd ~/IobeamPlatform
-./Scripts/manage-local-system.sh restart
+./Scripts/manage-local-system.sh restart # restarts sbc-vacuum; plan for pump interruption
 ./Scripts/manage-local-system.sh status
 ./Scripts/manage-local-system.sh logs
 ./Scripts/manage-local-system.sh stop

@@ -39,11 +39,12 @@ python -m glasgow_service.emulation --model 5 commission
 
 ## The service against the emulator
 
-The normal SBC service uses `Enable` from
-`GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json`. Configuration → General →
-**Active vacuum control** updates this entry and restarts the service. `true`
-activates the emulator when scanner `IsProduction` is false and real SBC hardware when it is true; `false` leaves the service idle and disables the
-vacuum scan-readiness gate. Scanner `IsProduction` selects the execution mode.
+The SBC's own profile (`SBC_VACUUM_CONFIG`) decides how the service runs; nothing on the
+host changes it. `"Enable": true` activates control, and `"IsProduction"` selects the mode:
+`false` runs the production driver on the emulator, `true` (or missing) requires the real
+board. Restart `sbc-vacuum` after changing either. On a Pi installed with
+`deploy/sbc/install_sbc.py` the profile is `/etc/sbc-vacuum/vacuumSystem.json` and starts with
+`Enable: false` and `IsProduction: true`.
 
 For explicit emulator development, inject `load_vacuum_config` instead of the
 normal runtime loader. This standalone loader selects the following modes:
@@ -67,7 +68,7 @@ export SBC_VACUUM_EMULATOR_MODEL=4B     # optional: 4B (default from PiModel) or
 python -c 'import uvicorn; from glasgow_service.sbc_vacuum_app import create_app; from glasgow_service.vacuum import load_vacuum_config; uvicorn.run(create_app(config_loader=load_vacuum_config), host="127.0.0.1", port=8766)' 
 ```
 
-Restart the development app after changing its mode settings. Normal service startup selects emulation or hardware from scanner `IsProduction` when `Enable` is true.
+Restart the development app after changing its mode settings.
 
 Vacuum readiness requires a successful poll within five seconds. Unknown or
 stale readings report disconnected/not ready, clear displayed pressure values,
@@ -145,9 +146,10 @@ SBC_VACUUM_LOG_FORMAT=json ...                              # JSON lines with "e
 1. **Before hardware.** `test_is_production_true_runs_the_hardware_path_with_hw_tag` runs the
    production hardware path (`build_board_device` → `LgpioHAL` + `smbus2.SMBus`) with only those two
    Linux endpoints substituted, and checks the `[VACUUM-HW]` banner and that K1 is really driven.
-2. **On the controller Pi**, after setting `"Enable": true` and restarting the normal service:
+2. **On the controller Pi** (installed with `deploy/sbc/`), run `sudo sbc-vacuum-preflight preflight --probe`
+   with the service stopped, then set `"Enable": true` and restart the service:
    - the banner reads `[VACUUM-HW] LIVE HARDWARE ... reason=IsProduction=true, Simulate=false`;
-   - `curl localhost:8765/status` shows `"mode": "board"`, `"is_production": true`, `"log_tag": "[VACUUM-HW]"`;
+   - `curl localhost:8766/status` shows `"mode": "board"`, `"is_production": true`, `"log_tag": "[VACUUM-HW]"`;
    - `GET /emulator` returns 404 (no emulator exists in this mode);
    - `i2cdetect -y 1` shows `20 21 48 49` (the real chips) and `pinctrl get 19` shows the heartbeat;
    - then run WIRING.md step 12. Every row produces a `[VACUUM-HW]` line for each relay that

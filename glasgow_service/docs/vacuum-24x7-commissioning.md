@@ -13,11 +13,12 @@ status; operator commands from the UI are forwarded to it and the SBC decides.
 | Configuration → Update / Restore (scan settings) | None. The host's reset hook restarts only the scan service; it *starts* `sbc-vacuum` and the optional executor if they are not running, and never restarts them. |
 | Configuration → Active vacuum control | None. Host setting only (`vacuumHost.json`): shows/hides the vacuum dashboard and the vacuum scan gate. |
 | SBC profile `Enable: false` | The SBC runs idle. The host follows it: no vacuum dashboard and no vacuum scan gate, even with Active vacuum control on (the host shows vacuum only when both are on; an unreachable SBC stays visible as down). The executor waits (checks every 30 s) instead of fencing. Turn control on in the SBC profile, then `restart-vacuum --yes`. |
-| `manage-local-system.sh start` / `restart` | Starts `sbc-vacuum` only if it is not running; never restarts it. |
+| `manage-local-system.sh start` | Starts `sbc-vacuum` only if it is not running; leaves an active controller untouched. |
+| `manage-local-system.sh restart` (including local distribution deployment) | Restarts `sbc-vacuum` to load the deployed profile. This can briefly power down every pump, including the backing pump unless `KeepBackingPumpOnRestart` is set. |
 | `manage-local-system.sh stop` | Stops the host stack; `sbc-vacuum` keeps running. |
-| Redeploy (distribution deploy) | `sbc-vacuum` keeps running the previous version; `start/restart` prints a note. Load the new version with `restart-vacuum --yes` when a restart is acceptable. |
+| Redeploy (distribution deploy) | Restarts `sbc-vacuum` as part of the local `restart` operation so it loads the deployed version and profile. Plan for the pump interruption. |
 | Web backend or executor down | The vacuum keeps running; the UI shows the SBC as unreachable until the host is back. |
-| `manage-local-system.sh stop-vacuum --yes` / `restart-vacuum --yes` | The only host commands that stop or restart the SBC. |
+| `manage-local-system.sh stop-vacuum --yes` / `restart-vacuum --yes` | Explicit standalone commands to stop or restart the SBC outside a full stack restart. |
 
 The SBC never reads host configuration: its own profile (`SBC_VACUUM_CONFIG`)
 decides `Enable` and `IsProduction`. The host reads the SBC directly

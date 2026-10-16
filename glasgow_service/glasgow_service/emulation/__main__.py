@@ -60,7 +60,13 @@ async def _commission(args) -> None:
     from ..vacuum import VacuumController
 
     rig = VacuumRig(spec=make_spec(args.model), tool_connected=False)
-    controller = VacuumController(load_config(args.config, args.model), emulator=rig)
+    config = load_config(args.config, args.model)
+    # WIRING.md step 12: with no gauges connected the pumps can never reach
+    # their configured readings, so the jumper test runs with the gauge
+    # interlock off (and it goes back on before the tool is connected).
+    for gauge in config.sbc.gauges.values():
+        gauge.interlock = False
+    controller = VacuumController(config, emulator=rig)
 
     async def settle(n=3):
         for _ in range(n):
@@ -72,7 +78,8 @@ async def _commission(args) -> None:
         alarm = f"  alarms={status.alarms}" if status.alarms else ""
         print(f"{step:<38} {rig.board.led_panel()}{alarm}")
 
-    print(f"Commissioning replay on {rig.pi.profile.name} (WIRING.md step 12), tool unplugged\n")
+    print(f"Commissioning replay on {rig.pi.profile.name} (WIRING.md step 12), tool unplugged, "
+          "gauge interlock off for the jumper test\n")
     row("1-2 24 V + E-stop, service stopped")
     for di in (5, 6, 7, 8):
         rig.jumper(di)
