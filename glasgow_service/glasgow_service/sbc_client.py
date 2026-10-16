@@ -16,6 +16,14 @@ class SbcAuthorityRejected(AuthorityDenied, SbcClientError):
     pass
 
 
+class SbcControllerDisabled(SbcClientError):
+    """The SBC runs with vacuum control disabled (Enable: false in its profile).
+
+    Not a fault: the SBC owns that decision.  The executor waits instead of
+    fencing itself.
+    """
+
+
 class SbcVacuumClient:
     def __init__(self, base_url: str, executor: FailoverExecutor, *,
                  bearer_token: str | None = None, http_client: Any | None = None,
@@ -99,6 +107,9 @@ class SbcVacuumClient:
             raise SbcClientError(f"SBC request failed: {exc}") from exc
         if response.status_code in {409, 428}:
             raise SbcAuthorityRejected(self._response_detail(response))
+        if response.status_code == 404 and \
+                "disabled" in self._response_detail(response).lower():
+            raise SbcControllerDisabled(self._response_detail(response))
         if response.status_code >= 400:
             raise SbcClientError(
                 f"SBC returned HTTP {response.status_code}: {self._response_detail(response)}")

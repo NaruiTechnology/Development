@@ -11,6 +11,8 @@ from glasgow_service.vacuum import load_vacuum_config
 
 
 CONFIG_PATH = Path(__file__).parents[2] / "GlasgowDataIO" / "Json" / "vacuumSystem.json"
+# Pinned 4-pump profile for behaviour tests (see test_vacuum.CONFIG_PATH).
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "vacuumSystem.4pump.json"
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +47,7 @@ def test_enable_false_keeps_service_idle_without_touching_hardware(tmp_path, mon
 
 
 def test_standalone_simulation_api_runs_without_executor(tmp_path, monkeypatch):
-    payload = json.loads(CONFIG_PATH.read_text())
+    payload = json.loads(FIXTURE_PATH.read_text())
     payload.update(Enable=True, IsProduction=False, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
@@ -67,7 +69,7 @@ def test_standalone_simulation_api_runs_without_executor(tmp_path, monkeypatch):
 
 
 def test_simulation_control_requires_bearer_token(tmp_path, monkeypatch):
-    payload = json.loads(CONFIG_PATH.read_text())
+    payload = json.loads(FIXTURE_PATH.read_text())
     payload.update(Enable=True, IsProduction=False, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
@@ -84,7 +86,7 @@ def test_simulation_control_requires_bearer_token(tmp_path, monkeypatch):
 
 
 def test_high_voltage_api_is_vacuum_interlocked(tmp_path, monkeypatch):
-    payload = json.loads(CONFIG_PATH.read_text())
+    payload = json.loads(FIXTURE_PATH.read_text())
     payload.update(Enable=True, IsProduction=False, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
@@ -209,11 +211,13 @@ def test_production_missing_sbc_never_constructs_emulator(tmp_path, monkeypatch,
 
     profile = CONFIG_PATH.with_name("vacuumSystem.rpi5-io.example.json")
     payload = json.loads(profile.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=stale_simulate)
+    payload.update(Enable=True, IsProduction=True, Simulate=stale_simulate)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
+    # The SBC profile decides; a non-production scanner cannot downgrade the
+    # SBC to emulation.
     stream = tmp_path / "streamData.json"
-    stream.write_text(json.dumps({"IsProduction": True}))
+    stream.write_text(json.dumps({"IsProduction": False}))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
     monkeypatch.setenv("GLASGOW_CONFIG", str(stream))
     monkeypatch.setenv("SBC_REQUIRE_FENCING", "false")
@@ -237,7 +241,7 @@ def test_production_missing_sbc_never_constructs_emulator(tmp_path, monkeypatch,
 
 
 def test_runtime_pump_list_comes_only_from_canonical_config(tmp_path, monkeypatch):
-    payload = json.loads(CONFIG_PATH.read_text())
+    payload = json.loads(FIXTURE_PATH.read_text())
     payload["VacuumPumps"] = [pump for pump in payload["VacuumPumps"]
                               if pump["name"] != "UHVacuumPump_1"]
     payload.update(Enable=True, IsProduction=False, Simulate=True)
@@ -258,7 +262,7 @@ def test_runtime_pump_list_comes_only_from_canonical_config(tmp_path, monkeypatc
 
 def test_emulator_excursion_endpoint_requires_board_emulator(tmp_path, monkeypatch):
     """GPIO-simulator profiles have no emulator: the endpoint is 404."""
-    payload = json.loads(CONFIG_PATH.read_text())
+    payload = json.loads(FIXTURE_PATH.read_text())
     payload.update(Enable=True, IsProduction=False, Simulate=True)
     profile = tmp_path / "vacuum.json"
     profile.write_text(json.dumps(payload))
@@ -293,7 +297,7 @@ def test_restart_endpoint_only_restarts_the_backing_pump(tmp_path, monkeypatch):
 
 
 def test_vacuum_health_reports_a_latched_cascade_that_ready_does_not(tmp_path, monkeypatch):
-    payload = json.loads(CONFIG_PATH.read_text())
+    payload = json.loads(FIXTURE_PATH.read_text())
     payload.update(Enable=True, IsProduction=False, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
@@ -321,7 +325,7 @@ def test_vacuum_health_reports_a_latched_cascade_that_ready_does_not(tmp_path, m
 
 
 def test_vacuum_health_when_disabled_is_not_an_alarm(tmp_path, monkeypatch):
-    payload = json.loads(CONFIG_PATH.read_text())
+    payload = json.loads(FIXTURE_PATH.read_text())
     payload.update(Enable=False)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))

@@ -8,7 +8,11 @@ Wants=network-online.target
 StartLimitIntervalSec=0
 
 [Service]
-Type=exec
+# The service reports READY and pings the watchdog only while its control
+# loop is alive; a hung loop is restarted (every output then goes off).
+Type=notify
+NotifyAccess=main
+WatchdogSec=20
 User=vacuum
 Group=gpio
 WorkingDirectory=/opt/ionbeam/Development/glasgow_service

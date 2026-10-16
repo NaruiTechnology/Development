@@ -38,6 +38,8 @@ export interface Config {
   port: number;
   proxyTargetHttp: string;
   vacuumControllerUrl: string;
+  /** Bearer token the SBC vacuum API expects (SBC_VACUUM_TOKEN), if set. */
+  sbcVacuumToken: string | null;
   sampleStageControllerUrl: string;
   proxyTargetWs: string;
   glasgowToken: string | null;
@@ -287,7 +289,12 @@ const resolvedOperationDbUser = normalizeLocalPeerUser(
 export const config: Config = {
   port: Number(process.env.PORT ?? 4000),
   proxyTargetHttp: process.env.PROXY_TARGET_HTTP ?? "http://127.0.0.1:8765",
-  vacuumControllerUrl: process.env.VACUUM_CONTROLLER_URL ?? "http://127.0.0.1:8780",
+  // The SBC owns the vacuum system; the host reads its data (and forwards
+  // operator commands) straight from the SBC, not through the host-side
+  // failover executor. Point this at the executor only for a fenced
+  // (SBC_REQUIRE_FENCING=true) active/standby deployment.
+  vacuumControllerUrl: process.env.VACUUM_CONTROLLER_URL ?? "http://127.0.0.1:8766",
+  sbcVacuumToken: process.env.SBC_VACUUM_TOKEN?.trim() || null,
   sampleStageControllerUrl: process.env.SAMPLE_STAGE_CONTROLLER_URL ?? "http://127.0.0.1:8790",
   proxyTargetWs: process.env.PROXY_TARGET_WS ?? "ws://127.0.0.1:8765",
   glasgowToken: process.env.GLASGOW_TOKEN?.trim() || null,

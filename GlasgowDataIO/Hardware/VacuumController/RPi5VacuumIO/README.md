@@ -84,7 +84,7 @@ The controller software sequences the pumps and the HV permissive (A0–A4, B0�
 | E-stop loop opened | K9 drops and **+24V_ESTOP and +24V_SAFE are both removed**. That means everything, including K1. |
 | Rail status | GPIO5 (`ESTOP_OK_N`) and GPIO6 (`SAFE_OK_N`) let the software see both rails. |
 
-**JP1–JP8** choose each relay coil's rail. By default K1 (the mechanical pump) runs from +24V_ESTOP, so the backing pump keeps running if the Pi hangs; it stops only on E-stop. K2–K8 run from +24V_SAFE. Move a jumper (cut the 1–2 bridge, bridge 2–3) to change a channel.
+**JP1–JP8** choose each relay coil's rail. By default K1 (the mechanical pump) runs from +24V_ESTOP, so the backing pump keeps running if the Pi hangs. When the service process exits (crash or restart) R10 resets the expanders and K1 drops as well, unless IO_RESET_N stays high (see `glasgow_service/docs/vacuum-24x7-commissioning.md`). K2–K8 run from +24V_SAFE. Move a jumper (cut the 1–2 bridge, bridge 2–3) to change a channel.
 
 Valves must be **normally closed** (spring return) for "rail off = safe" to hold. If a normally-open valve is used, its safe state is open; check that this is acceptable.
 

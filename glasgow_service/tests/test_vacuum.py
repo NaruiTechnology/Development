@@ -13,7 +13,12 @@ from glasgow_service.vacuum import (
 from glasgow_service.vacuum_device import SimulatedVacuumDevice, VacuumDevice
 
 
-CONFIG_PATH = Path(__file__).parents[2] / "GlasgowDataIO" / "Json" / "vacuumSystem.json"
+# A pinned 4-pump profile (vacuumSystem.json as of 8e3d1e3): these tests check
+# controller behaviour, not the live equipment list, which changes with the
+# installation.  test_live_vacuum_profiles_are_valid covers the live files.
+CONFIG_PATH = Path(__file__).parent / "fixtures" / "vacuumSystem.4pump.json"
+LIVE_PROFILES = sorted(
+    (Path(__file__).parents[2] / "GlasgowDataIO" / "Json").glob("vacuumSystem*.json"))
 
 
 def make_config(**updates):
@@ -647,3 +652,10 @@ def test_pump_turns_green_only_on_exact_match_or_lower(factor, ready):
         await controller.close()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("profile", LIVE_PROFILES, ids=lambda path: path.name)
+def test_live_vacuum_profiles_are_valid(profile):
+    config = VacuumConfig.model_validate(json.loads(profile.read_text()))
+    assert config.pumps[0].name == MECHANICAL_PUMP
+    assert len(config.stages) >= 2

@@ -190,6 +190,12 @@ class SbcDeviceConfig(BaseModel):
     i2c_bus: int = Field(1, alias="I2CBus")
     heartbeat_hz: float = Field(1000.0, alias="HeartbeatHz", ge=200, le=5000)
     keepalive_seconds: float = Field(3.0, alias="KeepAliveSeconds", gt=0, le=30)
+    #: Board mode: an orderly service stop/restart leaves the backing pump
+    #: (MechanicalVacuumPump, on the E-stop rail) running and the next start
+    #: adopts it, instead of switching it off.  Takes effect only when the
+    #: board's IO_RESET_N line stays high while no process holds it (see the
+    #: RPi5VacuumIO docs); otherwise the reset still drops it, as before.
+    keep_backing_pump_on_restart: bool = Field(False, alias="KeepBackingPumpOnRestart")
     #: Serial device nodes for the board's RS-485 (J4) and RS-232 (J5) ports.
     #: Pi 4B: /dev/ttyAMA0 + uart5 node; Pi 5: /dev/ttyAMA0 + /dev/ttyAMA4.
     serial: dict[str, str] = Field(default_factory=dict, alias="Serial")
@@ -410,20 +416,25 @@ def load_vacuum_config(path: Path) -> VacuumConfig:
 
 
 def load_runtime_vacuum_config(path: Path) -> VacuumConfig:
-    """The vacuum profile enables control; scanner production selects its mode."""
+    """Load the SBC's own vacuum profile; it alone decides how the SBC runs.
+
+    ``Enable`` activates control and ``IsProduction`` selects real hardware
+    (true) or emulation (false).  The SBC owns the vacuum system, so nothing
+    here reads host configuration such as the scanner's streamData.json: a
+    host-side edit can never change how the SBC drives the pumps.  A profile
+    without ``IsProduction`` is production, which requires hardware and never
+    falls back to emulation silently.
+    """
     payload = json.loads(path.read_text())
     enabled = payload.get("Enable", False)
     if not isinstance(enabled, bool):
         raise ValueError("vacuum configuration Enable must be true or false")
     payload["Enable"] = enabled
-    stream_path = Path(os.environ.get("GLASGOW_CONFIG") or path.parent / "streamData.json")
-    if enabled and stream_path.is_file():
-        stream = json.loads(stream_path.read_text())
-        production = stream.get("IsProduction", True)
-        if not isinstance(production, bool):
-            raise ValueError("stream configuration IsProduction must be true or false")
-        payload["IsProduction"] = production
-    # Runtime mode is selected by the scanner, not a stale simulator-tool flag.
+    production = payload.get("IsProduction", True)
+    if not isinstance(production, bool):
+        raise ValueError("vacuum configuration IsProduction must be true or false")
+    payload["IsProduction"] = production
+    # IsProduction selects the mode, not a stale simulator-tool flag.
     # GPIO-only profiles still use the simulator via select_execution_mode.
     if enabled:
         payload["Simulate"] = False
@@ -506,12 +517,15 @@ class VacuumController:
         elif config.sbc.board is not None and not config.simulate:
             from .vacuum_io_board import build_board_device
 
+            backing = next((p.write for p in config.pumps if p.name == MECHANICAL_PUMP), None)
             self.gpio = build_board_device(
                 config.sbc,
                 {pin: config.sbc.channels[pin] for pin in
                  [*(p.write for p in config.pumps), config.high_voltage_transformer.write]},
                 {pump.read: config.sbc.channels[pump.read] for pump in config.pumps},
                 emulator=emulator,
+                persistent_outputs=(
+                    [backing] if backing and config.sbc.keep_backing_pump_on_restart else []),
             )
         elif config.simulate:
             self.gpio = SimulatedVacuumDevice(
@@ -571,6 +585,8 @@ class VacuumController:
         self._last_error: Optional[str] = None
         self._updated_at: Optional[str] = None
         self._last_poll_monotonic: float | None = None
+        #: Start of the latest poll-loop iteration, successful or not.
+        self._last_iteration_monotonic: float | None = None
         self._latch_reason: Optional[str] = None
         self._healthy_polls = 0
         self._auto_resume_polls = _auto_resume_polls_from_environment(
@@ -825,8 +841,14 @@ class VacuumController:
             self._log(logging.INFO, "vacuum.start",
                       "controller started" + (": expanders reset, watchdog heartbeat running"
                                               if self._is_board else ""))
+            if getattr(self.gpio, "adopted", False):
+                self._log(logging.WARNING, "vacuum.start",
+                          f"{MECHANICAL_PUMP} was still running from before the restart: "
+                          "adopted without a reset; every other output starts off")
             self._alert("controller_started", "info",
-                        "vacuum controller started; cascade starting from the backing pump")
+                        "vacuum controller started; cascade starting from the backing pump"
+                        + (" (backing pump kept running across the restart)"
+                           if getattr(self.gpio, "adopted", False) else ""))
         except BaseException as exc:
             self._running = False
             self._log(logging.ERROR, "vacuum.start", f"controller failed to start: {exc}")
@@ -835,7 +857,15 @@ class VacuumController:
             await self.gpio.close()
             raise
 
-    async def close(self) -> None:
+    async def close(self, *, keep_backing_pump: bool = False) -> None:
+        """Stop the controller: every managed output goes off.
+
+        ``keep_backing_pump`` (service shutdown only) leaves the backing pump
+        running when the board profile sets ``KeepBackingPumpOnRestart``;
+        everything else still goes off.  An explicit release never keeps it.
+        """
+        keep = bool(keep_backing_pump and self._is_board
+                    and self.config.sbc.keep_backing_pump_on_restart)
         self._running = False
         if self._restart_task is not None and not self._restart_task.done():
             self._restart_task.cancel()
@@ -859,13 +889,24 @@ class VacuumController:
             except Exception:
                 pass    # the board reset below drops every solenoid anyway
         try:
-            await self.gpio.close()
+            if keep:
+                await self.gpio.close(keep_persistent=True)
+            else:
+                await self.gpio.close()
         finally:
-            self._log(logging.INFO, "vacuum.stop",
-                      "controller stopped: all managed outputs off")
-            self._alert("controller_stopped", "critical",
-                        "vacuum controller stopped: every managed output is off, "
-                        "including the backing pump")
+            if keep:
+                self._log(logging.WARNING, "vacuum.stop",
+                          f"controller stopped: every managed output off except "
+                          f"{MECHANICAL_PUMP}, kept running for the restart")
+                self._alert("controller_stopped", "critical",
+                            "vacuum controller stopped: every managed output is off "
+                            "except the backing pump, which keeps running")
+            else:
+                self._log(logging.INFO, "vacuum.stop",
+                          "controller stopped: all managed outputs off")
+                self._alert("controller_stopped", "critical",
+                            "vacuum controller stopped: every managed output is off, "
+                            "including the backing pump")
 
     @property
     def isVacuumSystemReady(self) -> bool:
@@ -1449,8 +1490,25 @@ class VacuumController:
                 if state.power:
                     await self.set_power(state.name, False, automatic=True)
 
+    def control_loop_alive(self, max_age: float) -> bool:
+        """True while the control loop iterates, or the controller is stopped.
+
+        Used by the systemd watchdog.  A device error does not count as a
+        hang: the loop keeps iterating and recovery (auto-resume, alerts)
+        is handled in the loop.  Only a dead poll task or a stuck iteration
+        (a hung event loop or I/O call) stops the watchdog pings.
+        """
+        if not self._running:
+            return True
+        task = self._task
+        if task is None or task.done():
+            return False
+        last = self._last_iteration_monotonic
+        return last is not None and time.monotonic() - last <= max_age
+
     async def _poll_worker(self) -> None:
         while True:
+            self._last_iteration_monotonic = time.monotonic()
             await self.poll_once()
             self._remind_if_still_latched()
             await asyncio.sleep(self.POLL_INTERVAL_SECONDS)

@@ -144,7 +144,7 @@ Put K5's NO contact **in series** with the tool's HV enable / interlock loop (J1
 
 ### Rail selection (JP1–JP8)
 
-- **K1** (mechanical pump) runs from the **E-stop rail**. The backing pump keeps running if the Pi hangs or reboots, so the turbo pumps are never left without backing, and it stops only on E-stop.
+- **K1** (mechanical pump) runs from the **E-stop rail**. The backing pump keeps running while the Pi or service *hangs* (the process still holds IO_RESET_N), so the turbo pumps are not left without backing. When the service process *exits* (crash, restart, reboot), R10 pulls IO_RESET_N low, the expanders reset and K1 drops too; see `glasgow_service/docs/vacuum-24x7-commissioning.md` for keeping it running across restarts.
 - **K2–K8** run from the **watchdog rail**, which drops about 100 ms after the Pi stops its heartbeat.
 - To change a channel, cut the solder bridge between pads 1–2 of JPn and bridge pads 2–3.
 

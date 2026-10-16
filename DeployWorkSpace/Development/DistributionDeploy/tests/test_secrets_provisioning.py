@@ -217,7 +217,7 @@ class NoInputMigrationTests(SecretsFileTestCase):
         self.assertTrue(values["IOBEAM_ADMIN_DB_PASSWORD"])
         warning = " ".join(str(c) for c in state.Logger.warning.mock_calls)
         self.assertIn("IOBEAM_ADMIN_CONFIG_DB_HOST", warning)
-        self.assertIn("local admin database", warning)
+        self.assertIn("local fallback if provisionLocalAdminDb is enabled", warning)
         self.assertIn("FTP is disabled", warning)
 
 

@@ -67,7 +67,14 @@ test("Update resets on mode changes and unchanged configuration; invalid saves d
       assert.equal(body.backend_restart.scheduled, false);
       assert.equal((await fs.readFile(counter, "utf8")).trim().split("\n").length, index + 1);
       assert.equal(JSON.parse(await fs.readFile(stream, "utf8")).IsProduction, update.production);
-      assert.equal(JSON.parse(await fs.readFile(vacuum, "utf8")).Enable, update.enabled);
+      // The host setting is saved host-side; the SBC profile is never written.
+      // (Unchanged from the profile's legacy value, nothing needs saving yet.)
+      if (!update.enabled) {
+        assert.equal(JSON.parse(await fs.readFile(path.join(directory, "vacuumHost.json"), "utf8")).Enable,
+          false);
+      }
+      assert.equal(JSON.parse(await fs.readFile(vacuum, "utf8")).Enable, true);
+      assert.equal((await (await fetch(url)).json()).vacuum_enabled, update.enabled);
     }
     const invalid = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data: { IsProduction: true }, vacuum_enabled: "true" }) });

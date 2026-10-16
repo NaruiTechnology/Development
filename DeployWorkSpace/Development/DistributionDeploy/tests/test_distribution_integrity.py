@@ -49,6 +49,7 @@ def make_workspace(base):
         "glasgow_service/requirements.txt": DEVELOPMENT / "glasgow_service/requirements.txt",
         "glasgow_service/pyproject.toml": DEVELOPMENT / "glasgow_service/pyproject.toml",
         "glasgow_service/deploy/setup-redis-sentinel.sh": DEVELOPMENT / "glasgow_service/deploy/setup-redis-sentinel.sh",
+        "glasgow_service/scripts/vacuum_excursion_test.py": DEVELOPMENT / "glasgow_service/scripts/vacuum_excursion_test.py",
         "requirements.txt": DEVELOPMENT / "requirements.txt",
         "IobeamAdmin/Sql/006_equipment_csv_functions.sql": DEVELOPMENT / "IobeamAdmin/Sql/006_equipment_csv_functions.sql",
         "buildCompiledDist.py": BUILDER_SOURCE,
@@ -60,6 +61,7 @@ def make_workspace(base):
         shutil.copy2(src, dev / rel)
     slot = dev / "DeployWorkSpace/Development/DistributionDeploy"
     for rel in ("Json/DistributionDeploy.json", "workstates/installRedisSentinel_state.py",
+                "workstates/provisionLocalAdminDb_state.py",
                 "distributionManifest.py"):
         (slot / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, slot / rel)

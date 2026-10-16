@@ -541,14 +541,19 @@ def test_is_production_true_runs_the_hardware_path_with_hw_tag(monkeypatch, capl
     Linux endpoints substituted by the emulator."""
     import logging
 
-    import smbus2
+    import sys
+    from types import ModuleType
 
     import glasgow_service.vacuum_io_board as board_module
 
     monkeypatch.delenv("SBC_VACUUM_EMULATOR", raising=False)
     rig = VacuumRig(realtime=True, speed=1.0, tool_connected=False)
     monkeypatch.setattr(board_module, "LgpioHAL", lambda: rig.gpio_hal())
-    monkeypatch.setattr(smbus2, "SMBus", lambda bus: rig.smbus(bus))
+    # Substitute the optional Linux I2C endpoint at the import boundary so
+    # this emulator test also runs on hosts without the SBC extras installed.
+    smbus2 = ModuleType("smbus2")
+    smbus2.SMBus = lambda bus: rig.smbus(bus)
+    monkeypatch.setitem(sys.modules, "smbus2", smbus2)
     caplog.set_level(logging.INFO, logger="glasgow_service.vacuum")
     config = VacuumConfig.model_validate(_payload(IsProduction=True, Simulate=False))
     controller = VacuumController(config)
@@ -601,37 +606,59 @@ def test_production_api_fails_startup_without_sbc_hardware(tmp_path, monkeypatch
             pytest.fail("production service started without hardware")
 
 
-@pytest.mark.parametrize("scan_production", [False, True])
+@pytest.mark.parametrize("production", [False, True])
 @pytest.mark.parametrize("simulate", [False, True])
-def test_runtime_ignores_stale_simulator_flag(tmp_path, monkeypatch, scan_production, simulate):
+def test_runtime_ignores_stale_simulator_flag(tmp_path, monkeypatch, production, simulate):
     source = tmp_path / "vacuum.json"
-    source.write_text(json.dumps(_payload(Enable=True, IsProduction=True, Simulate=simulate)))
+    source.write_text(json.dumps(_payload(Enable=True, IsProduction=production, Simulate=simulate)))
+    config = load_runtime_vacuum_config(source)
+    assert config.is_production is production
+    assert config.simulate is False
+    assert config.uses_emulator is (not production)
+
+
+@pytest.mark.parametrize("scan_production", [False, True])
+@pytest.mark.parametrize("production", [False, True])
+def test_sbc_mode_comes_from_its_own_profile_never_the_scanner(
+        tmp_path, monkeypatch, scan_production, production):
+    """The SBC owns the vacuum system: host scanner settings cannot change it."""
+    source = tmp_path / "vacuum.json"
+    source.write_text(json.dumps(_payload(Enable=True, IsProduction=production)))
     stream = tmp_path / "streamData.json"
     stream.write_text(json.dumps({"IsProduction": scan_production}))
     monkeypatch.setenv("GLASGOW_CONFIG", str(stream))
     config = load_runtime_vacuum_config(source)
-    assert config.is_production is scan_production
-    assert config.simulate is False
-    assert config.uses_emulator is (not scan_production)
+    assert config.is_production is production
+    assert config.uses_emulator is (not production)
 
 
-@pytest.mark.parametrize("scan_production", [False, True])
+def test_profile_without_is_production_requires_hardware(tmp_path):
+    payload = _payload(Enable=True)
+    payload.pop("IsProduction", None)
+    source = tmp_path / "vacuum.json"
+    source.write_text(json.dumps(payload))
+    config = load_runtime_vacuum_config(source)
+    assert config.is_production is True and config.uses_emulator is False
+
+
+@pytest.mark.parametrize("production", [False, True])
 @pytest.mark.parametrize("simulate", [False, True])
-def test_enabled_control_selects_mode_from_scan_production(tmp_path, monkeypatch, scan_production, simulate):
+def test_enabled_control_selects_mode_from_the_sbc_profile(tmp_path, monkeypatch, production, simulate):
     from fastapi.testclient import TestClient
     from glasgow_service.sbc_vacuum_app import create_app
 
     _forbid_hardware(monkeypatch)
     source = tmp_path / "vacuum.json"
-    source.write_text(json.dumps(_payload(Enable=True, IsProduction=False, Simulate=simulate)))
+    source.write_text(json.dumps(_payload(Enable=True, IsProduction=production, Simulate=simulate)))
+    # A conflicting scanner setting must not matter.
     stream = tmp_path / "streamData.json"
-    stream.write_text(json.dumps({"IsProduction": scan_production}))
+    stream.write_text(json.dumps({"IsProduction": not production}))
     monkeypatch.setenv("GLASGOW_CONFIG", str(stream))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
     config = load_runtime_vacuum_config(source)
-    assert config.enabled and config.is_production is scan_production
-    assert config.uses_emulator is (not scan_production)
-    if scan_production:
+    assert config.enabled and config.is_production is production
+    assert config.uses_emulator is (not production)
+    if production:
         with pytest.raises(AssertionError, match="real GPIO opened"):
             with TestClient(create_app()):
                 pytest.fail("production vacuum control started without hardware")
@@ -864,7 +891,9 @@ def test_backing_pump_restart_power_cycles_like_initialization():
         with pytest.raises(ValueError, match="already in progress"):
             await controller.restart_backing_pump()
 
-        await asyncio.sleep(0.3)                                      # dwell elapses
+        # Wait for completion, including the asynchronous I2C write; a
+        # fixed sleep races that write on a busy test host.
+        await asyncio.wait_for(asyncio.shield(controller._restart_task), timeout=5)
         status = controller.status()
         assert not status.restarting and not status.cascade_stopped
         assert status.pumps[0].power and not any(p.power for p in status.pumps[1:])

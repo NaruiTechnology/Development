@@ -7,6 +7,8 @@ same fencing headers used by the active/standby executor.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -27,7 +29,13 @@ from .vacuum import (
     find_vacuum_config_path,
     load_runtime_vacuum_config,
 )
+from .sd_notify import notify, watchdog_interval
 from .vacuum_health import sbc_controller_is_ready, vacuum_service_problems
+
+log = logging.getLogger("glasgow_service.sbc_vacuum_app")
+
+#: A control-loop iteration older than this withholds the watchdog ping.
+CONTROL_LOOP_MAX_AGE_SECONDS = 10.0
 
 
 def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
@@ -43,8 +51,49 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         if expected and (credentials is None or credentials.credentials != expected):
             raise HTTPException(401, "invalid or missing SBC bearer token")
 
+    def start_watchdog() -> asyncio.Task | None:
+        """Ping systemd's watchdog only while the control loop is alive.
+
+        A hung event loop or a dead poll task stops the pings and systemd
+        restarts the service (WatchdogSec= in the unit).  Outside systemd,
+        or without WatchdogSec=, this does nothing.
+        """
+        interval = watchdog_interval()
+        if interval is None:
+            return None
+
+        async def ping() -> None:
+            withheld = False
+            while True:
+                target = holder.get("controller")
+                alive = getattr(target, "control_loop_alive", None)
+                if alive is None or alive(CONTROL_LOOP_MAX_AGE_SECONDS):
+                    notify("WATCHDOG=1")
+                    withheld = False
+                elif not withheld:
+                    log.error("vacuum control loop stalled; withholding the systemd "
+                              "watchdog ping so systemd restarts the service")
+                    withheld = True
+                await asyncio.sleep(interval)
+
+        return asyncio.create_task(ping(), name="systemd-watchdog")
+
     @asynccontextmanager
-    async def lifespan(_app: FastAPI):
+    async def lifespan(app_: FastAPI):
+        async with controller_lifespan(app_):
+            watchdog = start_watchdog()
+            notify("READY=1")
+            try:
+                yield
+            finally:
+                notify("STOPPING=1")
+                if watchdog is not None:
+                    watchdog.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await watchdog
+
+    @asynccontextmanager
+    async def controller_lifespan(_app: FastAPI):
         config = config_loader(find_vacuum_config_path())
         activation["enabled"] = config.enabled
         if not config.enabled:
@@ -62,7 +111,9 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
             yield
         finally:
             try:
-                await controller.close()
+                # Service shutdown: the board profile may keep the backing
+                # pump running for the restart (KeepBackingPumpOnRestart).
+                await controller.close(keep_backing_pump=True)
                 # Let the "controller stopped" alert leave before exit.
                 flush = getattr(controller, "flush_alerts", None)
                 if flush is not None:

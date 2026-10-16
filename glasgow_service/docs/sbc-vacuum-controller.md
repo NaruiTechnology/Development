@@ -141,11 +141,18 @@ controller's state with no hardware behind it.
 To exercise this on the emulator, see the excursion test app in
 [`vacuum-emulator.md`](vacuum-emulator.md#excursion-test-app).
 
-Configuration → General → **Active vacuum control** edits `Enable` in
-`vacuumSystem.rpi5-io.example.json`. Enabled control uses the emulator when scanner `IsProduction` is false and real SBC hardware when it is true;
-disabled control remains idle and bypasses the vacuum scan gate. Scan
-`IsProduction` selects execution mode, while `Enable` controls activation. Explicit development tooling can
-run the production driver on an emulated rig; see [`vacuum-emulator.md`](vacuum-emulator.md).
+The SBC's own profile (`SBC_VACUUM_CONFIG`) decides how it runs: `Enable`
+activates control, and `IsProduction` selects real hardware (`true`, or missing)
+or the emulator (`false`). The SBC never reads host configuration, so a change
+to the scanner's `streamData.json` cannot change how the SBC drives the pumps.
+
+Configuration → General → **Active vacuum control** is a host setting: it
+decides whether this host shows the vacuum dashboard and applies the vacuum
+scan gate. It is saved host-side (`vacuumHost.json` beside the profile, or
+`VACUUM_HOST_CONFIG`) and never writes the SBC profile. Disabled, the host
+hides vacuum and bypasses the scan gate; the SBC keeps running as configured.
+Explicit development tooling can run the production driver on an emulated rig;
+see [`vacuum-emulator.md`](vacuum-emulator.md).
 
 ## API
 
@@ -212,6 +219,13 @@ The simulator also approaches thresholds automatically on each poll.
 6. Check `/health/ready`, `GET /vacuum`, and `journalctl -u sbc-vacuum` before
    connecting equipment control inputs.
 7. Point your monitoring at `GET /health/vacuum` and alert on any non-200.
+
+The units run as `Type=notify` with `WatchdogSec=20`: the service reports
+ready once started and pings the systemd watchdog only while its control loop
+iterates. A hung event loop or a dead poll task stops the pings and systemd
+restarts the service (all outputs go off, then the cascade restarts from the
+backing pump). A device error is not a hang: the loop keeps running and the
+auto-resume and alerts above handle it.
 8. Set `SBC_VACUUM_ALERT_WEBHOOK` so someone hears about a stop at night (see
    *Alerts* below).
 
@@ -241,11 +255,16 @@ actual Pi model, carrier schematic, and wiring drawing. Bind the API to a
 trusted control network or localhost/reverse proxy; bearer authentication does
 not provide TLS or network isolation.
 
+For ownership rules, the 24/7 commissioning checks and keeping the backing
+pump running across restarts, see [`vacuum-24x7-commissioning.md`](vacuum-24x7-commissioning.md).
+
 ## Optional failover and fencing
 
 When an executor exists, enable `SBC_REQUIRE_FENCING`, configure the executor
 from `examples/vacuum-executor.env.example`, and route the web backend through
-it. Redis Sentinel then elects one executor, which supplies a monotonically
+it (`VACUUM_CONTROLLER_URL=http://<executor>:8780`). Without fencing, the web
+backend reads the SBC directly (`VACUUM_CONTROLLER_URL`, default
+`http://127.0.0.1:8766`, with the SBC's `SBC_VACUUM_TOKEN`). Redis Sentinel then elects one executor, which supplies a monotonically
 increasing fencing token and lease duration. The SBC persists the highest term
 and rejects stale or expired leaders.
 

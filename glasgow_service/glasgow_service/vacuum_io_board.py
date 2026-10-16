@@ -33,7 +33,7 @@ import math
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Literal, Mapping, Protocol
+from typing import Callable, Iterable, Literal, Mapping, Protocol
 
 # ------------------------------------------------------------------ constants
 
@@ -192,8 +192,22 @@ class RPi5VacuumIODevice:
         rail_wait_seconds: float = 0.5,
         keepalive_thread: bool = True,
         transport: str = "rpi5-vacuum-io",
+        persistent_outputs: Iterable[str] = (),
     ) -> None:
         self._relay_of = {pin: _parse_index(k, "K", 8) for pin, k in outputs.items()}
+        # Relays (on the E-stop rail, e.g. K1 = backing pump) whose latch may
+        # stay set across an orderly stop and be adopted on the next start.
+        unknown_persistent = sorted(set(persistent_outputs) - set(self._relay_of))
+        if unknown_persistent:
+            raise ValueError(f"persistent outputs are not relay channels: "
+                             f"{', '.join(unknown_persistent)}")
+        self._persistent_mask = 0
+        for pin in persistent_outputs:
+            self._persistent_mask |= 1 << (self._relay_of[pin] - 1)
+        #: True when the last open() adopted latched persistent outputs.
+        self.adopted = False
+        #: True after an orderly stop that kept the persistent outputs.
+        self._kept = False
         self._di_of = {pin: _parse_index(d, "DI", 16) for pin, d in inputs.items()}
         self._fault_di = {pin: _parse_index(d, "DI", 16) for pin, d in (faults or {}).items()}
         self._gauges = dict(gauges or {})
@@ -252,21 +266,31 @@ class RPi5VacuumIODevice:
         with self._lock:
             g = self._gpio
             if not self._gpio_ready:
-                g.setup_output(BCM_IO_RESET_N, False)
+                # With persistent outputs, claim the reset line released so a
+                # still-latched backing pump can be adopted.  A cold board is
+                # safe either way: the expanders power up all-off.
+                g.setup_output(BCM_IO_RESET_N, bool(self._persistent_mask))
                 g.setup_output(BCM_HEARTBEAT, False)
                 g.setup_output(BCM_RUN_LED, False)
                 g.setup_output(BCM_RS485_DE, False)
                 for bcm in (BCM_ESTOP_OK_N, BCM_SAFE_OK_N, BCM_DI_INT, BCM_ADC_ALRT):
                     g.setup_input(bcm, None)   # board has external pull-ups
                 self._gpio_ready = True
-            # Pulse reset: every output starts from the hardware-off state.
-            g.write(BCM_IO_RESET_N, False)
-            self._sleep(0.001)
-            g.write(BCM_IO_RESET_N, True)
-            self._sleep(0.001)
-            if self._bus is None:
-                self._bus = self._bus_factory()
-            self._configure_expanders()
+            self.adopted = False
+            self._kept = False
+            if self._persistent_mask:
+                if self._bus is None:
+                    self._bus = self._bus_factory()
+                self.adopted = self._adopt_persistent_outputs()
+            if not self.adopted:
+                # Pulse reset: every output starts from the hardware-off state.
+                g.write(BCM_IO_RESET_N, False)
+                self._sleep(0.001)
+                g.write(BCM_IO_RESET_N, True)
+                self._sleep(0.001)
+                if self._bus is None:
+                    self._bus = self._bus_factory()
+                self._configure_expanders()
             self._configure_adcs()
             self._tripped = False
             self._last_kick = self._monotonic()
@@ -277,27 +301,67 @@ class RPi5VacuumIODevice:
             self._wait_for_output_rail()
         self._start_keepalive_thread()
 
+    def _adopt_persistent_outputs(self) -> bool:
+        """Keep a still-latched persistent relay instead of resetting it.
+
+        Only when the output expander is still configured (it was not reset
+        while no process held the board) and a persistent relay is latched.
+        Every other relay and solenoid latch is cleared here, before the
+        heartbeat restores the output rail, so nothing else can restart
+        without the cascade's readiness checks.  Any doubt: return False and
+        take the normal reset path (all off).
+        """
+        bus = self._bus
+        try:
+            iodir = bus.read_i2c_block_data(ADDR_OUTPUTS, IODIRA, 2)
+            olat = bus.read_i2c_block_data(ADDR_OUTPUTS, OLATA, 2)
+        except OSError:
+            return False
+        if iodir != [0, 0] or not (olat[0] & self._persistent_mask):
+            return False
+        keep = [olat[0] & self._persistent_mask, 0x00]
+        try:
+            bus.write_i2c_block_data(ADDR_OUTPUTS, OLATA, keep)
+            readback = bus.read_i2c_block_data(ADDR_OUTPUTS, OLATA, 2)
+            self._configure_input_expander()
+        except (OSError, BoardError):
+            return False
+        if readback != keep:
+            return False
+        self._olat = list(keep)
+        self._olat_readback = list(readback)
+        return True
+
     def _configure_expanders(self) -> None:
         bus = self._bus
         try:
             # Outputs: latches low before the pins become outputs.
             bus.write_i2c_block_data(ADDR_OUTPUTS, OLATA, [0x00, 0x00])
             bus.write_i2c_block_data(ADDR_OUTPUTS, IODIRA, [0x00, 0x00])
+            iodir = bus.read_i2c_block_data(ADDR_OUTPUTS, IODIRA, 2)
+        except OSError as exc:
+            raise BoardError(f"vacuum I/O board not responding on I2C: {exc}") from exc
+        if iodir != [0, 0]:
+            raise BoardError("vacuum I/O board expander configuration did not verify")
+        self._configure_input_expander()
+        self._olat = [0, 0]
+        self._olat_readback = [0, 0]
+
+    def _configure_input_expander(self) -> None:
+        bus = self._bus
+        try:
             # Inputs: optos pull low when active -> invert; one open-drain
             # interrupt (INTA only is wired) covering both ports.
             bus.write_byte_data(ADDR_INPUTS, IOCON, IOCON_MIRROR | IOCON_ODR)
             bus.write_i2c_block_data(ADDR_INPUTS, IODIRA, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
             bus.write_i2c_block_data(ADDR_INPUTS, INTCONA, [0x00, 0x00])
             bus.write_i2c_block_data(ADDR_INPUTS, GPPUA, [0x00, 0x00])
-            iodir = bus.read_i2c_block_data(ADDR_OUTPUTS, IODIRA, 2)
             iocon = bus.read_byte_data(ADDR_INPUTS, IOCON)
             ipol = bus.read_i2c_block_data(ADDR_INPUTS, IPOLA, 2)
         except OSError as exc:
             raise BoardError(f"vacuum I/O board not responding on I2C: {exc}") from exc
-        if iodir != [0, 0] or iocon != (IOCON_MIRROR | IOCON_ODR) or ipol != [0xFF, 0xFF]:
+        if iocon != (IOCON_MIRROR | IOCON_ODR) or ipol != [0xFF, 0xFF]:
             raise BoardError("vacuum I/O board expander configuration did not verify")
-        self._olat = [0, 0]
-        self._olat_readback = [0, 0]
 
     def _configure_adcs(self) -> None:
         for addr in ADDR_ADC:
@@ -317,13 +381,17 @@ class RPi5VacuumIODevice:
                 return
             self._sleep(0.005)
 
-    async def close(self) -> None:
-        await asyncio.to_thread(self._close_sync)
+    async def close(self, *, keep_persistent: bool = False) -> None:
+        await asyncio.to_thread(self._close_sync, keep_persistent)
 
-    def _close_sync(self) -> None:
+    def _close_sync(self, keep_persistent: bool = False) -> None:
         self._stop_keepalive_thread()
         with self._lock:
             if not self._gpio_ready:
+                return
+            if keep_persistent and self._persistent_mask and (self._opened or self._kept):
+                if self._opened:
+                    self._close_keeping_persistent()
                 return
             errors = []
             try:
@@ -344,6 +412,32 @@ class RPi5VacuumIODevice:
             self._opened = False
             if errors:
                 raise BoardError("; ".join(errors))
+
+    def _close_keeping_persistent(self) -> None:
+        """Orderly stop that leaves only the persistent relays latched.
+
+        Every other relay and solenoid latch is cleared and the heartbeat
+        stops, so the output rail drops exactly as on a crash; the reset
+        line stays released so the E-stop-rail backing pump keeps running.
+        Whether it survives the process exit as well depends on the reset
+        line staying high while no process holds it (see the board docs).
+        """
+        keep = [self._olat[0] & self._persistent_mask, 0x00]
+        errors = []
+        try:
+            if self._bus is not None:
+                self._bus.write_i2c_block_data(ADDR_OUTPUTS, OLATA, keep)
+        except OSError as exc:
+            errors.append(str(exc))
+        self._olat = list(keep)
+        self._olat_readback = list(keep)
+        self._gpio.pwm(BCM_HEARTBEAT, 0, 0)
+        self._heartbeat = False
+        self._gpio.write(BCM_RUN_LED, False)
+        self._opened = False
+        self._kept = True
+        if errors:
+            raise BoardError("; ".join(errors))
 
     def shutdown(self) -> None:
         """Release GPIO lines (process exit)."""
@@ -652,7 +746,7 @@ class LgpioHAL:
 # ------------------------------------------------------------------ factory
 
 def build_board_device(sbc, outputs: Mapping[str, str], inputs: Mapping[str, str], *,
-                       emulator=None) -> RPi5VacuumIODevice:
+                       emulator=None, persistent_outputs=()) -> RPi5VacuumIODevice:
     """Create the driver from ``SbcDeviceConfig``; ``emulator`` is a
     :class:`glasgow_service.emulation.rig.VacuumRig` or None for hardware."""
     gauges = {
@@ -664,6 +758,7 @@ def build_board_device(sbc, outputs: Mapping[str, str], inputs: Mapping[str, str
     common = dict(
         gauges=gauges, faults=dict(sbc.faults), valves=dict(sbc.valves),
         heartbeat_hz=sbc.heartbeat_hz, keepalive_seconds=sbc.keepalive_seconds,
+        persistent_outputs=tuple(persistent_outputs),
     )
     if emulator is not None:
         realtime = emulator.runner is not None

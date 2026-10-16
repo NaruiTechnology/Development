@@ -1,0 +1,26 @@
+10-16 02:50 PinBuildTest DEBUG    claimed pipe P and port(s) A, B
+10-16 02:50 PinBuildTest DEBUG    adding reset register at address 0x06
+10-16 02:50 PinBuildTest DEBUG    not assigning applet port 'ebeam_scan_enable' to any device pin
+10-16 02:50 PinBuildTest DEBUG    not assigning applet port 'ebeam_blank_enable' to any device pin
+10-16 02:50 PinBuildTest DEBUG    not assigning applet port 'ebeam_blank' to any device pin
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_scan_enable[0]' to device pin A0
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_scan_enable[1]' to device pin A1
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_blank_enable[0]' to device pin A4
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_blank_enable[1]' to device pin A5
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_blank[0]' to device pin A2 (inverted)
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_blank[1]' to device pin A3
+10-16 02:50 PinBuildTest DEBUG    claimed pipe P and port(s) A, B
+10-16 02:50 PinBuildTest DEBUG    adding reset register at address 0x06
+10-16 02:50 PinBuildTest DEBUG    not assigning applet port 'ebeam_scan_enable' to any device pin
+10-16 02:50 PinBuildTest DEBUG    not assigning applet port 'ebeam_blank_enable' to any device pin
+10-16 02:50 PinBuildTest DEBUG    not assigning applet port 'ebeam_blank' to any device pin
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_scan_enable[0]' to device pin A0
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_scan_enable[1]' to device pin A1
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_blank_enable[0]' to device pin A4
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_blank_enable[1]' to device pin A5
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_blank[0]' to device pin A2 (inverted)
+10-16 02:50 PinBuildTest DEBUG    assigning applet port 'ibeam_blank[1]' to device pin A3
+10-16 02:50 PinBuildTest DEBUG    claimed pipe P
+10-16 02:50 PinBuildTest DEBUG    adding reset register at address 0x08
+10-16 02:50 PinBuildTest DEBUG    claimed pipe P
+10-16 02:50 PinBuildTest DEBUG    adding reset register at address 0x08

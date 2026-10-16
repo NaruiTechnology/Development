@@ -109,7 +109,19 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
         cache: "no-store", headers: scanAuthHeaders(),
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000),
       });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        // Show the SBC's own reason (e.g. "vacuum controller is disabled").
+        let detail = "";
+        try {
+          const body = (await response.json()) as { detail?: unknown; error?: unknown };
+          detail = String(body?.detail ?? body?.error ?? "");
+        } catch {
+          // Not JSON: fall back to the status line.
+        }
+        throw new Error(detail
+          ? `${detail} (HTTP ${response.status})`
+          : `${response.status} ${response.statusText}`);
+      }
       const refreshed = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
       setStatus(vacuumStatusForDisplay(refreshed));

@@ -1,0 +1,2533 @@
+10-16 02:52 AdcConnectionTest ERROR    ADC read failed: RuntimeError: original read failure received_bytes=0
+10-16 02:52 AdcConnectionTest INFO     ADC FPGA read-error: status=0x1d running=True complete=False started=True sampled=True fifo_written=True fifo_stalled=False sample_dropped=False received_bytes=0
+10-16 02:52 AdcConnectionTest INFO     ADC FPGA close: status=0x1d running=True complete=False started=True sampled=True fifo_written=True fifo_stalled=False sample_dropped=False received_bytes=0
+10-16 02:52 AdcConnectionTest WARNING  ADC USB cleanup: TimeoutError: old background transfer
+10-16 02:52 AdcConnectionTest INFO     ADC receive: elapsed=0.001s bytes=4 chunk_samples=2 min=0x0001 max=0x1234 first=0001,1234
+10-16 02:52 AdcConnectionTest INFO     ADC FPGA receiving: status=0x1d running=True complete=False started=True sampled=True fifo_written=True fifo_stalled=False sample_dropped=False received_bytes=4
+10-16 02:52 AdcConnectionTest INFO     ADC FPGA end-marker: status=0x1d running=True complete=False started=True sampled=True fifo_written=True fifo_stalled=False sample_dropped=False received_bytes=6
+10-16 02:52 AdcLauncherTest INFO     ADC capture armed: enable_addr=1 status_addr=2 status=0x1d half_period=3 settle=1 latch_cycles=1 latch_phase=3 sample_phase=4 source=/home/vboxuser/Project/Operations/Development/GlasgowDataIO/IobeamControl/AdcLauncher.py
+10-16 02:52 AdcLauncherTest INFO     AdcLauncher ready in 0.000s (programmed image, simulation=False, duration=5m)
+10-16 02:52 AdcLauncherTest INFO     ADC capture armed: enable_addr=1 status_addr=2 status=0x1e half_period=3 settle=1 latch_cycles=1 latch_phase=3 sample_phase=4 source=/home/vboxuser/Project/Operations/Development/GlasgowDataIO/IobeamControl/AdcLauncher.py
+10-16 02:52 AdcLauncherTest INFO     AdcLauncher ready in 0.001s (programmed image, simulation=False, duration=5m)
+10-16 02:52 LauncherTest INFO     launcher: claimed VIO port(s)=<none> voltage=<unchanged>
+10-16 02:52 LauncherTest INFO     launcher: building bitstream 00000000000000000000000000000000
+10-16 02:52 LauncherTest WARNING  launcher: closing the device after a failed launch raised OSError: close failed
+10-16 02:52 LauncherTest INFO     launcher: claimed VIO port(s)=<none> voltage=<unchanged>
+10-16 02:52 LauncherTest INFO     launcher: building bitstream 00000000000000000000000000000000
+10-16 02:52 LauncherTest INFO     launcher: claimed VIO port(s)=<none> voltage=<unchanged>
+10-16 02:52 LauncherTest INFO     launcher: building bitstream 00000000000000000000000000000000
+10-16 02:52 LauncherTest INFO     launcher: claimed VIO port(s)=<none> voltage=<unchanged>
+10-16 02:52 LauncherTest INFO     launcher: building bitstream 00000000000000000000000000000000
+10-16 02:52 LauncherTest INFO     launcher: loaded bitstream 00000000000000000000000000000000 (build_dir=/tmp)
+10-16 02:52 LauncherTest INFO     launcher: claimed VIO port(s)=<none> voltage=<unchanged>
+10-16 02:52 LauncherTest INFO     launcher: building bitstream 00000000000000000000000000000000
+10-16 02:52 LauncherTest INFO     launcher: loaded bitstream 00000000000000000000000000000000 (build_dir=/tmp)
+10-16 02:52 PinBuildTest DEBUG    claimed pipe P and port(s) A, B
+10-16 02:52 PinBuildTest DEBUG    adding reset register at address 0x06
+10-16 02:52 PinBuildTest DEBUG    not assigning applet port 'ebeam_scan_enable' to any device pin
+10-16 02:52 PinBuildTest DEBUG    not assigning applet port 'ebeam_blank_enable' to any device pin
+10-16 02:52 PinBuildTest DEBUG    not assigning applet port 'ebeam_blank' to any device pin
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_scan_enable[0]' to device pin A0
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_scan_enable[1]' to device pin A1
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_blank_enable[0]' to device pin A4
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_blank_enable[1]' to device pin A5
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_blank[0]' to device pin A2 (inverted)
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_blank[1]' to device pin A3
+10-16 02:52 PinBuildTest DEBUG    claimed pipe P and port(s) A, B
+10-16 02:52 PinBuildTest DEBUG    adding reset register at address 0x06
+10-16 02:52 PinBuildTest DEBUG    not assigning applet port 'ebeam_scan_enable' to any device pin
+10-16 02:52 PinBuildTest DEBUG    not assigning applet port 'ebeam_blank_enable' to any device pin
+10-16 02:52 PinBuildTest DEBUG    not assigning applet port 'ebeam_blank' to any device pin
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_scan_enable[0]' to device pin A0
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_scan_enable[1]' to device pin A1
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_blank_enable[0]' to device pin A4
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_blank_enable[1]' to device pin A5
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_blank[0]' to device pin A2 (inverted)
+10-16 02:52 PinBuildTest DEBUG    assigning applet port 'ibeam_blank[1]' to device pin A3
+10-16 02:52 PinBuildTest DEBUG    claimed pipe P
+10-16 02:52 PinBuildTest DEBUG    adding reset register at address 0x08
+10-16 02:52 PinBuildTest DEBUG    claimed pipe P
+10-16 02:52 PinBuildTest DEBUG    adding reset register at address 0x08
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0x8edc
+10-16 02:54 PatternScan  DEBUG    send: data=<018edc20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<5130018ede20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=456, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0x8ee0
+10-16 02:54 PatternScan  DEBUG    send: data=<018ee020>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<0101c8>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<5130018ee220>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=789, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0x8ee4
+10-16 02:54 PatternScan  DEBUG    send: data=<018ee420>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<010315>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<5130018ee620>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:54 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), y_range=DACCodeRange(start=0, count=512, step=8192 - step size 32.000), dwell=4, cookie=111, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0x2cca
+10-16 02:54 PatternScan  DEBUG    send: data=<012cca20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<01006f>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000002002000000002002000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff0004c0ffff0004c070ff0004>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=320000  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff0004c08eff000451>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (9170 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=320000  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=204288  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=204288  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<5130012ccc20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=222, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0x2cce
+10-16 02:54 PatternScan  DEBUG    send: data=<012cce20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<0100de>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<5130012cd020>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:54 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=10, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0x7462
+10-16 02:54 PatternScan  DEBUG    send: data=<01746220>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<01000a>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001746420>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=2, cookie=20, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0x7466
+10-16 02:54 PatternScan  DEBUG    send: data=<01746620>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<010014>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000251>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001746820>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:54 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=1, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0xd0de
+10-16 02:54 PatternScan  DEBUG    send: data=<01d0de20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<010001>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001d0e020>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=2, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0xd0e2
+10-16 02:54 PatternScan  DEBUG    send: data=<01d0e220>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<010002>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001d0e420>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  WARNING  desktop session: soft reset failed (OSError: LIBUSB_ERROR_IO); closing USB
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:54 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=3, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0x6d58
+10-16 02:54 PatternScan  DEBUG    send: data=<016d5820>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<010003>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<5130016d5a20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:54 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:54 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0xbc8c
+10-16 02:54 PatternScan  DEBUG    send: data=<01bc8c20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001bc8e20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0xbc90
+10-16 02:54 PatternScan  DEBUG    send: data=<01bc9020>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001bc9220>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0xbc94
+10-16 02:54 PatternScan  DEBUG    send: data=<01bc9420>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001bc9620>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0xbc98
+10-16 02:54 PatternScan  DEBUG    send: data=<01bc9820>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001bc9a20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), y_range=DACCodeRange(start=0, count=256, step=16384 - step size 64.000), dwell=1, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:54 PatternScan  DEBUG    synchronizing with cookie 0xbc9c
+10-16 02:54 PatternScan  DEBUG    send: data=<01bc9c20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    synchronization complete
+10-16 02:54 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<42>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<51>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<31>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<52>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<a0000001004000000001004000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<c0ffff000151>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=131072  in_buffer_before=0
+10-16 02:54 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (2289 bytes total)>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=131072  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:54 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    send: data=<20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:54 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:54 PatternScan  DEBUG    send: data=<513001bc9e20>
+10-16 02:54 PatternScan  DEBUG    send: done
+10-16 02:54 PatternScan  DEBUG    flush
+10-16 02:54 PatternScan  DEBUG    flush: done
+10-16 02:54 PatternScan  INFO     external control released to the instrument
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:54 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:54 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run
+10-16 02:55 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), y_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), dwell=16, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:55 PatternScan  DEBUG    synchronizing with cookie 0xbfb0
+10-16 02:55 PatternScan  DEBUG    send: data=<01bfb020>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    synchronization complete
+10-16 02:55 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<42>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<51>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<31>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<52>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<a0000004001000000004001000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c033dd001051>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (36694 bytes total)>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=26556  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=26556  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    send: data=<513001bfb220>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  INFO     external control released to the instrument
+10-16 02:55 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), y_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), dwell=16, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:55 PatternScan  DEBUG    synchronizing with cookie 0xbfb4
+10-16 02:55 PatternScan  DEBUG    send: data=<01bfb420>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    synchronization complete
+10-16 02:55 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<42>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<51>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<31>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<52>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<a0000004001000000004001000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c033dd001051>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (36694 bytes total)>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=26556  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=26556  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    send: data=<513001bfb620>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  INFO     external control released to the instrument
+10-16 02:55 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=2048, step=2048 - step size 8.000), y_range=DACCodeRange(start=0, count=2048, step=2048 - step size 8.000), dwell=16, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:55 PatternScan  DEBUG    synchronizing with cookie 0xbfb8
+10-16 02:55 PatternScan  DEBUG    send: data=<01bfb820>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    synchronization complete
+10-16 02:55 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<42>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<51>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<31>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<52>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<a0000008000800000008000800>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c017a4001051>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (146797 bytes total)>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=12106  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=12106  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    send: data=<513001bfba20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  INFO     external control released to the instrument
+10-16 02:55 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), y_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), dwell=16, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:55 PatternScan  DEBUG    synchronizing with cookie 0xbfbc
+10-16 02:55 PatternScan  DEBUG    send: data=<01bfbc20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    synchronization complete
+10-16 02:55 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<42>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<51>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<31>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<52>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<a0000004001000000004001000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c033dd001051>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (36694 bytes total)>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=1882
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=1882
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=26556  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=26556  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    send: data=<513001bfbe20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  INFO     external control released to the instrument
+10-16 02:55 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), y_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), dwell=16, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:55 PatternScan  DEBUG    synchronizing with cookie 0xbfc0
+10-16 02:55 PatternScan  DEBUG    send: data=<01bfc020>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    synchronization complete
+10-16 02:55 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<42>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<51>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<31>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<52>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<a0000004001000000004001000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c033dd001051>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (36694 bytes total)>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=26556  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=26556  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    send: data=<513001bfc220>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  INFO     external control released to the instrument
+10-16 02:55 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:55 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:55 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:55 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run
+10-16 02:55 PatternScan  DEBUG    transfer multiple RasterScanCommand: x_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), y_range=DACCodeRange(start=0, count=1024, step=4096 - step size 16.000), dwell=16, cookie=123, output_mode=0, beam_type=2, external_control=True, frame_blank=True, max_pipeline=32, continuous=False
+10-16 02:55 PatternScan  DEBUG    synchronizing with cookie 0x373a
+10-16 02:55 PatternScan  DEBUG    send: data=<01373a20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    synchronization complete
+10-16 02:55 PatternScan  DEBUG    synchronize transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<42>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<51>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<31>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<52>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<01007b>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<a0000004001000000004001000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=4  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=4  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c0b7d20010>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<c033dd001051>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0000000000002e0... (36694 bytes total)>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=94118  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=94118  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=26556  in_buffer_before=0
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=26556  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    yield transfer_multiple
+10-16 02:55 PatternScan  DEBUG    send: data=<f000000000>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    send: data=<20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] requested=2  in_buffer_before=2
+10-16 02:55 PatternScan  DEBUG    [GlasgowStream.read] returned=2  in_buffer_after=0
+10-16 02:55 PatternScan  DEBUG    send: data=<513001373c20>
+10-16 02:55 PatternScan  DEBUG    send: done
+10-16 02:55 PatternScan  DEBUG    flush
+10-16 02:55 PatternScan  DEBUG    flush: done
+10-16 02:55 PatternScan  INFO     external control released to the instrument
+10-16 02:55 PatternScan  DEBUG    [CLEANUP] hard_close: cancelling demultiplexer tasks
+10-16 02:55 PatternScan  DEBUG    [CLEANUP] hard_close: calling GlasgowDevice.close()
+10-16 02:55 PatternScan  DEBUG    [CLEANUP] hard_close: GlasgowDevice.close() returned
+10-16 02:55 PatternScan  INFO     [CLEANUP] hard_close: references dropped, GC run

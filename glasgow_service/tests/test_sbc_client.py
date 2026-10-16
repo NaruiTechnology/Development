@@ -188,3 +188,52 @@ def test_runtime_reacquires_when_the_sbc_restarted_under_the_same_term():
         assert http.requests[-1][1].endswith("/vacuum/leadership/renew")
 
     asyncio.run(scenario())
+
+
+def test_runtime_waits_quietly_while_sbc_vacuum_control_is_disabled(caplog):
+    """A disabled SBC is the SBC's decision: no fencing, no 5 s traceback loop."""
+    import logging
+
+    async def scenario():
+        clock = ManualClock()
+        _coordinator, executor = make_executor(clock)
+        http = FakeHttpClient()
+        http.next_response = FakeResponse(404, {"detail": "vacuum controller is disabled"})
+        client = SbcVacuumClient(
+            "http://sbc.local:8765", executor, http_client=http, clock=clock
+        )
+        runtime = VacuumFailoverRuntime(executor, client)
+
+        await executor.start()
+        with caplog.at_level(logging.INFO):
+            await runtime.step()
+            assert executor.lifecycle.state is not ExecutorState.FENCED
+            assert executor.may_execute is True
+            assert runtime.status()["last_error"] == "SBC vacuum control is disabled"
+            asked = len(http.requests)
+
+            for _ in range(10):                      # 10 s: no new SBC requests
+                clock.advance(1.0)
+                await runtime.step()
+            assert len(http.requests) == asked
+
+            for _ in range(21):                      # past the 30 s retry
+                clock.advance(1.0)
+                await runtime.step()
+            assert len(http.requests) == asked + 1
+            assert executor.lifecycle.state is not ExecutorState.FENCED
+
+            http.next_response = FakeResponse(200, {"running": True})
+            for _ in range(31):
+                clock.advance(1.0)
+                await runtime.step()
+            assert any(url.endswith("/vacuum/acquire")
+                       for _m, url, _k in http.requests[asked + 1:])
+            assert runtime.status()["sbc_acquired"] is True
+            assert runtime.status()["last_error"] is None
+
+        disabled_logs = [r for r in caplog.records if "is disabled" in r.getMessage()]
+        assert len(disabled_logs) == 1
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    asyncio.run(scenario())

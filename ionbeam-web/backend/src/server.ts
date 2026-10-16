@@ -24,7 +24,7 @@ import tls from "node:tls";
 import type { IncomingMessage } from "node:http";
 
 import { config } from "./config";
-import { readVacuumEnabled, prepareVacuumEnabledUpdate } from "./vacuumConfig";
+import { readEffectiveVacuumEnabled, readVacuumEnabled, prepareVacuumEnabledUpdate } from "./vacuumConfig";
 import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
@@ -1284,7 +1284,8 @@ app.use("/api/scan/vector/run", requireScanPrivilege);
 if (config.mock) {
   app.get("/api/status", async (_req, res) => {
     const status = mockRest.status();
-    status.vacuum_enabled = readVacuumEnabled(config.vacuumConfigPath);
+    status.vacuum_enabled = await readEffectiveVacuumEnabled(
+      config.vacuumConfigPath, config.vacuumControllerUrl, config.sbcVacuumToken);
     res.json(status);
   });
   app.get("/api/defaults", (_req, res) => res.json(mockRest.defaults()));
