@@ -1,0 +1,19 @@
+{
+  "erc": {
+    "errors": 0,
+    "warnings": 587,
+    "by_type": {
+      "warning: footprint_link_issues": 291,
+      "warning: lib_symbol_issues": 296
+    }
+  },
+  "drc": {
+    "errors": 0,
+    "warnings": 0,
+    "unconnected": 0,
+    "parity_errors": 0,
+    "parity_warnings": 0,
+    "by_type": {}
+  },
+  "kicad_version": "10.0.7"
+}

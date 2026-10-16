@@ -27,7 +27,7 @@ Each software channel `An` is an output (the board turns a pump **on**). Each ch
 | Signal wiring (inputs, relay contacts to controller remote inputs) | 0.25–0.5 mm² (AWG 22–20) stranded, with ferrules |
 | Gauge / analog signals | Shielded twisted pair, 0.25 mm² (for example Belden 8761 or LiYCY 2×0.25) |
 | RS-485 | Shielded twisted pair, 120 Ω (for example Belden 3105A) |
-| Mating plugs | Phoenix MSTB 2,5/…-ST-5,08 (J1, J11–J18) and MC 1,5/…-ST-3,5 (all others). Part numbers are in `fab/RPi5VacuumIO-bom.csv` |
+| Mating plugs | Phoenix MSTB 2,5/…-ST-5,08 (J1, J11–J18) and MC 1,5/…-ST-3,5 (all others). Part numbers are in `fab/assembly/RPi5VacuumIO-bom.csv` |
 | Ferrules and crimp tool, 2.5 mm flat screwdriver, multimeter | – |
 | 40-way IDC ribbon cable, 15–20 cm, female–female | Pi header to J3 |
 

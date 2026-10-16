@@ -158,10 +158,18 @@ The board is 195 × 160 mm, 2 layers, 1.6 mm FR-4, 1 oz copper, with a GND pour 
 
 | Path | Content |
 |---|---|
-| `RPi5VacuumIO.kicad_pro/.kicad_sch/.kicad_pcb` | KiCad project (KiCad 7 format; opens in KiCad 7–10) |
-| `fab/RPi5VacuumIO-gerbers.zip` | Upload to the board house (Gerber X2 + Excellon) |
-| `fab/*-bom.csv`, `fab/*-pos.csv` | BOM with MPNs and the pick-and-place file |
-| `fab/*-schematic.pdf`, `fab/*.step`, `fab/*-drc.rpt` | Schematic print, 3D model, DRC report |
-| `tools/` | Generators (`design.py` is the source of truth), `build.sh`, `make_fab_kicad10.ps1` |
+| `RPi5VacuumIO.kicad_pro/.kicad_sch/.kicad_pcb` | KiCad project. The board is KiCad 10 format and is edited in KiCad 10 |
+| `fab/RPi5VacuumIO-gerbers-<rev>.zip` | **Upload to the board house** (Gerber X2, Excellon, job file with stackup and finish) |
+| `fab/README.md` | Fabrication and assembly notes: board spec, hole table, release checks, review items |
+| `fab/assembly/` | BOM (with MPNs and mating-plug part numbers), pick-and-place, assembly drawing |
+| `fab/*-ipc2581.xml`, `fab/*-odb.zip`, `fab/*-ipcd356.ipc` | IPC-2581, ODB++, electrical-test netlist |
+| `fab/*-schematic.pdf`, `fab/*.step`, `fab/reports/` | Schematic, 3D model, ERC/DRC reports |
+| `fab/RPi5VacuumIO-manufacturing-<rev>.zip`, `fab/SHA256SUMS` | Everything above in one archive, with checksums |
+| `tools/` | `make_fab_kicad10.sh` / `.ps1` (fab package), `prodprep.py`, `fabnotes.py`, `sync_from_schematic.py`; `design.py` and `build.sh` generated the original KiCad 7 layout |
 
-To regenerate on Windows with KiCad 10, run `powershell -ExecutionPolicy Bypass -File .\tools\make_fab_kicad10.ps1` from this folder. On Linux, run `tools/build.sh`.
+Regenerate the package with KiCad 10 from this folder, on Windows with
+`powershell -ExecutionPolicy Bypass -File .\tools\make_fab_kicad10.ps1` or on Linux/macOS with
+`tools/make_fab_kicad10.sh` (`REV=A.2` to change the revision). Both refuse to write `fab/` unless
+ERC has no errors and DRC has no errors, no unconnected items and no schematic/board mismatches.
+`tools/build.sh` would rebuild the board from `design.py` and discard KiCad 10 edits, so it now
+refuses to run on the KiCad 10 board.

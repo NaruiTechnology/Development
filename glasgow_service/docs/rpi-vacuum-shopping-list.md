@@ -58,7 +58,7 @@ Pi 4B (no exposed PCIe).
 
 | # | Item | Qty | Price (USD) | Notes |
 |---|---|---|---|---|
-| 8 | **RPi5VacuumIO rev A.1 board**: fabricated PCB plus parts | 1 | board-house quote | Gerbers: `RPi5VacuumIO/fab/`; BOM with MPNs: `fab/RPi5VacuumIO-bom.csv`; mating plugs are listed there too |
+| 8 | **RPi5VacuumIO rev A.1 board**: fabricated PCB plus parts | 1 | board-house quote | Gerbers: `RPi5VacuumIO/fab/`; BOM with MPNs: `fab/assembly/RPi5VacuumIO-bom.csv`; mating plugs are listed there too |
 | 9 | 40-way IDC ribbon cable, female-female, 15 - 20 cm | 1 | 3 - 5 est. | Pi header to J3, pin 1 to pin 1 |
 | 10 | 24 V DIN-rail PSU, 60 - 100 W (e.g. Mean Well HDR-60-24) | 1 | 20 - 30 est. | Feeds J1. Keep it separate from the Pi's USB-C supply |
 | 11 | Field wiring: ferrules, AWG 18 / 22 stranded wire, shielded twisted pair for gauges and RS-485 | 1 lot | 30 - 60 est. | See WIRING.md step 0 |
