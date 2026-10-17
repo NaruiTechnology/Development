@@ -2,6 +2,7 @@
 
     python3 tools/prodprep.py RPi5VacuumIO.kicad_pcb --rev A.1 --date 2026-10-16
 
+* A3 drawing sheet, so the whole board sits inside the frame (it overhung A4);
 * title block (title, date, revision, company, notes) -> Gerber X2 ``TF.ProjectId``
   revision, the job file and the drawing sheets;
 * physical stackup: 2-layer 1.6 mm FR-4, 1 oz copper both sides, green solder mask,
@@ -111,6 +112,9 @@ def prepare(text: str, rev: str, date: str) -> str:
     if not re.search(r'\(generator_version "10\.', text):
         raise SystemExit("expected a KiCad 10 board (generator_version 10.x)")
     text = remove_block(text, "title_block")
+    # The board spans X 100-295 / Y 100-260 mm: on A4 (297 x 210) its lower part runs off the
+    # sheet and under the title block, which clips plots (assembly drawing). A3 holds it whole.
+    text = re.sub(r'\n\t\(paper "[^"]*"\)\n', '\n\t(paper "A3")\n', text, count=1)
     paper = re.search(r'\n\t\(paper "[^"]*"\)\n', text)
     text = text[:paper.end()] + title_block(rev, date) + text[paper.end():]
     setup = re.search(r"\n\t\(setup\b", text)

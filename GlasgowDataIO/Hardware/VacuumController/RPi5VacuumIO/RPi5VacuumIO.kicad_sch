@@ -12105,7 +12105,7 @@
       (id 3)
       (at 558.8 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
       (id 4)
       (at 558.8 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -12492,7 +12492,7 @@
       (id 3)
       (at 713.74 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
       (id 4)
       (at 713.74 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -12879,7 +12879,7 @@
       (id 3)
       (at 868.68 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
       (id 4)
       (at 868.68 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -13269,7 +13269,7 @@
       (id 3)
       (at 1026.16 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
       (id 4)
       (at 1026.16 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -18925,7 +18925,7 @@
       (id 3)
       (at 299.72 464.82 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"
+    (property "MPN" "Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"
       (id 4)
       (at 299.72 464.82 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -19039,7 +19039,7 @@
       (id 3)
       (at 299.72 487.68 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"
+    (property "MPN" "Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"
       (id 4)
       (at 299.72 487.68 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))

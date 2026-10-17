@@ -1415,7 +1415,7 @@
     <Enterprise id="VENDOR_0" name="UNKNOWN" code="NONE"/>
     <Person name="UNKNOWN" enterpriseRef="UNKNOWN" roleRef="Owner"/>
   </LogisticHeader>
-  <HistoryRecord number="1" origination="2026-10-16T03:31:43" software="KiCad EDA" lastChange="2026-10-16T03:31:43">
+  <HistoryRecord number="1" origination="2026-10-17T15:57:34" software="KiCad EDA" lastChange="2026-10-17T15:57:34">
     <FileRevision fileRevisionId="1" comment="NO COMMENT" label="NO LABEL">
       <SoftwarePackage name="KiCad" revision="10.0.7" vendor="KiCad EDA">
         <Certification certificationStatus="SELFTEST"/>
@@ -1540,42 +1540,42 @@
     <BomItem OEMDesignNumberRef="Connector_Phoenix_MC_PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal_DI1-4" quantity="1" pinCount="6" category="ELECTRICAL" description="4 inputs + common + 24 V sensor supply">
       <RefDes name="J31" packageRef="PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal" populate="true" layerRef="F.Cu"/>
       <Characteristics category="ELECTRICAL">
-        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"/>
+        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"/>
         <Textual definitionSource="KICAD" textualCharacteristicName="Value" textualCharacteristicValue="DI1-4"/>
       </Characteristics>
     </BomItem>
     <BomItem OEMDesignNumberRef="Connector_Phoenix_MC_PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal_DI13-16" quantity="1" pinCount="6" category="ELECTRICAL" description="4 inputs + common + 24 V sensor supply">
       <RefDes name="J34" packageRef="PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal" populate="true" layerRef="F.Cu"/>
       <Characteristics category="ELECTRICAL">
-        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"/>
+        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"/>
         <Textual definitionSource="KICAD" textualCharacteristicName="Value" textualCharacteristicValue="DI13-16"/>
       </Characteristics>
     </BomItem>
     <BomItem OEMDesignNumberRef="Connector_Phoenix_MC_PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal_DI5-8" quantity="1" pinCount="6" category="ELECTRICAL" description="4 inputs + common + 24 V sensor supply">
       <RefDes name="J32" packageRef="PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal" populate="true" layerRef="F.Cu"/>
       <Characteristics category="ELECTRICAL">
-        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"/>
+        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"/>
         <Textual definitionSource="KICAD" textualCharacteristicName="Value" textualCharacteristicValue="DI5-8"/>
       </Characteristics>
     </BomItem>
     <BomItem OEMDesignNumberRef="Connector_Phoenix_MC_PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal_DI9-12" quantity="1" pinCount="6" category="ELECTRICAL" description="4 inputs + common + 24 V sensor supply">
       <RefDes name="J33" packageRef="PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal" populate="true" layerRef="F.Cu"/>
       <Characteristics category="ELECTRICAL">
-        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"/>
+        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"/>
         <Textual definitionSource="KICAD" textualCharacteristicName="Value" textualCharacteristicValue="DI9-12"/>
       </Characteristics>
     </BomItem>
     <BomItem OEMDesignNumberRef="Connector_Phoenix_MC_PhoenixContact_MC_1,5_8-G-3.5_1x08_P3.50mm_Horizontal_AI1-4" quantity="1" pinCount="8" category="ELECTRICAL" description="Analog in / AGND pairs">
       <RefDes name="J41" packageRef="PhoenixContact_MC_1,5_8-G-3.5_1x08_P3.50mm_Horizontal" populate="true" layerRef="F.Cu"/>
       <Characteristics category="ELECTRICAL">
-        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"/>
+        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"/>
         <Textual definitionSource="KICAD" textualCharacteristicName="Value" textualCharacteristicValue="AI1-4"/>
       </Characteristics>
     </BomItem>
     <BomItem OEMDesignNumberRef="Connector_Phoenix_MC_PhoenixContact_MC_1,5_8-G-3.5_1x08_P3.50mm_Horizontal_AI5-8" quantity="1" pinCount="8" category="ELECTRICAL" description="Analog in / AGND pairs">
       <RefDes name="J42" packageRef="PhoenixContact_MC_1,5_8-G-3.5_1x08_P3.50mm_Horizontal" populate="true" layerRef="F.Cu"/>
       <Characteristics category="ELECTRICAL">
-        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"/>
+        <Textual definitionSource="KICAD" textualCharacteristicName="MPN" textualCharacteristicValue="Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"/>
         <Textual definitionSource="KICAD" textualCharacteristicName="Value" textualCharacteristicValue="AI5-8"/>
       </Characteristics>
     </BomItem>
@@ -172958,7 +172958,7 @@
     </CadData>
   </Ecad>
   <Avl name="Primary_Vendor_List">
-    <AvlHeader title="BOM" source="KiCad" author="OWNER" datetime="2026-10-16T03:31:44" version="1"/>
+    <AvlHeader title="BOM" source="KiCad" author="OWNER" datetime="2026-10-17T15:57:35" version="1"/>
     <AvlItem OEMDesignNumber="Capacitor_SMD_C_0805_2012Metric_Pad1.18x1.45mm_HandSolder_100nF">
       <AvlVmpn qualified="false" chosen="false">
         <AvlMpn name="0805 100nF 50V X7R"/>
@@ -173051,7 +173051,7 @@
     </AvlItem>
     <AvlItem OEMDesignNumber="Connector_Phoenix_MC_PhoenixContact_MC_1,5_8-G-3.5_1x08_P3.50mm_Horizontal_AI5-8">
       <AvlVmpn qualified="false" chosen="false">
-        <AvlMpn name="Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"/>
+        <AvlMpn name="Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"/>
         <AvlVendor enterpriseRef="VENDOR_0"/>
       </AvlVmpn>
     </AvlItem>
@@ -173082,7 +173082,7 @@
     </AvlItem>
     <AvlItem OEMDesignNumber="Connector_Phoenix_MC_PhoenixContact_MC_1,5_8-G-3.5_1x08_P3.50mm_Horizontal_AI1-4">
       <AvlVmpn qualified="false" chosen="false">
-        <AvlMpn name="Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"/>
+        <AvlMpn name="Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"/>
         <AvlVendor enterpriseRef="VENDOR_0"/>
       </AvlVmpn>
     </AvlItem>
@@ -173107,7 +173107,7 @@
     </AvlItem>
     <AvlItem OEMDesignNumber="Connector_Phoenix_MC_PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal_DI9-12">
       <AvlVmpn qualified="false" chosen="false">
-        <AvlMpn name="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"/>
+        <AvlMpn name="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"/>
         <AvlVendor enterpriseRef="VENDOR_0"/>
       </AvlVmpn>
     </AvlItem>
@@ -173179,13 +173179,13 @@
     </AvlItem>
     <AvlItem OEMDesignNumber="Connector_Phoenix_MC_PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal_DI13-16">
       <AvlVmpn qualified="false" chosen="false">
-        <AvlMpn name="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"/>
+        <AvlMpn name="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"/>
         <AvlVendor enterpriseRef="VENDOR_0"/>
       </AvlVmpn>
     </AvlItem>
     <AvlItem OEMDesignNumber="Connector_Phoenix_MC_PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal_DI1-4">
       <AvlVmpn qualified="false" chosen="false">
-        <AvlMpn name="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"/>
+        <AvlMpn name="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"/>
         <AvlVendor enterpriseRef="VENDOR_0"/>
       </AvlVmpn>
     </AvlItem>
@@ -173276,7 +173276,7 @@
     </AvlItem>
     <AvlItem OEMDesignNumber="Connector_Phoenix_MC_PhoenixContact_MC_1,5_6-G-3.5_1x06_P3.50mm_Horizontal_DI5-8">
       <AvlVmpn qualified="false" chosen="false">
-        <AvlMpn name="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"/>
+        <AvlMpn name="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"/>
         <AvlVendor enterpriseRef="VENDOR_0"/>
       </AvlVmpn>
     </AvlItem>

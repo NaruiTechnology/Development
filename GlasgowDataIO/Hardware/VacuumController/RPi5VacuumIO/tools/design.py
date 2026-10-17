@@ -165,7 +165,7 @@ for q in range(4):
     comp(f"J{30+q+1}", "Connector_Generic:Conn_01x06", f"DI{4*q+1}-{4*q+4}", MC % (6, 6),
          {"1": f"DI{4*q+1}", "2": f"DI{4*q+2}", "3": f"DI{4*q+3}", "4": f"DI{4*q+4}",
           "5": f"DI_COM{q+1}", "6": "+24V_AUX"},
-         mpn="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395", desc="4 inputs + common + 24 V sensor supply")
+         mpn="Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405", desc="4 inputs + common + 24 V sensor supply")
 DI_USE = {1: "B0 MechanicalVacuumPump ready", 2: "B1 TurboVacuumPump at speed", 3: "B2 UHVacuumPump_1 at speed",
           4: "B3 UHVacuumPump_2 at speed", 5: "MechanicalVacuumPump fault", 6: "TurboVacuumPump fault",
           7: "UHVacuumPump_1 fault", 8: "UHVacuumPump_2 fault"}
@@ -196,7 +196,7 @@ for n in range(1, 9):
 for g in range(2):
     comp(f"J{40+g+1}", "Connector_Generic:Conn_01x08", f"AI{4*g+1}-{4*g+4}", MC % (8, 8),
          {str(2 * k + 1): f"AI{4*g+k+1}" for k in range(4)} | {str(2 * k + 2): "GND" for k in range(4)},
-         mpn="Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411", desc="Analog in / AGND pairs")
+         mpn="Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421", desc="Analog in / AGND pairs")
 
 # ================================================================ RS-485
 comp("U11", "Interface_UART:MAX3485", "MAX3485", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",

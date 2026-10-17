@@ -6,10 +6,10 @@
 		(thickness 1.6)
 		(legacy_teardrops no)
 	)
-	(paper "A4")
+	(paper "A3")
 	(title_block
 		(title "Raspberry Pi Vacuum Controller I/O - FEI DB235")
-		(date "2026-10-16")
+		(date "2026-10-17")
 		(rev "A.1")
 		(company "Ionbeam")
 		(comment 1 "2 layers, 1.6 mm FR-4, 1 oz Cu, ENIG, green mask, white silk")
@@ -5686,7 +5686,7 @@
 				)
 			)
 		)
-		(property "MPN" "Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"
+		(property "MPN" "Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -8460,7 +8460,7 @@
 				)
 			)
 		)
-		(property "MPN" "Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"
+		(property "MPN" "Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -15202,7 +15202,7 @@
 				)
 			)
 		)
-		(property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+		(property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -31587,7 +31587,7 @@
 				)
 			)
 		)
-		(property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+		(property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -36154,7 +36154,7 @@
 				)
 			)
 		)
-		(property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+		(property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -63368,7 +63368,7 @@
 				)
 			)
 		)
-		(property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+		(property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
