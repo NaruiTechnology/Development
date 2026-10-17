@@ -21,7 +21,7 @@ status; operator commands from the UI are forwarded to it and the SBC decides.
 | `manage-local-system.sh stop-vacuum --yes` / `restart-vacuum --yes` | Explicit standalone commands to stop or restart the SBC outside a full stack restart. |
 
 The SBC never reads host configuration: its own profile (`SBC_VACUUM_CONFIG`)
-decides `Enable` and `IsProduction`. The host reads the SBC directly
+decides `Enable` and `Simulate`. The host reads the SBC directly
 (`VACUUM_CONTROLLER_URL`, default `http://127.0.0.1:8766`, with
 `SBC_VACUUM_TOKEN`); the failover executor is not in that path.
 
@@ -34,14 +34,14 @@ In `/etc/sbc-vacuum.env` (or the local env file):
 - `SBC_VACUUM_ALERT_REMIND_SECONDS` — reminder interval while stopped (default 1800).
 - `SBC_VACUUM_AUTO_RESUME_POLLS` — healthy polls before a device-error stop clears (default 10).
 
-In the SBC profile: `Enable`, `IsProduction`, and for the board
+In the SBC profile: `Enable`, `Simulate`, and for the board
 `SBC.KeepBackingPumpOnRestart` (see below; leave `false` until verified).
 
 Point monitoring at `GET http://<sbc>:8766/health/vacuum` and alert on non-200.
 
 ## Commissioning checks
 
-Run on the emulator first (`IsProduction: false`), then on the rig. Record the
+Run on the emulator first (`Simulate: true`), then on the rig (`Simulate: false`). Record the
 SBC uptime before each host action with
 `curl -s http://127.0.0.1:8766/vacuum | python3 -m json.tool | grep runtime_seconds`.
 

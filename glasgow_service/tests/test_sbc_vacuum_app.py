@@ -48,7 +48,7 @@ def test_enable_false_keeps_service_idle_without_touching_hardware(tmp_path, mon
 
 def test_standalone_simulation_api_runs_without_executor(tmp_path, monkeypatch):
     payload = json.loads(FIXTURE_PATH.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    payload.update(Enable=True, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
@@ -70,7 +70,7 @@ def test_standalone_simulation_api_runs_without_executor(tmp_path, monkeypatch):
 
 def test_simulation_control_requires_bearer_token(tmp_path, monkeypatch):
     payload = json.loads(FIXTURE_PATH.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    payload.update(Enable=True, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
@@ -87,7 +87,7 @@ def test_simulation_control_requires_bearer_token(tmp_path, monkeypatch):
 
 def test_high_voltage_api_is_vacuum_interlocked(tmp_path, monkeypatch):
     payload = json.loads(FIXTURE_PATH.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    payload.update(Enable=True, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
@@ -203,19 +203,17 @@ def test_emulator_inspection_does_not_block_controller_event_loop(tmp_path, monk
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("stale_simulate", [True, False])
-def test_production_missing_sbc_never_constructs_emulator(tmp_path, monkeypatch, stale_simulate):
+def test_simulate_false_requires_hardware_and_never_constructs_emulator(tmp_path, monkeypatch):
     import asyncio
     import glasgow_service.vacuum as vacuum
     import glasgow_service.vacuum_io_board as board
 
     profile = CONFIG_PATH.with_name("vacuumSystem.rpi5-io.example.json")
     payload = json.loads(profile.read_text())
-    payload.update(Enable=True, IsProduction=True, Simulate=stale_simulate)
+    payload.update(Enable=True, Simulate=False)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
-    # The SBC profile decides; a non-production scanner cannot downgrade the
-    # SBC to emulation.
+    # A scanner profile cannot downgrade the SBC to simulation.
     stream = tmp_path / "streamData.json"
     stream.write_text(json.dumps({"IsProduction": False}))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
@@ -244,7 +242,7 @@ def test_runtime_pump_list_comes_only_from_canonical_config(tmp_path, monkeypatc
     payload = json.loads(FIXTURE_PATH.read_text())
     payload["VacuumPumps"] = [pump for pump in payload["VacuumPumps"]
                               if pump["name"] != "UHVacuumPump_1"]
-    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    payload.update(Enable=True, Simulate=True)
     source = tmp_path / "vacuumSystem.json"
     source.write_text(json.dumps(payload))
     (tmp_path / "streamData.json").write_text(json.dumps({"IsProduction": False}))
@@ -263,7 +261,7 @@ def test_runtime_pump_list_comes_only_from_canonical_config(tmp_path, monkeypatc
 def test_emulator_excursion_endpoint_requires_board_emulator(tmp_path, monkeypatch):
     """GPIO-simulator profiles have no emulator: the endpoint is 404."""
     payload = json.loads(FIXTURE_PATH.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    payload.update(Enable=True, Simulate=True)
     profile = tmp_path / "vacuum.json"
     profile.write_text(json.dumps(payload))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(profile))
@@ -276,7 +274,7 @@ def test_emulator_excursion_endpoint_requires_board_emulator(tmp_path, monkeypat
 
 def test_restart_endpoint_only_restarts_the_backing_pump(tmp_path, monkeypatch):
     payload = json.loads(CONFIG_PATH.with_name("vacuumSystem.rpi5-io.example.json").read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=False)
+    payload.update(Enable=True, Simulate=True)
     profile = tmp_path / "vacuum.json"
     profile.write_text(json.dumps(payload))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(profile))
@@ -298,7 +296,7 @@ def test_restart_endpoint_only_restarts_the_backing_pump(tmp_path, monkeypatch):
 
 def test_vacuum_health_reports_a_latched_cascade_that_ready_does_not(tmp_path, monkeypatch):
     payload = json.loads(FIXTURE_PATH.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    payload.update(Enable=True, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))

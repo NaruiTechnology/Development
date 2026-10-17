@@ -51,7 +51,7 @@ sha256sum -c SHA256SUMS && sudo python3 install_sbc.py`. Use `--python 3.13` for
 6. **Site files**, never overwritten once they exist (a new copy lands next to them as `.dist`):
    - `/etc/sbc-vacuum/wiring-map.json`: the as-wired record. Edit it if the cabinet differs.
    - `/etc/sbc-vacuum/vacuumSystem.json`: generated from the board profile for this model
-     (`PiModel`, `Serial` nodes), with **`Enable: false`** and **`IsProduction: true`**, so nothing
+     (`PiModel`, `Serial` nodes), with **`Enable: false`** and **`Simulate: false`**, so nothing
      switches until commissioning, and the service never falls back to the emulator.
    - `/etc/sbc-vacuum.env`: port **8766**, the profile path and a random `SBC_VACUUM_TOKEN`.
    - `/etc/sbc-vacuum/WIRING-MAP.md`: the map as tables.

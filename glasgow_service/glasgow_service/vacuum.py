@@ -292,31 +292,25 @@ class VacuumConfig(BaseModel):
     log_name: str = Field("VacuumDashboard", alias="LogName")
     verbose: bool = Field(False, alias="Verbose")
     simulate: bool = Field(False, alias="Simulate")
-    # Low-level simulator tools select hardware/emulation with this field.
-    # The normal service uses Enable for activation and scanner IsProduction
-    # to select real hardware or emulation.
-    is_production: bool = Field(True, alias="IsProduction")
     sbc: SbcDeviceConfig = Field(alias="SBC")
     high_voltage_transformer: HighVoltageTransformerConfig = Field(
         alias="HighVoltageTransformer"
     )
 
-    @model_validator(mode="after")
-    def select_execution_mode(self):
-        if self.is_production:
-            # Production always requires real hardware, regardless of stale
-            # simulator settings or a development environment override.
-            self.simulate = False
-        elif self.sbc.board is None:
-            self.simulate = True
-        return self
-
     @property
     def uses_emulator(self) -> bool:
-        """True when the board driver runs on the emulator, not hardware."""
-        if self.is_production or self.simulate or self.sbc.board is None:
-            return False
-        return True
+        """True when simulation uses the configured board and emulated Pi."""
+        return self.simulate and self.sbc.board is not None
+
+    @property
+    def uses_simulator(self) -> bool:
+        """True when simulation uses the built-in GPIO simulator."""
+        return self.simulate and self.sbc.board is None
+
+    @property
+    def is_production(self) -> bool:
+        """Compatibility/status value; production is the inverse of Simulate."""
+        return not self.simulate
 
     @model_validator(mode="after")
     def validate_channel_map(self):
@@ -418,35 +412,25 @@ def load_vacuum_config(path: Path) -> VacuumConfig:
 def load_runtime_vacuum_config(path: Path) -> VacuumConfig:
     """Load the SBC's own vacuum profile; it alone decides how the SBC runs.
 
-    ``Enable`` activates control and ``IsProduction`` selects real hardware
-    (true) or emulation (false).  The SBC owns the vacuum system, so nothing
-    here reads host configuration such as the scanner's streamData.json: a
-    host-side edit can never change how the SBC drives the pumps.  A profile
-    without ``IsProduction`` is production, which requires hardware and never
-    falls back to emulation silently.
+    ``Enable`` activates control. ``Simulate`` selects the built-in simulator
+    or emulated board; when false, the configured GPIO or I/O board is opened
+    as real hardware. Hardware presence is never auto-detected and simulation
+    is never selected as a fallback. Scanner configuration is independent.
     """
     payload = json.loads(path.read_text())
     enabled = payload.get("Enable", False)
     if not isinstance(enabled, bool):
         raise ValueError("vacuum configuration Enable must be true or false")
     payload["Enable"] = enabled
-    production = payload.get("IsProduction", True)
-    if not isinstance(production, bool):
-        raise ValueError("vacuum configuration IsProduction must be true or false")
-    payload["IsProduction"] = production
-    # IsProduction selects the mode, not a stale simulator-tool flag.
-    # GPIO-only profiles still use the simulator via select_execution_mode.
-    if enabled:
-        payload["Simulate"] = False
     return VacuumConfig.model_validate(payload)
 
 
 def emulator_for_config(config: VacuumConfig):
-    """Build the real-time emulated rig the config asks for, or None.
+    """Build the real-time emulated rig when Simulate and SBC.Board request it.
 
-    The emulator is used for an SBC.Board config with ``Simulate: false`` when
-    ``IsProduction`` is false. In that mode, ``Simulate: true`` selects the
-    built-in deterministic simulator instead. Production requires hardware.
+    GPIO-only profiles use the built-in simulator instead. With Simulate false,
+    startup always follows the selected hardware adapter and errors if hardware
+    is unavailable.
     """
     if not config.uses_emulator:
         return None
@@ -507,14 +491,10 @@ class VacuumController:
         self._last_permit: ExecutionPermit | None = None
         if device is None and emulator is None:
             emulator = emulator_for_config(config)
-        if (device is None and emulator is None and not config.is_production
-                and not config.simulate):
-            # Belt and braces: IsProduction=false must never open real GPIO/I2C.
-            raise RuntimeError("IsProduction is false but no emulator or simulator was selected")
         self.emulator = emulator
         if device is not None:
             self.gpio = device
-        elif config.sbc.board is not None and not config.simulate:
+        elif config.sbc.board is not None:
             from .vacuum_io_board import build_board_device
 
             backing = next((p.write for p in config.pumps if p.name == MECHANICAL_PUMP), None)
@@ -559,7 +539,7 @@ class VacuumController:
                 active_high=config.sbc.active_high,
                 input_pull_up=config.sbc.input_pull_up,
             )
-        if config.simulate and not isinstance(self.gpio, SimulatedVacuumDeviceControl):
+        if config.uses_simulator and not isinstance(self.gpio, SimulatedVacuumDeviceControl):
             raise TypeError(
                 "simulation requires a device implementing set_gauge_ready"
             )
@@ -605,11 +585,11 @@ class VacuumController:
     @property
     def run_mode(self) -> str:
         """``hardware``, ``emulator`` or ``simulator``."""
-        if self.config.simulate:
-            return "simulator"
         if self.emulator is not None or str(
                 getattr(self.gpio, "transport", "")).endswith("emulator"):
             return "emulator"
+        if self.config.simulate:
+            return "simulator"
         return "hardware"
 
     @property
@@ -632,16 +612,14 @@ class VacuumController:
         cfg = self.config
         mode = self.run_mode
         if mode == "simulator":
-            reason = ("IsProduction=false with an SBC.GPIO config"
-                      if cfg.sbc.board is None else "IsProduction=false, Simulate=true")
+            reason = "Simulate=true with an SBC.GPIO config"
         elif mode == "emulator":
-            reason = "IsProduction=false"
+            reason = "Simulate=true with an SBC.Board config"
         elif self._injected_device:
             reason = "device injected by caller"
         else:
-            reason = "IsProduction=true, Simulate=false"
-        detail = (f"mode={mode} IsProduction={str(cfg.is_production).lower()} "
-                  f"Simulate={str(cfg.simulate).lower()} transport={self._transport()} "
+            reason = "Simulate=false"
+        detail = (f"mode={mode} Simulate={str(cfg.simulate).lower()} transport={self._transport()} "
                   f"board={cfg.sbc.board or 'none'} PiModel={cfg.sbc.pi_model} "
                   f"reason={reason}")
         if mode == "hardware":
@@ -811,7 +789,7 @@ class VacuumController:
         self._healthy_polls = 0
         self._started_at = time.monotonic()
         try:
-            if self.config.simulate:
+            if self.config.uses_simulator:
                 self.gpio.reconnect()
             opener = getattr(self.gpio, "open", None)
             if opener is not None:
@@ -828,7 +806,7 @@ class VacuumController:
                 state.port_b_value = 0.0
                 state.ready = False
                 state.excursion = False
-                if self.config.simulate:
+                if self.config.uses_simulator:
                     async with self._io_lock:
                         await self.gpio.set_gauge_ready(state.read, False)
                 # Initialization: every isolation valve closed, every pump
@@ -931,7 +909,7 @@ class VacuumController:
         return hasattr(self.gpio, "read_safety")
 
     def _transport(self) -> str:
-        if self.config.simulate:
+        if self.config.uses_simulator:
             return "sbc-simulation"
         return getattr(self.gpio, "transport", "raspberry-pi-gpio")
 
@@ -1017,7 +995,7 @@ class VacuumController:
                 if power or not automatic:
                     self._require_authority()
                 await self.gpio.write(state.write, power)
-                if self.config.simulate and not power:
+                if self.config.uses_simulator and not power:
                     await self.gpio.set_gauge_ready(state.read, False)
             if state.power != power:
                 self._log(logging.INFO, "vacuum.output",
@@ -1149,7 +1127,7 @@ class VacuumController:
         await self.poll_once()
 
     async def set_simulated_read(self, name: str, checked: bool) -> None:
-        if not self.config.simulate:
+        if not self.config.uses_simulator:
             raise ValueError("simulated read controls are read-only on real hardware")
         state = self._states.get(name)
         if state is None:
@@ -1168,7 +1146,7 @@ class VacuumController:
 
     async def set_simulated_excursion(self, name: str, pressure_mbar: float | None) -> None:
         """Inject or clear a gauge excursion in the deterministic simulator."""
-        if not self.config.simulate:
+        if not self.config.uses_simulator:
             raise ValueError("simulated excursions are unavailable outside simulation mode")
         state = self._states.get(name)
         if state is None:
@@ -1183,7 +1161,7 @@ class VacuumController:
         await self.poll_once()
 
     async def _reset_mechanical_if_downstream_stopped(self) -> None:
-        if not self.config.simulate:
+        if not self.config.uses_simulator:
             return
         downstream = [
             state for name, state in self._states.items() if name != MECHANICAL_PUMP

@@ -5963,6 +5963,21 @@ body {
   font-size: 11px;
 }
 
+.vacuum-dashboard__error-details {
+  margin-top: 6px;
+  color: var(--c-text-dim);
+}
+
+.vacuum-dashboard__error-details summary {
+  cursor: pointer;
+}
+
+.vacuum-dashboard__error-details code {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
 .vacuum-dashboard__loading {
   color: var(--c-text-dim);
   text-align: center;

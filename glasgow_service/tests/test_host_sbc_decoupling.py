@@ -76,7 +76,7 @@ def stop(process):
 def stack(tmp_path):
     profile = tmp_path / "vacuumSystem.json"
     payload = json.loads(PROFILE.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    payload.update(Enable=True, Simulate=True)
     profile.write_text(json.dumps(payload, indent=4))
     stream = tmp_path / "streamData.json"
     stream.write_text(json.dumps({"IsProduction": True, "Actions": []}))

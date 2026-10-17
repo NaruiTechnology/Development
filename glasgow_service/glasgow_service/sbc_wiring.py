@@ -368,7 +368,7 @@ def check_profile(wmap: WiringMap, payload: dict, model: str | None = None) -> R
     if sbc.get("KeepBackingPumpOnRestart"):
         r.info("profile", "KeepBackingPumpOnRestart is on: it only works if IO_RESET_N stays high with "
                           "no process holding it (pull-up instead of R10, or kernel GPIO persistence)")
-    r.info("profile", f"Enable={payload.get('Enable', False)} IsProduction={payload.get('IsProduction', True)}")
+    r.info("profile", f"Enable={payload.get('Enable', False)} Simulate={payload.get('Simulate', False)}")
     return r
 
 
@@ -384,13 +384,14 @@ def profile_for_model(template: dict, model: str, wmap: WiringMap, rs232_node: s
         serial["RS232"] = node
     sbc.setdefault("KeepBackingPumpOnRestart", False)
     payload["Enable"] = False          # WIRING.md: keep control off until commissioning
-    payload["IsProduction"] = True     # on the Pi: real hardware, never the emulator
     payload["Simulate"] = False
+    payload.pop("IsProduction", None)  # discard legacy mode flag from old templates
     msgs = [m for m in payload.get("Message", []) if "IsProduction" not in m and "Enable:" not in m
             and not m.startswith("    true") and not m.startswith("    false")
             and not m.startswith("    Read at service")]
-    msgs.append("Enable/IsProduction: this SBC profile alone decides how the SBC runs. Installed with "
-                "Enable false; set it true at WIRING.md step 12 and restart sbc-vacuum.")
+    msgs.append("Enable controls activation; Simulate selects the built-in simulator or emulated board. "
+                "Simulate false uses real hardware and fails closed if the hardware is unavailable. "
+                "Installed with Enable false; set it true at WIRING.md step 12 and restart sbc-vacuum.")
     payload["Message"] = msgs
     return payload
 
@@ -648,7 +649,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             return 1
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(payload, indent=2) + "\n")
-        print(f"wrote {args.out} (PiModel {args.model}, Enable false, IsProduction true"
+        print(f"wrote {args.out} (PiModel {args.model}, Enable false, Simulate false"
               + (f", RS232 {payload['SBC']['Serial'].get('RS232')}" if payload['SBC'].get('Serial') else "") + ")")
         return 0
     if args.cmd == "check":

@@ -78,7 +78,7 @@ class VacuumSystemStatus(BaseModel):
     voltage: float
     connected: bool
     simulation: bool
-    # IsProduction from vacuumSystem.json (false: emulator or simulator only).
+    # Derived from Simulate in the SBC vacuum profile for backward-compatible API status.
     is_production: bool = True
     control_transport: Literal[
         "sbc-simulation", "raspberry-pi-gpio", "rpi5-vacuum-io", "rpi5-vacuum-io-emulator"

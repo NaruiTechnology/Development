@@ -40,25 +40,25 @@ python -m glasgow_service.emulation --model 5 commission
 ## The service against the emulator
 
 The SBC's own profile (`SBC_VACUUM_CONFIG`) decides how the service runs; nothing on the
-host changes it. `"Enable": true` activates control, and `"IsProduction"` selects the mode:
-`false` runs the production driver on the emulator, `true` (or missing) requires the real
-board. Restart `sbc-vacuum` after changing either. On a Pi installed with
-`deploy/sbc/install_sbc.py` the profile is `/etc/sbc-vacuum/vacuumSystem.json` and starts with
-`Enable: false` and `IsProduction: true`.
+host changes it. `"Enable": true` activates control. The single `"Simulate"` flag selects
+simulation (`true`) or real hardware (`false`). Hardware is not auto-detected: when
+`Simulate` is false, missing hardware causes startup to fail, never a silent fallback.
+Restart `sbc-vacuum` after changing either setting. On a Pi installed with
+`deploy/sbc/install_sbc.py`, the profile is `/etc/sbc-vacuum/vacuumSystem.json` and starts
+with `Enable: false` and `Simulate: false`.
 
-For explicit emulator development, inject `load_vacuum_config` instead of the
-normal runtime loader. This standalone loader selects the following modes:
+Simulation uses the board emulator for `SBC.Board` profiles and the built-in simulator for
+`SBC.GPIO` profiles:
 
-| `IsProduction` | `Simulate` | SBC config | What runs |
-|---|---|---|---|
-| `false` | `false` | `SBC.Board` | Production driver on the **emulated** Pi + board + DB235. Real GPIO/I2C is never opened |
-| `false` | any | `SBC.GPIO` | Built-in simulator (there is no emulator for direct GPIO wiring) |
-| `false` | `true` | any | Built-in deterministic simulator |
-| `true` (default when missing) | any | `SBC.Board` | Real RPi5VacuumIO board; startup fails without SBC hardware |
-| `true` (default when missing) | any | `SBC.GPIO` | Real BCM GPIO; startup fails without SBC hardware |
+| `Simulate` | SBC config | What runs |
+|---|---|---|
+| `true` | `SBC.Board` | Production driver on the **emulated** Pi + board + DB235. Real GPIO/I2C is never opened |
+| `true` | `SBC.GPIO` | Built-in deterministic simulator |
+| `false` | `SBC.Board` | Real RPi5VacuumIO board; startup fails without SBC hardware |
+| `false` | `SBC.GPIO` | Real BCM GPIO; startup fails without SBC hardware |
 
-The example config (`GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json`) ships with
-`"IsProduction": false`; the explicit development loader runs it on the emulator:
+The board example (`GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json`) ships with
+`"Simulate": false`; set it to true for the explicit development loader:
 
 ```bash
 export SBC_VACUUM_CONFIG=/path/to/vacuumSystem.rpi5-io.example.json
@@ -125,9 +125,9 @@ Every log line from the vacuum controller (logger `glasgow_service.vacuum`) star
 
 | Tag | Mode | When |
 |---|---|---|
-| `[VACUUM-HW]` | Real hardware | `IsProduction: true`, `Simulate: false` |
-| `[VACUUM-EMU]` | Emulator | `IsProduction: false`, `Simulate: false` with an `SBC.Board` config |
-| `[VACUUM-SIM]` | Built-in simulator | `IsProduction: false` with `Simulate: true` or an `SBC.GPIO` config |
+| `[VACUUM-HW]` | Real hardware | `Simulate: false` |
+| `[VACUUM-EMU]` | Board emulator | `Simulate: true` with an `SBC.Board` config |
+| `[VACUUM-SIM]` | Built-in simulator | `Simulate: true` with an `SBC.GPIO` config |
 
 At start-up the service logs one banner line with the mode, the flags and the reason. The banner is
 a **WARNING** for `[VACUUM-HW]` ("LIVE HARDWARE: outputs drive real equipment"). After that it logs every relay switch, with its
@@ -143,12 +143,12 @@ SBC_VACUUM_LOG_FORMAT=json ...                              # JSON lines with "e
 
 ## Verifying active hardware control
 
-1. **Before hardware.** `test_is_production_true_runs_the_hardware_path_with_hw_tag` runs the
+1. **Before hardware.** The hardware-mode regression runs the
    production hardware path (`build_board_device` → `LgpioHAL` + `smbus2.SMBus`) with only those two
    Linux endpoints substituted, and checks the `[VACUUM-HW]` banner and that K1 is really driven.
 2. **On the controller Pi** (installed with `deploy/sbc/`), run `sudo sbc-vacuum-preflight preflight --probe`
    with the service stopped, then set `"Enable": true` and restart the service:
-   - the banner reads `[VACUUM-HW] LIVE HARDWARE ... reason=IsProduction=true, Simulate=false`;
+   - the banner reads `[VACUUM-HW] LIVE HARDWARE ... reason=Simulate=false`;
    - `curl localhost:8766/status` shows `"mode": "board"`, `"is_production": true`, `"log_tag": "[VACUUM-HW]"`;
    - `GET /emulator` returns 404 (no emulator exists in this mode);
    - `i2cdetect -y 1` shows `20 21 48 49` (the real chips) and `pinctrl get 19` shows the heartbeat;

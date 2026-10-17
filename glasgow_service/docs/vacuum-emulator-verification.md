@@ -42,4 +42,4 @@ cd Development/glasgow_service
 PYTHONPATH=. ../../.venv/bin/python scripts/verify-vacuum-emulator.py   --seconds 200 --cycles 3 --output /tmp/vacuum-http-soak-results.json
 ```
 
-The script creates a temporary profile, forces `IsProduction=false`, and uses the local in-process HTTP application. It does not reset deployed services or change saved application configuration.
+The script creates a temporary profile with `Simulate=true` and uses the local in-process HTTP application. It does not reset deployed services or change saved application configuration.

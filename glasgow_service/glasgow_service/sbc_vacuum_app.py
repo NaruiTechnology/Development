@@ -99,7 +99,7 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         if not config.enabled:
             yield
             return
-        # Enable controls activation; IsProduction selects hardware or emulation.
+        # Enable controls activation; Simulate selects simulation or hardware.
         controller = VacuumController(
             config, authority=remote_authority_from_environment()
         )
@@ -170,12 +170,12 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         status = target.status() if target is not None else None
         if status is None:
             mode = "disabled" if not activation["enabled"] else "gpio"
-        elif status.simulation:
-            mode = "simulation"
         elif status.control_transport == "rpi5-vacuum-io-emulator":
             mode = "board-emulator"
         elif status.control_transport == "rpi5-vacuum-io":
             mode = "board"
+        elif status.simulation:
+            mode = "simulation"
         else:
             mode = "gpio"
         return {

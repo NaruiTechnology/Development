@@ -3,7 +3,7 @@
 
 Run with the test environment's Python, for example:
     PYTHONPATH=. python scripts/verify-vacuum-emulator.py --seconds 200 --cycles 3
-The temporary profile forces IsProduction=false; no service or saved settings
+The temporary profile forces Simulate=true; no service or saved settings
 are changed. Install the service's test/httpx dependencies before running.
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ from glasgow_service.vacuum import load_vacuum_config
 def verify(seconds: float, cycles: int, speed: float) -> list[dict]:
     example = Path(__file__).resolve().parents[2] / "GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json"
     payload = json.loads(example.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=False)
+    payload.update(Enable=True, Simulate=True)
     results = []
     with tempfile.TemporaryDirectory(prefix="vacuum-http-soak-") as directory:
         profile = Path(directory) / "vacuum.json"

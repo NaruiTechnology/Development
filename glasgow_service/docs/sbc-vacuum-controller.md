@@ -142,9 +142,10 @@ To exercise this on the emulator, see the excursion test app in
 [`vacuum-emulator.md`](vacuum-emulator.md#excursion-test-app).
 
 The SBC's own profile (`SBC_VACUUM_CONFIG`) decides how it runs: `Enable`
-activates control, and `IsProduction` selects real hardware (`true`, or missing)
-or the emulator (`false`). The SBC never reads host configuration, so a change
-to the scanner's `streamData.json` cannot change how the SBC drives the pumps.
+activates control and `Simulate` selects simulation (`true`) or real hardware
+(`false`). The SBC never reads host configuration, so a change to the scanner's
+`streamData.json` cannot change how the SBC drives the pumps. Hardware is not
+auto-detected; when `Simulate` is false, missing hardware causes startup to fail.
 
 Configuration → General → **Active vacuum control** is a host setting: it
 decides whether this host shows the vacuum dashboard and applies the vacuum
@@ -171,16 +172,15 @@ Run `python -m glasgow_service.sbc_vacuum_app`. It exposes:
 - `POST /vacuum/pumps/MechanicalVacuumPump/restart` with optional `{"off_seconds": 3}`:
   restart the backing pump like controller initialization (see below)
 - `POST /vacuum/simulation/{name}/ready` with `{"ready": true|false}`
-- `GET /emulator` and `POST /emulator/*` (only when the emulator is active: `IsProduction` false)
+- `GET /emulator` and `POST /emulator/*` (only when `Simulate` is true with an `SBC.Board` profile)
 
 All mutations require the bearer token when `SBC_VACUUM_TOKEN` is set.
-`Enable: true` activates control in the mode selected by scanner `IsProduction`. `Enable: false` reports an idle,
-disabled service, and `/vacuum` returns 404. Simulator endpoints are available
-only in an explicitly constructed development app.
+`Enable: true` activates control in the mode selected by `Simulate`.
+`Enable: false` reports an idle, disabled service, and `/vacuum` returns 404.
 
 ## Run the simulation
 
-Keep `"IsProduction": false` and `"Simulate": true` in `vacuumSystem.json`, then run:
+Set `"Simulate": true` in `vacuumSystem.json`, then run:
 
 ```bash
 export SBC_VACUUM_CONFIG=/path/to/vacuumSystem.json

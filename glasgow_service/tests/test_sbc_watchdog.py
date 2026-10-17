@@ -45,7 +45,7 @@ def drain(sock) -> list[str]:
 
 def simulation_profile(tmp_path, monkeypatch):
     payload = json.loads(CONFIG_PATH.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=True)
+    payload.update(Enable=True, Simulate=True)
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))

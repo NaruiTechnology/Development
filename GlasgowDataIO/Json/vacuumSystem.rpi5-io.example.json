@@ -117,12 +117,11 @@
         "Serial: Pi 4B -> RS485 /dev/ttyAMA0 (needs dtoverlay=disable-bt), RS232 on uart5 (dtoverlay=uart5, check ls -l /dev/ttyAMA*).",
         "        Pi 5  -> RS485 /dev/ttyAMA0, RS232 /dev/ttyAMA4 (dtoverlay=uart4-pi5).",
         "Enable: CONFIGURATION / GENERAL / Active vacuum control edits this entry.",
-        "    true -> activate vacuum control in the mode selected by scan IsProduction.",
+        "    true -> activate vacuum control.",
         "    false -> disable vacuum control and bypass its scan-readiness gate.",
         "    Read at service start: Configuration Update resets the controller after changing it.",
-        "Scan IsProduction selects hardware (true) or emulation (false). Enable controls activation; IsProduction below is the fallback for standalone use."
+        "Simulate: true selects simulation; false uses real SBC hardware and fails closed if it is unavailable."
     ],
-    "IsProduction": false,
     "Simulate": false,
     "Enable": true,
     "LogName": "VacuumDashboard",

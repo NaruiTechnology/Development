@@ -136,7 +136,8 @@ def test_interlock_off_is_flagged(wmap, example):
 @pytest.mark.parametrize("model,rs232", [("4B", "/dev/ttyAMA1"), ("5", "/dev/ttyAMA4")])
 def test_generated_profile_is_safe_and_matches(wmap, example, model, rs232):
     payload = sw.profile_for_model(example, model, wmap)
-    assert payload["Enable"] is False and payload["IsProduction"] is True
+    assert payload["Enable"] is False and payload["Simulate"] is False
+    assert "IsProduction" not in payload
     assert payload["SBC"]["PiModel"] == model
     assert payload["SBC"]["Serial"] == {"RS485": "/dev/ttyAMA0", "RS232": rs232}
     assert sw.check_profile(wmap, payload, model).passed
@@ -352,7 +353,8 @@ def test_install_on_a_fresh_pi(bundle, tmp_path, model_text, model, overlay, rs2
     assert "console=serial0" not in (root / "boot/firmware/cmdline.txt").read_text()
     assert list((root / "boot/firmware").glob("config.txt.sbc-vacuum.bak-*"))
     profile = json.loads((root / "etc/sbc-vacuum/vacuumSystem.json").read_text())
-    assert (profile["Enable"], profile["IsProduction"], profile["SBC"]["PiModel"]) == (False, True, model)
+    assert (profile["Enable"], profile["Simulate"], profile["SBC"]["PiModel"]) == (False, False, model)
+    assert "IsProduction" not in profile
     assert profile["SBC"]["Serial"]["RS232"] == rs232
     env = (root / "etc/sbc-vacuum.env").read_text()
     token = next(l.split("=", 1)[1] for l in env.splitlines() if l.startswith("SBC_VACUUM_TOKEN="))
