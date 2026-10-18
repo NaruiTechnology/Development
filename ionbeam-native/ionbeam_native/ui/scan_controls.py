@@ -6,8 +6,9 @@ with the ROI raster / ROI gray vector wedges), ValidationPanel.tsx and
 ErrorWedge.tsx.
 
 Infinite is an engine "live" job: frames follow each other on the open
-Glasgow session with no UI round trip in between (OBI's live loop). The
-finite Repeat loop keeps the web's 750 ms settle gap between vector runs.
+Glasgow session with no UI round trip in between (OBI's live loop). Repeat N
+is the same live job with ``max_frames = N``: one session, built once at Run,
+that ends by itself after N frames (like the web's ``continuous`` + ``frames``).
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import quote
 
-from PyQt6.QtCore import QTimer, QUrl, Qt
+from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget,
@@ -30,8 +31,7 @@ from ..core.bitmap_vector import (
     vector_request_with_bitmap_selection, vector_request_with_roi_gray_scale_action, without_partial_roi_selection,
 )
 from ..core.helpers import (
-    SITE_OPTIONS, ScanType, display_scan_error, repeat_countdown_display, should_clear_roi_feedback_before_repeat,
-    should_retain_roi_feedback_on_complete,
+    SITE_OPTIONS, ScanType, display_scan_error, repeat_countdown_display,
 )
 from ..core.jsmath import js_number, to_fixed, trunc
 from ..i18n import fmt, t
@@ -43,7 +43,8 @@ from .common import (
 from .panel import Panel
 from .params import bracketed_bold
 
-ACTION_LOOP_GAP_MS = 750
+# Most frames one Repeat session may run (the Repeat field's limit; web MAX_REPEAT_FRAMES).
+MAX_REPEAT_FRAMES = 50
 
 
 class RepeatControl(QWidget):
@@ -224,14 +225,10 @@ class ScanControls(Panel):
         self.vector_gray_skipped = None
         self.on_action_run_start: Optional[Callable[[], None]] = None
         self.on_repeat_change: Optional[Callable[[int], None]] = None
-        self._loop_timer = QTimer(self)
-        self._loop_timer.setSingleShot(True)
-        self._loop_timer.timeout.connect(self._fire_next_action_run)
-        self._loop_req: Optional[dict] = None
-        self._loop_remaining = 0
+        # Repeat N session: frames requested and the countdown shown.
+        self._loop_frames = 0
         self._loop_iteration = 0
         self._loop_active = False
-        self._loop_completion_pending = False
         self._infinite_active = False
         self._prev_phase = ctl.scan.phase
         self._selection_key = self._roi_key()
@@ -400,55 +397,56 @@ class ScanControls(Panel):
 
     # ------------------------------------------------------------------ loops
     def _clear_loops(self) -> None:
-        self._loop_timer.stop()
-        self._loop_req = None
-        self._loop_remaining = 0
+        self._loop_frames = 0
         self._loop_iteration = 0
         self._loop_active = False
-        self._loop_completion_pending = False
         self._infinite_active = False
 
-    def _start_action_loop(self, req: dict, scan_type: str) -> None:
-        self._clear_loops()
-        self._loop_req = {"req": req, "preview": self.ctl.scan.preview, "scan_type": scan_type}
-        self._loop_remaining = max(0, min(50, trunc(self.repeat)))
-        self._loop_iteration = self._loop_remaining
-        self._loop_completion_pending = True
-        self._loop_active = True
+    def _repeat_frames(self) -> int:
+        """Repeat N, clamped to 1..MAX_REPEAT_FRAMES."""
+        return max(1, min(MAX_REPEAT_FRAMES, trunc(self.repeat)))
 
-    def _fire_next_action_run(self) -> None:
-        if not self._loop_active or self._loop_remaining <= 0 or not self._loop_req:
-            return
-        entry = self._loop_req
-        if should_clear_roi_feedback_before_repeat(entry["scan_type"], self._loop_remaining):
-            self.ctl.reset_vector()
-            self.ctl.scan.update_roi({"scanImageDataUrl": None})
-        self.ctl.engine.vector.retain_feedback_on_complete = should_retain_roi_feedback_on_complete(
-            entry["scan_type"], self._loop_remaining)
-        self._loop_completion_pending = True
-        self.ctl.start_stream("vector", {**entry["req"], "preview": entry["preview"]}, scan_type=entry["scan_type"])
+    def _start_vector_run(self, req: dict, scan_type: str) -> None:
+        """One frame, or Repeat N as ONE live session of N frames.
+
+        Like Infinite, the request is built once and the engine streams frame
+        after frame on the open session; the session ends by itself after N
+        frames. Stop ends it early."""
+        self._clear_loops()
+        frames = self._repeat_frames()
+        # A session completes once (after its last frame), so its ROI gray
+        # feedback is always kept, like a single run.
+        self.ctl.engine.vector.retain_feedback_on_complete = True
+        if frames > 1:
+            self._loop_frames = frames
+            self._loop_iteration = frames
+            self._loop_active = True
+            self.ctl.start_stream("vector", req, live=True, max_frames=frames, scan_type=scan_type)
+        else:
+            self.ctl.start_stream("vector", req, scan_type=scan_type)
 
     def _scan_event(self, event: dict) -> None:
-        """The web's phase-transition effect (completed -> next repeat)."""
-        if event.get("event") != "done":
+        """Repeat countdown per frame; the session's end clears it."""
+        kind = event.get("event")
+        if kind == "frame":
+            # A frame of a live session finished (not its last one).
+            if self._loop_active:
+                done = int(event.get("index", 0)) + 1
+                self._loop_iteration = max(1, self._loop_frames - done)
+                self.refresh()
+            return
+        if kind == "finished":
+            # The session ended: after its last frame, on Stop, or on error.
+            if self._loop_active:
+                self._clear_loops()
+                self.refresh()
+            return
+        if kind != "done":
             return
         roi = self.ctl.scan.roi
         if roi.imageDataUrl and roi.selection:
             clear_bitmap_selection_cache()
-        if self._loop_active and self._loop_completion_pending:
-            self._loop_completion_pending = False
-            if self._loop_remaining > 0:
-                self._loop_remaining -= 1
-                self._loop_iteration = self._loop_remaining
-            if self._loop_remaining > 0:
-                clear_bitmap_selection_cache()
-                scan_type = (self._loop_req or {}).get("scan_type")
-                if scan_type is not None and should_clear_roi_feedback_before_repeat(scan_type, self._loop_remaining):
-                    self.ctl.reset_vector()
-                    self.ctl.scan.update_roi({"scanImageDataUrl": None})
-                self._loop_timer.start(ACTION_LOOP_GAP_MS)
-                self.refresh()
-                return
+        if self._loop_active:
             self._clear_loops()
             self.refresh()
 
@@ -486,16 +484,10 @@ class ScanControls(Panel):
                                                                         gray_scale_skipped=skipped)
                     scan_type = ScanType.VECTOR_ADAPTIVE_GRAN_FEED_BLANK if adaptive else \
                         ScanType.CUSTOM_GRAY_FEEDBACK_BLANK
-                    if trunc(self.repeat) > 1:
-                        self._start_action_loop(req, scan_type)
-                        self.ctl.engine.vector.retain_feedback_on_complete = False
-                    else:
-                        self._clear_loops()
-                        self.ctl.engine.vector.retain_feedback_on_complete = True
                     s.update_roi({"scanImageDataUrl": None})
                     if self.on_action_run_start:
                         self.on_action_run_start()
-                    self.ctl.start_stream("vector", {**req, "preview": s.preview}, scan_type=scan_type)
+                    self._start_vector_run({**req, "preview": s.preview}, scan_type)
                 else:
                     req = vector_request_with_bitmap_selection(
                         {**s.vector, "roi": s.roi.selection}, s.roi, is_production=self._is_production,
@@ -519,11 +511,7 @@ class ScanControls(Panel):
             try:
                 req = self._build_vector_request()
                 scan_type = self._vector_scan_type(req)
-                if trunc(self.repeat) > 1:
-                    self._start_action_loop(req, scan_type)
-                else:
-                    self._clear_loops()
-                self.ctl.start_stream("vector", {**req, "preview": s.preview}, scan_type=scan_type)
+                self._start_vector_run({**req, "preview": s.preview}, scan_type)
             except Exception as exc:  # noqa: BLE001
                 self._fail(exc)
         self.refresh()

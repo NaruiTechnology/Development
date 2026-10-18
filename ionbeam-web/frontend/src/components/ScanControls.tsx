@@ -139,8 +139,6 @@ export function ScanControls({
     : "";
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
-  const actionLoopTimerRef = useRef<number | null>(null);
-  const actionLoopRequestRef = useRef<{ req: VectorRequest; preview: boolean; scanType: ScanType } | null>(null);
   const actionLoopRemainingRef = useRef(0);
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
@@ -277,23 +275,14 @@ export function ScanControls({
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
   const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
 
-  const clearActionLoopTimer = useCallback(() => {
-    if (actionLoopTimerRef.current !== null) {
-      window.clearTimeout(actionLoopTimerRef.current);
-      actionLoopTimerRef.current = null;
-    }
-  }, []);
-
   const clearActionLoopState = useCallback(() => {
-    clearActionLoopTimer();
-    actionLoopRequestRef.current = null;
     actionLoopRemainingRef.current = 0;
     actionLoopIterationRef.current = 0;
     actionLoopActiveRef.current = false;
     actionLoopCompletionPendingRef.current = false;
     setActionLoopIteration((current) => current === 0 ? current : 0);
     setActionLoopActive((current) => current ? false : current);
-  }, [clearActionLoopTimer]);
+  }, []);
 
   const clearInfiniteScanState = useCallback(() => {
     infiniteScanRef.current = null;
@@ -331,23 +320,27 @@ export function ScanControls({
     );
   }, [onScanRunStart, preview, stream]);
 
-  /** Start Repeat N bookkeeping for a session of `frames` passes. */
-  const startActionLoop = useCallback((req: VectorRequest, scanType: ScanType, frames: number) => {
+  /** Start Repeat N bookkeeping (countdown) for a session of `frames` passes. */
+  const startActionLoop = useCallback((frames: number) => {
     clearActionLoopState();
-    actionLoopRequestRef.current = { req, preview, scanType };
     actionLoopRemainingRef.current = frames;
     actionLoopIterationRef.current = frames;
     actionLoopCompletionPendingRef.current = true;
     setActionLoopIteration(frames);
     actionLoopActiveRef.current = true;
     setActionLoopActive(true);
-  }, [clearActionLoopState, preview]);
+  }, [clearActionLoopState]);
 
-  /** Run a Vector request: one pass, or Repeat N as one held session. */
-  const startVectorRun = useCallback((req: VectorRequest, scanType: ScanType) => {
+  /**
+   * Run a Vector request: one pass, or Repeat N as ONE live session, the same
+   * path as Infinite (`continuous`, one WebSocket, the service replays the
+   * point list pass after pass and the image wraps in place) except that it
+   * ends by itself after N passes (`frames`). Nothing is rebuilt between passes.
+   */
+  const startVectorRun = useCallback((req: VectorRequest) => {
     const session = repeatSessionRequest({ ...req, preview }, repeat);
     if (session) {
-      startActionLoop(req, scanType, session.frames);
+      startActionLoop(session.frames);
       stream.startVector(session.req, { continuous: true, preserveFrame: false });
     } else {
       clearActionLoopState();
@@ -422,7 +415,7 @@ export function ScanControls({
           dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
           onScanRunStart?.(grayFilterScanType);
-          startVectorRun(req, grayFilterScanType);
+          startVectorRun(req);
         } else if (roi && selectedTargetGray !== null && !isProduction) {
           // Simulation, ROI area + target gray level, no gray level filter
           // range: the ROI canvas runs the passes, deciding SPOT/SKIP for
@@ -486,7 +479,7 @@ export function ScanControls({
         );
         const scanType = resolveVectorScanType(req);
         onScanRunStart?.(scanType);
-        startVectorRun(req, scanType);
+        startVectorRun(req);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -542,9 +535,10 @@ export function ScanControls({
       dispatch(finishROITargetGrayRun("stopped"));
       return;
     }
-    // Like OBI, stopping a live (Infinite) scan leaves the last image on the
-    // canvas; only finite runs clear it.
-    const stoppingLiveScan = infiniteScanActiveRef.current;
+    // Like OBI, stopping a live session leaves the last image on the canvas:
+    // Infinite, and Repeat N (the same live session with a frame limit).
+    // Only single runs clear it.
+    const stoppingLiveScan = infiniteScanActiveRef.current || actionLoopActiveRef.current;
     clearActionLoopState();
     clearInfiniteScanState();
     stream.stop();

@@ -280,7 +280,7 @@ export const en = {
   "scan.resume.title": "Resume the remaining ROI action loops after the current run finishes",
   "scan.stop": "Stop",
   "scan.transform": "Transform",
-  "scan.infinite": "Infinit",
+  "scan.infinite": "Infinite",
   "scan.runValidated": "Run validated",
   "scan.clear": "Clear",
   "scan.preview": "Preview",

@@ -753,7 +753,7 @@
  "scan.equipment.label": "Equipment",
  "scan.equipment.title": "Select the equipment attached to this scan activity record",
  "scan.error.deviceNotFound": "Glasgow device is not connected. Check the USB connection and try again.",
- "scan.infinite": "Infinit",
+ "scan.infinite": "Infinite",
  "scan.infinite.title": "Repeat Raster scans continuously until Stop is pressed",
  "scan.infinite.title.vector": "Repeat Vector scans continuously until Stop is pressed",
  "scan.modeGuide": "Raster vs vector",
