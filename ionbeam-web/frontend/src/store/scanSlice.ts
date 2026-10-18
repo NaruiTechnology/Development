@@ -94,6 +94,10 @@ export interface ROITargetGrayRun {
   token: number;
   /** Passes run so far in the current (or last) loop. */
   passes: number;
+  /** Pixels in the ROI area spotted (gray != target) in the latest pass. */
+  spot: number;
+  /** Pixels in the ROI area skipped (gray == target) in the latest pass. */
+  skip: number;
 }
 
 export interface ROIState {
@@ -222,7 +226,7 @@ const initialState: ScanState = {
   roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
   selectedTargetGray: null,
   selectedTargetGrayPoint: null,
-  roiTargetGrayRun: { status: "idle", token: 0, passes: 0 },
+  roiTargetGrayRun: { status: "idle", token: 0, passes: 0, spot: 0, skip: 0 },
   vectorRenderMode: "decimated",
   streamTransforms: { xflip: false, yflip: false, rotate90: false },
   lastScanParams: null,
@@ -680,10 +684,15 @@ const slice = createSlice({
         status: "running",
         token: s.roiTargetGrayRun.token + 1,
         passes: 0,
+        spot: 0,
+        skip: 0,
       };
     },
-    roiTargetGrayRunProgress(s, a: PayloadAction<number>) {
-      if (s.roiTargetGrayRun.status === "running") s.roiTargetGrayRun.passes = a.payload;
+    roiTargetGrayRunProgress(s, a: PayloadAction<{ passes: number; spot: number; skip: number }>) {
+      if (s.roiTargetGrayRun.status !== "running") return;
+      s.roiTargetGrayRun.passes = a.payload.passes;
+      s.roiTargetGrayRun.spot = a.payload.spot;
+      s.roiTargetGrayRun.skip = a.payload.skip;
     },
     finishROITargetGrayRun(s, a: PayloadAction<"idle" | "completed" | "stopped">) {
       s.roiTargetGrayRun.status = a.payload;

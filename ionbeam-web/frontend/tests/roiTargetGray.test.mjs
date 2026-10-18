@@ -7,6 +7,8 @@ import {
   grayAt,
   pixelGray,
   stepTowardTargetGray,
+  targetGrayDecision,
+  targetGrayFilter,
 } from "../.test-dist/lib/roiTargetGray.js";
 
 function grayImage(width, height, fill) {
@@ -60,7 +62,7 @@ test("looping step passes converge the ROI area to the target and leave the rest
   let remaining = countTargetGrayMismatches(data, width, rect, target);
   assert.ok(remaining > 0);
   while (remaining > 0) {
-    remaining = stepTowardTargetGray(data, width, rect, target, 2);
+    remaining = stepTowardTargetGray(data, width, rect, target, 2).remaining;
     passes++;
     assert.ok(passes <= 128, "converges within 256 / step passes");
   }
@@ -85,8 +87,49 @@ test("looping step passes converge the ROI area to the target and leave the rest
 test("each pass moves a pixel at most maxStep gray levels", () => {
   const data = grayImage(1, 1, () => 10);
   const rect = { left: 0, top: 0, width: 1, height: 1 };
-  assert.equal(stepTowardTargetGray(data, 1, rect, 200, 4), 1);
+  assert.equal(stepTowardTargetGray(data, 1, rect, 200, 4).remaining, 1);
   assert.equal(data[0], 14);
-  assert.equal(stepTowardTargetGray(data, 1, rect, 15, 4), 0);
+  assert.equal(stepTowardTargetGray(data, 1, rect, 15, 4).remaining, 0);
   assert.equal(data[0], 15);
+});
+
+test("SPOT/SKIP is decided per pixel by comparing its gray with the target", () => {
+  assert.equal(targetGrayDecision(128, 128), "skip");
+  assert.equal(targetGrayDecision(127, 128), "spot");
+  assert.equal(targetGrayDecision(129, 128), "spot");
+  assert.deepEqual(targetGrayFilter(128.4), { selection: [128, 128], skipped: true });
+  assert.deepEqual(targetGrayFilter(300), { selection: [255, 255], skipped: true });
+});
+
+test("each pass re-decides every ROI pixel: matching pixels are skipped and left unchanged", () => {
+  // 3x1 ROI: one pixel already at target, one below, one above.
+  const width = 5;
+  const data = grayImage(width, 1, (x) => [9, 100, 50, 150, 9][x]);
+  const rect = { left: 1, top: 0, width: 3, height: 1 };
+  const decisions = new Uint8Array(width).fill(7);
+
+  const first = stepTowardTargetGray(data, width, rect, 100, 10, decisions);
+  assert.deepEqual(first, { spot: 2, skip: 1, remaining: 2 });
+  assert.deepEqual([...decisions], [7, 0, 1, 1, 7], "outside pixels get no decision");
+  assert.deepEqual([data[4], data[8], data[12]], [100, 60, 140]);
+  assert.deepEqual([data[0], data[16]], [9, 9], "outside pixels untouched");
+
+  // Run to convergence; the SPOT count can only fall and ends at zero.
+  let pass = first;
+  let lastSpot = pass.spot;
+  while (pass.remaining > 0) {
+    pass = stepTowardTargetGray(data, width, rect, 100, 10, decisions);
+    assert.ok(pass.spot <= lastSpot);
+    lastSpot = pass.spot;
+  }
+  const settled = stepTowardTargetGray(data, width, rect, 100, 10, decisions);
+  assert.deepEqual(settled, { spot: 0, skip: 3, remaining: 0 });
+  assert.deepEqual([...decisions], [7, 0, 0, 0, 7]);
+});
+
+test("colour pixels are compared by their gray value, not raw channels", () => {
+  const data = new Uint8ClampedArray([255, 0, 0, 255]); // luma 76
+  const rect = { left: 0, top: 0, width: 1, height: 1 };
+  assert.equal(countTargetGrayMismatches(data, 1, rect, 76), 0);
+  assert.deepEqual(stepTowardTargetGray(data, 1, rect, 76), { spot: 0, skip: 1, remaining: 0 });
 });

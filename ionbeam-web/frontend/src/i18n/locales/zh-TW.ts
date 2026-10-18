@@ -398,7 +398,7 @@ export const zhTW: Partial<TranslationTable> = {
   "roi.targetGray.clear": "清除目標灰階",
   "roi.targetGray.empty": "右鍵點選影像",
   "roi.targetGray.tooltip": "灰階 {value}",
-  "roi.targetGray.running": "ROI 正趨近目標灰階 {value} — 第 {passes} 次",
+  "roi.targetGray.running": "目標灰階 {value} — 第 {passes} 次：Spot {spot} · Skip {skip}",
   "roi.targetGray.noImage": "請先載入 ROI 影像，再執行目標灰階。",
   "roi.imageSourceFileRequired": "目前為非正式模式，且模擬影像來源為「{source}」，因此影像選擇已停用。請在 設定 > 模擬 > 來源 中選擇 檔案（PNG/BMP/JPG），即可啟用 選擇檔案 和 清除影像。",
   "roi.scaleUnit": "刻度單位",

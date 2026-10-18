@@ -57,6 +57,36 @@ export function clipPixelRect(
   return { left, top, width: right - left, height: bottom - top };
 }
 
+/**
+ * Beam decision for one pixel: SKIP (beam blanked) once the pixel's gray
+ * value equals the target, SPOT (beam on) while it still differs. Made per
+ * pixel, per pass, from the pixel's current gray value.
+ */
+export type TargetGrayDecision = "spot" | "skip";
+
+export function targetGrayDecision(gray: number, target: number): TargetGrayDecision {
+  return Math.round(gray) === Math.round(target) ? "skip" : "spot";
+}
+
+/**
+ * The same rule as a gray level filter for the scan request: the single
+ * level [target, target] with Skip = true blanks the beam on pixels at the
+ * target and spots every other pixel.
+ */
+export function targetGrayFilter(target: number): { selection: [number, number]; skipped: true } {
+  const level = Math.max(0, Math.min(255, Math.round(target)));
+  return { selection: [level, level], skipped: true };
+}
+
+export interface TargetGrayPassResult {
+  /** Pixels the beam spotted in this pass (gray differed from the target). */
+  spot: number;
+  /** Pixels the beam skipped in this pass (gray already equal to the target). */
+  skip: number;
+  /** Pixels still differing from the target after this pass. */
+  remaining: number;
+}
+
 /** Number of opaque pixels inside `rect` whose gray value differs from `target`. */
 export function countTargetGrayMismatches(
   data: ArrayLike<number>,
@@ -69,16 +99,22 @@ export function countTargetGrayMismatches(
     for (let x = rect.left; x < rect.left + rect.width; x++) {
       const i = (y * imageWidth + x) * 4;
       if (data[i + 3] === 0) continue;
-      if (data[i] !== target || data[i + 1] !== target || data[i + 2] !== target) mismatches++;
+      const gray = pixelGray(data[i], data[i + 1], data[i + 2]);
+      if (targetGrayDecision(gray, target) === "spot") mismatches++;
     }
   }
   return mismatches;
 }
 
 /**
- * One pass of the target gray loop: move every opaque pixel inside `rect`
- * at most `maxStep` gray levels toward `target` (writing it back as gray),
- * in place. Returns how many pixels still differ from the target.
+ * One pass of the target gray loop, in place. Every opaque pixel inside
+ * `rect` is compared with `target` first:
+ *   - SKIP: its gray equals the target, the beam is blanked and the pixel
+ *     is left unchanged;
+ *   - SPOT: its gray differs, the beam dwells there and moves it at most
+ *     `maxStep` gray levels toward the target.
+ * When `decisions` is given, each pixel's decision is recorded there at
+ * index `y * imageWidth + x` (1 = SPOT, 0 = SKIP; other entries untouched).
  */
 export function stepTowardTargetGray(
   data: Uint8ClampedArray,
@@ -86,22 +122,29 @@ export function stepTowardTargetGray(
   rect: PixelRect,
   target: number,
   maxStep = ROI_TARGET_GRAY_STEP,
-): number {
+  decisions?: Uint8Array,
+): TargetGrayPassResult {
   const goal = Math.max(0, Math.min(255, Math.round(target)));
   const step = Math.max(1, Math.round(maxStep));
-  let remaining = 0;
+  const result: TargetGrayPassResult = { spot: 0, skip: 0, remaining: 0 };
   for (let y = rect.top; y < rect.top + rect.height; y++) {
     for (let x = rect.left; x < rect.left + rect.width; x++) {
       const i = (y * imageWidth + x) * 4;
       if (data[i + 3] === 0) continue;
       const gray = pixelGray(data[i], data[i + 1], data[i + 2]);
-      const delta = Math.max(-step, Math.min(step, goal - gray));
-      const next = gray + delta;
+      if (targetGrayDecision(gray, goal) === "skip") {
+        result.skip++;
+        if (decisions) decisions[y * imageWidth + x] = 0;
+        continue;
+      }
+      result.spot++;
+      if (decisions) decisions[y * imageWidth + x] = 1;
+      const next = gray + Math.max(-step, Math.min(step, goal - gray));
       data[i] = next;
       data[i + 1] = next;
       data[i + 2] = next;
-      if (next !== goal) remaining++;
+      if (next !== goal) result.remaining++;
     }
   }
-  return remaining;
+  return result;
 }

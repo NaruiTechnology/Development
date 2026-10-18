@@ -389,7 +389,7 @@ export const zhCN: Partial<TranslationTable> = {
   "roi.targetGray.clear": "清除目标灰度",
   "roi.targetGray.empty": "右键点选图像",
   "roi.targetGray.tooltip": "灰度 {value}",
-  "roi.targetGray.running": "ROI 正趋近目标灰度 {value} — 第 {passes} 次",
+  "roi.targetGray.running": "目标灰度 {value} — 第 {passes} 次：Spot {spot} · Skip {skip}",
   "roi.targetGray.noImage": "请先加载 ROI 图像，再运行目标灰度。",
   "roi.imageSourceFileRequired": "当前为非生产模式，且仿真图像来源为“{source}”，因此图像选择被禁用。请在 配置 > 仿真 > 来源 中选择 文件（PNG/BMP/JPG），即可启用 选择文件 和 清除图像。",
   "roi.scaleUnit": "刻度单位",

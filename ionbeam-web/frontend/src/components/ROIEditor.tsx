@@ -378,10 +378,13 @@ export function ROIEditor({
     lut,
   ]);
 
-  // Action run toward the target gray level: pass after pass, step every
-  // pixel inside the ROI area toward `selectedTargetGray` and repaint, until
-  // every pixel in the area matches. Pixels outside the area are untouched.
-  // The result then replaces the ROI image the canvas is showing.
+  // Action run toward the target gray level. Each pass compares every pixel
+  // inside the ROI area with `selectedTargetGray` and decides its beam state
+  // from its current gray: SKIP when equal (beam blanked, pixel unchanged),
+  // SPOT when different (beam dwells, pixel steps toward the target). Passes
+  // repeat until every pixel is skipped, i.e. matches. Spotted pixels are
+  // painted on the mask layer each pass. Pixels outside the area are never
+  // touched. The result then replaces the ROI image the canvas is showing.
   useEffect(() => {
     if (variant === "controls") return;
     if (targetGrayRun.status !== "running") return;
@@ -404,6 +407,7 @@ export function ROIEditor({
     const finish = (status: "completed" | "stopped") => {
       if (finished) return;
       finished = true;
+      drawHighlightMask();
       if (status === "completed") {
         const dataUrl = raw.toDataURL("image/png");
         // Keep painting from the raw canvas until the new image has loaded.
@@ -417,14 +421,39 @@ export function ROIEditor({
       dispatch(finishROITargetGrayRun(status));
     };
 
+    // Per-pixel beam decision of the current pass (1 = SPOT, 0 = SKIP).
+    const decisions = new Uint8Array(ROI_CANVAS_EDGE * ROI_CANVAS_EDGE);
+    const showDecisions = (shown: ImageData) => {
+      // Paint the pixels the beam spotted this pass; skipped pixels stay clear.
+      const maskCtx = maskCanvasRef.current?.getContext("2d");
+      if (!maskCtx) return;
+      maskCtx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      const overlay = maskCtx.createImageData(rect.width, rect.height);
+      for (let y = 0; y < rect.height; y++) {
+        for (let x = 0; x < rect.width; x++) {
+          const src = ((rect.top + y) * ROI_CANVAS_EDGE + rect.left + x);
+          if (decisions[src] !== 1) continue;
+          const gray = lut[shown.data[src * 4]];
+          const tinted = tintBeamHitPixel(gray, gray, gray);
+          const o = (y * rect.width + x) * 4;
+          overlay.data[o] = tinted.r;
+          overlay.data[o + 1] = tinted.g;
+          overlay.data[o + 2] = tinted.b;
+          overlay.data[o + 3] = Math.round(tinted.a * 0.55);
+        }
+      }
+      maskCtx.putImageData(overlay, rect.left, rect.top);
+    };
+
     const runPass = () => {
       frame = null;
-      const remaining = stepTowardTargetGray(working.data, ROI_CANVAS_EDGE, rect, target);
+      const pass = stepTowardTargetGray(working.data, ROI_CANVAS_EDGE, rect, target, undefined, decisions);
       passes += 1;
       rawCtx.putImageData(working, 0, 0, rect.left, rect.top, rect.width, rect.height);
       drawBaseCanvas();
-      dispatch(roiTargetGrayRunProgress(passes));
-      if (remaining === 0) {
+      showDecisions(working);
+      dispatch(roiTargetGrayRunProgress({ passes, spot: pass.spot, skip: pass.skip }));
+      if (pass.remaining === 0) {
         finish("completed");
         return;
       }
@@ -1740,7 +1769,12 @@ export function ROIEditor({
               style={{ transform: uprightOverlayTransform("translateX(-50%)") }}
               aria-live="polite"
             >
-              {t("roi.targetGray.running", { value: selectedTargetGray, passes: targetGrayRun.passes })}
+              {t("roi.targetGray.running", {
+                value: selectedTargetGray,
+                passes: targetGrayRun.passes,
+                spot: targetGrayRun.spot,
+                skip: targetGrayRun.skip,
+              })}
             </span>
           )}
           {grayTip &&

@@ -414,7 +414,7 @@ export const en = {
   "roi.targetGray.clear": "Clear target gray level",
   "roi.targetGray.empty": "Right-click image",
   "roi.targetGray.tooltip": "Gray {value}",
-  "roi.targetGray.running": "Matching ROI to target gray {value} — pass {passes}",
+  "roi.targetGray.running": "Target gray {value} — pass {passes}: Spot {spot} · Skip {skip}",
   "roi.targetGray.noImage": "Load an ROI image before running toward the target gray level.",
   "roi.imageSourceFileRequired": "Image selection is disabled in non-production mode because Simulation image source is \"{source}\". Set Configuration > Simulation > Source to File (PNG/BMP/JPG) to enable SELECT and Clear image.",
   "roi.scaleUnit": "Scale unit",

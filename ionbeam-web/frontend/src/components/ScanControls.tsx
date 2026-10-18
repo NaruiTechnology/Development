@@ -35,6 +35,7 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
+import { targetGrayFilter } from "../lib/roiTargetGray";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -375,26 +376,42 @@ export function ScanControls({
         }
         const hasGrayFilter =
           scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
-        if (hasGrayFilter) {
+        // Production target gray (ROI area, no gray level filter range): the
+        // beam decision is made per pixel by comparing its gray with the
+        // target, i.e. the single-level filter [target, target] with Skip:
+        // pixels at the target are skipped (blanked), all others spotted.
+        const productionTargetFilter =
+          !hasGrayFilter && roi && selectedTargetGray !== null && isProduction
+            ? targetGrayFilter(selectedTargetGray)
+            : null;
+        if (hasGrayFilter || productionTargetFilter) {
+          const grayScaleSelection = productionTargetFilter?.selection ?? scanGrayScaleSelection;
+          const grayScaleSkipped = productionTargetFilter?.skipped ?? scanGrayScaleSkipped;
           // Production must make the gray decision from the live 14-bit ADC,
           // not from the loaded ROI reference bitmap. Simulation keeps the
           // bitmap-derived custom point path because it has no physical ADC.
           const adaptiveProductionFilter = isProduction && vectorPixelFallbackBlank;
+          if (productionTargetFilter && !adaptiveProductionFilter && !roiState.imageDataUrl) {
+            // Without live feedback the per-pixel decision needs the ROI image;
+            // without it the request would fall back to an unblanked sweep.
+            dispatch(streamErrored(t("roi.targetGray.noImage")));
+            return;
+          }
           const req = adaptiveProductionFilter
             ? await vectorRequestWithAdaptiveGrayFeedback(
                 { ...vector, roi },
                 roiState,
                 {
-                  grayScaleSelection: scanGrayScaleSelection,
-                  grayScaleSkipped: scanGrayScaleSkipped,
+                  grayScaleSelection,
+                  grayScaleSkipped,
                 }
               )
             : await vectorRequestWithROIGrayScaleAction(
                 { ...vector, roi },
                 roiState,
                 {
-                  grayScaleSelection: scanGrayScaleSelection,
-                  grayScaleSkipped: scanGrayScaleSkipped,
+                  grayScaleSelection,
+                  grayScaleSkipped,
                 }
               );
           const grayFilterScanType = adaptiveProductionFilter
@@ -407,11 +424,12 @@ export function ScanControls({
           onScanRunStart?.(grayFilterScanType);
           startVectorRun(req, grayFilterScanType);
         } else if (roi && selectedTargetGray !== null && !isProduction) {
-          // ROI area + target gray level, no gray level filter range: loop
-          // over the ROI area on the image until every pixel in it matches
-          // the target gray level (the ROI canvas runs the passes). Production
-          // must use a real vector scan so the backend's ADC presence check
-          // can fail the action before any image-only processing occurs.
+          // Simulation, ROI area + target gray level, no gray level filter
+          // range: the ROI canvas runs the passes, deciding SPOT/SKIP for
+          // every pixel in the area each pass by comparing it with the target,
+          // until every pixel is skipped (matches). Production takes the
+          // real vector scan above so the backend's ADC presence check can
+          // fail the action before any image-only processing occurs.
           if (!roiState.imageDataUrl && !roiState.scanImageDataUrl) {
             dispatch(streamErrored(t("roi.targetGray.noImage")));
             return;
