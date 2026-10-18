@@ -43,11 +43,11 @@ import { VectorScanPathField } from "./components/VectorScanPathField";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
+import { ROISelectHelp } from "./components/ROISelectHelp";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
 import { MagCalibrationChart, MagCalibrationControls } from "./components/MagCalibration";
 import { GrayScaleHelp } from "./components/GrayScaleHelp";
-import { NumberStepperInput } from "./components/NumberStepperField";
 import { VectorGrayLevelHelp } from "./components/VectorGrayLevelHelp";
 import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
@@ -81,7 +81,6 @@ import {
   applyPersistedDimensionCalibration,
   clearROISelection,
   clearROIScanImage,
-  persistGrayScaleStepDelta,
   setKind,
   setROIGrayScaleSelection,
   setSelectedTargetGray,
@@ -200,6 +199,10 @@ export function App() {
   const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
   const roiState = useAppSelector((s) => s.scan.roi);
   const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
+  const [targetGrayDraft, setTargetGrayDraft] = useState(
+    selectedTargetGray === null ? "" : String(selectedTargetGray)
+  );
+  const [targetGrayDraftInvalid, setTargetGrayDraftInvalid] = useState(false);
   const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const dimensionCalibration = useAppSelector((s) => s.dimensionCalibration.values);
   const hasPersistedDimensionCalibration = useAppSelector(
@@ -212,7 +215,6 @@ export function App() {
     : "";
   const committedGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const committedGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
-  const committedGrayScaleStepDelta = useAppSelector((s) => s.scan.roiGrayScaleStepDelta);
   const dimensionCalNavigationRequest = useAppSelector((s) => s.settings.dimensionCalNavigationRequest);
   const [lastScanKind, setLastScanKind] = useState<Extract<ScanKind, "raster" | "vector">>("vector");
   const [lastLiveScanImage, setLastLiveScanImage] = useState<{
@@ -272,7 +274,6 @@ export function App() {
   const [pendingGrayScaleAnchor, setPendingGrayScaleAnchor] = useState<number | null>(null);
   const [pendingGrayScaleSkipped, setPendingGrayScaleSkipped] = useState<boolean | null>(committedGrayScaleSkipped);
   const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
-  const [grayScaleStepDelta, setGrayScaleStepDelta] = useState(committedGrayScaleStepDelta);
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
   const [grayScaleConfirmTarget, setGrayScaleConfirmTarget] = useState<"roi" | "vector">("roi");
   const [grayScaleCommitCount, setGrayScaleCommitCount] = useState(0);
@@ -310,7 +311,10 @@ export function App() {
   const settingsTarget = useMemo(() => parseSettingsTarget(window.location.search), []);
   const hasPartialROI = isPartialROISelection(roiState);
   const showROICalibrationInControls = kind === "roi" && roiState.calibration_enabled;
-  const showROIPreviewSideCardBase = kind === "roi" && hasPartialROI && !roiState.calibration_enabled;
+  const showROIPreviewSideCardBase =
+    kind === "roi" &&
+    (hasPartialROI || Boolean(roiState.imageDataUrl)) &&
+    !roiState.calibration_enabled;
   const isSignedIn = Boolean(signedInUser);
   const [activeTopTab, setActiveTopTab] = useState<LeftTopTab>("scan");
   const [scanSubTab, setScanSubTab] = useState<ScanSubTab>("vector");
@@ -624,8 +628,7 @@ export function App() {
   const showGraySpectrum =
     kind === "roi" &&
     hasPartialROI &&
-    Boolean(roiState.scanImageDataUrl || roiState.imageDataUrl || activeROIScanImageUrl) &&
-    !(selectedTargetGray !== null && committedGrayScaleSelection === null);
+    Boolean(roiState.scanImageDataUrl || roiState.imageDataUrl || activeROIScanImageUrl);
   const grayScaleSourceKind = resolveGrayScaleSourceKind({
     showGraySpectrum: kind === "roi" && showGraySpectrum,
     roiImageDataUrl: roiState.imageDataUrl,
@@ -668,25 +671,35 @@ export function App() {
           {t("roi.showGrid")}
         </label>
         <div className="canvas-target-gray">
-          {selectedTargetGray !== null && (
-            <>
-              <span className="canvas-target-gray__label">{t("roi.targetGray")}</span>
-              <HelpPopover
-                title={t("roi.targetGray.help.title")}
-                ariaLabel={t("roi.targetGray.help.aria")}
-              >
-                <p>{t("roi.targetGray.help.body")}</p>
-              </HelpPopover>
-            </>
-          )}
+          <span className="canvas-target-gray__label">
+            {t("roi.targetGray")}
+            <br />
+            {t("roi.targetGray.hint")}
+          </span>
+          <HelpPopover
+            title={t("roi.targetGray.help.title")}
+            ariaLabel={t("roi.targetGray.help.aria")}
+          >
+            <p>{t("roi.targetGray.help.body")}</p>
+          </HelpPopover>
           <span className="canvas-target-gray__value">
             <input
               type="text"
-              className="input canvas-target-gray__input"
-              readOnly
-              value={selectedTargetGray === null ? "" : String(selectedTargetGray)}
+              className={`input canvas-target-gray__input${targetGrayDraftInvalid ? " input--invalid" : ""}`}
+              inputMode="numeric"
+              value={targetGrayDraft}
               placeholder={t("roi.targetGray.empty")}
               aria-label={t("roi.targetGray")}
+              aria-invalid={targetGrayDraftInvalid}
+              title={targetGrayDraftInvalid ? t("roi.targetGray.invalid") : undefined}
+              onChange={(event) => {
+                setTargetGrayDraft(event.target.value);
+                setTargetGrayDraftInvalid(false);
+              }}
+              onBlur={commitTargetGrayDraft}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
               data-empty={selectedTargetGray === null ? "true" : "false"}
             />
             {selectedTargetGray !== null && <button
@@ -807,8 +820,31 @@ export function App() {
   }, [committedGrayScaleSelection]);
 
   useEffect(() => {
-    persistGrayScaleStepDelta(grayScaleStepDelta);
-  }, [grayScaleStepDelta]);
+    setTargetGrayDraft(selectedTargetGray === null ? "" : String(selectedTargetGray));
+    setTargetGrayDraftInvalid(false);
+  }, [selectedTargetGray]);
+
+  function commitTargetGrayDraft() {
+    const text = targetGrayDraft.trim();
+    if (text === "") {
+      setTargetGrayDraftInvalid(false);
+      if (selectedTargetGray !== null) dispatch(setSelectedTargetGray({ value: null }));
+      return;
+    }
+    const value = /^\d+$/.test(text) ? Number(text) : Number.NaN;
+    const filterMin = committedGrayScaleSelection === null
+      ? 0
+      : Math.min(committedGrayScaleSelection[0], committedGrayScaleSelection[1]);
+    const filterMax = committedGrayScaleSelection === null
+      ? 255
+      : Math.max(committedGrayScaleSelection[0], committedGrayScaleSelection[1]);
+    if (!Number.isInteger(value) || value < filterMin || value > filterMax) {
+      setTargetGrayDraftInvalid(true);
+      return;
+    }
+    setTargetGrayDraftInvalid(false);
+    dispatch(setSelectedTargetGray({ value, point: null }));
+  }
 
   useEffect(() => {
     const previous = previousROIImageRef.current;
@@ -870,12 +906,6 @@ export function App() {
     roiState.viewport_y_start,
     roiState.viewport_y_end,
   ]);
-
-  useEffect(() => {
-    if (!showGraySpectrum) return;
-    if (grayScaleStepDelta >= 2) return;
-    setGrayScaleStepDelta(10);
-  }, [grayScaleStepDelta, showGraySpectrum]);
 
   const previousROISelectionKeyRef = useRef(roiSelectionKey);
   useEffect(() => {
@@ -1124,12 +1154,6 @@ export function App() {
     setGrayScaleCommitCount(0);
     setGrayScaleConfirmOpen(true);
   }, [committedGrayScaleSkipped, grayScaleCommitCount, pendingGrayScaleAnchor, pendingGrayScaleSelection]);
-
-  const handleGrayScaleStepDeltaChange = useCallback((nextStepDelta: number) => {
-    const n = Number(nextStepDelta);
-    if (!Number.isFinite(n)) return;
-    setGrayScaleStepDelta(Math.max(1, Math.min(255, Math.round(n))));
-  }, []);
 
   const handleGrayScaleConfirm = useCallback(() => {
     if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
@@ -1396,17 +1420,14 @@ export function App() {
           onRangeCommit={handleVectorGrayRangeSelect}
           onSelect={handleVectorGrayRangeSelect}
         />
-      ) : showGraySpectrum &&
-        !(kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive) ? (
+      ) : showGraySpectrum ? (
         <GrayScaleSpectrum
           selectedGrayScale={displayedROIGrayScaleSelection}
           selectionAnchor={pendingGrayScaleAnchor}
           levels={grayScaleLevels}
-          stepDelta={grayScaleStepDelta}
           sourceLabel={grayScaleSourceLabel}
           scopeNote={grayScaleScopeNote}
           onSelect={handleGrayScaleSelect}
-          onStepDeltaChange={handleGrayScaleStepDeltaChange}
         />
       ) : null}
       {shouldShowROIGrayScaleClear({
@@ -1522,16 +1543,19 @@ export function App() {
             </div>
             {activeTopTab === "scan" ? (
               <div className="tabs tabs--sub" role="tablist" aria-label={t("tabs.scan.aria")}>
-                <button
-                  role="tab"
-                  className="tab tab--sub"
-                  aria-selected={scanSubTab === "roi"}
-                  disabled={panelDisabled}
-                  onClick={() => activateScanSubTab("roi")}
-                >
-                  <Icon name="target" tone="tab" />
-                  {t("tabs.roi")}
-                </button>
+                <div className="tab-group tab-group--roi">
+                  <button
+                    role="tab"
+                    className="tab tab--sub"
+                    aria-selected={scanSubTab === "roi"}
+                    disabled={panelDisabled}
+                    onClick={() => activateScanSubTab("roi")}
+                  >
+                    <Icon name="target" tone="tab" />
+                    {t("tabs.roi")}
+                  </button>
+                  <ROISelectHelp />
+                </div>
                 <button
                   role="tab"
                   className="tab tab--sub"
@@ -2285,22 +2309,19 @@ function GrayScaleSpectrum({
   selectedGrayScale,
   selectionAnchor,
   levels,
-  stepDelta,
   sourceLabel,
   scopeNote,
   onSelect,
-  onStepDeltaChange,
 }: {
   selectedGrayScale: GrayScaleSelection;
   selectionAnchor: number | null;
   levels: number[];
-  stepDelta: number;
   sourceLabel: string | null;
   scopeNote: string | null;
   onSelect: (grayScale: number) => void;
-  onStepDeltaChange: (stepDelta: number) => void;
 }) {
-  const boxes = buildGrayScaleBoxes(levels, stepDelta, selectedGrayScale);
+  const { t } = useTranslation();
+  const boxes = buildGrayScaleBoxes(levels, selectedGrayScale);
   const hasPendingSelection = selectedGrayScale !== null && selectionAnchor === null;
   const selectedMin = selectedGrayScale ? Math.min(selectedGrayScale[0], selectedGrayScale[1]) : null;
   const selectedMax = selectedGrayScale ? Math.max(selectedGrayScale[0], selectedGrayScale[1]) : null;
@@ -2308,6 +2329,7 @@ function GrayScaleSpectrum({
   return (
     <div className="roi-spectrum" aria-label="Grayscale spectrum">
       <div className="roi-spectrum__topline">
+        <span className="roi-spectrum__label">{t("roi.grayScale.rangeSelect")}</span>
         <div className="roi-spectrum__chain" role="list" aria-label="Gray levels">
           {boxes.map((grayScale) => {
             const selected =
@@ -2362,17 +2384,6 @@ function GrayScaleSpectrum({
       </div>
       {scopeNote && <span className="roi-spectrum__context">{scopeNote}</span>}
       <div className="roi-spectrum__controls">
-        <div className="roi-spectrum__stepper-wrap">
-          <NumberStepperInput
-            value={stepDelta}
-            min={1}
-            max={255}
-            step={1}
-            inputMode="numeric"
-            ariaLabel="Gray level box count"
-            onValueChange={(next) => onStepDeltaChange(Number(next))}
-          />
-        </div>
         <div className="roi-spectrum__help">
           <GrayScaleHelp />
         </div>
@@ -2381,43 +2392,19 @@ function GrayScaleSpectrum({
   );
 }
 
-function buildGrayScaleBoxes(levels: number[], stepDelta: number, selectedGrayScale: GrayScaleSelection): number[] {
+function buildGrayScaleBoxes(levels: number[], selectedGrayScale: GrayScaleSelection): number[] {
   if (!levels.length) return [];
-  const delta = clampGrayScaleStepDelta(stepDelta);
-  const boxCount = Math.max(1, Math.min(levels.length, delta));
-  if (boxCount === 1) {
-    return [levels[Math.floor((levels.length - 1) / 2)]];
-  }
-  if (boxCount === levels.length) {
-    return levels;
-  }
-  const boxes: number[] = [];
-  const lastIndex = levels.length - 1;
-  for (let i = 0; i < boxCount; i++) {
-    const index = Math.round((i * lastIndex) / (boxCount - 1));
-    const value = levels[index];
-    if (boxes[boxes.length - 1] !== value) {
-      boxes.push(value);
-    }
-  }
-  if (boxes[0] !== levels[0]) {
-    boxes.unshift(levels[0]);
-  }
-  if (boxes[boxes.length - 1] !== levels[lastIndex]) {
-    boxes.push(levels[lastIndex]);
-  }
+  const min = levels[0];
+  const max = levels[levels.length - 1];
+  const boxes = [min];
+  for (let value = min + 10; value < max; value += 10) boxes.push(value);
+  if (max !== min) boxes.push(max);
   if (selectedGrayScale !== null) {
     const start = Math.max(0, Math.min(255, Math.min(selectedGrayScale[0], selectedGrayScale[1])));
     const end = Math.max(0, Math.min(255, Math.max(selectedGrayScale[0], selectedGrayScale[1])));
     boxes.push(start, end);
   }
   return [...new Set(boxes)].sort((a, b) => a - b);
-}
-
-function clampGrayScaleStepDelta(value: number): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 10;
-  return Math.max(1, Math.min(255, Math.round(n)));
 }
 
 function clampVectorGrayLevel(value: number): number {

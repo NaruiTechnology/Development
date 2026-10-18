@@ -2,9 +2,9 @@
  * Target gray level helpers for the ROI image canvas.
  *
  * The operator right-clicks a pixel to pick a target gray level. Action run
- * (with an ROI area and no gray level filter range) then repeatedly steps
- * every pixel inside the ROI area toward that target until they all match.
- * Pixels outside the ROI area are never touched.
+ * (with an ROI area and no gray level filter range) then steps pixels brighter
+ * than that target down toward it. Pixels at or below the target are skipped,
+ * and pixels outside the ROI area are never touched.
  */
 
 /** Gray levels a pixel may move toward the target in one pass. */
@@ -58,24 +58,23 @@ export function clipPixelRect(
 }
 
 /**
- * Beam decision for one pixel: SKIP (beam blanked) once the pixel's gray
- * value equals the target, SPOT (beam on) while it still differs. Made per
- * pixel, per pass, from the pixel's current gray value.
+ * Beam decision for one pixel: SKIP (beam blanked) when the pixel is already
+ * at or below the target; SPOT (beam on) while it is brighter. Made per pixel,
+ * per pass, from the pixel's current gray value.
  */
 export type TargetGrayDecision = "spot" | "skip";
 
 export function targetGrayDecision(gray: number, target: number): TargetGrayDecision {
-  return Math.round(gray) === Math.round(target) ? "skip" : "spot";
+  return Math.round(gray) <= Math.round(target) ? "skip" : "spot";
 }
 
 /**
- * The same rule as a gray level filter for the scan request: the single
- * level [target, target] with Skip = true blanks the beam on pixels at the
- * target and spots every other pixel.
+ * The gray level filter for the scan request: skip the complete range from
+ * black through the target so only brighter pixels are scanned.
  */
 export function targetGrayFilter(target: number): { selection: [number, number]; skipped: true } {
   const level = Math.max(0, Math.min(255, Math.round(target)));
-  return { selection: [level, level], skipped: true };
+  return { selection: [0, level], skipped: true };
 }
 
 export interface TargetGrayPassResult {
@@ -139,7 +138,7 @@ export function stepTowardTargetGray(
       }
       result.spot++;
       if (decisions) decisions[y * imageWidth + x] = 1;
-      const next = gray + Math.max(-step, Math.min(step, goal - gray));
+      const next = Math.max(goal, gray - step);
       data[i] = next;
       data[i + 1] = next;
       data[i + 2] = next;

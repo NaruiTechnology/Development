@@ -37,7 +37,6 @@ export interface StreamTransforms {
   yflip: boolean;
   rotate90: boolean;
 }
-const ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY = "ionbeam.roiGrayScaleStepDelta";
 
 interface ScanState {
   kind: ScanKind;
@@ -67,7 +66,6 @@ interface ScanState {
   roiGrayScaleSelection: GrayScaleSelection;
   /** `true` skips highlighted pixels, `false` spots them, `null` means no special handling. */
   roiGrayScaleSkipped: boolean | null;
-  roiGrayScaleStepDelta: number;
 
   /** Target gray level picked by right-clicking a pixel on the ROI image;
    *  null until the operator picks one. */
@@ -223,7 +221,6 @@ const initialState: ScanState = {
   beamEnergyEv: 1000.0,
   roiGrayScaleSelection: null,
   roiGrayScaleSkipped: null,
-  roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
   selectedTargetGray: null,
   selectedTargetGrayPoint: null,
   roiTargetGrayRun: { status: "idle", token: 0, passes: 0, spot: 0, skip: 0 },
@@ -440,34 +437,6 @@ function calibrationPatchTouchesConfirmedMapping(patch: Partial<ROIState>): bool
   ].some((key) => Object.prototype.hasOwnProperty.call(patch, key));
 }
 
-function clampGrayScaleStepDelta(value: unknown): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 10;
-  return Math.max(1, Math.min(255, Math.round(n)));
-}
-
-function loadInitialGrayScaleStepDelta(): number {
-  if (typeof window === "undefined") return 10;
-  try {
-    return clampGrayScaleStepDelta(window.localStorage.getItem(ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY));
-  } catch {
-    return 10;
-  }
-}
-
-export function persistGrayScaleStepDelta(stepDelta: number): void {
-  try {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY,
-        String(clampGrayScaleStepDelta(stepDelta))
-      );
-    }
-  } catch {
-    /* localStorage may be disabled */
-  }
-}
-
 /* -------- blocking REST runs ------------------------------------------- */
 
 export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
@@ -636,16 +605,13 @@ const slice = createSlice({
     },
     setROIGrayScaleSelection(
       s,
-      a: PayloadAction<{ selection: GrayScaleSelection; isSkipped?: boolean | null; stepDelta?: number }>
+      a: PayloadAction<{ selection: GrayScaleSelection; isSkipped?: boolean | null }>
     ) {
       s.roiGrayScaleSelection = normalizeGrayScaleSelection(a.payload.selection);
       if (a.payload.selection === null) {
         s.roiGrayScaleSkipped = null;
       } else if (Object.prototype.hasOwnProperty.call(a.payload, "isSkipped")) {
         s.roiGrayScaleSkipped = a.payload.isSkipped === null ? null : Boolean(a.payload.isSkipped);
-      }
-      if (a.payload.stepDelta !== undefined) {
-        s.roiGrayScaleStepDelta = clampGrayScaleStepDelta(a.payload.stepDelta);
       }
     },
     confirmROICalibration(s) {

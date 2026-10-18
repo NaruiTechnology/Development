@@ -1291,7 +1291,6 @@ export function ROIEditor({
     clearBitmapSelectionCache();
     stopAllScanActions();
     setDraft(null);
-    dispatch(clearROIImage());
     dispatch(clearROIScanImage());
     dispatch(clearROISelection());
     dispatch(streamReset());
@@ -1358,6 +1357,7 @@ export function ROIEditor({
             <select
               className="select"
               value={roi.scale_unit}
+              disabled
               onChange={(e) => dispatch(updateROI({ scale_unit: e.target.value }))}
             >
               {UNITS.map((u) => (

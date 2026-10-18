@@ -427,6 +427,17 @@ body {
   min-width: 0;
 }
 
+.image-panel-card__header--roi .image-panel-card__toolbar-slot {
+  display: flex;
+  justify-content: center;
+}
+
+.image-panel-card__header--roi .roi-spectrum {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+}
+
 .image-panel-card__toolbar-slot--vector {
   grid-column: 5;
 }
@@ -588,15 +599,15 @@ body {
   grid-row: 3;
   width: 100%;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 3px;
   overflow: visible;
 }
 
 .image-panel-card__header--roi.image-panel-card__header--scan-path .image-panel-card__toolbar-slot > .roi-spectrum {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  width: max-content;
+  width: 100%;
   margin-left: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -612,7 +623,7 @@ body {
   flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin-left: 0;
   min-width: 0;
   width: max-content;
   max-width: 100%;
@@ -624,13 +635,23 @@ body {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.roi-spectrum__label {
+  color: var(--c-text-dim);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .roi-spectrum__chain {
   display: flex;
   align-items: stretch;
+  justify-content: space-between;
   gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 2px;
   border: 1px solid var(--c-border);
   border-radius: 999px;
@@ -701,6 +722,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 1 1 0;
   min-width: 16px;
   height: 18px;
   padding: 0 4px;
@@ -771,11 +793,6 @@ body {
   flex: 0 0 auto;
   white-space: nowrap;
   padding-right: 4px;
-}
-
-.roi-spectrum__stepper-wrap {
-  width: 82px;
-  flex: 0 0 82px;
 }
 
 .roi-spectrum__help {
@@ -2752,6 +2769,23 @@ body {
   white-space: nowrap;
 }
 
+.tab-group--roi {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tab-group--roi .tab {
+  flex: 1 1 auto;
+}
+
+.tab-group--roi > .help-btn {
+  flex: 0 0 auto;
+  margin: 0 8px 0 -4px;
+}
+
 .tab--top {
   font-weight: 600;
 }
@@ -4058,7 +4092,7 @@ body {
   padding: 2px 6px;
   font-size: 12px;
   text-align: center;
-  cursor: default;
+  cursor: text;
   color: var(--c-text);
   background: var(--c-bg-input);
 }
