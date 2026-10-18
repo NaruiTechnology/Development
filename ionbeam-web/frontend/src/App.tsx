@@ -1698,7 +1698,7 @@ export function App() {
               {(showROIActionControls || (activeTopTab === "scan" && scanSubTab === "roi")) && (
                 <>
                   {kind !== "roi" && (
-                    <div className="card scan-controls-card">
+                    <div className={`card scan-controls-card${activeScanColor ? " scan-controls-card--active" : ""}`}>
                       <div className="card__header">
                         <span className="card__title">{t("card.controls")}</span>
                         <button

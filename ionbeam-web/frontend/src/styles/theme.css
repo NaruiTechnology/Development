@@ -359,6 +359,10 @@ body {
   color: color-mix(in srgb, var(--scan-panel-active-color) 80%, var(--c-text));
 }
 
+.scan-controls-card--active {
+  border-color: color-mix(in srgb, var(--scan-panel-active-color) 80%, transparent);
+}
+
 .card + .card { margin-top: 16px; }
 /* Cards nested in the scan panel card (Scan parameters, Controls, Save
    results, ADC test, DAC check) stack with a tighter gap. */

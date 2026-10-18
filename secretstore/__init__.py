@@ -686,7 +686,10 @@ _URL_PASSWORD = re.compile(r"[a-z][a-z0-9+.-]*://[^/\s:@\"'$]+:[^@\s\"'$/{]+@", 
 _ENV_SECRET = re.compile(
     r"^\s*(?:Environment=)?([A-Z][A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|PRIVATE_KEY))"
     r"\s*=\s*['\"]?([^'\"\s#]*)")
-_EXAMPLE_VALUE = re.compile(r"^(change[-_]?me|replace[-_].*|example.*|x{3,}|<[^>]*>)$", re.IGNORECASE)
+_EXAMPLE_VALUE = re.compile(
+    r"^(change[-_]?me|replace[-_].*|example.*|x{3,}|<[^>]*>|@[A-Z][A-Z0-9_]*@)$",
+    re.IGNORECASE,
+)
 # Keys whose literal value is configuration, not a credential.
 _ALLOWED_KEYS = {"DatabaseOwnerRole", "databaseRole", "databaseOwnerRole"}
 
