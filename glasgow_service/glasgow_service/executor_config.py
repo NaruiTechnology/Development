@@ -38,6 +38,9 @@ class ExecutorConfig:
     redis_wait_timeout_ms: int
     require_fencing: bool
     redis: RedisSentinelSettings
+    #: Power the SBC down (``/vacuum/release``) when this executor stops.
+    #: Off by default so restarts and hand-overs keep the vacuum up.
+    release_on_stop: bool = False
 
     @classmethod
     def from_environment(cls) -> "ExecutorConfig":
@@ -78,4 +81,5 @@ class ExecutorConfig:
             redis_wait_timeout_ms=wait_timeout,
             require_fencing=require_fencing,
             redis=redis,
+            release_on_stop=_bool("VACUUM_EXECUTOR_RELEASE_ON_STOP", False),
         )

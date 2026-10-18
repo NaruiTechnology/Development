@@ -188,8 +188,8 @@
         "Verify every GPIOn-to-header-pin connection with pinout on the final Raspberry Pi, the carrier schematic,",
         "the relay interface and the wiring drawing before changing Simulate to false."
     ],
-    "IsProduction": false,
     "Simulate": true,
+    "Enable": true,
     "LogName": "VacummDashboard",
-    "Verbose": false
+    "Verbose": true
 }

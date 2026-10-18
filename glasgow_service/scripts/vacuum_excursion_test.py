@@ -2,7 +2,7 @@
 """Vacuum excursion test: one pump loses vacuum, is isolated, and recovers.
 
 Runs against the SBC vacuum service in board-emulator or deterministic GPIO
-simulation mode (vacuum ``Enable: true``, scanner ``IsProduction: false``), so
+simulation mode (vacuum ``Enable: true``, ``Simulate: true``), so
 every step shows live on the SBC Vacuum Controller dashboard.
 
 For the selected pump (picked at random from the configured pump list when
@@ -166,7 +166,7 @@ def local_client(speed: float):
 
     example = root.parent / "GlasgowDataIO/Json/vacuumSystem.rpi5-io.example.json"
     payload = json.loads(example.read_text())
-    payload.update(Enable=True, IsProduction=False, Simulate=False)
+    payload.update(Enable=True, Simulate=True)
     with tempfile.TemporaryDirectory(prefix="vacuum-excursion-") as directory:
         profile = Path(directory) / "vacuum.json"
         profile.write_text(json.dumps(payload))
@@ -565,7 +565,7 @@ def main() -> int:
         if mode not in {"board-emulator", "simulation"}:
             print(f"The vacuum service is in mode {mode!r}. This test needs the board emulator "
                   "or deterministic GPIO simulator: "
-                  "vacuum \"Enable\": true and scanner \"IsProduction\": false.", file=sys.stderr)
+                  "vacuum \"Enable\": true and \"Simulate\": true.", file=sys.stderr)
             return 2
         client.mode = mode
         require_valve_support(client, mode)

@@ -1,0 +1,3469 @@
+{
+    "$schema": "https://schemas.kicad.org/drc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-17T15:57:31",
+    "ignored_checks": [
+        {
+            "description": "Footprint has no courtyard defined",
+            "key": "missing_courtyard"
+        },
+        {
+            "description": "Track endpoint not centered on via",
+            "key": "track_not_centered_on_via"
+        },
+        {
+            "description": "Tuning profile track geometries",
+            "key": "tuning_profile_track_geometries"
+        },
+        {
+            "description": "Footprint doesn't match symbol's footprint filters",
+            "key": "footprint_filters_mismatch"
+        },
+        {
+            "description": "Footprint component type doesn't match footprint pads",
+            "key": "footprint_type_mismatch"
+        },
+        {
+            "description": "Footprint not found in libraries",
+            "key": "lib_footprint_issues"
+        },
+        {
+            "description": "Footprint doesn't match copy in library",
+            "key": "lib_footprint_mismatch"
+        }
+    ],
+    "included_severities": [
+        "error",
+        "warning",
+        "exclusion"
+    ],
+    "kicad_version": "10.0.7",
+    "schematic_parity": [],
+    "source": "RPi5VacuumIO.kicad_pcb",
+    "unconnected_items": [],
+    "violations": [
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 111.0,
+                        "y": 248.37
+                    },
+                    "uuid": "6c5009c0-1a28-4a12-8680-fede2e3556ac"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'V1-' on F.Silkscreen",
+                    "pos": {
+                        "x": 114.5,
+                        "y": 248.37
+                    },
+                    "uuid": "ac2a10b5-d1cf-4692-865f-5879ed1fb618"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 118.0,
+                        "y": 248.37
+                    },
+                    "uuid": "a001c166-fa3a-45a7-954e-65ebe921dc5d"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'V2-' on F.Silkscreen",
+                    "pos": {
+                        "x": 121.5,
+                        "y": 248.37
+                    },
+                    "uuid": "e1f85261-2b67-4f43-8d00-a744812af276"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 129.0,
+                        "y": 248.37
+                    },
+                    "uuid": "336d233c-2a58-411b-9532-b71e8b77c4a7"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'V3-' on F.Silkscreen",
+                    "pos": {
+                        "x": 132.5,
+                        "y": 248.37
+                    },
+                    "uuid": "720639fe-20ef-4b15-83b4-78d22657fd02"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 136.0,
+                        "y": 248.37
+                    },
+                    "uuid": "8955e10d-11a0-4ac2-9036-276f6d5253ba"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'V4-' on F.Silkscreen",
+                    "pos": {
+                        "x": 139.5,
+                        "y": 248.37
+                    },
+                    "uuid": "39f34ab2-4433-41a3-ac05-1605fde9fe5f"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 147.0,
+                        "y": 248.37
+                    },
+                    "uuid": "ee651a6d-e7db-4c4e-839b-7fb65dee9005"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'V5-' on F.Silkscreen",
+                    "pos": {
+                        "x": 150.5,
+                        "y": 248.37
+                    },
+                    "uuid": "6af743c3-5f46-4242-8c30-4bceb104b32f"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 154.0,
+                        "y": 248.37
+                    },
+                    "uuid": "f992735d-da30-449a-b1b1-7feb5ce0a7df"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'V6-' on F.Silkscreen",
+                    "pos": {
+                        "x": 157.5,
+                        "y": 248.37
+                    },
+                    "uuid": "50d6e326-e590-4d39-b2e1-0c5bdab2cf9d"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 165.0,
+                        "y": 248.37
+                    },
+                    "uuid": "05705be8-8485-403a-8590-6ca014abdfec"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'V7-' on F.Silkscreen",
+                    "pos": {
+                        "x": 168.5,
+                        "y": 248.37
+                    },
+                    "uuid": "9932f9f3-8c8e-4f9a-8414-08b79afc62b3"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 172.0,
+                        "y": 248.37
+                    },
+                    "uuid": "35ed8e98-9a6f-4989-9350-b6c618ea2ea7"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'V8-' on F.Silkscreen",
+                    "pos": {
+                        "x": 175.5,
+                        "y": 248.37
+                    },
+                    "uuid": "c7ed1ebc-495a-49a1-bf1d-0700edfc2390"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI1' on F.Silkscreen",
+                    "pos": {
+                        "x": 184.0,
+                        "y": 248.37
+                    },
+                    "uuid": "db38f4f8-8331-4b58-8afe-2e60e4339c65"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI2' on F.Silkscreen",
+                    "pos": {
+                        "x": 187.5,
+                        "y": 248.37
+                    },
+                    "uuid": "85ef0db9-4085-493c-9635-2fc8acd0ae70"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI3' on F.Silkscreen",
+                    "pos": {
+                        "x": 191.0,
+                        "y": 248.37
+                    },
+                    "uuid": "2f127267-d014-4b50-a97e-c310ef4a5835"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'READY B0 MECH  B1 TURBO  B2 UH1  B3 UH2' on F.Silkscreen",
+                    "pos": {
+                        "x": 192.75,
+                        "y": 246.87
+                    },
+                    "uuid": "0b3d249e-b8d2-4996-aca0-f86f12b8c2e0"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI4' on F.Silkscreen",
+                    "pos": {
+                        "x": 194.5,
+                        "y": 248.37
+                    },
+                    "uuid": "0ce29008-950b-4b6b-9e9a-a8b979dae6e5"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 198.0,
+                        "y": 248.37
+                    },
+                    "uuid": "60a6deec-688b-4544-9e52-789accb5a8e9"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 201.5,
+                        "y": 248.37
+                    },
+                    "uuid": "c98d987c-49cf-4f97-80c1-d2bec81efb78"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI5' on F.Silkscreen",
+                    "pos": {
+                        "x": 209.0,
+                        "y": 248.37
+                    },
+                    "uuid": "725f83d9-8684-4fb4-83e5-35dc18ce4d66"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI6' on F.Silkscreen",
+                    "pos": {
+                        "x": 212.5,
+                        "y": 248.37
+                    },
+                    "uuid": "b6fb1ceb-adb5-4a7b-b20f-2e6523431a49"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI7' on F.Silkscreen",
+                    "pos": {
+                        "x": 216.0,
+                        "y": 248.37
+                    },
+                    "uuid": "a0edfea7-d9f9-4e19-94ec-5c013dd6253e"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'FAULT  MECH  TURBO  UH1  UH2' on F.Silkscreen",
+                    "pos": {
+                        "x": 217.75,
+                        "y": 246.87
+                    },
+                    "uuid": "3f706191-ff99-4db9-a641-ee0e62a4b278"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI8' on F.Silkscreen",
+                    "pos": {
+                        "x": 219.5,
+                        "y": 248.37
+                    },
+                    "uuid": "7190c494-8f4b-4e69-81e0-54926f0455ec"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 223.0,
+                        "y": 248.37
+                    },
+                    "uuid": "a0b17f2f-1579-45fb-805c-7a3e3452f440"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 226.5,
+                        "y": 248.37
+                    },
+                    "uuid": "6ca3322f-28b5-444d-b0a4-44349115ec98"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI9' on F.Silkscreen",
+                    "pos": {
+                        "x": 234.0,
+                        "y": 248.37
+                    },
+                    "uuid": "12ba32fa-6247-44c9-bd40-1b2c99b7a90e"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI10' on F.Silkscreen",
+                    "pos": {
+                        "x": 237.5,
+                        "y": 248.37
+                    },
+                    "uuid": "d33ede0c-3856-4c47-a780-b33cdd35e594"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI11' on F.Silkscreen",
+                    "pos": {
+                        "x": 241.0,
+                        "y": 248.37
+                    },
+                    "uuid": "b08959de-67c4-4ce2-877c-2ef2e1e7de0d"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI12' on F.Silkscreen",
+                    "pos": {
+                        "x": 244.5,
+                        "y": 248.37
+                    },
+                    "uuid": "c5b6b26b-493c-46a2-8108-f038e253f3cf"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 248.0,
+                        "y": 248.37
+                    },
+                    "uuid": "283ae2f7-1b9a-4261-ad27-553abfaa8786"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 251.5,
+                        "y": 248.37
+                    },
+                    "uuid": "4e692c1e-91ea-4a3f-9e83-8980ecac86c1"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI13' on F.Silkscreen",
+                    "pos": {
+                        "x": 259.0,
+                        "y": 248.37
+                    },
+                    "uuid": "33f1649b-d81c-47b6-b18b-c4c37151070b"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI14' on F.Silkscreen",
+                    "pos": {
+                        "x": 262.5,
+                        "y": 248.37
+                    },
+                    "uuid": "13a18eea-433b-45cc-b6dc-ad062bcc10c7"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI15' on F.Silkscreen",
+                    "pos": {
+                        "x": 266.0,
+                        "y": 248.37
+                    },
+                    "uuid": "a7883536-f3b2-4ca6-811f-07fc2a376edd"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'DI16' on F.Silkscreen",
+                    "pos": {
+                        "x": 269.5,
+                        "y": 248.37
+                    },
+                    "uuid": "27623e18-8680-4606-b58b-4587a0f2ebd5"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 273.0,
+                        "y": 248.37
+                    },
+                    "uuid": "a79285ac-3b9a-43ce-a3ed-a1bded613875"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '+24' on F.Silkscreen",
+                    "pos": {
+                        "x": 276.5,
+                        "y": 248.37
+                    },
+                    "uuid": "c2a9f3aa-1860-4f57-9d59-782fbdc26c56"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'GND' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 163.0
+                    },
+                    "uuid": "3fbcd25e-e9d2-430c-812c-f625e86afeda"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '485B' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 166.5
+                    },
+                    "uuid": "e143909f-9d54-4650-b52a-59980fe8a811"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '485A' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 170.0
+                    },
+                    "uuid": "7eb6dd82-fd62-46d4-a3b0-a3099390cda4"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'GND' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 178.0
+                    },
+                    "uuid": "f13f9ac1-7a52-45cc-82a8-186a0a0ac308"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '232RX' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 181.5
+                    },
+                    "uuid": "1624eecf-ae13-46c8-a5d8-380b7cc9222f"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '232TX' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 185.0
+                    },
+                    "uuid": "66808209-95be-46e1-9b90-8fd87bc05e1c"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '0V' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 193.5
+                    },
+                    "uuid": "b78ef6b9-4170-43a1-8f98-45e011cbdf14"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'AI4' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 197.0
+                    },
+                    "uuid": "2013c3b8-03fd-4643-9126-5b33758479aa"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '0V' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 200.5
+                    },
+                    "uuid": "f4066068-9fa6-4bc4-be46-a89c117f3c46"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'AI3' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 204.0
+                    },
+                    "uuid": "eedb6e06-b87e-4b76-a648-4ae2950d4b48"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '0V' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 207.5
+                    },
+                    "uuid": "a62fb763-cfde-4cae-80b4-979ce42da0e1"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'AI2' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 211.0
+                    },
+                    "uuid": "fa920ead-d035-470e-8d19-d44e5d0a3568"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '0V' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 214.5
+                    },
+                    "uuid": "e0fa4885-4854-40c9-aa35-dea35f07bc20"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'AI1' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 218.0
+                    },
+                    "uuid": "e894a3e6-69d3-494d-a2bb-98b60b6988de"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '0V' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 225.0
+                    },
+                    "uuid": "f644da3d-40c4-4ff3-b723-27e770cec8dd"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'AI8' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 228.5
+                    },
+                    "uuid": "d3d3bc81-e055-47af-b3cc-693ee74ee213"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '0V' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 232.0
+                    },
+                    "uuid": "33b1f12d-c7a6-4cc1-b470-0320bbb789af"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'AI7' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 235.5
+                    },
+                    "uuid": "3be09dd7-03ed-482b-b0b8-34db0d12b349"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '0V' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 239.0
+                    },
+                    "uuid": "def76378-eb9b-4b72-9da8-aa09370b9da9"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'AI6' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 242.5
+                    },
+                    "uuid": "b425f704-c5be-40f1-9bde-fd77b3568c56"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '0V' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 246.0
+                    },
+                    "uuid": "3c956ef2-2b69-422f-a886-4e4e7a3312da"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.6000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'AI5' on F.Silkscreen",
+                    "pos": {
+                        "x": 283.47,
+                        "y": 249.5
+                    },
+                    "uuid": "251f0c89-3b87-4555-b303-d42963aa70b4"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text '24VDC IN' on F.Silkscreen",
+                    "pos": {
+                        "x": 101.0,
+                        "y": 146.6
+                    },
+                    "uuid": "07b225b7-9b4a-4c2e-9b95-60dcc2fafa6b"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'E-STOP NC LOOP' on F.Silkscreen",
+                    "pos": {
+                        "x": 101.0,
+                        "y": 162.6
+                    },
+                    "uuid": "3073d3db-68a8-40c1-9a9c-79023d86de92"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NC' on F.Silkscreen",
+                    "pos": {
+                        "x": 111.72,
+                        "y": 105.73
+                    },
+                    "uuid": "8fe1b951-5d4d-4fd2-b1c9-9498f4422b7e"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'SOLENOID V1/V2' on F.Silkscreen",
+                    "pos": {
+                        "x": 116.25,
+                        "y": 246.87
+                    },
+                    "uuid": "5e950d0f-28c8-4b98-b7ca-7aac10700a74"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NO' on F.Silkscreen",
+                    "pos": {
+                        "x": 116.8,
+                        "y": 105.73
+                    },
+                    "uuid": "425f0a5a-1eef-4a7f-83dc-86ef60d9462f"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 121.88,
+                        "y": 105.73
+                    },
+                    "uuid": "bc888052-fa46-40cc-9eb8-2c19820807b7"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'SOLENOID V3/V4' on F.Silkscreen",
+                    "pos": {
+                        "x": 134.25,
+                        "y": 246.87
+                    },
+                    "uuid": "c1c78bd1-a9b9-4261-8376-988489b01c07"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NC' on F.Silkscreen",
+                    "pos": {
+                        "x": 134.72,
+                        "y": 105.73
+                    },
+                    "uuid": "0bfafd83-6213-4154-89e7-f777f9e5a690"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NO' on F.Silkscreen",
+                    "pos": {
+                        "x": 139.8,
+                        "y": 105.73
+                    },
+                    "uuid": "def1861e-83a1-4181-bc9c-b6d1f9a121b3"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 144.88,
+                        "y": 105.73
+                    },
+                    "uuid": "e43d919e-0855-4aee-ad86-a722f95a4e75"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'SOLENOID V5/V6' on F.Silkscreen",
+                    "pos": {
+                        "x": 152.25,
+                        "y": 246.87
+                    },
+                    "uuid": "57acf0ad-1aeb-4baf-a5eb-050101ab11db"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NC' on F.Silkscreen",
+                    "pos": {
+                        "x": 157.72,
+                        "y": 105.73
+                    },
+                    "uuid": "7d87596b-1aed-41bc-862d-8de3ed507966"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NO' on F.Silkscreen",
+                    "pos": {
+                        "x": 162.8,
+                        "y": 105.73
+                    },
+                    "uuid": "ec4aa44f-4d6f-40c3-b4aa-c32d68c3b54e"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 167.88,
+                        "y": 105.73
+                    },
+                    "uuid": "375b0b6f-6a7f-46da-86fb-a0f65b140cf8"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'SOLENOID V7/V8' on F.Silkscreen",
+                    "pos": {
+                        "x": 170.25,
+                        "y": 246.87
+                    },
+                    "uuid": "459a8de2-a769-4de4-86a2-4a43457e9229"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NC' on F.Silkscreen",
+                    "pos": {
+                        "x": 180.72,
+                        "y": 105.73
+                    },
+                    "uuid": "bc067bbf-5e1c-48d6-ae36-6193050aafdc"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NO' on F.Silkscreen",
+                    "pos": {
+                        "x": 185.8,
+                        "y": 105.73
+                    },
+                    "uuid": "36ad4306-fd31-4ec3-b811-125c13d1215d"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 190.88,
+                        "y": 105.73
+                    },
+                    "uuid": "3b4b5d31-d0e3-4d54-899f-08be0d009e0f"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NC' on F.Silkscreen",
+                    "pos": {
+                        "x": 203.72,
+                        "y": 105.73
+                    },
+                    "uuid": "beed1916-5f6c-4a02-a74e-a7c118dc7cf8"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NO' on F.Silkscreen",
+                    "pos": {
+                        "x": 208.8,
+                        "y": 105.73
+                    },
+                    "uuid": "45ead4ac-091e-4d58-b3af-cd967fa82fc9"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 213.88,
+                        "y": 105.73
+                    },
+                    "uuid": "8aab650c-16c6-497b-80f8-209375f74647"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NC' on F.Silkscreen",
+                    "pos": {
+                        "x": 226.72,
+                        "y": 105.73
+                    },
+                    "uuid": "a3e61ddb-b018-4dcd-88aa-0251c80f521b"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NO' on F.Silkscreen",
+                    "pos": {
+                        "x": 231.8,
+                        "y": 105.73
+                    },
+                    "uuid": "c33befa5-27f1-4d5e-8f5a-047ce384b0b0"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 236.88,
+                        "y": 105.73
+                    },
+                    "uuid": "4ead112a-457c-4017-85fd-b3af43885613"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'INPUTS 9-12  (COM = 0 V)' on F.Silkscreen",
+                    "pos": {
+                        "x": 242.75,
+                        "y": 246.87
+                    },
+                    "uuid": "8dde0584-457e-4490-b285-e54a576556b3"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NC' on F.Silkscreen",
+                    "pos": {
+                        "x": 249.72,
+                        "y": 105.73
+                    },
+                    "uuid": "835b638a-cdfd-411b-bfe1-6e24b2f9a5e6"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NO' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.8,
+                        "y": 105.73
+                    },
+                    "uuid": "fbe49462-73eb-4b73-a6e6-e3254e807729"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 259.88,
+                        "y": 105.73
+                    },
+                    "uuid": "16cdbf00-0590-4c07-b824-7e257774254a"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'INPUTS 13-16  (COM = 0 V)' on F.Silkscreen",
+                    "pos": {
+                        "x": 267.75,
+                        "y": 246.87
+                    },
+                    "uuid": "2be683f2-a45b-49a9-9732-7505c4038e09"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NC' on F.Silkscreen",
+                    "pos": {
+                        "x": 272.72,
+                        "y": 105.73
+                    },
+                    "uuid": "a7c44918-0aab-479d-a386-55f2bc79ad90"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'NO' on F.Silkscreen",
+                    "pos": {
+                        "x": 277.8,
+                        "y": 105.73
+                    },
+                    "uuid": "db98ff78-c993-46fc-907a-9edd7bebcadd"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'COM' on F.Silkscreen",
+                    "pos": {
+                        "x": 282.88,
+                        "y": 105.73
+                    },
+                    "uuid": "f14b4539-96dc-4d28-906b-cdfc2f755f11"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'K1 MECHANICAL A0' on F.Silkscreen",
+                    "pos": {
+                        "x": 116.8,
+                        "y": 113.4
+                    },
+                    "uuid": "1d8f9dbb-63e5-4fb5-93ad-1fbcb1efd13e"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'K2 TURBO A1' on F.Silkscreen",
+                    "pos": {
+                        "x": 139.8,
+                        "y": 113.4
+                    },
+                    "uuid": "ae8f2e9c-24ba-4bdf-9dd9-3a4684b9c46d"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'K3 UH PUMP 1 A2' on F.Silkscreen",
+                    "pos": {
+                        "x": 162.8,
+                        "y": 113.4
+                    },
+                    "uuid": "f6e458bf-9dc7-4123-a0f2-4502d641979b"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'K4 UH PUMP 2 A3' on F.Silkscreen",
+                    "pos": {
+                        "x": 185.8,
+                        "y": 113.4
+                    },
+                    "uuid": "ad3b0df1-4c02-44f3-bcdc-07ea80d06d28"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'K5 HV XFMR A4' on F.Silkscreen",
+                    "pos": {
+                        "x": 208.8,
+                        "y": 113.4
+                    },
+                    "uuid": "0385ce2a-48db-44d9-857d-1b948d7b11a1"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'K6 SPARE A5' on F.Silkscreen",
+                    "pos": {
+                        "x": 231.8,
+                        "y": 113.4
+                    },
+                    "uuid": "9fb35886-f93b-47fb-b480-20542d0d9554"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'K7 SPARE A6' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.8,
+                        "y": 113.4
+                    },
+                    "uuid": "0f53d198-cf78-499e-9c5b-dbe660b480db"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Text height out of range (board setup constraints silk text height min height 0.8000 mm; actual 0.7000 mm)",
+            "items": [
+                {
+                    "description": "PCB text 'K8 SPARE A7' on F.Silkscreen",
+                    "pos": {
+                        "x": 277.8,
+                        "y": 113.4
+                    },
+                    "uuid": "2fd1a1f8-b287-458a-95db-d5d14bc61893"
+                }
+            ],
+            "severity": "warning",
+            "type": "text_height"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'TO RASPBERRY PI 5 GPIO (pin 1 = square pad)' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.0,
+                        "y": 157.2
+                    },
+                    "uuid": "122e9578-6f4d-4e78-aa46-ac0933aa35c0"
+                },
+                {
+                    "description": "Reference field of R24",
+                    "pos": {
+                        "x": 242.155,
+                        "y": 157.325
+                    },
+                    "uuid": "cc82f722-2426-4aea-b1d4-e063b757e15c"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'TO RASPBERRY PI 5 GPIO (pin 1 = square pad)' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.0,
+                        "y": 157.2
+                    },
+                    "uuid": "122e9578-6f4d-4e78-aa46-ac0933aa35c0"
+                },
+                {
+                    "description": "Reference field of U11",
+                    "pos": {
+                        "x": 255.725,
+                        "y": 157.325
+                    },
+                    "uuid": "bd81439d-a82d-4664-9cb6-ea1a1027654b"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'TO RASPBERRY PI 5 GPIO (pin 1 = square pad)' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.0,
+                        "y": 157.2
+                    },
+                    "uuid": "122e9578-6f4d-4e78-aa46-ac0933aa35c0"
+                },
+                {
+                    "description": "Reference field of C12",
+                    "pos": {
+                        "x": 261.755,
+                        "y": 157.325
+                    },
+                    "uuid": "67fb8894-8fb1-452a-aa48-e14fa84b8bce"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of R14",
+                    "pos": {
+                        "x": 265.935,
+                        "y": 157.325
+                    },
+                    "uuid": "0435147a-ae4b-4f4e-a816-1910665f3020"
+                },
+                {
+                    "description": "PCB text 'TO RASPBERRY PI 5 GPIO (pin 1 = square pad)' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.0,
+                        "y": 157.2
+                    },
+                    "uuid": "122e9578-6f4d-4e78-aa46-ac0933aa35c0"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'TO RASPBERRY PI 5 GPIO (pin 1 = square pad)' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.0,
+                        "y": 157.2
+                    },
+                    "uuid": "122e9578-6f4d-4e78-aa46-ac0933aa35c0"
+                },
+                {
+                    "description": "Reference field of R25",
+                    "pos": {
+                        "x": 246.305,
+                        "y": 157.325
+                    },
+                    "uuid": "99e3ad09-59a3-4309-85da-57305b6341df"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of R27",
+                    "pos": {
+                        "x": 205.025,
+                        "y": 176.175
+                    },
+                    "uuid": "1c36571c-2025-45dd-9f18-9d443c887d85"
+                },
+                {
+                    "description": "Segment of U1 on F.Silkscreen",
+                    "pos": {
+                        "x": 204.954999,
+                        "y": 176.285
+                    },
+                    "uuid": "5951e731-8b55-4f34-99cc-6090070d8ab2"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of R27",
+                    "pos": {
+                        "x": 205.025,
+                        "y": 176.175
+                    },
+                    "uuid": "1c36571c-2025-45dd-9f18-9d443c887d85"
+                },
+                {
+                    "description": "Segment of U1 on F.Silkscreen",
+                    "pos": {
+                        "x": 204.954999,
+                        "y": 176.285
+                    },
+                    "uuid": "a77d7c7b-d621-4d6f-b036-3c79c014ef29"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text '24VDC IN' on F.Silkscreen",
+                    "pos": {
+                        "x": 101.0,
+                        "y": 146.6
+                    },
+                    "uuid": "07b225b7-9b4a-4c2e-9b95-60dcc2fafa6b"
+                },
+                {
+                    "description": "Segment of J1 on F.Silkscreen",
+                    "pos": {
+                        "x": 112.64,
+                        "y": 146.35
+                    },
+                    "uuid": "997dac5f-ee4f-4ba1-a907-15114f2d9e21"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K1 MECHANICAL A0' on F.Silkscreen",
+                    "pos": {
+                        "x": 116.8,
+                        "y": 113.4
+                    },
+                    "uuid": "1d8f9dbb-63e5-4fb5-93ad-1fbcb1efd13e"
+                },
+                {
+                    "description": "Segment of K1 on F.Silkscreen",
+                    "pos": {
+                        "x": 125.15,
+                        "y": 113.35
+                    },
+                    "uuid": "a025bd1d-fb7b-44a3-8dcb-4fe4c87f8dd6"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K1 MECHANICAL A0' on F.Silkscreen",
+                    "pos": {
+                        "x": 116.8,
+                        "y": 113.4
+                    },
+                    "uuid": "1d8f9dbb-63e5-4fb5-93ad-1fbcb1efd13e"
+                },
+                {
+                    "description": "Segment of K1 on F.Silkscreen",
+                    "pos": {
+                        "x": 115.8,
+                        "y": 113.09
+                    },
+                    "uuid": "892189ce-92dc-41c7-8a57-43b443882bae"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of D21",
+                    "pos": {
+                        "x": 119.075,
+                        "y": 136.325
+                    },
+                    "uuid": "12ae5080-ba8c-417c-b775-5ff2b088a7f5"
+                },
+                {
+                    "description": "Segment of K1 on F.Silkscreen",
+                    "pos": {
+                        "x": 108.45,
+                        "y": 136.05
+                    },
+                    "uuid": "fc7240da-d195-4960-a7a5-b1e382d7da3c"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of R31",
+                    "pos": {
+                        "x": 114.325,
+                        "y": 136.325
+                    },
+                    "uuid": "e36852c4-75d0-4a28-8e08-1729d048f299"
+                },
+                {
+                    "description": "Segment of K1 on F.Silkscreen",
+                    "pos": {
+                        "x": 108.45,
+                        "y": 136.05
+                    },
+                    "uuid": "fc7240da-d195-4960-a7a5-b1e382d7da3c"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K1 on F.Silkscreen",
+                    "pos": {
+                        "x": 125.15,
+                        "y": 113.35
+                    },
+                    "uuid": "a025bd1d-fb7b-44a3-8dcb-4fe4c87f8dd6"
+                },
+                {
+                    "description": "Segment of J11 on F.Silkscreen",
+                    "pos": {
+                        "x": 122.18,
+                        "y": 113.44
+                    },
+                    "uuid": "bc2a44e6-90eb-4b4a-a31e-cdc3c759fe61"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K1 on F.Silkscreen",
+                    "pos": {
+                        "x": 125.15,
+                        "y": 113.35
+                    },
+                    "uuid": "a025bd1d-fb7b-44a3-8dcb-4fe4c87f8dd6"
+                },
+                {
+                    "description": "Segment of J11 on F.Silkscreen",
+                    "pos": {
+                        "x": 121.58,
+                        "y": 113.44
+                    },
+                    "uuid": "b70e6d8f-c101-4321-9141-02b1273cf3a0"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J11 on F.Silkscreen",
+                    "pos": {
+                        "x": 121.88,
+                        "y": 112.84
+                    },
+                    "uuid": "37c59838-200c-4a3c-8f30-9f7fdf207a0b"
+                },
+                {
+                    "description": "Segment of K1 on F.Silkscreen",
+                    "pos": {
+                        "x": 125.15,
+                        "y": 113.35
+                    },
+                    "uuid": "a025bd1d-fb7b-44a3-8dcb-4fe4c87f8dd6"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K1 MECHANICAL A0' on F.Silkscreen",
+                    "pos": {
+                        "x": 116.8,
+                        "y": 113.4
+                    },
+                    "uuid": "1d8f9dbb-63e5-4fb5-93ad-1fbcb1efd13e"
+                },
+                {
+                    "description": "Segment of J11 on F.Silkscreen",
+                    "pos": {
+                        "x": 122.18,
+                        "y": 113.44
+                    },
+                    "uuid": "bc2a44e6-90eb-4b4a-a31e-cdc3c759fe61"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K1 MECHANICAL A0' on F.Silkscreen",
+                    "pos": {
+                        "x": 116.8,
+                        "y": 113.4
+                    },
+                    "uuid": "1d8f9dbb-63e5-4fb5-93ad-1fbcb1efd13e"
+                },
+                {
+                    "description": "Segment of J11 on F.Silkscreen",
+                    "pos": {
+                        "x": 121.58,
+                        "y": 113.44
+                    },
+                    "uuid": "b70e6d8f-c101-4321-9141-02b1273cf3a0"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K2 on F.Silkscreen",
+                    "pos": {
+                        "x": 148.15,
+                        "y": 113.35
+                    },
+                    "uuid": "474f6018-7032-469e-acdd-f15ad9db2f59"
+                },
+                {
+                    "description": "PCB text 'K2 TURBO A1' on F.Silkscreen",
+                    "pos": {
+                        "x": 139.8,
+                        "y": 113.4
+                    },
+                    "uuid": "ae8f2e9c-24ba-4bdf-9dd9-3a4684b9c46d"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K2 on F.Silkscreen",
+                    "pos": {
+                        "x": 138.8,
+                        "y": 113.09
+                    },
+                    "uuid": "13da16fc-8f9d-4b1d-8bce-48d26b7b82a6"
+                },
+                {
+                    "description": "PCB text 'K2 TURBO A1' on F.Silkscreen",
+                    "pos": {
+                        "x": 139.8,
+                        "y": 113.4
+                    },
+                    "uuid": "ae8f2e9c-24ba-4bdf-9dd9-3a4684b9c46d"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K2 on F.Silkscreen",
+                    "pos": {
+                        "x": 148.15,
+                        "y": 113.35
+                    },
+                    "uuid": "474f6018-7032-469e-acdd-f15ad9db2f59"
+                },
+                {
+                    "description": "Segment of J12 on F.Silkscreen",
+                    "pos": {
+                        "x": 144.58,
+                        "y": 113.44
+                    },
+                    "uuid": "ee70d0df-832d-4c30-bc15-3aadfa37628c"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K2 on F.Silkscreen",
+                    "pos": {
+                        "x": 148.15,
+                        "y": 113.35
+                    },
+                    "uuid": "474f6018-7032-469e-acdd-f15ad9db2f59"
+                },
+                {
+                    "description": "Segment of J12 on F.Silkscreen",
+                    "pos": {
+                        "x": 144.88,
+                        "y": 112.84
+                    },
+                    "uuid": "8b38f035-56d2-483b-a60a-e259d5a4ef16"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K2 on F.Silkscreen",
+                    "pos": {
+                        "x": 148.15,
+                        "y": 113.35
+                    },
+                    "uuid": "474f6018-7032-469e-acdd-f15ad9db2f59"
+                },
+                {
+                    "description": "Segment of J12 on F.Silkscreen",
+                    "pos": {
+                        "x": 145.18,
+                        "y": 113.44
+                    },
+                    "uuid": "81b147a7-543a-473f-a16a-b369fbcfdb32"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text '24VDC IN' on F.Silkscreen",
+                    "pos": {
+                        "x": 101.0,
+                        "y": 146.6
+                    },
+                    "uuid": "07b225b7-9b4a-4c2e-9b95-60dcc2fafa6b"
+                },
+                {
+                    "description": "Segment of J1 on F.Silkscreen",
+                    "pos": {
+                        "x": 101.92,
+                        "y": 146.35
+                    },
+                    "uuid": "ef8e111c-08fe-46cc-9c0e-a7a1c3a70eb6"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text '24VDC IN' on F.Silkscreen",
+                    "pos": {
+                        "x": 101.0,
+                        "y": 146.6
+                    },
+                    "uuid": "07b225b7-9b4a-4c2e-9b95-60dcc2fafa6b"
+                },
+                {
+                    "description": "Segment of J1 on F.Silkscreen",
+                    "pos": {
+                        "x": 101.92,
+                        "y": 158.73
+                    },
+                    "uuid": "fa6675df-eae2-4fb2-9c8b-59146bb531d1"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text '24VDC IN' on F.Silkscreen",
+                    "pos": {
+                        "x": 101.0,
+                        "y": 146.6
+                    },
+                    "uuid": "07b225b7-9b4a-4c2e-9b95-60dcc2fafa6b"
+                },
+                {
+                    "description": "Segment of J1 on F.Silkscreen",
+                    "pos": {
+                        "x": 103.72,
+                        "y": 146.35
+                    },
+                    "uuid": "5e9bcc11-2fd8-4ef5-a5d8-05f0af5aa047"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of D2 on F.Silkscreen",
+                    "pos": {
+                        "x": 114.015,
+                        "y": 154.275
+                    },
+                    "uuid": "78abee61-d919-44bd-ad27-7a337dcd674d"
+                },
+                {
+                    "description": "PCB text '-' on F.Silkscreen",
+                    "pos": {
+                        "x": 113.03,
+                        "y": 155.079999
+                    },
+                    "uuid": "b6da1b8d-a4c4-446f-9301-422eaa876aa2"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text '+' on F.Silkscreen",
+                    "pos": {
+                        "x": 113.03,
+                        "y": 150.0
+                    },
+                    "uuid": "4059b87f-0da0-40f8-a648-112c270b2b7d"
+                },
+                {
+                    "description": "Segment of J1 on F.Silkscreen",
+                    "pos": {
+                        "x": 113.44,
+                        "y": 149.7
+                    },
+                    "uuid": "6f08e183-f579-40f6-8d51-ffa166f92071"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of D1 on F.Silkscreen",
+                    "pos": {
+                        "x": 123.465,
+                        "y": 153.625
+                    },
+                    "uuid": "086ac5e6-6340-4354-b284-ccd32a8ca96d"
+                },
+                {
+                    "description": "Reference field of C1",
+                    "pos": {
+                        "x": 126.725,
+                        "y": 153.375
+                    },
+                    "uuid": "7f18b9ce-7168-49b3-acde-8f460ef5b13f"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of D3",
+                    "pos": {
+                        "x": 127.575,
+                        "y": 162.725
+                    },
+                    "uuid": "7bf510f4-dbab-4680-866f-050dcd864d1d"
+                },
+                {
+                    "description": "Segment of C1 on F.Silkscreen",
+                    "pos": {
+                        "x": 123.529437,
+                        "y": 162.835
+                    },
+                    "uuid": "dc6d0acb-dfff-481d-9c9f-ce2cda292f2d"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of C1 on F.Silkscreen",
+                    "pos": {
+                        "x": 122.465,
+                        "y": 161.770563
+                    },
+                    "uuid": "d4910467-3bd0-45d0-94e5-5b90fc57e9b6"
+                },
+                {
+                    "description": "Reference field of R1",
+                    "pos": {
+                        "x": 122.825,
+                        "y": 162.725
+                    },
+                    "uuid": "dfa21d58-b4cd-469a-b894-90a453d2e8da"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K2 on F.Silkscreen",
+                    "pos": {
+                        "x": 131.45,
+                        "y": 136.05
+                    },
+                    "uuid": "278a0442-c6f2-46a2-8bcb-d17b031db324"
+                },
+                {
+                    "description": "Reference field of R32",
+                    "pos": {
+                        "x": 137.325,
+                        "y": 136.325
+                    },
+                    "uuid": "ec0e10bf-72f8-49e7-84b2-dea28c2b7f36"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K2 on F.Silkscreen",
+                    "pos": {
+                        "x": 131.45,
+                        "y": 136.05
+                    },
+                    "uuid": "278a0442-c6f2-46a2-8bcb-d17b031db324"
+                },
+                {
+                    "description": "Reference field of D22",
+                    "pos": {
+                        "x": 142.075,
+                        "y": 136.325
+                    },
+                    "uuid": "cb485439-db3b-4de6-a0e9-75c77705fe7f"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K4 on F.Silkscreen",
+                    "pos": {
+                        "x": 194.15,
+                        "y": 113.35
+                    },
+                    "uuid": "a95f531e-c295-4f19-9bdf-01462fd02aa3"
+                },
+                {
+                    "description": "PCB text 'K4 UH PUMP 2 A3' on F.Silkscreen",
+                    "pos": {
+                        "x": 185.8,
+                        "y": 113.4
+                    },
+                    "uuid": "ad3b0df1-4c02-44f3-bcdc-07ea80d06d28"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K4 UH PUMP 2 A3' on F.Silkscreen",
+                    "pos": {
+                        "x": 185.8,
+                        "y": 113.4
+                    },
+                    "uuid": "ad3b0df1-4c02-44f3-bcdc-07ea80d06d28"
+                },
+                {
+                    "description": "Segment of K4 on F.Silkscreen",
+                    "pos": {
+                        "x": 184.8,
+                        "y": 113.09
+                    },
+                    "uuid": "ddbd4a33-fe19-485f-957b-6274656f2a09"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K5 HV XFMR A4' on F.Silkscreen",
+                    "pos": {
+                        "x": 208.8,
+                        "y": 113.4
+                    },
+                    "uuid": "0385ce2a-48db-44d9-857d-1b948d7b11a1"
+                },
+                {
+                    "description": "Segment of K5 on F.Silkscreen",
+                    "pos": {
+                        "x": 207.8,
+                        "y": 113.09
+                    },
+                    "uuid": "7874faa9-8fa5-4dff-b25c-39c83812600e"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K5 HV XFMR A4' on F.Silkscreen",
+                    "pos": {
+                        "x": 208.8,
+                        "y": 113.4
+                    },
+                    "uuid": "0385ce2a-48db-44d9-857d-1b948d7b11a1"
+                },
+                {
+                    "description": "Segment of K5 on F.Silkscreen",
+                    "pos": {
+                        "x": 217.15,
+                        "y": 113.35
+                    },
+                    "uuid": "32ff45c2-bd2a-4309-9c9f-a7f1f83ecd94"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K5 on F.Silkscreen",
+                    "pos": {
+                        "x": 217.15,
+                        "y": 113.35
+                    },
+                    "uuid": "32ff45c2-bd2a-4309-9c9f-a7f1f83ecd94"
+                },
+                {
+                    "description": "Segment of J15 on F.Silkscreen",
+                    "pos": {
+                        "x": 213.58,
+                        "y": 113.44
+                    },
+                    "uuid": "3b9874bc-fdb8-4924-aa7a-54cfc0f52e07"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K5 on F.Silkscreen",
+                    "pos": {
+                        "x": 217.15,
+                        "y": 113.35
+                    },
+                    "uuid": "32ff45c2-bd2a-4309-9c9f-a7f1f83ecd94"
+                },
+                {
+                    "description": "Segment of J15 on F.Silkscreen",
+                    "pos": {
+                        "x": 213.88,
+                        "y": 112.84
+                    },
+                    "uuid": "3bc4ee60-5944-410b-a230-289b2dad9a5a"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J15 on F.Silkscreen",
+                    "pos": {
+                        "x": 214.18,
+                        "y": 113.44
+                    },
+                    "uuid": "1b935e1e-2612-4f3f-a0be-e09e01fb402a"
+                },
+                {
+                    "description": "Segment of K5 on F.Silkscreen",
+                    "pos": {
+                        "x": 217.15,
+                        "y": 113.35
+                    },
+                    "uuid": "32ff45c2-bd2a-4309-9c9f-a7f1f83ecd94"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K5 on F.Silkscreen",
+                    "pos": {
+                        "x": 200.45,
+                        "y": 136.05
+                    },
+                    "uuid": "5ee9bff6-075f-4323-860c-e1ddfecac402"
+                },
+                {
+                    "description": "Reference field of R35",
+                    "pos": {
+                        "x": 206.325,
+                        "y": 136.325
+                    },
+                    "uuid": "b9e06e97-c36c-4ca0-a99d-ce48f5abbc26"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K5 on F.Silkscreen",
+                    "pos": {
+                        "x": 200.45,
+                        "y": 136.05
+                    },
+                    "uuid": "5ee9bff6-075f-4323-860c-e1ddfecac402"
+                },
+                {
+                    "description": "Reference field of D25",
+                    "pos": {
+                        "x": 211.075,
+                        "y": 136.325
+                    },
+                    "uuid": "763d53c4-038c-4b66-9bda-89e6c59720e5"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J14 on F.Silkscreen",
+                    "pos": {
+                        "x": 190.58,
+                        "y": 113.44
+                    },
+                    "uuid": "6093ce61-5dd2-450b-a138-7c98da224947"
+                },
+                {
+                    "description": "PCB text 'K4 UH PUMP 2 A3' on F.Silkscreen",
+                    "pos": {
+                        "x": 185.8,
+                        "y": 113.4
+                    },
+                    "uuid": "ad3b0df1-4c02-44f3-bcdc-07ea80d06d28"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J14 on F.Silkscreen",
+                    "pos": {
+                        "x": 191.18,
+                        "y": 113.44
+                    },
+                    "uuid": "18172b01-56db-40ab-bb5c-087703bfc36d"
+                },
+                {
+                    "description": "PCB text 'K4 UH PUMP 2 A3' on F.Silkscreen",
+                    "pos": {
+                        "x": 185.8,
+                        "y": 113.4
+                    },
+                    "uuid": "ad3b0df1-4c02-44f3-bcdc-07ea80d06d28"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J14 on F.Silkscreen",
+                    "pos": {
+                        "x": 190.58,
+                        "y": 113.44
+                    },
+                    "uuid": "6093ce61-5dd2-450b-a138-7c98da224947"
+                },
+                {
+                    "description": "Segment of K4 on F.Silkscreen",
+                    "pos": {
+                        "x": 194.15,
+                        "y": 113.35
+                    },
+                    "uuid": "a95f531e-c295-4f19-9bdf-01462fd02aa3"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K4 on F.Silkscreen",
+                    "pos": {
+                        "x": 194.15,
+                        "y": 113.35
+                    },
+                    "uuid": "a95f531e-c295-4f19-9bdf-01462fd02aa3"
+                },
+                {
+                    "description": "Segment of J14 on F.Silkscreen",
+                    "pos": {
+                        "x": 190.88,
+                        "y": 112.84
+                    },
+                    "uuid": "e6a9b71b-a909-4dfe-b4d4-76bc049b52af"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J14 on F.Silkscreen",
+                    "pos": {
+                        "x": 191.18,
+                        "y": 113.44
+                    },
+                    "uuid": "18172b01-56db-40ab-bb5c-087703bfc36d"
+                },
+                {
+                    "description": "Segment of K4 on F.Silkscreen",
+                    "pos": {
+                        "x": 194.15,
+                        "y": 113.35
+                    },
+                    "uuid": "a95f531e-c295-4f19-9bdf-01462fd02aa3"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K4 on F.Silkscreen",
+                    "pos": {
+                        "x": 177.45,
+                        "y": 136.05
+                    },
+                    "uuid": "3afff5a9-6394-43c0-b7db-170eee0369f0"
+                },
+                {
+                    "description": "Reference field of D24",
+                    "pos": {
+                        "x": 188.075,
+                        "y": 136.325
+                    },
+                    "uuid": "cec76217-9eff-4935-b698-3e50881dd2ed"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of R34",
+                    "pos": {
+                        "x": 183.325,
+                        "y": 136.325
+                    },
+                    "uuid": "239fd85c-4ef6-4204-8246-19240af33608"
+                },
+                {
+                    "description": "Segment of K4 on F.Silkscreen",
+                    "pos": {
+                        "x": 177.45,
+                        "y": 136.05
+                    },
+                    "uuid": "3afff5a9-6394-43c0-b7db-170eee0369f0"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of U3 on F.Silkscreen",
+                    "pos": {
+                        "x": 173.954999,
+                        "y": 208.285
+                    },
+                    "uuid": "20a0b517-3a6d-4585-b724-d0b7488881c6"
+                },
+                {
+                    "description": "Reference field of R104",
+                    "pos": {
+                        "x": 174.625,
+                        "y": 208.175
+                    },
+                    "uuid": "a42d2f7c-40ec-444b-b1a3-a95b0cbd6679"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of U3 on F.Silkscreen",
+                    "pos": {
+                        "x": 173.954999,
+                        "y": 208.285
+                    },
+                    "uuid": "46a1d34f-5486-433c-a6f4-07fde61b3f50"
+                },
+                {
+                    "description": "Reference field of R104",
+                    "pos": {
+                        "x": 174.625,
+                        "y": 208.175
+                    },
+                    "uuid": "a42d2f7c-40ec-444b-b1a3-a95b0cbd6679"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K6 on F.Silkscreen",
+                    "pos": {
+                        "x": 240.15,
+                        "y": 113.35
+                    },
+                    "uuid": "27dbb7ae-e2ac-43f5-bff2-a4854079d24a"
+                },
+                {
+                    "description": "PCB text 'K6 SPARE A5' on F.Silkscreen",
+                    "pos": {
+                        "x": 231.8,
+                        "y": 113.4
+                    },
+                    "uuid": "9fb35886-f93b-47fb-b480-20542d0d9554"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K6 on F.Silkscreen",
+                    "pos": {
+                        "x": 240.15,
+                        "y": 113.35
+                    },
+                    "uuid": "27dbb7ae-e2ac-43f5-bff2-a4854079d24a"
+                },
+                {
+                    "description": "Segment of J16 on F.Silkscreen",
+                    "pos": {
+                        "x": 236.58,
+                        "y": 113.44
+                    },
+                    "uuid": "a97730c8-6c43-4f51-ba61-1965db97ff95"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K6 on F.Silkscreen",
+                    "pos": {
+                        "x": 240.15,
+                        "y": 113.35
+                    },
+                    "uuid": "27dbb7ae-e2ac-43f5-bff2-a4854079d24a"
+                },
+                {
+                    "description": "Segment of J16 on F.Silkscreen",
+                    "pos": {
+                        "x": 236.88,
+                        "y": 112.84
+                    },
+                    "uuid": "7a7aab7b-986a-422b-a4c6-64e0270db6bc"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K6 on F.Silkscreen",
+                    "pos": {
+                        "x": 240.15,
+                        "y": 113.35
+                    },
+                    "uuid": "27dbb7ae-e2ac-43f5-bff2-a4854079d24a"
+                },
+                {
+                    "description": "Segment of J16 on F.Silkscreen",
+                    "pos": {
+                        "x": 237.18,
+                        "y": 113.44
+                    },
+                    "uuid": "370c86de-9624-48ff-9798-c2f84c736802"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K6 on F.Silkscreen",
+                    "pos": {
+                        "x": 230.8,
+                        "y": 113.09
+                    },
+                    "uuid": "244e96a5-975f-42bf-b876-459402ed3178"
+                },
+                {
+                    "description": "PCB text 'K6 SPARE A5' on F.Silkscreen",
+                    "pos": {
+                        "x": 231.8,
+                        "y": 113.4
+                    },
+                    "uuid": "9fb35886-f93b-47fb-b480-20542d0d9554"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K7 SPARE A6' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.8,
+                        "y": 113.4
+                    },
+                    "uuid": "0f53d198-cf78-499e-9c5b-dbe660b480db"
+                },
+                {
+                    "description": "Segment of K7 on F.Silkscreen",
+                    "pos": {
+                        "x": 263.15,
+                        "y": 113.35
+                    },
+                    "uuid": "2976fdb3-9de7-4aed-8e72-306d49079879"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K7 SPARE A6' on F.Silkscreen",
+                    "pos": {
+                        "x": 254.8,
+                        "y": 113.4
+                    },
+                    "uuid": "0f53d198-cf78-499e-9c5b-dbe660b480db"
+                },
+                {
+                    "description": "Segment of K7 on F.Silkscreen",
+                    "pos": {
+                        "x": 253.8,
+                        "y": 113.09
+                    },
+                    "uuid": "a9b86d3e-64b9-481c-912d-c8b89f5a5d3f"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K7 on F.Silkscreen",
+                    "pos": {
+                        "x": 263.15,
+                        "y": 113.35
+                    },
+                    "uuid": "2976fdb3-9de7-4aed-8e72-306d49079879"
+                },
+                {
+                    "description": "Segment of J17 on F.Silkscreen",
+                    "pos": {
+                        "x": 259.58,
+                        "y": 113.44
+                    },
+                    "uuid": "f8b6cd08-59b7-4a70-97a2-b3d8ece930b7"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J17 on F.Silkscreen",
+                    "pos": {
+                        "x": 259.88,
+                        "y": 112.84
+                    },
+                    "uuid": "2590c416-ff02-4617-9481-d69ce59bcd10"
+                },
+                {
+                    "description": "Segment of K7 on F.Silkscreen",
+                    "pos": {
+                        "x": 263.15,
+                        "y": 113.35
+                    },
+                    "uuid": "2976fdb3-9de7-4aed-8e72-306d49079879"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J17 on F.Silkscreen",
+                    "pos": {
+                        "x": 260.18,
+                        "y": 113.44
+                    },
+                    "uuid": "1762ea23-6a4b-486d-8461-28ea9ea7b2c8"
+                },
+                {
+                    "description": "Segment of K7 on F.Silkscreen",
+                    "pos": {
+                        "x": 263.15,
+                        "y": 113.35
+                    },
+                    "uuid": "2976fdb3-9de7-4aed-8e72-306d49079879"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K8 on F.Silkscreen",
+                    "pos": {
+                        "x": 286.15,
+                        "y": 113.35
+                    },
+                    "uuid": "0dfd2ee1-098c-426c-b43c-d66ce85c4cd0"
+                },
+                {
+                    "description": "PCB text 'K8 SPARE A7' on F.Silkscreen",
+                    "pos": {
+                        "x": 277.8,
+                        "y": 113.4
+                    },
+                    "uuid": "2fd1a1f8-b287-458a-95db-d5d14bc61893"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "PCB text 'K8 SPARE A7' on F.Silkscreen",
+                    "pos": {
+                        "x": 277.8,
+                        "y": 113.4
+                    },
+                    "uuid": "2fd1a1f8-b287-458a-95db-d5d14bc61893"
+                },
+                {
+                    "description": "Segment of K8 on F.Silkscreen",
+                    "pos": {
+                        "x": 276.8,
+                        "y": 113.09
+                    },
+                    "uuid": "830042a7-dd11-42fa-a40a-bda162ad77e6"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K8 on F.Silkscreen",
+                    "pos": {
+                        "x": 286.15,
+                        "y": 113.35
+                    },
+                    "uuid": "0dfd2ee1-098c-426c-b43c-d66ce85c4cd0"
+                },
+                {
+                    "description": "Segment of J18 on F.Silkscreen",
+                    "pos": {
+                        "x": 282.58,
+                        "y": 113.44
+                    },
+                    "uuid": "f70e88e4-7a00-4fd3-b6f5-a9d54448d76b"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K8 on F.Silkscreen",
+                    "pos": {
+                        "x": 286.15,
+                        "y": 113.35
+                    },
+                    "uuid": "0dfd2ee1-098c-426c-b43c-d66ce85c4cd0"
+                },
+                {
+                    "description": "Segment of J18 on F.Silkscreen",
+                    "pos": {
+                        "x": 282.88,
+                        "y": 112.84
+                    },
+                    "uuid": "9213cebc-db6e-4c2d-99e7-cfe502f949e2"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K8 on F.Silkscreen",
+                    "pos": {
+                        "x": 286.15,
+                        "y": 113.35
+                    },
+                    "uuid": "0dfd2ee1-098c-426c-b43c-d66ce85c4cd0"
+                },
+                {
+                    "description": "Segment of J18 on F.Silkscreen",
+                    "pos": {
+                        "x": 283.18,
+                        "y": 113.44
+                    },
+                    "uuid": "b4c6d417-eebf-441f-be45-29047621722a"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K8 on F.Silkscreen",
+                    "pos": {
+                        "x": 269.45,
+                        "y": 136.05
+                    },
+                    "uuid": "54b143ab-4836-4212-80ed-b5fd3efb4fd3"
+                },
+                {
+                    "description": "Reference field of R38",
+                    "pos": {
+                        "x": 275.325,
+                        "y": 136.325
+                    },
+                    "uuid": "f94fb188-3d5a-4c23-875f-853999868654"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K8 on F.Silkscreen",
+                    "pos": {
+                        "x": 269.45,
+                        "y": 136.05
+                    },
+                    "uuid": "54b143ab-4836-4212-80ed-b5fd3efb4fd3"
+                },
+                {
+                    "description": "Reference field of D28",
+                    "pos": {
+                        "x": 280.075,
+                        "y": 136.325
+                    },
+                    "uuid": "e9cb4078-b798-4d07-a815-7d9c7b62c533"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K7 on F.Silkscreen",
+                    "pos": {
+                        "x": 246.45,
+                        "y": 136.05
+                    },
+                    "uuid": "4adb5782-4448-4f99-86a3-3a9b1777e1c7"
+                },
+                {
+                    "description": "Reference field of R37",
+                    "pos": {
+                        "x": 252.325,
+                        "y": 136.325
+                    },
+                    "uuid": "5a552fb3-6bf2-4a10-af1f-9c9e47bc11e8"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of D27",
+                    "pos": {
+                        "x": 257.075,
+                        "y": 136.325
+                    },
+                    "uuid": "41f34f37-8b83-4d5d-8943-4d35d93404e3"
+                },
+                {
+                    "description": "Segment of K7 on F.Silkscreen",
+                    "pos": {
+                        "x": 246.45,
+                        "y": 136.05
+                    },
+                    "uuid": "4adb5782-4448-4f99-86a3-3a9b1777e1c7"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of R36",
+                    "pos": {
+                        "x": 229.325,
+                        "y": 136.325
+                    },
+                    "uuid": "5f1c7b52-97d0-40f8-b55d-18781d6dd185"
+                },
+                {
+                    "description": "Segment of K6 on F.Silkscreen",
+                    "pos": {
+                        "x": 223.45,
+                        "y": 136.05
+                    },
+                    "uuid": "70d389ba-a714-4f51-bc7a-39bb0923c6af"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of D26",
+                    "pos": {
+                        "x": 234.075,
+                        "y": 136.325
+                    },
+                    "uuid": "1984bb97-5fd7-4187-b52f-0f123b57d941"
+                },
+                {
+                    "description": "Segment of K6 on F.Silkscreen",
+                    "pos": {
+                        "x": 223.45,
+                        "y": 136.05
+                    },
+                    "uuid": "70d389ba-a714-4f51-bc7a-39bb0923c6af"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K3 on F.Silkscreen",
+                    "pos": {
+                        "x": 171.15,
+                        "y": 113.35
+                    },
+                    "uuid": "617fb9e8-4c75-4335-ae18-f483be794912"
+                },
+                {
+                    "description": "PCB text 'K3 UH PUMP 1 A2' on F.Silkscreen",
+                    "pos": {
+                        "x": 162.8,
+                        "y": 113.4
+                    },
+                    "uuid": "f6e458bf-9dc7-4123-a0f2-4502d641979b"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J13 on F.Silkscreen",
+                    "pos": {
+                        "x": 167.58,
+                        "y": 113.44
+                    },
+                    "uuid": "6eed51bb-064d-4119-a312-d031eabe915a"
+                },
+                {
+                    "description": "PCB text 'K3 UH PUMP 1 A2' on F.Silkscreen",
+                    "pos": {
+                        "x": 162.8,
+                        "y": 113.4
+                    },
+                    "uuid": "f6e458bf-9dc7-4123-a0f2-4502d641979b"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K3 on F.Silkscreen",
+                    "pos": {
+                        "x": 171.15,
+                        "y": 113.35
+                    },
+                    "uuid": "617fb9e8-4c75-4335-ae18-f483be794912"
+                },
+                {
+                    "description": "Segment of J13 on F.Silkscreen",
+                    "pos": {
+                        "x": 167.58,
+                        "y": 113.44
+                    },
+                    "uuid": "6eed51bb-064d-4119-a312-d031eabe915a"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K3 on F.Silkscreen",
+                    "pos": {
+                        "x": 171.15,
+                        "y": 113.35
+                    },
+                    "uuid": "617fb9e8-4c75-4335-ae18-f483be794912"
+                },
+                {
+                    "description": "Segment of J13 on F.Silkscreen",
+                    "pos": {
+                        "x": 167.88,
+                        "y": 112.84
+                    },
+                    "uuid": "e34c78bb-08c4-4342-b17a-5fb5a442f5d4"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of J13 on F.Silkscreen",
+                    "pos": {
+                        "x": 168.18,
+                        "y": 113.44
+                    },
+                    "uuid": "c5d0311e-442f-4a7e-b433-f845cf53ed8b"
+                },
+                {
+                    "description": "PCB text 'K3 UH PUMP 1 A2' on F.Silkscreen",
+                    "pos": {
+                        "x": 162.8,
+                        "y": 113.4
+                    },
+                    "uuid": "f6e458bf-9dc7-4123-a0f2-4502d641979b"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K3 on F.Silkscreen",
+                    "pos": {
+                        "x": 171.15,
+                        "y": 113.35
+                    },
+                    "uuid": "617fb9e8-4c75-4335-ae18-f483be794912"
+                },
+                {
+                    "description": "Segment of J13 on F.Silkscreen",
+                    "pos": {
+                        "x": 168.18,
+                        "y": 113.44
+                    },
+                    "uuid": "c5d0311e-442f-4a7e-b433-f845cf53ed8b"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K3 on F.Silkscreen",
+                    "pos": {
+                        "x": 161.8,
+                        "y": 113.09
+                    },
+                    "uuid": "2eaff713-ae25-4091-a82b-eb4bb346ec26"
+                },
+                {
+                    "description": "PCB text 'K3 UH PUMP 1 A2' on F.Silkscreen",
+                    "pos": {
+                        "x": 162.8,
+                        "y": 113.4
+                    },
+                    "uuid": "f6e458bf-9dc7-4123-a0f2-4502d641979b"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of R33",
+                    "pos": {
+                        "x": 160.325,
+                        "y": 136.325
+                    },
+                    "uuid": "8265b6cd-2009-487c-b38c-8fa7353c5a44"
+                },
+                {
+                    "description": "Segment of K3 on F.Silkscreen",
+                    "pos": {
+                        "x": 154.45,
+                        "y": 136.05
+                    },
+                    "uuid": "982db482-a891-49f2-9632-edab98d683bc"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Segment of K3 on F.Silkscreen",
+                    "pos": {
+                        "x": 154.45,
+                        "y": 136.05
+                    },
+                    "uuid": "982db482-a891-49f2-9632-edab98d683bc"
+                },
+                {
+                    "description": "Reference field of D23",
+                    "pos": {
+                        "x": 165.075,
+                        "y": 136.325
+                    },
+                    "uuid": "e1762cbf-f3c8-4c02-9066-3a68d64d9c91"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        },
+        {
+            "description": "Silkscreen clearance",
+            "items": [
+                {
+                    "description": "Reference field of R9",
+                    "pos": {
+                        "x": 187.725,
+                        "y": 169.325
+                    },
+                    "uuid": "256598e0-5d37-42d4-b854-9c265ea23187"
+                },
+                {
+                    "description": "Segment of U13 on F.Silkscreen",
+                    "pos": {
+                        "x": 188.975,
+                        "y": 169.435
+                    },
+                    "uuid": "ef1b0c3e-c5e2-4d2d-a024-7bdf13cf390d"
+                }
+            ],
+            "severity": "warning",
+            "type": "silk_overlap"
+        }
+    ]
+}

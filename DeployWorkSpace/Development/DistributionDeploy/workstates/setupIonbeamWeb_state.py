@@ -264,8 +264,11 @@ class setupIonbeamWeb_state(distributionDeploy_state):
             "SBC_VACUUM_CONFIG={}".format(
                 self.resolveDeployPath(actionData.get(
                     "vacuumConfig", "Development/GlasgowDataIO/Json/vacuumSystem.json"))),
+            # The SBC owns the vacuum system: the host reads its data straight
+            # from the SBC. Set vacuumControllerUrl to the executor (8780)
+            # only for a fenced active/standby deployment.
             "VACUUM_CONTROLLER_URL={}".format(
-                actionData.get("vacuumControllerUrl", "http://127.0.0.1:8780")),
+                actionData.get("vacuumControllerUrl", "http://127.0.0.1:8766")),
             "IOBEAM_ADMIN_CONFIG={}".format(
                 self.resolveDeployPath(os.path.join("Development", "IobeamAdmin", "Json", "IobeamAdmin.json"))),
             "IOBEAM_ADMIN_DB_PORT={}".format(dbPort),

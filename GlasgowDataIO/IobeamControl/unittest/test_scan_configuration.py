@@ -20,10 +20,11 @@ DEVELOPMENT = Path(__file__).resolve().parents[3]
 
 
 class ScanConfigurationTest(unittest.TestCase):
-    def test_shipped_configuration_reflects_vector_y_at_dac_latches(self):
+    def test_configured_y_reflection_at_dac_latches(self):
         config = AutomationConfig(str(DEVELOPMENT / "GlasgowDataIO/Json/streamData.json"))
-        args = configure_scan_args(config, GetStateConfigByName(config, "streamData")["actionData"],
-                                   SimpleNamespace())
+        action = GetStateConfigByName(config, "streamData")["actionData"]
+        action["transforms"] = {"xflip": False, "yflip": True, "rotate90": False}
+        args = configure_scan_args(config, action, SimpleNamespace())
         dut = BusController(adc_half_period=6, adc_latency=8, transforms=args.transforms)
         sim = Simulator(dut)
         sim.add_clock(1 / 48_000_000)
@@ -63,7 +64,7 @@ class ScanConfigurationTest(unittest.TestCase):
         self.assertIsNone(args.ebeam_blank)
         self.assertEqual([pin.number for pin in args.ibeam_blank_enable], [4, 5])
         self.assertEqual([(pin.number, pin.invert) for pin in args.ibeam_blank], [(2, True), (3, False)])
-        self.assertEqual((args.xflip, args.yflip, args.rotate90), (False, True, False))
+        self.assertEqual((args.xflip, args.yflip, args.rotate90), (False, False, False))
         self.assertEqual(args.ext_switch_delay_cycles, 960000)
         self.assertEqual(args.voltage, 3.3)
 
@@ -125,7 +126,7 @@ class ScanConfigurationTest(unittest.TestCase):
                     if not adc:
                         self.assertEqual(subtarget.ext_switch_delay, 960000)
                         self.assertEqual((subtarget.transforms.xflip, subtarget.transforms.yflip,
-                                          subtarget.transforms.rotate90), (False, True, False))
+                                          subtarget.transforms.rotate90), (False, False, False))
                         self.assertEqual(len(subtarget.ports.ibeam_blank), 2)
                     plan = target.platform.prepare(target, emit_src=False)
                     plans.append(plan.files)

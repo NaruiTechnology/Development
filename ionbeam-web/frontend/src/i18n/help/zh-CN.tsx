@@ -148,8 +148,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   grayScale: () => (
     <>
       <p>
-        灰度光谱条会显示当前实时图像或已加载位图中存在的灰度值。
-        每个方框代表一个采样到的灰度值，步进旋钮用于控制在可用范围内显示多少个方框。
+        灰度光谱条显示所选 ROI 区域中灰度范围内的数值。各方框约以 10
+        个灰度级为间隔；首尾方框保留实际观测到的范围边界。
       </p>
 
       <div className="dwell-help__rule">
@@ -220,6 +220,34 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <div className="dwell-help__rule">
         <strong>经验法则：</strong>光栅偏重覆盖，矢量偏重选择性。
+      </div>
+    </>
+  ),
+
+  roiSelect: () => (
+    <>
+      <p>
+        使用 <strong>ROI / SELECT</strong> 加载图像、定义要扫描的部分区域，并选择如何处理该区域中的灰度值。
+        选择图像或加载上次扫描结果，然后在图像上拖动以创建矩形 ROI。按住 <strong>Ctrl</strong> 并拖动角点可调整大小。
+        <strong>清除区域</strong>会删除矩形并保留已加载图像；<strong>清除图像</strong>会移除图像。
+      </p>
+
+      <h3>选择一种灰度工作流程</h3>
+      <ul className="dwell-help__list">
+        <li>
+          <strong>灰度范围：</strong>使用灰度方框选择起始值和结束值，然后确认范围并选择 <strong>Skip</strong> 或 <strong>Spot</strong>。
+          Skip 会消隐范围内的像素；Spot 会扫描范围内的像素，并消隐 ROI 中的其他像素。矩形外的像素仍按正常方式处理。
+        </li>
+        <li>
+          <strong>目标灰度：</strong>在图像上右键点击像素以设定目标，也可在目标框中输入整数。没有已确认灰度范围时，
+          “运行”会使用目标灰度工作流程。在仿真模式下，低于或等于目标的像素保持不变，高于目标的像素会逐步降低到目标值。
+          在正式模式下，扫描会跳过低于或等于目标的像素，并对其余像素执行正常硬件扫描和 ADC 验证。
+        </li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>一次只使用一种筛选方式。</strong>已确认的灰度范围优先于目标值。清除灰度范围即可使用目标灰度方式。
+        目标值必须是有效灰度范围内的整数；未选择范围时可输入 0–255。
       </div>
     </>
   ),

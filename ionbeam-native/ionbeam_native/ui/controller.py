@@ -564,8 +564,12 @@ class AppController(QObject):
         return value if value == value and abs(value) != float("inf") else 0.0
 
     def start_stream(self, kind: str, req: dict, *, preserve_frame: bool = False, live: bool = False,
-                     scan_type: Optional[str] = None) -> None:
-        """``startRaster`` / ``startVector`` (+ Infinite as an engine live job)."""
+                     max_frames: Optional[int] = None, scan_type: Optional[str] = None) -> None:
+        """``startRaster`` / ``startVector`` (+ Infinite / Repeat N as an engine live job).
+
+        ``live`` keeps one session streaming frame after frame; ``max_frames``
+        ends it by itself after that many frames (Repeat N), otherwise it runs
+        until Stop (Infinite)."""
         if self._job is not None:
             self.engine.stop()
         self._closure_stop = False
@@ -575,13 +579,15 @@ class AppController(QObject):
         self.server_figure.pop(kind, None)
         self.scan.stream_started()
         req = dict(req)
-        self._launch(kind, req, preserve_frame=preserve_frame, live=live)
+        self._launch(kind, req, preserve_frame=preserve_frame, live=live,
+                     max_frames=max_frames if live else None)
         self.notify("scan", "panel")
 
-    def _launch(self, kind: str, req: dict, *, preserve_frame: bool, live: bool) -> None:
+    def _launch(self, kind: str, req: dict, *, preserve_frame: bool, live: bool,
+                max_frames: Optional[int] = None) -> None:
         preview = bool(req.get("preview"))
         needs_artifacts = (not preview) and kind in ("raster", "vector") and ftp_configured(self.stream_config)
-        job = ScanJob(kind, req, live=live, preserve_frame=preserve_frame,
+        job = ScanJob(kind, req, live=live, max_frames=max_frames, preserve_frame=preserve_frame,
                       line_shift_per_x_row=self._line_shift() if kind == "vector" else 0.0)
         self._job = job
 
@@ -629,8 +635,9 @@ class AppController(QObject):
             self._record_finish(record, kind, job.request, {"event": "done", "chunks": chunks}, chunks,
                                 result.get("snapshot"),
                                 on_names=lambda c, i, k=kind: self._set_output_names(k, c, i))
-        if job.live:
-            # Infinite: the frame is complete, the session keeps streaming.
+        if job.live and not result.get("last"):
+            # Infinite / Repeat N: the frame is complete, the session keeps streaming.
+            # The last frame of Repeat N falls through and completes like a run.
             self.scan.lastOutput = {"kind": kind, "csv_filename": csv_name, "image_filename": png_name}
             self.scan_event.emit({"event": "frame", "kind": kind, "index": index, "perf": result.get("perf")})
             self.notify("scan", "frame-complete")
@@ -660,19 +667,23 @@ class AppController(QObject):
                 self._auto_reconnect_attempted = True
                 fut = self.engine.reconnect()
 
-                def after(_f, kind=job.kind, req=job.request, live=job.live):
+                # Restart a Repeat N session with only the frames it still owes.
+                remaining = None if job.max_frames is None else max(1, job.max_frames - job.frames_done)
+
+                def after(_f, kind=job.kind, req=job.request, live=job.live, max_frames=remaining):
                     def ui():
                         if self._closure_stop:
                             self.scan.stream_reset()
                             self.notify("scan", "panel")
                             return
-                        QTimer.singleShot(250, lambda: self._launch(kind, req, preserve_frame=False, live=live))
+                        QTimer.singleShot(250, lambda: self._launch(kind, req, preserve_frame=False, live=live,
+                                                                    max_frames=max_frames))
                     self.engine.post(ui)
                 fut.add_done_callback(after)
                 return
             self.scan.stream_errored(message)
             self.active_scan_type = None
-        elif event == "done" and job.live:
+        elif event == "done" and job.live and job.max_frames is None:
             self.scan.stream_completed(chunks=int(outcome.get("chunks") or 0))
             self.active_scan_type = None
         else:

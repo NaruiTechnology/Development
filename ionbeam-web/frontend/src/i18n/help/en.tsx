@@ -35,6 +35,7 @@ export type HelpKey =
   | "grayScale"
   | "vectorGrayLevelFilter"
   | "scanModes"
+  | "roiSelect"
   | "magCalibration"
   | "dacCheck"
   | "scanGeometry"
@@ -658,10 +659,9 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   grayScale: () => (
     <>
       <p>
-        The gray-scale spectrum shows the gray values currently present
-        in the rendered live image or loaded bitmap. Each box is one
-        sampled gray level, and the step spinner controls how many
-        boxes are shown across the available range.
+        The gray-scale spectrum shows values across the gray range present
+        in the selected ROI area. The chips are spaced in steps of about 10
+        gray levels; the first and last chips preserve the observed limits.
       </p>
 
       <div className="dwell-help__rule">
@@ -750,6 +750,46 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       <div className="dwell-help__rule">
         <strong>Practical rule of thumb:</strong> Raster is for
         coverage, vector is for selectivity.
+      </div>
+    </>
+  ),
+
+  roiSelect: () => (
+    <>
+      <p>
+        Use <strong>ROI / SELECT</strong> to load an image, define the partial
+        area to scan, and choose how gray values in that area are handled.
+        Select an image or load the last scan, then drag on the image to create
+        a rectangular ROI. Hold <strong>Ctrl</strong> while dragging a corner
+        to resize it. <strong>Clear region</strong> removes the rectangle and
+        keeps the loaded image; <strong>Clear image</strong> removes the image.
+      </p>
+
+      <h3>Choose one gray-level workflow</h3>
+      <ul className="dwell-help__list">
+        <li>
+          <strong>Gray-level range:</strong> use the chips to choose the first
+          and last gray values, then confirm the range and choose <strong>Skip</strong>
+          or <strong>Spot</strong>. Skip blanks pixels in the selected range;
+          Spot scans that range and blanks other pixels inside the ROI. Pixels
+          outside the rectangle keep their normal scan handling.
+        </li>
+        <li>
+          <strong>Target gray level:</strong> right-click a pixel in the image
+          to set a target, or enter a whole-number value in the target field.
+          With no committed gray range, Action Run uses the target workflow.
+          In simulation, pixels darker than or equal to the target stay
+          unchanged while brighter pixels step down toward it. In production,
+          the scan skips values at or below the target and performs the normal
+          hardware scan and ADC validation on the remaining pixels.
+        </li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>Only one filter is used at a time.</strong> A committed
+        gray-level range takes precedence over the target value. Clear the
+        range to use target-gray behavior. The target value must be an integer
+        inside the active gray range; with no range selected, it can be 0–255.
       </div>
     </>
   ),

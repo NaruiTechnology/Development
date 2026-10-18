@@ -2,7 +2,8 @@
 
 Source: software/obi/applet/open_beam_interface/modules/bus_controller.py
 Upstream license: 0BSD OR Apache-2.0.
-The elaborate method is unchanged. Only imports and the host stream layout
+The FSM sequence is unchanged; the skid FIFO reserves two extra slots for
+in-flight samples under backpressure. Imports and the host stream layout
 are adapted: this application keeps raw/right-aligned samples in a 16-bit
 container (including full16 simulation), and does not expose unused adc_ovf.
 Do not add diagnostic timing states here; busController.py owns that extension.

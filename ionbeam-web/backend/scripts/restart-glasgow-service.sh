@@ -1,132 +1,111 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_DEVELOPMENT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-DEFAULT_PROJECT_ROOT="$(cd "${DEFAULT_DEVELOPMENT_ROOT}/.." && pwd)"
-PROJECT_ROOT="${GLASGOW_PROJECT_ROOT:-${DEFAULT_PROJECT_ROOT}}"
-WORKDIR="${GLASGOW_WORKDIR:-${PROJECT_ROOT}/Development/glasgow_service}"
-DEFAULT_GLASGOW_CONFIG="${PROJECT_ROOT}/Development/GlasgowDataIO/Json/streamData.json"
-RUNTIME_DIR="${GLASGOW_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
-APP="${GLASGOW_APP:-glasgow_service.api:app}"
-HOST="${GLASGOW_HOST:-127.0.0.1}"
-PORT="${GLASGOW_PORT:-8765}"
-LOG_FILE="${GLASGOW_RESTART_LOG:-/tmp/glasgow_service.uvicorn.log}"
-PYTHON_BIN="${GLASGOW_PYTHON:-${PROJECT_ROOT}/.venv/bin/python}"
+# Glasgow and the vacuum executor are system services; the SBC controller is
+# a user service. A Configuration server reset restarts the scan service,
+# the only service that reads the scan configuration.
+#
+# The optional vacuum failover executor is not restarted either: nothing in
+# the scan configuration affects it, the UI reads vacuum data straight from
+# the SBC, and its orderly stop can take most of the backend's 30 s budget
+# for this script. It is only started when it is not running, and a problem
+# with it is reported as a warning, never as a failed reset.
+#
+# The SBC vacuum controller is NOT restarted here.  Once running it owns the
+# vacuum system; restarting it powers every pump down (the backing pump
+# included) and pumps the system down from scratch.  This script only starts
+# it when it is not running.  To restart it on purpose, use
+# Development/Scripts/manage-local-system.sh restart-vacuum.
+# Do not route this through the full-stack
+# manager: that requires interactive sudo and can restart this backend itself.
+SYSTEMCTL="${SYSTEMCTL_BIN:-/usr/bin/systemctl}"
+ACCOUNT="$(id -un)"
 
-if [[ ! -x "${PYTHON_BIN}" ]]; then
-  PYTHON_BIN="$(command -v python3)"
+# The signed-in account must be an administrator. This is only an eligibility
+# check; --no-ask-password below is what guarantees this backend command can
+# never display or wait for an authentication dialog.
+if ! id -nG "${ACCOUNT}" | tr ' ' '\n' | grep -Eq '^(sudo|admin|wheel)$'; then
+  echo "account ${ACCOUNT} is not a sudoer; refusing to reset controller services" >&2
+  exit 1
 fi
 
-export VIRTUAL_ENV="${VIRTUAL_ENV:-${PROJECT_ROOT}/.venv}"
-export PATH="${VIRTUAL_ENV}/bin:${PATH}"
-export PYTHONPATH="${WORKDIR}:${PROJECT_ROOT}/Development${PYTHONPATH:+:${PYTHONPATH}}"
-if [[ -z "${GLASGOW_CONFIG:-}" || ! -f "${GLASGOW_CONFIG}" ]]; then
-  export GLASGOW_CONFIG="${DEFAULT_GLASGOW_CONFIG}"
-fi
-
-port_pids() {
-  ss -ltnp "sport = :${PORT}" 2>/dev/null |
-    sed -n 's/.*pid=\([0-9]\+\).*/\1/p' |
-    sort -u
-}
-
-glasgow_pids() {
-  {
-    pgrep -f "uvicorn .*${APP}.*--port[ =]${PORT}" || true
-    port_pids | while read -r pid; do
-      [[ -z "${pid}" || "${pid}" == "$$" ]] && continue
-      local cmd
-      cmd="$(ps -p "${pid}" -o args= 2>/dev/null || true)"
-      [[ "${cmd}" == *"${APP}"* || "${cmd}" == *"glasgow_service"* ]] &&
-        printf '%s\n' "${pid}"
-    done
-  } | sort -u
-}
-
-wait_for_exit() {
-  local signal="$1"
-  local tries="$2"
-  shift 2
-  local pids=("$@")
-
-  ((${#pids[@]} == 0)) && return 0
-
-  for pid in "${pids[@]}"; do
-    [[ -z "${pid}" || "${pid}" == "$$" ]] && continue
-    kill "-${signal}" "${pid}" 2>/dev/null || true
-  done
-
-  for _ in $(seq 1 "${tries}"); do
-    local alive=0
-    for pid in "${pids[@]}"; do
-      [[ -z "${pid}" || "${pid}" == "$$" ]] && continue
-      if kill -0 "${pid}" 2>/dev/null; then
-        alive=1
-        break
+# Do not test the rule file directly.  polkit rule directories may be hidden
+# from this unprivileged user even when the rule is installed and active.
+# systemd/polkit is the authority: --no-ask-password makes a missing or
+# rejected authorization fail immediately without opening an auth dialog.
+restart_and_wait() {
+  local service="$1"
+  shift
+  local stable_checks=0
+  "${SYSTEMCTL}" "$@" --no-ask-password restart "${service}" || return 1
+  # Report startup crashes, including production mode without SBC hardware.
+  for _ in {1..20}; do
+    if "${SYSTEMCTL}" "$@" --no-ask-password is-active --quiet "${service}"; then
+      ((stable_checks += 1))
+      if ((stable_checks >= 6)); then
+        echo "restarted ${service}; service is active"
+        return 0
       fi
-    done
-    ((alive == 0)) && return 0
+    else
+      stable_checks=0
+    fi
     sleep 0.5
   done
-
+  echo "restarted ${service}, but it did not remain active" >&2
   return 1
 }
 
-wait_for_port_free() {
-  for _ in {1..20}; do
-    [[ -z "$(port_pids)" ]] && return 0
-    sleep 0.25
-  done
-  return 1
-}
-
-wait_for_ready() {
-  for _ in {1..40}; do
-    if command -v curl >/dev/null 2>&1; then
-      curl -fsS "http://${HOST}:${PORT}/status" >/dev/null 2>&1 && return 0
-    elif [[ -n "$(port_pids)" ]]; then
-      return 0
-    fi
-    sleep 0.25
-  done
-  return 1
-}
-
-mapfile -t PIDS < <(glasgow_pids)
-
-if (( ${#PIDS[@]} > 0 )); then
-  wait_for_exit INT 30 "${PIDS[@]}" ||
-    wait_for_exit TERM 20 "${PIDS[@]}" ||
-    wait_for_exit KILL 10 "${PIDS[@]}" ||
-    true
-fi
-
-if ! wait_for_port_free; then
-  echo "port ${HOST}:${PORT} is still in use by pid(s): $(port_pids)" >&2
-  exit 1
-fi
-
-cd "${RUNTIME_DIR}"
-if command -v setsid >/dev/null 2>&1; then
-  nohup setsid "${PYTHON_BIN}" -m uvicorn "${APP}" --host "${HOST}" --port "${PORT}" \
-    --ws websockets \
-    >> "${LOG_FILE}" 2>&1 &
-else
-  nohup "${PYTHON_BIN}" -m uvicorn "${APP}" --host "${HOST}" --port "${PORT}" \
-    --ws websockets \
-    >> "${LOG_FILE}" 2>&1 &
-fi
-new_pid=$!
-
-if ! wait_for_ready; then
-  if ! kill -0 "${new_pid}" 2>/dev/null; then
-    echo "failed to start ${APP}; process exited early (log ${LOG_FILE})" >&2
-    tail -n 40 "${LOG_FILE}" >&2 || true
-  else
-    echo "started process ${new_pid}, but ${HOST}:${PORT}/status did not become ready" >&2
+# Start the SBC controller when it is not running; never restart a running
+# one (see the header).
+ensure_running() {
+  local service="$1"
+  shift
+  if "${SYSTEMCTL}" "$@" --no-ask-password is-active --quiet "${service}"; then
+    echo "${service} is running; left untouched (it owns the vacuum system)"
+    return 0
   fi
-  exit 1
-fi
+  local stable_checks=0
+  "${SYSTEMCTL}" "$@" --no-ask-password start "${service}" || return 1
+  for _ in {1..20}; do
+    if "${SYSTEMCTL}" "$@" --no-ask-password is-active --quiet "${service}"; then
+      ((stable_checks += 1))
+      if ((stable_checks >= 6)); then
+        echo "started ${service}; service is active"
+        return 0
+      fi
+    else
+      stable_checks=0
+    fi
+    sleep 0.5
+  done
+  echo "started ${service}, but it did not remain active" >&2
+  echo "Active vacuum control uses the emulator when IsProduction=false and requires SBC hardware when IsProduction=true. Check logs/sbc-vacuum.log; on a machine without SBC hardware, set Enable to false in the SBC's vacuum profile." >&2
+  return 1
+}
 
-echo "started ${APP} on ${HOST}:${PORT} with ${PYTHON_BIN} (pid ${new_pid}, listener pid(s): $(port_pids), log ${LOG_FILE})"
+# Optional executor: start it only when it is installed and not running.
+# The polkit rule grants the "restart" verb, which also starts a stopped unit.
+ensure_executor_running() {
+  local service="vacuum-executor.service"
+  if "${SYSTEMCTL}" --no-ask-password is-active --quiet "${service}"; then
+    echo "${service} is running; left untouched"
+    return 0
+  fi
+  local load_state
+  load_state="$("${SYSTEMCTL}" --no-ask-password show "${service}" --property=LoadState --value 2>/dev/null || true)"
+  if [[ "${load_state}" == "not-found" ]]; then
+    echo "${service} is not installed; skipped"
+    return 0
+  fi
+  if ! restart_and_wait "${service}"; then
+    echo "WARNING: ${service} could not be started; the vacuum UI does not depend on it" >&2
+  fi
+  return 0
+}
+
+# A controller startup failure must not prevent the remaining steps.
+restart_failed=0
+restart_and_wait glasgow-svc.service || restart_failed=1
+ensure_running sbc-vacuum.service --user || restart_failed=1
+ensure_executor_running
+exit "${restart_failed}"

@@ -7,10 +7,13 @@ same fencing headers used by the active/standby executor.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
 
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .execution_authority import AuthorityDenied, remote_authority_from_environment
@@ -26,7 +29,13 @@ from .vacuum import (
     find_vacuum_config_path,
     load_runtime_vacuum_config,
 )
-from .vacuum_health import sbc_controller_is_ready
+from .sd_notify import notify, watchdog_interval
+from .vacuum_health import sbc_controller_is_ready, vacuum_service_problems
+
+log = logging.getLogger("glasgow_service.sbc_vacuum_app")
+
+#: A control-loop iteration older than this withholds the watchdog ping.
+CONTROL_LOOP_MAX_AGE_SECONDS = 10.0
 
 
 def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
@@ -42,14 +51,55 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         if expected and (credentials is None or credentials.credentials != expected):
             raise HTTPException(401, "invalid or missing SBC bearer token")
 
+    def start_watchdog() -> asyncio.Task | None:
+        """Ping systemd's watchdog only while the control loop is alive.
+
+        A hung event loop or a dead poll task stops the pings and systemd
+        restarts the service (WatchdogSec= in the unit).  Outside systemd,
+        or without WatchdogSec=, this does nothing.
+        """
+        interval = watchdog_interval()
+        if interval is None:
+            return None
+
+        async def ping() -> None:
+            withheld = False
+            while True:
+                target = holder.get("controller")
+                alive = getattr(target, "control_loop_alive", None)
+                if alive is None or alive(CONTROL_LOOP_MAX_AGE_SECONDS):
+                    notify("WATCHDOG=1")
+                    withheld = False
+                elif not withheld:
+                    log.error("vacuum control loop stalled; withholding the systemd "
+                              "watchdog ping so systemd restarts the service")
+                    withheld = True
+                await asyncio.sleep(interval)
+
+        return asyncio.create_task(ping(), name="systemd-watchdog")
+
     @asynccontextmanager
-    async def lifespan(_app: FastAPI):
+    async def lifespan(app_: FastAPI):
+        async with controller_lifespan(app_):
+            watchdog = start_watchdog()
+            notify("READY=1")
+            try:
+                yield
+            finally:
+                notify("STOPPING=1")
+                if watchdog is not None:
+                    watchdog.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await watchdog
+
+    @asynccontextmanager
+    async def controller_lifespan(_app: FastAPI):
         config = config_loader(find_vacuum_config_path())
         activation["enabled"] = config.enabled
         if not config.enabled:
             yield
             return
-        # Enable controls activation; IsProduction selects hardware or emulation.
+        # Enable controls activation; Simulate selects simulation or hardware.
         controller = VacuumController(
             config, authority=remote_authority_from_environment()
         )
@@ -61,7 +111,13 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
             yield
         finally:
             try:
-                await controller.close()
+                # Service shutdown: the board profile may keep the backing
+                # pump running for the restart (KeepBackingPumpOnRestart).
+                await controller.close(keep_backing_pump=True)
+                # Let the "controller stopped" alert leave before exit.
+                flush = getattr(controller, "flush_alerts", None)
+                if flush is not None:
+                    await asyncio.to_thread(flush)
             finally:
                 try:
                     if emulator is not None:
@@ -114,12 +170,12 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
         status = target.status() if target is not None else None
         if status is None:
             mode = "disabled" if not activation["enabled"] else "gpio"
-        elif status.simulation:
-            mode = "simulation"
         elif status.control_transport == "rpi5-vacuum-io-emulator":
             mode = "board-emulator"
         elif status.control_transport == "rpi5-vacuum-io":
             mode = "board"
+        elif status.simulation:
+            mode = "simulation"
         else:
             mode = "gpio"
         return {
@@ -151,7 +207,43 @@ def create_app(*, config_loader=load_runtime_vacuum_config) -> FastAPI:
             "status": "ready",
             "connected": status.connected,
             "equipment_count": len(status.pumps),
+            "cascade_latch": status.cascade_latch,
         }
+
+    @app.get("/health/vacuum")
+    async def vacuum_health():
+        """Continuous-service health for monitoring and alerting.
+
+        200 while the controller runs and the cascade is free to advance;
+        503 with the reasons while it is latched, alarmed, restarting,
+        disconnected or stopped.  ``/health/ready`` stays a process-readiness
+        check so deploy scripts are unaffected.
+        """
+        target = holder.get("controller")
+        if target is None:
+            if not activation["enabled"]:
+                return {"status": "disabled", "vacuum_enabled": False}
+            return JSONResponse(status_code=503, content={
+                "status": "starting", "problems": ["controller is starting"]})
+        status = target.status()
+        problems = vacuum_service_problems(
+            connected=status.connected,
+            running=status.running,
+            cascade_latch=status.cascade_latch,
+            restarting=status.restarting,
+            alarms=status.alarms,
+        )
+        body = {
+            "status": "degraded" if problems else "ok",
+            "problems": problems,
+            "cascade_latch": status.cascade_latch,
+            "isVacuumSystemReady": status.isVacuumSystemReady,
+            "running": status.running,
+            "connected": status.connected,
+            "runtime_seconds": status.runtime_seconds,
+            "updated_at": status.updated_at,
+        }
+        return JSONResponse(status_code=503 if problems else 200, content=body)
 
     @app.get("/vacuum", response_model=VacuumSystemStatus)
     async def vacuum_status():

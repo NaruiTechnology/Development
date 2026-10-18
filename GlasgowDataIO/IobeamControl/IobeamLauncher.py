@@ -110,6 +110,22 @@ class IobeamLauncher:
                              prepare=None):
         """Shared Glasgow build/download/claim lifecycle for Iobeam applets."""
         device = GlasgowDevice(deviceId)
+        try:
+            return await self._activate_applet(
+                device, applet, applet_args, prepare=prepare)
+        except BaseException:
+            # GlasgowDevice() has already claimed USB interface 0.  Release it
+            # on every failure, or this process keeps the device and every
+            # later launch fails with LIBUSB_ERROR_BUSY until it exits.
+            try:
+                device.close()
+            except Exception as exc:  # noqa: BLE001 - keep the original error
+                self._logger.warning("launcher: closing the device after a "
+                                     "failed launch raised %s: %s",
+                                     type(exc).__name__, exc)
+            raise
+
+    async def _activate_applet(self, device, applet, applet_args, *, prepare=None):
         target = GlasgowHardwareTarget(
             revision=device.revision, multiplexer_cls=DirectMultiplexer)
         applet.build(target, applet_args)
@@ -140,7 +156,6 @@ class IobeamLauncher:
             await asyncio.sleep(3.0)
         status = await device._status()
         if not (status & ST_FPGA_RDY):
-            device.close()
             raise RuntimeError(
                 "FPGA is not ready after bitstream download. "
                 f"Status register = {status:#04x}")

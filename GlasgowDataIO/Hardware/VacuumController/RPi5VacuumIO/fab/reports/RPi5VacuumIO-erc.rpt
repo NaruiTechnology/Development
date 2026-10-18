@@ -1,0 +1,1773 @@
+ERC report (2026-10-17T15:57:24, Encoding UTF8)
+Report includes: Errors, Warnings, Exclusions
+
+***** Sheet /
+[footprint_link_issues]: The current configuration does not include the footprint library 'Fuse'
+    ; warning
+    @(27.94 mm, 68.58 mm): Symbol F1 [Fuse]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(27.94 mm, 68.58 mm): Symbol F1 [Fuse]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(27.94 mm, 132.08 mm): Symbol C1 [C_Polarized]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(27.94 mm, 132.08 mm): Symbol C1 [C_Polarized]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(27.94 mm, 162.56 mm): Symbol C2 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(27.94 mm, 162.56 mm): Symbol C2 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(27.94 mm, 220.98 mm): Symbol R41 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(27.94 mm, 220.98 mm): Symbol R41 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(27.94 mm, 254.00 mm): Symbol R51 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(27.94 mm, 254.00 mm): Symbol R51 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(27.94 mm, 472.44 mm): Symbol C10 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(27.94 mm, 472.44 mm): Symbol C10 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(27.94 mm, 500.38 mm): Symbol C11 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(27.94 mm, 500.38 mm): Symbol C11 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(35.56 mm, 93.98 mm): Symbol D1 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(35.56 mm, 93.98 mm): Symbol D1 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(35.56 mm, 109.22 mm): Symbol D2 [D_TVS]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(35.56 mm, 109.22 mm): Symbol D2 [D_TVS]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(38.10 mm, 287.02 mm): Symbol Q1 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(38.10 mm, 287.02 mm): Symbol Q1 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(40.64 mm, 43.18 mm): Symbol J1 [Conn_01x02]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(40.64 mm, 43.18 mm): Symbol J1 [Conn_01x02]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(40.64 mm, 309.88 mm): Symbol D31 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(40.64 mm, 309.88 mm): Symbol D31 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(43.18 mm, 393.70 mm): Symbol U9 [ADS1115IDGS]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Analog_ADC'
+    ; warning
+    @(43.18 mm, 393.70 mm): Symbol U9 [ADS1115IDGS]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(43.18 mm, 436.88 mm): Symbol U10 [ADS1115IDGS]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Analog_ADC'
+    ; warning
+    @(43.18 mm, 436.88 mm): Symbol U10 [ADS1115IDGS]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Fuse'
+    ; warning
+    @(60.96 mm, 48.26 mm): Symbol F2 [Polyfuse]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(60.96 mm, 48.26 mm): Symbol F2 [Polyfuse]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(60.96 mm, 81.28 mm): Symbol R1 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(60.96 mm, 81.28 mm): Symbol R1 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(60.96 mm, 132.08 mm): Symbol C3 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(60.96 mm, 132.08 mm): Symbol C3 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'power'
+    ; warning
+    @(60.96 mm, 152.40 mm): Symbol #FLG01 [PWR_FLAG]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'power'
+    ; warning
+    @(60.96 mm, 172.72 mm): Symbol #FLG02 [PWR_FLAG]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(66.04 mm, 109.22 mm): Symbol D3 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(66.04 mm, 109.22 mm): Symbol D3 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(66.04 mm, 223.52 mm): Symbol R61 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(66.04 mm, 223.52 mm): Symbol R61 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(66.04 mm, 274.32 mm): Symbol R42 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(66.04 mm, 274.32 mm): Symbol R42 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(66.04 mm, 309.88 mm): Symbol R52 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(66.04 mm, 309.88 mm): Symbol R52 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(73.66 mm, 248.92 mm): Symbol D41 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(73.66 mm, 248.92 mm): Symbol D41 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(76.20 mm, 383.54 mm): Symbol R13 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(76.20 mm, 383.54 mm): Symbol R13 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(76.20 mm, 416.56 mm): Symbol R141 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(76.20 mm, 416.56 mm): Symbol R141 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(76.20 mm, 449.58 mm): Symbol R151 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(76.20 mm, 449.58 mm): Symbol R151 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(76.20 mm, 480.06 mm): Symbol C21 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(76.20 mm, 480.06 mm): Symbol C21 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(83.82 mm, 500.38 mm): Symbol D61 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(83.82 mm, 500.38 mm): Symbol D61 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'power'
+    ; warning
+    @(91.44 mm, 43.18 mm): Symbol #FLG03 [PWR_FLAG]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(101.60 mm, 271.78 mm): Symbol R62 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(101.60 mm, 271.78 mm): Symbol R62 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(101.60 mm, 325.12 mm): Symbol R43 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(101.60 mm, 325.12 mm): Symbol R43 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(109.22 mm, 299.72 mm): Symbol D42 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(109.22 mm, 299.72 mm): Symbol D42 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(111.76 mm, 220.98 mm): Symbol Q2 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(111.76 mm, 220.98 mm): Symbol Q2 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(111.76 mm, 243.84 mm): Symbol D32 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(111.76 mm, 243.84 mm): Symbol D32 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(111.76 mm, 383.54 mm): Symbol R142 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(111.76 mm, 383.54 mm): Symbol R142 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(111.76 mm, 416.56 mm): Symbol R152 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(111.76 mm, 416.56 mm): Symbol R152 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(111.76 mm, 444.50 mm): Symbol C22 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(111.76 mm, 444.50 mm): Symbol C22 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(111.76 mm, 497.84 mm): Symbol R143 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(111.76 mm, 497.84 mm): Symbol R143 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(119.38 mm, 73.66 mm): Symbol K9 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(119.38 mm, 73.66 mm): Symbol K9 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(119.38 mm, 134.62 mm): Symbol K10 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(119.38 mm, 134.62 mm): Symbol K10 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(121.92 mm, 467.36 mm): Symbol D62 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(121.92 mm, 467.36 mm): Symbol D62 [BAT54S]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(132.08 mm, 43.18 mm): Symbol J2 [Conn_01x02]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(132.08 mm, 43.18 mm): Symbol J2 [Conn_01x02]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(132.08 mm, 101.60 mm): Symbol D4 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(132.08 mm, 101.60 mm): Symbol D4 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(132.08 mm, 167.64 mm): Symbol D5 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(132.08 mm, 167.64 mm): Symbol D5 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(137.16 mm, 218.44 mm): Symbol R53 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(137.16 mm, 218.44 mm): Symbol R53 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(137.16 mm, 302.26 mm): Symbol R63 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(137.16 mm, 302.26 mm): Symbol R63 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(144.78 mm, 330.20 mm): Symbol D43 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(144.78 mm, 330.20 mm): Symbol D43 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(147.32 mm, 251.46 mm): Symbol Q3 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(147.32 mm, 251.46 mm): Symbol Q3 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(147.32 mm, 386.08 mm): Symbol R153 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(147.32 mm, 386.08 mm): Symbol R153 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(147.32 mm, 416.56 mm): Symbol C23 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(147.32 mm, 416.56 mm): Symbol C23 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(147.32 mm, 467.36 mm): Symbol R144 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(147.32 mm, 467.36 mm): Symbol R144 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(147.32 mm, 500.38 mm): Symbol R154 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(147.32 mm, 500.38 mm): Symbol R154 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(149.86 mm, 274.32 mm): Symbol D33 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(149.86 mm, 274.32 mm): Symbol D33 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(157.48 mm, 436.88 mm): Symbol D63 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(157.48 mm, 436.88 mm): Symbol D63 [BAT54S]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(160.02 mm, 86.36 mm): Symbol R2 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(160.02 mm, 86.36 mm): Symbol R2 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(160.02 mm, 124.46 mm): Symbol C4 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(160.02 mm, 124.46 mm): Symbol C4 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(170.18 mm, 149.86 mm): Symbol D6 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(170.18 mm, 149.86 mm): Symbol D6 [BAT54S]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(172.72 mm, 55.88 mm): Symbol Q9 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(172.72 mm, 55.88 mm): Symbol Q9 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(172.72 mm, 220.98 mm): Symbol R44 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(172.72 mm, 220.98 mm): Symbol R44 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(172.72 mm, 254.00 mm): Symbol R54 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(172.72 mm, 254.00 mm): Symbol R54 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(182.88 mm, 287.02 mm): Symbol Q4 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(182.88 mm, 287.02 mm): Symbol Q4 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(185.42 mm, 309.88 mm): Symbol D34 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(185.42 mm, 309.88 mm): Symbol D34 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(185.42 mm, 386.08 mm): Symbol C24 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(185.42 mm, 386.08 mm): Symbol C24 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(185.42 mm, 439.42 mm): Symbol R145 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(185.42 mm, 439.42 mm): Symbol R145 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(185.42 mm, 469.90 mm): Symbol R155 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(185.42 mm, 469.90 mm): Symbol R155 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(185.42 mm, 500.38 mm): Symbol C25 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(185.42 mm, 500.38 mm): Symbol C25 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(193.04 mm, 406.40 mm): Symbol D64 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(193.04 mm, 406.40 mm): Symbol D64 [BAT54S]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(200.66 mm, 53.34 mm): Symbol C5 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(200.66 mm, 53.34 mm): Symbol C5 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(200.66 mm, 86.36 mm): Symbol R3 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(200.66 mm, 86.36 mm): Symbol R3 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(200.66 mm, 152.40 mm): Symbol C6 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(200.66 mm, 152.40 mm): Symbol C6 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(210.82 mm, 223.52 mm): Symbol R64 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(210.82 mm, 223.52 mm): Symbol R64 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(210.82 mm, 274.32 mm): Symbol R45 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(210.82 mm, 274.32 mm): Symbol R45 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(210.82 mm, 309.88 mm): Symbol R55 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(210.82 mm, 309.88 mm): Symbol R55 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(213.36 mm, 106.68 mm): Symbol D7 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(213.36 mm, 106.68 mm): Symbol D7 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(213.36 mm, 124.46 mm): Symbol D8 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(213.36 mm, 124.46 mm): Symbol D8 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(218.44 mm, 248.92 mm): Symbol D44 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(218.44 mm, 248.92 mm): Symbol D44 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(220.98 mm, 408.94 mm): Symbol R146 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(220.98 mm, 408.94 mm): Symbol R146 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(220.98 mm, 439.42 mm): Symbol R156 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(220.98 mm, 439.42 mm): Symbol R156 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(220.98 mm, 469.90 mm): Symbol C26 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(220.98 mm, 469.90 mm): Symbol C26 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(231.14 mm, 378.46 mm): Symbol D65 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(231.14 mm, 378.46 mm): Symbol D65 [BAT54S]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(231.14 mm, 492.76 mm): Symbol D66 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(231.14 mm, 492.76 mm): Symbol D66 [BAT54S]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(236.22 mm, 53.34 mm): Symbol C7 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(236.22 mm, 53.34 mm): Symbol C7 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(236.22 mm, 88.90 mm): Symbol R4 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(236.22 mm, 88.90 mm): Symbol R4 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(236.22 mm, 142.24 mm): Symbol R5 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(236.22 mm, 142.24 mm): Symbol R5 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(241.30 mm, 114.30 mm): Symbol D9 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(241.30 mm, 114.30 mm): Symbol D9 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(241.30 mm, 170.18 mm): Symbol D10 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(241.30 mm, 170.18 mm): Symbol D10 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(246.38 mm, 271.78 mm): Symbol R65 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(246.38 mm, 271.78 mm): Symbol R65 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(246.38 mm, 325.12 mm): Symbol R46 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(246.38 mm, 325.12 mm): Symbol R46 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(254.00 mm, 299.72 mm): Symbol D45 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(254.00 mm, 299.72 mm): Symbol D45 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(256.54 mm, 220.98 mm): Symbol Q5 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(256.54 mm, 220.98 mm): Symbol Q5 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(256.54 mm, 383.54 mm): Symbol R147 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(256.54 mm, 383.54 mm): Symbol R147 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(256.54 mm, 416.56 mm): Symbol R157 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(256.54 mm, 416.56 mm): Symbol R157 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(256.54 mm, 444.50 mm): Symbol C27 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(256.54 mm, 444.50 mm): Symbol C27 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(256.54 mm, 497.84 mm): Symbol R148 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(256.54 mm, 497.84 mm): Symbol R148 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(259.08 mm, 243.84 mm): Symbol D35 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(259.08 mm, 243.84 mm): Symbol D35 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(266.70 mm, 467.36 mm): Symbol D67 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(266.70 mm, 467.36 mm): Symbol D67 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'power'
+    ; warning
+    @(269.24 mm, 43.18 mm): Symbol #FLG04 [PWR_FLAG]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'power'
+    ; warning
+    @(269.24 mm, 66.04 mm): Symbol #FLG05 [PWR_FLAG]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(276.86 mm, 124.46 mm): Symbol U13 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(276.86 mm, 124.46 mm): Symbol U13 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(276.86 mm, 139.70 mm): Symbol U13 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(276.86 mm, 139.70 mm): Symbol U13 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(279.40 mm, 91.44 mm): Symbol U13 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(279.40 mm, 91.44 mm): Symbol U13 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(279.40 mm, 106.68 mm): Symbol U13 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(279.40 mm, 106.68 mm): Symbol U13 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(281.94 mm, 218.44 mm): Symbol R56 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(281.94 mm, 218.44 mm): Symbol R56 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(281.94 mm, 302.26 mm): Symbol R66 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(281.94 mm, 302.26 mm): Symbol R66 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(292.10 mm, 251.46 mm): Symbol Q6 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(292.10 mm, 251.46 mm): Symbol Q6 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(292.10 mm, 330.20 mm): Symbol D46 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(292.10 mm, 330.20 mm): Symbol D46 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(294.64 mm, 274.32 mm): Symbol D36 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(294.64 mm, 274.32 mm): Symbol D36 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(294.64 mm, 386.08 mm): Symbol R158 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(294.64 mm, 386.08 mm): Symbol R158 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(294.64 mm, 416.56 mm): Symbol C28 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(294.64 mm, 416.56 mm): Symbol C28 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(299.72 mm, 464.82 mm): Symbol J41 [Conn_01x08]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(299.72 mm, 464.82 mm): Symbol J41 [Conn_01x08]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(299.72 mm, 487.68 mm): Symbol J42 [Conn_01x08]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(299.72 mm, 487.68 mm): Symbol J42 [Conn_01x08]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(302.26 mm, 436.88 mm): Symbol D68 [BAT54S]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Diode'
+    ; warning
+    @(302.26 mm, 436.88 mm): Symbol D68 [BAT54S]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(312.42 mm, 55.88 mm): Symbol R6 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(312.42 mm, 55.88 mm): Symbol R6 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(312.42 mm, 91.44 mm): Symbol R7 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(312.42 mm, 91.44 mm): Symbol R7 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(312.42 mm, 121.92 mm): Symbol R8 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(312.42 mm, 121.92 mm): Symbol R8 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(312.42 mm, 157.48 mm): Symbol R9 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(312.42 mm, 157.48 mm): Symbol R9 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(320.04 mm, 220.98 mm): Symbol R47 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(320.04 mm, 220.98 mm): Symbol R47 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(320.04 mm, 254.00 mm): Symbol R57 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(320.04 mm, 254.00 mm): Symbol R57 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(330.20 mm, 287.02 mm): Symbol Q7 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(330.20 mm, 287.02 mm): Symbol Q7 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(330.20 mm, 309.88 mm): Symbol D37 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(330.20 mm, 309.88 mm): Symbol D37 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(340.36 mm, 109.22 mm): Symbol R10 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(340.36 mm, 109.22 mm): Symbol R10 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(340.36 mm, 139.70 mm): Symbol R11 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(340.36 mm, 139.70 mm): Symbol R11 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(342.90 mm, 434.34 mm): Symbol C12 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(342.90 mm, 434.34 mm): Symbol C12 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(342.90 mm, 467.36 mm): Symbol R14 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(342.90 mm, 467.36 mm): Symbol R14 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(342.90 mm, 495.30 mm): Symbol R15 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(342.90 mm, 495.30 mm): Symbol R15 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(345.44 mm, 167.64 mm): Symbol D11 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(345.44 mm, 167.64 mm): Symbol D11 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_IDC'
+    ; warning
+    @(355.60 mm, 60.96 mm): Symbol J3 [Conn_02x20_Odd_Even]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(355.60 mm, 60.96 mm): Symbol J3 [Conn_02x20_Odd_Even]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(355.60 mm, 223.52 mm): Symbol R67 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(355.60 mm, 223.52 mm): Symbol R67 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(355.60 mm, 274.32 mm): Symbol R48 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(355.60 mm, 274.32 mm): Symbol R48 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(355.60 mm, 309.88 mm): Symbol R58 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(355.60 mm, 309.88 mm): Symbol R58 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(358.14 mm, 393.70 mm): Symbol U11 [MAX3485]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Interface_UART'
+    ; warning
+    @(358.14 mm, 393.70 mm): Symbol U11 [MAX3485]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(365.76 mm, 248.92 mm): Symbol D47 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(365.76 mm, 248.92 mm): Symbol D47 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(391.16 mm, 271.78 mm): Symbol R68 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(391.16 mm, 271.78 mm): Symbol R68 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(391.16 mm, 388.62 mm): Symbol R16 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(391.16 mm, 388.62 mm): Symbol R16 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(391.16 mm, 419.10 mm): Symbol R17 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(391.16 mm, 419.10 mm): Symbol R17 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(396.24 mm, 127.00 mm): Symbol C8 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(396.24 mm, 127.00 mm): Symbol C8 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_TO_SOT_SMD'
+    ; warning
+    @(401.32 mm, 220.98 mm): Symbol Q8 [AO3400A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_FET'
+    ; warning
+    @(401.32 mm, 220.98 mm): Symbol Q8 [AO3400A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(401.32 mm, 299.72 mm): Symbol D48 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(401.32 mm, 299.72 mm): Symbol D48 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(401.32 mm, 444.50 mm): Symbol JP9 [SolderJumper_2_Open]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(401.32 mm, 444.50 mm): Symbol JP9 [SolderJumper_2_Open]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(401.32 mm, 462.28 mm): Symbol D12 [D_TVS]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(401.32 mm, 462.28 mm): Symbol D12 [D_TVS]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(401.32 mm, 477.52 mm): Symbol D13 [D_TVS]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(401.32 mm, 477.52 mm): Symbol D13 [D_TVS]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(401.32 mm, 492.76 mm): Symbol J4 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(401.32 mm, 492.76 mm): Symbol J4 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(403.86 mm, 243.84 mm): Symbol D38 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(403.86 mm, 243.84 mm): Symbol D38 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(403.86 mm, 314.96 mm): Symbol J21 [Conn_01x04]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(403.86 mm, 314.96 mm): Symbol J21 [Conn_01x04]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(403.86 mm, 330.20 mm): Symbol J22 [Conn_01x04]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(403.86 mm, 330.20 mm): Symbol J22 [Conn_01x04]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(414.02 mm, 149.86 mm): Symbol U2 [ULN2803A]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Transistor_Array'
+    ; warning
+    @(414.02 mm, 149.86 mm): Symbol U2 [ULN2803A]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(424.18 mm, 73.66 mm): Symbol U1 [MCP23017_SO]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Interface_Expansion'
+    ; warning
+    @(424.18 mm, 73.66 mm): Symbol U1 [MCP23017_SO]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(439.42 mm, 464.82 mm): Symbol C13 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(439.42 mm, 464.82 mm): Symbol C13 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(439.42 mm, 492.76 mm): Symbol C14 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(439.42 mm, 492.76 mm): Symbol C14 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(441.96 mm, 210.82 mm): Symbol J23 [Conn_01x04]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(441.96 mm, 210.82 mm): Symbol J23 [Conn_01x04]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(441.96 mm, 226.06 mm): Symbol J24 [Conn_01x04]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(441.96 mm, 226.06 mm): Symbol J24 [Conn_01x04]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(464.82 mm, 50.80 mm): Symbol R21 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(464.82 mm, 50.80 mm): Symbol R21 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(464.82 mm, 83.82 mm): Symbol R22 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(464.82 mm, 83.82 mm): Symbol R22 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(464.82 mm, 114.30 mm): Symbol R23 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(464.82 mm, 114.30 mm): Symbol R23 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(464.82 mm, 147.32 mm): Symbol R24 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(464.82 mm, 147.32 mm): Symbol R24 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(467.36 mm, 411.48 mm): Symbol U12 [MAX3232]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Interface_UART'
+    ; warning
+    @(467.36 mm, 411.48 mm): Symbol U12 [MAX3232]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(469.90 mm, 294.64 mm): Symbol C9 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(469.90 mm, 294.64 mm): Symbol C9 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(469.90 mm, 322.58 mm): Symbol R12 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(469.90 mm, 322.58 mm): Symbol R12 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(480.06 mm, 50.80 mm): Symbol R25 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(480.06 mm, 50.80 mm): Symbol R25 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(480.06 mm, 83.82 mm): Symbol R26 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(480.06 mm, 83.82 mm): Symbol R26 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(480.06 mm, 114.30 mm): Symbol R27 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(480.06 mm, 114.30 mm): Symbol R27 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(480.06 mm, 147.32 mm): Symbol R28 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(480.06 mm, 147.32 mm): Symbol R28 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(497.84 mm, 241.30 mm): Symbol U3 [MCP23017_SO]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Interface_Expansion'
+    ; warning
+    @(497.84 mm, 241.30 mm): Symbol U3 [MCP23017_SO]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(508.00 mm, 55.88 mm): Symbol K1 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(508.00 mm, 55.88 mm): Symbol K1 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(508.00 mm, 116.84 mm): Symbol R31 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(508.00 mm, 116.84 mm): Symbol R31 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(510.54 mm, 383.54 mm): Symbol C15 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(510.54 mm, 383.54 mm): Symbol C15 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(510.54 mm, 411.48 mm): Symbol C16 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(510.54 mm, 411.48 mm): Symbol C16 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Capacitor_SMD'
+    ; warning
+    @(510.54 mm, 439.42 mm): Symbol C17 [C]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(510.54 mm, 439.42 mm): Symbol C17 [C]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(518.16 mm, 144.78 mm): Symbol D21 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(518.16 mm, 144.78 mm): Symbol D21 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(518.16 mm, 160.02 mm): Symbol J11 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(518.16 mm, 160.02 mm): Symbol J11 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(523.24 mm, 83.82 mm): Symbol JP1 [SolderJumper_3_Bridged12]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(523.24 mm, 83.82 mm): Symbol JP1 [SolderJumper_3_Bridged12]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(523.24 mm, 462.28 mm): Symbol J5 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(523.24 mm, 462.28 mm): Symbol J5 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(548.64 mm, 299.72 mm): Symbol R101 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(548.64 mm, 299.72 mm): Symbol R101 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'MountingHole'
+    ; warning
+    @(551.18 mm, 378.46 mm): Symbol H1 [MountingHole]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Mechanical'
+    ; warning
+    @(551.18 mm, 378.46 mm): Symbol H1 [MountingHole]
+[footprint_link_issues]: The current configuration does not include the footprint library 'MountingHole'
+    ; warning
+    @(551.18 mm, 393.70 mm): Symbol H2 [MountingHole]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Mechanical'
+    ; warning
+    @(551.18 mm, 393.70 mm): Symbol H2 [MountingHole]
+[footprint_link_issues]: The current configuration does not include the footprint library 'MountingHole'
+    ; warning
+    @(551.18 mm, 411.48 mm): Symbol H3 [MountingHole]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Mechanical'
+    ; warning
+    @(551.18 mm, 411.48 mm): Symbol H3 [MountingHole]
+[footprint_link_issues]: The current configuration does not include the footprint library 'MountingHole'
+    ; warning
+    @(551.18 mm, 426.72 mm): Symbol H4 [MountingHole]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Mechanical'
+    ; warning
+    @(551.18 mm, 426.72 mm): Symbol H4 [MountingHole]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(556.26 mm, 322.58 mm): Symbol D101 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(556.26 mm, 322.58 mm): Symbol D101 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(556.26 mm, 340.36 mm): Symbol D121 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(556.26 mm, 340.36 mm): Symbol D121 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(558.80 mm, 274.32 mm): Symbol J31 [Conn_01x06]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(558.80 mm, 274.32 mm): Symbol J31 [Conn_01x06]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(561.34 mm, 210.82 mm): Symbol U5 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(561.34 mm, 210.82 mm): Symbol U5 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(561.34 mm, 226.06 mm): Symbol U5 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(561.34 mm, 226.06 mm): Symbol U5 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(561.34 mm, 243.84 mm): Symbol U5 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(561.34 mm, 243.84 mm): Symbol U5 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(561.34 mm, 259.08 mm): Symbol U5 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(561.34 mm, 259.08 mm): Symbol U5 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(563.88 mm, 55.88 mm): Symbol K2 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(563.88 mm, 55.88 mm): Symbol K2 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(563.88 mm, 116.84 mm): Symbol R32 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(563.88 mm, 116.84 mm): Symbol R32 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(571.50 mm, 144.78 mm): Symbol D22 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(571.50 mm, 144.78 mm): Symbol D22 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(574.04 mm, 160.02 mm): Symbol J12 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(574.04 mm, 160.02 mm): Symbol J12 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(576.58 mm, 83.82 mm): Symbol JP2 [SolderJumper_3_Bridged12]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(576.58 mm, 83.82 mm): Symbol JP2 [SolderJumper_3_Bridged12]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(589.28 mm, 218.44 mm): Symbol R121 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(589.28 mm, 218.44 mm): Symbol R121 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(589.28 mm, 246.38 mm): Symbol R102 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(589.28 mm, 246.38 mm): Symbol R102 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(589.28 mm, 309.88 mm): Symbol R122 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(589.28 mm, 309.88 mm): Symbol R122 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(596.90 mm, 271.78 mm): Symbol D102 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(596.90 mm, 271.78 mm): Symbol D102 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(596.90 mm, 287.02 mm): Symbol D122 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(596.90 mm, 287.02 mm): Symbol D122 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(619.76 mm, 55.88 mm): Symbol K3 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(619.76 mm, 55.88 mm): Symbol K3 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(619.76 mm, 116.84 mm): Symbol R33 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(619.76 mm, 116.84 mm): Symbol R33 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(622.30 mm, 215.90 mm): Symbol R103 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(622.30 mm, 215.90 mm): Symbol R103 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(622.30 mm, 279.40 mm): Symbol R123 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(622.30 mm, 279.40 mm): Symbol R123 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(622.30 mm, 309.88 mm): Symbol R104 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(622.30 mm, 309.88 mm): Symbol R104 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(627.38 mm, 144.78 mm): Symbol D23 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(627.38 mm, 144.78 mm): Symbol D23 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(629.92 mm, 160.02 mm): Symbol J13 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(629.92 mm, 160.02 mm): Symbol J13 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(629.92 mm, 241.30 mm): Symbol D103 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(629.92 mm, 241.30 mm): Symbol D103 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(629.92 mm, 256.54 mm): Symbol D123 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(629.92 mm, 256.54 mm): Symbol D123 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(629.92 mm, 332.74 mm): Symbol D104 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(629.92 mm, 332.74 mm): Symbol D104 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(632.46 mm, 83.82 mm): Symbol JP3 [SolderJumper_3_Bridged12]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(632.46 mm, 83.82 mm): Symbol JP3 [SolderJumper_3_Bridged12]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(655.32 mm, 233.68 mm): Symbol R124 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(655.32 mm, 233.68 mm): Symbol R124 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(662.94 mm, 210.82 mm): Symbol D124 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(662.94 mm, 210.82 mm): Symbol D124 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(673.10 mm, 55.88 mm): Symbol K4 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(673.10 mm, 55.88 mm): Symbol K4 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(673.10 mm, 116.84 mm): Symbol R34 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(673.10 mm, 116.84 mm): Symbol R34 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(683.26 mm, 144.78 mm): Symbol D24 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(683.26 mm, 144.78 mm): Symbol D24 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(683.26 mm, 160.02 mm): Symbol J14 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(683.26 mm, 160.02 mm): Symbol J14 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(685.80 mm, 83.82 mm): Symbol JP4 [SolderJumper_3_Bridged12]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(685.80 mm, 83.82 mm): Symbol JP4 [SolderJumper_3_Bridged12]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(701.04 mm, 299.72 mm): Symbol R105 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(701.04 mm, 299.72 mm): Symbol R105 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(708.66 mm, 322.58 mm): Symbol D105 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(708.66 mm, 322.58 mm): Symbol D105 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(708.66 mm, 340.36 mm): Symbol D125 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(708.66 mm, 340.36 mm): Symbol D125 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(713.74 mm, 274.32 mm): Symbol J32 [Conn_01x06]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(713.74 mm, 274.32 mm): Symbol J32 [Conn_01x06]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(716.28 mm, 210.82 mm): Symbol U6 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(716.28 mm, 210.82 mm): Symbol U6 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(716.28 mm, 226.06 mm): Symbol U6 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(716.28 mm, 226.06 mm): Symbol U6 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(716.28 mm, 243.84 mm): Symbol U6 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(716.28 mm, 243.84 mm): Symbol U6 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(716.28 mm, 259.08 mm): Symbol U6 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(716.28 mm, 259.08 mm): Symbol U6 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(728.98 mm, 55.88 mm): Symbol K5 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(728.98 mm, 55.88 mm): Symbol K5 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(728.98 mm, 116.84 mm): Symbol R35 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(728.98 mm, 116.84 mm): Symbol R35 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(739.14 mm, 144.78 mm): Symbol D25 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(739.14 mm, 144.78 mm): Symbol D25 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(739.14 mm, 160.02 mm): Symbol J15 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(739.14 mm, 160.02 mm): Symbol J15 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(741.68 mm, 83.82 mm): Symbol JP5 [SolderJumper_3_Bridged12]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(741.68 mm, 83.82 mm): Symbol JP5 [SolderJumper_3_Bridged12]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(744.22 mm, 218.44 mm): Symbol R125 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(744.22 mm, 218.44 mm): Symbol R125 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(744.22 mm, 246.38 mm): Symbol R106 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(744.22 mm, 246.38 mm): Symbol R106 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(744.22 mm, 309.88 mm): Symbol R126 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(744.22 mm, 309.88 mm): Symbol R126 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(751.84 mm, 271.78 mm): Symbol D106 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(751.84 mm, 271.78 mm): Symbol D106 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(751.84 mm, 287.02 mm): Symbol D126 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(751.84 mm, 287.02 mm): Symbol D126 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(777.24 mm, 215.90 mm): Symbol R107 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(777.24 mm, 215.90 mm): Symbol R107 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(777.24 mm, 279.40 mm): Symbol R127 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(777.24 mm, 279.40 mm): Symbol R127 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(777.24 mm, 309.88 mm): Symbol R108 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(777.24 mm, 309.88 mm): Symbol R108 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(784.86 mm, 55.88 mm): Symbol K6 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(784.86 mm, 55.88 mm): Symbol K6 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(784.86 mm, 116.84 mm): Symbol R36 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(784.86 mm, 116.84 mm): Symbol R36 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(784.86 mm, 241.30 mm): Symbol D107 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(784.86 mm, 241.30 mm): Symbol D107 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(784.86 mm, 256.54 mm): Symbol D127 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(784.86 mm, 256.54 mm): Symbol D127 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(784.86 mm, 332.74 mm): Symbol D108 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(784.86 mm, 332.74 mm): Symbol D108 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(792.48 mm, 144.78 mm): Symbol D26 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(792.48 mm, 144.78 mm): Symbol D26 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(795.02 mm, 160.02 mm): Symbol J16 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(795.02 mm, 160.02 mm): Symbol J16 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(797.56 mm, 83.82 mm): Symbol JP6 [SolderJumper_3_Bridged12]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(797.56 mm, 83.82 mm): Symbol JP6 [SolderJumper_3_Bridged12]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(810.26 mm, 233.68 mm): Symbol R128 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(810.26 mm, 233.68 mm): Symbol R128 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(817.88 mm, 210.82 mm): Symbol D128 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(817.88 mm, 210.82 mm): Symbol D128 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(840.74 mm, 55.88 mm): Symbol K7 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(840.74 mm, 55.88 mm): Symbol K7 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(840.74 mm, 116.84 mm): Symbol R37 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(840.74 mm, 116.84 mm): Symbol R37 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(848.36 mm, 144.78 mm): Symbol D27 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(848.36 mm, 144.78 mm): Symbol D27 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(850.90 mm, 160.02 mm): Symbol J17 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(850.90 mm, 160.02 mm): Symbol J17 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(853.44 mm, 83.82 mm): Symbol JP7 [SolderJumper_3_Bridged12]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(853.44 mm, 83.82 mm): Symbol JP7 [SolderJumper_3_Bridged12]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(855.98 mm, 299.72 mm): Symbol R109 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(855.98 mm, 299.72 mm): Symbol R109 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(863.60 mm, 322.58 mm): Symbol D109 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(863.60 mm, 322.58 mm): Symbol D109 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(863.60 mm, 340.36 mm): Symbol D129 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(863.60 mm, 340.36 mm): Symbol D129 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(868.68 mm, 274.32 mm): Symbol J33 [Conn_01x06]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(868.68 mm, 274.32 mm): Symbol J33 [Conn_01x06]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(871.22 mm, 210.82 mm): Symbol U7 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(871.22 mm, 210.82 mm): Symbol U7 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(871.22 mm, 226.06 mm): Symbol U7 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(871.22 mm, 226.06 mm): Symbol U7 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(871.22 mm, 243.84 mm): Symbol U7 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(871.22 mm, 243.84 mm): Symbol U7 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(871.22 mm, 259.08 mm): Symbol U7 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(871.22 mm, 259.08 mm): Symbol U7 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Relay_THT'
+    ; warning
+    @(894.08 mm, 55.88 mm): Symbol K8 [G5LE-1]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Relay'
+    ; warning
+    @(894.08 mm, 55.88 mm): Symbol K8 [G5LE-1]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(894.08 mm, 116.84 mm): Symbol R38 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(894.08 mm, 116.84 mm): Symbol R38 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(899.16 mm, 218.44 mm): Symbol R129 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(899.16 mm, 218.44 mm): Symbol R129 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(899.16 mm, 248.92 mm): Symbol R110 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(899.16 mm, 248.92 mm): Symbol R110 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(899.16 mm, 312.42 mm): Symbol R130 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(899.16 mm, 312.42 mm): Symbol R130 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(904.24 mm, 144.78 mm): Symbol D28 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(904.24 mm, 144.78 mm): Symbol D28 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MSTB'
+    ; warning
+    @(904.24 mm, 160.02 mm): Symbol J18 [Conn_01x03]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(904.24 mm, 160.02 mm): Symbol J18 [Conn_01x03]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Jumper'
+    ; warning
+    @(906.78 mm, 83.82 mm): Symbol JP8 [SolderJumper_3_Bridged12]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Jumper'
+    ; warning
+    @(906.78 mm, 83.82 mm): Symbol JP8 [SolderJumper_3_Bridged12]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(906.78 mm, 271.78 mm): Symbol D110 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(906.78 mm, 271.78 mm): Symbol D110 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(906.78 mm, 289.56 mm): Symbol D130 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(906.78 mm, 289.56 mm): Symbol D130 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(934.72 mm, 218.44 mm): Symbol R111 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(934.72 mm, 218.44 mm): Symbol R111 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(934.72 mm, 281.94 mm): Symbol R131 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(934.72 mm, 281.94 mm): Symbol R131 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(934.72 mm, 312.42 mm): Symbol R112 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(934.72 mm, 312.42 mm): Symbol R112 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(942.34 mm, 241.30 mm): Symbol D111 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(942.34 mm, 241.30 mm): Symbol D111 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(942.34 mm, 259.08 mm): Symbol D131 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(942.34 mm, 259.08 mm): Symbol D131 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(942.34 mm, 337.82 mm): Symbol D112 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(942.34 mm, 337.82 mm): Symbol D112 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(967.74 mm, 233.68 mm): Symbol R132 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(967.74 mm, 233.68 mm): Symbol R132 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(977.90 mm, 210.82 mm): Symbol D132 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(977.90 mm, 210.82 mm): Symbol D132 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(1016.00 mm, 299.72 mm): Symbol R113 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1016.00 mm, 299.72 mm): Symbol R113 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(1023.62 mm, 325.12 mm): Symbol D113 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1023.62 mm, 325.12 mm): Symbol D113 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(1023.62 mm, 342.90 mm): Symbol D133 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1023.62 mm, 342.90 mm): Symbol D133 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Connector_Phoenix_MC'
+    ; warning
+    @(1026.16 mm, 274.32 mm): Symbol J34 [Conn_01x06]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Connector_Generic'
+    ; warning
+    @(1026.16 mm, 274.32 mm): Symbol J34 [Conn_01x06]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(1028.70 mm, 210.82 mm): Symbol U8 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(1028.70 mm, 210.82 mm): Symbol U8 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(1028.70 mm, 226.06 mm): Symbol U8 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(1028.70 mm, 226.06 mm): Symbol U8 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(1028.70 mm, 243.84 mm): Symbol U8 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(1028.70 mm, 243.84 mm): Symbol U8 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Package_SO'
+    ; warning
+    @(1028.70 mm, 259.08 mm): Symbol U8 [TLP291-4]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Isolator'
+    ; warning
+    @(1028.70 mm, 259.08 mm): Symbol U8 [TLP291-4]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(1056.64 mm, 218.44 mm): Symbol R133 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1056.64 mm, 218.44 mm): Symbol R133 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(1056.64 mm, 248.92 mm): Symbol R114 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1056.64 mm, 248.92 mm): Symbol R114 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(1056.64 mm, 312.42 mm): Symbol R134 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1056.64 mm, 312.42 mm): Symbol R134 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(1066.80 mm, 274.32 mm): Symbol D114 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1066.80 mm, 274.32 mm): Symbol D114 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(1066.80 mm, 289.56 mm): Symbol D134 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1066.80 mm, 289.56 mm): Symbol D134 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(1092.20 mm, 218.44 mm): Symbol R115 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1092.20 mm, 218.44 mm): Symbol R115 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(1092.20 mm, 281.94 mm): Symbol R135 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1092.20 mm, 281.94 mm): Symbol R135 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(1092.20 mm, 312.42 mm): Symbol R116 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1092.20 mm, 312.42 mm): Symbol R116 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(1099.82 mm, 241.30 mm): Symbol D115 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1099.82 mm, 241.30 mm): Symbol D115 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(1099.82 mm, 259.08 mm): Symbol D135 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1099.82 mm, 259.08 mm): Symbol D135 [D]
+[footprint_link_issues]: The current configuration does not include the footprint library 'LED_SMD'
+    ; warning
+    @(1099.82 mm, 337.82 mm): Symbol D116 [LED]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1099.82 mm, 337.82 mm): Symbol D116 [LED]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Resistor_SMD'
+    ; warning
+    @(1127.76 mm, 233.68 mm): Symbol R136 [R]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1127.76 mm, 233.68 mm): Symbol R136 [R]
+[footprint_link_issues]: The current configuration does not include the footprint library 'Diode_SMD'
+    ; warning
+    @(1135.38 mm, 210.82 mm): Symbol D136 [D]
+[lib_symbol_issues]: The current configuration does not include the symbol library 'Device'
+    ; warning
+    @(1135.38 mm, 210.82 mm): Symbol D136 [D]
+
+ ** ERC messages: 587  Errors 0  Warnings 587
+
+ ** Ignored checks:
+    - Global label only appears once in the schematic
+    - Four connection points are joined together
+    - SPICE model issue
+    - Assigned footprint doesn't match footprint filters

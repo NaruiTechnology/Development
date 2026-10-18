@@ -97,6 +97,35 @@ def test_infinite_then_stop(h):
     assert h.engine.status()["session"]["hard_closes"] == 0
 
 
+def test_vector_repeat_runs_one_session_and_ends(h):
+    """Repeat N is a live session like Infinite that ends by itself after N frames."""
+    w, ctl = h.win, h.ctl
+    w._activate_scan_sub("vector")
+    sc = w.scan_controls
+    sc.preview.setChecked(True)
+    sc._repeat_changed(3)
+    countdown = []
+    ctl.scan_event.connect(lambda e: countdown.append(sc._loop_iteration) if e.get("event") == "frame" else None)
+    connects = h.engine.status()["session"]["connects"]
+    launches = []
+    original = ctl._launch
+    ctl._launch = lambda *a, **k: (launches.append(k), original(*a, **k))[1]
+    try:
+        sc.run_btn.click()
+        h.wait(lambda: ctl._job is not None, 15, "repeat start")
+        assert ctl._job.live and ctl._job.max_frames == 3
+        h.wait(lambda: ctl._job is None and ctl.scan.phase not in RUNNING, 120, "repeat end")
+        h.pump(0.3)
+    finally:
+        ctl._launch = original
+        sc._repeat_changed(1)
+    assert len(launches) == 1, "one launch for the whole Repeat session"
+    assert ctl.scan.phase == "completed"
+    assert countdown == [2, 1]
+    assert not sc._loop_active
+    assert h.engine.status()["session"]["connects"] == connects
+
+
 def test_run_validated(h):
     w, ctl = h.win, h.ctl
     w._activate_scan_sub("raster")

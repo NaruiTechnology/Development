@@ -9,6 +9,8 @@ import { createPortal } from "react-dom";
 import { useAppDispatch, useAppSelector } from "../store";
 import { apiUrl } from "../lib/backendUrl";
 import {
+  finishROITargetGrayRun,
+  requestROITargetGrayRun,
   runRasterValidated,
   runVectorValidated,
   setPreview,
@@ -33,6 +35,7 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
+import { targetGrayFilter } from "../lib/roiTargetGray";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -127,6 +130,8 @@ export function ScanControls({
   const backendRestarting = useAppSelector((s) => s.settings.backendRestarting);
   const roiGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const roiGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
+  const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
+  const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const selectedBeam = defaults?.selected_beam;
   const roi = roiState.selection;
   const roiSelectionKey = roi
@@ -134,8 +139,6 @@ export function ScanControls({
     : "";
   const stream = useScanStream();
   const prevPhaseRef = useRef(phase);
-  const actionLoopTimerRef = useRef<number | null>(null);
-  const actionLoopRequestRef = useRef<{ req: VectorRequest; preview: boolean; scanType: ScanType } | null>(null);
   const actionLoopRemainingRef = useRef(0);
   const actionLoopIterationRef = useRef(0);
   const actionLoopActiveRef = useRef(false);
@@ -267,27 +270,19 @@ export function ScanControls({
   const busy = streaming || closing;
   // The panel is disabled while a scan runs to prevent parameter changes, but
   // Stop must remain available so an active scan can always be cancelled.
-  const stopAvailable = streaming || closing || actionLoopActive || infiniteScanActive;
+  const stopAvailable =
+    streaming || closing || actionLoopActive || infiniteScanActive || (roiAction && targetGrayRunning);
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
   const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
 
-  const clearActionLoopTimer = useCallback(() => {
-    if (actionLoopTimerRef.current !== null) {
-      window.clearTimeout(actionLoopTimerRef.current);
-      actionLoopTimerRef.current = null;
-    }
-  }, []);
-
   const clearActionLoopState = useCallback(() => {
-    clearActionLoopTimer();
-    actionLoopRequestRef.current = null;
     actionLoopRemainingRef.current = 0;
     actionLoopIterationRef.current = 0;
     actionLoopActiveRef.current = false;
     actionLoopCompletionPendingRef.current = false;
     setActionLoopIteration((current) => current === 0 ? current : 0);
     setActionLoopActive((current) => current ? false : current);
-  }, [clearActionLoopTimer]);
+  }, []);
 
   const clearInfiniteScanState = useCallback(() => {
     infiniteScanRef.current = null;
@@ -325,23 +320,27 @@ export function ScanControls({
     );
   }, [onScanRunStart, preview, stream]);
 
-  /** Start Repeat N bookkeeping for a session of `frames` passes. */
-  const startActionLoop = useCallback((req: VectorRequest, scanType: ScanType, frames: number) => {
+  /** Start Repeat N bookkeeping (countdown) for a session of `frames` passes. */
+  const startActionLoop = useCallback((frames: number) => {
     clearActionLoopState();
-    actionLoopRequestRef.current = { req, preview, scanType };
     actionLoopRemainingRef.current = frames;
     actionLoopIterationRef.current = frames;
     actionLoopCompletionPendingRef.current = true;
     setActionLoopIteration(frames);
     actionLoopActiveRef.current = true;
     setActionLoopActive(true);
-  }, [clearActionLoopState, preview]);
+  }, [clearActionLoopState]);
 
-  /** Run a Vector request: one pass, or Repeat N as one held session. */
-  const startVectorRun = useCallback((req: VectorRequest, scanType: ScanType) => {
+  /**
+   * Run a Vector request: one pass, or Repeat N as ONE live session, the same
+   * path as Infinite (`continuous`, one WebSocket, the service replays the
+   * point list pass after pass and the image wraps in place) except that it
+   * ends by itself after N passes (`frames`). Nothing is rebuilt between passes.
+   */
+  const startVectorRun = useCallback((req: VectorRequest) => {
     const session = repeatSessionRequest({ ...req, preview }, repeat);
     if (session) {
-      startActionLoop(req, scanType, session.frames);
+      startActionLoop(session.frames);
       stream.startVector(session.req, { continuous: true, preserveFrame: false });
     } else {
       clearActionLoopState();
@@ -370,26 +369,42 @@ export function ScanControls({
         }
         const hasGrayFilter =
           scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
-        if (hasGrayFilter) {
+        // Production target gray (ROI area, no gray level filter range): the
+        // beam decision is made per pixel by comparing its gray with the
+        // target, i.e. the single-level filter [target, target] with Skip:
+        // pixels at the target are skipped (blanked), all others spotted.
+        const productionTargetFilter =
+          !hasGrayFilter && roi && selectedTargetGray !== null && isProduction
+            ? targetGrayFilter(selectedTargetGray)
+            : null;
+        if (hasGrayFilter || productionTargetFilter) {
+          const grayScaleSelection = productionTargetFilter?.selection ?? scanGrayScaleSelection;
+          const grayScaleSkipped = productionTargetFilter?.skipped ?? scanGrayScaleSkipped;
           // Production must make the gray decision from the live 14-bit ADC,
           // not from the loaded ROI reference bitmap. Simulation keeps the
           // bitmap-derived custom point path because it has no physical ADC.
           const adaptiveProductionFilter = isProduction && vectorPixelFallbackBlank;
+          if (productionTargetFilter && !adaptiveProductionFilter && !roiState.imageDataUrl) {
+            // Without live feedback the per-pixel decision needs the ROI image;
+            // without it the request would fall back to an unblanked sweep.
+            dispatch(streamErrored(t("roi.targetGray.noImage")));
+            return;
+          }
           const req = adaptiveProductionFilter
             ? await vectorRequestWithAdaptiveGrayFeedback(
                 { ...vector, roi },
                 roiState,
                 {
-                  grayScaleSelection: scanGrayScaleSelection,
-                  grayScaleSkipped: scanGrayScaleSkipped,
+                  grayScaleSelection,
+                  grayScaleSkipped,
                 }
               )
             : await vectorRequestWithROIGrayScaleAction(
                 { ...vector, roi },
                 roiState,
                 {
-                  grayScaleSelection: scanGrayScaleSelection,
-                  grayScaleSkipped: scanGrayScaleSkipped,
+                  grayScaleSelection,
+                  grayScaleSkipped,
                 }
               );
           const grayFilterScanType = adaptiveProductionFilter
@@ -400,7 +415,21 @@ export function ScanControls({
           dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
           onScanRunStart?.(grayFilterScanType);
-          startVectorRun(req, grayFilterScanType);
+          startVectorRun(req);
+        } else if (roi && selectedTargetGray !== null && !isProduction) {
+          // Simulation, ROI area + target gray level, no gray level filter
+          // range: the ROI canvas runs the passes, deciding SPOT/SKIP for
+          // every pixel in the area each pass by comparing it with the target,
+          // until every pixel is skipped (matches). Production takes the
+          // real vector scan above so the backend's ADC presence check can
+          // fail the action before any image-only processing occurs.
+          if (!roiState.imageDataUrl && !roiState.scanImageDataUrl) {
+            dispatch(streamErrored(t("roi.targetGray.noImage")));
+            return;
+          }
+          clearActionLoopState();
+          if (phase === "error") dispatch(streamReset());
+          dispatch(requestROITargetGrayRun());
         } else {
           const req = await vectorRequestWithBitmapSelection(
             { ...vector, roi },
@@ -450,7 +479,7 @@ export function ScanControls({
         );
         const scanType = resolveVectorScanType(req);
         onScanRunStart?.(scanType);
-        startVectorRun(req, scanType);
+        startVectorRun(req);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -501,9 +530,15 @@ export function ScanControls({
 
   function onStop() {
     if (roiEbeamDisabled || !stopAvailable) return;
-    // Like OBI, stopping a live (Infinite) scan leaves the last image on the
-    // canvas; only finite runs clear it.
-    const stoppingLiveScan = infiniteScanActiveRef.current;
+    if (roiAction && targetGrayRunning) {
+      // Image-only loop: nothing is streaming, just stop the passes.
+      dispatch(finishROITargetGrayRun("stopped"));
+      return;
+    }
+    // Like OBI, stopping a live session leaves the last image on the canvas:
+    // Infinite, and Repeat N (the same live session with a frame limit).
+    // Only single runs clear it.
+    const stoppingLiveScan = infiniteScanActiveRef.current || actionLoopActiveRef.current;
     clearActionLoopState();
     clearInfiniteScanState();
     stream.stop();
@@ -601,7 +636,7 @@ export function ScanControls({
     roiEbeamDisabled ||
     streaming ||
     closing ||
-    (roiAction && actionLoopActive);
+    (roiAction && (actionLoopActive || targetGrayRunning));
   const stopDisabled = roiEbeamDisabled || !stopAvailable;
   const infiniteDisabled =
     (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive;
@@ -793,8 +828,8 @@ export function ScanControls({
             </HelpPopover>
             <span
               className="scan-busy"
-              data-visible={busy ? "true" : "false"}
-              aria-hidden={!busy}
+              data-visible={busy || targetGrayRunning ? "true" : "false"}
+              aria-hidden={!(busy || targetGrayRunning)}
               title={t("scan.busy.title")}
             >
               <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />

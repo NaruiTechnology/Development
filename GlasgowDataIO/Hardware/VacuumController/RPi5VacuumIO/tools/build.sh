@@ -3,6 +3,14 @@
 # Routing is replayed from routes.ses; REROUTE=1 (with FREEROUTING_CP set) autoroutes again.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; OUT="$(cd "$HERE/.." && pwd)"; N=RPi5VacuumIO
+# The board is now maintained in KiCad 10. This script regenerates it from design.py
+# with KiCad 7 and would overwrite RPi5VacuumIO.kicad_pcb and fab/. Fabrication data
+# comes from tools/make_fab_kicad10.sh (or .ps1).
+if grep -q '(generator_version "10\.' "$OUT/$N.kicad_pcb" && [ "${FORCE_REGENERATE:-0}" != 1 ]; then
+  echo "refusing: $N.kicad_pcb is a KiCad 10 board; use tools/make_fab_kicad10.sh for fab data" >&2
+  echo "(FORCE_REGENERATE=1 rebuilds the board from design.py and discards KiCad 10 edits)" >&2
+  exit 2
+fi
 W="$(mktemp -d)"; cd "$W"
 python3 "$HERE/safetycheck.py"
 python3 "$HERE/genpcb.py" place.kicad_pcb && python3 "$HERE/mkpro.py" place

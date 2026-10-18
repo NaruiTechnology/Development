@@ -37,7 +37,8 @@ def create_app() -> FastAPI:
         client = SbcVacuumClient(
             config.sbc_url, executor, bearer_token=config.sbc_token,
         )
-        runtime = VacuumFailoverRuntime(executor, client)
+        runtime = VacuumFailoverRuntime(
+            executor, client, release_on_stop=config.release_on_stop)
         stop_event = asyncio.Event()
         task = asyncio.create_task(runtime.run(stop_event))
         holder.update(config=config, runtime=runtime, task=task)

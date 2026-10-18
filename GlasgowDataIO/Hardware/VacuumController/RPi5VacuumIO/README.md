@@ -84,7 +84,7 @@ The controller software sequences the pumps and the HV permissive (A0–A4, B0�
 | E-stop loop opened | K9 drops and **+24V_ESTOP and +24V_SAFE are both removed**. That means everything, including K1. |
 | Rail status | GPIO5 (`ESTOP_OK_N`) and GPIO6 (`SAFE_OK_N`) let the software see both rails. |
 
-**JP1–JP8** choose each relay coil's rail. By default K1 (the mechanical pump) runs from +24V_ESTOP, so the backing pump keeps running if the Pi hangs; it stops only on E-stop. K2–K8 run from +24V_SAFE. Move a jumper (cut the 1–2 bridge, bridge 2–3) to change a channel.
+**JP1–JP8** choose each relay coil's rail. By default K1 (the mechanical pump) runs from +24V_ESTOP, so the backing pump keeps running if the Pi hangs. When the service process exits (crash or restart) R10 resets the expanders and K1 drops as well, unless IO_RESET_N stays high (see `glasgow_service/docs/vacuum-24x7-commissioning.md`). K2–K8 run from +24V_SAFE. Move a jumper (cut the 1–2 bridge, bridge 2–3) to change a channel.
 
 Valves must be **normally closed** (spring return) for "rail off = safe" to hold. If a normally-open valve is used, its safe state is open; check that this is acceptable.
 
@@ -158,10 +158,18 @@ The board is 195 × 160 mm, 2 layers, 1.6 mm FR-4, 1 oz copper, with a GND pour 
 
 | Path | Content |
 |---|---|
-| `RPi5VacuumIO.kicad_pro/.kicad_sch/.kicad_pcb` | KiCad project (KiCad 7 format; opens in KiCad 7–10) |
-| `fab/RPi5VacuumIO-gerbers.zip` | Upload to the board house (Gerber X2 + Excellon) |
-| `fab/*-bom.csv`, `fab/*-pos.csv` | BOM with MPNs and the pick-and-place file |
-| `fab/*-schematic.pdf`, `fab/*.step`, `fab/*-drc.rpt` | Schematic print, 3D model, DRC report |
-| `tools/` | Generators (`design.py` is the source of truth), `build.sh`, `make_fab_kicad10.ps1` |
+| `RPi5VacuumIO.kicad_pro/.kicad_sch/.kicad_pcb` | KiCad project. The board is KiCad 10 format and is edited in KiCad 10 |
+| `fab/RPi5VacuumIO-gerbers-<rev>.zip` | **Upload to the board house** (Gerber X2, Excellon, job file with stackup and finish) |
+| `fab/README.md` | Fabrication and assembly notes: board spec, hole table, release checks, review items |
+| `fab/assembly/` | BOM (with MPNs and mating-plug part numbers), pick-and-place, assembly drawing |
+| `fab/*-ipc2581.xml`, `fab/*-odb.zip`, `fab/*-ipcd356.ipc` | IPC-2581, ODB++, electrical-test netlist |
+| `fab/*-schematic.pdf`, `fab/*.step`, `fab/reports/` | Schematic, 3D model, ERC/DRC reports |
+| `fab/RPi5VacuumIO-manufacturing-<rev>.zip`, `fab/SHA256SUMS` | Everything above in one archive, with checksums |
+| `tools/` | `make_fab_kicad10.sh` / `.ps1` (fab package), `prodprep.py`, `fabnotes.py`, `sync_from_schematic.py`; `design.py` and `build.sh` generated the original KiCad 7 layout |
 
-To regenerate on Windows with KiCad 10, run `powershell -ExecutionPolicy Bypass -File .\tools\make_fab_kicad10.ps1` from this folder. On Linux, run `tools/build.sh`.
+Regenerate the package with KiCad 10 from this folder, on Windows with
+`powershell -ExecutionPolicy Bypass -File .\tools\make_fab_kicad10.ps1` or on Linux/macOS with
+`tools/make_fab_kicad10.sh` (`REV=A.2` to change the revision). Both refuse to write `fab/` unless
+ERC has no errors and DRC has no errors, no unconnected items and no schematic/board mismatches.
+`tools/build.sh` would rebuild the board from `design.py` and discard KiCad 10 edits, so it now
+refuses to run on the KiCad 10 board.

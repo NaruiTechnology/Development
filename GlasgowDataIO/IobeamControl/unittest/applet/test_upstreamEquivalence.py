@@ -12,6 +12,7 @@ import struct
 import sys
 import types
 import unittest
+from unittest.mock import patch
 
 from amaranth import Fragment, Module, Signal
 from amaranth.sim import Simulator
@@ -58,13 +59,24 @@ def reference():
 
 
 class UpstreamEquivalenceTest(unittest.TestCase):
-    def test_reference_elaborate_is_copied_without_logic_changes(self):
+    def test_reference_elaborate_only_changes_fifo_capacity(self):
         import inspect
         import textwrap
         from GlasgowDataIO.IobeamControl.applet.upstreamBusController import UpstreamBusController
         upstream, _, _ = reference()
         local = ast.parse(textwrap.dedent(inspect.getsource(UpstreamBusController.elaborate)))
         ref = ast.parse(textwrap.dedent(inspect.getsource(upstream.BusController.elaborate)))
+        # The local overflow fix reserves two extra FIFO slots for samples
+        # already in flight when backpressure arrives. All FSM logic stays
+        # identical to upstream; verify that this is the sole adaptation.
+        depths = [keyword for node in ast.walk(local)
+                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                  and node.func.id == "SkidBuffer"
+                  for keyword in node.keywords if keyword.arg == "depth"]
+        self.assertEqual(len(depths), 1)
+        self.assertEqual(ast.dump(depths[0].value),
+                         ast.dump(ast.parse("self.adc_latency + 2", mode="eval").body))
+        depths[0].value = ast.parse("self.adc_latency", mode="eval").body
         self.assertEqual(ast.dump(local), ast.dump(ref))
 
     def test_controller_pins_handshakes_samples_and_tags_match_upstream(self):
@@ -77,7 +89,13 @@ class UpstreamEquivalenceTest(unittest.TestCase):
                                              transforms=upstream.Transforms(*flags))
                 m = Module()
                 m.submodules.local, m.submodules.ref = local, ref
-                sim = Simulator(m)
+                # Match the intentional FIFO capacity correction while
+                # retaining upstream's independent FSM and stream logic.
+                upstream_globals = upstream.BusController.elaborate.__globals__
+                skid_buffer = upstream_globals["SkidBuffer"]
+                with patch.dict(upstream_globals, {"SkidBuffer":
+                        lambda layout, *, depth: skid_buffer(layout, depth=depth + 2)}):
+                    sim = Simulator(m)
                 sim.add_clock(1 / 48e6)
 
                 async def bench(ctx):

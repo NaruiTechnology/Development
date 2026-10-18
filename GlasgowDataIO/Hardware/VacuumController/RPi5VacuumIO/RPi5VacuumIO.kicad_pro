@@ -123,27 +123,27 @@
     "netclass_patterns": [
       {
         "netclass": "Power",
-        "pattern": "+24V*"
+        "pattern": "/+24V*"
       },
       {
         "netclass": "Load",
-        "pattern": "SOL_D*"
+        "pattern": "/SOL_D*"
       },
       {
         "netclass": "Load",
-        "pattern": "RLY_V*"
+        "pattern": "/RLY_V*"
       },
       {
         "netclass": "Contact",
-        "pattern": "K*_COM"
+        "pattern": "/K*_COM"
       },
       {
         "netclass": "Contact",
-        "pattern": "K*_NO"
+        "pattern": "/K*_NO"
       },
       {
         "netclass": "Contact",
-        "pattern": "K*_NC"
+        "pattern": "/K*_NC"
       }
     ]
   },

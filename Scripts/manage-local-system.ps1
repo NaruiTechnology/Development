@@ -1,8 +1,9 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet("install", "start", "start-sample-stage", "restart", "restart-controllers", "stop", "status", "logs")]
-    [string]$Operation = "restart"
+    [ValidateSet("install", "start", "start-sample-stage", "restart", "restart-controllers", "stop", "stop-vacuum", "restart-vacuum", "status", "logs")]
+    [string]$Operation = "restart",
+    [switch]$Yes
 )
 
 $ErrorActionPreference = "Stop"
@@ -218,6 +219,7 @@ function Start-SampleStage {
 }
 
 function Start-Controllers {
+    param([switch]$VacuumOnly)
     Assert-Prerequisites
     $env:PYTHONPATH = "$developmentRoot;$serviceRoot"
     # Use the application parser; keep credential values out of terminal output.
@@ -244,7 +246,8 @@ function Start-Controllers {
     if (-not $env:IOBEAM_ADMIN_DB_USER) { $env:IOBEAM_ADMIN_DB_USER = "postgres" }
 
     Start-Managed "sbc-vacuum" $python @("-m", "glasgow_service.sbc_vacuum_app") $serviceRoot
-    Wait-Http "SBC vacuum" "http://127.0.0.1:8766/health/ready"
+    Wait-Http "SBC vacuum" "http://127.0.0.1:8766/health/live"
+    if ($VacuumOnly) { return }
     Start-Managed "glasgow" $python @("-m", "uvicorn", "glasgow_service.api:app", "--host", "127.0.0.1", "--port", "8765") $serviceRoot
     Wait-Http "Glasgow" "http://127.0.0.1:8765/status"
     Start-Managed "vacuum-executor" $python @("-m", "glasgow_service.vacuum_executor_app") $serviceRoot
@@ -279,7 +282,7 @@ function Start-Stack {
 }
 
 function Stop-Stack {
-    foreach ($name in @("ionbeam-frontend", "ionbeam-backend", "vacuum-executor", "sample-stage", "glasgow", "sbc-vacuum")) {
+    foreach ($name in @("ionbeam-frontend", "ionbeam-backend", "vacuum-executor", "sample-stage", "glasgow")) {
         Stop-Managed $name
     }
 }
@@ -288,13 +291,23 @@ switch ($Operation) {
     "install" { Assert-Prerequisites; Write-Host "Windows local stack prerequisites are available." }
     "start" { Start-Stack; Show-Status }
     "start-sample-stage" { Start-SampleStage; Show-Status }
-    "restart" { Stop-Stack; Start-Stack; Show-Status }
+    "restart" { Stop-Stack; Stop-Managed "sbc-vacuum"; Start-Stack; Show-Status }
     "restart-controllers" {
         foreach ($name in @("vacuum-executor", "glasgow", "sbc-vacuum")) { Stop-Managed $name }
         Start-Controllers
         Show-Status
     }
-    "stop" { Stop-Stack }
+    "stop" { Stop-Stack; Write-Host "SBC vacuum keeps running. Use stop-vacuum -Yes to stop it." }
+    "stop-vacuum" {
+        if (-not $Yes) { throw "Stopping vacuum powers pumps down. Run stop-vacuum -Yes to confirm." }
+        Stop-Managed "sbc-vacuum"
+    }
+    "restart-vacuum" {
+        if (-not $Yes) { throw "Restarting vacuum can power pumps down. Run restart-vacuum -Yes to confirm." }
+        Stop-Managed "sbc-vacuum"
+        Start-Controllers -VacuumOnly
+        Show-Status
+    }
     "status" { Show-Status }
     "logs" {
         Get-ChildItem -LiteralPath $logRoot -Filter "*.log" -ErrorAction SilentlyContinue |

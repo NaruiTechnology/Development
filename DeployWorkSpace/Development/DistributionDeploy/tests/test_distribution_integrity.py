@@ -51,6 +51,7 @@ def make_workspace(base):
         "glasgow_service/pyproject.toml": DEVELOPMENT / "glasgow_service/pyproject.toml",
         "glasgow_service/deploy/setup-redis-sentinel.sh": DEVELOPMENT / "glasgow_service/deploy/setup-redis-sentinel.sh",
         "glasgow_service/deploy/prepare-docker-wsl.ps1": DEVELOPMENT / "glasgow_service/deploy/prepare-docker-wsl.ps1",
+        "glasgow_service/scripts/vacuum_excursion_test.py": DEVELOPMENT / "glasgow_service/scripts/vacuum_excursion_test.py",
         "requirements.txt": DEVELOPMENT / "requirements.txt",
         "IobeamAdmin/Sql/006_equipment_csv_functions.sql": DEVELOPMENT / "IobeamAdmin/Sql/006_equipment_csv_functions.sql",
         "buildCompiledDist.py": BUILDER_SOURCE,

@@ -44,7 +44,7 @@
           (length 2.54)
           (name "SCL" (effects (font (size 1.27 1.27))))
           (number "10" (effects (font (size 1.27 1.27)))))
-        (pin output line
+        (pin open_collector line
           (at 10.16 5.08 180)
           (length 2.54)
           (name "ALERT/RDY" (effects (font (size 1.27 1.27))))
@@ -5707,7 +5707,7 @@
     (lib_id "Jumper:SolderJumper_3_Bridged12")
     (at 523.24 83.82 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid 98889eee-c52f-5e90-a1f6-c8912c52a4b4)
@@ -6072,7 +6072,7 @@
     (lib_id "Jumper:SolderJumper_3_Bridged12")
     (at 576.58 83.82 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid fbd83e01-fcae-52c2-981d-a42113ec8246)
@@ -6440,7 +6440,7 @@
     (lib_id "Jumper:SolderJumper_3_Bridged12")
     (at 632.46 83.82 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid 6253da57-ad5b-5947-8884-e39069cf072d)
@@ -6802,7 +6802,7 @@
     (lib_id "Jumper:SolderJumper_3_Bridged12")
     (at 685.8 83.82 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid a0823538-385b-5b01-a239-c821695506e0)
@@ -7167,7 +7167,7 @@
     (lib_id "Jumper:SolderJumper_3_Bridged12")
     (at 741.68 83.82 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid 506ffd51-3e46-5964-a3bd-41b7a4dabccb)
@@ -7532,7 +7532,7 @@
     (lib_id "Jumper:SolderJumper_3_Bridged12")
     (at 797.56 83.82 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid 7392c7ec-754f-52d9-9458-c340855f05d8)
@@ -7894,7 +7894,7 @@
     (lib_id "Jumper:SolderJumper_3_Bridged12")
     (at 853.44 83.82 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid 85a7027f-b9c6-5688-b546-dc0c964e88a4)
@@ -8259,7 +8259,7 @@
     (lib_id "Jumper:SolderJumper_3_Bridged12")
     (at 906.78 83.82 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid 455a002e-6bc9-5d83-a614-db41117aefa2)
@@ -12105,7 +12105,7 @@
       (id 3)
       (at 558.8 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
       (id 4)
       (at 558.8 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -12492,7 +12492,7 @@
       (id 3)
       (at 713.74 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
       (id 4)
       (at 713.74 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -12879,7 +12879,7 @@
       (id 3)
       (at 868.68 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
       (id 4)
       (at 868.68 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -13269,7 +13269,7 @@
       (id 3)
       (at 1026.16 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840395"
+    (property "MPN" "Phoenix 1844252 (MC 1,5/6-G-3,5); plug 1840405"
       (id 4)
       (at 1026.16 274.32 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -18925,7 +18925,7 @@
       (id 3)
       (at 299.72 464.82 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"
+    (property "MPN" "Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"
       (id 4)
       (at 299.72 464.82 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -19039,7 +19039,7 @@
       (id 3)
       (at 299.72 487.68 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
-    (property "MPN" "Phoenix 1844265 (MC 1,5/8-G-3,5); plug 1840411"
+    (property "MPN" "Phoenix 1844278 (MC 1,5/8-G-3,5); plug 1840421"
       (id 4)
       (at 299.72 487.68 0)
       (effects (font (size 1.27 1.27)) (justify left) hide))
@@ -19508,7 +19508,7 @@
     (lib_id "Jumper:SolderJumper_2_Open")
     (at 401.32 444.5 0)
     (unit 1)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid 5ae02306-f87c-535f-8219-a4a0767b1286)

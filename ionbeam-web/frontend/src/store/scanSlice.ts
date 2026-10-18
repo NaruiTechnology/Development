@@ -37,7 +37,6 @@ export interface StreamTransforms {
   yflip: boolean;
   rotate90: boolean;
 }
-const ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY = "ionbeam.roiGrayScaleStepDelta";
 
 interface ScanState {
   kind: ScanKind;
@@ -67,7 +66,15 @@ interface ScanState {
   roiGrayScaleSelection: GrayScaleSelection;
   /** `true` skips highlighted pixels, `false` spots them, `null` means no special handling. */
   roiGrayScaleSkipped: boolean | null;
-  roiGrayScaleStepDelta: number;
+
+  /** Target gray level picked by right-clicking a pixel on the ROI image;
+   *  null until the operator picks one. */
+  selectedTargetGray: number | null;
+  /** Canvas pixel (ROI canvas space) the target gray was picked at, for the "+" mark. */
+  selectedTargetGrayPoint: { x: number; y: number } | null;
+  /** Action run loop that steps the ROI area toward `selectedTargetGray`.
+   *  `token` changes on every run request so the canvas can start a fresh loop. */
+  roiTargetGrayRun: ROITargetGrayRun;
 
   /** How the vector image is rendered onto the canvas. Per-session — not
    *  persisted to localStorage — because the right choice depends on the
@@ -78,6 +85,17 @@ interface ScanState {
   /** Settings of the most recently started scan, shown as a chip on the
    *  live image once that scan completes. */
   lastScanParams: ScanParamSummary | null;
+}
+
+export interface ROITargetGrayRun {
+  status: "idle" | "running" | "completed" | "stopped";
+  token: number;
+  /** Passes run so far in the current (or last) loop. */
+  passes: number;
+  /** Pixels in the ROI area spotted (gray != target) in the latest pass. */
+  spot: number;
+  /** Pixels in the ROI area skipped (gray == target) in the latest pass. */
+  skip: number;
 }
 
 export interface ROIState {
@@ -203,7 +221,9 @@ const initialState: ScanState = {
   beamEnergyEv: 1000.0,
   roiGrayScaleSelection: null,
   roiGrayScaleSkipped: null,
-  roiGrayScaleStepDelta: loadInitialGrayScaleStepDelta(),
+  selectedTargetGray: null,
+  selectedTargetGrayPoint: null,
+  roiTargetGrayRun: { status: "idle", token: 0, passes: 0, spot: 0, skip: 0 },
   vectorRenderMode: "decimated",
   streamTransforms: { xflip: false, yflip: false, rotate90: false },
   lastScanParams: null,
@@ -417,34 +437,6 @@ function calibrationPatchTouchesConfirmedMapping(patch: Partial<ROIState>): bool
   ].some((key) => Object.prototype.hasOwnProperty.call(patch, key));
 }
 
-function clampGrayScaleStepDelta(value: unknown): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 10;
-  return Math.max(1, Math.min(255, Math.round(n)));
-}
-
-function loadInitialGrayScaleStepDelta(): number {
-  if (typeof window === "undefined") return 10;
-  try {
-    return clampGrayScaleStepDelta(window.localStorage.getItem(ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY));
-  } catch {
-    return 10;
-  }
-}
-
-export function persistGrayScaleStepDelta(stepDelta: number): void {
-  try {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        ROI_GRAY_SCALE_STEP_DELTA_STORAGE_KEY,
-        String(clampGrayScaleStepDelta(stepDelta))
-      );
-    }
-  } catch {
-    /* localStorage may be disabled */
-  }
-}
-
 /* -------- blocking REST runs ------------------------------------------- */
 
 export const runRasterValidated = createAsyncThunk<ScanResult, RasterRequest>(
@@ -613,16 +605,13 @@ const slice = createSlice({
     },
     setROIGrayScaleSelection(
       s,
-      a: PayloadAction<{ selection: GrayScaleSelection; isSkipped?: boolean | null; stepDelta?: number }>
+      a: PayloadAction<{ selection: GrayScaleSelection; isSkipped?: boolean | null }>
     ) {
       s.roiGrayScaleSelection = normalizeGrayScaleSelection(a.payload.selection);
       if (a.payload.selection === null) {
         s.roiGrayScaleSkipped = null;
       } else if (Object.prototype.hasOwnProperty.call(a.payload, "isSkipped")) {
         s.roiGrayScaleSkipped = a.payload.isSkipped === null ? null : Boolean(a.payload.isSkipped);
-      }
-      if (a.payload.stepDelta !== undefined) {
-        s.roiGrayScaleStepDelta = clampGrayScaleStepDelta(a.payload.stepDelta);
       }
     },
     confirmROICalibration(s) {
@@ -641,11 +630,45 @@ const slice = createSlice({
       s.raster.roi = null;
       s.vector.roi = null;
     },
+    setSelectedTargetGray(
+      s,
+      a: PayloadAction<{ value: number | null; point?: { x: number; y: number } | null }>
+    ) {
+      const value = a.payload.value;
+      s.selectedTargetGray =
+        value === null || !Number.isFinite(value)
+          ? null
+          : Math.max(0, Math.min(255, Math.round(value)));
+      s.selectedTargetGrayPoint = s.selectedTargetGray === null ? null : a.payload.point ?? null;
+    },
+    /** Clear only the "+" mark (the picked value stays in the text box). */
+    clearSelectedTargetGrayPoint(s) {
+      s.selectedTargetGrayPoint = null;
+    },
+    requestROITargetGrayRun(s) {
+      s.roiTargetGrayRun = {
+        status: "running",
+        token: s.roiTargetGrayRun.token + 1,
+        passes: 0,
+        spot: 0,
+        skip: 0,
+      };
+    },
+    roiTargetGrayRunProgress(s, a: PayloadAction<{ passes: number; spot: number; skip: number }>) {
+      if (s.roiTargetGrayRun.status !== "running") return;
+      s.roiTargetGrayRun.passes = a.payload.passes;
+      s.roiTargetGrayRun.spot = a.payload.spot;
+      s.roiTargetGrayRun.skip = a.payload.skip;
+    },
+    finishROITargetGrayRun(s, a: PayloadAction<"idle" | "completed" | "stopped">) {
+      s.roiTargetGrayRun.status = a.payload;
+    },
     clearROIImage(s) {
       s.roi.imageName = "No image selected";
       s.roi.imageDataUrl = null;
       s.roi.imageKind = "none";
       s.roi.imageBounds = null;
+      s.selectedTargetGrayPoint = null;
     },
     clearROIScanImage(s) {
       s.roi.scanImageDataUrl = null;
@@ -800,6 +823,11 @@ export const {
   clearROIScanImage,
   clearROISelection,
   setROIGrayScaleSelection,
+  setSelectedTargetGray,
+  clearSelectedTargetGrayPoint,
+  requestROITargetGrayRun,
+  roiTargetGrayRunProgress,
+  finishROITargetGrayRun,
   clearLastResult,
   clearLastOutput,
   setVectorRenderMode,

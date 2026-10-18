@@ -48,7 +48,7 @@ class WorkThread(Thread):
         self._timeout = 0  # Seconds, 0 = infinite
         self._recurringInterval = util.DefaultRecurringInterval
         '''
-            NOTE: if the timeout value < 0, the life time for a work thread is infinit
+            NOTE: if the timeout value < 0, the life time for a work thread is infinite
         '''
         self._shutdownEvent = None
         self._id = repr("WorkThread_" + util.IdGenerator())

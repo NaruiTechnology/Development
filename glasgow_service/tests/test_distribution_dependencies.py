@@ -118,6 +118,7 @@ def isolated_builder(monkeypatch, tmp_path):
     # omit unrelated web/assets/dependency requirements from the tiny fixture.
     for name in ("validate_glasgow_runtime_dependencies",
                  "validate_local_redis_distribution_workflow",
+                 "validate_local_admin_database_workflow",
                  "copy_source_trees", "copy_preserved_files",
                  "copy_matching_assets", "validate_packaged_local_system_manager",
                  "validate_dist_contents", "write_dist_manifest",

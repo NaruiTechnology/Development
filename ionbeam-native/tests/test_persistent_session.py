@@ -191,3 +191,43 @@ def test_engine_live_mode_streams_frames_without_reconnect(stream_config):
         assert engine.svc.session_stats.connects == 1
     finally:
         engine.shutdown()
+
+
+def test_engine_repeat_session_ends_after_max_frames(stream_config):
+    """Repeat N runs like Infinite (one live job on the open session) but ends
+    by itself after N frames, with no reconnect between frames."""
+    import threading
+    from ionbeam_native.engine.engine import Engine, ScanJob
+
+    engine = Engine(stream_config, post=lambda fn: fn(), service_cls=FakeDesktopService)
+    frames, done = [], threading.Event()
+    outcome = {}
+
+    def on_finished(result):
+        outcome.update(result)
+        done.set()
+
+    req = raster().model_dump()
+    job = ScanJob("raster", req, live=True, max_frames=3)
+    engine.start_stream(job, on_started=lambda: None,
+                        on_frame=lambda index, result: frames.append(result), on_finished=on_finished)
+    assert done.wait(30)
+    try:
+        assert [f["frame"] for f in frames] == [0, 1, 2]
+        assert [f["last"] for f in frames] == [False, False, True]
+        assert outcome["event"] == "done" and outcome["frame"] == 2
+        assert job.frames_done == 3
+        assert all(not f["perf"]["reconnected"] for f in frames[1:])
+        assert engine.svc.session_stats.connects == 1
+    finally:
+        engine.shutdown()
+
+
+def test_scan_job_last_frame():
+    from ionbeam_native.engine.engine import ScanJob
+
+    assert ScanJob("vector", {}).is_last_frame(0)                       # single run
+    assert not ScanJob("vector", {}, live=True).is_last_frame(99)       # Infinite: until Stop
+    repeat = ScanJob("vector", {}, live=True, max_frames=2)             # Repeat 2
+    assert not repeat.is_last_frame(0)
+    assert repeat.is_last_frame(1)

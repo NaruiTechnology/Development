@@ -53,9 +53,9 @@ from AutomationPy.buildingblocks.automation_config import AutomationConfig
 from AutomationPy.buildingblocks.definitions import Consts
 import AutomationPy.buildingblocks.utils as util
 from AutomationPy.buildingblocks.automation_log import AutomationLog
-# Single source of truth for scan parameters — see the module docstring
-# in scan_params.py for the design notes. JSON config → params, then
-# request → params.override(...) → macro.
+# Single source of truth for scan parameters â€” see the module docstring
+# in scan_params.py for the design notes. JSON config â†’ params, then
+# request â†’ params.override(...) â†’ macro.
 from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .device_lock import DeviceHeld, DeviceLock
@@ -919,6 +919,11 @@ class DeviceService:
 
         self._conn: Optional[GlasgowConnection] = None
         self._adc_conn: Optional[AdcConnection] = None
+        # A connection dropped after a USB error.  It still owns the USB
+        # interface until it is hard-closed, which happens before the next
+        # connect (see _close_stale_conn); opening a new GlasgowDevice
+        # first fails with LIBUSB_ERROR_BUSY.
+        self._stale_conn: Optional[GlasgowConnection] = None
         # Cross-process USB ownership (see device_lock.py): the native desktop
         # app and this service must not claim the Glasgow at the same time.
         # Created lazily by the _device_lock property.
@@ -972,8 +977,8 @@ class DeviceService:
         logger.debug("service ready (lazy connect on first scan)")
 
     async def stop(self) -> None:
-        """Best-effort: drop the reference. The library has no clean USB
-        teardown, so we rely on process exit / GC for actual release."""
+        """Close every connection and release the device lock."""
+        await self._close_stale_conn()
         if self._adc_conn is not None:
             await self._adc_conn.close()
             self._adc_conn = None
@@ -988,6 +993,7 @@ class DeviceService:
     async def reconnect(self) -> None:
         """Drop the current connection so the next scan opens a fresh one."""
         async with self._lock:
+            await self._close_stale_conn()
             if self._adc_conn is not None:
                 await self._adc_conn.close()
                 self._adc_conn = None
@@ -1043,6 +1049,7 @@ class DeviceService:
         releases the USB interface.
         """
         async with self._acquire("adc"):
+            await self._close_stale_conn()
             if self._conn is not None:
                 await self._conn._hard_close()
                 self._conn = None
@@ -1205,12 +1212,12 @@ class DeviceService:
         """Return the JSON defaults for the UI.
 
         Both shapes are present:
-          * `raster` / `vector` — raw camelCase JSON keys, for back-compat
+          * `raster` / `vector` â€” raw camelCase JSON keys, for back-compat
             with the existing frontend translation in `applyServerDefaults`
             and the display-render code that pulls `lineShiftPerXRow` etc.
-          * `raster_params` / `vector_params` — normalized snake_case dicts
+          * `raster_params` / `vector_params` â€” normalized snake_case dicts
             matching the API request shapes, fed by RasterParams /
-            VectorParams. New frontend code should prefer these — no
+            VectorParams. New frontend code should prefer these â€” no
             client-side translation needed.
         """
         return {
@@ -1241,12 +1248,12 @@ class DeviceService:
             "version": str(getattr(self._config, "Version", "")),
         }
 
-    # -------- internal: effective params (JSON defaults ⊕ request override) ---
+    # -------- internal: effective params (JSON defaults âŠ• request override) ---
 
     def _effective_raster_params(self, req: "RasterRequest") -> RasterParams:
         """Merge the JSON defaults with the request, with the request
         winning on every field it explicitly carries. Macro-tuning
-        constants (max_pipeline, padding_*) come from JSON only — they're
+        constants (max_pipeline, padding_*) come from JSON only â€” they're
         not exposed on the request because nothing in the UI needs to set
         them, but a per-build streamData.json override flows through."""
         return self._raster_params_defaults.override(
@@ -1340,6 +1347,13 @@ class DeviceService:
         if self._conn is not None and self._conn.connected:
             return self._conn
 
+        # A connection dropped after an error still claims the USB interface:
+        # release it first, or the new GlasgowDevice fails with BUSY.
+        await self._close_stale_conn()
+        if self._conn is not None:
+            # Present but no longer connected: close it before replacing it.
+            await self._hard_close_quietly(self._conn, "disconnected connection")
+            self._conn = None
         logger.debug("opening Glasgow connection")
         self._claim_device()
         self._status.state = DeviceState.CONNECTING
@@ -1351,7 +1365,9 @@ class DeviceService:
                     "GlasgowConnection._connect() reported not connected")
         except Exception as e:
             logger.exception("Glasgow connection setup failed")
-            self._conn = None
+            failed, self._conn = self._conn, None
+            if failed is not None:
+                await self._hard_close_quietly(failed, "failed connection")
             self._status.state = DeviceState.ERROR
             self._status.last_error = repr(e)
             if _is_fatal_usb_error(e):
@@ -1368,7 +1384,29 @@ class DeviceService:
         if _is_fatal_usb_error(exc):
             logger.warning("dropping connection after %s: %s",
                         type(exc).__name__, exc)
-            self._conn = None
+            stale, self._conn = self._conn, None
+            if stale is not None:
+                # Called from synchronous exception paths (some inside async
+                # generators), so the close is deferred to the next connect.
+                previous = getattr(self, "_stale_conn", None)
+                if previous is not None and previous is not stale:
+                    logger.warning("a previous stale connection was still open")
+                self._stale_conn = stale
+
+    async def _close_stale_conn(self) -> None:
+        stale = getattr(self, "_stale_conn", None)
+        self._stale_conn = None
+        if stale is not None:
+            await self._hard_close_quietly(stale, "connection dropped after an error")
+
+    @staticmethod
+    async def _hard_close_quietly(conn, what: str) -> None:
+        try:
+            await conn._hard_close()
+            logger.info("released the Glasgow USB interface held by the %s", what)
+        except Exception as exc:  # noqa: BLE001 - best effort; keep going
+            logger.warning("closing the %s raised %s: %s",
+                           what, type(exc).__name__, exc)
 
     # -------- streaming (for WebSocket) -----------------------------------
 
@@ -1436,7 +1474,7 @@ class DeviceService:
                     logger.info("%s", summary)
                 # On normal completion AND on cancellation (Pause/Stop),
                 # snapshot whatever we got. Partial captures are still
-                # downloadable — better than nothing for a paused scan.
+                # downloadable â€” better than nothing for a paused scan.
                 if not adc_presence_fault:
                     self._set_last_scan(req, {
                         "kind": "raster",
@@ -1556,7 +1594,7 @@ class DeviceService:
             # Same disconnected-bus detection raster/vector already run:
             # a floating revC3 ADC bus reads as full scale forever, which
             # looks exactly like a flat line pegged at 16383/16384 on the
-            # waveform — indistinguishable from "Complete" without this
+            # waveform â€” indistinguishable from "Complete" without this
             # check. Surfacing it as an error (instead of silently
             # finishing) is what actually explains a flat trace to the
             # operator; the DAC ramp itself may well be fine.
@@ -1777,8 +1815,8 @@ class DeviceService:
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req)
             latency = self._chunk_latency("raster", req.latency_bytes, cmd)
-            # Log effective params (post-override) — what actually goes to
-            # the macro — rather than just the raw request. Makes it easy
+            # Log effective params (post-override) â€” what actually goes to
+            # the macro â€” rather than just the raw request. Makes it easy
             # to confirm a streamData.json default landed where it should.
             eff = self._effective_raster_params(req)
             logger.debug(
@@ -1849,7 +1887,7 @@ class DeviceService:
         full-range, the other pinned), which was never ported into this
         fork. Without it, the only way to sanity-check DAC output was
         `/scan/vector/run`, whose default `scan_path` (vertical_raster)
-        sweeps the *other* axis fast — on a scope the axis under test then
+        sweeps the *other* axis fast â€” on a scope the axis under test then
         shows a staircase (one step per full sweep of the other axis),
         which looks like a hardware fault but is a scan-pattern artifact.
         This reuses the same connection/lock/RasterScanCommand path as
@@ -2017,7 +2055,7 @@ class DeviceService:
     def _build_raster_cmd(self, req: RasterRequest, *,
                           continuous: bool = False) -> RasterScanCommand:
         """Build the macro command from JSON defaults overridden by the
-        request. Every field the macro accepts is passed explicitly —
+        request. Every field the macro accepts is passed explicitly â€”
         nothing falls through to a hardcoded macro default.
 
         ``continuous`` is passed only by the streaming path (raster_scan);
@@ -2067,7 +2105,7 @@ class DeviceService:
         """Mirror upstream OBI's manual_dac_ctrl.RampControl.scan(): full
         resolution on the swept axis, count=1 (a single fixed code) on the
         held axis. Goes through the exact same RasterScanCommand /
-        UpstreamBusController path as `/scan/raster/run` — the gateware
+        UpstreamBusController path as `/scan/raster/run` â€” the gateware
         side has already been verified bit-for-bit against upstream, so
         this only needs to reproduce the *stimulus*, not re-implement the
         drive logic."""
@@ -2440,7 +2478,7 @@ class DeviceService:
                       Pixel coords correspond to DAC codes 1:1.
           - decimated: render an edge x edge image where edge is the
                        scan's vector_resolution. Pixel coords correspond
-                       to scan indices, NOT DAC codes — but we use
+                       to scan indices, NOT DAC codes â€” but we use
                        imshow's `extent=` to keep the axis labels in DAC
                        coordinates so the figure stays legible.
         """
@@ -2448,7 +2486,7 @@ class DeviceService:
             raise DeviceNotReady("no scan data cached")
 
         # Imported lazily so the service still boots without matplotlib
-        # installed — only this endpoint will fail.
+        # installed â€” only this endpoint will fail.
         import numpy as np
         import matplotlib
         matplotlib.use("Agg")  # headless backend; required when no display
@@ -2701,7 +2739,7 @@ class DeviceService:
                     except asyncio.TimeoutError:
                         raise DeviceBusy(svc._busy_detail()) from None
                     acquired = True
-                # IDLE, ERROR, DISCONNECTED are all OK to start from — the
+                # IDLE, ERROR, DISCONNECTED are all OK to start from â€” the
                 # _ensure_conn() call inside the scan will (re)open as needed.
                 if svc._status.state is DeviceState.CONNECTING:
                     if acquired:

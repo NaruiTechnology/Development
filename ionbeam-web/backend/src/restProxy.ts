@@ -9,7 +9,11 @@
 import { Router } from "express";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import { config } from "./config";
-import { readVacuumEnabled } from "./vacuumConfig";
+import { readEffectiveVacuumEnabled } from "./vacuumConfig";
+
+/** Host setting AND the SBC's own report (see vacuumConfig.ts). */
+const effectiveVacuumEnabled = () => readEffectiveVacuumEnabled(
+  config.vacuumConfigPath, config.vacuumControllerUrl, config.sbcVacuumToken);
 
 export function buildRestProxy(): Router {
   const router = Router();
@@ -28,7 +32,7 @@ export function buildRestProxy(): Router {
     req.url?.startsWith("/stage") === true ||
     req.originalUrl?.startsWith("/api/stage") === true;
   router.get("/status", async (_req, res) => {
-    const vacuumEnabled = readVacuumEnabled(config.vacuumConfigPath);
+    const vacuumEnabled = await effectiveVacuumEnabled();
     try {
       const upstream = await fetch(`${config.proxyTargetHttp}/status`, {
         headers: config.glasgowToken
@@ -73,7 +77,7 @@ export function buildRestProxy(): Router {
   });
 
   router.use("/vacuum", async (req, res, next) => {
-    if (readVacuumEnabled(config.vacuumConfigPath)) {
+    if (await effectiveVacuumEnabled()) {
       (req as RoutedRequest).vacuumProxyTarget = true;
       next();
       return;
@@ -99,8 +103,13 @@ export function buildRestProxy(): Router {
     on: {
       // Inject the bearer token if configured. Browsers must not see it.
       proxyReq: (proxyReq, req) => {
-        if (config.glasgowToken) {
-          proxyReq.setHeader("Authorization", `Bearer ${config.glasgowToken}`);
+        // The SBC vacuum API has its own token; everything else uses the
+        // glasgow_service token.
+        const token = isVacuumRequest(req) && config.sbcVacuumToken
+          ? config.sbcVacuumToken
+          : config.glasgowToken;
+        if (token) {
+          proxyReq.setHeader("Authorization", `Bearer ${token}`);
         }
         // body-parser may have already consumed the request body; re-write
         // it onto the proxied request so POST /scan/raster/run gets its JSON.

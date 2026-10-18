@@ -9,7 +9,8 @@ per-chunk message, no serialisation and no WebSocket in between.
 Stream jobs mirror the web's ``/ws/scan/*/stream`` behaviour, including the
 error-message shapes the UI displays; "live" jobs repeat a request frame
 after frame on the open session (the web's Infinite mode, OBI's live view)
-without a round trip through the UI between frames.
+without a round trip through the UI between frames. A live job with
+``max_frames`` (Repeat N) is the same session ending by itself after N frames.
 """
 from __future__ import annotations
 
@@ -58,13 +59,21 @@ def stream_error_message(exc: BaseException) -> str:
 class ScanJob:
     kind: str                       # raster | vector | dac_ramp
     request: dict                   # web request JSON shape
-    live: bool = False              # repeat until stopped (Infinite)
+    live: bool = False              # repeat frames on the open session (Infinite / Repeat N)
+    max_frames: Optional[int] = None  # live only: end after N frames (Repeat N); None = until Stop
     preserve_frame: bool = False
     line_shift_per_x_row: float = 0.0
     on_frame_start: Optional[Callable[[int], None]] = None           # engine thread, must be quick
     on_frame_done: Optional[Callable[[int, dict], None]] = None      # engine thread, must be quick
     id: int = field(default_factory=lambda: next(_JOB_IDS))
     stop_requested: bool = False
+    frames_done: int = 0            # frames completed so far (engine thread)
+
+    def is_last_frame(self, frame_index: int) -> bool:
+        """Whether ``frame_index`` ends the job: a single run, or the Nth frame of Repeat N."""
+        if not self.live:
+            return True
+        return self.max_frames is not None and frame_index + 1 >= self.max_frames
 
 
 _JOB_IDS = itertools.count(1)
@@ -226,13 +235,15 @@ class Engine:
                     break
                 if job.kind == "vector" and job.line_shift_per_x_row:
                     self.vector.correct_line_shift(job.line_shift_per_x_row)
+                job.frames_done = frame_index + 1
+                last = job.is_last_frame(frame_index)
                 frame_result = {"event": "done", "chunks": chunks, "frame": frame_index,
-                                "perf": perf.as_dict()}
+                                "last": last, "perf": perf.as_dict()}
                 if job.on_frame_done is not None:
                     job.on_frame_done(frame_index, frame_result)
                 self.post(lambda r=frame_result: on_frame(r["frame"], r))
                 outcome = frame_result
-                if not job.live or job.stop_requested:
+                if last or job.stop_requested:
                     break
                 frame_index += 1
         except Exception as exc:

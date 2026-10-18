@@ -95,3 +95,18 @@ docker exec iobeam-sentinel redis-cli -p 26379 ping
 
 Local logs are written under `C:\Project\Iobeam\Deploy\Logs`; PID files
 are under `C:\Project\Iobeam\Deploy\Runtime`.
+
+The SBC vacuum controller owns the vacuum system. The backend connects directly
+to port 8766 by default; port 8780 is reserved for a fenced failover deployment.
+Stopping the Windows host stack leaves the SBC controller running. A full
+`restart` reloads its profile and may drop pump outputs. To stop or restart only
+the vacuum controller explicitly, use:
+
+```powershell
+.\Development\Scripts\manage-local-system.ps1 stop-vacuum -Yes
+.\Development\Scripts\manage-local-system.ps1 restart-vacuum -Yes
+```
+
+`/health/live` checks the SBC process, `/health/ready` checks readiness, and
+`/health/vacuum` reports continuous vacuum control problems. SBC installation
+scripts and systemd units target the Raspberry Pi and run on that Linux device.

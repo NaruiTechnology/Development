@@ -22,16 +22,29 @@ LOG_DIR="${OPERATIONS_LOG_DIR:-${OPERATIONS_ROOT}/logs}"
 NPM_BIN="${NPM_BIN:-$(command -v npm || true)}"
 NPM_DIR="$(dirname -- "${NPM_BIN:-/usr/bin/npm}")"
 ACTION="${1:-restart}"
+CONFIRM="${2:-}"
 
 usage() {
   cat <<'EOF'
 Usage: manage-local-system.sh [start|restart|stop|status|logs|install]
+       manage-local-system.sh [stop-vacuum|restart-vacuum] --yes
 
-  start/restart  Install location-aware units, reload systemd, and start stack
-  stop           Stop the complete local stack
+  start           Install location-aware units and start the host stack. The SBC
+                  vacuum controller starts only when it is not already running.
+  restart         Install/reload units and restart the host stack, including the
+                  SBC vacuum controller. Its outputs may drop during restart.
+  stop           Stop the host stack. The SBC vacuum controller keeps running.
   status         Show a non-paged summary of every service
   logs           Follow logs for all five services (Ctrl-C exits)
   install        Install/reload/enable units without restarting running services
+
+  stop-vacuum    Stop the SBC vacuum controller.     Every pump powers down; the
+  restart-vacuum Restart the SBC vacuum controller.  backing pump too, unless the
+                 board keeps it (KeepBackingPumpOnRestart). Both require --yes.
+
+The SBC vacuum controller owns the vacuum system once it runs. The host stack
+starts it when down, and a full `restart` operation restarts it to load the
+deployed profile; both actions wait for its health endpoint.
 
 Log files are written under OPERATIONS_ROOT/logs.
 Environment overrides: OPERATIONS_ROOT, OPERATIONS_VENV, OPERATIONS_LOG_DIR, ADMIN_USER,
@@ -40,7 +53,7 @@ EOF
 }
 
 case "${ACTION}" in
-  start|restart|stop|status|logs|install) ;;
+  start|restart|stop|status|logs|install|stop-vacuum|restart-vacuum) ;;
   -h|--help|help) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -257,6 +270,44 @@ wait_http() {
   return 1
 }
 
+# The SBC controller owns the vacuum system once it runs. A normal start leaves
+# an already-running controller alone. A deployment restart deliberately
+# restarts it to load the deployed profile; restarting may power every pump
+# down, including the backing pump, unless KeepBackingPumpOnRestart is set.
+ensure_sbc_running() {
+  if user_systemctl is-active --quiet "${SBC_UNIT}"; then
+    echo "${SBC_UNIT} is running; left untouched (it owns the vacuum system)"
+    local pid
+    pid="$(user_systemctl show "${SBC_UNIT}" --property=MainPID --value 2>/dev/null || true)"
+    if [[ -n "${pid}" && "${pid}" != "0" ]] &&
+       readlink "/proc/${pid}/cwd" 2>/dev/null | grep -q " (deleted)$"; then
+      echo "NOTE: ${SBC_UNIT} still runs the previous installation (its files were replaced by a" >&2
+      echo "      redeploy). It keeps controlling the vacuum. To load the new version, at a time" >&2
+      echo "      when a pump-down is acceptable: $0 restart-vacuum --yes" >&2
+    fi
+  else
+    echo "Starting ${SBC_UNIT}"
+    user_systemctl start "${SBC_UNIT}" || return 1
+  fi
+  wait_http "SBC vacuum" "http://127.0.0.1:8766/health/live"
+}
+
+restart_sbc_vacuum() {
+  echo "Restarting ${SBC_UNIT} to load the deployed vacuum profile; outputs may drop during restart."
+  # Equivalent to: systemctl --user restart sbc-vacuum.service
+  user_systemctl restart "${SBC_UNIT}" || return 1
+  wait_http "SBC vacuum" "http://127.0.0.1:8766/health/live"
+}
+
+require_vacuum_confirmation() {
+  if [[ "${CONFIRM}" != "--yes" ]]; then
+    echo "${ACTION} powers the vacuum pumps down (the backing pump too, unless the board" >&2
+    echo "profile keeps it running with KeepBackingPumpOnRestart)." >&2
+    echo "Run it again as: $0 ${ACTION} --yes" >&2
+    exit 2
+  fi
+}
+
 stop_installed_units() {
   local scope="$1" unit load_state
   shift
@@ -285,13 +336,17 @@ case "${ACTION}" in
     stack_failed=0
     sudo_cmd systemctl stop "${EXECUTOR_UNIT}" "${GLASGOW_UNIT}" || true
     stop_stale_glasgow
-    user_systemctl "${ACTION}" "${SBC_UNIT}" || stack_failed=1
-    if ! wait_http "SBC vacuum" "http://127.0.0.1:8766/health/ready"; then
+    if [[ "${ACTION}" == "restart" ]]; then
+      if ! restart_sbc_vacuum; then
+        stack_failed=1
+        echo "Check ${LOG_DIR}/sbc-vacuum.log. Active vacuum control requires real SBC hardware; set Enable to false in the SBC's vacuum profile (SBC_VACUUM_CONFIG) when hardware is unavailable." >&2
+      fi
+    elif ! ensure_sbc_running; then
       stack_failed=1
-      echo "Check ${LOG_DIR}/sbc-vacuum.log. Active vacuum control requires real SBC hardware; turn it off in Configuration > General when hardware is unavailable." >&2
+      echo "Check ${LOG_DIR}/sbc-vacuum.log. Active vacuum control requires real SBC hardware; set Enable to false in the SBC's vacuum profile (SBC_VACUUM_CONFIG) when hardware is unavailable." >&2
     fi
     # Restore the remaining stack even when vacuum startup fails. The web UI
-    # must stay available to display the fault and change its Enable setting.
+    # must stay available to display the fault.
     sudo_cmd systemctl start "${GLASGOW_UNIT}" || stack_failed=1
     wait_http "Glasgow" "http://127.0.0.1:8765/status" || stack_failed=1
     sudo_cmd systemctl start "${EXECUTOR_UNIT}" || stack_failed=1
@@ -311,10 +366,23 @@ case "${ACTION}" in
     exit "${stack_failed}"
     ;;
   stop)
-    stop_installed_units user "${FRONTEND_UNIT}" "${BACKEND_UNIT}" "${SBC_UNIT}"
+    stop_installed_units user "${FRONTEND_UNIT}" "${BACKEND_UNIT}"
     stop_installed_units system "${EXECUTOR_UNIT}" "${GLASGOW_UNIT}" "ionbeam-web.service"
     stop_stale_glasgow
     stop_stale_web_processes
+    echo "${SBC_UNIT} keeps running and keeps controlling the vacuum."
+    echo "To stop it (every pump powers down): $0 stop-vacuum --yes"
+    ;;
+  stop-vacuum)
+    require_vacuum_confirmation
+    stop_installed_units user "${SBC_UNIT}"
+    echo "Stopped ${SBC_UNIT}: the vacuum outputs are off (the backing pump only if not kept)."
+    ;;
+  restart-vacuum)
+    require_vacuum_confirmation
+    user_systemctl restart "${SBC_UNIT}"
+    wait_http "SBC vacuum" "http://127.0.0.1:8766/health/live"
+    echo "Restarted ${SBC_UNIT}: the cascade starts again from the backing pump."
     ;;
   status)
     show_status

@@ -1,98 +1,119 @@
 <#
 .SYNOPSIS
-  Build the manufacturing package for RPi5VacuumIO (Raspberry Pi 5 vacuum controller I/O board) with KiCad 10 (Windows).
+  Build the RPi5VacuumIO manufacturing package with KiCad 10 (Windows).
+  Same steps, gates and output as tools/make_fab_kicad10.sh (Linux / macOS).
 
 .DESCRIPTION
-  Uses kicad-cli from KiCad 10 to:
-    1. run ERC on the schematic        (stops on errors)
-    2. refill zones + run DRC with schematic parity, saving the board in KiCad 10 format (stops on errors)
-    3. export Gerber X2, Excellon drill + maps, pick-and-place, BOM, schematic/assembly PDFs, STEP, IPC-2581
-    4. zip Gerbers+drill for the board house and zip the whole package
-
-  Output: <project>\fab\kicad10\  (the KiCad 7 outputs in fab\ are left untouched)
+  1. adds the title block (revision, date) and the fabrication stackup (tools/prodprep.py)
+  2. ERC (0 errors) and DRC with zone refill + schematic parity (0 errors, 0 unconnected,
+     0 parity issues) - the package is not written unless these pass
+  3. Gerber X2 + job file, Excellon (mm) + maps, IPC-D-356, IPC-2581, ODB++, BOM,
+     pick-and-place, assembly + schematic PDFs, STEP, renders, fab notes, SHA256SUMS
+  4. replaces fab\ with the new package and writes the checked board back
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\tools\make_fab_kicad10.ps1
+  powershell -ExecutionPolicy Bypass -File .\tools\make_fab_kicad10.ps1 -Rev A.2
 #>
 param(
   [string]$KiCadBin = "C:\Users\yingh\AppData\Local\Programs\KiCad\10.0\bin",
-  [switch]$NoSaveBoard   # do not write the zone-refilled KiCad 10 board back to the project
+  [string]$Rev = "",
+  [string]$Date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd"),
+  [switch]$NoSaveBoard
 )
 $ErrorActionPreference = "Stop"
 $Cli  = Join-Path $KiCadBin "kicad-cli.exe"
-$Proj = Split-Path -Parent $PSScriptRoot
+$Py   = Join-Path $KiCadBin "python.exe"
+if (-not (Test-Path $Py)) { $Py = "python" }
+$Here = $PSScriptRoot
+$Proj = Split-Path -Parent $Here
 $N    = "RPi5VacuumIO"
-$Sch  = Join-Path $Proj "$N.kicad_sch"
-$Pcb  = Join-Path $Proj "$N.kicad_pcb"
-$Out  = Join-Path $Proj "fab\kicad10"
-$Ger  = Join-Path $Out  "gerbers"
+$Fab  = Join-Path $Proj "fab"
 
 if (-not (Test-Path $Cli)) { throw "kicad-cli not found at $Cli (pass -KiCadBin)" }
-Write-Host "kicad-cli version:" (& $Cli version)
+$ver = (& $Cli version).Trim()
+if (-not $ver.StartsWith("10.")) { throw "need KiCad 10.x, found $ver" }
+Write-Host "kicad-cli $ver"
+if (-not $Rev) {
+  $m = Select-String -Path "$Proj\$N.kicad_pcb" -Pattern '\(rev "([^"]*)"\)' | Select-Object -First 1
+  $Rev = if ($m) { $m.Matches[0].Groups[1].Value } else { "A.1" }
+}
 
-function Run([string]$Step, [string[]]$CliArgs, [switch]$AllowFail) {
+function Cli([string]$Step, [string[]]$CliArgs, [switch]$AllowFail) {
   Write-Host "`n=== $Step ===" -ForegroundColor Cyan
-  & $Cli @CliArgs
-  $code = $LASTEXITCODE
-  if ($code -ne 0 -and -not $AllowFail) { throw "$Step failed (exit $code)" }
-  return $code
+  & $Cli @CliArgs | Out-Null
+  if ($LASTEXITCODE -ne 0 -and -not $AllowFail) { throw "$Step failed (exit $LASTEXITCODE)" }
 }
 
-Remove-Item -Recurse -Force $Out -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force $Ger | Out-Null
+$W = Join-Path $env:TEMP "$N-kicad10-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+New-Item -ItemType Directory -Force $W | Out-Null
+Copy-Item "$Proj\$N.kicad_pcb","$Proj\$N.kicad_sch","$Proj\$N.kicad_pro" $W
+$Pcb = Join-Path $W "$N.kicad_pcb"; $Sch = Join-Path $W "$N.kicad_sch"
+& $Py "$Here\prodprep.py" $Pcb --rev $Rev --date $Date
+if ($LASTEXITCODE -ne 0) { throw "prodprep failed" }
 
-# Work on a copy so the refilled/upgraded board is only written back when DRC passes.
-$Tmp = Join-Path $env:TEMP "$N-kicad10"
-Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force $Tmp | Out-Null
-Copy-Item "$Proj\$N.*" $Tmp
-$TSch = Join-Path $Tmp "$N.kicad_sch"; $TPcb = Join-Path $Tmp "$N.kicad_pcb"
+$Out = Join-Path $W "fab"; $Ger = Join-Path $Out "gerbers"; $Rep = Join-Path $Out "reports"; $Asm = Join-Path $Out "assembly"
+New-Item -ItemType Directory -Force $Ger,$Rep,$Asm | Out-Null
 
-# 1. ERC
-$erc = Run "ERC" @("sch","erc","--format","report","--units","mm","--severity-all",
-                   "--exit-code-violations","-o","$Out\$N-erc.rpt",$TSch) -AllowFail
-$ercErrors = (Select-String -Path "$Out\$N-erc.rpt" -Pattern "Severity: error" -SimpleMatch).Count
-Write-Host "ERC errors: $ercErrors (warnings are listed in $N-erc.rpt)"
-if ($ercErrors -gt 0) { throw "ERC has errors - see $Out\$N-erc.rpt" }
+Cli "ERC" @("sch","erc","--format","json","--units","mm","--severity-all","-o","$Rep\$N-erc.json",$Sch) -AllowFail
+Cli "ERC report" @("sch","erc","--format","report","--units","mm","--severity-all","-o","$Rep\$N-erc.rpt",$Sch) -AllowFail
+Cli "DRC" @("pcb","drc","--format","json","--units","mm","--severity-all","--refill-zones","--schematic-parity",
+            "--save-board","-o","$Rep\$N-drc.json",$Pcb) -AllowFail
+Cli "DRC report" @("pcb","drc","--format","report","--units","mm","--severity-all","--schematic-parity",
+            "-o","$Rep\$N-drc.rpt",$Pcb) -AllowFail
+$Adv = Join-Path $W "adv"; New-Item -ItemType Directory -Force $Adv | Out-Null
+Copy-Item $Pcb,$Sch,"$W\$N.kicad_pro" $Adv
+& $Py "$Here\fabnotes.py" advisory-project "$Adv\$N.kicad_pro"
+Cli "DRC advisory" @("pcb","drc","--format","json","--units","mm","--severity-all","-o","$Rep\$N-drc-advisory.json","$Adv\$N.kicad_pcb") -AllowFail
+& $Py "$Here\fabnotes.py" gate --erc "$Rep\$N-erc.json" --drc "$Rep\$N-drc.json" --summary "$Rep\summary.json"
+if ($LASTEXITCODE -ne 0) { throw "release gate failed - see $Rep (fab\ was not changed)" }
 
-# 2. DRC (refill zones, check schematic parity, save refilled board)
-Run "DRC" @("pcb","drc","--format","report","--units","mm","--severity-all","--refill-zones",
-            "--schematic-parity","--save-board","--exit-code-violations",
-            "-o","$Out\$N-drc.rpt",$TPcb) -AllowFail | Out-Null
-$drcErrors = (Select-String -Path "$Out\$N-drc.rpt" -Pattern "Severity: error" -SimpleMatch).Count
-$unconn = Select-String -Path "$Out\$N-drc.rpt" -Pattern "Found (\d+) unconnected" | ForEach-Object { [int]$_.Matches[0].Groups[1].Value }
-Write-Host "DRC errors: $drcErrors, unconnected: $unconn"
-if ($drcErrors -gt 0 -or $unconn -gt 0) { throw "DRC failed - see $Out\$N-drc.rpt" }
-if (-not $NoSaveBoard) {
-  Copy-Item $TPcb $Pcb -Force
-  Copy-Item $TSch $Sch -Force -ErrorAction SilentlyContinue
-  Write-Host "Saved KiCad 10 board (zones refilled) back to the project."
-}
-
-# 3. Fabrication outputs
 $layers = "F.Cu,B.Cu,F.Paste,B.Paste,F.Silkscreen,B.Silkscreen,F.Mask,B.Mask,Edge.Cuts"
-Run "Gerbers" @("pcb","export","gerbers","--layers",$layers,"--subtract-soldermask",
-                "--use-drill-file-origin","--check-zones","-o","$Ger\",$TPcb) | Out-Null
-Run "Drill"   @("pcb","export","drill","--format","excellon","--excellon-separate-th",
-                "--drill-origin","plot","--excellon-units","mm","--generate-map","--map-format","gerberx2",
-                "-o","$Ger\",$TPcb) | Out-Null
-Run "Pick-and-place" @("pcb","export","pos","--format","csv","--units","mm","--side","both",
-                "--smd-only","--exclude-dnp","--use-drill-file-origin","-o","$Out\$N-pos.csv",$TPcb) | Out-Null
-Run "BOM" @("sch","export","bom","--fields",'Reference,Value,Footprint,MPN,Description,${QUANTITY},${DNP}',
-            "--labels","Refs,Value,Footprint,MPN,Description,Qty,DNP","--group-by","Value,Footprint,MPN",
-            "--exclude-dnp","-o","$Out\$N-bom.csv",$TSch) | Out-Null
-Run "Schematic PDF" @("sch","export","pdf","-o","$Out\$N-schematic.pdf",$TSch) | Out-Null
-Run "Assembly PDF" @("pcb","export","pdf","--layers","F.Fab,F.Silkscreen,Edge.Cuts","--include-border-title",
-            "-o","$Out\$N-assembly-top.pdf",$TPcb) -AllowFail | Out-Null
-Run "STEP" @("pcb","export","step","--subst-models","--force","-o","$Out\$N.step",$TPcb) -AllowFail | Out-Null
-Run "IPC-2581" @("pcb","export","ipc2581","-o","$Out\$N.xml",$TPcb) -AllowFail | Out-Null
+Cli "Gerbers" @("pcb","export","gerbers","--layers",$layers,"--subtract-soldermask","--use-drill-file-origin","-o","$Ger\",$Pcb)
+Cli "Drill" @("pcb","export","drill","--format","excellon","--excellon-separate-th","--excellon-units","mm",
+              "--drill-origin","plot","--generate-map","--map-format","gerberx2","--generate-report",
+              "--report-path","$Rep\$N-drill-report.txt","-o","$Ger\",$Pcb)
+$Map = Join-Path $W "map"; New-Item -ItemType Directory -Force $Map | Out-Null
+Cli "Drill map PDF" @("pcb","export","drill","--format","excellon","--excellon-separate-th","--drill-origin","plot",
+              "--generate-map","--map-format","pdf","-o","$Map\",$Pcb)
+Copy-Item "$Map\*-drl_map.pdf" $Out
+Cli "IPC-D-356" @("pcb","export","ipcd356","-o","$Out\$N-ipcd356.ipc",$Pcb)
+Cli "IPC-2581" @("pcb","export","ipc2581","--units","mm","--bom-col-mfg-pn","MPN","-o","$Out\$N-ipc2581.xml",$Pcb)
+Cli "ODB++" @("pcb","export","odb","--units","mm","--compression","zip","-o","$Out\$N-odb.zip",$Pcb)
+Cli "BOM" @("sch","export","bom","--fields",'Reference,${QUANTITY},Value,Footprint,MPN',
+            "--labels","Refs,Qty,Value,Footprint,MPN / specification","--group-by","Value,Footprint,MPN",
+            "--exclude-dnp","-o","$Asm\$N-bom.csv",$Sch)
+Cli "Pick-and-place (SMD)" @("pcb","export","pos","--format","csv","--units","mm","--side","both","--smd-only",
+            "--exclude-dnp","--use-drill-file-origin","-o","$Asm\$N-pos.csv",$Pcb)
+Cli "Pick-and-place (all)" @("pcb","export","pos","--format","csv","--units","mm","--side","both",
+            "--exclude-dnp","--use-drill-file-origin","-o","$Asm\$N-pos-all.csv",$Pcb)
+Cli "Assembly PDF" @("pcb","export","pdf","--layers","F.Fab,Edge.Cuts","--common-layers","F.Silkscreen",
+            "--include-border-title","--mode-single","-o","$Asm\$N-assembly-top.pdf",$Pcb)
+Cli "Schematic PDF" @("sch","export","pdf","-o","$Out\$N-schematic.pdf",$Sch)
+Cli "STEP" @("pcb","export","step","--subst-models","--force","-o","$Out\$N.step",$Pcb) -AllowFail
+foreach ($side in "top","bottom") {
+  Cli "Render $side" @("pcb","render","--side",$side,"--quality","basic","--width","1600","--height","1300",
+                      "-o","$Out\$N-render-$side.png",$Pcb) -AllowFail
+}
+Cli "Stats" @("pcb","export","stats","--format","json","-o","$Rep\$N-stats.json",$Pcb) -AllowFail
 
-# 4. Zips
-Compress-Archive -Path "$Ger\*" -DestinationPath "$Out\$N-gerbers.zip" -Force
-$pkg = Join-Path $Proj "fab\$N-manufacturing-kicad10.zip"
-Compress-Archive -Path "$Out\*" -DestinationPath $pkg -Force
+& $Py "$Here\fabnotes.py" notes --board $Pcb --summary "$Rep\summary.json" --stats "$Rep\$N-stats.json" --advisory "$Rep\$N-drc-advisory.json" `
+      --rev $Rev --date $Date --kicad $ver --out "$Out\README.md"
+Compress-Archive -Path "$Ger\*" -DestinationPath "$Out\$N-gerbers-$Rev.zip" -Force
+$sums = Get-ChildItem -Recurse -File $Out | Sort-Object FullName | ForEach-Object {
+  $rel = $_.FullName.Substring($Out.Length + 1).Replace('\','/')
+  "{0}  ./{1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower(), $rel
+}
+$sums | Set-Content -Encoding ascii "$Out\SHA256SUMS"
+Compress-Archive -Path "$Out\*" -DestinationPath "$W\$N-manufacturing-$Rev.zip" -Force
+Move-Item "$W\$N-manufacturing-$Rev.zip" $Out
 
-Write-Host "`nDONE" -ForegroundColor Green
-Write-Host "  Board house upload : $Out\$N-gerbers.zip"
-Write-Host "  Assembly (BOM/CPL) : $Out\$N-bom.csv, $Out\$N-pos.csv"
-Write-Host "  Full package       : $pkg"
+Remove-Item -Recurse -Force $Fab -ErrorAction SilentlyContinue
+Copy-Item -Recurse $Out $Fab
+if (-not $NoSaveBoard) { Copy-Item $Pcb "$Proj\$N.kicad_pcb" -Force; Write-Host "board written back (rev $Rev)" }
+Remove-Item -Recurse -Force $W
+
+Write-Host "`nDONE  rev $Rev" -ForegroundColor Green
+Write-Host "  board house : fab\$N-gerbers-$Rev.zip"
+Write-Host "  assembly    : fab\assembly\"
+Write-Host "  everything  : fab\$N-manufacturing-$Rev.zip"

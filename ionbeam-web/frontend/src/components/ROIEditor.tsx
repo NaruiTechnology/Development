@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
   clearROIImage,
   clearROIScanImage,
   clearROISelection,
+  clearSelectedTargetGrayPoint,
+  finishROITargetGrayRun,
+  roiTargetGrayRunProgress,
+  setSelectedTargetGray,
   streamReset,
   updateROI,
   type ROIState,
 } from "../store/scanSlice";
+import {
+  clipPixelRect,
+  grayAt,
+  stepTowardTargetGray,
+} from "../lib/roiTargetGray";
 import { useAppDispatch, useAppSelector } from "../store";
 import type { ROIRequest } from "../types/api";
 import { clearBitmapSelectionCache } from "../lib/bitmapVector";
@@ -181,6 +191,17 @@ export function ROIEditor({
   } | null>(null);
   const [calibrationLine, setCalibrationLine] = useState<CalibrationLine | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  // Gray value of the pixel under the mouse (raw, not wedge-stretched).
+  const [grayTip, setGrayTip] = useState<{ clientX: number; clientY: number; value: number } | null>(null);
+  const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
+  const selectedTargetGrayPoint = useAppSelector((s) => s.scan.selectedTargetGrayPoint);
+  const targetGrayRun = useAppSelector((s) => s.scan.roiTargetGrayRun);
+  const targetGrayRunning = targetGrayRun.status === "running";
+  // True while the Action run target-gray loop owns the raw canvas: the base
+  // canvas then paints from the working copy instead of the loaded image.
+  const targetGrayLoopActiveRef = useRef(false);
+  const targetGrayRunStatusRef = useRef(targetGrayRun.status);
+  targetGrayRunStatusRef.current = targetGrayRun.status;
   const [calibrationCorrection, setCalibrationCorrection] = useState<{
     x1: string;
     x2: string;
@@ -271,6 +292,8 @@ export function ROIEditor({
     const img = new Image();
     img.onload = () => {
       imageRef.current = img;
+      // A finished target gray run's image has arrived: paint from it again.
+      if (targetGrayRunStatusRef.current !== "running") targetGrayLoopActiveRef.current = false;
       if (vectorPhase === "running") {
         drawBaseCanvas();
         drawHighlightMask();
@@ -354,6 +377,98 @@ export function ROIEditor({
     calibrationLine,
     lut,
   ]);
+
+  // Action run toward the target gray level. Each pass compares every pixel
+  // inside the ROI area with `selectedTargetGray` and decides its beam state
+  // from its current gray: SKIP when equal (beam blanked, pixel unchanged),
+  // SPOT when different (beam dwells, pixel steps toward the target). Passes
+  // repeat until every pixel is skipped, i.e. matches. Spotted pixels are
+  // painted on the mask layer each pass. Pixels outside the area are never
+  // touched. The result then replaces the ROI image the canvas is showing.
+  useEffect(() => {
+    if (variant === "controls") return;
+    if (targetGrayRun.status !== "running") return;
+    const target = selectedTargetGray;
+    const raw = rawCanvasRef.current;
+    const rawCtx = raw?.getContext("2d", { willReadFrequently: true });
+    const rect = selectionPixelRect();
+    if (target === null || !imageRef.current || !raw || !rawCtx || !rect) {
+      dispatch(finishROITargetGrayRun("idle"));
+      return;
+    }
+
+    const working = rawCtx.getImageData(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+    const updateScanImage = roi.scanImageDataUrl !== null;
+    targetGrayLoopActiveRef.current = true;
+    let passes = 0;
+    let frame: number | null = null;
+    let finished = false;
+
+    const finish = (status: "completed" | "stopped") => {
+      if (finished) return;
+      finished = true;
+      drawHighlightMask();
+      if (status === "completed") {
+        const dataUrl = raw.toDataURL("image/png");
+        // Keep painting from the raw canvas until the new image has loaded.
+        dispatch(updateROI(updateScanImage ? { scanImageDataUrl: dataUrl } : { imageDataUrl: dataUrl }));
+      } else {
+        targetGrayLoopActiveRef.current = false;
+        // The raw copy holds the partial update; re-measure it from the image.
+        rawImageRef.current = null;
+        drawBaseCanvas();
+      }
+      dispatch(finishROITargetGrayRun(status));
+    };
+
+    // Per-pixel beam decision of the current pass (1 = SPOT, 0 = SKIP).
+    const decisions = new Uint8Array(ROI_CANVAS_EDGE * ROI_CANVAS_EDGE);
+    const showDecisions = (shown: ImageData) => {
+      // Paint the pixels the beam spotted this pass; skipped pixels stay clear.
+      const maskCtx = maskCanvasRef.current?.getContext("2d");
+      if (!maskCtx) return;
+      maskCtx.clearRect(0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      const overlay = maskCtx.createImageData(rect.width, rect.height);
+      for (let y = 0; y < rect.height; y++) {
+        for (let x = 0; x < rect.width; x++) {
+          const src = ((rect.top + y) * ROI_CANVAS_EDGE + rect.left + x);
+          if (decisions[src] !== 1) continue;
+          const gray = lut[shown.data[src * 4]];
+          const tinted = tintBeamHitPixel(gray, gray, gray);
+          const o = (y * rect.width + x) * 4;
+          overlay.data[o] = tinted.r;
+          overlay.data[o + 1] = tinted.g;
+          overlay.data[o + 2] = tinted.b;
+          overlay.data[o + 3] = Math.round(tinted.a * 0.55);
+        }
+      }
+      maskCtx.putImageData(overlay, rect.left, rect.top);
+    };
+
+    const runPass = () => {
+      frame = null;
+      const pass = stepTowardTargetGray(working.data, ROI_CANVAS_EDGE, rect, target, undefined, decisions);
+      passes += 1;
+      rawCtx.putImageData(working, 0, 0, rect.left, rect.top, rect.width, rect.height);
+      drawBaseCanvas();
+      showDecisions(working);
+      dispatch(roiTargetGrayRunProgress({ passes, spot: pass.spot, skip: pass.skip }));
+      if (pass.remaining === 0) {
+        finish("completed");
+        return;
+      }
+      frame = window.requestAnimationFrame(runPass);
+    };
+    frame = window.requestAnimationFrame(runPass);
+
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      // Stopped (Stop button, selection change, unmount) before converging:
+      // drop the partial update and show the image as it was.
+      if (!finished) finish("stopped");
+    };
+    // Restart only for a new run request; the loop reads the rest once.
+  }, [targetGrayRun.token, targetGrayRun.status === "running"]);
 
   useEffect(() => {
     if (graySelectionResetToken <= 0) return;
@@ -472,6 +587,7 @@ export function ROIEditor({
         setDraft(null);
         setSuppressedBackgroundUrl(null);
         dispatch(clearROISelection());
+        dispatch(clearSelectedTargetGrayPoint());
         dispatch(
           updateROI({
             imageName: file.name,
@@ -508,6 +624,41 @@ export function ROIEditor({
 
   function rawCanvasPoint(e: React.PointerEvent<HTMLElement>) {
     return canvasPointFromClient(e.clientX, e.clientY, false);
+  }
+
+  /** Raw gray value (and canvas pixel) under a client point, or null without a loaded image. */
+  function rawGrayAtClient(clientX: number, clientY: number): { value: number; x: number; y: number } | null {
+    if (!imageRef.current || !canvasRef.current) return null;
+    const raw = rawCanvasRef.current;
+    const ctx = raw?.getContext("2d", { willReadFrequently: true });
+    if (!raw || !ctx) return null;
+    const p = canvasPointFromClient(clientX, clientY, false);
+    const x = Math.min(ROI_CANVAS_EDGE - 1, Math.max(0, Math.floor(p.x)));
+    const y = Math.min(ROI_CANVAS_EDGE - 1, Math.max(0, Math.floor(p.y)));
+    const value = grayAt(ctx.getImageData(x, y, 1, 1).data, 1, 1, 0, 0);
+    return value === null ? null : { value, x, y };
+  }
+
+  /** The committed ROI area as an integer pixel rectangle on the ROI canvas. */
+  function selectionPixelRect() {
+    const selection = roi.selection;
+    if (!selection) return null;
+    const bounds = viewportBounds(roi);
+    const imageBounds = imageWorldBounds(roi);
+    const x0 = worldToCanvasX(selection.x_start, imageBounds, bounds);
+    const x1 = worldToCanvasX(selection.x_end, imageBounds, bounds);
+    const y0 = worldToCanvasY(selection.y_start, imageBounds, bounds);
+    const y1 = worldToCanvasY(selection.y_end, imageBounds, bounds);
+    return clipPixelRect(
+      {
+        left: Math.min(x0, x1),
+        top: Math.min(y0, y1),
+        width: Math.abs(x1 - x0),
+        height: Math.abs(y1 - y0),
+      },
+      ROI_CANVAS_EDGE,
+      ROI_CANVAS_EDGE,
+    );
   }
 
   function toDut(point: { x: number; y: number }) {
@@ -608,7 +759,7 @@ export function ROIEditor({
     corner: ROISelectionCorner,
     event: React.PointerEvent<HTMLElement>
   ) {
-    if (disabled || roi.calibration_enabled) return;
+    if (disabled || targetGrayRunning || roi.calibration_enabled) return;
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
@@ -670,7 +821,10 @@ export function ROIEditor({
     const img = imageRef.current;
     syncRawImage(img);
     if (img) {
-      ctx.drawImage(img, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
+      // While the target gray loop runs, the raw canvas holds the image being
+      // updated; paint that so a re-render mid-loop does not revert it.
+      const source = targetGrayLoopActiveRef.current && rawCanvasRef.current ? rawCanvasRef.current : img;
+      ctx.drawImage(source, 0, 0, ROI_CANVAS_EDGE, ROI_CANVAS_EDGE);
       applyLevelsToCanvas(canvas, levels);
     } else {
       ctx.fillStyle = getCssColor(canvas, "--c-bg-elev", "#11203a");
@@ -1137,7 +1291,6 @@ export function ROIEditor({
     clearBitmapSelectionCache();
     stopAllScanActions();
     setDraft(null);
-    dispatch(clearROIImage());
     dispatch(clearROIScanImage());
     dispatch(clearROISelection());
     dispatch(streamReset());
@@ -1204,6 +1357,7 @@ export function ROIEditor({
             <select
               className="select"
               value={roi.scale_unit}
+              disabled
               onChange={(e) => dispatch(updateROI({ scale_unit: e.target.value }))}
             >
               {UNITS.map((u) => (
@@ -1365,9 +1519,21 @@ export function ROIEditor({
           )}
           <div
             className={`roi-canvas-layer roi-canvas-layer--base${disabled ? " is-disabled" : ""}${ctrlCursor ? " roi-canvas-layer--ctrl-cursor" : ""}`}
+            onContextMenu={(e) => {
+              // Right-click picks the target gray level; no browser menu on the image.
+              if (imageRef.current) e.preventDefault();
+            }}
             onPointerDown={(e) => {
+              if (e.button === 2) {
+                if (disabled || targetGrayRunning || roi.calibration_enabled) return;
+                const picked = rawGrayAtClient(e.clientX, e.clientY);
+                if (!picked) return;
+                e.preventDefault();
+                dispatch(setSelectedTargetGray({ value: picked.value, point: { x: picked.x, y: picked.y } }));
+                return;
+              }
               if (e.button !== 0) return;
-              if (disabled) return;
+              if (disabled || targetGrayRunning) return;
               if (roi.calibration_enabled) {
                 if (e.target instanceof Element && e.target.closest("button")) return;
                 e.preventDefault();
@@ -1397,8 +1563,10 @@ export function ROIEditor({
               setTip({ x: e.clientX, y: e.clientY, text: formatPointText(d) });
             }}
             onPointerMove={(e) => {
+              const hovered = e.pointerType === "touch" ? null : rawGrayAtClient(e.clientX, e.clientY);
+              setGrayTip(hovered ? { clientX: e.clientX, clientY: e.clientY, value: hovered.value } : null);
               if (resizeCornerRef.current) return;
-              if (disabled) return;
+              if (disabled || targetGrayRunning) return;
               if (roi.calibration_enabled) {
                 if (!calibrationLine) return;
                 e.preventDefault();
@@ -1486,6 +1654,7 @@ export function ROIEditor({
               setTip(null);
             }}
             onPointerLeave={() => {
+              setGrayTip(null);
               if (resizeCornerRef.current) return;
               dragStartRef.current = null;
               resizeCornerRef.current = null;
@@ -1583,6 +1752,47 @@ export function ROIEditor({
               aria-hidden="true"
             />
           )}
+          {hasLoadedImage && selectedTargetGrayPoint && !roi.calibration_enabled && (
+            <span
+              className="roi-target-gray-mark"
+              style={{
+                left: `${((selectedTargetGrayPoint.x + 0.5) / ROI_CANVAS_EDGE) * 100}%`,
+                top: `${((selectedTargetGrayPoint.y + 0.5) / ROI_CANVAS_EDGE) * 100}%`,
+              }}
+              title={selectedTargetGray === null ? undefined : t("roi.targetGray.tooltip", { value: selectedTargetGray })}
+              aria-hidden="true"
+            />
+          )}
+          {targetGrayRunning && selectedTargetGray !== null && (
+            <span
+              className="roi-target-gray-status"
+              style={{ transform: uprightOverlayTransform("translateX(-50%)") }}
+              aria-live="polite"
+            >
+              {t("roi.targetGray.running", {
+                value: selectedTargetGray,
+                passes: targetGrayRun.passes,
+                spot: targetGrayRun.spot,
+                skip: targetGrayRun.skip,
+              })}
+            </span>
+          )}
+          {grayTip &&
+            createPortal(
+              <div
+                className="roi-gray-tooltip"
+                style={{ left: grayTip.clientX, top: grayTip.clientY }}
+                role="tooltip"
+              >
+                <span
+                  className="roi-gray-tooltip__swatch"
+                  style={{ background: `rgb(${grayTip.value}, ${grayTip.value}, ${grayTip.value})` }}
+                  aria-hidden="true"
+                />
+                {t("roi.targetGray.tooltip", { value: grayTip.value })}
+              </div>,
+              document.body,
+            )}
           {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} textCounterTransform={axisTextCounterTransform} />}
           {roi.calibration_enabled && (
             <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} textCounterTransform={axisTextCounterTransform} />

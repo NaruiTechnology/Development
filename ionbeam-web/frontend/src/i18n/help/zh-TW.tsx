@@ -144,8 +144,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
   grayScale: () => (
     <>
       <p>
-        灰階光譜條會顯示目前即時影像或已載入點陣圖中存在的灰階值。
-        每個方框代表一個採樣到的灰階值，步進旋鈕用來控制在可用範圍內顯示多少個方框。
+        灰階光譜條會顯示所選 ROI 區域灰階範圍內的數值。各方框約以 10
+        個灰階級為間隔；首尾方框保留實際觀測到的範圍邊界。
       </p>
 
       <div className="dwell-help__rule">
@@ -216,6 +216,34 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <div className="dwell-help__rule">
         <strong>經驗法則：</strong>光柵重視覆蓋，矢量重視選擇性。
+      </div>
+    </>
+  ),
+
+  roiSelect: () => (
+    <>
+      <p>
+        使用 <strong>ROI / SELECT</strong> 載入影像、定義要掃描的部分區域，並選擇如何處理該區域中的灰階值。
+        選擇影像或載入上次掃描結果，然後在影像上拖曳以建立矩形 ROI。按住 <strong>Ctrl</strong> 並拖曳角點可調整大小。
+        <strong>清除區域</strong>會移除矩形並保留已載入影像；<strong>清除影像</strong>會移除影像。
+      </p>
+
+      <h3>選擇一種灰階工作流程</h3>
+      <ul className="dwell-help__list">
+        <li>
+          <strong>灰階範圍：</strong>使用灰階方框選擇起始值與結束值，接著確認範圍並選擇 <strong>Skip</strong> 或 <strong>Spot</strong>。
+          Skip 會消隱範圍內的像素；Spot 會掃描範圍內的像素，並消隱 ROI 中的其他像素。矩形外的像素仍依正常方式處理。
+        </li>
+        <li>
+          <strong>目標灰階：</strong>在影像上按右鍵點選像素以設定目標，也可在目標欄位輸入整數。沒有已確認灰階範圍時，
+          「執行」會使用目標灰階工作流程。在模擬模式下，低於或等於目標的像素保持不變，高於目標的像素會逐步降低至目標值。
+          在正式模式下，掃描會略過低於或等於目標的像素，並對其餘像素執行正常硬體掃描與 ADC 驗證。
+        </li>
+      </ul>
+
+      <div className="dwell-help__rule">
+        <strong>一次只會使用一種篩選方式。</strong>已確認的灰階範圍優先於目標值。清除灰階範圍即可使用目標灰階方式。
+        目標值必須是有效灰階範圍內的整數；未選擇範圍時可輸入 0–255。
       </div>
     </>
   ),

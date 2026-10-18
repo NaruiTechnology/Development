@@ -39,6 +39,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
   const { t } = useTranslation();
   const [status, setStatus] = useState<VacuumSystemStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [windowOffset, setWindowOffset] = useState({ x: 0, y: 0 });
   const mutationRef = useRef(false);
@@ -54,6 +55,17 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     minY: number;
     maxY: number;
   } | null>(null);
+
+  const reportError = useCallback((cause: unknown) => {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    if (/ECONNREFUSED|ERR_CONNECTION_REFUSED|Failed to fetch|NetworkError/i.test(message)) {
+      setError(t("vacuum.connection.unavailable"));
+      setErrorDetails(message);
+    } else {
+      setError(message);
+      setErrorDetails(null);
+    }
+  }, [t]);
 
   useEffect(() => {
     const initializing = status?.running === true
@@ -109,19 +121,32 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
         cache: "no-store", headers: scanAuthHeaders(),
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000),
       });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        // Show the SBC's own reason (e.g. "vacuum controller is disabled").
+        let detail = "";
+        try {
+          const body = (await response.json()) as { detail?: unknown; error?: unknown };
+          detail = String(body?.detail ?? body?.error ?? "");
+        } catch {
+          // Not JSON: fall back to the status line.
+        }
+        throw new Error(detail
+          ? `${detail} (HTTP ${response.status})`
+          : `${response.status} ${response.statusText}`);
+      }
       const refreshed = await readJsonResponse<VacuumSystemStatus>(response, "vacuum status");
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
       setStatus(vacuumStatusForDisplay(refreshed));
+      setErrorDetails(null);
       setError(!vacuumReadingsAreFresh(refreshed.updated_at) && !refreshed.last_error
         ? "Vacuum readings are unavailable or stale" : null);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       if (mutationRef.current || statusVersion !== statusVersionRef.current) return;
       setStatus(null);
-      setError(cause instanceof Error ? cause.message : String(cause));
+      reportError(cause);
     }
-  }, []);
+  }, [reportError]);
 
   useEffect(() => {
     if (!open) return;
@@ -129,6 +154,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     const pollController = new AbortController();
     setStatus(null);
     setError(null);
+    setErrorDetails(null);
     setPending(null);
     void refresh(pollController.signal);
     const timer = window.setInterval(() => void refresh(pollController.signal), 1000);
@@ -153,6 +179,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
   async function updatePower(name: string, power: boolean) {
     setPending(name);
     setError(null);
+    setErrorDetails(null);
     try {
       const response = await fetch(apiUrl(`/api/vacuum/pumps/${encodeURIComponent(name)}/power`), {
         method: "POST",
@@ -165,7 +192,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
       }
       setStatus(await readJsonResponse<VacuumSystemStatus>(response, "vacuum power"));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      reportError(cause);
     } finally {
       setPending(null);
     }
@@ -176,6 +203,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
     statusVersionRef.current += 1;
     setPending("resume");
     setError(null);
+    setErrorDetails(null);
     try {
       const response = await fetch(apiUrl("/api/vacuum/resume"), {
         method: "POST", headers: scanAuthHeaders(), signal: AbortSignal.timeout(10000),
@@ -183,7 +211,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
       if (!response.ok) throw new Error(await response.text());
       setStatus(vacuumStatusForDisplay(await readJsonResponse<VacuumSystemStatus>(response, "vacuum resume")));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      reportError(cause);
     } finally {
       mutationRef.current = false;
       setPending(null);
@@ -279,12 +307,19 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
         </div>
 
         <><div className="modal__body vacuum-dashboard__body">
-          {error && <div className="vacuum-dashboard__error" role="alert">{error}</div>}
+          {error && <div className="vacuum-dashboard__error" role="alert">
+            <div>{error}</div>
+            {errorDetails && <details className="vacuum-dashboard__error-details">
+              <summary>{t("vacuum.errorDetails")}</summary>
+              <code>{errorDetails}</code>
+            </details>}
+          </div>}
           {status?.last_error && <div className="vacuum-dashboard__error" role="alert">{status.last_error}</div>}
           {status?.alarms?.map((alarm) => <div key={alarm} className="vacuum-dashboard__error" role="alert">{alarm}</div>)}
           {!status ? (
             <div className="vacuum-dashboard__loading">
-              {pending === "acquire" ? t("vacuum.acquiring") : t("vacuum.loading")}
+              {error ? t("vacuum.connection.retrying")
+                : pending === "acquire" ? t("vacuum.acquiring") : t("vacuum.loading")}
             </div>
           ) : (
             showWorkflow ? (

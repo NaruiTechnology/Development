@@ -27,7 +27,7 @@ Each software channel `An` is an output (the board turns a pump **on**). Each ch
 | Signal wiring (inputs, relay contacts to controller remote inputs) | 0.25–0.5 mm² (AWG 22–20) stranded, with ferrules |
 | Gauge / analog signals | Shielded twisted pair, 0.25 mm² (for example Belden 8761 or LiYCY 2×0.25) |
 | RS-485 | Shielded twisted pair, 120 Ω (for example Belden 3105A) |
-| Mating plugs | Phoenix MSTB 2,5/…-ST-5,08 (J1, J11–J18) and MC 1,5/…-ST-3,5 (all others). Part numbers are in `fab/RPi5VacuumIO-bom.csv` |
+| Mating plugs | Phoenix MSTB 2,5/…-ST-5,08 (J1, J11–J18) and MC 1,5/…-ST-3,5 (all others). Part numbers are in `fab/assembly/RPi5VacuumIO-bom.csv` |
 | Ferrules and crimp tool, 2.5 mm flat screwdriver, multimeter | – |
 | 40-way IDC ribbon cable, 15–20 cm, female–female | Pi header to J3 |
 
@@ -144,7 +144,7 @@ Put K5's NO contact **in series** with the tool's HV enable / interlock loop (J1
 
 ### Rail selection (JP1–JP8)
 
-- **K1** (mechanical pump) runs from the **E-stop rail**. The backing pump keeps running if the Pi hangs or reboots, so the turbo pumps are never left without backing, and it stops only on E-stop.
+- **K1** (mechanical pump) runs from the **E-stop rail**. The backing pump keeps running while the Pi or service *hangs* (the process still holds IO_RESET_N), so the turbo pumps are not left without backing. When the service process *exits* (crash, restart, reboot), R10 pulls IO_RESET_N low, the expanders reset and K1 drops too; see `glasgow_service/docs/vacuum-24x7-commissioning.md` for keeping it running across restarts.
 - **K2–K8** run from the **watchdog rail**, which drops about 100 ms after the Pi stops its heartbeat.
 - To change a channel, cut the solder bridge between pads 1–2 of JPn and bridge pads 2–3.
 

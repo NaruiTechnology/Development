@@ -1,0 +1,42 @@
+[Unit]
+Description=SBC vacuum controller (RPi5VacuumIO board)
+Documentation=file:///etc/sbc-vacuum/WIRING-MAP.md
+After=network-online.target time-sync.target
+Wants=network-online.target
+# Keep restarting for 24/7 service: the default start limit (5 starts in
+# 10 s) would leave the unit failed for good after a short crash loop,
+# for example while the I2C expanders come up at boot.
+StartLimitIntervalSec=0
+
+[Service]
+# READY and watchdog pings only while the control loop is alive; a hung loop
+# is restarted (outputs go off; the backing pump too unless the board keeps it).
+Type=notify
+NotifyAccess=main
+WatchdogSec=20
+User=vacuum
+Group=vacuum
+# /dev/gpiochip* (gpio), /dev/i2c-1 (i2c), /dev/ttyAMA* (dialout).
+SupplementaryGroups=gpio i2c dialout
+EnvironmentFile=/etc/sbc-vacuum.env
+Environment=PYTHONUNBUFFERED=1
+# lgpio creates notification pipes (.lgd-nfy*) in its working directory, and
+# /opt is read-only under ProtectSystem=strict: run from the state directory.
+WorkingDirectory=/var/lib/sbc-vacuum
+Environment=LG_WD=/var/lib/sbc-vacuum
+# Refuse to drive the board with a profile that disagrees with the wiring map.
+ExecStartPre=@PREFIX@/current/venv/bin/python -m glasgow_service.sbc_wiring --map /etc/sbc-vacuum/wiring-map.json check --profile ${SBC_VACUUM_CONFIG}
+ExecStart=@PREFIX@/current/venv/bin/python -m glasgow_service.sbc_vacuum_app
+Restart=always
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+StateDirectory=sbc-vacuum
+ReadWritePaths=/var/lib/sbc-vacuum
+
+[Install]
+WantedBy=multi-user.target

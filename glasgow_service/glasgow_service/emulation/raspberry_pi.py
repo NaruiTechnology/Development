@@ -3,7 +3,7 @@
 The default target is the **Raspberry Pi 4 Model B** from the controller
 shopping list (``docs/rpi-vacuum-shopping-list.md``): 2 GB, official 15 W
 USB-C PSU, USB 3 SSD boot, microSD rescue card.  QEMU's ``raspi4b`` machine
-boots the same Raspberry Pi OS image (``tools/qemu/run-raspi4b.sh``), but it
+boots the same Raspberry Pi OS image (``glasgow_service/scripts/qemu/run-raspi4b.sh``), but it
 has no model of the carrier board's I2C chips, relays or field wiring.  This
 emulator provides exactly that layer, for both Pi models:
 
@@ -154,10 +154,10 @@ class I2CBus:
         pending = self._nack_once.get(address, 0)
         if pending:
             self._nack_once[address] = pending - 1
-            raise OSError(errno.EREMOTEIO, "Remote I/O error")
+            raise OSError(getattr(errno, "EREMOTEIO", errno.EIO), "Remote I/O error")
         device = self._devices.get(address)
         if device is None or not device.i2c_acks():
-            raise OSError(errno.EREMOTEIO, "Remote I/O error")
+            raise OSError(getattr(errno, "EREMOTEIO", errno.EIO), "Remote I/O error")
         return device
 
     def write(self, address: int, data: bytes) -> None:
@@ -642,7 +642,7 @@ class RaspberryPi:
     # ------------------------------------------------------------- userspace API
     def _require_userspace(self) -> None:
         if not self.userspace_ready:
-            raise OSError(errno.ENODEV, "Raspberry Pi 5 is not running")
+            raise OSError(errno.ENODEV, f"{self.profile.name} is not running")
 
     def _claim(self, bcm: int, owner: str) -> GpioLine:
         self._require_userspace()

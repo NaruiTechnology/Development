@@ -136,10 +136,22 @@ class GlasgowConnection(Connection):
         iface = await launcher.start()
         if iface is None:
             raise ConnectionError("Launcher failed to start: Interface is None")
-        self._stream = GlasgowStream(iface, self._config)
-        self._logger.debug("Successfully connected and wrapped GlasgowStream")
-        await log_power_good(self._logger, iface.device,
-                             getattr(iface, "iobeam_power_good_addr", None), "connect")
+        try:
+            self._stream = GlasgowStream(iface, self._config)
+            self._logger.debug("Successfully connected and wrapped GlasgowStream")
+            await log_power_good(self._logger, iface.device,
+                                 getattr(iface, "iobeam_power_good_addr", None), "connect")
+        except BaseException:
+            # Release the claimed USB interface; see IobeamLauncher._launch_applet.
+            if self._stream is not None:
+                await self._hard_close()
+            else:
+                try:
+                    iface.device.close()
+                except Exception as exc:  # noqa: BLE001 - keep the original error
+                    self._logger.warning("closing the device after a failed "
+                                         "connect raised %s", exc)
+            raise
 
     async def _hard_close(self) -> None:
         if self._stream is None:
