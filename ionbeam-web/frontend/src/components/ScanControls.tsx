@@ -9,6 +9,8 @@ import { createPortal } from "react-dom";
 import { useAppDispatch, useAppSelector } from "../store";
 import { apiUrl } from "../lib/backendUrl";
 import {
+  finishROITargetGrayRun,
+  requestROITargetGrayRun,
   runRasterValidated,
   runVectorValidated,
   setPreview,
@@ -127,6 +129,8 @@ export function ScanControls({
   const backendRestarting = useAppSelector((s) => s.settings.backendRestarting);
   const roiGrayScaleSelection = useAppSelector((s) => s.scan.roiGrayScaleSelection);
   const roiGrayScaleSkipped = useAppSelector((s) => s.scan.roiGrayScaleSkipped);
+  const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
+  const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const selectedBeam = defaults?.selected_beam;
   const roi = roiState.selection;
   const roiSelectionKey = roi
@@ -267,7 +271,8 @@ export function ScanControls({
   const busy = streaming || closing;
   // The panel is disabled while a scan runs to prevent parameter changes, but
   // Stop must remain available so an active scan can always be cancelled.
-  const stopAvailable = streaming || closing || actionLoopActive || infiniteScanActive;
+  const stopAvailable =
+    streaming || closing || actionLoopActive || infiniteScanActive || (roiAction && targetGrayRunning);
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
   const roiEbeamDisabled = roiAction && selectedBeam === "ebeam";
 
@@ -401,6 +406,19 @@ export function ScanControls({
           onActionRunStart?.();
           onScanRunStart?.(grayFilterScanType);
           startVectorRun(req, grayFilterScanType);
+        } else if (roi && selectedTargetGray !== null && !isProduction) {
+          // ROI area + target gray level, no gray level filter range: loop
+          // over the ROI area on the image until every pixel in it matches
+          // the target gray level (the ROI canvas runs the passes). Production
+          // must use a real vector scan so the backend's ADC presence check
+          // can fail the action before any image-only processing occurs.
+          if (!roiState.imageDataUrl && !roiState.scanImageDataUrl) {
+            dispatch(streamErrored(t("roi.targetGray.noImage")));
+            return;
+          }
+          clearActionLoopState();
+          if (phase === "error") dispatch(streamReset());
+          dispatch(requestROITargetGrayRun());
         } else {
           const req = await vectorRequestWithBitmapSelection(
             { ...vector, roi },
@@ -501,6 +519,11 @@ export function ScanControls({
 
   function onStop() {
     if (roiEbeamDisabled || !stopAvailable) return;
+    if (roiAction && targetGrayRunning) {
+      // Image-only loop: nothing is streaming, just stop the passes.
+      dispatch(finishROITargetGrayRun("stopped"));
+      return;
+    }
     // Like OBI, stopping a live (Infinite) scan leaves the last image on the
     // canvas; only finite runs clear it.
     const stoppingLiveScan = infiniteScanActiveRef.current;
@@ -601,7 +624,7 @@ export function ScanControls({
     roiEbeamDisabled ||
     streaming ||
     closing ||
-    (roiAction && actionLoopActive);
+    (roiAction && (actionLoopActive || targetGrayRunning));
   const stopDisabled = roiEbeamDisabled || !stopAvailable;
   const infiniteDisabled =
     (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive;
@@ -793,8 +816,8 @@ export function ScanControls({
             </HelpPopover>
             <span
               className="scan-busy"
-              data-visible={busy ? "true" : "false"}
-              aria-hidden={!busy}
+              data-visible={busy || targetGrayRunning ? "true" : "false"}
+              aria-hidden={!(busy || targetGrayRunning)}
               title={t("scan.busy.title")}
             >
               <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />

@@ -4016,6 +4016,196 @@ body {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 0 10px rgba(124, 252, 0, 0.75);
 }
 
+/* ---- Target gray level (ROI) ------------------------------------------ */
+
+/* Grid switch + read-only Target gray level box, sharing one header slot. */
+.card__header .canvas-target-gray-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Two-column ROI header: let the group span its column so the box can
+   flow to the centre of the space next to the switch. */
+.image-panel-card__header--roi.image-panel-card__header--scan-path .canvas-target-gray-group {
+  justify-self: stretch;
+}
+
+.canvas-target-gray {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto;
+  white-space: nowrap;
+  color: var(--c-text-dim);
+}
+
+.canvas-target-gray__label {
+  font-size: 12px;
+}
+
+/* Keep header help icons at the shared help-button size; the generic card
+   header rule enlarges every icon otherwise. */
+.card__header .canvas-target-gray .help-btn .icon {
+  width: 1em;
+  height: 1em;
+}
+
+.card__header .canvas-target-gray__input {
+  width: 9ch;
+  min-width: 9ch;
+  padding: 2px 6px;
+  font-size: 12px;
+  text-align: center;
+  cursor: default;
+  color: var(--c-text);
+  background: var(--c-bg-input);
+}
+
+.card__header .canvas-target-gray__input[data-empty="false"] {
+  border-color: rgba(124, 252, 0, 0.7);
+  box-shadow: 0 0 0 1px rgba(124, 252, 0, 0.25);
+  font-weight: 600;
+}
+
+.card__header .canvas-target-gray__input[data-empty="true"] {
+  width: 15ch;
+}
+
+.canvas-target-gray__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.canvas-target-gray__clear {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  place-items: center;
+  color: var(--c-danger);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.canvas-target-gray__clear:hover:not(:disabled) {
+  background: var(--c-bg-input);
+  border-color: var(--c-danger-border);
+}
+
+.canvas-target-gray__clear:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.canvas-target-gray__clear svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.card__header .canvas-target-gray__input::placeholder {
+  color: var(--c-text-muted);
+  font-weight: 400;
+}
+
+/* "+" mark at the pixel the target gray level was picked from. Lives inside
+   the oriented canvas wrap, so it stays on its pixel when flipped/rotated. */
+.roi-target-gray-mark {
+  position: absolute;
+  z-index: 6;
+  width: 15px;
+  height: 15px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.roi-target-gray-mark::before,
+.roi-target-gray-mark::after {
+  content: "";
+  position: absolute;
+  background: lawngreen;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 6px rgba(124, 252, 0, 0.8);
+}
+
+.roi-target-gray-mark::before {
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.roi-target-gray-mark::after {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+/* Transparent tooltip with the hovered pixel's gray value. Rendered in a
+   portal (position: fixed) so
+   the canvas orientation transform does not move or mirror it. */
+.roi-gray-tooltip {
+  position: fixed;
+  z-index: 1000;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 252, 0, 0.55);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  transform: translate(14px, -130%);
+}
+
+.roi-gray-tooltip__swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.roi-target-gray-status {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  z-index: 7;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 252, 0, 0.55);
+  background: rgba(124, 252, 0, 0.2);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #ffffff;
+  font-size: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .roi-corner-handle {
   position: absolute;
   z-index: 4;
@@ -4297,9 +4487,9 @@ body {
   pointer-events: none;
   max-width: min(320px, calc(100vw - 16px));
   padding: 7px 10px;
-  border: 1px solid rgba(190, 232, 255, 0.42);
+  border: 1px solid rgba(190, 232, 255, 0.32);
   border-radius: 7px;
-  background: linear-gradient(135deg, rgba(48, 91, 126, 0.30), rgba(9, 21, 36, 0.27));
+  background: linear-gradient(135deg, rgba(48, 91, 126, 0.18), rgba(9, 21, 36, 0.15));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 10px 18px rgba(0, 0, 0, 0.56), 0 22px 44px rgba(0, 0, 0, 0.46), 0 2px 5px rgba(0, 0, 0, 0.38);
   backdrop-filter: blur(12px) saturate(160%);
   -webkit-backdrop-filter: blur(12px) saturate(160%);

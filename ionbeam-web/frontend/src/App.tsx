@@ -84,6 +84,7 @@ import {
   persistGrayScaleStepDelta,
   setKind,
   setROIGrayScaleSelection,
+  setSelectedTargetGray,
   updateVector,
   updateROI,
   streamReset,
@@ -198,6 +199,8 @@ export function App() {
   const vectorRenderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const vectorLatencyBytes = useAppSelector((s) => s.scan.vector.latency_bytes);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
+  const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const dimensionCalibration = useAppSelector((s) => s.dimensionCalibration.values);
   const hasPersistedDimensionCalibration = useAppSelector(
     (s) => s.dimensionCalibration.persisted
@@ -621,7 +624,8 @@ export function App() {
   const showGraySpectrum =
     kind === "roi" &&
     hasPartialROI &&
-    Boolean(roiState.scanImageDataUrl || roiState.imageDataUrl || activeROIScanImageUrl);
+    Boolean(roiState.scanImageDataUrl || roiState.imageDataUrl || activeROIScanImageUrl) &&
+    !(selectedTargetGray !== null && committedGrayScaleSelection === null);
   const grayScaleSourceKind = resolveGrayScaleSourceKind({
     showGraySpectrum: kind === "roi" && showGraySpectrum,
     roiImageDataUrl: roiState.imageDataUrl,
@@ -632,6 +636,11 @@ export function App() {
   const grayScaleScopeNote = grayScaleScopeNoteForKind(grayScaleSourceKind, isProduction, t);
   const roiActionGrayFilterActive =
     committedGrayScaleSelection !== null && committedGrayScaleSkipped !== null;
+  const showROIActionVectorCanvas =
+    roiActionCanvasVisible &&
+    !roiActionGrayFilterActive &&
+    roiState.scanImageDataUrl === null &&
+    phase === "completed";
   const displayedROIGrayScaleSelection = pendingGrayScaleSelection ?? committedGrayScaleSelection;
   const displayedROIGrayScaleSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped;
   const actionScanKind =
@@ -644,16 +653,57 @@ export function App() {
   });
   const gridLineToggle =
     kind === "roi" ? (
-      <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
-        <input
-          type="checkbox"
-          checked={roiState.show_grid}
-          disabled={panelDisabled}
-          onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
-        />
-        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-        {t("roi.showGrid")}
-      </label>
+      // The grid switch and the read-only Target gray level box share the
+      // grid switch's header slot, so every ROI header layout keeps them
+      // side by side; the box flows to the centre of the free space.
+      <div className="canvas-grid-toggle canvas-grid-toggle--grid canvas-target-gray-group">
+        <label className="checkbox vacuum-switch app-switch canvas-grid-toggle">
+          <input
+            type="checkbox"
+            checked={roiState.show_grid}
+            disabled={panelDisabled}
+            onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
+          />
+          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+          {t("roi.showGrid")}
+        </label>
+        <div className="canvas-target-gray">
+          {selectedTargetGray !== null && (
+            <>
+              <span className="canvas-target-gray__label">{t("roi.targetGray")}</span>
+              <HelpPopover
+                title={t("roi.targetGray.help.title")}
+                ariaLabel={t("roi.targetGray.help.aria")}
+              >
+                <p>{t("roi.targetGray.help.body")}</p>
+              </HelpPopover>
+            </>
+          )}
+          <span className="canvas-target-gray__value">
+            <input
+              type="text"
+              className="input canvas-target-gray__input"
+              readOnly
+              value={selectedTargetGray === null ? "" : String(selectedTargetGray)}
+              placeholder={t("roi.targetGray.empty")}
+              aria-label={t("roi.targetGray")}
+              data-empty={selectedTargetGray === null ? "true" : "false"}
+            />
+            {selectedTargetGray !== null && <button
+              type="button"
+              className="canvas-target-gray__clear"
+              aria-label={t("roi.targetGray.clear")}
+              title={t("roi.targetGray.clear")}
+              disabled={panelDisabled || targetGrayRunning || roiState.calibration_enabled}
+              onClick={() => dispatch(setSelectedTargetGray({ value: null }))}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="m4 4 8 8M12 4l-8 8" />
+              </svg>
+            </button>}
+          </span>
+        </div>
+      </div>
     ) : kind === "vector" ? (
       <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
         <input
@@ -1821,7 +1871,7 @@ export function App() {
                   <span className="card__title">{t(
                     adcView
                       ? "card.adcTimeline"
-                      : kind === "roi" && roiActionCanvasVisible && !roiActionGrayFilterActive
+                      : kind === "roi" && showROIActionVectorCanvas
                       ? "card.vectorPattern"
                       : imagePanelTitleKey
                   )}</span>
@@ -1898,9 +1948,7 @@ export function App() {
                 {adcView ? (
                   <AdcTimelineCanvas state={adcTest.state} />
                 ) : kind === "roi" ? (
-                  roiActionCanvasVisible &&
-                  !roiActionGrayFilterActive &&
-                  roiState.scanImageDataUrl === null ? (
+                  showROIActionVectorCanvas ? (
                     <ImageCanvas
                       kind="vector"
                       onRenderedImageChange={handleRenderedImageChange}
@@ -1915,7 +1963,7 @@ export function App() {
                       grayScaleSelection={displayedROIGrayScaleSelection}
                       grayScaleSkipped={displayedROIGrayScaleSkipped}
                       liveVectorPreview={roiActionCanvasVisible && roiActionGrayFilterActive}
-                      hideSelectionOverlay={roiActionCanvasVisible && !roiActionGrayFilterActive}
+                      hideSelectionOverlay={showROIActionVectorCanvas}
                       graySelectionResetToken={roiGraySelectionResetToken}
                     />
                   )

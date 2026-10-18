@@ -27,6 +27,7 @@
     "src/lib/vacuumPolicy.ts",
     "src/lib/beamHoldAnalysis.ts",
     "src/lib/takeoverTiming.ts",
-    "src/lib/vectorScanPath.ts"
+    "src/lib/vectorScanPath.ts",
+    "src/lib/roiTargetGray.ts"
   ]
 }
