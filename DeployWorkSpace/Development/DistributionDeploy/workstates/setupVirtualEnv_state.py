@@ -1,7 +1,6 @@
 """Create and upgrade the Windows deployment virtual environment."""
 import asyncio
 import os
-import shutil
 import sys
 
 from buildingblocks.decorators import overrides
@@ -22,9 +21,11 @@ class setupVirtualEnv_state(distributionDeploy_state):
             timeout = float((stateConfig or {}).get(Consts.TIMEOUT, 300.0) or 300.0)
             root = self.resolveDeployPath(actionData.get("root") or ".")
             venvDir = self.resolveDeployPath(actionData.get("venv", ".venv"))
-            launcher = shutil.which("py.exe") or shutil.which("python.exe") or sys.executable
-            launcherArgs = ["-3"] if os.path.basename(launcher).lower() == "py.exe" else []
-            create = [launcher] + launcherArgs + ["-m", "venv", venvDir]
+            # Reuse the running interpreter's base Python. PATH may point to
+            # unavailable Windows Store aliases, and this also works when the
+            # deploy app itself was started inside a virtual environment.
+            launcher = getattr(sys, "_base_executable", None) or sys.executable
+            create = [launcher, "-m", "venv", venvDir]
             if not await self._run(create, root, timeout):
                 self._success = False
                 return

@@ -1,63 +1,35 @@
 @echo off
 setlocal
 title IobeamTech One-Key Deploy
-
 cd /d "%~dp0"
 echo Running one-key deploy from: %~dp0
 
 set "APP=%~dp0Development\DistributionDeploy\distributionDeployApp.py"
 set "CONFIG=%~dp0Development\DistributionDeploy\Json\DistributionDeploy.json"
-set "DIST_ZIP=%~dp0Development\DistributionDeploy\dist_app.zip"
+if not exist "%APP%" goto missing_files
+if not exist "%CONFIG%" goto missing_files
 
-if not exist "%APP%" (
-    echo Deploy entrypoint not found:
-    echo   "%APP%"
-    pause
-    exit /b 1
-)
+set "PYTHON="
+set "PYTHON_ARGS="
+call :try_python "%~dp0.venv\Scripts\python.exe" ""
+for /f "delims=" %%P in ('where py.exe 2^>nul') do call :try_python "%%P" "-3"
+for /f "delims=" %%P in ('where python.exe 2^>nul') do call :try_python "%%P" ""
+if defined PYTHON goto run_deploy
+echo No working Python 3 interpreter was found. Install Python 3 and add it to PATH.
+pause
+exit /b 1
 
-if not exist "%CONFIG%" (
-    echo Deploy config not found:
-    echo   "%CONFIG%"
-    pause
-    exit /b 1
-)
-
-if not exist "%DIST_ZIP%" (
-    echo Warning: dist archive not found at the expected location:
-    echo   "%DIST_ZIP%"
-    echo The deploy app may fail if it expects this file.
-    echo.
-)
-
-if exist "%~dp0.venv\Scripts\python.exe" (
-    set "PYTHON=%~dp0.venv\Scripts\python.exe"
-    goto run_deploy
-)
-
-where py >nul 2>nul
-if %ERRORLEVEL% EQU 0 (
-    py -3 "%APP%" -j "%CONFIG%" %*
-    set "DEPLOY_EXIT=%ERRORLEVEL%"
-    goto done
-)
-
-where python >nul 2>nul
-if %ERRORLEVEL% EQU 0 (
-    python "%APP%" -j "%CONFIG%" %*
-    set "DEPLOY_EXIT=%ERRORLEVEL%"
-    goto done
-)
-
-echo Python was not found on PATH. Install Python 3 or run from a shell that has Python available.
+:missing_files
+echo Deployment entrypoint or configuration is missing:
+echo   "%APP%"
+echo   "%CONFIG%"
 pause
 exit /b 1
 
 :run_deploy
-"%PYTHON%" "%APP%" -j "%CONFIG%" %*
+echo Using Python: "%PYTHON%" %PYTHON_ARGS%
+"%PYTHON%" %PYTHON_ARGS% "%APP%" -j "%CONFIG%" %*
 set "DEPLOY_EXIT=%ERRORLEVEL%"
-
-:done
 echo.
 if "%DEPLOY_EXIT%"=="0" (
     echo Deploy workflow completed successfully.
@@ -66,3 +38,12 @@ if "%DEPLOY_EXIT%"=="0" (
 )
 pause
 exit /b %DEPLOY_EXIT%
+
+:try_python
+if defined PYTHON exit /b 0
+if not exist "%~1" exit /b 0
+"%~1" %~2 -c "import sys; sys.exit(0 if sys.version_info.major == 3 else 1)" >nul 2>nul
+if errorlevel 1 exit /b 0
+set "PYTHON=%~1"
+set "PYTHON_ARGS=%~2"
+exit /b 0

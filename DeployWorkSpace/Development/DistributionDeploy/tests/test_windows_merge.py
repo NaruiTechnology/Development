@@ -25,10 +25,26 @@ from workstates.installRedisSentinel_state import installRedisSentinel_state
 from workstates.installGoogleChrome_state import installGoogleChrome_state
 from workstates.exportEnv_state import exportEnv_state
 from workstates.detachedShellLaunch_state import detachedShellLaunch_state
+from workstates.setupVirtualEnv_state import setupVirtualEnv_state
 
 
 @unittest.skipUnless(os.name == "nt", "Windows launch contracts")
 class WindowsMergeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_virtualenv_uses_running_python_instead_of_windows_alias(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state = setupVirtualEnv_state(SimpleNamespace(
+                deployRoot=temp, GetStateConfig=lambda _: {"actionData": {}}))
+            state._run = AsyncMock(return_value=True)
+            base_python = r"C:\Python314\python.exe"
+            with patch("workstates.setupVirtualEnv_state.sys._base_executable", base_python), \
+                 patch("shutil.which", return_value=r"C:\WindowsApps\py.exe") as lookup:
+                await state.DoWork()
+            self.assertTrue(state._success)
+            lookup.assert_not_called()
+            commands = [call.args[0] for call in state._run.await_args_list]
+            self.assertEqual(commands[0], [base_python, "-m", "venv", os.path.join(temp, ".venv")])
+            self.assertEqual(commands[1][0], os.path.join(temp, ".venv", "Scripts", "python.exe"))
+
     def test_smbus2_import_check_is_linux_only(self):
         config = json.loads((Path(__file__).parents[1] / "Json/DistributionDeploy.json").read_text())
         action = next(item["installPipRequirements"] for item in config["Actions"]
