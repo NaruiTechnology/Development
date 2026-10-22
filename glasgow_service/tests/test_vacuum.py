@@ -406,6 +406,31 @@ def test_mechanical_pump_cannot_be_turned_off():
     asyncio.run(scenario())
 
 
+def test_manual_power_on_resumes_downstream_cascade_progression():
+    async def scenario():
+        controller, _commands = simulated_controller()
+        await controller.start()
+        try:
+            await controller.set_simulated_read(MECHANICAL_PUMP, True)
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert states["TurboVacuumPump"].power is True
+
+            # Reproduce an operator-stopped controller whose upstream pump is
+            # already powered. Re-engaging it must clear the latch.
+            controller._cascade_stopped = True
+            await controller.set_power("TurboVacuumPump", True)
+            assert controller.status().cascade_stopped is False
+
+            await controller.set_simulated_read("TurboVacuumPump", True)
+            states = {pump.name: pump for pump in controller.status().pumps}
+            assert states["UHVacuumPump_1"].power is True
+            assert states["UHVacuumPump_2"].power is True
+        finally:
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
 def test_reacquire_resets_simulated_cascade_to_initial_state():
     async def scenario():
         controller, _commands = simulated_controller()

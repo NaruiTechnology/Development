@@ -6077,12 +6077,17 @@ body {
   transition: color 140ms ease, filter 140ms ease, opacity 140ms ease;
 }
 
-.vacuum-power-button[data-state="on"] {
+.vacuum-power-button[data-state="working"] {
   color: lawngreen;
   filter: drop-shadow(0 0 5px color-mix(in srgb, lawngreen 60%, transparent));
 }
 
-.vacuum-power-button:hover:not(:disabled) {
+.vacuum-power-button[data-state="initialized"] {
+  color: red;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, red 60%, transparent));
+}
+
+.vacuum-power-button[data-state="off"]:hover:not(:disabled) {
   color: lawngreen;
 }
 
@@ -6094,6 +6099,12 @@ body {
 .vacuum-power-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.vacuum-power-button[data-locked="true"] {
+  color: var(--c-text-muted);
+  filter: none;
+  opacity: 0.62;
 }
 
 .vacuum-power-button__icon {

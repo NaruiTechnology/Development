@@ -1,4 +1,14 @@
-import type { VacuumSystemStatus } from "../types/api";
+import type { VacuumPumpState, VacuumSystemStatus } from "../types/api";
+
+export type VacuumPumpPowerState = "off" | "working" | "initialized";
+
+/** Powered pumps stay green while pumping down, then turn red at/below threshold. */
+export function vacuumPumpPowerState(
+  pump: Pick<VacuumPumpState, "power" | "value" | "threshold">,
+): VacuumPumpPowerState {
+  if (!pump.power) return "off";
+  return pump.value != null && pump.value <= pump.threshold ? "initialized" : "working";
+}
 
 export function vacuumReadingsAreFresh(updatedAt: string | null, now = Date.now()): boolean {
   if (!updatedAt) return false;
@@ -15,7 +25,7 @@ export function shouldShowVacuumControllerError(
   return pending !== null || error !== null || status === null
     || status.connected !== true || status.running !== true
     || (status.is_production !== false && status.isVacuumSystemReady !== true)
-    || status.cascade_stopped === true
+    || (status.cascade_stopped === true && status.isVacuumSystemReady !== true)
     || Boolean(status.last_error) || (status.alarms?.length ?? 0) > 0
     || !vacuumReadingsAreFresh(status.updated_at);
 }

@@ -1013,10 +1013,11 @@ class VacuumController:
                 state.simulation_read = False
             self._last_error = None
             if not automatic:
-                # A manual pump toggle applies only to the selected pump.
-                # Keep the cascade paused for downstream manual controls so
-                # polling cannot implicitly energize a sibling UH pump.
-                self._cascade_stopped = name != MECHANICAL_PUMP or not power
+                # Manual OFF pauses the cascade so the pump is not immediately
+                # restarted. Manual ON is the operator's intent to continue:
+                # once this stage reaches its threshold, normal progression
+                # must energize the next configured stage.
+                self._cascade_stopped = not power
             if name != MECHANICAL_PUMP and not power and not automatic:
                 await self._reset_mechanical_if_downstream_stopped()
         except Exception as exc:

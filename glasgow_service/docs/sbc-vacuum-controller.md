@@ -124,7 +124,7 @@ When the cascade stops, `GET /vacuum` reports why in `cascade_latch`:
 |---|---|---|
 | `device_error` | an I/O or gauge read/write failure | by itself after `SBC_VACUUM_AUTO_RESUME_POLLS` consecutive healthy polls (default 10, about 10 s; `0` disables) |
 | `restart` | a backing-pump restart | by itself when the backing pump is back ON |
-| `operator` | `POST /vacuum/stop`, a manual pump toggle | `POST /vacuum/resume` |
+| `operator` | `POST /vacuum/stop`, or manually powering a pump off | `POST /vacuum/resume`, or manually powering a pump on |
 | `safety` | E-stop, output-rail / keep-alive trip, a new pump-fault alarm | `POST /vacuum/resume` |
 
 A higher row never gets downgraded by a lower one: a device error during an
