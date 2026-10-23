@@ -16,6 +16,7 @@
     "src/lib/calibrationImportFile.ts",
     "src/types/calibration.ts",
     "src/lib/dimensionCalibrationPersistence.ts",
+    "src/lib/pixelSize.ts",
     "src/lib/roiWorkflow.ts",
     "src/lib/scanError.ts",
     "src/lib/scanRepeat.ts",

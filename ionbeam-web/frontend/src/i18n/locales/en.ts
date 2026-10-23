@@ -166,6 +166,7 @@ export const en = {
   "canvas.scanParams.on": "on",
   "canvas.scanParams.customPattern": "Custom points",
   "canvas.scanParams.grayRange": "Gray",
+  "canvas.meta.pixelSize": "Pixel size",
   "canvas.scanParams.grayMode": "Mode",
   "canvas.scanParams.feedback": "Feedback",
   "canvas.scanParams.feedback.adaptive": "adaptive",

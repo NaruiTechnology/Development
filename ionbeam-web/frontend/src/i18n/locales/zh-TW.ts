@@ -156,6 +156,7 @@ export const zhTW: Partial<TranslationTable> = {
   "canvas.scanParams.on": "開",
   "canvas.scanParams.customPattern": "自訂點",
   "canvas.scanParams.grayRange": "灰階",
+  "canvas.meta.pixelSize": "像素尺寸",
   "canvas.scanParams.grayMode": "模式",
   "canvas.scanParams.feedback": "回饋",
   "canvas.scanParams.feedback.adaptive": "自適應",

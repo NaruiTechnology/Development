@@ -55,6 +55,8 @@ import {
   measureGrayImage,
   resolveRoiLevels,
 } from "../lib/grayImageLevels";
+import { selectGlobalPixelSize } from "../store/selectors";
+import { formatPixelSize } from "../lib/pixelSize";
 
 type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
 type ROISelectionCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -113,6 +115,7 @@ export function ROIEditor({
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
+  const pixelSize = useAppSelector(selectGlobalPixelSize);
   const streamTransforms = useAppSelector((s) => s.scan.streamTransforms);
   // The transform settings describe how scan data is oriented. A file the
   // operator loaded and an ROI scan (its live preview and its result) are
@@ -191,6 +194,12 @@ export function ROIEditor({
   } | null>(null);
   const [calibrationLine, setCalibrationLine] = useState<CalibrationLine | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const coordinatePointReadout = (point: { x: number; y: number }) =>
+    `${formatPointText(point)} ${unitLabel(roi.scale_unit)}`;
+  const coordinateReadout = (point: { x: number; y: number }) =>
+    `${coordinatePointReadout(point)}${
+      pixelSize ? ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}` : ""
+    }`;
   // Gray value of the pixel under the mouse (raw, not wedge-stretched).
   const [grayTip, setGrayTip] = useState<{ clientX: number; clientY: number; value: number } | null>(null);
   const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
@@ -772,7 +781,7 @@ export function ROIEditor({
     setResizeTrace({ corner, point: p });
     setCtrlCursor({ x: p.x, y: p.y, captured: true });
     const d = toDut(p);
-    setTip({ x: event.clientX, y: event.clientY, text: formatPointText(d) });
+    setTip({ x: event.clientX, y: event.clientY, text: coordinateReadout(d) });
     const onMove = (moveEvent: PointerEvent) => {
       if (resizeCornerRef.current !== corner) return;
       moveEvent.preventDefault();
@@ -780,7 +789,7 @@ export function ROIEditor({
       setResizeTrace({ corner, point: p });
       setCtrlCursor({ x: p.x, y: p.y, captured: true });
       const dMove = toDut(p);
-      setTip({ x: moveEvent.clientX, y: moveEvent.clientY, text: formatPointText(dMove) });
+      setTip({ x: moveEvent.clientX, y: moveEvent.clientY, text: coordinateReadout(dMove) });
     };
 
     const onUp = (upEvent: PointerEvent) => {
@@ -1187,9 +1196,10 @@ export function ROIEditor({
       <>
         <span>Press ctrl to drag a corner</span>
         <span>
-          {formatPointText({ x: selected.x_start, y: selected.y_start })} -{" "}
-          {formatPointText({ x: selected.x_end, y: selected.y_end })}
+          {coordinatePointReadout({ x: selected.x_start, y: selected.y_start })} -{" "}
+          {coordinatePointReadout({ x: selected.x_end, y: selected.y_end })}
         </span>
+        {pixelSize && <span>{t("canvas.meta.pixelSize")}: {formatPixelSize(pixelSize)}</span>}
       </>
     );
   }
@@ -1551,7 +1561,7 @@ export function ROIEditor({
                 dragStartRef.current = null;
                 setCtrlCursor({ x: p.x, y: p.y, captured: false });
                 const d = toDut(p);
-                setTip({ x: e.clientX, y: e.clientY, text: formatPointText(d) });
+                setTip({ x: e.clientX, y: e.clientY, text: coordinateReadout(d) });
                 return;
               }
               e.currentTarget.setPointerCapture(e.pointerId);
@@ -1560,7 +1570,7 @@ export function ROIEditor({
               dragStartRef.current = p;
               setCtrlCursor(null);
               const d = toDut(p);
-              setTip({ x: e.clientX, y: e.clientY, text: formatPointText(d) });
+              setTip({ x: e.clientX, y: e.clientY, text: coordinateReadout(d) });
             }}
             onPointerMove={(e) => {
               const hovered = e.pointerType === "touch" ? null : rawGrayAtClient(e.clientX, e.clientY);
@@ -1592,7 +1602,7 @@ export function ROIEditor({
                   const next = rectFromPoints(dragStartRef.current, p);
                   setDraft(next);
                 }
-                setTip({ x: e.clientX, y: e.clientY, text: formatPointText(d) });
+                setTip({ x: e.clientX, y: e.clientY, text: coordinateReadout(d) });
               }
             }}
             onPointerUp={(e) => {
@@ -1820,6 +1830,7 @@ export function ROIEditor({
               >
                 <span>X1: {formatDimensionValue(x1, roi.scale_unit)} | Y1: {formatDimensionValue(y1, roi.scale_unit)}</span>
                 <span>X2: {formatDimensionValue(x2, roi.scale_unit)} | Y2: {formatDimensionValue(y2, roi.scale_unit)}</span>
+                {pixelSize && <span>{t("canvas.meta.pixelSize")}: {formatPixelSize(pixelSize)}</span>}
               </div>
             );
           })()}
@@ -2424,6 +2435,7 @@ function drawScale(
 
 function ROIAxisOverlay({ roi, textCounterTransform }: { roi: ROIState; textCounterTransform: string }) {
   const { t } = useTranslation();
+  const pixelSize = useAppSelector(selectGlobalPixelSize);
   const ticks = Array.from({ length: 21 }, (_, i) => {
     const ratio = i / 20;
     return {
@@ -2472,12 +2484,14 @@ function ROIAxisOverlay({ roi, textCounterTransform }: { roi: ROIState; textCoun
           point: `(${formatOneDecimal(roi.x_origin)}, ${formatOneDecimal(roi.y_origin)})`,
           unit: unitLabel(roi.scale_unit),
         })}
+        {pixelSize && ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}
       </span>
       <span className="canvas-axis-overlay__label canvas-axis-overlay__label--end" style={{ transform: textCounterTransform }}>
         {t("roi.canvas.end", {
           point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
           unit: unitLabel(roi.scale_unit),
         })}
+        {pixelSize && ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}
       </span>
     </div>
   );
@@ -2493,6 +2507,7 @@ function ROICalibrationAxisOverlay({
   textCounterTransform: string;
 }) {
   const { t } = useTranslation();
+  const pixelSize = useAppSelector(selectGlobalPixelSize);
   const draftBounds = viewportBounds(roi, "draft");
   const ticks = Array.from({ length: 21 }, (_, i) => {
     const ratio = i / 20;
@@ -2607,6 +2622,7 @@ function ROICalibrationAxisOverlay({
           point: `(${formatOneDecimal(roi.calibration_x_origin)}, ${formatOneDecimal(roi.calibration_y_origin)})`,
           unit: unitLabel(roi.scale_unit),
         })}
+        {pixelSize && ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}
       </span>
       <span
         className="canvas-axis-overlay__label canvas-axis-overlay__label--end"
@@ -2622,6 +2638,7 @@ function ROICalibrationAxisOverlay({
           point: `(${formatOneDecimal(roi.calibration_x_end)}, ${formatOneDecimal(roi.calibration_y_end)})`,
           unit: unitLabel(roi.scale_unit),
         })}
+        {pixelSize && ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}
       </span>
     </div>
   );

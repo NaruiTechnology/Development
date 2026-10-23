@@ -147,6 +147,7 @@ export const zhCN: Partial<TranslationTable> = {
   "canvas.scanParams.on": "开",
   "canvas.scanParams.customPattern": "自定义点",
   "canvas.scanParams.grayRange": "灰度",
+  "canvas.meta.pixelSize": "像素尺寸",
   "canvas.scanParams.grayMode": "模式",
   "canvas.scanParams.feedback": "反馈",
   "canvas.scanParams.feedback.adaptive": "自适应",

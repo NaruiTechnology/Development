@@ -51,6 +51,8 @@ import {
   type ResolvedLevels,
 } from "../lib/displayLevels";
 import { LevelWedge } from "./LevelWedge";
+import { selectGlobalPixelSize } from "../store/selectors";
+import { formatPixelSize } from "../lib/pixelSize";
 
 const DAC_RANGE = 2048;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
@@ -358,6 +360,7 @@ export function ImageCanvas({
   );
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roi = useAppSelector((s) => s.scan.roi);
+  const pixelSize = useAppSelector(selectGlobalPixelSize);
   const theme = useAppSelector((s) => s.theme.theme);
   const configuredStreamTransforms = useAppSelector((s) => s.scan.streamTransforms);
   // Only control changes update the selected pane. Selecting a different pane
@@ -1785,11 +1788,13 @@ export function ImageCanvas({
           <b>
             {formatPoint(activeRegion.x_start, activeRegion.y_start, roi.scale_unit)} →{" "}
             {formatPoint(activeRegion.x_end, activeRegion.y_end, roi.scale_unit)}
+            {pixelSize && ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}
           </b>
         </span>
         {current && (
           <span title={t("canvas.meta.beam.title")}>
             {t("canvas.meta.beam")} <b>{formatPoint(current.x, current.y, roi.scale_unit)}</b>
+            {pixelSize && <b>{` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}</b>}
           </span>
         )}
         {current && (
@@ -1976,6 +1981,7 @@ function LiveAxisOverlay({
   ignoreTransforms?: boolean;
   transforms?: StreamTransforms;
 }) {
+  const pixelSize = useAppSelector(selectGlobalPixelSize);
   const configuredTransforms = useAppSelector((s) => s.scan.streamTransforms);
   const transforms = ignoreTransforms ? NO_STREAM_TRANSFORMS : paneTransforms ?? configuredTransforms;
   const transformPoint = (x: number, y: number) => {
@@ -2130,6 +2136,7 @@ function LiveAxisOverlay({
           point: `(${formatOneDecimal(roi.x_end)}, ${formatOneDecimal(roi.y_end)})`,
           unit,
         })}
+        {pixelSize && ` · ${t("canvas.meta.pixelSize")} ${formatPixelSize(pixelSize)}`}
       </span>;
       })}
     </div>
