@@ -324,7 +324,10 @@ export function App() {
   const adcTest = useAdcTestStream();
   const adcActive = adcTest.state.phase === "connecting" || adcTest.state.phase === "running";
   const adcView = adcTestEnabled && !adcTestCollapsed;
-  const showROIPreviewSideCard = showROIPreviewSideCardBase && !adcView;
+  const showInlineSampleStage =
+    route === "control" && kind === "roi" && sampleStageOpen && !sampleStageMinimized;
+  const showROIPreviewSideCard = showROIPreviewSideCardBase && !adcView && !showInlineSampleStage;
+  const showROIThirdColumn = showROIPreviewSideCard || showInlineSampleStage;
 
   useEffect(() => {
     dispatch(fetchDefaults());
@@ -563,7 +566,7 @@ export function App() {
       const rect = main.getBoundingClientRect();
       const maxRight = Math.max(
         MIN_RIGHT_PANEL_WIDTH,
-        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIPreviewSideCard ? 236 : 0)
+        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIThirdColumn ? 236 : 0)
       );
       const next = Math.min(
         maxRight,
@@ -588,7 +591,7 @@ export function App() {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [isResizing, showROIPreviewSideCard]);
+  }, [isResizing, showROIThirdColumn]);
 
   const scanActive = phase === "running" || phase === "stopping";
   const panelDisabled = shouldDisableScanPanel({
@@ -625,6 +628,11 @@ export function App() {
     roiCachedScanImageUrl && roiCachedScanImageUrl !== suppressedROIScanImageUrl
       ? roiCachedScanImageUrl
       : null;
+  const sampleStagePreviewImageUrl =
+    roiState.scanImageDataUrl ??
+    (roiState.imageKind === "lastScan"
+      ? activeROIScanImageUrl ?? roiState.imageDataUrl
+      : roiState.imageDataUrl ?? activeROIScanImageUrl);
   const showGraySpectrum =
     kind === "roi" &&
     hasPartialROI &&
@@ -1369,7 +1377,7 @@ export function App() {
     const rect = main.getBoundingClientRect();
     const maxRight = Math.max(
       MIN_RIGHT_PANEL_WIDTH,
-      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIPreviewSideCard ? 236 : 0)
+      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIThirdColumn ? 236 : 0)
     );
     const next = Math.min(maxRight, Math.max(MIN_RIGHT_PANEL_WIDTH, rightPanelWidth + delta));
     setRightPanelWidth(next);
@@ -1465,6 +1473,7 @@ export function App() {
         onOpenSampleStage={() => {
           setSampleStageOpen(true);
           setSampleStageMinimized(false);
+          if (kind === "roi" && route !== "control") navigateTo("control");
         }}
         sampleStageControllerBusy={sampleStageControllerBusy}
         highVoltagePower={highVoltagePower}
@@ -1502,7 +1511,7 @@ export function App() {
       <main
         ref={mainRef}
         className={`app-main${isResizing ? " app-main--resizing" : ""}${
-          showROIPreviewSideCard ? " app-main--with-roi-preview" : ""
+          showROIThirdColumn ? " app-main--with-roi-preview" : ""
         }`}
         style={layoutStyle}
       >
@@ -2015,16 +2024,32 @@ export function App() {
           </div>
         </section>
 
-        {showROIPreviewSideCard && (
+        {showROIThirdColumn && (
           <section className="roi-preview-column">
-            <div className="card roi-preview-card">
-              <div className="card__header">
-                <span className="card__title">{t("card.roiPreview")}</span>
+            {showROIPreviewSideCard && (
+              <div className="card roi-preview-card">
+                <div className="card__header">
+                  <span className="card__title">{t("card.roiPreview")}</span>
+                </div>
+                <div className="card__body">
+                  <ROIScanPreview backgroundImageUrl={activeROIScanImageUrl} />
+                </div>
               </div>
-              <div className="card__body">
-                <ROIScanPreview backgroundImageUrl={activeROIScanImageUrl} />
-              </div>
-            </div>
+            )}
+            {showInlineSampleStage && (
+              <SampleStageDashboard
+                open
+                minimized={false}
+                variant="inline"
+                previewImageUrl={sampleStagePreviewImageUrl}
+                onActivityChange={setSampleStageControllerBusy}
+                onMinimizedChange={setSampleStageMinimized}
+                onClose={() => {
+                  setSampleStageOpen(false);
+                  setSampleStageMinimized(false);
+                }}
+              />
+            )}
           </section>
         )}
       </main>
@@ -2047,16 +2072,18 @@ export function App() {
           }}
         />
       )}
-      <SampleStageDashboard
-        open={sampleStageOpen}
-        minimized={sampleStageMinimized}
-        onActivityChange={setSampleStageControllerBusy}
-        onMinimizedChange={setSampleStageMinimized}
-        onClose={() => {
-          setSampleStageOpen(false);
-          setSampleStageMinimized(false);
-        }}
-      />
+      {!(route === "control" && kind === "roi") && (
+        <SampleStageDashboard
+          open={sampleStageOpen}
+          minimized={sampleStageMinimized}
+          onActivityChange={setSampleStageControllerBusy}
+          onMinimizedChange={setSampleStageMinimized}
+          onClose={() => {
+            setSampleStageOpen(false);
+            setSampleStageMinimized(false);
+          }}
+        />
+      )}
       <Footer />
     </div>
   );
