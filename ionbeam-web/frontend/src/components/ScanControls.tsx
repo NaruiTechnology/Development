@@ -361,8 +361,10 @@ export function ScanControls({
 
   async function startRunRequest() {
     if (disabled || (kind === "roi" && !roiAction)) return;
-    // The WebSocket upgrade checks the current session and scan privilege on
-    // the server. Avoid a duplicate account round trip before starting Run.
+    // Match the known-good ROI action flow from e7e58e18: validate the
+    // operator before doing bitmap work or opening the scan stream.
+    const allowed = await refreshScanPrivilege();
+    if (!allowed) return;
     if (roiAction) {
       try {
         if (roiEbeamDisabled) {
@@ -433,14 +435,17 @@ export function ScanControls({
           dispatch(requestROITargetGrayRun());
         } else {
           const req = await vectorRequestWithBitmapSelection(
-            { ...vector, roi },
-            roiState,
             {
-              isProduction,
-              allowBitmapSimulation,
-              grayScaleSelection: null,
-              grayScaleSkipped: null,
-            }
+              ...vector,
+              pattern: "default",
+              points: null,
+              roi,
+              feedback_mode: "standard",
+              gray_level_range: null,
+              gray_level_skipped: null,
+            },
+            roiState,
+            { isProduction, allowBitmapSimulation },
           );
           clearActionLoopState();
           dispatch(updateROI({ scanImageDataUrl: null }));

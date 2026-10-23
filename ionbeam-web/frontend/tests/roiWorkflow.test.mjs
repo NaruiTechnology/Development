@@ -6,7 +6,9 @@ import {
   imageWorldBounds,
   viewportBounds,
 } from "../.test-dist/lib/roiGeometry.js";
-import { completedROIImagePatch } from "../.test-dist/lib/roiWorkflow.js";
+import {
+  completedROIImagePatch,
+} from "../.test-dist/lib/roiWorkflow.js";
 import { worldSelectionToDacROI } from "../.test-dist/lib/roiDac.js";
 
 function roi(overrides = {}) {
@@ -69,3 +71,4 @@ test("maps a nested selection against the prior result image bounds", () => {
     "nested selections must remain absolute within the hardware DAC field",
   );
 });
+

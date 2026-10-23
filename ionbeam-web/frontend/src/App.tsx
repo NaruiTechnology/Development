@@ -72,6 +72,7 @@ import {
   resolveROIActionKind,
   shouldShowROIGrayScaleClear,
   shouldShowROIActionControls,
+  shouldShowROIActionVectorCanvas,
   resolveGrayScaleSourceKind,
 } from "./lib/grayScaleUI";
 import { completedROIImagePatch } from "./lib/roiWorkflow";
@@ -647,11 +648,11 @@ export function App() {
   const grayScaleScopeNote = grayScaleScopeNoteForKind(grayScaleSourceKind, isProduction, t);
   const roiActionGrayFilterActive =
     committedGrayScaleSelection !== null && committedGrayScaleSkipped !== null;
-  const showROIActionVectorCanvas =
-    roiActionCanvasVisible &&
-    !roiActionGrayFilterActive &&
-    roiState.scanImageDataUrl === null &&
-    phase === "completed";
+  const showROIActionVectorCanvas = shouldShowROIActionVectorCanvas({
+    roiActionCanvasVisible,
+    roiActionGrayFilterActive,
+    scanImageDataUrl: roiState.scanImageDataUrl,
+  });
   const displayedROIGrayScaleSelection = pendingGrayScaleSelection ?? committedGrayScaleSelection;
   const displayedROIGrayScaleSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped;
   const actionScanKind =
@@ -1438,14 +1439,17 @@ export function App() {
           onSelect={handleGrayScaleSelect}
         />
       ) : null}
-      {shouldShowROIGrayScaleClear({
-        kind,
-        hasConfirmedGrayRange: committedGrayScaleSelection !== null,
-      }) && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+      {shouldShowROIGrayScaleClear({ kind }) &&
+        !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
         <button
           type="button"
           className="btn btn--ghost image-panel-card__header-action"
-          disabled={panelDisabled}
+          disabled={
+            panelDisabled ||
+            (pendingGrayScaleSelection === null &&
+              committedGrayScaleSelection === null &&
+              pendingGrayScaleAnchor === null)
+          }
           onClick={handleClearROIGrayScaleValues}
           title={t("scan.clear")}
         >

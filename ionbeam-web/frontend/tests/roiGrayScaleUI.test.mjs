@@ -8,6 +8,7 @@ import {
   resolveGrayScaleSourceKind,
   shouldShowROIGrayScaleClear,
   shouldShowROIActionControls,
+  shouldShowROIActionVectorCanvas,
 } from "../.test-dist/lib/grayScaleUI.js";
 
 const t = (key) => key;
@@ -82,17 +83,35 @@ test("uses vector style for ROI action runs", () => {
   assert.equal(resolveROIActionKind("mag", "raster"), null);
 });
 
-test("shows ROI gray-range Clear only after a range is confirmed", () => {
+test("shows the unfiltered ROI vector canvas as soon as Action Run starts", () => {
   assert.equal(
-    shouldShowROIGrayScaleClear({ kind: "roi", hasConfirmedGrayRange: false }),
-    false,
-  );
-  assert.equal(
-    shouldShowROIGrayScaleClear({ kind: "roi", hasConfirmedGrayRange: true }),
+    shouldShowROIActionVectorCanvas({
+      roiActionCanvasVisible: true,
+      roiActionGrayFilterActive: false,
+      scanImageDataUrl: null,
+    }),
     true,
   );
   assert.equal(
-    shouldShowROIGrayScaleClear({ kind: "vector", hasConfirmedGrayRange: true }),
+    shouldShowROIActionVectorCanvas({
+      roiActionCanvasVisible: false,
+      roiActionGrayFilterActive: false,
+      scanImageDataUrl: null,
+    }),
     false,
   );
+  assert.equal(
+    shouldShowROIActionVectorCanvas({
+      roiActionCanvasVisible: true,
+      roiActionGrayFilterActive: true,
+      scanImageDataUrl: null,
+    }),
+    false,
+  );
+});
+
+test("keeps the ROI gray-range Clear action visible before and after selection", () => {
+  assert.equal(shouldShowROIGrayScaleClear({ kind: "roi" }), true);
+  assert.equal(shouldShowROIGrayScaleClear({ kind: "vector" }), false);
+  assert.equal(shouldShowROIGrayScaleClear({ kind: "raster" }), false);
 });
