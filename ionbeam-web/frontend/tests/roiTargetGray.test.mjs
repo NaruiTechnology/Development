@@ -50,7 +50,7 @@ test("clipPixelRect clips to the image and rejects empty areas", () => {
   assert.equal(clipPixelRect({ left: 9, top: 0, width: 3, height: 3 }, 8, 8), null);
 });
 
-test("looping step passes converge the ROI area to the target and leave the rest untouched", () => {
+test("looping passes lower brighter ROI pixels and leave darker and outside pixels untouched", () => {
   const width = 8;
   const height = 6;
   const data = grayImage(width, height, (x, y) => (x * 37 + y * 53) % 256);
@@ -73,7 +73,8 @@ test("looping step passes converge the ROI area to the target and leave the rest
       const inside = x >= rect.left && x < rect.left + rect.width && y >= rect.top && y < rect.top + rect.height;
       const i = (y * width + x) * 4;
       if (inside) {
-        assert.deepEqual([data[i], data[i + 1], data[i + 2]], [target, target, target]);
+        const expected = before[i] <= target ? before[i] : target;
+        assert.deepEqual([data[i], data[i + 1], data[i + 2]], [expected, expected, expected]);
       } else {
         assert.deepEqual(
           [data[i], data[i + 1], data[i + 2], data[i + 3]],
@@ -85,23 +86,23 @@ test("looping step passes converge the ROI area to the target and leave the rest
 });
 
 test("each pass moves a pixel at most maxStep gray levels", () => {
-  const data = grayImage(1, 1, () => 10);
+  const data = grayImage(1, 1, () => 220);
   const rect = { left: 0, top: 0, width: 1, height: 1 };
   assert.equal(stepTowardTargetGray(data, 1, rect, 200, 4).remaining, 1);
-  assert.equal(data[0], 14);
-  assert.equal(stepTowardTargetGray(data, 1, rect, 15, 4).remaining, 0);
-  assert.equal(data[0], 15);
+  assert.equal(data[0], 216);
+  assert.equal(stepTowardTargetGray(data, 1, rect, 215, 4).remaining, 0);
+  assert.equal(data[0], 215);
 });
 
 test("SPOT/SKIP is decided per pixel by comparing its gray with the target", () => {
   assert.equal(targetGrayDecision(128, 128), "skip");
-  assert.equal(targetGrayDecision(127, 128), "spot");
+  assert.equal(targetGrayDecision(127, 128), "skip");
   assert.equal(targetGrayDecision(129, 128), "spot");
-  assert.deepEqual(targetGrayFilter(128.4), { selection: [128, 128], skipped: true });
-  assert.deepEqual(targetGrayFilter(300), { selection: [255, 255], skipped: true });
+  assert.deepEqual(targetGrayFilter(128.4), { selection: [0, 128], skipped: true });
+  assert.deepEqual(targetGrayFilter(300), { selection: [0, 255], skipped: true });
 });
 
-test("each pass re-decides every ROI pixel: matching pixels are skipped and left unchanged", () => {
+test("each pass skips matching and darker pixels while lowering brighter pixels", () => {
   // 3x1 ROI: one pixel already at target, one below, one above.
   const width = 5;
   const data = grayImage(width, 1, (x) => [9, 100, 50, 150, 9][x]);
@@ -109,9 +110,9 @@ test("each pass re-decides every ROI pixel: matching pixels are skipped and left
   const decisions = new Uint8Array(width).fill(7);
 
   const first = stepTowardTargetGray(data, width, rect, 100, 10, decisions);
-  assert.deepEqual(first, { spot: 2, skip: 1, remaining: 2 });
-  assert.deepEqual([...decisions], [7, 0, 1, 1, 7], "outside pixels get no decision");
-  assert.deepEqual([data[4], data[8], data[12]], [100, 60, 140]);
+  assert.deepEqual(first, { spot: 1, skip: 2, remaining: 1 });
+  assert.deepEqual([...decisions], [7, 0, 0, 1, 7], "outside pixels get no decision");
+  assert.deepEqual([data[4], data[8], data[12]], [100, 50, 140]);
   assert.deepEqual([data[0], data[16]], [9, 9], "outside pixels untouched");
 
   // Run to convergence; the SPOT count can only fall and ends at zero.
@@ -127,7 +128,7 @@ test("each pass re-decides every ROI pixel: matching pixels are skipped and left
   assert.deepEqual([...decisions], [7, 0, 0, 0, 7]);
 });
 
-test("colour pixels are compared by their gray value, not raw channels", () => {
+test("colour pixels at or below target are skipped by gray value, not raw channels", () => {
   const data = new Uint8ClampedArray([255, 0, 0, 255]); // luma 76
   const rect = { left: 0, top: 0, width: 1, height: 1 };
   assert.equal(countTargetGrayMismatches(data, 1, rect, 76), 0);

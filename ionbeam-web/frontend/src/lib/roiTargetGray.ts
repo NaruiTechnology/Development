@@ -2,9 +2,9 @@
  * Target gray level helpers for the ROI image canvas.
  *
  * The operator right-clicks a pixel to pick a target gray level. Action run
- * (with an ROI area and no gray level filter range) then steps pixels brighter
- * than that target down toward it. Pixels at or below the target are skipped,
- * and pixels outside the ROI area are never touched.
+ * (with an ROI area and no gray level filter range) then steps brighter pixels
+ * down toward that target. Pixels at or below the target are skipped, and
+ * pixels outside the ROI area are never touched.
  */
 
 /** Gray levels a pixel may move toward the target in one pass. */

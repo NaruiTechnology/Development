@@ -380,9 +380,9 @@ export function ROIEditor({
 
   // Action run toward the target gray level. Each pass compares every pixel
   // inside the ROI area with `selectedTargetGray` and decides its beam state
-  // from its current gray: SKIP when equal (beam blanked, pixel unchanged),
-  // SPOT when different (beam dwells, pixel steps toward the target). Passes
-  // repeat until every pixel is skipped, i.e. matches. Spotted pixels are
+  // from its current gray: SKIP when at or below target (beam blanked, pixel
+  // unchanged), SPOT when brighter (beam dwells, pixel steps down toward the
+  // target). Passes repeat until every pixel is skipped. Spotted pixels are
   // painted on the mask layer each pass. Pixels outside the area are never
   // touched. The result then replaces the ROI image the canvas is showing.
   useEffect(() => {

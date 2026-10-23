@@ -154,6 +154,7 @@ export function ScanControls({
   const vectorPasses = useAppSelector((s) => s.image.vectorPasses);
   const [actionLoopIteration, setActionLoopIteration] = useState(0);
   const [actionLoopActive, setActionLoopActive] = useState(false);
+  const [runStarting, setRunStarting] = useState(false);
   const [infiniteScanActive, setInfiniteScanActive] = useState(false);
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
   const [region, setRegion] = useState("");
@@ -371,8 +372,8 @@ export function ScanControls({
           scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
         // Production target gray (ROI area, no gray level filter range): the
         // beam decision is made per pixel by comparing its gray with the
-        // target, i.e. the single-level filter [target, target] with Skip:
-        // pixels at the target are skipped (blanked), all others spotted.
+        // target, i.e. the range [0, target] with Skip: pixels at or below
+        // the target are skipped (blanked), while brighter pixels are spotted.
         const productionTargetFilter =
           !hasGrayFilter && roi && selectedTargetGray !== null && isProduction
             ? targetGrayFilter(selectedTargetGray)
@@ -621,21 +622,25 @@ export function ScanControls({
   const guardRunStart = (start: () => Promise<void>) => async () => {
     if (runStartingRef.current) return;
     runStartingRef.current = true;
+    setRunStarting(true);
     try {
       await start();
     } finally {
       runStartingRef.current = false;
+      setRunStarting(false);
     }
   };
   const onRun = guardRunStart(startRunRequest);
   const onInfinite = guardRunStart(startInfiniteRequest);
   const onRunValidated = guardRunStart(startValidatedRunRequest);
 
+  const roiActionBusy = runStarting || busy || targetGrayRunning;
   const runDisabled =
     controlsDisabled ||
     roiEbeamDisabled ||
     streaming ||
     closing ||
+    runStarting ||
     (roiAction && (actionLoopActive || targetGrayRunning));
   const stopDisabled = roiEbeamDisabled || !stopAvailable;
   const infiniteDisabled =
@@ -828,8 +833,8 @@ export function ScanControls({
             </HelpPopover>
             <span
               className="scan-busy"
-              data-visible={busy || targetGrayRunning ? "true" : "false"}
-              aria-hidden={!(busy || targetGrayRunning)}
+              data-visible={roiActionBusy ? "true" : "false"}
+              aria-hidden={!roiActionBusy}
               title={t("scan.busy.title")}
             >
               <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />
@@ -843,7 +848,7 @@ export function ScanControls({
               onClick={onRun}
               title={t("roi.actionRun.title")}
             >
-              <Icon name="play" tone="success" />
+              {roiActionBusy ? <LoadingSpinner inline size={16} ariaLabel={t("scan.busy.title")} /> : <Icon name="play" tone="success" />}
               {t("roi.actionRun")}
             </button>
             <button
