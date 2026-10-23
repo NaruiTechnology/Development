@@ -110,8 +110,21 @@ test("shows the unfiltered ROI vector canvas as soon as Action Run starts", () =
   );
 });
 
-test("keeps the ROI gray-range Clear action visible before and after selection", () => {
-  assert.equal(shouldShowROIGrayScaleClear({ kind: "roi" }), true);
-  assert.equal(shouldShowROIGrayScaleClear({ kind: "vector" }), false);
-  assert.equal(shouldShowROIGrayScaleClear({ kind: "raster" }), false);
+test("shows the ROI gray-range Clear action only for an active filter", () => {
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "roi", grayFilterActive: true }),
+    true,
+  );
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "roi", grayFilterActive: false }),
+    false,
+  );
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "vector", grayFilterActive: true }),
+    false,
+  );
+  assert.equal(
+    shouldShowROIGrayScaleClear({ kind: "raster", grayFilterActive: true }),
+    false,
+  );
 });

@@ -1439,11 +1439,10 @@ export function App() {
           onSelect={handleGrayScaleSelect}
         />
       ) : null}
-      {shouldShowROIGrayScaleClear({ kind }) &&
-        !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+      {shouldShowROIGrayScaleClear({ kind, grayFilterActive: roiActionGrayFilterActive }) && (
         <button
           type="button"
-          className="btn btn--ghost image-panel-card__header-action"
+          className="btn btn--accent-solid image-panel-card__header-action"
           disabled={
             panelDisabled ||
             (pendingGrayScaleSelection === null &&

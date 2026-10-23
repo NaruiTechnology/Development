@@ -36,6 +36,7 @@ import {
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { targetGrayFilter } from "../lib/roiTargetGray";
+import { unfilteredROIActionRequest } from "../lib/roiWorkflow";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -434,19 +435,11 @@ export function ScanControls({
           if (phase === "error") dispatch(streamReset());
           dispatch(requestROITargetGrayRun());
         } else {
-          const req = await vectorRequestWithBitmapSelection(
-            {
-              ...vector,
-              pattern: "default",
-              points: null,
-              roi,
-              feedback_mode: "standard",
-              gray_level_range: null,
-              gray_level_skipped: null,
-            },
-            roiState,
-            { isProduction, allowBitmapSimulation },
-          );
+          // Commit 43f9427b only used the bitmap path after a gray range was
+          // confirmed. An unfiltered action is a normal ROI sweep; sending the
+          // source bitmap makes glasgow_service prebuild a large frame before
+          // yielding anything, which leaves the UI spinner waiting.
+          const req = unfilteredROIActionRequest({ ...vector, roi }, roiState);
           clearActionLoopState();
           dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();

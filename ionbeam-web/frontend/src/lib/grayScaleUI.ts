@@ -48,8 +48,9 @@ export function shouldShowROIActionVectorCanvas(options: {
 
 export function shouldShowROIGrayScaleClear(options: {
   kind: "roi" | ROIActionKind | "mag";
+  grayFilterActive: boolean;
 }): boolean {
-  return options.kind === "roi";
+  return options.kind === "roi" && options.grayFilterActive;
 }
 
 export function resolveGrayScaleSourceKind(options: {

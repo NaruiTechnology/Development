@@ -1887,6 +1887,16 @@ body {
 }
 .btn--primary:hover:not(:disabled) { background: var(--c-btn-primary-hover); }
 
+.btn--accent-solid {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+.btn--accent-solid:hover:not(:disabled) {
+  background: var(--c-accent-hot);
+  border-color: var(--c-accent-hot);
+}
+
 .btn--gold {
   background: var(--c-btn-gold-grad);
   border-color: var(--c-btn-gold-bord);
