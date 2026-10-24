@@ -250,15 +250,22 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
       <article key={pump.name} className="card vacuum-card" data-border={pump.border}>
         <div className="card__header vacuum-card__header">
           <span className="card__title">{pumpLabel}</span>
-          <label className="vacuum-switch" title={valveTitle}>
-            <input
-              type="checkbox"
-              checked={valveOpen}
-              disabled
-              aria-label={valveTitle}
-            />
-            <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-          </label>
+          <div className="vacuum-card__valve" title={valveTitle}>
+            <svg className="vacuum-valve-icon" data-state={valveOpen ? "open" : "closed"} viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M1.5 13h5l5.5-5v10l-5.5-5h11" />
+              <path d="M12 8V4h7M16 4v3" />
+              <path d="M16.5 13h6" />
+            </svg>
+            <label className="vacuum-switch">
+              <input
+                type="checkbox"
+                checked={valveOpen}
+                disabled
+                aria-label={valveTitle}
+              />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+            </label>
+          </div>
         </div>
         <div className="card__body vacuum-card__body">
           {pumpImage && (
