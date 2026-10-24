@@ -5,6 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import sampleStageImage from "../assets/SampleStage-0.3.png";
 import { useTranslation } from "../i18n";
 import { apiUrl } from "../lib/backendUrl";
+import { Icon } from "./Icon";
 import { NumberStepperInput } from "./NumberStepperField";
 
 type StagePosition = { x: number; y: number; z: number; t: number; r: number };
@@ -74,6 +75,7 @@ type Props = {
   minimized: boolean;
   variant?: "modal" | "inline";
   previewImageUrl?: string | null;
+  onDockedChange: (docked: boolean) => void;
   onMinimizedChange: (minimized: boolean) => void;
   onActivityChange: (active: boolean) => void;
   onClose: () => void;
@@ -84,6 +86,7 @@ export function SampleStageDashboard({
   minimized,
   variant = "modal",
   previewImageUrl = null,
+  onDockedChange,
   onMinimizedChange,
   onActivityChange,
   onClose,
@@ -359,15 +362,28 @@ export function SampleStageDashboard({
       <section className="card sample-stage-card" aria-labelledby="sample-stage-inline-title">
         <div className="card__header sample-stage-card__header">
           <span id="sample-stage-inline-title" className="card__title">{t("sampleStage.title")}</span>
-          <button
-            type="button"
-            className="sample-stage-card__minimize"
-            onClick={() => onMinimizedChange(true)}
-            aria-label={t("sampleStage.minimize")}
-            title={t("sampleStage.minimize")}
-          >
-            <span aria-hidden>−</span>
-          </button>
+          <div className="sample-stage-card__window-actions">
+            <button
+              type="button"
+              className="sample-stage-card__window-action"
+              onClick={() => onDockedChange(false)}
+              aria-label={t("sampleStage.undock")}
+              data-tooltip={t("sampleStage.undock")}
+              data-styled-tooltip="true"
+            >
+              <Icon name="dock" />
+            </button>
+            <button
+              type="button"
+              className="sample-stage-card__window-action"
+              onClick={() => onMinimizedChange(true)}
+              aria-label={t("sampleStage.minimize")}
+              data-tooltip={t("sampleStage.minimize")}
+              data-styled-tooltip="true"
+            >
+              <Icon name="triangleUp" />
+            </button>
+          </div>
         </div>
         <div className="card__body sample-stage-card__body">
           <div className="sample-stage-card__controls">
@@ -456,12 +472,13 @@ export function SampleStageDashboard({
                 positionEditedRef.current = true;
                 setTargetPosition((position) => ({ ...position, r: parsed }));
               }} ariaLabel="Rotation target" /></label>
-              <button type="button" className="btn btn--primary sample-stage-dashboard__move-button" onClick={() => void moveStage()} disabled={!stageStatus?.connected || stageStatus.moving}>
-                {stageStatus?.moving ? t("sampleStage.moving") : t("sampleStage.move")}
+              <button type="button" className="btn btn--primary sample-stage-dashboard__move-button" onClick={() => void moveStage()} disabled={!stageStatus?.connected || stageStatus.moving || movePending}>
+                {stageStatus?.moving || movePending ? t("sampleStage.moving") : t("sampleStage.move")}
               </button>
             </div>
             <div className="sample-stage-dashboard__window-actions">
-              <button type="button" className="modal__close" onClick={() => onMinimizedChange(true)} aria-label={t("sampleStage.minimize")} title={t("sampleStage.minimize")}><span aria-hidden>−</span></button>
+              <button type="button" className="modal__close" onClick={() => onDockedChange(true)} aria-label={t("sampleStage.dock")} data-tooltip={t("sampleStage.dock")} data-styled-tooltip="true"><Icon name="dock" /></button>
+              <button type="button" className="modal__close" onClick={() => onMinimizedChange(true)} aria-label={t("sampleStage.minimize")} data-tooltip={t("sampleStage.minimize")} data-styled-tooltip="true"><Icon name="triangleUp" /></button>
             </div>
           </div>
           <div className="modal__body sample-stage-dashboard__body">

@@ -721,6 +721,8 @@ export const zhCN: Partial<TranslationTable> = {
   "sampleStage.close": "关闭样品台",
   "sampleStage.minimize": "最小化样品台",
   "sampleStage.restore": "恢复样品台",
+  "sampleStage.dock": "将样品台停靠到扫描页面第三列",
+  "sampleStage.undock": "将样品台取消停靠为浮动窗口",
   "sampleStage.canvas.aria": "样品台图像",
   "sampleStage.axis.x": "X 轴",
   "sampleStage.axis.y": "Y 轴",

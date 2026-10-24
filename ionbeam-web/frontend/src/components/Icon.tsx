@@ -16,6 +16,7 @@ type IconName =
   | "commentTool"
   | "crop"
   | "download"
+  | "dock"
   | "edit"
   | "dashboard"
   | "globe"
@@ -47,6 +48,7 @@ type IconName =
   | "square"
   | "sun"
   | "target"
+  | "triangleUp"
   | "atom"
   | "tools"
   | "fileText"
@@ -114,6 +116,13 @@ const imageSources: Partial<Record<IconName, string>> = {
 };
 
 const paths: Partial<Record<IconName, JSX.Element>> = {
+  triangleUp: <path d="M5 17 12 7l7 10z" fill="currentColor" stroke="none" />,
+  dock: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M15 4v16M6.5 9h5M9 6.5 11.5 9 9 11.5" />
+    </>
+  ),
   waveform: (
     <path d="M3 13h3l2-6 4 12 3-9 2 3h4" />
   ),

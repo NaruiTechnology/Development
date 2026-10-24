@@ -727,6 +727,8 @@ export const zhTW: Partial<TranslationTable> = {
   "sampleStage.close": "關閉樣品載台",
   "sampleStage.minimize": "最小化樣品載台",
   "sampleStage.restore": "恢復樣品載台",
+  "sampleStage.dock": "將樣品載台停駐到掃描頁面第三欄",
+  "sampleStage.undock": "將樣品載台取消停駐為浮動視窗",
   "sampleStage.canvas.aria": "樣品載台影像",
   "sampleStage.axis.x": "X 軸",
   "sampleStage.axis.y": "Y 軸",

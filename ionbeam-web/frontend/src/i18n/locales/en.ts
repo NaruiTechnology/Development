@@ -782,6 +782,8 @@ export const en = {
   "sampleStage.close": "Close sample stage",
   "sampleStage.minimize": "Minimize sample stage",
   "sampleStage.restore": "Restore sample stage",
+  "sampleStage.dock": "Dock sample stage in the scan third column",
+  "sampleStage.undock": "Undock sample stage into a floating window",
   "sampleStage.canvas.aria": "Sample stage image",
   "sampleStage.axis.x": "X axis",
   "sampleStage.axis.y": "Y axis",

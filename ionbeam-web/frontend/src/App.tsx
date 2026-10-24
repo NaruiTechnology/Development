@@ -149,6 +149,7 @@ export function App() {
   const [vacuumControllerError, setVacuumControllerError] = useState(true);
   const [sampleStageOpen, setSampleStageOpen] = useState(true);
   const [sampleStageMinimized, setSampleStageMinimized] = useState(true);
+  const [sampleStageDocked, setSampleStageDocked] = useState(true);
   const [sampleStageControllerBusy, setSampleStageControllerBusy] = useState(false);
   // DAC check card starts collapsed — it's an occasional diagnostic,
   // not part of the normal vector-scan flow, so it shouldn't compete
@@ -325,8 +326,10 @@ export function App() {
   const adcTest = useAdcTestStream();
   const adcActive = adcTest.state.phase === "connecting" || adcTest.state.phase === "running";
   const adcView = adcTestEnabled && !adcTestCollapsed;
+  const sampleStageDockTargetAvailable =
+    route === "control" && (kind === "roi" || kind === "raster" || kind === "vector");
   const showInlineSampleStage =
-    route === "control" && kind === "roi" && sampleStageOpen && !sampleStageMinimized;
+    sampleStageDockTargetAvailable && sampleStageDocked && sampleStageOpen && !sampleStageMinimized;
   const showROIPreviewSideCard = showROIPreviewSideCardBase && !adcView && !showInlineSampleStage;
   const showROIThirdColumn = showROIPreviewSideCard || showInlineSampleStage;
 
@@ -1365,6 +1368,14 @@ export function App() {
     activateCalibrateSubTab(calibrateSubTab);
   }
 
+  function handleSampleStageDockedChange(docked: boolean) {
+    setSampleStageDocked(docked);
+    setSampleStageMinimized(false);
+    if (!docked) return;
+    if (route !== "control") navigateTo("control");
+    activateScanTopTab();
+  }
+
   function navigateTo(nextRoute: AppRoute) {
     const nextPath = `/${nextRoute}`;
     if (window.location.pathname === nextPath) return;
@@ -1476,6 +1487,9 @@ export function App() {
         onOpenSampleStage={() => {
           setSampleStageOpen(true);
           setSampleStageMinimized(false);
+          if (kind === "raster" || kind === "vector") {
+            setSampleStageDocked(false);
+          }
           if (kind === "roi" && route !== "control") navigateTo("control");
         }}
         sampleStageControllerBusy={sampleStageControllerBusy}
@@ -2045,6 +2059,7 @@ export function App() {
                 minimized={false}
                 variant="inline"
                 previewImageUrl={sampleStagePreviewImageUrl}
+                onDockedChange={handleSampleStageDockedChange}
                 onActivityChange={setSampleStageControllerBusy}
                 onMinimizedChange={setSampleStageMinimized}
                 onClose={() => {
@@ -2075,10 +2090,11 @@ export function App() {
           }}
         />
       )}
-      {!(route === "control" && kind === "roi") && (
+      {!sampleStageDocked && (
         <SampleStageDashboard
           open={sampleStageOpen}
           minimized={sampleStageMinimized}
+          onDockedChange={handleSampleStageDockedChange}
           onActivityChange={setSampleStageControllerBusy}
           onMinimizedChange={setSampleStageMinimized}
           onClose={() => {
