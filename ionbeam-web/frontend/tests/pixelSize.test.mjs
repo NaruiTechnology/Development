@@ -3,9 +3,16 @@ import assert from "node:assert/strict";
 
 import {
   formatPixelSize,
+  isotropicPixelSizeFromMetres,
   pixelSizeFromDimensionCalibration,
   pixelSizeFromScanGeometry,
 } from "../.test-dist/lib/pixelSize.js";
+
+test("formats metre calibration values like the metadata chip", () => {
+  const size = isotropicPixelSizeFromMetres(1e-8, "um");
+  assert.ok(size);
+  assert.equal(formatPixelSize(size), "X 0.01 × Y 0.01 µm/px");
+});
 
 test("derives anisotropic pixel size from saved dimension calibration", () => {
   const size = pixelSizeFromDimensionCalibration({

@@ -33,6 +33,27 @@ export function pixelSizeFromDimensionCalibration(
     : null;
 }
 
+/** Convert an isotropic size in metres to the unit used by the metadata chip. */
+export function isotropicPixelSizeFromMetres(
+  valueM: number,
+  unit: string,
+): PixelSize | null {
+  const metresPerUnit: Record<string, number> = {
+    m: 1,
+    mm: 1e-3,
+    um: 1e-6,
+    "µm": 1e-6,
+    "μm": 1e-6,
+    nm: 1e-9,
+  };
+  const scale = metresPerUnit[unit];
+  if (!scale) return null;
+  const value = valueM / scale;
+  return validSize(value, value)
+    ? { x: value, y: value, unit, source: "dimensionCalibration" }
+    : null;
+}
+
 function displayUnit(unit: string): string {
   return unit === "um" || unit === "μm" ? "µm" : unit;
 }

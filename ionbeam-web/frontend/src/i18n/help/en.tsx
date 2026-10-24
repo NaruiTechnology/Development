@@ -819,10 +819,55 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <div className="dwell-help__rule">
         <strong>X/Y relationship.</strong> Magnification calibration
-        stores HFOV only. The ROI X/Y calibration owns the viewport-to-DUT
-        coordinate mapping. If pixels are square, VFOV is derived from
-        HFOV by the image aspect ratio; otherwise X and Y require separate
-        ROI calibration.
+        stores HFOV only; it does not directly drive a separate FPGA
+        magnification input. When Scan geometry is applied, HFOV at the
+        entered magnification and the configured pixel counts determine
+        physical pixel size (HFOV / pixels across). The world-coordinate ROI
+        is then converted to 14-bit X/Y DAC codes and sent with the scan.
+        Without applied Scan geometry, MAG CAL alone does not change the DAC
+        scan. If pixels are square, VFOV is derived from HFOV by the image
+        aspect ratio; otherwise X and Y require separate ROI calibration.
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>Current integration status: OPEN.</strong> This application
+        does not yet send a magnification value or control signal to an
+        external FEI magnification switch box, including FiBDb235. MAG CAL is
+        used by the browser when Scan geometry is resolved; the active
+        geometry then turns the selected physical area into DAC scan
+        coordinates. The USB command contains coordinates and dwell, not
+        magnification: RASTER sends <code>x_start</code>, <code>x_count</code>,
+        <code>x_step</code>, <code>y_start</code>, <code>y_count</code>,
+        <code>y_step</code> (16-bit command fields carrying DAC-range values),
+        followed by dwell commands; VECTOR sends <code>x_coord</code>,
+        <code>y_coord</code> and <code>dwell_time</code>. The FPGA raster
+        scanner generates each pixel's X/Y DAC codes from the ROI fields.
+        The web backend's <code>/api/admin/mag-calibration</code> endpoint
+        saves/returns calibration data; it is not an instrument-control or
+        FPGA command endpoint. The switch-box output is a separate,
+        unimplemented integration and is not carried on the OBI scan DAC bus.
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>Existing scan-DAC transport and connection map (configured revC3).</strong>
+        Host scan commands go through the Glasgow USB interface (pipes
+        <code>PQ</code>) into the FPGA command parser and scan executor. The
+        subtarget connects to the upstream OBI expansion bus using the
+        following FPGA-ball assignments. The shared bidirectional data bus
+        is 3.3 V LVCMOS and ordered least-significant bit first:
+        <code> data[0..13] = B2, C4, B1, C3, C2, C1, D3, D1, F4, G2, E3, F1, E2, F2</code>.
+        DAC outputs use <code>dac_clk</code> F3 (inverted at the pad),
+        <code>dac_x_le_clk</code> H3 (not inverted; X latch), and
+        <code>dac_y_le_clk</code> H1 (not inverted; Y latch). The shared ADC
+        path uses <code>adc_clk</code> G1 (inverted), <code>adc_le_clk</code>
+        H2 (not inverted), and <code>adc_oe</code> G3 (inverted). These
+        signal names, FPGA balls, direction, polarity, and bit order must
+        match the instrument-side connector wiring. Check the board schematic
+        and active <code>streamData.json</code> before connecting hardware;
+        FPGA ball names are not connector pin numbers. The full bit-by-bit
+        table is in <code>docs/magnification-to-subtarget.html</code>. This
+        scan-bus map does not define the FEI box connector, signal, voltage,
+        protocol, value encoding, or magnification-to-output mapping.
       </div>
 
       <p>
@@ -835,9 +880,10 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <p>
         Saved results are written into the stream configuration and served
-        back through <code>/api/admin/mag-calibration</code>. Other scan
-        logic can consume that per-beam map from defaults/config; the
-        import button itself only replaces the current mag-cal point table.
+        back through <code>/api/admin/mag-calibration</code>. Scan geometry
+        consumes that per-beam map when resolving HFOV; applying the geometry
+        snapshots the operating point used by subsequent scans. The import
+        button itself only replaces the current mag-cal point table.
       </p>
 
       <p>

@@ -1,7 +1,15 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { useTranslation } from "../i18n";
+import {
+  checkAgainstCurve,
+  computeHfovM,
+  pixelSizeM,
+  replacesPoint,
+} from "../lib/magCalibrationMath";
+import { formatPixelSize, isotropicPixelSizeFromMetres } from "../lib/pixelSize";
 import { useAppDispatch, useAppSelector } from "../store";
+import { selectGlobalPixelSize } from "../store/selectors";
 import {
   addCurrentPoint,
   fetchMagCalibration,
@@ -24,8 +32,10 @@ export function MagCalibrationControls({ disabled }: { disabled: boolean }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const state = useAppSelector((s) => s.magCalibration);
   const beam = state.beams[state.selectedBeam] ?? { path: "", m_per_fov: {} };
-  const computedFov =
-    state.measuredPixels > 0 ? state.measuredLengthM * (state.resolution / state.measuredPixels) : 0;
+  const pixelSize = pixelSizeM(state.measuredLengthM, state.measuredPixels);
+  const computedFov = computeHfovM(state.measuredLengthM, state.measuredPixels, state.resolution);
+  const curveCheck = checkAgainstCurve(beam.m_per_fov, state.mag, computedFov);
+  const replacing = computedFov > 0 && replacesPoint(beam.m_per_fov, state.mag);
 
   useEffect(() => {
     dispatch(fetchMagCalibration());
@@ -131,10 +141,27 @@ export function MagCalibrationControls({ disabled }: { disabled: boolean }) {
         </div>
       </div>
 
+      <div className="field-row">
+        <div className="field">
+          <label>{t("mag.pixelSize")}</label>
+          <input className="input" value={formatScientific(pixelSize)} readOnly />
+        </div>
+      </div>
+      {curveCheck?.flagged && (
+        <div className="field-warning">
+          {t("mag.curveDeviation", {
+            percent: Math.abs(curveCheck.deviation * 100).toFixed(1),
+            expected: formatScientific(curveCheck.expectedM),
+            mag: state.mag,
+          })}
+        </div>
+      )}
+      {replacing && <div className="muted">{t("mag.replacesPoint", { mag: state.mag })}</div>}
+
       <div className="button-row">
         <button
           className="btn btn--primary"
-          disabled={disabled || computedFov <= 0}
+          disabled={disabled || state.loading || computedFov <= 0}
           onClick={() => dispatch(addCurrentPoint())}
         >
           <Icon name="plus" />
@@ -266,6 +293,8 @@ function MagCalibrationTable({ disabled }: { disabled: boolean }) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const state = useAppSelector((s) => s.magCalibration);
+  const chipPixelSize = useAppSelector(selectGlobalPixelSize);
+  const displayUnit = chipPixelSize?.unit ?? "um";
   const beam = state.beams[state.selectedBeam] ?? { path: "", m_per_fov: {} };
   const rows = Object.entries(beam.m_per_fov);
 
@@ -275,6 +304,7 @@ function MagCalibrationTable({ disabled }: { disabled: boolean }) {
         <tr>
           <th>{t("mag.table.magnification")}</th>
           <th>{t("mag.table.fov")}</th>
+          <th>{t("mag.table.pixelSize")}</th>
           <th />
         </tr>
       </thead>
@@ -283,6 +313,7 @@ function MagCalibrationTable({ disabled }: { disabled: boolean }) {
           <tr key={mag}>
             <td>{mag}</td>
             <td>{formatScientific(fov)}</td>
+            <td>{formatCalibrationPixelSize(pixelSizeM(fov, state.resolution), displayUnit)}</td>
             <td>
               <button
                 className="btn btn--ghost"
@@ -300,12 +331,17 @@ function MagCalibrationTable({ disabled }: { disabled: boolean }) {
         ))}
         {rows.length === 0 && (
           <tr>
-            <td colSpan={3} className="muted">{t("mag.table.empty")}</td>
+            <td colSpan={4} className="muted">{t("mag.table.empty")}</td>
           </tr>
         )}
       </tbody>
     </table>
   );
+}
+
+function formatCalibrationPixelSize(valueM: number, unit: string): string {
+  const size = isotropicPixelSizeFromMetres(valueM, unit);
+  return size ? formatPixelSize(size) : "—";
 }
 
 function NumberField(props: {

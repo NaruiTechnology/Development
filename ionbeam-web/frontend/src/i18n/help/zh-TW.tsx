@@ -651,9 +651,33 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>X/Y 關係。</strong>放大倍率校準只保存 HFOV。ROI 的 X/Y 校準負責視口到 DUT
-        座標的映射。如果像素為正方形，VFOV 可由 HFOV 按影像寬高比推導；否則 X 和 Y
-        需要分別透過 ROI 校準。
+        <strong>X/Y 關係。</strong>放大倍率校準只儲存 HFOV，不會直接驅動獨立的 FPGA 放大倍率輸入。
+        套用掃描幾何後，目前放大倍率對應的 HFOV 與設定的像素數共同決定實體像素尺寸（HFOV / 橫向像素數）。
+        接著，世界座標 ROI 會轉換為 14 位元 X/Y DAC 碼並隨掃描傳送。未套用掃描幾何時，只有 MAG CAL 不會改變 DAC 掃描。
+        若像素為正方形，VFOV 會依影像長寬比由 HFOV 推導；否則 X 和 Y 需要分別透過 ROI 校準。
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>目前整合狀態：尚未完成。</strong>本應用程式尚未向外部 FEI 放大倍率切換盒（包括 FiBDb235）傳送放大倍率值或控制訊號。
+        MAG CAL 由瀏覽器在解析掃描幾何時使用；生效的幾何會將選定的實體區域轉換為 DAC 掃描座標。
+        USB 命令包含座標和停留時間，而不是放大倍率：RASTER 傳送 <code>x_start</code>、
+        <code>x_count</code>、<code>x_step</code>、<code>y_start</code>、<code>y_count</code>、<code>y_step</code>
+        （16 位元命令欄位，內容為 DAC 範圍值），接著傳送停留命令；VECTOR 傳送 <code>x_coord</code>、
+        <code>y_coord</code> 和 <code>dwell_time</code>。FPGA 光柵掃描器依 ROI 欄位產生每個像素的 X/Y DAC 碼。
+        Web 後端的 <code>/api/admin/mag-calibration</code> 用於儲存/讀取校準資料，不是儀器控制或 FPGA 命令介面。
+        切換盒輸出是獨立且尚未實作的整合，不會透過 OBI 掃描 DAC 匯流排傳送。
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>現有掃描 DAC 傳輸與接線對照（目前 revC3 設定）。</strong>主機掃描命令經 Glasgow USB 介面（管道
+        <code>PQ</code>）進入 FPGA 命令解析器與掃描執行器。子目標透過上游 OBI 擴充匯流排連接，FPGA 球位如下。
+        共用雙向資料匯流排為 3.3 V LVCMOS，依最低有效位元優先排列：
+        <code> data[0..13] = B2, C4, B1, C3, C2, C1, D3, D1, F4, G2, E3, F1, E2, F2</code>。
+        DAC 輸出使用 <code>dac_clk</code> F3（球位端反相）、<code>dac_x_le_clk</code> H3（不反相，鎖存 X）與
+        <code>dac_y_le_clk</code> H1（不反相，鎖存 Y）。共用 ADC 路徑使用 <code>adc_clk</code> G1（反相）、
+        <code>adc_le_clk</code> H2（不反相）與 <code>adc_oe</code> G3（反相）。訊號名稱、FPGA 球位、方向、極性與位元順序
+        必須與儀器端連接器接線一致。接線前請核對電路板原理圖及目前的 <code>streamData.json</code>；FPGA 球位不是連接器接腳編號。
+        完整逐位對照表請見 <code>docs/magnification-to-subtarget.html</code>。此掃描匯流排圖未定義 FEI 切換盒的連接器、訊號、電壓、協定、數值編碼或放大倍率到輸出值的對應。
       </div>
 
       <p>
@@ -664,7 +688,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <p>
         保存結果會寫入 stream 設定，並透過 <code>/api/admin/mag-calibration</code> 返回。
-        其他掃描邏輯可從 defaults/config 讀取該按束流保存的映射；匯入按鈕本身只替換目前的校準點表。
+        掃描幾何會使用每束流校準表解析 HFOV；套用幾何後，後續掃描會使用該操作點的快照。
+        匯入按鈕本身只會取代目前的放大倍率校準點表。
       </p>
 
       <p>

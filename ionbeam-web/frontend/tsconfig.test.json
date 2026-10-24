@@ -11,6 +11,7 @@
     "src/lib/imagePanelLayout.ts",
     "src/lib/roiDac.ts",
     "src/lib/scanGeometry.ts",
+    "src/lib/magCalibrationMath.ts",
     "src/lib/roiGeometry.ts",
     "src/lib/calibrationModel.ts",
     "src/lib/calibrationImportFile.ts",

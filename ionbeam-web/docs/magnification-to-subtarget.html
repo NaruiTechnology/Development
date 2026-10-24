@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magnification Calibration to FPGA Subtarget</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182326;
+      --muted: #526267;
+      --line: #b7c5c6;
+      --paper: #f4f7f4;
+      --accent: #075e5b;
+      --accent-soft: #dcece8;
+      --warning: #8b3d19;
+      --warning-soft: #fff0dc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 36px 44px 48px;
+      color: var(--ink);
+      background: var(--paper);
+      font: 15px/1.5 "Noto Sans", "DejaVu Sans", sans-serif;
+    }
+    h1, h2, h3 { line-height: 1.15; }
+    h1 { max-width: 760px; margin: 8px 0 12px; font-size: 32px; }
+    h2 { margin: 30px 0 12px; padding-bottom: 7px; border-bottom: 2px solid var(--accent); font-size: 21px; }
+    h3 { margin: 18px 0 7px; font-size: 16px; }
+    p { margin: 8px 0 12px; }
+    code { font: 0.92em "DejaVu Sans Mono", monospace; }
+    .kicker { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .lead { max-width: 800px; color: var(--muted); font-size: 17px; }
+    .callout { margin: 18px 0; padding: 13px 16px; border-left: 5px solid var(--warning); background: var(--warning-soft); }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0; }
+    .step { min-height: 112px; padding: 12px; border: 1px solid var(--line); border-top: 4px solid var(--accent); background: white; }
+    .step b { display: block; margin-bottom: 6px; }
+    .step small { display: block; color: var(--muted); }
+    table { width: 100%; margin: 12px 0 18px; border-collapse: collapse; background: white; font-size: 13px; }
+    th, td { padding: 7px 9px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: white; background: var(--accent); }
+    tbody tr:nth-child(even) { background: #edf3f0; }
+    .bits { columns: 2; }
+    .bits li { padding: 2px 0; break-inside: avoid; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .implementation { padding-left: 24px; }
+    .implementation li { margin: 0 0 13px; padding-left: 4px; }
+    .implementation li::marker { color: var(--accent); font-weight: 700; }
+    .gate { margin: 8px 0 0; padding: 8px 10px; border-left: 3px solid var(--warning); background: var(--warning-soft); font-size: 13px; }
+    .code-block { overflow-wrap: anywhere; padding: 12px 14px; border: 1px solid var(--line); background: white; font: 12px/1.5 "DejaVu Sans Mono", monospace; }
+    footer { margin-top: 32px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    @media (max-width: 680px) {
+      body { padding: 22px 18px; }
+      .flow { grid-template-columns: 1fr 1fr; }
+      table { font-size: 11px; }
+      th, td { padding: 5px; }
+    }
+    @page { size: A4; margin: 14mm; }
+    @media print {
+      body { max-width: none; padding: 0; background: white; font-size: 10pt; }
+      h1 { font-size: 25pt; }
+      h2 { break-after: avoid; }
+      h3 { break-after: avoid; }
+      table, .callout, .step { break-inside: avoid; }
+      .flow { grid-template-columns: repeat(4, 1fr); }
+      th { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      tbody tr:nth-child(even), .step, .callout { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="kicker">Ion Beam Operations · Wiring and data-path reference</div>
+    <h1>Magnification Calibration to the FPGA Subtarget</h1>
+    <p class="lead">The current calibration/scan data path, configured revC3 FPGA DAC/ADC wiring, and the separate FEI magnification switch-box integration gap.</p>
+  </header>
+
+  <div class="callout">
+    <strong>Integration status: OPEN.</strong> The application currently has no outbound control path to an external FEI magnification switch box, including the FiBDb235 system. It does not send the box a magnification value or control signal. The scan FPGA path described here sends DAC-domain coordinates and dwell values only. The OBI DAC connector is not the switch-box interface.
+  </div>
+
+  <h2>Data path</h2>
+  <div class="flow" aria-label="Calibration to DAC data flow">
+    <div class="step"><b>1 · MAG CAL</b><small>Per-beam curve: magnification → full horizontal FOV in meters (`m_per_fov`).</small></div>
+    <div class="step"><b>2 · Applied geometry</b><small>HFOV, pixel counts and corrections resolve pixel scale and map physical ROI to DAC coordinates.</small></div>
+    <div class="step"><b>3 · Scan command</b><small>Host sends the ROI/vector DAC values and dwell through Glasgow USB pipes `PQ`.</small></div>
+    <div class="step"><b>4 · Scan DAC bus</b><small>FPGA generates or consumes X/Y DAC codes and strobes the upstream OBI bus.</small></div>
+  </div>
+
+  <h2>Command contents</h2>
+  <table>
+    <thead><tr><th>Scan mode</th><th>Host command fields</th><th>FPGA behavior</th></tr></thead>
+    <tbody>
+      <tr><td>RASTER</td><td><code>x_start</code>, <code>x_count</code>, <code>x_step</code>, <code>y_start</code>, <code>y_count</code>, <code>y_step</code>; separate dwell commands. Coordinate fields occupy 16-bit command slots and are constrained to the 14-bit DAC range.</td><td>Raster scanner advances X/Y accumulators and emits a DAC coordinate for each pixel.</td></tr>
+      <tr><td>VECTOR</td><td><code>x_coord</code>, <code>y_coord</code>, <code>dwell_time</code>.</td><td>Subtarget presents the requested X/Y DAC code and holds for the requested dwell.</td></tr>
+      <tr><td>Calibration API</td><td><code>/api/admin/mag-calibration</code> saves and returns calibration data.</td><td>This endpoint is not an FPGA command channel.</td></tr>
+    </tbody>
+  </table>
+  <p>Changing a MAG CAL point alone does not alter an already-applied scan-geometry snapshot. Resolve and apply the intended geometry before scanning. Physical pixel size for the horizontal axis is HFOV divided by the number of pixels across.</p>
+
+  <h2>Separate switch-box control path: not implemented</h2>
+  <p>The scan geometry/DAC path does not close the requirement to command the FEI magnification switch box. No driver, USB/serial/network protocol, FPGA command/register, electrical output, or FiBDb235 connector/pin mapping for that box was found in the current application sources and configuration. Do not infer a signal name or connector pinout from the OBI scan bus.</p>
+  <p>Use this sequence to implement the separate interface. Steps 1–3 are required design inputs; the concrete transport and connector details must come from the FiBDb235 documentation/vendor, not from the scan bus:</p>
+  <ol class="implementation">
+    <li><strong>Acquire the authoritative interface specification.</strong> Obtain the FiBDb235 manual or vendor-confirmed interface-control document. Record exact model/revision, control mode, protocol, connector part/pin numbers, command examples, and any required interface cable or adapter.
+      <div class="gate"><strong>Gate:</strong> Do not connect or drive an undocumented pin. If the vendor does not document remote control, ask them to confirm the supported method first.</div>
+    </li>
+    <li><strong>Complete the electrical and operational review.</strong> Confirm signal levels/range, polarity, impedance/current, grounding/isolation, shielding, update timing, settling time, readback/acknowledgement, safe state, and microscope/software ownership. Determine how local microscope control is disabled or arbitrated so two controllers cannot fight.
+      <div class="gate"><strong>Gate:</strong> Instrument owner and electrical reviewer approve the connection and safe-state behavior before hardware tests.</div>
+    </li>
+    <li><strong>Define and validate the magnification mapping.</strong> Specify the source value (the actual requested microscope magnification), supported discrete/continuous values, rounding or table mapping, encoded command or voltage, tolerances, invalid-value handling, and how the box confirms its selected state. Keep this mapping separate from the MAG CAL HFOV curve; HFOV calibrates image geometry and is not automatically the switch-box command.
+      <div class="gate"><strong>Gate:</strong> Review a mapping table with the instrument owner and test boundary, unsupported, and representative values without connecting hardware.</div>
+    </li>
+    <li><strong>Add a dedicated interface adapter.</strong> Create a backend/service abstraction such as <code>MagnificationController.setMagnification(value)</code> with explicit transport configuration, input validation, timeout, bounded retry policy, acknowledgement/readback, and structured unavailable/error results. Implement the adapter only for the vendor-approved transport. Do not append magnification data to raster/vector pixel commands or reuse OBI DAC pins unless the vendor explicitly specifies that electrical interface.
+    </li>
+    <li><strong>Connect the UI and scan lifecycle.</strong> Establish one source of truth for the selected/actual operating magnification. On an operator change, validate and send the mapped command, wait for acknowledgement and the documented settle interval, then mark the setting current. Block or visibly refuse scans when the external box is required but not confirmed. Show requested value, confirmed value, and communication/fault status; never silently fall back to the last value.
+    </li>
+    <li><strong>Test without the instrument.</strong> Add unit tests for value-to-command mapping, protocol framing/checksums if applicable, invalid values, timeouts, retries, acknowledgement mismatch, disconnected device, and concurrent/manual ownership. Add a fake adapter so scan workflow tests prove that a scan cannot start before confirmation when box control is required.
+    </li>
+    <li><strong>Commission in stages.</strong> First test the interface with the beam disabled and a vendor-approved test method. Verify connector continuity and measured levels with appropriate isolated equipment; command a small set of known magnifications and compare box readback/display with the requested values. Then test settling and scan interlocks at low risk. Record instrument model/revision, adapter/cable, configuration, measured results, rollback procedure, and approver.
+      <div class="gate"><strong>Gate:</strong> Do not enable normal scanning until command/readback, fault handling, ownership, and safe recovery have passed instrument-owner acceptance.</div>
+    </li>
+    <li><strong>Publish the verified wiring and support record.</strong> Replace the “unknown” items in this reference with the vendor-confirmed connector table, electrical levels, protocol, mapping, and tested hardware/software revisions. Keep the existing OBI scan DAC table separately labeled. Update localized help only after those details are verified.
+    </li>
+  </ol>
+
+  <h3>Minimum interface contract to implement</h3>
+  <div class="code-block">setMagnification(requestedValue) → confirmedValue | explicit error<br>preconditions: validated value; external control ownership acquired<br>success: device acknowledgement/readback matches mapping; settling complete<br>failure: timeout / disconnected / rejected / mismatch; scan remains inhibited if control is required<br>observability: requested value, transmitted value, confirmed value, timestamp, device identity</div>
+
+  <p>Before implementation and hardware connection, obtain from the instrument documentation/vendor:</p>
+  <ul>
+    <li>FiBDb235 control interface and protocol, connector type, and exact connector pin numbers.</li>
+    <li>Electrical limits: signal range, polarity, input impedance/current, ground/isolation, shielding, and any enable/interlock requirements.</li>
+    <li>Magnification mapping: supported values/range, voltage or command encoding, resolution, tolerance, and invalid-value behavior.</li>
+    <li>Timing/state behavior: update and settling time, readback/acknowledgement, error handling, and safe state.</li>
+    <li>Ownership: whether the microscope currently controls the box and how software control is enabled without conflicting with it.</li>
+  </ul>
+  <p>The implementation sequence above is a design and commissioning plan, not a claim that the box is currently connected or controlled.</p>
+
+  <h2>Shared data bus</h2>
+  <p>The configured bus is bidirectional, 14-bit, 3.3 V LVCMOS, and listed least-significant bit first. During DAC writes FPGA outputs drive the bus; during ADC reads the instrument drives it.</p>
+  <table>
+    <thead><tr><th>Bit</th><th>FPGA ball</th><th>Bit</th><th>FPGA ball</th></tr></thead>
+    <tbody>
+      <tr><td>data[0]</td><td>B2</td><td>data[7]</td><td>D1</td></tr>
+      <tr><td>data[1]</td><td>C4</td><td>data[8]</td><td>F4</td></tr>
+      <tr><td>data[2]</td><td>B1</td><td>data[9]</td><td>G2</td></tr>
+      <tr><td>data[3]</td><td>C3</td><td>data[10]</td><td>E3</td></tr>
+      <tr><td>data[4]</td><td>C2</td><td>data[11]</td><td>F1</td></tr>
+      <tr><td>data[5]</td><td>C1</td><td>data[12]</td><td>E2</td></tr>
+      <tr><td>data[6]</td><td>D3</td><td>data[13]</td><td>F2</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Control signals and OBI labels</h2>
+  <table>
+    <thead><tr><th>FPGA signal</th><th>FPGA ball</th><th>OBI label</th><th>FPGA direction</th><th>Pad inversion</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>dac_clk</code></td><td>F3</td><td>D23</td><td>Output</td><td>Yes</td><td>DAC clock</td></tr>
+      <tr><td><code>dac_x_le_clk</code></td><td>H3</td><td>D19</td><td>Output</td><td>No</td><td>Latch X DAC code</td></tr>
+      <tr><td><code>dac_y_le_clk</code></td><td>H1</td><td>D20</td><td>Output</td><td>No</td><td>Latch Y DAC code</td></tr>
+      <tr><td><code>adc_clk</code></td><td>G1</td><td>D24</td><td>Output</td><td>Yes</td><td>ADC clock</td></tr>
+      <tr><td><code>adc_le_clk</code></td><td>H2</td><td>D22</td><td>Output</td><td>No</td><td>ADC latch</td></tr>
+      <tr><td><code>adc_oe</code></td><td>G3</td><td>D21</td><td>Output</td><td>Yes</td><td>ADC output enable</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Before connecting hardware</h2>
+  <ul>
+    <li>Confirm the actual board revision and use its schematic to map FPGA balls to connector contacts. FPGA ball identifiers are not connector pin numbers.</li>
+    <li>Confirm the instrument-side OBI cable orientation, signal names, ground reference, and allowed I/O voltage. Do not connect based on this software mapping alone.</li>
+    <li>Compare the active <code>streamData.json</code> pin configuration with the table. It is checked in software by <code>validate_obi_pin_config</code>.</li>
+    <li>The host uses Glasgow USB pipes <code>PQ</code>, with the OUT FIFO for host commands and the IN FIFO for FPGA samples. These are USB pipes, not physical OBI connector pins.</li>
+    <li>Do not attach an external magnification signal to the DAC bus. Adding a separate scalar requires a new documented host command/register, FPGA receiver and a physically assigned pin or other defined instrument interface.</li>
+  </ul>
+
+  <p class="small muted">Source of scan-bus assignments: <code>GlasgowDataIO/Json/streamData.json</code>; validation: <code>GlasgowDataIO/IobeamControl/applet/__init__.py</code>; scan command definitions: <code>GlasgowDataIO/IobeamControl/commands/low_level_commands.py</code>. Configuration reference only; not a substitute for the board schematic, FiBDb235 documentation, or electrical commissioning procedure.</p>
+  <footer>Generated from the local configured pin map. Verify the shipped configuration and hardware revision before use.</footer>
+</body>
+</html>

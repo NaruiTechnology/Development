@@ -357,6 +357,9 @@ export const zhCN: Partial<TranslationTable> = {
   "mag.measuredPixels": "测量像素",
   "mag.imageResolution": "图像分辨率",
   "mag.hfovLengthM": "HFOV 长度（m）",
+  "mag.pixelSize": "像素尺寸（m）",
+  "mag.curveDeviation": "该点偏离已标定曲线 {percent}%（{mag}x 时预期 HFOV 为 {expected} m）。添加前请检查放大倍率、测量长度和像素数。",
+  "mag.replacesPoint": "已存在 {mag}x 的点，添加将覆盖它。",
   "mag.updateCurve": "更新曲线",
   "mag.save": "保存",
   "mag.exportCsv": "导出 CSV",
@@ -367,6 +370,7 @@ export const zhCN: Partial<TranslationTable> = {
   "mag.chart.empty": "尚未保存校准点。",
   "mag.table.magnification": "放大倍率",
   "mag.table.fov": "FOV（m）",
+  "mag.table.pixelSize": "像素尺寸",
   "mag.table.empty": "无点",
 
   /* ===== ROI editor =============================================== */

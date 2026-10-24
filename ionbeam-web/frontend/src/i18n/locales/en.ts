@@ -382,6 +382,9 @@ export const en = {
   "mag.measuredPixels": "Measured pixels",
   "mag.imageResolution": "Image resolution",
   "mag.hfovLengthM": "HFOV length (m)",
+  "mag.pixelSize": "Pixel size (m)",
+  "mag.curveDeviation": "This point is {percent}% off the calibrated curve (expected HFOV {expected} m at {mag}x). Check the magnification, measured length and pixel count before adding it.",
+  "mag.replacesPoint": "A point at {mag}x already exists; adding will replace it.",
   "mag.updateCurve": "Update curve",
   "mag.save": "Save",
   "mag.exportCsv": "Export CSV",
@@ -392,6 +395,7 @@ export const en = {
   "mag.chart.empty": "No calibration points saved.",
   "mag.table.magnification": "Magnification",
   "mag.table.fov": "FOV (m)",
+  "mag.table.pixelSize": "Pixel size",
   "mag.table.empty": "No points",
 
   /* ===== ROI editor =============================================== */
