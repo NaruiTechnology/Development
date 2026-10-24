@@ -37,7 +37,7 @@ import {
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
 import { adaptiveRoiResolution, targetGrayFilter } from "../lib/roiTargetGray";
-import { unfilteredROIActionRequest } from "../lib/roiWorkflow";
+import { roiRasterExecutionRequest, unfilteredROIActionRequest } from "../lib/roiWorkflow";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -98,6 +98,7 @@ export function ScanControls({
   vectorGrayScaleSelection = null,
   vectorGrayScaleSkipped = null,
   onActionRunStart,
+  onActionRunStop,
   onScanRunStart,
   validatedActionsHost = null,
   firstRowContent,
@@ -112,6 +113,7 @@ export function ScanControls({
   vectorGrayScaleSelection?: [number, number] | null;
   vectorGrayScaleSkipped?: boolean | null;
   onActionRunStart?: () => void;
+  onActionRunStop?: () => void;
   onScanRunStart?: (scanType: ScanType) => void;
   /** When set, Run validated + Clear render here (bottom of the scan
    *  parameters card, under Validated run options) instead of inline. */
@@ -149,6 +151,15 @@ export function ScanControls({
   // Vector scan (with the scan type its progress/feedback handling needs).
   const infiniteScanRef = useRef<InfiniteScanEntry | null>(null);
   const infiniteScanActiveRef = useRef(false);
+  const roiActionImageSnapshotRef = useRef<Pick<
+    ROIState,
+    | "imageName"
+    | "imageDataUrl"
+    | "imageKind"
+    | "imageBounds"
+    | "scanImageDataUrl"
+    | "roiScanResultUrl"
+  > | null>(null);
   // Repeat N runs as ONE live session of N passes (`continuous` + `frames`):
   // external control is taken once at Run and held for every pass, then
   // handed back after the last. Separate runs reconnected between passes,
@@ -392,6 +403,14 @@ export function ScanControls({
         }
         const hasGrayFilter =
           scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
+        roiActionImageSnapshotRef.current = {
+          imageName: roiState.imageName,
+          imageDataUrl: roiState.imageDataUrl,
+          imageKind: roiState.imageKind,
+          imageBounds: roiState.imageBounds,
+          scanImageDataUrl: roiState.scanImageDataUrl,
+          roiScanResultUrl: roiState.roiScanResultUrl,
+        };
         // Production target gray (ROI area, no gray level filter range): the
         // beam decision is made per pixel by comparing its gray with the
         // target, i.e. the range [0, target] with Skip: pixels at or below
@@ -454,11 +473,27 @@ export function ScanControls({
           if (phase === "error") dispatch(streamReset());
           dispatch(requestROITargetGrayRun());
         } else {
-          // Commit 43f9427b only used the bitmap path after a gray range was
-          // confirmed. An unfiltered action is a normal ROI sweep; sending the
-          // source bitmap makes glasgow_service prebuild a large frame before
-          // yielding anything, which leaves the UI spinner waiting.
-          const req = unfilteredROIActionRequest({ ...vector, roi }, roiState);
+          // An unfiltered action is a normal DAC sweep over the selected ROI.
+          // Production needs only the ROI bounds; in simulation, also send the
+          // cropped ROI bitmap so the selected rectangle is stretched across
+          // the live canvas instead of sampling the configured simulation
+          // source (pattern/random/file) at those DAC coordinates.
+          const roiRasterRequest = roiRasterExecutionRequest(
+            { ...vector, roi },
+            raster,
+          );
+          const req = isProduction
+            ? unfilteredROIActionRequest(roiRasterRequest, roiState)
+            : await vectorRequestWithBitmapSelection(
+                roiRasterRequest,
+                roiState,
+                {
+                  isProduction: false,
+                  allowBitmapSimulation: true,
+                  grayScaleSelection: null,
+                  grayScaleSkipped: null,
+                }
+              );
           clearActionLoopState();
           dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
@@ -548,9 +583,18 @@ export function ScanControls({
 
   function onStop() {
     if (roiEbeamDisabled || !stopAvailable) return;
+    const restoreROIAction = () => {
+      if (!roiAction) return;
+      const snapshot = roiActionImageSnapshotRef.current;
+      roiActionImageSnapshotRef.current = null;
+      if (snapshot) dispatch(updateROI(snapshot));
+      dispatch(resetVector());
+      onActionRunStop?.();
+    };
     if (roiAction && targetGrayRunning) {
       // Image-only loop: nothing is streaming, just stop the passes.
       dispatch(finishROITargetGrayRun("stopped"));
+      restoreROIAction();
       return;
     }
     // Like OBI, stopping a live session leaves the last image on the canvas:
@@ -560,9 +604,12 @@ export function ScanControls({
     clearActionLoopState();
     clearInfiniteScanState();
     stream.stop();
+    if (roiAction) {
+      restoreROIAction();
+      return;
+    }
     if (stoppingLiveScan) return;
-    if (roiAction && !roiActionGrayFilterActive) dispatch(resetVector());
-    else if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
+    if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }
 

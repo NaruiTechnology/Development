@@ -71,10 +71,9 @@ export async function rasterRequestWithBitmapSelection(
   }
 
   // Bitmap loaded with a partial selection. Only forward the cropped
-  // pixels as simulation_bitmap when the active simulation source is
-  // explicitly file-backed. Pattern/random simulation is configured on
-  // the service/bitstream side; sending a promoted last-scan bitmap here
-  // would bypass that path and make the scan complete immediately.
+  // pixels when the caller requests bitmap-driven simulation. Ordinary
+  // raster/vector scans can keep using the configured service source,
+  // while an ROI action can deliberately render the selected crop.
   if (!options.allowBitmapSimulation) {
     return {
       ...req,
@@ -171,7 +170,7 @@ export async function vectorRequestWithBitmapSelection(
 
   // Bitmap path: keep vector scans as default-pattern ROI sweeps. The
   // cropped grayscale pixels are only a simulation input, and only when
-  // the active simulation source is file-backed. Otherwise a promoted
+  // the caller opts into bitmap-driven simulation. Otherwise a promoted
   // last-scan image would override pattern/random simulation settings.
   if (!options.allowBitmapSimulation) {
     return {

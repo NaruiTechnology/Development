@@ -3,7 +3,7 @@ import asyncio
 import unittest
 from pathlib import Path
 
-from glasgow_service.models import DacRampRequest, VectorPattern, VectorRequest, VectorScanPath
+from glasgow_service.models import DacRampRequest, ROIRequest, VectorPattern, VectorRequest, VectorScanPath
 from glasgow_service.service import DeviceService, _link_chunk_latency
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 from GlasgowDataIO.IobeamControl.macros import RasterScanCommand
@@ -104,6 +104,18 @@ class SawtoothRoutingTest(unittest.TestCase):
         self.assertIsInstance(cmd, RasterScanCommand)
         self.assertEqual((cmd._x_range.count, cmd._y_range.count), (2048, 2048))
         self.assertEqual(cmd._dwell, 16)
+
+    def test_roi_resolution_and_dwell_reach_the_dac_command(self):
+        cmd = self.svc._build_vector_cmd(_req(
+            vector_resolution=512,
+            dwell=7,
+            roi=ROIRequest(x_start=2048, x_end=12287, y_start=4096, y_end=14335),
+        ))
+
+        self.assertIsInstance(cmd, RasterScanCommand)
+        self.assertEqual((cmd._x_range.count, cmd._y_range.count), (512, 512))
+        self.assertEqual((cmd._x_range.start, cmd._y_range.start), (2048, 4096))
+        self.assertEqual(cmd._dwell, 7)
 
     def test_other_paths_stream_points(self):
         for path in (VectorScanPath.horizontal_triangle, VectorScanPath.vertical_raster,

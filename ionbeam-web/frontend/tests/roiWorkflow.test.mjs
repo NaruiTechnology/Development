@@ -8,6 +8,7 @@ import {
 } from "../.test-dist/lib/roiGeometry.js";
 import {
   completedROIImagePatch,
+  roiRasterExecutionRequest,
   unfilteredROIActionRequest,
 } from "../.test-dist/lib/roiWorkflow.js";
 import { worldSelectionToDacROI } from "../.test-dist/lib/roiDac.js";
@@ -33,7 +34,7 @@ function roi(overrides = {}) {
   };
 }
 
-test("promotes a partial result while preserving its world bounds", () => {
+test("promotes a partial result while preserving its world bounds and active ROI", () => {
   const selection = { x_start: 20, x_end: 60, y_start: 10, y_end: 50 };
   const patch = completedROIImagePatch(
     roi({ selection }),
@@ -42,7 +43,7 @@ test("promotes a partial result while preserving its world bounds", () => {
   );
 
   assert.deepEqual(patch.imageBounds, selection);
-  assert.equal(patch.selection, null);
+  assert.deepEqual(patch.selection, selection);
   assert.equal(patch.imageDataUrl, "data:image/png;base64,result");
 });
 
@@ -107,5 +108,27 @@ test("builds an unfiltered ROI action without a browser bitmap", () => {
   assert.equal(request.feedback_mode, "standard");
   assert.equal(request.gray_level_range, null);
   assert.equal(request.gray_level_skipped, null);
+});
+
+test("uses the ROI Raster resolution and dwell for the vector DAC sweep", () => {
+  const request = roiRasterExecutionRequest({
+    pattern: "default",
+    points: null,
+    vector_resolution: 2048,
+    dwell: 16,
+    latency_bytes: 8196,
+    output_mode: "SixteenBit",
+    adc_valid: true,
+    beam_type: "Ion",
+    external_control: true,
+    cookie: 123,
+    roi: null,
+  }, {
+    resolution: 512,
+    dwell: 7,
+  });
+
+  assert.equal(request.vector_resolution, 512);
+  assert.equal(request.dwell, 7);
 });
 

@@ -977,9 +977,12 @@ export function App() {
               ),
             )
           );
-          dispatch(resetVector());
+          // Keep the completed vector buffer and its canvas mounted. The
+          // phase/chunk/resolution message panel belongs to ImageCanvas, so
+          // clearing the buffer or switching back to ROIEditor here made that
+          // panel disappear as soon as the scan completed. Manual Stop still
+          // performs the pre-scan rollback and clears this buffer.
           setROIActionLocked(false);
-          setROIActionCanvasVisible(false);
           setLastLiveScanImage(null);
           setMergedFigureByKind({ raster: null, vector: null });
         }
@@ -1687,6 +1690,11 @@ export function App() {
                             setROIActionLocked(true);
                             setROIActionCanvasVisible(true);
                           }}
+                          onActionRunStop={() => {
+                            setROIActionLocked(false);
+                            setROIActionCanvasVisible(false);
+                            setActiveScanType(null);
+                          }}
                         />
                       </div>
                     )}
@@ -1882,7 +1890,7 @@ export function App() {
             </div>
           </div>
 
-          {showROIActionControls && kind !== "roi" && <ErrorWedge signedInUser={signedInUser} />}
+          {showROIActionControls && <ErrorWedge signedInUser={signedInUser} />}
         </section>
 
         <div
