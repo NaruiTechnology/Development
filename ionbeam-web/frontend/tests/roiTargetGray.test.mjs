@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  ROI_ADAPTIVE_RESOLUTION,
+  adaptiveRoiResolution,
   clipPixelRect,
   countTargetGrayMismatches,
   grayAt,
@@ -133,4 +135,19 @@ test("colour pixels at or below target are skipped by gray value, not raw channe
   const rect = { left: 0, top: 0, width: 1, height: 1 };
   assert.equal(countTargetGrayMismatches(data, 1, rect, 76), 0);
   assert.deepEqual(stepTowardTargetGray(data, 1, rect, 76), { spot: 0, skip: 1, remaining: 0 });
+});
+
+test("production adaptive ROI runs start at a small resolution", () => {
+  assert.equal(ROI_ADAPTIVE_RESOLUTION, 128);
+  assert.equal(adaptiveRoiResolution(2048), 128);
+  assert.equal(adaptiveRoiResolution(1024), 128);
+  assert.equal(adaptiveRoiResolution(128), 128);
+});
+
+test("a resolution already below the cap is kept, and bad input falls back to the cap", () => {
+  assert.equal(adaptiveRoiResolution(64), 64);
+  assert.equal(adaptiveRoiResolution(100.9), 100);
+  assert.equal(adaptiveRoiResolution(0), 128);
+  assert.equal(adaptiveRoiResolution(-5), 128);
+  assert.equal(adaptiveRoiResolution(Number.NaN), 128);
 });

@@ -147,3 +147,22 @@ export function stepTowardTargetGray(
   }
   return result;
 }
+
+/**
+ * Resolution a production ROI + target gray run starts at.
+ *
+ * With IsProduction the per-pixel decision comes from the live ADC through the
+ * host-side adaptive feedback loop, which probes every point and then revisits
+ * it (two USB round trips per point). At the normal 1024 to 2048 edge the live
+ * canvas shows only its first scan line for a long time, so the selected
+ * rectangle never appears to render. 128 matches what the VECTOR gray filter
+ * already starts at (App.tsx); the resolution control stays editable.
+ */
+export const ROI_ADAPTIVE_RESOLUTION = 128;
+
+/** The resolution to start an adaptive ROI run at: never above the cap, never invalid. */
+export function adaptiveRoiResolution(current: number): number {
+  const n = Math.trunc(Number(current));
+  if (!Number.isFinite(n) || n < 1) return ROI_ADAPTIVE_RESOLUTION;
+  return Math.min(n, ROI_ADAPTIVE_RESOLUTION);
+}

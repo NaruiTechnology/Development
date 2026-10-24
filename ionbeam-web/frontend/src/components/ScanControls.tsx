@@ -17,6 +17,7 @@ import {
   streamErrored,
   streamReset,
   updateROI,
+  updateVector,
   type ScanKind,
 } from "../store/scanSlice";
 import {
@@ -35,7 +36,7 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
-import { targetGrayFilter } from "../lib/roiTargetGray";
+import { adaptiveRoiResolution, targetGrayFilter } from "../lib/roiTargetGray";
 import { unfilteredROIActionRequest } from "../lib/roiWorkflow";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
@@ -349,6 +350,24 @@ export function ScanControls({
       stream.startVector({ ...req, preview });
     }
   }, [clearActionLoopState, preview, repeat, startActionLoop, stream]);
+
+  // Production ROI + target gray runs the host-side adaptive loop (two USB
+  // round trips per point). At a large resolution the live canvas shows only
+  // its first scan line for a long time, so the selected rectangle never seems
+  // to render; start a freshly chosen target at a small resolution, the same
+  // way the VECTOR gray filter does. The resolution control stays editable.
+  const vectorResolutionRef = useRef(vector.vector_resolution);
+  vectorResolutionRef.current = vector.vector_resolution;
+  const previousTargetGrayRef = useRef<number | null>(selectedTargetGray);
+  useEffect(() => {
+    const previous = previousTargetGrayRef.current;
+    previousTargetGrayRef.current = selectedTargetGray;
+    if (!roiAction || !isProduction || selectedTargetGray === null || previous !== null) return;
+    const next = adaptiveRoiResolution(vectorResolutionRef.current);
+    if (next !== vectorResolutionRef.current) {
+      dispatch(updateVector({ vector_resolution: next, pattern: "default", points: null }));
+    }
+  }, [dispatch, isProduction, roiAction, selectedTargetGray]);
 
   // Countdown: passes left in the running Repeat session.
   useEffect(() => {
