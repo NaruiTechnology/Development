@@ -200,6 +200,11 @@ class installPipRequirements_state(distributionDeploy_state):
     def _writeFilteredRequirements(self, reqPath):
         skipped = []
         kept = []
+        pillowAdjusted = False
+        usePillow13 = sys.version_info[:2] == (3, 15)
+        pillowPin = re.compile(
+            r"^(\s*pillow\s*==\s*)(\d+(?:\.\d+){1,2})(\s*(?:#.*)?)$",
+            re.IGNORECASE)
         with open(reqPath, "r") as src:
             for line in src:
                 normalized = line.strip().lower()
@@ -207,6 +212,13 @@ class installPipRequirements_state(distributionDeploy_state):
                         "#egg=iobeam_development" in normalized):
                     skipped.append(line.rstrip())
                     continue
+                if usePillow13:
+                    requirement = line.rstrip("\r\n")
+                    match = pillowPin.match(requirement)
+                    if match and tuple(int(part) for part in match.group(2).split(".")) < (13, 0, 0):
+                        newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+                        line = "{}13.0.0{}{}".format(match.group(1), match.group(3), newline)
+                        pillowAdjusted = True
                 kept.append(line)
 
         tmp = tempfile.NamedTemporaryFile(
@@ -218,8 +230,11 @@ class installPipRequirements_state(distributionDeploy_state):
         for line in skipped:
             self.warn("[{}] skipped private editable dependency already present "
                       "in deploy tree: {}".format(type(self).__name__, line))
+        if pillowAdjusted:
+            self.warn("[{}] using Pillow==13.0.0 for Python 3.15; older pinned Pillow "
+                      "versions do not provide compatible Windows wheels".format(
+                          type(self).__name__))
         return tmp.name
-
     def _venvPython(self, venvDir):
         candidates = [
             os.path.join(venvDir, "Scripts", "python.exe"),

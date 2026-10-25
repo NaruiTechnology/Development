@@ -61,6 +61,10 @@ def make_workspace(base):
     for rel, src in real.items():
         (dev / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dev / rel)
+    deploy_workspace = dev / "DeployWorkSpace"
+    deploy_workspace.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(DEVELOPMENT / "DeployWorkSpace/OneKeyDeploy.bat",
+                 deploy_workspace / "OneKeyDeploy.bat")
     slot = dev / "DeployWorkSpace/Development/DistributionDeploy"
     for rel in ("Json/DistributionDeploy.json", "workstates/installRedisSentinel_state.py",
                 "workstates/setupIobeamAdminDb_state.py",
@@ -158,6 +162,12 @@ class BuilderEndToEndTests(unittest.TestCase):
         self.assertEqual(listings[0], listings[2])
         self.assertIn("Development/GlasgowDataIO/Json/streamData.json", listings[0])
         self.assertIn("dist_manifest.json", listings[0])
+
+    def test_handoff_contains_one_key_launcher(self):
+        self.assertEqual(self.build(self.ws), 0)
+        handoff = max(self.ws.glob("DeployWorkspace_*.zip"))
+        with zipfile.ZipFile(handoff) as archive:
+            self.assertIn("DeployWorkSpace/OneKeyDeploy.bat", archive.namelist())
 
     def test_working_tree_runtime_additions_are_packaged(self):
         additions = {
