@@ -46,3 +46,46 @@ test("uses exact applied scan-geometry pixel size and rejects unavailable data",
   assert.equal(formatPixelSize(size), "X 12.35 × Y 23.46 nm/px");
   assert.equal(pixelSizeFromScanGeometry(null), null);
 });
+
+import {
+  dacCodePitch,
+  pixelSizeFromExtent,
+  selectionPixelSize,
+  selectionZoom,
+} from "../.test-dist/lib/pixelSize.js";
+
+const fov = { x_origin: 0, x_end: 100, y_origin: 0, y_end: 100, scanGeometry: null };
+
+test("pixel pitch mirrors the FPGA UQ8.8 step on an inclusive DAC range", () => {
+  assert.equal(dacCodePitch(0, 16383, 512), 32);
+  assert.equal(dacCodePitch(16383, 0, 512), 32);
+  assert.equal(dacCodePitch(0, 999, 300), 853 / 256);
+  assert.equal(dacCodePitch(5, 5, 4096), 1 / 256);
+});
+
+test("a loaded image reports axis extent over native pixels", () => {
+  const size = pixelSizeFromExtent(100, -100, 2048, 1024, "um", "loadedImage");
+  assert.deepEqual(size, { x: 100 / 2048, y: 100 / 1024, unit: "um", source: "loadedImage" });
+  assert.equal(pixelSizeFromExtent(100, 100, 0, 1024, "um", "loadedImage"), null);
+});
+
+test("selection pixel size defaults to the global one and shrinks with the ROI", () => {
+  const global = pixelSizeFromExtent(100, 100, 1024, 1024, "um", "loadedImage");
+  assert.equal(selectionPixelSize(global, null, fov, 1024), global);
+  const half = selectionPixelSize(global, { x_start: 0, x_end: 50, y_start: 0, y_end: 50 }, fov, 1024);
+  const quarter = selectionPixelSize(global, { x_start: 0, x_end: 25, y_start: 0, y_end: 25 }, fov, 1024);
+  assert.ok(Math.abs(half.x - 50 / 1024) / (50 / 1024) < 0.005);
+  assert.ok(Math.abs(quarter.y - 25 / 1024) / (25 / 1024) < 0.01);
+  assert.ok(quarter.x < half.x && half.x < global.x);
+  assert.equal(half.unit, "um");
+});
+
+test("zoom grows as the selected area shrinks and follows the longer side", () => {
+  assert.equal(selectionZoom(null, fov), 1);
+  const half = selectionZoom({ x_start: 0, x_end: 50, y_start: 0, y_end: 50 }, fov);
+  const quarter = selectionZoom({ x_start: 0, x_end: 25, y_start: 0, y_end: 25 }, fov);
+  assert.ok(half > 1.9 && half < 2.1);
+  assert.ok(quarter > 3.9 && quarter < 4.1);
+  const strip = selectionZoom({ x_start: 0, x_end: 100, y_start: 0, y_end: 25 }, fov);
+  assert.ok(strip < 1.1);
+});

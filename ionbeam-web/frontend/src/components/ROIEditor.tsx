@@ -56,7 +56,7 @@ import {
   resolveRoiLevels,
 } from "../lib/grayImageLevels";
 import { selectGlobalPixelSize } from "../store/selectors";
-import { formatPixelSize, selectionPixelSize, type PixelSize } from "../lib/pixelSize";
+import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize, type PixelSize } from "../lib/pixelSize";
 
 type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
 type ROISelectionCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -115,7 +115,25 @@ export function ROIEditor({
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
-  const globalPixelSize = useAppSelector(selectGlobalPixelSize);
+  const calibratedPixelSize = useAppSelector(selectGlobalPixelSize);
+  // Native size of the image on the canvas, known once it has loaded.
+  const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
+  // Global pixel size: the applied scan geometry or saved dimension calibration
+  // when there is one, otherwise the loaded image's axes over its native pixels,
+  // so a newly loaded image always reports a pixel size.
+  const globalPixelSize = useMemo(() => {
+    if (calibratedPixelSize) return calibratedPixelSize;
+    if (!imageNaturalSize) return null;
+    const bounds = imageWorldBounds(roi);
+    return pixelSizeFromExtent(
+      bounds.x_end - bounds.x_origin,
+      bounds.y_end - bounds.y_origin,
+      imageNaturalSize.width,
+      imageNaturalSize.height,
+      roi.scale_unit,
+      "loadedImage",
+    );
+  }, [calibratedPixelSize, imageNaturalSize, roi]);
   const configuredVectorEdge = useAppSelector((s) => s.scan.vector.vector_resolution);
   const streamTransforms = useAppSelector((s) => s.scan.streamTransforms);
   // The transform settings describe how scan data is oriented. A file the
@@ -300,6 +318,7 @@ export function ROIEditor({
   useEffect(() => {
     if (!imageSource) {
       imageRef.current = null;
+      setImageNaturalSize(null);
       drawBaseCanvas();
       drawHighlightMask();
       drawAnnotationLayer();
@@ -308,6 +327,9 @@ export function ROIEditor({
     const img = new Image();
     img.onload = () => {
       imageRef.current = img;
+      const width = img.naturalWidth || img.width;
+      const height = img.naturalHeight || img.height;
+      setImageNaturalSize((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
       // A finished target gray run's image has arrived: paint from it again.
       if (targetGrayRunStatusRef.current !== "running") targetGrayLoopActiveRef.current = false;
       if (vectorPhase === "running") {
@@ -343,6 +365,7 @@ export function ROIEditor({
     };
     img.onerror = () => {
       imageRef.current = null;
+      setImageNaturalSize(null);
       drawBaseCanvas();
       drawHighlightMask();
       drawAnnotationLayer();

@@ -1,14 +1,14 @@
 import type { DimensionCalibrationValues } from "./dimensionCalibrationPersistence";
 import type { ROIRequest } from "../types/api";
-import { DAC_MAX, worldSelectionToDacROI } from "./roiDac";
-import { DAC_CODES, type AppliedScanGeometry } from "./scanGeometry";
+import { DAC_MAX, worldSelectionToDacROI } from "./roiDac.js";
+import { DAC_CODES, type AppliedScanGeometry } from "./scanGeometry.js";
 
 /** Physical size represented by one calibrated image pixel. */
 export interface PixelSize {
   x: number;
   y: number;
   unit: string;
-  source: "scanGeometry" | "dimensionCalibration";
+  source: "scanGeometry" | "dimensionCalibration" | "loadedImage" | "scanRegion";
 }
 
 function validSize(x: number, y: number): boolean {
@@ -33,6 +33,24 @@ export function pixelSizeFromDimensionCalibration(
   return validSize(x, y)
     ? { x, y, unit: calibration.scale_unit, source: "dimensionCalibration" }
     : null;
+}
+
+/**
+ * Pixel size when no calibration or scan geometry exists: a world extent
+ * (e.g. the loaded image's axes, or the scanned region) spread over a pixel
+ * count (the image's native size, or the scan resolution).
+ */
+export function pixelSizeFromExtent(
+  spanX: number,
+  spanY: number,
+  pixelsX: number,
+  pixelsY: number,
+  unit: string,
+  source: "loadedImage" | "scanRegion",
+): PixelSize | null {
+  const x = Math.abs(spanX) / pixelsX;
+  const y = Math.abs(spanY) / pixelsY;
+  return validSize(x, y) ? { x, y, unit, source } : null;
 }
 
 /** Convert an isotropic size in metres to the unit used by the metadata chip. */
