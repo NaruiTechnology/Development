@@ -1,7 +1,7 @@
 import type { ROIRequest } from "../types/api";
 import { worldRectToDacROI, type AppliedScanGeometry } from "./scanGeometry.js";
 
-const DAC_MAX = 16383;
+export const DAC_MAX = 16383;
 
 /**
  * Map a world-unit selection to absolute DAC coordinates within the hardware FOV.

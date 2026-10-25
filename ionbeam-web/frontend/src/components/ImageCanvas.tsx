@@ -52,7 +52,7 @@ import {
 } from "../lib/displayLevels";
 import { LevelWedge } from "./LevelWedge";
 import { selectGlobalPixelSize } from "../store/selectors";
-import { formatPixelSize } from "../lib/pixelSize";
+import { formatPixelSize, selectionPixelSize } from "../lib/pixelSize";
 
 const DAC_RANGE = 2048;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
@@ -360,7 +360,7 @@ export function ImageCanvas({
   );
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roi = useAppSelector((s) => s.scan.roi);
-  const pixelSize = useAppSelector(selectGlobalPixelSize);
+  const globalPixelSize = useAppSelector(selectGlobalPixelSize);
   const theme = useAppSelector((s) => s.theme.theme);
   const configuredStreamTransforms = useAppSelector((s) => s.scan.streamTransforms);
   // Only control changes update the selected pane. Selecting a different pane
@@ -749,6 +749,12 @@ export function ImageCanvas({
       ? vectorScanSampleCount(vectorEdge, vectorScanPath)
       : vectorCustomCount;
   const activeRegion = activeROIRegion(roi);
+  // Local pixel size: a partial-ROI vector scan spreads its pixels over the
+  // selection only; otherwise this is the global pixel size.
+  const pixelSize =
+    kind === "vector" && roi.selection
+      ? selectionPixelSize(globalPixelSize, roi.selection, roi, vectorEdge)
+      : globalPixelSize;
   const current = currentBeamPosition({
     kind,
     roi,
