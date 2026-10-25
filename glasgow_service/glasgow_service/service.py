@@ -59,6 +59,7 @@ from AutomationPy.buildingblocks.automation_log import AutomationLog
 from AutomationPy.buildingblocks.scan_params import RasterParams, VectorParams
 
 from .device_lock import DeviceHeld, DeviceLock
+from .roi_scaling import dac_step, roi_zoom
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
     DacRampRequest, DacRampAxis, BeamHoldRequest, BeamHoldState,
@@ -383,9 +384,8 @@ def _roi_bounds(roi) -> Optional[Tuple[int, int, int, int]]:
 
 
 def _dac_range_for_bounds(start: int, end: int, count: int) -> DACCodeRange:
-    lo, hi = sorted((int(start), int(end)))
-    span = max(1, hi - lo + 1)
-    return DACCodeRange(start=lo, count=count, step=max(1, int((span / count) * 256)))
+    lo, _hi = sorted((int(start), int(end)))
+    return DACCodeRange(start=lo, count=count, step=dac_step(start, end, count))
 
 
 def _roi_vector_iter(
@@ -2346,6 +2346,7 @@ class DeviceService:
         roi = getattr(req, "roi", None)
         if roi is not None:
             params.append(("roi_dac", f"x {roi.x_start:g}..{roi.x_end:g}, y {roi.y_start:g}..{roi.y_end:g}"))
+            params.append(("roi_zoom", f"{roi_zoom(_roi_bounds(roi)):.4g}x"))
         params.append(("chunks", str(len(last.get("chunks") or []))))
         return [(name, value) for name, value in params if value != ""]
 

@@ -138,6 +138,10 @@ The mobility-only path adds:
 
 ### Database upgrade
 
+The web backend connects through the Node `pg` driver installed by `npm install`.
+It does not require a local PostgreSQL server or the `psql` executable, including
+when connecting to a remote database during deployment readiness checks.
+
 To reapply the current admin and operation schemas to an existing PostgreSQL
 deployment, run:
 

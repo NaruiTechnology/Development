@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { Client, type ClientConfig, type QueryResult } from "pg";
 
 import { config, type Config } from "./config";
 import { expandPlaceholders } from "./secretStore";
@@ -204,7 +204,8 @@ async function applyDatabaseSetup(
   };
 }
 
-export function runPsql(
+// Keep the existing call interface while removing the external psql dependency.
+export async function runPsql(
   args: string[],
   database = config.adminDbName,
   stdin?: string,
@@ -212,103 +213,87 @@ export function runPsql(
 ): Promise<string> {
   const target = { ...connection, database };
   const backoffKey = connectionKey(target);
-  return new Promise((resolve, reject) => {
-    const backoffUntil = adminDbBackoffByKey.get(backoffKey) ?? 0;
-    if (Date.now() < backoffUntil) {
-      reject(
-        new Error(
-          `psql temporarily unavailable for ${target.host}:${target.port}/${target.database} after a recent connection failure`,
-        ),
-      );
-      return;
+  if (Date.now() < (adminDbBackoffByKey.get(backoffKey) ?? 0)) {
+    throw new Error(`database temporarily unavailable for ${target.host}:${target.port}/${target.database} after a recent connection failure`);
+  }
+  const commandIndex = args.findIndex((arg) => /^-[Atq]*c$/.test(arg));
+  const sql = stdin ?? (commandIndex >= 0 ? args[commandIndex + 1] : undefined);
+  if (sql === undefined) throw new Error("SQL is required");
+  const mode = (target.sslMode || process.env.PGSSLMODE || "prefer").toLowerCase();
+  if (!["disable", "allow", "prefer", "require", "verify-ca", "verify-full"].includes(mode)) {
+    throw new Error(`Unsupported PostgreSQL SSL mode: ${mode}`);
+  }
+  const ssl: ClientConfig["ssl"] = mode === "disable" || mode === "allow" ? false
+    : mode === "verify-full" ? { rejectUnauthorized: true }
+    : mode === "verify-ca" ? { rejectUnauthorized: true, checkServerIdentity: () => undefined }
+    : { rejectUnauthorized: false };
+  const started = Date.now();
+  async function execute(sslOptions: ClientConfig["ssl"]): Promise<string> {
+    const remaining = Math.max(1, target.commandTimeoutMs - (Date.now() - started));
+    const client = new Client({
+      host: target.host, port: target.port, database: target.database, user: target.user,
+      password: target.password ?? process.env.PGPASSWORD,
+      ssl: sslOptions,
+      connectionTimeoutMillis: remaining,
+      query_timeout: remaining,
+      statement_timeout: remaining,
+    });
+    // Idle connection errors must not become unhandled EventEmitter errors.
+    client.on("error", () => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        (async () => {
+          await client.connect();
+          const results = await client.query({
+            text: sql!, rowMode: "array",
+            // Match psql's textual output, including JSON and large numeric values.
+            types: { getTypeParser: () => (value: string) => value },
+          });
+          return formatSqlResults(results);
+        })(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(
+            `database timed out after ${target.commandTimeoutMs}ms connecting to ${target.host}:${target.port}/${target.database}`,
+          )), remaining);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+      await client.end();
     }
-
-    let settled = false;
-    const child = spawn(
-      "psql",
-      [
-        "-h",
-        target.host,
-        "-p",
-        String(target.port),
-        "-U",
-        target.user,
-        "-d",
-        target.database,
-        ...args,
-      ],
-      {
-        env: {
-          ...process.env,
-          ...(target.password ? { PGPASSWORD: target.password } : {}),
-          ...(target.sslMode ? { PGSSLMODE: target.sslMode } : {}),
-          PGCONNECT_TIMEOUT: String(Math.max(1, Math.ceil(target.commandTimeoutMs / 1000))),
-        },
-        stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-      },
-    );
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      child.kill("SIGTERM");
+  }
+  try {
+    let output: string;
+    try {
+      output = await execute(ssl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (mode === "prefer" && /server does not support SSL connections/i.test(message)) {
+        output = await execute(false);
+      } else if (mode === "allow" && /no pg_hba.conf entry.*no encryption/i.test(message)) {
+        output = await execute({ rejectUnauthorized: false });
+      } else {
+        throw error;
+      }
+    }
+    adminDbBackoffByKey.delete(backoffKey);
+    return output;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isDbConnectivityError(message)) {
       adminDbBackoffByKey.set(backoffKey, Date.now() + ADMIN_DB_BACKOFF_MS);
-      reject(
-        new Error(
-          `psql timed out after ${target.commandTimeoutMs}ms connecting to ${target.host}:${target.port}/${target.database}`,
-        ),
-      );
-    }, target.commandTimeoutMs);
-
-    function finish(fn: () => void): void {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      fn();
     }
+    throw error;
+  }
+}
 
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.setEncoding("utf8");
-    child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr?.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    if (stdin !== undefined) {
-      child.stdin?.on("error", (err: NodeJS.ErrnoException) => {
-        // psql may exit before consuming SQL (for example on a connection
-        // failure). Its close handler reports stderr and the exit status.
-        if (err.code === "EPIPE" || err.code === "EOF" || err.code === "ERR_STREAM_DESTROYED") return;
-        finish(() => reject(err));
-      });
-      child.stdin?.setDefaultEncoding("utf8");
-      child.stdin?.end(stdin);
-    }
-    child.on("error", (err) => {
-      finish(() => {
-        if (isDbConnectivityError(err.message)) {
-          adminDbBackoffByKey.set(backoffKey, Date.now() + ADMIN_DB_BACKOFF_MS);
-        }
-        reject(err);
-      });
-    });
-    child.on("close", (code) => {
-      finish(() => {
-        if (code === 0) {
-          adminDbBackoffByKey.set(backoffKey, 0);
-          resolve(stdout);
-          return;
-        }
-        const message = stderr.trim() || `psql exited with code ${code}`;
-        if (isDbConnectivityError(message)) {
-          adminDbBackoffByKey.set(backoffKey, Date.now() + ADMIN_DB_BACKOFF_MS);
-        }
-        reject(new Error(message));
-      });
-    });
-  });
+function formatSqlResults(results: QueryResult | QueryResult[]): string {
+  // SET/schema commands have no rows; a script may return several SELECT results.
+  const lines = (Array.isArray(results) ? results : [results]).flatMap((result) =>
+    result.rows.map((row: unknown[]) => row.map((value) => value == null ? "" : String(value)).join("\t")),
+  );
+  return lines.length ? `${lines.join("\n")}\n` : "";
 }
 
 async function ensureDatabase(connection: PgConnection, adminDatabase: string): Promise<{ name: string; ok: boolean; detail: string }> {
@@ -422,5 +407,5 @@ function connectionKey(connection: PgConnection): string {
 }
 
 export function isDbConnectivityError(message: string): boolean {
-  return /timed out after|could not connect to server|could not translate host name|connection refused|connect ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ECONNRESET|no route to host|timeout/i.test(message);
+  return /timed out after|could not connect to server|could not translate host name|connection refused|ECONNREFUSED|Connection terminated|Connection timeout|Query read timeout|connect ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ECONNRESET|no route to host|timeout/i.test(message);
 }

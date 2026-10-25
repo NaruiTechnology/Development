@@ -112,7 +112,14 @@ class verifyIonbeamWeb_state(distributionDeploy_state):
 
     def _checkResponse(self, check, status, body):
         if status not in check["expectedStatuses"]:
-            return False, "HTTP {}".format(status)
+            detail = ""
+            try:
+                payload = json.loads(body)
+                if isinstance(payload, dict) and isinstance(payload.get("error"), str):
+                    detail = " - " + " ".join(payload["error"].split())[:500]
+            except (ValueError, TypeError):
+                pass
+            return False, "HTTP {}{}".format(status, detail)
         contains = check.get("contains")
         if contains is not None and contains not in body:
             return False, "HTTP {} body missing {!r}".format(status, contains)

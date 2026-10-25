@@ -56,7 +56,7 @@ import {
   resolveRoiLevels,
 } from "../lib/grayImageLevels";
 import { selectGlobalPixelSize } from "../store/selectors";
-import { formatPixelSize } from "../lib/pixelSize";
+import { formatPixelSize, selectionPixelSize, type PixelSize } from "../lib/pixelSize";
 
 type CalibrationHandle = "x-start" | "x-end" | "y-start" | "y-end";
 type ROISelectionCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -115,7 +115,8 @@ export function ROIEditor({
   const tr = useTranslation();
   const { t } = tr;
   const roi = useAppSelector((s) => s.scan.roi);
-  const pixelSize = useAppSelector(selectGlobalPixelSize);
+  const globalPixelSize = useAppSelector(selectGlobalPixelSize);
+  const configuredVectorEdge = useAppSelector((s) => s.scan.vector.vector_resolution);
   const streamTransforms = useAppSelector((s) => s.scan.streamTransforms);
   // The transform settings describe how scan data is oriented. A file the
   // operator loaded and an ROI scan (its live preview and its result) are
@@ -265,6 +266,12 @@ export function ROIEditor({
     ? `${roi.selection.x_start}:${roi.selection.x_end}:${roi.selection.y_start}:${roi.selection.y_end}`
     : "";
   const activeSelection = draft ?? roi.selection;
+  // Local pixel size: follows the selected partial ROI (including while it is
+  // being dragged or resized) and defaults to the global one without a selection.
+  const pixelSize = useMemo(
+    () => selectionPixelSize(globalPixelSize, activeSelection, roi, configuredVectorEdge),
+    [globalPixelSize, activeSelection, roi, configuredVectorEdge],
+  );
   const roiModeLabel =
     roi.scanImageDataUrl !== null
       ? t("roi.canvasMode.scanPreview")
@@ -1500,6 +1507,11 @@ export function ROIEditor({
                         &nbsp;<span style={{ opacity: 0.7 }}>
                           w : {formatOneDecimal(widthX)} {unit}
                         </span>
+                        {pixelSize && (
+                          <>
+                            &nbsp;·&nbsp;{t("canvas.meta.pixelSize")} {formatPixelSize(pixelSize)}
+                          </>
+                        )}
                       </>
                     );
                   })()}
@@ -1803,7 +1815,7 @@ export function ROIEditor({
               </div>,
               document.body,
             )}
-          {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} textCounterTransform={axisTextCounterTransform} />}
+          {!roi.calibration_enabled && <ROIAxisOverlay roi={roi} pixelSize={pixelSize} textCounterTransform={axisTextCounterTransform} />}
           {roi.calibration_enabled && (
             <ROICalibrationAxisOverlay roi={roi} showGrid={roi.show_grid} textCounterTransform={axisTextCounterTransform} />
           )}
@@ -2433,9 +2445,16 @@ function drawScale(
   ctx.restore();
 }
 
-function ROIAxisOverlay({ roi, textCounterTransform }: { roi: ROIState; textCounterTransform: string }) {
+function ROIAxisOverlay({
+  roi,
+  pixelSize,
+  textCounterTransform,
+}: {
+  roi: ROIState;
+  pixelSize: PixelSize | null;
+  textCounterTransform: string;
+}) {
   const { t } = useTranslation();
-  const pixelSize = useAppSelector(selectGlobalPixelSize);
   const ticks = Array.from({ length: 21 }, (_, i) => {
     const ratio = i / 20;
     return {
