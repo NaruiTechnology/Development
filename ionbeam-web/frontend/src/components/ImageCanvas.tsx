@@ -52,7 +52,7 @@ import {
 } from "../lib/displayLevels";
 import { LevelWedge } from "./LevelWedge";
 import { selectGlobalPixelSize } from "../store/selectors";
-import { formatPixelSize, selectionPixelSize } from "../lib/pixelSize";
+import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize } from "../lib/pixelSize";
 
 const DAC_RANGE = 2048;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
@@ -751,10 +751,23 @@ export function ImageCanvas({
   const activeRegion = activeROIRegion(roi);
   // Local pixel size: a partial-ROI vector scan spreads its pixels over the
   // selection only; otherwise this is the global pixel size.
+  // Without a calibration the scanned region over the scan resolution gives it.
+  const scanBasePixelSize =
+    globalPixelSize ??
+    (kind === "vector"
+      ? pixelSizeFromExtent(
+          roi.x_end - roi.x_origin,
+          roi.y_end - roi.y_origin,
+          vectorEdge,
+          vectorEdge,
+          roi.scale_unit,
+          "scanRegion",
+        )
+      : null);
   const pixelSize =
     kind === "vector" && roi.selection
-      ? selectionPixelSize(globalPixelSize, roi.selection, roi, vectorEdge)
-      : globalPixelSize;
+      ? selectionPixelSize(scanBasePixelSize, roi.selection, roi, vectorEdge)
+      : scanBasePixelSize;
   const current = currentBeamPosition({
     kind,
     roi,
