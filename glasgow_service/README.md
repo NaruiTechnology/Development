@@ -202,9 +202,9 @@ Use the repository-relative PowerShell manager to control Glasgow, the vacuum
 services, the Node backend, and the Vite frontend:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File `..\Scripts\manage-local-system.ps1 restart`
-powershell -NoProfile -ExecutionPolicy Bypass -File `..\Scripts\manage-local-system.ps1 status`
-powershell -NoProfile -ExecutionPolicy Bypass -File `..\Scripts\manage-local-system.ps1 logs`
+powershell -NoProfile -ExecutionPolicy Bypass -File ..\Scripts\manage-local-system.ps1 restart
+powershell -NoProfile -ExecutionPolicy Bypass -File ..\Scripts\manage-local-system.ps1 status
+powershell -NoProfile -ExecutionPolicy Bypass -File ..\Scripts\manage-local-system.ps1 logs
 ```
 
 Initialize the local Redis/Sentinel containers first with

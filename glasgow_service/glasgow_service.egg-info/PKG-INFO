@@ -7,12 +7,20 @@ Description-Content-Type: text/markdown
 Requires-Dist: fastapi>=0.110
 Requires-Dist: uvicorn[standard]>=0.27
 Requires-Dist: pydantic>=2.5
+Requires-Dist: gpiozero>=2.0
 Requires-Dist: redis<8,>=5.0
 Requires-Dist: httpx<1,>=0.27
+Requires-Dist: numpy>=2.0
 Provides-Extra: examples
 Requires-Dist: websockets>=12; extra == "examples"
 Provides-Extra: tests
 Requires-Dist: pytest>=8; extra == "tests"
+Requires-Dist: pytest-cov>=5; extra == "tests"
+Requires-Dist: pillow>=10; extra == "tests"
+Provides-Extra: sbc
+Requires-Dist: gpiozero>=2.0; extra == "sbc"
+Requires-Dist: smbus2>=0.4; extra == "sbc"
+Requires-Dist: pyserial>=3.5; extra == "sbc"
 
 # Glasgow Device Service
 
@@ -182,3 +190,34 @@ One scan at a time. Concurrent REST or WebSocket requests return **HTTP
   ]
 }
 #------------------------------------------
+### Active/standby executor
+
+The optional `vacuum_executor_app` is an always-running active/standby process,
+not a scheduler. Run it with `python -m glasgow_service.vacuum_executor_app`.
+Production deployment assets are in `deploy/vacuum-executor.service` and
+`examples/vacuum-executor.env.example`; use at least three Redis Sentinel
+endpoints. Configure the separate Raspberry Pi service with
+`examples/sbc-vacuum.env.example` and enable `SBC_REQUIRE_FENCING` there.
+
+The bundled deploy/setup-redis-sentinel.sh helper is for Linux SBC hosts only.
+For a Windows POC, run Redis/Sentinel in WSL or a container and set
+VACUUM_REDIS_SENTINELS to those reachable endpoints. A single Sentinel with
+quorum 1 is suitable only for a smoke test; production needs replicated Redis
+plus three or more Sentinel processes on independent nodes.
+
+
+### Start the complete local stack on Windows
+
+Use the repository-relative PowerShell manager to control Glasgow, the vacuum
+services, the Node backend, and the Vite frontend:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ..\Scripts\manage-local-system.ps1 restart
+powershell -NoProfile -ExecutionPolicy Bypass -File ..\Scripts\manage-local-system.ps1 status
+powershell -NoProfile -ExecutionPolicy Bypass -File ..\Scripts\manage-local-system.ps1 logs
+```
+
+Initialize the local Redis/Sentinel containers first with
+`deploy\setup-redis-sentinel.ps1`. Docker Desktop is used for this development
+configuration; production still requires replicated Redis and at least three
+independent Sentinel endpoints.

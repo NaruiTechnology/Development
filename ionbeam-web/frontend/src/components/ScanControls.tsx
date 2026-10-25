@@ -17,6 +17,7 @@ import {
   streamErrored,
   streamReset,
   updateROI,
+  updateVector,
   type ScanKind,
 } from "../store/scanSlice";
 import {
@@ -35,7 +36,8 @@ import {
 } from "../lib/bitmapVector";
 import { useTranslation } from "../i18n";
 import { displayScanError } from "../lib/scanError";
-import { targetGrayFilter } from "../lib/roiTargetGray";
+import { adaptiveRoiResolution, targetGrayFilter } from "../lib/roiTargetGray";
+import { roiRasterExecutionRequest, unfilteredROIActionRequest } from "../lib/roiWorkflow";
 import { Icon } from "./Icon";
 import { TransformCard } from "./TransformCard";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -96,6 +98,7 @@ export function ScanControls({
   vectorGrayScaleSelection = null,
   vectorGrayScaleSkipped = null,
   onActionRunStart,
+  onActionRunStop,
   onScanRunStart,
   validatedActionsHost = null,
   firstRowContent,
@@ -110,6 +113,7 @@ export function ScanControls({
   vectorGrayScaleSelection?: [number, number] | null;
   vectorGrayScaleSkipped?: boolean | null;
   onActionRunStart?: () => void;
+  onActionRunStop?: () => void;
   onScanRunStart?: (scanType: ScanType) => void;
   /** When set, Run validated + Clear render here (bottom of the scan
    *  parameters card, under Validated run options) instead of inline. */
@@ -147,6 +151,15 @@ export function ScanControls({
   // Vector scan (with the scan type its progress/feedback handling needs).
   const infiniteScanRef = useRef<InfiniteScanEntry | null>(null);
   const infiniteScanActiveRef = useRef(false);
+  const roiActionImageSnapshotRef = useRef<Pick<
+    ROIState,
+    | "imageName"
+    | "imageDataUrl"
+    | "imageKind"
+    | "imageBounds"
+    | "scanImageDataUrl"
+    | "roiScanResultUrl"
+  > | null>(null);
   // Repeat N runs as ONE live session of N passes (`continuous` + `frames`):
   // external control is taken once at Run and held for every pass, then
   // handed back after the last. Separate runs reconnected between passes,
@@ -154,6 +167,7 @@ export function ScanControls({
   const vectorPasses = useAppSelector((s) => s.image.vectorPasses);
   const [actionLoopIteration, setActionLoopIteration] = useState(0);
   const [actionLoopActive, setActionLoopActive] = useState(false);
+  const [runStarting, setRunStarting] = useState(false);
   const [infiniteScanActive, setInfiniteScanActive] = useState(false);
   const [equipment, setEquipment] = useState<EquipmentOption[]>([]);
   const [region, setRegion] = useState("");
@@ -348,6 +362,24 @@ export function ScanControls({
     }
   }, [clearActionLoopState, preview, repeat, startActionLoop, stream]);
 
+  // Production ROI + target gray runs the host-side adaptive loop (two USB
+  // round trips per point). At a large resolution the live canvas shows only
+  // its first scan line for a long time, so the selected rectangle never seems
+  // to render; start a freshly chosen target at a small resolution, the same
+  // way the VECTOR gray filter does. The resolution control stays editable.
+  const vectorResolutionRef = useRef(vector.vector_resolution);
+  vectorResolutionRef.current = vector.vector_resolution;
+  const previousTargetGrayRef = useRef<number | null>(selectedTargetGray);
+  useEffect(() => {
+    const previous = previousTargetGrayRef.current;
+    previousTargetGrayRef.current = selectedTargetGray;
+    if (!roiAction || !isProduction || selectedTargetGray === null || previous !== null) return;
+    const next = adaptiveRoiResolution(vectorResolutionRef.current);
+    if (next !== vectorResolutionRef.current) {
+      dispatch(updateVector({ vector_resolution: next, pattern: "default", points: null }));
+    }
+  }, [dispatch, isProduction, roiAction, selectedTargetGray]);
+
   // Countdown: passes left in the running Repeat session.
   useEffect(() => {
     if (!actionLoopActiveRef.current) return;
@@ -360,8 +392,10 @@ export function ScanControls({
 
   async function startRunRequest() {
     if (disabled || (kind === "roi" && !roiAction)) return;
-    // The WebSocket upgrade checks the current session and scan privilege on
-    // the server. Avoid a duplicate account round trip before starting Run.
+    // Match the known-good ROI action flow from e7e58e18: validate the
+    // operator before doing bitmap work or opening the scan stream.
+    const allowed = await refreshScanPrivilege();
+    if (!allowed) return;
     if (roiAction) {
       try {
         if (roiEbeamDisabled) {
@@ -369,10 +403,18 @@ export function ScanControls({
         }
         const hasGrayFilter =
           scanGrayScaleSelection !== null && scanGrayScaleSkipped !== null;
+        roiActionImageSnapshotRef.current = {
+          imageName: roiState.imageName,
+          imageDataUrl: roiState.imageDataUrl,
+          imageKind: roiState.imageKind,
+          imageBounds: roiState.imageBounds,
+          scanImageDataUrl: roiState.scanImageDataUrl,
+          roiScanResultUrl: roiState.roiScanResultUrl,
+        };
         // Production target gray (ROI area, no gray level filter range): the
         // beam decision is made per pixel by comparing its gray with the
-        // target, i.e. the single-level filter [target, target] with Skip:
-        // pixels at the target are skipped (blanked), all others spotted.
+        // target, i.e. the range [0, target] with Skip: pixels at or below
+        // the target are skipped (blanked), while brighter pixels are spotted.
         const productionTargetFilter =
           !hasGrayFilter && roi && selectedTargetGray !== null && isProduction
             ? targetGrayFilter(selectedTargetGray)
@@ -431,16 +473,27 @@ export function ScanControls({
           if (phase === "error") dispatch(streamReset());
           dispatch(requestROITargetGrayRun());
         } else {
-          const req = await vectorRequestWithBitmapSelection(
+          // An unfiltered action is a normal DAC sweep over the selected ROI.
+          // Production needs only the ROI bounds; in simulation, also send the
+          // cropped ROI bitmap so the selected rectangle is stretched across
+          // the live canvas instead of sampling the configured simulation
+          // source (pattern/random/file) at those DAC coordinates.
+          const roiRasterRequest = roiRasterExecutionRequest(
             { ...vector, roi },
-            roiState,
-            {
-              isProduction,
-              allowBitmapSimulation,
-              grayScaleSelection: null,
-              grayScaleSkipped: null,
-            }
+            raster,
           );
+          const req = isProduction
+            ? unfilteredROIActionRequest(roiRasterRequest, roiState)
+            : await vectorRequestWithBitmapSelection(
+                roiRasterRequest,
+                roiState,
+                {
+                  isProduction: false,
+                  allowBitmapSimulation: true,
+                  grayScaleSelection: null,
+                  grayScaleSkipped: null,
+                }
+              );
           clearActionLoopState();
           dispatch(updateROI({ scanImageDataUrl: null }));
           onActionRunStart?.();
@@ -530,9 +583,18 @@ export function ScanControls({
 
   function onStop() {
     if (roiEbeamDisabled || !stopAvailable) return;
+    const restoreROIAction = () => {
+      if (!roiAction) return;
+      const snapshot = roiActionImageSnapshotRef.current;
+      roiActionImageSnapshotRef.current = null;
+      if (snapshot) dispatch(updateROI(snapshot));
+      dispatch(resetVector());
+      onActionRunStop?.();
+    };
     if (roiAction && targetGrayRunning) {
       // Image-only loop: nothing is streaming, just stop the passes.
       dispatch(finishROITargetGrayRun("stopped"));
+      restoreROIAction();
       return;
     }
     // Like OBI, stopping a live session leaves the last image on the canvas:
@@ -542,9 +604,12 @@ export function ScanControls({
     clearActionLoopState();
     clearInfiniteScanState();
     stream.stop();
+    if (roiAction) {
+      restoreROIAction();
+      return;
+    }
     if (stoppingLiveScan) return;
-    if (roiAction && !roiActionGrayFilterActive) dispatch(resetVector());
-    else if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
+    if (kind === "raster") dispatch(resetRaster({ resolution: raster.resolution }));
     else dispatch(resetVector());
   }
 
@@ -621,21 +686,25 @@ export function ScanControls({
   const guardRunStart = (start: () => Promise<void>) => async () => {
     if (runStartingRef.current) return;
     runStartingRef.current = true;
+    setRunStarting(true);
     try {
       await start();
     } finally {
       runStartingRef.current = false;
+      setRunStarting(false);
     }
   };
   const onRun = guardRunStart(startRunRequest);
   const onInfinite = guardRunStart(startInfiniteRequest);
   const onRunValidated = guardRunStart(startValidatedRunRequest);
 
+  const roiActionBusy = runStarting || busy || targetGrayRunning;
   const runDisabled =
     controlsDisabled ||
     roiEbeamDisabled ||
     streaming ||
     closing ||
+    runStarting ||
     (roiAction && (actionLoopActive || targetGrayRunning));
   const stopDisabled = roiEbeamDisabled || !stopAvailable;
   const infiniteDisabled =
@@ -828,8 +897,8 @@ export function ScanControls({
             </HelpPopover>
             <span
               className="scan-busy"
-              data-visible={busy || targetGrayRunning ? "true" : "false"}
-              aria-hidden={!(busy || targetGrayRunning)}
+              data-visible={roiActionBusy ? "true" : "false"}
+              aria-hidden={!roiActionBusy}
               title={t("scan.busy.title")}
             >
               <LoadingSpinner inline size={20} ariaLabel={t("scan.busy.title")} />
@@ -843,7 +912,7 @@ export function ScanControls({
               onClick={onRun}
               title={t("roi.actionRun.title")}
             >
-              <Icon name="play" tone="success" />
+              {roiActionBusy ? <LoadingSpinner inline size={16} ariaLabel={t("scan.busy.title")} /> : <Icon name="play" tone="success" />}
               {t("roi.actionRun")}
             </button>
             <button

@@ -9,7 +9,7 @@ import { useTranslation, type TranslationKey } from "../i18n";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
-import { vacuumReadingsAreFresh, vacuumStatusForDisplay } from "../lib/vacuumPolicy";
+import { vacuumPumpPowerState, vacuumReadingsAreFresh, vacuumStatusForDisplay } from "../lib/vacuumPolicy";
 import type { VacuumPumpState, VacuumSystemStatus } from "../types/api";
 
 const MECHANICAL_PUMP = "MechanicalVacuumPump";
@@ -177,6 +177,8 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
   }, [closeDashboard, open]);
 
   async function updatePower(name: string, power: boolean) {
+    mutationRef.current = true;
+    statusVersionRef.current += 1;
     setPending(name);
     setError(null);
     setErrorDetails(null);
@@ -187,14 +189,17 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
         body: JSON.stringify({ power }),
       });
       if (!response.ok) {
-        const detail = await response.text();
+        const body = await response.json().catch(() => null) as { detail?: unknown; error?: unknown } | null;
+        const detail = String(body?.error ?? body?.detail ?? "").trim();
         throw new Error(detail || `${response.status} ${response.statusText}`);
       }
-      setStatus(await readJsonResponse<VacuumSystemStatus>(response, "vacuum power"));
+      setStatus(vacuumStatusForDisplay(await readJsonResponse<VacuumSystemStatus>(response, "vacuum power")));
     } catch (cause) {
       reportError(cause);
     } finally {
+      mutationRef.current = false;
       setPending(null);
+      void refresh();
     }
   }
 
@@ -231,6 +236,7 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
 
   function renderPumpCard(pump: VacuumPumpState) {
     const mechanical = pump.name === MECHANICAL_PUMP;
+    const powerState = vacuumPumpPowerState(pump);
     const pumpLabel = PUMP_TRANSLATION_KEYS[pump.name] ? t(PUMP_TRANSLATION_KEYS[pump.name]) : pump.name;
     const pumpImage = PUMP_IMAGES[pump.name] ?? GROUP_PUMP_IMAGES[pump.group ?? ""];
     // The header slide switch shows the pump's isolation valve (controller
@@ -244,15 +250,22 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
       <article key={pump.name} className="card vacuum-card" data-border={pump.border}>
         <div className="card__header vacuum-card__header">
           <span className="card__title">{pumpLabel}</span>
-          <label className="vacuum-switch" title={valveTitle}>
-            <input
-              type="checkbox"
-              checked={valveOpen}
-              disabled
-              aria-label={valveTitle}
-            />
-            <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-          </label>
+          <div className="vacuum-card__valve" title={valveTitle}>
+            <svg className="vacuum-valve-icon" data-state={valveOpen ? "open" : "closed"} viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M1.5 13h5l5.5-5v10l-5.5-5h11" />
+              <path d="M12 8V4h7M16 4v3" />
+              <path d="M16.5 13h6" />
+            </svg>
+            <label className="vacuum-switch">
+              <input
+                type="checkbox"
+                checked={valveOpen}
+                disabled
+                aria-label={valveTitle}
+              />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+            </label>
+          </div>
         </div>
         <div className="card__body vacuum-card__body">
           {pumpImage && (
@@ -268,11 +281,12 @@ export function VacuumDashboard({ open, minimized, onMinimizedChange, onActivity
               <button
                 type="button"
                 className="vacuum-power-button"
-                data-state={pump.power ? "on" : "off"}
+                data-state={powerState}
+                data-locked={mechanical ? "true" : "false"}
                 disabled={mechanical || !status?.running || !status.connected || pending !== null}
                 aria-pressed={pump.power}
                 aria-label={`${pumpLabel} ${t("vacuum.power")}`}
-                title={`${t("vacuum.power")} ${pump.power ? "off" : "on"}`}
+                title={mechanical ? t("vacuum.mechanicalAlwaysOn") : `${t("vacuum.power")} ${pump.power ? "off" : "on"}`}
                 onClick={() => void updatePower(pump.name, !pump.power)}
               >
                 <svg className="vacuum-power-button__icon" viewBox="0 0 24 24" aria-hidden>

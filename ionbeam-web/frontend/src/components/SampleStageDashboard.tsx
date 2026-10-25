@@ -5,6 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import sampleStageImage from "../assets/SampleStage-0.3.png";
 import { useTranslation } from "../i18n";
 import { apiUrl } from "../lib/backendUrl";
+import { Icon } from "./Icon";
 import { NumberStepperInput } from "./NumberStepperField";
 
 type StagePosition = { x: number; y: number; z: number; t: number; r: number };
@@ -72,12 +73,24 @@ function axisPercent(value: number, limit: AxisLimit, invert = false): number {
 type Props = {
   open: boolean;
   minimized: boolean;
+  variant?: "modal" | "inline";
+  previewImageUrl?: string | null;
+  onDockedChange: (docked: boolean) => void;
   onMinimizedChange: (minimized: boolean) => void;
   onActivityChange: (active: boolean) => void;
   onClose: () => void;
 };
 
-export function SampleStageDashboard({ open, minimized, onMinimizedChange, onActivityChange, onClose }: Props) {
+export function SampleStageDashboard({
+  open,
+  minimized,
+  variant = "modal",
+  previewImageUrl = null,
+  onDockedChange,
+  onMinimizedChange,
+  onActivityChange,
+  onClose,
+}: Props) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageImageRef = useRef<HTMLImageElement | null>(null);
@@ -88,6 +101,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
   const [initializing, setInitializing] = useState(false);
   const [movePending, setMovePending] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
+  const [linearUnit, setLinearUnit] = useState<"µm" | "mm">("mm");
   const positionEditedRef = useRef(false);
   const animationRef = useRef<number | null>(null);
   const stagePositionRef = useRef<StagePosition>(ZERO_POSITION);
@@ -204,7 +218,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
   }, []);
 
   useEffect(() => {
-    if (!open || minimized) return;
+    if (!open || minimized || variant === "inline") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const image = stageImageRef.current ?? new Image();
@@ -270,7 +284,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
     else {
       image.onload = draw;
     }
-  }, [minimized, open, stagePosition, stageStatus?.limits]);
+  }, [minimized, open, stagePosition, stageStatus?.limits, variant]);
 
   useEffect(() => {
     if (!open) return;
@@ -317,7 +331,7 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
     }
   }
 
-  if (!open) return null;
+  if (!open || minimized) return null;
 
   const zLimit = stageStatus?.limits.z ?? { minimum: 0, maximum: 10000 };
   const tiltLimit = stageStatus?.limits.t ?? { minimum: -10, maximum: 60 };
@@ -325,6 +339,102 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
   const yLimit = stageStatus?.limits.y ?? { minimum: -75000, maximum: 75000 };
   const rotationContinuous = stageStatus?.axes?.r?.continuous ?? true;
   const zProgress = axisPercent(stagePosition.z, zLimit) / 100;
+  const linearScale = linearUnit === "mm" ? 1000 : 1;
+  const displayLinear = (value: number) => displayMicrometers(value / linearScale);
+  const updateLinearTarget = (axis: "x" | "y" | "z", value: number) => {
+    if (!Number.isFinite(value)) return;
+    positionEditedRef.current = true;
+    setTargetPosition((position) => ({ ...position, [axis]: canonicalMicrometers(value * linearScale) }));
+  };
+  const updateAngularTarget = (axis: "t" | "r", value: number) => {
+    if (!Number.isFinite(value)) return;
+    positionEditedRef.current = true;
+    setTargetPosition((position) => ({ ...position, [axis]: value }));
+  };
+
+  if (variant === "inline") {
+    const xPositionPercent = axisPercent(stagePosition.x, xLimit);
+    const yPositionPercent = axisPercent(stagePosition.y, yLimit, true);
+    const moveDisabled = !stageStatus?.connected || stageStatus.moving || movePending;
+    const linearStep = (axis: "x" | "y" | "z") => micrometerStep(stageStatus, axis) / linearScale;
+
+    return (
+      <section className="card sample-stage-card" aria-labelledby="sample-stage-inline-title">
+        <div className="card__header sample-stage-card__header">
+          <span id="sample-stage-inline-title" className="card__title">{t("sampleStage.title")}</span>
+          <div className="sample-stage-card__window-actions">
+            <button
+              type="button"
+              className="sample-stage-card__window-action"
+              onClick={() => onDockedChange(false)}
+              aria-label={t("sampleStage.undock")}
+              data-tooltip={t("sampleStage.undock")}
+              data-styled-tooltip="true"
+            >
+              <Icon name="dock" />
+            </button>
+            <button
+              type="button"
+              className="sample-stage-card__window-action"
+              onClick={() => onMinimizedChange(true)}
+              aria-label={t("sampleStage.minimize")}
+              data-tooltip={t("sampleStage.minimize")}
+              data-styled-tooltip="true"
+            >
+              <Icon name="triangleUp" />
+            </button>
+          </div>
+        </div>
+        <div className="card__body sample-stage-card__body">
+          <div className="sample-stage-card__controls">
+            <label>
+              <span>X ({linearUnit})</span>
+              <NumberStepperInput value={displayLinear(targetPosition.x)} step={linearStep("x")} min={displayLinear(xLimit.minimum)} max={displayLinear(xLimit.maximum)} onValueChange={(value) => updateLinearTarget("x", Number(value))} ariaLabel="X target" />
+            </label>
+            <label>
+              <span>Y ({linearUnit})</span>
+              <NumberStepperInput value={displayLinear(targetPosition.y)} step={linearStep("y")} min={displayLinear(yLimit.minimum)} max={displayLinear(yLimit.maximum)} onValueChange={(value) => updateLinearTarget("y", Number(value))} ariaLabel="Y target" />
+            </label>
+            <label>
+              <span>Z ({linearUnit})</span>
+              <NumberStepperInput value={displayLinear(targetPosition.z)} step={linearStep("z")} min={displayLinear(zLimit.minimum)} max={displayLinear(zLimit.maximum)} onValueChange={(value) => updateLinearTarget("z", Number(value))} ariaLabel="Z target" />
+            </label>
+            <label>
+              <span>T (°)</span>
+              <NumberStepperInput value={targetPosition.t} step={stageStatus?.axes?.t?.resolution ?? 0.1} min={tiltLimit.minimum} max={tiltLimit.maximum} onValueChange={(value) => updateAngularTarget("t", Number(value))} ariaLabel="Tilt target" />
+            </label>
+            <label>
+              <span>R (°)</span>
+              <NumberStepperInput value={targetPosition.r} step={stageStatus?.axes?.r?.resolution ?? 0.1} min={rotationContinuous ? undefined : stageStatus?.limits.r.minimum} max={rotationContinuous ? undefined : stageStatus?.limits.r.maximum} onValueChange={(value) => updateAngularTarget("r", Number(value))} ariaLabel="Rotation target" />
+            </label>
+            <label>
+              <span>Unit</span>
+              <select value={linearUnit} onChange={(event) => setLinearUnit(event.target.value as "µm" | "mm")} aria-label="Linear stage unit">
+                <option value="µm">µm</option>
+                <option value="mm">mm</option>
+              </select>
+            </label>
+          </div>
+          <button type="button" className="btn btn--primary sample-stage-card__move" onClick={() => void moveStage()} disabled={moveDisabled}>
+            {stageStatus?.moving || movePending ? t("sampleStage.moving") : t("sampleStage.move")}
+          </button>
+          <div className="sample-stage-card__preview-title">Stage position · loaded ROI image</div>
+          <div className="sample-stage-card__plot" aria-label={`Stage position X ${displayMicrometers(stagePosition.x)} micrometers, Y ${displayMicrometers(stagePosition.y)} micrometers`}>
+            {previewImageUrl ? <img src={previewImageUrl} alt="Loaded ROI" /> : <span className="sample-stage-card__empty">No ROI image loaded</span>}
+            <i className="sample-stage-card__crosshair sample-stage-card__crosshair--x" style={{ top: `calc(17px + (100% - 39px) * ${yPositionPercent / 100})` }} aria-hidden="true" />
+            <i className="sample-stage-card__crosshair sample-stage-card__crosshair--y" style={{ left: `calc(27px + (100% - 29px) * ${xPositionPercent / 100})` }} aria-hidden="true" />
+            <i className="sample-stage-card__marker" style={{ left: `calc(27px + (100% - 29px) * ${xPositionPercent / 100})`, top: `calc(17px + (100% - 39px) * ${yPositionPercent / 100})` }} aria-hidden="true" />
+            <span className="sample-stage-card__axis-label sample-stage-card__axis-label--y-max">{displayLinear(yLimit.maximum)}</span>
+            <span className="sample-stage-card__axis-label sample-stage-card__axis-label--y-min">{displayLinear(yLimit.minimum)}</span>
+            <span className="sample-stage-card__axis-label sample-stage-card__axis-label--x-min">{displayLinear(xLimit.minimum)} {linearUnit}</span>
+            <span className="sample-stage-card__axis-label sample-stage-card__axis-label--x-max">{displayLinear(xLimit.maximum)} {linearUnit}</span>
+          </div>
+          {stageError && <span className="sample-stage-card__error">{stageError}</span>}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div className="modal-backdrop sample-stage-dashboard__backdrop" role="presentation">
       {!minimized && (
@@ -362,12 +472,13 @@ export function SampleStageDashboard({ open, minimized, onMinimizedChange, onAct
                 positionEditedRef.current = true;
                 setTargetPosition((position) => ({ ...position, r: parsed }));
               }} ariaLabel="Rotation target" /></label>
-              <button type="button" className="btn btn--primary sample-stage-dashboard__move-button" onClick={() => void moveStage()} disabled={!stageStatus?.connected || stageStatus.moving}>
-                {stageStatus?.moving ? t("sampleStage.moving") : t("sampleStage.move")}
+              <button type="button" className="btn btn--primary sample-stage-dashboard__move-button" onClick={() => void moveStage()} disabled={!stageStatus?.connected || stageStatus.moving || movePending}>
+                {stageStatus?.moving || movePending ? t("sampleStage.moving") : t("sampleStage.move")}
               </button>
             </div>
             <div className="sample-stage-dashboard__window-actions">
-              <button type="button" className="modal__close" onClick={() => onMinimizedChange(true)} aria-label={t("sampleStage.minimize")} title={t("sampleStage.minimize")}><span aria-hidden>−</span></button>
+              <button type="button" className="modal__close" onClick={() => onDockedChange(true)} aria-label={t("sampleStage.dock")} data-tooltip={t("sampleStage.dock")} data-styled-tooltip="true"><Icon name="dock" /></button>
+              <button type="button" className="modal__close" onClick={() => onMinimizedChange(true)} aria-label={t("sampleStage.minimize")} data-tooltip={t("sampleStage.minimize")} data-styled-tooltip="true"><Icon name="triangleUp" /></button>
             </div>
           </div>
           <div className="modal__body sample-stage-dashboard__body">

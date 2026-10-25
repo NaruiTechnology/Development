@@ -329,7 +329,11 @@ def test_realtime_accelerated_pumpdown_does_not_latch_spurious_faults():
     async def scenario():
         try:
             await controller.start()
-            deadline = time.monotonic() + 25
+            # Coverage instrumentation and slower CI hosts can substantially
+            # delay the Python control loop even though the emulated plant is
+            # accelerated. Keep this a completion deadline, not a performance
+            # assertion.
+            deadline = time.monotonic() + 60
             while time.monotonic() < deadline:
                 await asyncio.sleep(0.1)
                 status = controller.status()
@@ -348,7 +352,7 @@ def test_realtime_accelerated_pumpdown_does_not_latch_spurious_faults():
         rig.close()
 
 
-def test_sbc_api_runs_the_production_driver_on_the_realtime_emulator(tmp_path, monkeypatch):
+def test_sbc_api_runs_the_board_driver_on_the_realtime_emulator(tmp_path, monkeypatch):
     import time
 
     pytest.importorskip("httpx")
@@ -358,13 +362,15 @@ def test_sbc_api_runs_the_production_driver_on_the_realtime_emulator(tmp_path, m
 
     payload = json.loads(EXAMPLE.read_text())
     payload["Enable"] = True
-    payload["Simulate"] = False
+    # Simulation is selected only by the profile.  The speed environment
+    # variable tunes the selected board emulator but does not override a
+    # production profile.
+    payload["Simulate"] = True
     source = tmp_path / "vacuum.json"
     source.write_text(json.dumps(payload))
     monkeypatch.setenv("SBC_VACUUM_CONFIG", str(source))
     monkeypatch.setenv("SBC_REQUIRE_FENCING", "false")
     monkeypatch.setenv("SBC_VACUUM_TOKEN", "test-token")
-    monkeypatch.setenv("SBC_VACUUM_EMULATOR", "1")
     monkeypatch.setenv("SBC_VACUUM_EMULATOR_SPEED", "20")
     auth = {"Authorization": "Bearer test-token"}
 
@@ -514,7 +520,10 @@ def test_simulator_mode_logs_are_tagged(monkeypatch, caplog):
 
     monkeypatch.delenv("SBC_VACUUM_EMULATOR", raising=False)
     caplog.set_level(logging.INFO, logger="glasgow_service.vacuum")
-    config = VacuumConfig.model_validate(_payload(Simulate=True))
+    gpio_config = Path(__file__).parents[2] / "GlasgowDataIO" / "Json" / "vacuumSystem.json"
+    payload = json.loads(gpio_config.read_text())
+    payload.update(Enable=True, Simulate=True)
+    config = VacuumConfig.model_validate(payload)
     controller = VacuumController(config)
     assert controller.log_tag == "[VACUUM-SIM]"
     assert any(r.getMessage().startswith("[VACUUM-SIM] no real equipment is driven")

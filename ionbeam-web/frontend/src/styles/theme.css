@@ -1331,6 +1331,9 @@ body {
 
 .roi-preview-column {
   align-self: start;
+  display: grid;
+  min-width: 0;
+  gap: 12px;
 }
 
 .roi-preview-card {
@@ -1346,6 +1349,188 @@ body {
   display: grid;
   width: min(100%, 192px);
   gap: 8px;
+}
+
+.sample-stage-card {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sample-stage-card__header {
+  min-height: 44px;
+}
+
+.sample-stage-card__window-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.sample-stage-card__window-action {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  color: lawngreen;
+  background: color-mix(in srgb, var(--c-bg-elev) 88%, #000);
+  cursor: pointer;
+}
+
+.sample-stage-card__window-action:hover,
+.sample-stage-card__window-action:focus-visible {
+  color: lawngreen;
+  border-color: var(--c-accent);
+}
+
+.sample-stage-card__window-action .icon,
+.sample-stage-dashboard__window-actions .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.sample-stage-card__body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.sample-stage-card__controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 8px;
+}
+
+.sample-stage-card__controls label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--c-text-dim);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sample-stage-card__controls .number-stepper,
+.sample-stage-card__controls select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+}
+
+.sample-stage-card__controls .number-stepper__input {
+  height: 36px;
+  min-width: 0;
+  padding: 0 5px;
+  font-size: 11px;
+}
+
+.sample-stage-card__controls select {
+  padding: 0 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  color: var(--c-text);
+  background: var(--c-bg-input);
+  font: inherit;
+  text-transform: none;
+}
+
+.sample-stage-card__move {
+  width: 100%;
+  min-height: 38px;
+}
+
+.sample-stage-card__preview-title {
+  color: var(--c-text-dim);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sample-stage-card__plot {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 17px 2px 22px 27px;
+  overflow: hidden;
+}
+
+.sample-stage-card__plot img,
+.sample-stage-card__empty {
+  position: absolute;
+  inset: 17px 2px 22px 27px;
+  width: calc(100% - 29px);
+  height: calc(100% - 39px);
+  border: 1px solid var(--c-border);
+  border-radius: 4px;
+}
+
+.sample-stage-card__plot img {
+  object-fit: cover;
+  filter: grayscale(1);
+}
+
+.sample-stage-card__empty {
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  color: var(--c-text-dim);
+  background: color-mix(in srgb, var(--c-bg-elev) 82%, #000);
+  font-size: 10px;
+  text-align: center;
+}
+
+.sample-stage-card__crosshair,
+.sample-stage-card__marker {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.sample-stage-card__crosshair--x {
+  right: 2px;
+  left: 27px;
+  border-top: 1px dashed #65c9ff;
+  transform: translateY(-50%);
+}
+
+.sample-stage-card__crosshair--y {
+  top: 17px;
+  bottom: 22px;
+  border-left: 1px dashed #65c9ff;
+  transform: translateX(-50%);
+}
+
+.sample-stage-card__marker {
+  width: 13px;
+  height: 13px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #58b9f4;
+  box-shadow: 0 0 0 1px rgba(15, 53, 87, 0.9);
+  transform: translate(-50%, -50%);
+}
+
+.sample-stage-card__axis-label {
+  position: absolute;
+  color: var(--c-text-dim);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.sample-stage-card__axis-label--y-max { top: 18px; left: 0; }
+.sample-stage-card__axis-label--y-min { bottom: 23px; left: 0; }
+.sample-stage-card__axis-label--x-min { bottom: 6px; left: 27px; }
+.sample-stage-card__axis-label--x-max { right: 2px; bottom: 6px; }
+
+.sample-stage-card__error {
+  color: var(--c-danger);
+  font-size: 10px;
 }
 
 .roi-calibration-card {
@@ -1713,6 +1898,16 @@ body {
   color: var(--c-btn-primary-text);
 }
 .btn--primary:hover:not(:disabled) { background: var(--c-btn-primary-hover); }
+
+.btn--accent-solid {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+.btn--accent-solid:hover:not(:disabled) {
+  background: var(--c-accent-hot);
+  border-color: var(--c-accent-hot);
+}
 
 .btn--gold {
   background: var(--c-btn-gold-grad);
@@ -5236,6 +5431,12 @@ body {
   gap: 4px;
 }
 
+.sample-stage-dashboard__window-actions .modal__close,
+.sample-stage-dashboard__window-actions .modal__close:hover,
+.sample-stage-dashboard__window-actions .modal__close:focus-visible {
+  color: lawngreen;
+}
+
 .sample-stage-dashboard__body {
   padding: 5px 10px 10px;
   overflow: hidden;
@@ -5980,6 +6181,33 @@ body {
   overflow-wrap: anywhere;
 }
 
+.vacuum-card__valve {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.vacuum-valve-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--c-text-muted);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.vacuum-valve-icon[data-state="open"] {
+  color: var(--c-accent);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c-accent) 55%, transparent));
+}
+
+.vacuum-valve-icon[data-state="closed"] {
+  color: var(--c-text-dim);
+}
+
 .vacuum-card__body {
   display: grid;
   gap: 10px;
@@ -6077,12 +6305,17 @@ body {
   transition: color 140ms ease, filter 140ms ease, opacity 140ms ease;
 }
 
-.vacuum-power-button[data-state="on"] {
+.vacuum-power-button[data-state="working"] {
   color: lawngreen;
   filter: drop-shadow(0 0 5px color-mix(in srgb, lawngreen 60%, transparent));
 }
 
-.vacuum-power-button:hover:not(:disabled) {
+.vacuum-power-button[data-state="initialized"] {
+  color: red;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, red 60%, transparent));
+}
+
+.vacuum-power-button[data-state="off"]:hover:not(:disabled) {
   color: lawngreen;
 }
 
@@ -6094,6 +6327,12 @@ body {
 .vacuum-power-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.vacuum-power-button[data-locked="true"] {
+  color: var(--c-text-muted);
+  filter: none;
+  opacity: 0.62;
 }
 
 .vacuum-power-button__icon {

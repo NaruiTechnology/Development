@@ -29,7 +29,8 @@ from glasgow_service.models import (
     ROIRequest, RasterRequest, SimulationBitmap, VectorRequest,
 )
 from glasgow_service.service import (
-    DeviceService, _dac_codes, _dac_range_for_bounds, _sample_chunk_to_wire_bytes,
+    DeviceService, _bitmap_vector_chunks, _dac_codes, _dac_range_for_bounds,
+    _sample_chunk_to_wire_bytes,
 )
 
 CONFIG_PATH = str(
@@ -225,6 +226,27 @@ def test_simulated_vector_scan_is_hardware_free_and_streams():
     seen, frames = asyncio.run(run())
     assert sum(len(f) for f in frames) == 128 * 128 * 2
     assert len(frames) > 1 and all(b > a for a, b in zip(seen, seen[1:]))
+
+
+def test_unfiltered_roi_vector_scan_uses_the_incremental_service_path():
+    """The API shape used by ROI Action Run without a gray filter must
+    bypass the prebuilt browser-bitmap frame path."""
+    roi = ROIRequest(x_start=3277, x_end=9830, y_start=1638, y_end=8192)
+    req = VectorRequest(
+        pattern="default",
+        vector_resolution=32,
+        dwell=16,
+        latency_bytes=128,
+        roi=roi,
+        simulation_bitmap=None,
+        feedback_mode="standard",
+        gray_level_range=None,
+        gray_level_skipped=None,
+    )
+
+    assert _bitmap_vector_chunks(req) is None
+    assert req.roi == roi
+    assert req.simulation_bitmap is None
 
 
 def test_blocking_run_raster_and_run_vector_are_hardware_free():

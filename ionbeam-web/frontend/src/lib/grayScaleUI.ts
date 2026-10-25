@@ -29,11 +29,28 @@ export function shouldShowROIActionControls(options: {
   return options.hasPartialROI;
 }
 
+/**
+ * The unfiltered ROI action uses the vector canvas as its live scan surface.
+ * It must become visible as soon as Action Run starts; waiting for the stream
+ * to complete hides all scan progress behind the original ROI image.
+ */
+export function shouldShowROIActionVectorCanvas(options: {
+  roiActionCanvasVisible: boolean;
+  roiActionGrayFilterActive: boolean;
+  scanImageDataUrl: string | null;
+}): boolean {
+  return (
+    options.roiActionCanvasVisible &&
+    !options.roiActionGrayFilterActive &&
+    options.scanImageDataUrl === null
+  );
+}
+
 export function shouldShowROIGrayScaleClear(options: {
   kind: "roi" | ROIActionKind | "mag";
-  hasConfirmedGrayRange: boolean;
+  grayFilterActive: boolean;
 }): boolean {
-  return options.kind === "roi" && options.hasConfirmedGrayRange;
+  return options.kind === "roi" && options.grayFilterActive;
 }
 
 export function resolveGrayScaleSourceKind(options: {

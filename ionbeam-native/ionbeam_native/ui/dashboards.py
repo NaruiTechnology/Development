@@ -249,9 +249,16 @@ class VacuumDashboard(_ToolWindow):
         pb.setCheckable(True)
         pb.setChecked(bool(pump.get("power")))
         pb.setEnabled(not mech and s.get("running") is True and self.pending is None)
-        pb.setToolTip(f"{t('vacuum.power')} {'off' if pump.get('power') else 'on'}")
+        pb.setToolTip(t("vacuum.mechanicalAlwaysOn") if mech
+                      else f"{t('vacuum.power')} {'off' if pump.get('power') else 'on'}")
+        reading = pump.get("value")
+        threshold = pump.get("threshold")
+        initialized = (reading is not None and threshold is not None
+                       and float(reading) <= float(threshold))
+        power_color = theme.current().danger if initialized else theme.current().success
         pb.setStyleSheet("QPushButton { border-radius: 14px; min-width: 28px; min-height: 28px; font-size: 16px; }"
-                         f"QPushButton:checked {{ color: {theme.current().success}; border-color: {theme.current().success}; }}")
+                         f"QPushButton:checked {{ color: {power_color}; border-color: {power_color}; }}"
+                         f"QPushButton:checked:disabled {{ color: {theme.current().text_muted}; border-color: {theme.current().text_muted}; }}")
         pb.clicked.connect(lambda _c, n=pump.get("name"), p=pump.get("power"): self.update_power(n, not p))
         row.addWidget(pb)
         card.body.addLayout(row)

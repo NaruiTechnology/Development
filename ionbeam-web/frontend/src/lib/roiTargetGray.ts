@@ -2,9 +2,9 @@
  * Target gray level helpers for the ROI image canvas.
  *
  * The operator right-clicks a pixel to pick a target gray level. Action run
- * (with an ROI area and no gray level filter range) then steps pixels brighter
- * than that target down toward it. Pixels at or below the target are skipped,
- * and pixels outside the ROI area are never touched.
+ * (with an ROI area and no gray level filter range) then steps brighter pixels
+ * down toward that target. Pixels at or below the target are skipped, and
+ * pixels outside the ROI area are never touched.
  */
 
 /** Gray levels a pixel may move toward the target in one pass. */
@@ -146,4 +146,23 @@ export function stepTowardTargetGray(
     }
   }
   return result;
+}
+
+/**
+ * Resolution a production ROI + target gray run starts at.
+ *
+ * With IsProduction the per-pixel decision comes from the live ADC through the
+ * host-side adaptive feedback loop, which probes every point and then revisits
+ * it (two USB round trips per point). At the normal 1024 to 2048 edge the live
+ * canvas shows only its first scan line for a long time, so the selected
+ * rectangle never appears to render. 128 matches what the VECTOR gray filter
+ * already starts at (App.tsx); the resolution control stays editable.
+ */
+export const ROI_ADAPTIVE_RESOLUTION = 128;
+
+/** The resolution to start an adaptive ROI run at: never above the cap, never invalid. */
+export function adaptiveRoiResolution(current: number): number {
+  const n = Math.trunc(Number(current));
+  if (!Number.isFinite(n) || n < 1) return ROI_ADAPTIVE_RESOLUTION;
+  return Math.min(n, ROI_ADAPTIVE_RESOLUTION);
 }

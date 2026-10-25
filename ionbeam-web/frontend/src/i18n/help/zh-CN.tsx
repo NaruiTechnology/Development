@@ -655,9 +655,33 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
       </ul>
 
       <div className="dwell-help__rule">
-        <strong>X/Y 关系。</strong>放大倍率校准只保存 HFOV。ROI 的 X/Y 校准负责视口到 DUT
-        坐标的映射。如果像素为正方形，VFOV 可由 HFOV 按图像宽高比推导；否则 X 和 Y
-        需要分别通过 ROI 校准。
+        <strong>X/Y 关系。</strong>放大倍率校准只保存 HFOV，不会直接驱动独立的 FPGA 放大倍率输入。
+        应用扫描几何后，当前放大倍率对应的 HFOV 与配置的像素数共同决定实体像素尺寸（HFOV / 横向像素数）。
+        随后，世界坐标 ROI 会转换为 14 位 X/Y DAC 码并随扫描发送。未应用扫描几何时，仅有 MAG CAL 不会改变 DAC 扫描。
+        若像素为正方形，VFOV 会根据图像宽高比由 HFOV 推导；否则 X 和 Y 需要分别通过 ROI 校准。
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>当前集成状态：尚未完成。</strong>本应用尚未向外部 FEI 放大倍率开关盒（包括 FiBDb235）发送放大倍率值或控制信号。
+        MAG CAL 由浏览器在解析扫描几何时使用；生效的几何会把选定的实体区域转换为 DAC 扫描坐标。
+        USB 命令包含坐标和停留时间，而不是放大倍率：RASTER 发送 <code>x_start</code>、
+        <code>x_count</code>、<code>x_step</code>、<code>y_start</code>、<code>y_count</code>、<code>y_step</code>
+        （16 位命令字段，内容为 DAC 范围值），随后发送停留命令；VECTOR 发送 <code>x_coord</code>、
+        <code>y_coord</code> 和 <code>dwell_time</code>。FPGA 光栅扫描器根据 ROI 字段生成每个像素的 X/Y DAC 码。
+        Web 后端的 <code>/api/admin/mag-calibration</code> 用于保存/读取校准数据，不是仪器控制或 FPGA 命令接口。
+        开关盒输出是独立且尚未实现的集成，不通过 OBI 扫描 DAC 总线传输。
+      </div>
+
+      <div className="dwell-help__rule">
+        <strong>现有扫描 DAC 传输与接线映射（当前 revC3 配置）。</strong>主机扫描命令经 Glasgow USB 接口（管道
+        <code>PQ</code>）进入 FPGA 命令解析器和扫描执行器。子目标通过上游 OBI 扩展总线连接，FPGA 球位如下。
+        共用双向数据总线为 3.3 V LVCMOS，按最低有效位优先排列：
+        <code> data[0..13] = B2, C4, B1, C3, C2, C1, D3, D1, F4, G2, E3, F1, E2, F2</code>。
+        DAC 输出使用 <code>dac_clk</code> F3（球位端反相）、<code>dac_x_le_clk</code> H3（不反相，锁存 X）和
+        <code>dac_y_le_clk</code> H1（不反相，锁存 Y）。共用 ADC 通路使用 <code>adc_clk</code> G1（反相）、
+        <code>adc_le_clk</code> H2（不反相）和 <code>adc_oe</code> G3（反相）。信号名、FPGA 球位、方向、极性和位序
+        必须与仪器侧连接器接线一致。接线前请核对板卡原理图和当前 <code>streamData.json</code>；FPGA 球位不是连接器针脚号。
+        完整逐位表见 <code>docs/magnification-to-subtarget.html</code>。此扫描总线图不定义 FEI 开关盒的连接器、信号、电压、协议、数值编码或放大倍率到输出值的映射。
       </div>
 
       <p>
@@ -668,7 +692,8 @@ export const helpBodies: Record<HelpKey, () => ReactNode> = {
 
       <p>
         保存结果会写入 stream 配置，并通过 <code>/api/admin/mag-calibration</code> 返回。
-        其他扫描逻辑可从 defaults/config 读取该按束流保存的映射；导入按钮本身只替换当前的校准点表。
+        扫描几何会使用每束流校准表解析 HFOV；应用几何后，后续扫描将使用该操作点的快照。
+        导入按钮本身只替换当前的放大倍率校准点表。
       </p>
 
       <p>

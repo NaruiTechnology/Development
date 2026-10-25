@@ -35,6 +35,11 @@ export function TooltipLayer() {
     let timer: number | undefined;
     const isButton = (target: EventTarget | null) => target instanceof Element
       && Boolean(target.closest("button, [role='button'], input[type='button'], input[type='submit'], input[type='reset']"));
+    const tooltipTarget = (target: EventTarget | null) => {
+      const node = target instanceof Element ? target.closest<HTMLElement>("[data-tooltip]") : null;
+      if (node && isButton(node) && node.dataset.styledTooltip !== "true") return null;
+      return node;
+    };
 
     const normalize = (root: ParentNode) => {
       const nodes = root instanceof HTMLElement && root.hasAttribute("title")
@@ -47,7 +52,7 @@ export function TooltipLayer() {
     };
 
     const position = (node: HTMLElement, delay: number) => {
-      if (isButton(node)) return;
+      if (isButton(node) && node.dataset.styledTooltip !== "true") return;
       const text = node.dataset.tooltip;
       if (!text) return;
       active = node;
@@ -79,25 +84,18 @@ export function TooltipLayer() {
     observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["title"] });
 
     const onPointerOver = (event: PointerEvent) => {
-      if (isButton(event.target)) {
-        if (active) dismiss();
-        return;
-      }
-      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-tooltip]") : null;
+      const target = tooltipTarget(event.target);
       if (target && target !== active) position(target, 350);
+      else if (!target && active) dismiss();
     };
     const onPointerOut = (event: PointerEvent) => {
-      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-tooltip]") : null;
+      const target = tooltipTarget(event.target);
       if (target && !target.contains(event.relatedTarget as Node | null)) dismiss(target);
     };
     const onFocus = (event: FocusEvent) => {
-      // Mouse clicks focus buttons too; do not start a tooltip on either path.
-      if (isButton(event.target)) {
-        if (active) dismiss();
-        return;
-      }
-      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-tooltip]") : null;
+      const target = tooltipTarget(event.target);
       if (target) position(target, 0);
+      else if (active) dismiss();
     };
     const onBlur = (event: FocusEvent) => {
       const target = event.target instanceof HTMLElement ? event.target : undefined;

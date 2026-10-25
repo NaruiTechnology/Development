@@ -72,6 +72,7 @@ import {
   resolveROIActionKind,
   shouldShowROIGrayScaleClear,
   shouldShowROIActionControls,
+  shouldShowROIActionVectorCanvas,
   resolveGrayScaleSourceKind,
 } from "./lib/grayScaleUI";
 import { completedROIImagePatch } from "./lib/roiWorkflow";
@@ -148,6 +149,7 @@ export function App() {
   const [vacuumControllerError, setVacuumControllerError] = useState(true);
   const [sampleStageOpen, setSampleStageOpen] = useState(true);
   const [sampleStageMinimized, setSampleStageMinimized] = useState(true);
+  const [sampleStageDocked, setSampleStageDocked] = useState(true);
   const [sampleStageControllerBusy, setSampleStageControllerBusy] = useState(false);
   // DAC check card starts collapsed — it's an occasional diagnostic,
   // not part of the normal vector-scan flow, so it shouldn't compete
@@ -324,7 +326,12 @@ export function App() {
   const adcTest = useAdcTestStream();
   const adcActive = adcTest.state.phase === "connecting" || adcTest.state.phase === "running";
   const adcView = adcTestEnabled && !adcTestCollapsed;
-  const showROIPreviewSideCard = showROIPreviewSideCardBase && !adcView;
+  const sampleStageDockTargetAvailable =
+    route === "control" && (kind === "roi" || kind === "raster" || kind === "vector");
+  const showInlineSampleStage =
+    sampleStageDockTargetAvailable && sampleStageDocked && sampleStageOpen && !sampleStageMinimized;
+  const showROIPreviewSideCard = showROIPreviewSideCardBase && !adcView && !showInlineSampleStage;
+  const showROIThirdColumn = showROIPreviewSideCard || showInlineSampleStage;
 
   useEffect(() => {
     dispatch(fetchDefaults());
@@ -567,7 +574,7 @@ export function App() {
       const rect = main.getBoundingClientRect();
       const maxRight = Math.max(
         MIN_RIGHT_PANEL_WIDTH,
-        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIPreviewSideCard ? 236 : 0)
+        rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIThirdColumn ? 236 : 0)
       );
       const next = Math.min(
         maxRight,
@@ -592,7 +599,7 @@ export function App() {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [isResizing, showROIPreviewSideCard]);
+  }, [isResizing, showROIThirdColumn]);
 
   const scanActive = phase === "running" || phase === "stopping";
   const panelDisabled = shouldDisableScanPanel({
@@ -629,6 +636,11 @@ export function App() {
     roiCachedScanImageUrl && roiCachedScanImageUrl !== suppressedROIScanImageUrl
       ? roiCachedScanImageUrl
       : null;
+  const sampleStagePreviewImageUrl =
+    roiState.scanImageDataUrl ??
+    (roiState.imageKind === "lastScan"
+      ? activeROIScanImageUrl ?? roiState.imageDataUrl
+      : roiState.imageDataUrl ?? activeROIScanImageUrl);
   const showGraySpectrum =
     kind === "roi" &&
     hasPartialROI &&
@@ -643,11 +655,11 @@ export function App() {
   const grayScaleScopeNote = grayScaleScopeNoteForKind(grayScaleSourceKind, isProduction, t);
   const roiActionGrayFilterActive =
     committedGrayScaleSelection !== null && committedGrayScaleSkipped !== null;
-  const showROIActionVectorCanvas =
-    roiActionCanvasVisible &&
-    !roiActionGrayFilterActive &&
-    roiState.scanImageDataUrl === null &&
-    phase === "completed";
+  const showROIActionVectorCanvas = shouldShowROIActionVectorCanvas({
+    roiActionCanvasVisible,
+    roiActionGrayFilterActive,
+    scanImageDataUrl: roiState.scanImageDataUrl,
+  });
   const displayedROIGrayScaleSelection = pendingGrayScaleSelection ?? committedGrayScaleSelection;
   const displayedROIGrayScaleSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped;
   const actionScanKind =
@@ -969,9 +981,12 @@ export function App() {
               ),
             )
           );
-          dispatch(resetVector());
+          // Keep the completed vector buffer and its canvas mounted. The
+          // phase/chunk/resolution message panel belongs to ImageCanvas, so
+          // clearing the buffer or switching back to ROIEditor here made that
+          // panel disappear as soon as the scan completed. Manual Stop still
+          // performs the pre-scan rollback and clears this buffer.
           setROIActionLocked(false);
-          setROIActionCanvasVisible(false);
           setLastLiveScanImage(null);
           setMergedFigureByKind({ raster: null, vector: null });
         }
@@ -1360,6 +1375,14 @@ export function App() {
     activateCalibrateSubTab(calibrateSubTab);
   }
 
+  function handleSampleStageDockedChange(docked: boolean) {
+    setSampleStageDocked(docked);
+    setSampleStageMinimized(false);
+    if (!docked) return;
+    if (route !== "control") navigateTo("control");
+    activateScanTopTab();
+  }
+
   function navigateTo(nextRoute: AppRoute) {
     const nextPath = `/${nextRoute}`;
     if (window.location.pathname === nextPath) return;
@@ -1373,7 +1396,7 @@ export function App() {
     const rect = main.getBoundingClientRect();
     const maxRight = Math.max(
       MIN_RIGHT_PANEL_WIDTH,
-      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIPreviewSideCard ? 236 : 0)
+      rect.width - MIN_LEFT_PANEL_WIDTH - SPLITTER_SPACE - (showROIThirdColumn ? 236 : 0)
     );
     const next = Math.min(maxRight, Math.max(MIN_RIGHT_PANEL_WIDTH, rightPanelWidth + delta));
     setRightPanelWidth(next);
@@ -1434,14 +1457,16 @@ export function App() {
           onSelect={handleGrayScaleSelect}
         />
       ) : null}
-      {shouldShowROIGrayScaleClear({
-        kind,
-        hasConfirmedGrayRange: committedGrayScaleSelection !== null,
-      }) && !(roiActionCanvasVisible && !roiActionGrayFilterActive) && (
+      {shouldShowROIGrayScaleClear({ kind, grayFilterActive: roiActionGrayFilterActive }) && (
         <button
           type="button"
-          className="btn btn--ghost image-panel-card__header-action"
-          disabled={panelDisabled}
+          className="btn btn--accent-solid image-panel-card__header-action"
+          disabled={
+            panelDisabled ||
+            (pendingGrayScaleSelection === null &&
+              committedGrayScaleSelection === null &&
+              pendingGrayScaleAnchor === null)
+          }
           onClick={handleClearROIGrayScaleValues}
           title={t("scan.clear")}
         >
@@ -1469,6 +1494,10 @@ export function App() {
         onOpenSampleStage={() => {
           setSampleStageOpen(true);
           setSampleStageMinimized(false);
+          if (kind === "raster" || kind === "vector") {
+            setSampleStageDocked(false);
+          }
+          if (kind === "roi" && route !== "control") navigateTo("control");
         }}
         sampleStageControllerBusy={sampleStageControllerBusy}
         highVoltagePower={highVoltagePower}
@@ -1506,7 +1535,7 @@ export function App() {
       <main
         ref={mainRef}
         className={`app-main${isResizing ? " app-main--resizing" : ""}${
-          showROIPreviewSideCard ? " app-main--with-roi-preview" : ""
+          showROIThirdColumn ? " app-main--with-roi-preview" : ""
         }`}
         style={layoutStyle}
       >
@@ -1664,6 +1693,11 @@ export function App() {
                           onActionRunStart={() => {
                             setROIActionLocked(true);
                             setROIActionCanvasVisible(true);
+                          }}
+                          onActionRunStop={() => {
+                            setROIActionLocked(false);
+                            setROIActionCanvasVisible(false);
+                            setActiveScanType(null);
                           }}
                         />
                       </div>
@@ -1860,7 +1894,7 @@ export function App() {
             </div>
           </div>
 
-          {showROIActionControls && kind !== "roi" && <ErrorWedge signedInUser={signedInUser} />}
+          {showROIActionControls && <ErrorWedge signedInUser={signedInUser} />}
         </section>
 
         <div
@@ -2019,16 +2053,33 @@ export function App() {
           </div>
         </section>
 
-        {showROIPreviewSideCard && (
+        {showROIThirdColumn && (
           <section className="roi-preview-column">
-            <div className="card roi-preview-card">
-              <div className="card__header">
-                <span className="card__title">{t("card.roiPreview")}</span>
+            {showROIPreviewSideCard && (
+              <div className="card roi-preview-card">
+                <div className="card__header">
+                  <span className="card__title">{t("card.roiPreview")}</span>
+                </div>
+                <div className="card__body">
+                  <ROIScanPreview backgroundImageUrl={activeROIScanImageUrl} />
+                </div>
               </div>
-              <div className="card__body">
-                <ROIScanPreview backgroundImageUrl={activeROIScanImageUrl} />
-              </div>
-            </div>
+            )}
+            {showInlineSampleStage && (
+              <SampleStageDashboard
+                open
+                minimized={false}
+                variant="inline"
+                previewImageUrl={sampleStagePreviewImageUrl}
+                onDockedChange={handleSampleStageDockedChange}
+                onActivityChange={setSampleStageControllerBusy}
+                onMinimizedChange={setSampleStageMinimized}
+                onClose={() => {
+                  setSampleStageOpen(false);
+                  setSampleStageMinimized(false);
+                }}
+              />
+            )}
           </section>
         )}
       </main>
@@ -2051,16 +2102,19 @@ export function App() {
           }}
         />
       )}
-      <SampleStageDashboard
-        open={sampleStageOpen}
-        minimized={sampleStageMinimized}
-        onActivityChange={setSampleStageControllerBusy}
-        onMinimizedChange={setSampleStageMinimized}
-        onClose={() => {
-          setSampleStageOpen(false);
-          setSampleStageMinimized(false);
-        }}
-      />
+      {!sampleStageDocked && (
+        <SampleStageDashboard
+          open={sampleStageOpen}
+          minimized={sampleStageMinimized}
+          onDockedChange={handleSampleStageDockedChange}
+          onActivityChange={setSampleStageControllerBusy}
+          onMinimizedChange={setSampleStageMinimized}
+          onClose={() => {
+            setSampleStageOpen(false);
+            setSampleStageMinimized(false);
+          }}
+        />
+      )}
       <Footer />
     </div>
   );

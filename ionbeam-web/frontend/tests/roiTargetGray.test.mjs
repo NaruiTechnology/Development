@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  ROI_ADAPTIVE_RESOLUTION,
+  adaptiveRoiResolution,
   clipPixelRect,
   countTargetGrayMismatches,
   grayAt,
@@ -50,7 +52,7 @@ test("clipPixelRect clips to the image and rejects empty areas", () => {
   assert.equal(clipPixelRect({ left: 9, top: 0, width: 3, height: 3 }, 8, 8), null);
 });
 
-test("looping passes lower brighter ROI pixels and leave darker pixels and the rest untouched", () => {
+test("looping passes lower brighter ROI pixels and leave darker and outside pixels untouched", () => {
   const width = 8;
   const height = 6;
   const data = grayImage(width, height, (x, y) => (x * 37 + y * 53) % 256);
@@ -73,7 +75,7 @@ test("looping passes lower brighter ROI pixels and leave darker pixels and the r
       const inside = x >= rect.left && x < rect.left + rect.width && y >= rect.top && y < rect.top + rect.height;
       const i = (y * width + x) * 4;
       if (inside) {
-        const expected = Math.min(before[i], target);
+        const expected = before[i] <= target ? before[i] : target;
         assert.deepEqual([data[i], data[i + 1], data[i + 2]], [expected, expected, expected]);
       } else {
         assert.deepEqual(
@@ -86,12 +88,12 @@ test("looping passes lower brighter ROI pixels and leave darker pixels and the r
 });
 
 test("each pass moves a pixel at most maxStep gray levels", () => {
-  const data = grayImage(1, 1, () => 200);
+  const data = grayImage(1, 1, () => 220);
   const rect = { left: 0, top: 0, width: 1, height: 1 };
-  assert.equal(stepTowardTargetGray(data, 1, rect, 10, 4).remaining, 1);
-  assert.equal(data[0], 196);
-  assert.equal(stepTowardTargetGray(data, 1, rect, 195, 4).remaining, 0);
-  assert.equal(data[0], 195);
+  assert.equal(stepTowardTargetGray(data, 1, rect, 200, 4).remaining, 1);
+  assert.equal(data[0], 216);
+  assert.equal(stepTowardTargetGray(data, 1, rect, 215, 4).remaining, 0);
+  assert.equal(data[0], 215);
 });
 
 test("SPOT/SKIP is decided per pixel by comparing its gray with the target", () => {
@@ -102,7 +104,7 @@ test("SPOT/SKIP is decided per pixel by comparing its gray with the target", () 
   assert.deepEqual(targetGrayFilter(300), { selection: [0, 255], skipped: true });
 });
 
-test("each pass re-decides every ROI pixel: matching pixels are skipped and left unchanged", () => {
+test("each pass skips matching and darker pixels while lowering brighter pixels", () => {
   // 3x1 ROI: one pixel already at target, one below, one above.
   const width = 5;
   const data = grayImage(width, 1, (x) => [9, 100, 50, 150, 9][x]);
@@ -128,9 +130,24 @@ test("each pass re-decides every ROI pixel: matching pixels are skipped and left
   assert.deepEqual([...decisions], [7, 0, 0, 0, 7]);
 });
 
-test("colour pixels are compared by their gray value, not raw channels", () => {
+test("colour pixels at or below target are skipped by gray value, not raw channels", () => {
   const data = new Uint8ClampedArray([255, 0, 0, 255]); // luma 76
   const rect = { left: 0, top: 0, width: 1, height: 1 };
   assert.equal(countTargetGrayMismatches(data, 1, rect, 76), 0);
   assert.deepEqual(stepTowardTargetGray(data, 1, rect, 76), { spot: 0, skip: 1, remaining: 0 });
+});
+
+test("production adaptive ROI runs start at a small resolution", () => {
+  assert.equal(ROI_ADAPTIVE_RESOLUTION, 128);
+  assert.equal(adaptiveRoiResolution(2048), 128);
+  assert.equal(adaptiveRoiResolution(1024), 128);
+  assert.equal(adaptiveRoiResolution(128), 128);
+});
+
+test("a resolution already below the cap is kept, and bad input falls back to the cap", () => {
+  assert.equal(adaptiveRoiResolution(64), 64);
+  assert.equal(adaptiveRoiResolution(100.9), 100);
+  assert.equal(adaptiveRoiResolution(0), 128);
+  assert.equal(adaptiveRoiResolution(-5), 128);
+  assert.equal(adaptiveRoiResolution(Number.NaN), 128);
 });

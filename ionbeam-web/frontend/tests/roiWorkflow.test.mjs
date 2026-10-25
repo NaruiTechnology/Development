@@ -6,7 +6,11 @@ import {
   imageWorldBounds,
   viewportBounds,
 } from "../.test-dist/lib/roiGeometry.js";
-import { completedROIImagePatch } from "../.test-dist/lib/roiWorkflow.js";
+import {
+  completedROIImagePatch,
+  roiRasterExecutionRequest,
+  unfilteredROIActionRequest,
+} from "../.test-dist/lib/roiWorkflow.js";
 import { worldSelectionToDacROI } from "../.test-dist/lib/roiDac.js";
 
 function roi(overrides = {}) {
@@ -30,7 +34,7 @@ function roi(overrides = {}) {
   };
 }
 
-test("promotes a partial result while preserving its world bounds", () => {
+test("promotes a partial result while preserving its world bounds and active ROI", () => {
   const selection = { x_start: 20, x_end: 60, y_start: 10, y_end: 50 };
   const patch = completedROIImagePatch(
     roi({ selection }),
@@ -39,7 +43,7 @@ test("promotes a partial result while preserving its world bounds", () => {
   );
 
   assert.deepEqual(patch.imageBounds, selection);
-  assert.equal(patch.selection, null);
+  assert.deepEqual(patch.selection, selection);
   assert.equal(patch.imageDataUrl, "data:image/png;base64,result");
 });
 
@@ -68,4 +72,62 @@ test("maps a nested selection against the prior result image bounds", () => {
     { x_start: 4915, x_end: 8192, y_start: 3277, y_end: 6553 },
     "nested selections must remain absolute within the hardware DAC field",
   );
+});
+
+test("builds an unfiltered ROI action without a browser bitmap", () => {
+  const current = roi({
+    selection: { x_start: 20, x_end: 60, y_start: 10, y_end: 50 },
+  });
+  const request = unfilteredROIActionRequest({
+    pattern: "custom",
+    points: [[1, 2, 3]],
+    simulation_bitmap: { width: 1, height: 1, pixels: [42] },
+    feedback_mode: "adaptive_gray_feedback",
+    gray_level_range: [10, 20],
+    gray_level_skipped: true,
+    vector_resolution: 1024,
+    dwell: 16,
+    latency_bytes: 8196,
+    output_mode: "SixteenBit",
+    adc_valid: true,
+    beam_type: "Ion",
+    external_control: true,
+    cookie: 123,
+    roi: null,
+  }, current);
+
+  assert.equal(request.pattern, "default");
+  assert.equal(request.points, null);
+  assert.deepEqual(request.roi, {
+    x_start: 3277,
+    x_end: 9830,
+    y_start: 1638,
+    y_end: 8192,
+  });
+  assert.equal(request.simulation_bitmap, null);
+  assert.equal(request.feedback_mode, "standard");
+  assert.equal(request.gray_level_range, null);
+  assert.equal(request.gray_level_skipped, null);
+});
+
+test("uses the ROI Raster resolution and dwell for the vector DAC sweep", () => {
+  const request = roiRasterExecutionRequest({
+    pattern: "default",
+    points: null,
+    vector_resolution: 2048,
+    dwell: 16,
+    latency_bytes: 8196,
+    output_mode: "SixteenBit",
+    adc_valid: true,
+    beam_type: "Ion",
+    external_control: true,
+    cookie: 123,
+    roi: null,
+  }, {
+    resolution: 512,
+    dwell: 7,
+  });
+
+  assert.equal(request.vector_resolution, 512);
+  assert.equal(request.dwell, 7);
 });

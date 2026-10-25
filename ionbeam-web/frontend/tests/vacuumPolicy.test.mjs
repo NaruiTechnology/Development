@@ -9,6 +9,7 @@ import {
   shouldShowVacuumControllerError,
   vacuumReadingsAreFresh,
   vacuumStatusForDisplay,
+  vacuumPumpPowerState,
 } from "../.test-dist/lib/vacuumPolicy.js";
 
 const healthyVacuum = {
@@ -17,17 +18,32 @@ const healthyVacuum = {
   updated_at: new Date().toISOString(), is_production: true, simulation: false,
 };
 
+test("pump power color follows gauge progress", () => {
+  assert.equal(vacuumPumpPowerState({ power: false, value: 4e-5, threshold: 3e-5 }), "off");
+  assert.equal(vacuumPumpPowerState({ power: true, value: 4e-5, threshold: 3e-5 }), "working");
+  assert.equal(vacuumPumpPowerState({ power: true, value: 3e-5, threshold: 3e-5 }), "initialized");
+  assert.equal(vacuumPumpPowerState({ power: true, value: 2e-5, threshold: 3e-5 }), "initialized");
+  assert.equal(vacuumPumpPowerState({ power: true, value: null, threshold: 3e-5 }), "working");
+});
+
 test("vacuum icon shows an error for unknown, unavailable, stopped and faulted states", () => {
   assert.equal(shouldShowVacuumControllerError(null, null, null), true);
   for (const fault of [
     { connected: false }, { running: false }, { isVacuumSystemReady: false },
-    { cascade_stopped: true }, { last_error: "SBC unavailable" }, { alarms: ["E-stop"] },
+    { isVacuumSystemReady: false, cascade_stopped: true },
+    { last_error: "SBC unavailable" }, { alarms: ["E-stop"] },
   ]) {
     assert.equal(shouldShowVacuumControllerError({ ...healthyVacuum, ...fault }, null, null), true);
   }
   assert.equal(shouldShowVacuumControllerError(healthyVacuum, "503 unavailable", null), true);
   assert.equal(shouldShowVacuumControllerError(healthyVacuum, "404 Not Found", null), true);
   assert.equal(shouldShowVacuumControllerError(healthyVacuum, null, "power"), true);
+});
+
+test("a fully initialized system is healthy even when automatic cascade progression is paused", () => {
+  const initializedAndPaused = { ...healthyVacuum, cascade_stopped: true };
+  assert.equal(shouldShowVacuumControllerError(initializedAndPaused, null, null), false);
+  assert.equal(vacuumIsReadyForControls(initializedAndPaused), true);
 });
 
 test("vacuum icon clears its error after a healthy recovery", () => {
@@ -133,7 +149,8 @@ test("simulation pump-down cannot unlock controls before initialization complete
   assert.equal(vacuumIsReadyForControls({ ...simulated, isVacuumSystemReady: false }), false);
   assert.equal(vacuumIsReadyForControls(simulated), true);
   assert.equal(vacuumIsReadyForControls(healthyVacuum), true);
-  for (const fault of [{ connected: false }, { running: false }, { cascade_stopped: true },
+  for (const fault of [{ connected: false }, { running: false },
+    { cascade_stopped: true, isVacuumSystemReady: false },
     { last_error: "fault" }, { alarms: ["fault"] }, { updated_at: null }]) {
     assert.equal(vacuumIsReadyForControls({ ...simulated, ...fault }), false);
   }

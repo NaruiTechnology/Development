@@ -88,6 +88,73 @@ test("vacuum status is read from the SBC with the SBC token", { timeout: 20000 }
   }
 });
 
+test("vacuum power commands do not require an interactive user session", { timeout: 20000 }, async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "vacuum-power-routing-"));
+  const seen: { method?: string; url?: string; auth?: string; body?: string }[] = [];
+  const sbc = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ running: true, connected: true, cascade_stopped: true, pumps: [
+        { name: "UHVacuumPump_1", power: false },
+      ] }));
+    });
+  });
+  sbc.listen(0, "127.0.0.1");
+  await once(sbc, "listening");
+  const sbcPort = (sbc.address() as net.AddressInfo).port;
+  const vacuum = path.join(directory, "vacuumSystem.json");
+  await fs.writeFile(vacuum, JSON.stringify({ Enable: true }));
+  await fs.writeFile(path.join(directory, "streamData.json"), JSON.stringify({ IsProduction: false }));
+  const port = await freePort();
+  const child = spawn(process.execPath, ["--import", "tsx", "src/server.ts"], {
+    cwd: path.resolve(__dirname, ".."),
+    env: { ...process.env, PORT: String(port), MOCK: "true",
+      GLASGOW_CONFIG: path.join(directory, "streamData.json"), SBC_VACUUM_CONFIG: vacuum,
+      VACUUM_CONTROLLER_URL: `http://127.0.0.1:${sbcPort}`,
+      SBC_VACUUM_TOKEN: "sbc-secret", GLASGOW_TOKEN: "glasgow-secret",
+      IOBEAM_ADMIN_CONFIG: path.join(directory, "admin.json"),
+      IOBEAM_SECRETS_FILE: path.join(directory, "secrets.env"),
+      IOBEAM_ADMIN_DB_CONFIG: path.join(directory, "missing-db.json"),
+      IOBEAM_ADMIN_DB_HOST: "127.0.0.1", IOBEAM_ADMIN_DB_PORT: "1",
+      IOBEAM_OPERATION_DB_HOST: "127.0.0.1", IOBEAM_OPERATION_DB_PORT: "1",
+    }, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { output += chunk; });
+  try {
+    let response: Response | undefined;
+    for (let i = 0; i < 100; i++) {
+      try {
+        response = await fetch(`http://127.0.0.1:${port}/api/vacuum/pumps/UHVacuumPump_1/power`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ power: false }),
+        });
+      } catch { /* starting */ }
+      if (response?.ok) break;
+      if (child.exitCode !== null) throw new Error(`test backend exited: ${output}`);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.ok(response?.ok, `vacuum command not served: ${output}`);
+    assert.equal((await response!.json()).pumps[0].power, false);
+    const request = seen.find((entry) => entry.url === "/vacuum/pumps/UHVacuumPump_1/power");
+    assert.ok(request, JSON.stringify(seen));
+    assert.equal(request!.method, "POST");
+    assert.equal(request!.auth, "Bearer sbc-secret");
+    assert.deepEqual(JSON.parse(request!.body ?? "{}"), { power: false });
+  } finally {
+    if (child.exitCode === null) {
+      const stopped = once(child, "exit");
+      child.kill("SIGTERM");
+      await stopped;
+    }
+    sbc.close();
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
 
 test("an SBC with its own control disabled hides vacuum on the host", { timeout: 20000 }, async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "vacuum-disabled-"));

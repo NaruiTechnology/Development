@@ -3,6 +3,7 @@ import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/tool
 import { apiUrl } from "../lib/backendUrl";
 import { readJsonResponse } from "../lib/readJsonResponse";
 import { scanAuthHeaders } from "../lib/authIdentity";
+import { computeHfovM } from "../lib/magCalibrationMath";
 
 export interface MagCalibrationBeam {
   path: string;
@@ -160,8 +161,7 @@ function ensureBeam(s: MagCalibrationState): MagCalibrationBeam {
 }
 
 function computedFov(s: MagCalibrationState): number {
-  if (s.measuredPixels <= 0 || s.resolution <= 0) return 0;
-  return s.measuredLengthM * (s.resolution / s.measuredPixels);
+  return computeHfovM(s.measuredLengthM, s.measuredPixels, s.resolution);
 }
 
 function normalizeBeam(value: string): string {

@@ -131,6 +131,41 @@ The section-3 preview (`GeometryPreview`) only renders once there's something to
 since with neither, nominal and rectified frames are identical and it would just be an empty square
 (`geometry.previewEmpty` explains this in the UI; `cornersRoughlyEqual` is the check).
 
+### Magnification calibration and FEI switch-box status
+
+**The external FEI magnification switch-box control path (including FiBDb235) is not implemented.** No outbound
+driver, command, FPGA receiver, or verified box connector/pin mapping is present in the application. MAG CAL stores
+a per-beam table of full horizontal field of view (`m_per_fov`); it does not send the microscope magnification value
+to the switch box. When Scan geometry is applied, the active magnification resolves HFOV from
+that table; the configured pixel count then gives the physical pixel scale (for square pixels, `pixel size = HFOV /
+pixels across`). A world-coordinate ROI is mapped through the inverse geometry into 14-bit DAC coordinates. Those
+coordinates travel in the normal scan command through the Glasgow USB FIFO to the FPGA subtarget. RASTER sends a
+`RasterRegion` containing `x_start`, `x_count`, `x_step`, `y_start`, `y_count`, and `y_step` (16-bit command fields
+whose values are constrained to the 14-bit DAC domain), plus dwell commands; the FPGA raster scanner generates each
+pixel coordinate. VECTOR sends `x_coord`, `y_coord`, and `dwell_time`. The subtarget serializes each X/Y code onto
+the upstream OBI shared data bus and clocks it into the corresponding DAC latch. The REST endpoint
+`/api/admin/mag-calibration` only saves/returns calibration data; it does not send an FPGA or switch-box command. MAG CAL data
+therefore affects the DAC trajectory only through an applied scan geometry; changing the MAG CAL table alone does
+not change the active scan geometry snapshot.
+
+The revC3 physical bus contract is checked by `validate_obi_pin_config` in
+`GlasgowDataIO/IobeamControl/applet/__init__.py`:
+
+| FPGA signal | Pin | Direction | Function |
+|---|---:|---|---|
+| `data[13:0]` | B2 C4 B1 C3 C2 C1 D3 D1 F4 G2 E3 F1 E2 F2 | bidirectional | Shared ADC input / DAC output bus |
+| `dac_clk` | F3 | output, inverted | DAC clock |
+| `dac_x_le_clk` | H3 | output, non-inverted | Latch X DAC code |
+| `dac_y_le_clk` | H1 | output, non-inverted | Latch Y DAC code |
+| `adc_clk` | G1 | output, inverted | ADC clock |
+| `adc_le_clk` | H2 | output, non-inverted | ADC latch |
+| `adc_oe` | G3 | output, inverted | ADC output enable |
+
+The X/Y latch strobes and shared data bus are the existing scan-DAC channel to the upstream subtarget. They are not
+the control interface for an external magnification switch box. See the printable
+[Magnification-to-subtarget wiring reference](magnification-to-subtarget.html) for the scan-DAC map and the still-open
+switch-box integration requirements. Do not wire or infer the switch-box interface from this OBI pin table.
+
 **Dimension Cal** (CONFIGURATION > Calibrate > DIMENTION CAL) is the simpler, older, image-based way to set the
 same world-coordinate mapping: measure a real scanned image and enter what its edges are in µm. Both paths write
 to the same place (`store/dimensionCalibrationSlice.ts`, one row per equipment server-side — see below — plus
