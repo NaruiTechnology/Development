@@ -41,6 +41,11 @@ class setupIobeamAdminDb_state(distributionDeploy_state):
         script = """
 import os, ssl, sys
 import pg8000.native
+import scramp
+if not callable(getattr(scramp, 'make_channel_binding', None)):
+    sys.exit('Incompatible pg8000/Scramp installation: pg8000 1.31.5 requires '
+             'scramp.make_channel_binding. Install scramp==1.4.18 in the deployment '
+             'venv and rerun deployment.')
 mode = os.environ['PGSSLMODE']
 context = None
 if mode == 'disable':
