@@ -385,6 +385,11 @@ export const zhTW: Partial<TranslationTable> = {
   /* ===== ROI editor =============================================== */
   "roi.select": "選擇檔案",
   "roi.loadLastScan": "載入上次掃描",
+  "card.simulationImage": "模擬影像",
+  "simulation.mode.simulation": "模擬",
+  "simulation.mode.hardware": "硬體",
+  "simulation.image.hintSimulation": "掃描會以此影像作為模擬來源。",
+  "simulation.image.hintHardware": "掃描在儀器上執行;影像僅用於 ROI 選取。",
   "roi.clearImage": "清除影像",
   "roi.clearRegion": "清除區域",
   "roi.calibrate": "校準",

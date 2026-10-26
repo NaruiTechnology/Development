@@ -46,6 +46,7 @@ import { ROIEditor } from "./components/ROIEditor";
 import { ROISelectHelp } from "./components/ROISelectHelp";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
+import { SimulationImageCard } from "./components/SimulationImageCard";
 import { MagCalibrationChart, MagCalibrationControls } from "./components/MagCalibration";
 import { GrayScaleHelp } from "./components/GrayScaleHelp";
 import { VectorGrayLevelHelp } from "./components/VectorGrayLevelHelp";
@@ -1639,25 +1640,41 @@ export function App() {
             <div className="card__body">
               {activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
-                  <CollapsibleScanParameters>
-                    <div className="card__body">
-                      <RasterParameters disabled={panelDisabled} />
-                      <div ref={setValidatedActionsHost} className="validated-run-actions" />
-                      <div ref={setValidationSummaryHost} className="validated-run-summary" />
-                    </div>
-                  </CollapsibleScanParameters>
+                  <>
+                    <SimulationImageCard
+                      disabled={panelDisabled}
+                      allowClearRegionWhileDisabled={roiActionLocked}
+                      lastScanImageUrl={roiScanImageUrl}
+                      onLoadLastScan={handleLoadLastScan}
+                    />
+                    <CollapsibleScanParameters>
+                      <div className="card__body">
+                        <RasterParameters disabled={panelDisabled} />
+                        <div ref={setValidatedActionsHost} className="validated-run-actions" />
+                        <div ref={setValidationSummaryHost} className="validated-run-summary" />
+                      </div>
+                    </CollapsibleScanParameters>
+                  </>
                 ) : scanSubTab === "vector" ? (
-                  <CollapsibleScanParameters>
-                    <div className="card__body">
-                      <VectorParameters
-                        disabled={panelDisabled}
-                        grayLevelFilterActive={vectorGrayLevelsEnabled}
-                        showScanPathSettings={false}
-                      />
-                      <div ref={setValidatedActionsHost} className="validated-run-actions" />
-                      <div ref={setValidationSummaryHost} className="validated-run-summary" />
-                    </div>
-                  </CollapsibleScanParameters>
+                  <>
+                    <SimulationImageCard
+                      disabled={panelDisabled}
+                      allowClearRegionWhileDisabled={roiActionLocked}
+                      lastScanImageUrl={roiScanImageUrl}
+                      onLoadLastScan={handleLoadLastScan}
+                    />
+                    <CollapsibleScanParameters>
+                      <div className="card__body">
+                        <VectorParameters
+                          disabled={panelDisabled}
+                          grayLevelFilterActive={vectorGrayLevelsEnabled}
+                          showScanPathSettings={false}
+                        />
+                        <div ref={setValidatedActionsHost} className="validated-run-actions" />
+                        <div ref={setValidationSummaryHost} className="validated-run-summary" />
+                      </div>
+                    </CollapsibleScanParameters>
+                  </>
                 ) : (
                   <>
                     <ROIEditor

@@ -100,7 +100,7 @@ export function ROIEditor({
   onLoadLastScan,
 }: {
   disabled: boolean;
-  variant?: "controls" | "canvas" | "all";
+  variant?: "controls" | "canvas" | "all" | "actions";
   backgroundImageUrl?: string | null;
   lastScanImageUrl?: string | null;
   grayScaleSelection?: GrayScaleSelection;
@@ -425,7 +425,7 @@ export function ROIEditor({
   // painted on the mask layer each pass. Pixels outside the area are never
   // touched. The result then replaces the ROI image the canvas is showing.
   useEffect(() => {
-    if (variant === "controls") return;
+    if (variant === "controls" || variant === "actions") return;
     if (targetGrayRun.status !== "running") return;
     const target = selectedTargetGray;
     const raw = rawCanvasRef.current;
@@ -1336,61 +1336,67 @@ export function ROIEditor({
     dispatch(streamReset());
   }
 
+  const imageActionRow = (
+    <div className="button-row" style={{ marginBottom: 10 }}>
+      <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
+        <Icon name="upload" tone="accent" />
+        {t("roi.select")}
+      </button>
+      {(lastScanImageUrl || roi.calibration_enabled) && (
+        <button
+          className="btn btn--ghost"
+          disabled={disabled || !lastScanImageUrl || !onLoadLastScan || roi.imageKind === "lastScan"}
+          onClick={() => {
+            if (fileRef.current) {
+              fileRef.current.value = "";
+            }
+            onLoadLastScan?.();
+          }}
+        >
+          <Icon name="download" tone="accent" />
+          {t("roi.loadLastScan")}
+        </button>
+      )}
+      <button
+        className="btn btn--ghost"
+        disabled={disabled || !hasLoadedImage}
+        onClick={clearLoadedImage}
+      >
+        <Icon name="trash" tone="danger" />
+        {t("roi.clearImage")}
+      </button>
+      <button
+        className="btn btn--ghost"
+        disabled={(disabled && !allowClearRegionWhileDisabled) || roi.calibration_enabled || !hasPartialRegion}
+        onClick={clearPartialRegion}
+      >
+        <Icon name="crop" tone="warn" />
+        {t("roi.clearRegion")}
+      </button>
+      <span className="muted" style={{ fontSize: 12 }}>{roi.imageName}</span>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,.bmp,.png,.jpg,.jpeg,.svg,.webp"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) loadFile(file);
+        }}
+      />
+    </div>
+  );
+
   const confirmedBounds = viewportBounds(roi);
   const draftBounds = viewportBounds(roi, "draft");
 
   return (
     <div>
+      {variant === "actions" && imageActionRow}
+
       {(variant === "controls" || variant === "all") && (
         <>
-          <div className="button-row" style={{ marginBottom: 10 }}>
-            <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
-              <Icon name="upload" tone="accent" />
-              {t("roi.select")}
-            </button>
-            {(lastScanImageUrl || roi.calibration_enabled) && (
-              <button
-                className="btn btn--ghost"
-                disabled={disabled || !lastScanImageUrl || !onLoadLastScan || roi.imageKind === "lastScan"}
-                onClick={() => {
-                  if (fileRef.current) {
-                    fileRef.current.value = "";
-                  }
-                  onLoadLastScan?.();
-                }}
-              >
-                <Icon name="download" tone="accent" />
-                {t("roi.loadLastScan")}
-              </button>
-            )}
-            <button
-              className="btn btn--ghost"
-              disabled={disabled || !hasLoadedImage}
-              onClick={clearLoadedImage}
-            >
-              <Icon name="trash" tone="danger" />
-              {t("roi.clearImage")}
-            </button>
-            <button
-              className="btn btn--ghost"
-              disabled={(disabled && !allowClearRegionWhileDisabled) || roi.calibration_enabled || !hasPartialRegion}
-              onClick={clearPartialRegion}
-            >
-              <Icon name="crop" tone="warn" />
-              {t("roi.clearRegion")}
-            </button>
-            <span className="muted" style={{ fontSize: 12 }}>{roi.imageName}</span>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,.bmp,.png,.jpg,.jpeg,.svg,.webp"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) loadFile(file);
-              }}
-            />
-          </div>
+          {imageActionRow}
 
           <div className="field">
             <label>{t("roi.scaleUnit")}</label>

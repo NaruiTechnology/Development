@@ -376,6 +376,11 @@ export const zhCN: Partial<TranslationTable> = {
   /* ===== ROI editor =============================================== */
   "roi.select": "选择文件",
   "roi.loadLastScan": "加载上次扫描",
+  "card.simulationImage": "模拟图像",
+  "simulation.mode.simulation": "模拟",
+  "simulation.mode.hardware": "硬件",
+  "simulation.image.hintSimulation": "扫描将以此图像作为模拟来源。",
+  "simulation.image.hintHardware": "扫描在仪器上执行;图像仅用于 ROI 选取。",
   "roi.clearImage": "清除图像",
   "roi.clearRegion": "清除区域",
   "roi.calibrate": "校准",

@@ -401,6 +401,11 @@ export const en = {
   /* ===== ROI editor =============================================== */
   "roi.select": "SELECT",
   "roi.loadLastScan": "Load last scan",
+  "card.simulationImage": "Simulation image",
+  "simulation.mode.simulation": "Simulation",
+  "simulation.mode.hardware": "Hardware",
+  "simulation.image.hintSimulation": "Scans use this image as the simulated source.",
+  "simulation.image.hintHardware": "Scans run on the instrument; the image is only used for ROI selection.",
   "roi.clearImage": "Clear image",
   "roi.clearRegion": "Clear region",
   "roi.calibrate": "Calibrate",
