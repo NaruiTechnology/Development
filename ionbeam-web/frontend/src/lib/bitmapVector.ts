@@ -24,6 +24,17 @@ export { worldSelectionToDacROI } from "./roiDac.js";
 
 const MAX_POINTS = 250_000;
 
+export function interleaveParallelPoints<T>(groups: readonly (readonly T[])[]): T[] {
+  const result: T[] = [];
+  const maxLength = Math.max(0, ...groups.map((group) => group.length));
+  for (let index = 0; index < maxLength; index += 1) {
+    for (const group of groups) {
+      if (index < group.length) result.push(group[index]);
+    }
+  }
+  return result;
+}
+
 let cachedExtraction:
   | {
       key: string;
@@ -444,14 +455,14 @@ async function bitmapSelectionToVector(
   );
 
   const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
-  const pixels: SimulationBitmapPixel[] = [];
+  const pixels: number[] = [];
   for (let y = 0; y < sampleH; y++) {
     for (let x = 0; x < sampleW; x++) {
       const i = (y * sampleW + x) * 4;
       const alpha = data[i + 3];
       const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       const pixel = alpha === 0 ? 255 : Math.round(luma);
-      pixels.push({ value: pixel, isHighlighted: false, isSkipped: null, blank: null });
+      pixels.push(pixel);
     }
   }
 
@@ -467,7 +478,7 @@ async function bitmapSelectionToVector(
   return value;
 }
 
-function decorateSimulationBitmap(
+export function decorateSimulationBitmap(
   bitmap: SimulationBitmap,
   selection: GrayScaleSelection,
   skipped: boolean | null | undefined,
@@ -478,15 +489,7 @@ function decorateSimulationBitmap(
     : Boolean(skipped);
 
   if (normalizedSelection === null) {
-    return {
-      ...bitmap,
-      pixels: bitmap.pixels.map((pixel) => ({
-        value: pixelValue(pixel),
-        isHighlighted: false,
-        isSkipped: null,
-        blank: null,
-      })),
-    };
+    return { ...bitmap, pixels: bitmap.pixels.map(pixelValue) };
   }
 
   return {
@@ -494,15 +497,16 @@ function decorateSimulationBitmap(
     pixels: bitmap.pixels.map((pixel) => {
       const value = pixelValue(pixel);
       const highlighted = grayScaleSelectionContains(normalizedSelection, value);
+      if (!highlighted) return value;
       return {
         value,
-        isHighlighted: highlighted,
-        isSkipped: highlighted ? normalizedSkipped : null,
+        isHighlighted: true,
+        isSkipped: normalizedSkipped,
         blank:
           normalizedSkipped === true
-            ? highlighted
+            ? true
             : normalizedSkipped === false
-            ? !highlighted
+            ? false
             : null,
       };
     }),
@@ -537,7 +541,7 @@ function bitmapToCustomPoints(
   for (const [x, y] of bitmapScanCoordinates(bitmap.width, bitmap.height, scanPath)) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
     const pixel = bitmap.pixels[y * bitmap.width + x];
-    const highlighted = Boolean(pixel?.isHighlighted);
+    const highlighted = typeof pixel === "number" ? false : Boolean(pixel?.isHighlighted);
     const sampleX = x0 + Math.round((x / xDiv) * xSpan);
     const blank = normalizedSkipped === true
       ? highlighted

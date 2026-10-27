@@ -28,6 +28,8 @@ import { readEffectiveVacuumEnabled, readVacuumEnabled, prepareVacuumEnabledUpda
 import { buildRestProxy } from "./restProxy";
 import { attachWsProxy } from "./wsProxy";
 import { mockRest } from "./mockHardware";
+import { prepareMockScanAsset, appendMockScanAsset, completeMockScanAsset } from "./mockScanAssets";
+import { createScanQueue, latestScanQueue, queuePage, recoverInterruptedScanQueues, type QueueEntry } from "./scanQueueStore";
 import {
   applyAdminDatabaseSetup,
   pgConnectionFromAdminConfig,
@@ -290,7 +292,7 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", origin ?? "*");
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Iobeam-Auth");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
     res.setHeader("Vary", "Origin");
   }
 
@@ -1280,8 +1282,64 @@ app.get("/api/admin/ftp/test-connection", async (_req, res) => {
 
 app.use("/api/scan/raster/run", requireScanPrivilege);
 app.use("/api/scan/vector/run", requireScanPrivilege);
+app.use("/api/scan/assets", requireScanPrivilege);
+app.use("/api/scan/queues", requireScanPrivilege);
+recoverInterruptedScanQueues();
+
+app.post("/api/scan/queues", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor) throw new Error("scan session expired");
+    const queue = createScanQueue(actor.login_name, req.body?.entries as QueueEntry[]);
+    res.status(201).json({ id: queue.id, status: queue.status, next_index: queue.next_index, total: queue.entries.length });
+  } catch (err) {
+    res.status(400).json({ detail: err instanceof Error ? err.message : String(err) });
+  }
+});
+app.get("/api/scan/queues/latest", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor) throw new Error("scan session expired");
+    const queue = latestScanQueue(actor.login_name);
+    res.json(queue ? { id: queue.id, status: queue.status, next_index: queue.next_index, total: queue.entries.length } : null);
+  } catch (err) {
+    res.status(400).json({ detail: err instanceof Error ? err.message : String(err) });
+  }
+});
+app.get("/api/scan/queues/:id", async (req, res) => {
+  try {
+    const actor = await currentAdminActor(req);
+    if (!actor) throw new Error("scan session expired");
+    const page = Math.max(0, Math.trunc(Number(req.query.page) || 0));
+    const pageSize = Math.max(1, Math.min(100, Math.trunc(Number(req.query.page_size) || 100)));
+    res.json(queuePage(req.params.id, actor.login_name, page, pageSize));
+  } catch (err) {
+    res.status(404).json({ detail: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 if (config.mock) {
+  app.post("/api/scan/assets/prepare", (req, res) => {
+    try {
+      res.json(prepareMockScanAsset(String(req.body?.asset_id ?? ""), Number(req.body?.total_bytes)));
+    } catch (err) {
+      res.status(400).json({ detail: err instanceof Error ? err.message : String(err) });
+    }
+  });
+  app.put("/api/scan/assets/:id/chunk", express.raw({ type: "application/octet-stream", limit: "1mb" }), (req, res) => {
+    try {
+      res.json(appendMockScanAsset(req.params.id, Number(req.query.offset), req.body as Buffer));
+    } catch (err) {
+      res.status(400).json({ detail: err instanceof Error ? err.message : String(err) });
+    }
+  });
+  app.post("/api/scan/assets/:id/complete", (req, res) => {
+    try {
+      res.json(completeMockScanAsset(req.params.id));
+    } catch (err) {
+      res.status(400).json({ detail: err instanceof Error ? err.message : String(err) });
+    }
+  });
   app.get("/api/status", async (_req, res) => {
     const status = mockRest.status();
     status.vacuum_enabled = await readEffectiveVacuumEnabled(

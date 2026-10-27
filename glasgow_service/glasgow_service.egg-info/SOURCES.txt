@@ -14,11 +14,13 @@ glasgow_service/failover_executor.py
 glasgow_service/models.py
 glasgow_service/pfeiffer.py
 glasgow_service/redis_coordination.py
+glasgow_service/roi_scaling.py
 glasgow_service/sample_stage.py
 glasgow_service/sample_stage_app.py
 glasgow_service/sbc_client.py
 glasgow_service/sbc_vacuum_app.py
 glasgow_service/sbc_wiring.py
+glasgow_service/scan_assets.py
 glasgow_service/sd_notify.py
 glasgow_service/service.py
 glasgow_service/vacuum.py
@@ -62,9 +64,11 @@ tests/test_figure_levels.py
 tests/test_host_sbc_decoupling.py
 tests/test_link_pacing.py
 tests/test_live_scan_continuous.py
+tests/test_parallel_regions.py
 tests/test_raster_orientation.py
 tests/test_redis_coordination.py
 tests/test_repeat_session.py
+tests/test_roi_scaling.py
 tests/test_sample_alignment.py
 tests/test_sample_stage.py
 tests/test_sbc_client.py
@@ -73,6 +77,7 @@ tests/test_sbc_service_boundary.py
 tests/test_sbc_vacuum_app.py
 tests/test_sbc_watchdog.py
 tests/test_scan_abort.py
+tests/test_scan_assets.py
 tests/test_simulation_scan_path.py
 tests/test_stack_manager_sbc.py
 tests/test_stream_disconnect.py

@@ -79,6 +79,13 @@ export interface RasterRequest {
    *  after Stop. */
   continuous?: boolean;
   roi?: ROIRequest | null;
+  /** DAC regions traversed in one scan command, in display order. */
+  parallel_rois?: ROIRequest[] | null;
+  parallel_simulation_bitmaps?: SimulationBitmap[] | null;
+  parallel_simulation_bitmap_ids?: string[] | null;
+  simulation_bitmap_id?: string | null;
+  queue_id?: string;
+  queue_index?: number;
   /** Browser-provided grayscale crop for simulation-only raster scans.
    *  Production hardware ignores it and uses the DAC ROI normally. */
   simulation_bitmap?: SimulationBitmap | null;
@@ -137,6 +144,13 @@ export interface VectorRequest {
   pre_process: boolean;
   do_validate: boolean;
   roi?: ROIRequest | null;
+  /** DAC regions traversed in one scan command, in display order. */
+  parallel_rois?: ROIRequest[] | null;
+  parallel_simulation_bitmaps?: SimulationBitmap[] | null;
+  parallel_simulation_bitmap_ids?: string[] | null;
+  simulation_bitmap_id?: string | null;
+  queue_id?: string;
+  queue_index?: number;
   /** Browser-provided grayscale crop for simulation-only vector scans.
    *  Production hardware ignores it and uses the DAC points normally. */
   simulation_bitmap?: SimulationBitmap | null;
@@ -195,7 +209,7 @@ export interface BeamHoldRequest {
 export interface SimulationBitmap {
   width: number;
   height: number;
-  pixels: SimulationBitmapPixel[];
+  pixels: Array<number | SimulationBitmapPixel>;
 }
 
 export interface SimulationBitmapPixel {

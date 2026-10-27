@@ -55,7 +55,7 @@
                         "adcLatency": 8,
                         "beamType": "Ion",
                         "externalControl": true,
-                        "dwell": 7,
+                        "dwell": 16,
                         "PixelFallbackBlank": true,
                         "adaptiveFeedbackWindowPoints": 1,
                         "adaptiveFeedbackPipelineDelayPoints": 0,
@@ -195,7 +195,7 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": false,
+    "IsProduction": true,
     "DumpData": true,
     "AdcTest": true,
     "transforms": {

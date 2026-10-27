@@ -1,13 +1,15 @@
+import { useEffect, useState } from "react";
 import { useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
 import { ROIEditor } from "./ROIEditor";
 import { useScansUseHardware } from "./TakeoverEstimate";
+import { Icon } from "./Icon";
 
 /**
  * Image source card for the RASTER and VECTOR tabs: the SELECT / Clear image /
- * Clear region actions from the ROI tab plus the current simulation-mode state,
+ * Clear region actions from the ROI tab plus the current simulation-mode hint,
  * so the simulated bitmap can be changed without leaving the scan tab.
- * Hidden when IsProduction is true.
+ * Collapsed by default when IsProduction is true.
  */
 export function SimulationImageCard({
   disabled,
@@ -25,20 +27,24 @@ export function SimulationImageCard({
   // Same rule as ScanControls: anything but an explicit IsProduction=false
   // (including defaults not loaded yet) counts as production.
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production !== false);
-
-  if (isProduction) return null;
+  const [collapsed, setCollapsed] = useState(isProduction);
+  useEffect(() => setCollapsed(isProduction), [isProduction]);
 
   return (
     <div className="card simulation-image-card">
       <div className="card__header">
         <span className="card__title">{t("card.simulationImage")}</span>
-        <span
-          className={`simulation-image-card__mode simulation-image-card__mode--${usesHardware ? "hardware" : "simulation"}`}
+        <button
+          type="button"
+          className="card__collapse-btn"
+          aria-expanded={!collapsed}
+          aria-label={`${t("card.simulationImage")}: ${t(collapsed ? "controls.expand" : "controls.collapse")}`}
+          onClick={() => setCollapsed((value) => !value)}
         >
-          {t(usesHardware ? "simulation.mode.hardware" : "simulation.mode.simulation")}
-        </span>
+          <Icon name="chevronDown" />
+        </button>
       </div>
-      <div className="card__body">
+      <div className="card__body" hidden={collapsed}>
         <ROIEditor
           disabled={disabled}
           variant="actions"

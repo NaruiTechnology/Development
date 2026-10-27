@@ -85,3 +85,4 @@ export function effectiveScanRegions(
   const source: Array<ROIRequest | null> = regions.length ? regions : [null];
   return source.map((region) => zoomScanRegion(region, zoom, fov));
 }
+

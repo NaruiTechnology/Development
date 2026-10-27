@@ -79,6 +79,48 @@ test("successive raster ROIs composite into one preserved full-frame buffer", ()
   ]);
 });
 
+test("one raster stream composites samples from two parallel ROIs", () => {
+  const regions = [
+    { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 },
+    { x_start: 8192, x_end: 16383, y_start: 8192, y_end: 16383 },
+  ];
+  let state = imageReducer(undefined, resetRaster({
+    resolution: 4, parallelROIs: regions,
+    initialFrame: new Uint16Array(16).fill(9),
+  }));
+  state = imageReducer(state, appendRaster({
+    pixels: Uint16Array.from({ length: 32 }, (_, index) => index % 2 === 0 ? 100 : 200),
+  }));
+  assert.equal(state.cursor, 32);
+  assert.deepEqual([...state.frame], [
+    100, 100, 9, 9,
+    100, 100, 9, 9,
+    9, 9, 200, 200,
+    9, 9, 200, 200,
+  ]);
+});
+
+test("one vector stream maps each parallel pass segment to its ROI", () => {
+  const regions = [
+    { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 },
+    { x_start: 8192, x_end: 16383, y_start: 8192, y_end: 16383 },
+  ];
+  let state = imageReducer(undefined, setupVector({
+    pattern: "default", scanPath: "horizontal_sawtooth", edge: 4,
+    parallelROIs: regions, initialImage: new Uint16Array(16).fill(9),
+  }));
+  state = imageReducer(state, appendVectorSamples({
+    values: Uint16Array.from({ length: 32 }, (_, index) => index % 2 === 0 ? 100 : 200),
+  }));
+  assert.equal(state.vectorCursor, 32);
+  assert.deepEqual([...state.vectorImage], [
+    100, 100, 9, 9,
+    100, 100, 9, 9,
+    9, 9, 200, 200,
+    9, 9, 200, 200,
+  ]);
+});
+
 test("vector ROI rendering preserves the seeded image outside its display area", () => {
   let state = imageReducer(undefined, { type: "test/init" });
   const displayROI = { x_start: 4096, x_end: 12287, y_start: 4096, y_end: 12287 };

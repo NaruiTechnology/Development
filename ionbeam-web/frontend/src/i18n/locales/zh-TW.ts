@@ -265,6 +265,8 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "執行",
+  "scan.resumeQueue": "繼續佇列",
+  "scan.resumeQueue.title": "從第一個未完成的掃描繼續已儲存的 ROI 佇列",
   "scan.pause": "暫停",
   "scan.pausing": "正在暫停…",
   "scan.resume": "繼續",
@@ -306,6 +308,8 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.zoom.title": "OBI 式放大：沒有局部 ROI 時套用至完整影像，否則套用至每個選定 ROI。",
   "scan.roi.remove": "清除選定的 ROI",
   "scan.roi.edit": "ROI 掃描",
+  "scan.parallel": "並行",
+  "scan.parallel.title": "在一條路徑中掃描所有選定的 ROI 區域",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "解析度",
@@ -389,7 +393,7 @@ export const zhTW: Partial<TranslationTable> = {
   /* ===== ROI editor =============================================== */
   "roi.select": "選擇檔案",
   "roi.loadLastScan": "載入上次掃描",
-  "card.simulationImage": "模擬影像",
+  "card.simulationImage": "載入影像",
   "simulation.mode.simulation": "模擬",
   "simulation.mode.hardware": "硬體",
   "simulation.image.hintSimulation": "掃描會以此影像作為模擬來源。",

@@ -351,6 +351,7 @@ export function ImageCanvas({
   const cursor = useAppSelector((s) => s.image.cursor);
   // Valid raster pixels; stays at the full frame once a live scan wraps.
   const rasterFilled = useAppSelector((s) => s.image.filled);
+  const rasterParallelROIs = useAppSelector((s) => s.image.rasterParallelROIs);
 
   // Vector fields
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
@@ -367,6 +368,7 @@ export function ImageCanvas({
   const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
   const vectorSource = useAppSelector((s) => s.image.vectorSource);
   const vectorROI = useAppSelector((s) => s.image.vectorROI);
+  const vectorParallelROIs = useAppSelector((s) => s.image.vectorParallelROIs);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const configuredVectorResolution = useAppSelector(
     (s) => s.scan.vector.vector_resolution
@@ -770,12 +772,12 @@ export function ImageCanvas({
     };
   }, [showServerFigure, kind, renderMode, chunksReceived, streamTransforms]);
 
-  const totalRasterPx = resolution * resolution;
+  const totalRasterPx = resolution * resolution * (rasterParallelROIs?.length ?? 1);
   const totalVectorSamples =
     kind === "vector" && vectorSource !== "vector"
       ? 0
       : vectorPattern === "default"
-      ? vectorScanSampleCount(vectorEdge, vectorScanPath)
+      ? vectorScanSampleCount(vectorEdge, vectorScanPath) * (vectorParallelROIs?.length ?? 1)
       : vectorCustomCount;
   const activeRegion = activeROIRegion(roi);
   // Local pixel size: a partial-ROI vector scan spreads its pixels over the

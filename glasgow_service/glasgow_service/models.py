@@ -144,6 +144,13 @@ class RasterRequest(BaseModel):
         default=None,
         description="Optional DAC-code ROI bounds. Coordinates are inclusive 0..16383.",
     )
+    parallel_rois: Optional[List["ROIRequest"]] = Field(
+        default=None, min_length=2,
+        description="ROI bounds traversed in one command stream, in display order.",
+    )
+    parallel_simulation_bitmaps: Optional[List["SimulationBitmap"]] = None
+    parallel_simulation_bitmap_ids: Optional[List[str]] = None
+    simulation_bitmap_id: Optional[str] = None
     simulation_bitmap: Optional["SimulationBitmap"] = Field(
         default=None,
         description=(
@@ -414,6 +421,13 @@ class VectorRequest(BaseModel):
         default=None,
         description="Optional DAC-code ROI bounds. Coordinates are inclusive 0..16383.",
     )
+    parallel_rois: Optional[List["ROIRequest"]] = Field(
+        default=None, min_length=2,
+        description="ROI bounds traversed in one command stream, in display order.",
+    )
+    parallel_simulation_bitmaps: Optional[List[SimulationBitmap]] = None
+    parallel_simulation_bitmap_ids: Optional[List[str]] = None
+    simulation_bitmap_id: Optional[str] = None
     simulation_bitmap: Optional[SimulationBitmap] = Field(
         default=None,
         description=(

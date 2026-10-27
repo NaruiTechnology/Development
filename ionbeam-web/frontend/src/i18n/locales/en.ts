@@ -275,6 +275,8 @@ export const en = {
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "Run",
+  "scan.resumeQueue": "Resume queue",
+  "scan.resumeQueue.title": "Resume the saved ROI queue from its first unfinished scan",
   "scan.pause": "Pause",
   "scan.pausing": "Pausing...",
   "scan.resume": "Resume",
@@ -322,6 +324,8 @@ export const en = {
   "scan.zoom.title": "OBI-style magnification: applies to the full image when no partial ROI exists, otherwise to every selected ROI.",
   "scan.roi.remove": "Clear selected ROI",
   "scan.roi.edit": "ROI Scan",
+  "scan.parallel": "Parallel",
+  "scan.parallel.title": "Scan all selected ROI areas in one path",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "Resolution",
@@ -405,7 +409,7 @@ export const en = {
   /* ===== ROI editor =============================================== */
   "roi.select": "SELECT",
   "roi.loadLastScan": "Load last scan",
-  "card.simulationImage": "Simulation image",
+  "card.simulationImage": "Load image",
   "simulation.mode.simulation": "Simulation",
   "simulation.mode.hardware": "Hardware",
   "simulation.image.hintSimulation": "Scans use this image as the simulated source.",

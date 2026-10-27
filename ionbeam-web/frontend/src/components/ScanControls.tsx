@@ -27,6 +27,7 @@ import { useScanStream } from "../hooks/useScanStream";
 import {
   clearBitmapSelectionCache,
   bitmapImageFrame,
+  interleaveParallelPoints,
   rasterRequestWithBitmapSelection,
   vectorRequestWithAdaptiveGrayFeedback,
   vectorRequestWithBitmapSelection,
@@ -43,6 +44,7 @@ import { ScanTakeoverEstimate } from "./TakeoverEstimate";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { SITE_OPTIONS } from "../lib/sites";
+import { createScanQueue, latestScanQueue, loadScanQueue, type ScanQueueSummary, type StoredScanEntry } from "../lib/scanQueues";
 import type { RasterRequest, ROIRequest, VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 
@@ -51,6 +53,9 @@ type InfiniteScanEntry =
       kind: "raster";
       req: RasterRequest;
       displayROI: ROIRequest | null;
+      displayROIs?: ROIRequest[] | null;
+      simulationBitmapInfo?: { width: number; height: number } | null;
+      hasSimulationBitmap?: boolean;
       initialFrame: Uint16Array | null;
     }
   | {
@@ -58,6 +63,9 @@ type InfiniteScanEntry =
       req: VectorRequest;
       scanType: ScanType;
       displayROI: ROIRequest | null;
+      displayROIs?: ROIRequest[] | null;
+      simulationBitmapInfo?: { width: number; height: number } | null;
+      hasSimulationBitmap?: boolean;
       initialFrame: Uint16Array | null;
     };
 import type { ROIState } from "../store/scanSlice";
@@ -69,6 +77,9 @@ type RegionScanEntry =
       kind: "raster";
       req: RasterRequest;
       displayROI: ROIRequest | null;
+      displayROIs?: ROIRequest[] | null;
+      simulationBitmapInfo?: { width: number; height: number } | null;
+      hasSimulationBitmap?: boolean;
       initialFrame: Uint16Array | null;
     }
   | {
@@ -76,8 +87,65 @@ type RegionScanEntry =
       req: VectorRequest;
       scanType: ScanType;
       displayROI: ROIRequest | null;
+      displayROIs?: ROIRequest[] | null;
+      simulationBitmapInfo?: { width: number; height: number } | null;
+      hasSimulationBitmap?: boolean;
       initialFrame: Uint16Array | null;
     };
+
+function combineRasterRegions(requests: RasterRequest[]): RasterRequest {
+  const rois = requests.map((request) => request.roi);
+  if (rois.some((roi) => roi === null || roi === undefined)) {
+    throw new Error("Every parallel scan area needs valid DAC bounds");
+  }
+  const bitmaps = requests.map((request) => request.simulation_bitmap);
+  return {
+    ...requests[0],
+    roi: null,
+    parallel_rois: rois as ROIRequest[],
+    simulation_bitmap: null,
+    parallel_simulation_bitmaps: bitmaps.every(Boolean) ? bitmaps as NonNullable<RasterRequest["simulation_bitmap"]>[] : null,
+  };
+}
+
+function hasBitmapSimulation(request: RasterRequest | VectorRequest): boolean {
+  return Boolean(
+    request.simulation_bitmap || request.simulation_bitmap_id ||
+    request.parallel_simulation_bitmaps?.length || request.parallel_simulation_bitmap_ids?.length,
+  );
+}
+
+function combineVectorRegions(requests: VectorRequest[]): VectorRequest {
+  const rois = requests.map((request) => request.roi);
+  if (rois.some((roi) => roi === null || roi === undefined)) {
+    throw new Error("Every parallel scan area needs valid DAC bounds");
+  }
+  if (requests.every((request) => request.pattern === "custom" && request.points)) {
+    const points = interleaveParallelPoints(requests.map((request) => request.points ?? []));
+    if (points.length > 1_000_000) {
+      throw new Error("Parallel vector path exceeds the 1,000,000 point service limit");
+    }
+    return {
+      ...requests[0],
+      roi: null,
+      points,
+      simulation_bitmap: null,
+      parallel_rois: null,
+      parallel_simulation_bitmaps: null,
+    };
+  }
+  if (requests.some((request) => request.pattern !== "default" || request.points)) {
+    throw new Error("Parallel regions require one compatible vector path");
+  }
+  const bitmaps = requests.map((request) => request.simulation_bitmap);
+  return {
+    ...requests[0],
+    roi: null,
+    parallel_rois: rois as ROIRequest[],
+    simulation_bitmap: null,
+    parallel_simulation_bitmaps: bitmaps.every(Boolean) ? bitmaps as NonNullable<VectorRequest["simulation_bitmap"]>[] : null,
+  };
+}
 
 interface EquipmentOption {
   id: number | null;
@@ -161,6 +229,16 @@ export function ScanControls({
   const vectorImageFilled = useAppSelector((s) => s.image.vectorFilled);
   const preview = useAppSelector((s) => s.scan.preview);
   const roiState = useAppSelector((s) => s.scan.roi);
+  const [parallelRegions, setParallelRegions] = useState(false);
+  const [roiControlsCollapsed, setROIControlsCollapsed] = useState(false);
+  const [pendingQueue, setPendingQueue] = useState<ScanQueueSummary | null>(null);
+  useEffect(() => {
+    void latestScanQueue().then(setPendingQueue).catch(() => {});
+  }, []);
+  const canParallelRegions = roiState.scan_regions.length > 1;
+  useEffect(() => {
+    if (!canParallelRegions) setParallelRegions(false);
+  }, [canParallelRegions]);
   const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
   const defaults = useAppSelector((s) => s.status.defaults);
   const sessionSimulation = useAppSelector((s) => s.status.sessionSimulation);
@@ -334,6 +412,9 @@ export function ScanControls({
           preserveFrame,
           continuous: true,
           displayROI: entry.displayROI,
+          displayROIs: entry.displayROIs,
+          simulationBitmapInfo: entry.simulationBitmapInfo,
+          hasSimulationBitmap: entry.hasSimulationBitmap,
           initialFrame: entry.initialFrame,
         },
       );
@@ -347,6 +428,9 @@ export function ScanControls({
         preserveFrame,
         continuous,
         displayROI: entry.displayROI,
+        displayROIs: entry.displayROIs,
+        simulationBitmapInfo: entry.simulationBitmapInfo,
+        hasSimulationBitmap: entry.hasSimulationBitmap,
         initialFrame: entry.initialFrame,
       },
     );
@@ -358,12 +442,18 @@ export function ScanControls({
       req: VectorRequest,
       preserveFrame = false,
       displayROI: ROIRequest | null | undefined = undefined,
+      displayROIs: ROIRequest[] | null | undefined = undefined,
       initialFrame: Uint16Array | null = null,
       onComplete?: () => void,
+      simulationBitmapInfo?: { width: number; height: number } | null,
+      hasSimulationBitmap?: boolean,
     ) => {
     stream.startVector({ ...req, preview }, {
       preserveFrame,
       displayROI,
+      displayROIs,
+      simulationBitmapInfo,
+      hasSimulationBitmap,
       initialFrame,
       onComplete,
     });
@@ -373,6 +463,7 @@ export function ScanControls({
     // Advance from the stream event, not React phase renders: a fast stream
     // may start and complete before React renders the intermediate phase.
     const onComplete = () => {
+      void latestScanQueue().then(setPendingQueue).catch(() => {});
       if (!regionScanQueueRef.current.length && regionScanRepeatRef.current.length) {
         regionScanQueueRef.current = [...regionScanRepeatRef.current];
       }
@@ -383,11 +474,17 @@ export function ScanControls({
       stream.startRaster({ ...entry.req, preview }, {
         preserveFrame,
         displayROI: entry.displayROI,
+        displayROIs: entry.displayROIs,
+        simulationBitmapInfo: entry.simulationBitmapInfo,
+        hasSimulationBitmap: entry.hasSimulationBitmap,
         initialFrame: entry.initialFrame,
         onComplete,
       });
     } else {
-      startVectorRun(entry.req, preserveFrame, entry.displayROI, entry.initialFrame, onComplete);
+      startVectorRun(
+        entry.req, preserveFrame, entry.displayROI, entry.displayROIs,
+        entry.initialFrame, onComplete, entry.simulationBitmapInfo, entry.hasSimulationBitmap,
+      );
     }
   }, [preview, startVectorRun, stream]);
 
@@ -403,6 +500,29 @@ export function ScanControls({
     regionScanQueueRef.current = rest;
     startRegionScanEntry(first, preserveFirst);
   }, [startRegionScanEntry]);
+
+  async function persistScanSequence(entries: RegionScanEntry[], repeat: boolean): Promise<RegionScanEntry[]> {
+    if (repeat) return entries;
+    const stored = entries.map(({ initialFrame: _initialFrame, ...entry }) => entry) as StoredScanEntry[];
+    const created = await createScanQueue(stored);
+    setPendingQueue(created.summary);
+    return entries.map((entry, index) => ({ ...entry, req: created.entries[index].req })) as RegionScanEntry[];
+  }
+
+  async function resumeScanQueue() {
+    if (!pendingQueue || pendingQueue.status === "running" || disabled) return;
+    try {
+      const allowed = await refreshScanPrivilege();
+      if (!allowed) return;
+      const entries = await loadScanQueue(pendingQueue);
+      const remaining = entries.slice(pendingQueue.next_index);
+      if (!remaining.length || remaining[0].kind !== kind) return;
+      startRegionScanSequence(remaining.map((entry) => ({ ...entry, initialFrame: null })) as RegionScanEntry[], true);
+      setPendingQueue({ ...pendingQueue, status: "running" });
+    } catch (err) {
+      dispatch(streamErrored(err instanceof Error ? err.message : String(err)));
+    }
+  }
 
   async function startRunRequest(repeatRegions = false) {
     if (disabled) return;
@@ -442,12 +562,16 @@ export function ScanControls({
           },
         )));
         onScanRunStart?.(ScanType.RASTER);
-        startRegionScanSequence(requests.map((req, index) => ({
+        const entries = requests.map((req, index) => ({
           kind: "raster" as const,
           req,
           displayROI: displayRegions[index] ?? null,
           initialFrame: initialFrames[index] ?? null,
-        })), isProduction && (roiState.scan_regions.length > 0 || roiState.selection !== null), repeatRegions);
+        }));
+        const scanEntries = parallelRegions && requests.length > 1
+          ? [{ kind: "raster" as const, req: combineRasterRegions(requests), displayROI: null, displayROIs: displayRegions as ROIRequest[], initialFrame: initialFrames[0] ?? null }]
+          : entries;
+        startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), isProduction && roiAreaDefined, repeatRegions);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -476,7 +600,17 @@ export function ScanControls({
           initialFrame: initialFrames[index] ?? null,
         }));
         onScanRunStart?.(entries[0]?.scanType ?? ScanType.VECTOR);
-        startRegionScanSequence(entries, isProduction && (roiState.scan_regions.length > 0 || roiState.selection !== null), repeatRegions);
+        const scanEntries = parallelRegions && requests.length > 1
+          ? [{
+              kind: "vector" as const,
+              req: combineVectorRegions(requests),
+              scanType: entries[0].scanType,
+              displayROI: null,
+              displayROIs: displayRegions as ROIRequest[],
+              initialFrame: initialFrames[0] ?? null,
+            }]
+          : entries;
+        startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), isProduction && roiAreaDefined, repeatRegions);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -584,15 +718,18 @@ export function ScanControls({
           { ...roiState, selection: region },
           { isProduction, allowBitmapSimulation, grayScaleSelection: null, grayScaleSkipped: null },
         )));
+        const runRequests = parallelRegions && requests.length > 1
+          ? [combineRasterRegions(requests)]
+          : requests;
         let current: { abort?: () => void } | null = null;
         let cancelled = false;
         const promise = (async () => {
-          for (const req of requests) {
+          for (const req of runRequests) {
             if (cancelled) break;
             current = dispatch(runRasterValidated({
               ...req,
               preview,
-              ...(sessionSimulation && !req.simulation_bitmap ? { simulation: sessionSimulation } : {}),
+              ...(sessionSimulation && !hasBitmapSimulation(req) ? { simulation: sessionSimulation } : {}),
             }));
             await (current as unknown as Promise<unknown>);
           }
@@ -611,16 +748,19 @@ export function ScanControls({
       try {
         const regions = effectiveScanRegions(roiState.scan_regions, roiState.scan_zoom, roiState);
         const requests = await Promise.all(regions.map((region) => buildVectorRequest(region)));
+        const runRequests = parallelRegions && requests.length > 1
+          ? [combineVectorRegions(requests)]
+          : requests;
         let current: { abort?: () => void } | null = null;
         let cancelled = false;
         const promise = (async () => {
-          for (const req of requests) {
+          for (const req of runRequests) {
             if (cancelled) break;
             logVectorRequestContext("validated", req, resolveVectorBranch(req));
             current = dispatch(runVectorValidated({
               ...req,
               preview,
-              ...(sessionSimulation && !req.simulation_bitmap ? { simulation: sessionSimulation } : {}),
+              ...(sessionSimulation && !hasBitmapSimulation(req) ? { simulation: sessionSimulation } : {}),
             }));
             await (current as unknown as Promise<unknown>);
           }
@@ -762,6 +902,10 @@ export function ScanControls({
   }, [clearInfiniteScanState, dispatch, phase, roiState.imageDataUrl, roiSelectionKey, startInfiniteScanRun, startRegionScanEntry]);
 
   useEffect(() => {
+    if (phase === "error") void latestScanQueue().then(setPendingQueue).catch(() => {});
+  }, [phase]);
+
+  useEffect(() => {
     clearInfiniteScanState();
     regionScanQueueRef.current = [];
   }, [clearInfiniteScanState, roiSelectionKey, kind]);
@@ -868,34 +1012,63 @@ export function ScanControls({
       )}
       {(kind === "raster" || kind === "vector") && <TransformCard />}
       {(kind === "raster" || kind === "vector") && (
-        <div className="scan-region-controls">
-          <label className="scan-equipment-field scan-zoom-field">
-            <span>{t("scan.zoom")}</span>
-            <NumberStepperInput
-              value={roiState.scan_zoom}
-              disabled={controlsDisabled}
-              min={1}
-              max={1000}
-              step={1}
-              inputMode="numeric"
-              ariaLabel={t("scan.zoom")}
-              title={t("scan.zoom.title")}
-              onValueChange={(value) => dispatch(setScanZoom(Number(value)))}
-            />
-          </label>
-          <label
-            className={`checkbox vacuum-switch app-switch scan-roi-toggle${roiState.roi_scan_enabled ? " scan-roi-toggle--active" : ""}`}
-            title={t("scan.roi.edit")}
-          >
-            <input
-              type="checkbox"
-              checked={roiState.roi_scan_enabled}
-              disabled={controlsDisabled}
-              onChange={(event) => dispatch(setROIScanEnabled(event.target.checked))}
-            />
-            <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-            <span>{t("scan.roi.edit")}</span>
-          </label>
+        <div className="card scan-roi-controls-card">
+          <div className="card__header">
+            <span className="card__title">{t("tabs.roi")}</span>
+            <button
+              type="button"
+              className="card__collapse-btn"
+              aria-expanded={!roiControlsCollapsed}
+              aria-label={`${t("tabs.roi")}: ${t(roiControlsCollapsed ? "controls.expand" : "controls.collapse")}`}
+              onClick={() => {
+                const nextCollapsed = !roiControlsCollapsed;
+                setROIControlsCollapsed(nextCollapsed);
+                dispatch(setROIScanEnabled(!nextCollapsed));
+                if (nextCollapsed) setParallelRegions(false);
+              }}
+            >
+              <Icon name="chevronDown" />
+            </button>
+          </div>
+          <div className="card__body scan-region-controls" hidden={roiControlsCollapsed}>
+            <label className="scan-equipment-field scan-zoom-field">
+              <span>{t("scan.zoom")}</span>
+              <NumberStepperInput
+                value={roiState.scan_zoom}
+                disabled={controlsDisabled}
+                min={1}
+                max={1000}
+                step={1}
+                inputMode="numeric"
+                ariaLabel={t("scan.zoom")}
+                title={t("scan.zoom.title")}
+                onValueChange={(value) => dispatch(setScanZoom(Number(value)))}
+              />
+            </label>
+            <label
+              className={`checkbox vacuum-switch app-switch scan-roi-toggle${roiState.roi_scan_enabled ? " scan-roi-toggle--active" : ""}`}
+              title={t("scan.roi.edit")}
+            >
+              <input
+                type="checkbox"
+                checked={roiState.roi_scan_enabled}
+                disabled={controlsDisabled}
+                onChange={(event) => dispatch(setROIScanEnabled(event.target.checked))}
+              />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+              <span>{t("scan.roi.edit")}</span>
+            </label>
+            <label className="checkbox vacuum-switch app-switch scan-parallel-toggle" title={t("scan.parallel.title")}>
+              <input
+                type="checkbox"
+                checked={parallelRegions && canParallelRegions}
+                disabled={controlsDisabled || !canParallelRegions}
+                onChange={(event) => setParallelRegions(event.target.checked)}
+              />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+              <span>{t("scan.parallel")}</span>
+            </label>
+          </div>
         </div>
       )}
 
@@ -910,6 +1083,17 @@ export function ScanControls({
           <Icon name="play" tone="success" />
           {t("scan.run")}
         </button>
+        {pendingQueue && pendingQueue.status !== "running" && pendingQueue.next_index < pendingQueue.total && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={runDisabled || kind === "roi"}
+            onClick={() => void resumeScanQueue()}
+            title={t("scan.resumeQueue.title")}
+          >
+            {t("scan.resumeQueue")} ({pendingQueue.next_index + 1}/{pendingQueue.total})
+          </button>
+        )}
         <button
           type="button"
           className="btn btn--stop"

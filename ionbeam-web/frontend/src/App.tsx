@@ -720,7 +720,6 @@ export function App() {
       <input
         type="checkbox"
         checked={kind === "raster" ? roiState.raster_show_scan_path : roiState.vector_show_scan_path}
-        disabled={panelDisabled}
         onChange={(e) =>
           dispatch(updateROI(kind === "raster"
             ? { raster_show_scan_path: e.target.checked }

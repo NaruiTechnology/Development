@@ -63,6 +63,7 @@ import { apiUrl } from "../lib/backendUrl";
 import { wsUrl } from "../lib/backendUrl";
 import { estimateRevC3ScanTiming } from "../lib/scanTiming";
 import { summarizeScanParams } from "../lib/scanParamChip";
+import { prepareScanAssets } from "../lib/scanAssets";
 
 const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
 
@@ -150,9 +151,17 @@ export function useScanStream() {
       preserveFrame?: boolean;
       continuous?: boolean;
       displayROI?: ROIRequest | null;
+      displayROIs?: ROIRequest[] | null;
+      simulationBitmapInfo?: { width: number; height: number } | null;
+      hasSimulationBitmap?: boolean;
       initialFrame?: Uint16Array | null;
     }) => {
-      if (sessionSimulation && !req.simulation_bitmap) {
+      const hasBitmapSource = Boolean(
+        req.simulation_bitmap || req.simulation_bitmap_id ||
+        req.parallel_simulation_bitmaps?.length || req.parallel_simulation_bitmap_ids?.length ||
+        options?.hasSimulationBitmap,
+      );
+      if (sessionSimulation && !hasBitmapSource) {
         req = { ...req, simulation: sessionSimulation };
       }
       // Live scan (Infinite): one WebSocket for the whole session; samples
@@ -169,8 +178,9 @@ export function useScanStream() {
         preserveFrame: options?.preserveFrame === true || continuous,
         continuous,
         roi: options?.displayROI === undefined ? req.roi : options.displayROI,
+        parallelROIs: options?.displayROIs ?? req.parallel_rois,
         initialFrame: options?.initialFrame,
-        preserveZeroSamples: Boolean(req.simulation_bitmap && options?.initialFrame),
+        preserveZeroSamples: Boolean(hasBitmapSource && options?.initialFrame),
       }));
       dispatch(streamStarted());
       dispatch(scanParamsCaptured(summarizeScanParams("raster", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS })));
@@ -183,10 +193,19 @@ export function useScanStream() {
       pendingCompletionRef.current = null;
 
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => {
+      ws.onopen = async () => {
         if (wsRef.current !== ws) return;
         markScanPerformanceConnected();
-        ws.send(JSON.stringify(req));
+        try {
+          const prepared = await prepareScanAssets(req);
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(prepared));
+        } catch (err) {
+          if (wsRef.current !== ws) return;
+          controlFailed = true;
+          activeScanRef.current = null;
+          dispatch(streamErrored(err instanceof Error ? err.message : String(err)));
+          ws.close(1000, "asset upload failed");
+        }
       };
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;
@@ -243,9 +262,17 @@ export function useScanStream() {
       preserveFrame?: boolean;
       continuous?: boolean;
       displayROI?: ROIRequest | null;
+      displayROIs?: ROIRequest[] | null;
+      simulationBitmapInfo?: { width: number; height: number } | null;
+      hasSimulationBitmap?: boolean;
       initialFrame?: Uint16Array | null;
     }) => {
-      if (sessionSimulation && !req.simulation_bitmap) {
+      const hasBitmapSource = Boolean(
+        req.simulation_bitmap || req.simulation_bitmap_id ||
+        req.parallel_simulation_bitmaps?.length || req.parallel_simulation_bitmap_ids?.length ||
+        options?.hasSimulationBitmap,
+      );
+      if (sessionSimulation && !hasBitmapSource) {
         req = { ...req, simulation: sessionSimulation };
       }
       // Live scan (Infinite): one WebSocket for the whole session; the
@@ -261,8 +288,9 @@ export function useScanStream() {
       // custom bitmap simulations render in compact bitmap space, but a
       // default-pattern request with simulation_bitmap still scans at the
       // configured vector resolution.
-      const edge = req.pattern === "custom" && req.simulation_bitmap
-        ? Math.max(req.simulation_bitmap.width, req.simulation_bitmap.height)
+      const bitmapInfo = req.simulation_bitmap ?? options?.simulationBitmapInfo;
+      const edge = req.pattern === "custom" && bitmapInfo
+        ? Math.max(bitmapInfo.width, bitmapInfo.height)
         : req.pattern === "custom"
         ? 2048
         : req.vector_resolution;
@@ -274,16 +302,17 @@ export function useScanStream() {
           edge,
           roi: req.roi,
           displayROI: options?.displayROI,
+          parallelROIs: options?.displayROIs ?? req.parallel_rois,
           initialImage: options?.initialFrame,
           simulationBitmap: req.simulation_bitmap
             ? {
                 width: req.simulation_bitmap.width,
                 height: req.simulation_bitmap.height,
               }
-            : undefined,
+            : bitmapInfo ?? undefined,
           continuous,
           preserveImage,
-          preserveZeroSamples: Boolean(req.simulation_bitmap && options?.initialFrame),
+        preserveZeroSamples: Boolean(hasBitmapSource && options?.initialFrame),
         })
       );
       dispatch(streamStarted());
@@ -297,7 +326,7 @@ export function useScanStream() {
       pendingCompletionRef.current = null;
 
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => {
+      ws.onopen = async () => {
         if (wsRef.current !== ws) return;
         markScanPerformanceConnected();
         console.info("[scan/vector] ws-send", {
@@ -310,7 +339,16 @@ export function useScanStream() {
           roi: req.roi != null,
           simulation_bitmap: req.simulation_bitmap != null,
         });
-        ws.send(JSON.stringify(req));
+        try {
+          const prepared = await prepareScanAssets(req);
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(prepared));
+        } catch (err) {
+          if (wsRef.current !== ws) return;
+          controlFailed = true;
+          activeScanRef.current = null;
+          dispatch(streamErrored(err instanceof Error ? err.message : String(err)));
+          ws.close(1000, "asset upload failed");
+        }
       };
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;

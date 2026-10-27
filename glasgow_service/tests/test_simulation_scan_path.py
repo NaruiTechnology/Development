@@ -164,6 +164,39 @@ def test_simulated_raster_scans_the_roi_not_the_full_frame():
     assert not np.array_equal(got, full)
 
 
+@pytest.mark.parametrize("parallel", [False, True])
+def test_uploaded_bitmap_assets_override_disabled_configured_simulation(monkeypatch, parallel):
+    svc = make_service(simulation={"enabled": False, "mode": "zeros"})
+    bitmap = SimulationBitmap(width=2, height=2, pixels=[10, 20, 30, 40])
+    asset_ids = ["asset-a", "asset-b"] if parallel else None
+    monkeypatch.setattr("glasgow_service.scan_assets.load", lambda asset_id: bitmap)
+    if parallel:
+        req = RasterRequest(
+            resolution=2, dwell=2, latency_bytes=8,
+            parallel_rois=[
+                ROIRequest(x_start=0, x_end=8191, y_start=0, y_end=8191),
+                ROIRequest(x_start=8192, x_end=16383, y_start=8192, y_end=16383),
+            ],
+            parallel_simulation_bitmap_ids=asset_ids,
+        )
+    else:
+        req = RasterRequest(
+            resolution=2, dwell=2, latency_bytes=8,
+            roi=ROIRequest(x_start=0, x_end=8191, y_start=0, y_end=8191),
+            simulation_bitmap_id="asset-a",
+        )
+
+    assert svc._hardware_free(req) is True
+    got = samples(collect(svc, "raster", req))
+    expected_bitmap = bitmap if not parallel else None
+    if expected_bitmap is not None:
+        expected = np.asarray([10, 20, 30, 40], dtype=np.uint32) * 256
+        assert np.array_equal(got, expected.astype(np.uint16))
+    else:
+        assert got.size == 8
+        assert np.any(got)
+
+
 @pytest.mark.parametrize("resolution,bounds", [
     (128, None), (256, None), (512, None), (128, (100, 3000)), (300, (0, 16383))])
 def test_dac_codes_are_the_ones_the_fpga_counter_visits(resolution, bounds):

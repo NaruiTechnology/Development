@@ -1603,17 +1603,8 @@ body {
   font-size: 10px;
 }
 
-.simulation-image-card__mode {
-  padding: 1px 8px;
-  border: 1px solid var(--c-border-soft);
-  border-radius: 999px;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.simulation-image-card__mode--simulation { color: var(--c-accent); }
-.simulation-image-card__mode--hardware { color: var(--c-text-dim); }
+.simulation-image-card .card__collapse-btn { margin-left: auto; }
+.simulation-image-card .card__body[hidden] { display: none; }
 
 .simulation-image-card__hint {
   margin: 0;
@@ -3946,20 +3937,22 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   width: 100%;
   padding-top: 2px;
 }
 
 .scan-zoom-field {
-  flex: 0 0 130px;
+  flex: 0 0 72px;
 }
 
-.scan-roi-toggle {
+.scan-roi-toggle,
+.scan-parallel-toggle {
   min-height: 44px;
-  padding: 0 8px;
+  padding: 0 2px;
   white-space: nowrap;
   color: #fff;
+  font-size: 11px;
 }
 
 .scan-roi-toggle--active {
@@ -7675,6 +7668,9 @@ body {
 
 .scan-transform-card { flex: 1 0 100%; min-width: 0; margin-top: 6px; }
 .scan-transform-card .card__body[hidden] { display: none; }
+.scan-roi-controls-card { flex: 1 0 100%; min-width: 0; margin-top: 6px; }
+.scan-roi-controls-card .card__collapse-btn { margin-left: auto; }
+.scan-roi-controls-card .card__body[hidden] { display: none; }
 
 .scan-transform-switches { display: flex; flex-wrap: nowrap; gap: 12px; padding: 10px 8px; }
 .scan-transform-switches > .app-switch { flex: 1 1 auto; min-width: max-content; justify-content: flex-start; }
