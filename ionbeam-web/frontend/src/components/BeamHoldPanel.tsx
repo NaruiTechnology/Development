@@ -40,18 +40,16 @@ const HOLD_SAMPLE_DWELL = 7;
 export function BeamHoldPanel({
   disabled,
   kind,
-  repeat,
 }: {
   disabled: boolean;
   kind: "raster" | "vector";
-  repeat: number;
 }) {
   const { t, fmt } = useTranslation();
   const { state, start, stop, recorderRef } = useBeamHoldStream();
   const adcValid = useAppSelector((s) => s.scan.raster.adc_valid);
   const usesHardware = useScansUseHardware();
   const sessionSimulation = useAppSelector((s) => s.status.sessionSimulation);
-  const plan = useScanTakeoverPlan(kind, kind === "vector" ? repeat : 1);
+  const plan = useScanTakeoverPlan(kind);
   const estimate = estimateTakeover(plan);
   const [beam, setBeam] = useState<BeamHoldBeam>("on");
   const [externalControl, setExternalControl] = useState(true);

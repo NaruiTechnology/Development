@@ -19,7 +19,7 @@ import {
   type TakeoverPlan,
 } from "../lib/takeoverTiming";
 
-export function useScanTakeoverPlan(kind: "raster" | "vector", repeat: number): TakeoverPlan {
+export function useScanTakeoverPlan(kind: "raster" | "vector"): TakeoverPlan {
   const raster = useAppSelector((s) => s.scan.raster);
   const vector = useAppSelector((s) => s.scan.vector);
   const defaults = useAppSelector((s) => s.status.defaults);
@@ -36,7 +36,6 @@ export function useScanTakeoverPlan(kind: "raster" | "vector", repeat: number): 
       points: vector.points,
       dwell: vector.dwell,
     },
-    repeat,
     defaultFrameBlank: typeof defaultFrameBlank === "boolean" ? defaultFrameBlank : raster.frame_blank,
     switchDelayMs: Number.isFinite(switchDelay) ? switchDelay : undefined,
     adcHalfPeriod: Number.isFinite(adcHalfPeriod) ? adcHalfPeriod : undefined,
@@ -87,8 +86,8 @@ export function TakeoverEstimateLine({
 }
 
 /** Takeover line for the scan controls (Raster / Vector). */
-export function ScanTakeoverEstimate({ kind, repeat }: { kind: "raster" | "vector"; repeat: number }) {
-  const plan = useScanTakeoverPlan(kind, repeat);
+export function ScanTakeoverEstimate({ kind }: { kind: "raster" | "vector" }) {
+  const plan = useScanTakeoverPlan(kind);
   const usesHardware = useScansUseHardware();
   return <TakeoverEstimateLine estimate={estimateTakeover(plan)} usesHardware={usesHardware} />;
 }

@@ -48,13 +48,14 @@
                         "dwell": 16
                     },
                     "vectorScan": {
+                        "vectorResolution": 1024,
                         "minChunkBeamTimeMs": 100,
                         "sawtoothOnRasterGenerator": true,
                         "latency": 8196,
                         "adcLatency": 8,
                         "beamType": "Ion",
                         "externalControl": true,
-                        "dwell": 16,
+                        "dwell": 7,
                         "PixelFallbackBlank": true,
                         "adaptiveFeedbackWindowPoints": 1,
                         "adaptiveFeedbackPipelineDelayPoints": 0,

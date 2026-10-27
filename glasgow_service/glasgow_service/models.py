@@ -354,7 +354,7 @@ class VectorRequest(BaseModel):
     # derived as 2048 // vector_resolution; only divisors of 2048 produce
     # an integer stride. Ignored when pattern=custom.
     vector_resolution: int = Field(
-        2048,
+        1024,
         description=(
             "Default-pattern sample density on each axis. Allowed: 1..2048. "
             "Coverage is always full DAC range; smaller values just sample sparser. "
@@ -362,7 +362,7 @@ class VectorRequest(BaseModel):
         ),
     )
     dwell:          int  = Field(
-        1,
+        7,
         ge=0,
         le=65535,
         description="Default-pattern dwell: N averages N + 1 ADC samples (125 ns each with the current revC3 timing). Ignored when pattern=custom.",

@@ -14,12 +14,13 @@ import {
   grayScaleSelectionContains,
   normalizeGrayScaleSelection,
   type GrayScaleSelection,
-} from "./grayScaleSelection";
-import { imageWorldBounds, ROI_CANVAS_EDGE, viewportBounds } from "./roiGeometry";
-import { worldSelectionToDacROI } from "./roiDac";
-import { bitmapScanCoordinates } from "./vectorScanPath";
+} from "./grayScaleSelection.js";
+import { imageWorldBounds, ROI_CANVAS_EDGE, viewportBounds } from "./roiGeometry.js";
+import { worldSelectionToDacROI } from "./roiDac.js";
+import { bitmapScanCoordinates } from "./vectorScanPath.js";
+import { scanRegionPixelBounds } from "./scanRegions.js";
 
-export { worldSelectionToDacROI } from "./roiDac";
+export { worldSelectionToDacROI } from "./roiDac.js";
 
 const MAX_POINTS = 250_000;
 
@@ -37,6 +38,52 @@ export function clearBitmapSelectionCache(): void {
   cachedExtraction = null;
 }
 
+/** Decode the loaded source image into the same OBI-aligned 16-bit values
+ * used by streamed scan samples. This seeds an ROI scan's untouched area so
+ * partial updates are composited over the image the operator selected. */
+export async function bitmapImageFrame(
+  roi: ROIState,
+  edgeValue: number,
+  zoom?: { sourceSelection: ROIRequest | null; displayROI: ROIRequest | null },
+): Promise<Uint16Array | null> {
+  if (!roi.imageDataUrl) return null;
+  const edge = Math.max(1, Math.trunc(edgeValue));
+  const img = await loadImage(roi.imageDataUrl);
+  const sourceW = img.naturalWidth || img.width;
+  const sourceH = img.naturalHeight || img.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = edge;
+  canvas.height = edge;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, edge, edge);
+  if (zoom) {
+    const sourceSelection = zoom.sourceSelection ?? {
+      x_start: roi.x_origin,
+      x_end: roi.x_end,
+      y_start: roi.y_origin,
+      y_end: roi.y_end,
+    };
+    const crop = selectionCrop({ ...roi, selection: sourceSelection }, sourceW, sourceH);
+    const bounds = scanRegionPixelBounds(zoom.displayROI, edge);
+    const width = bounds.x1 - bounds.x0;
+    const height = bounds.y1 - bounds.y0;
+    if (crop.w > 0 && crop.h > 0 && width > 0 && height > 0) {
+      ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, bounds.x0, bounds.y0, width, height);
+    }
+  }
+  const rgba = ctx.getImageData(0, 0, edge, edge).data;
+  const frame = new Uint16Array(edge * edge);
+  for (let index = 0; index < frame.length; index += 1) {
+    const offset = index * 4;
+    const luma = rgba[offset + 3] === 0
+      ? 255
+      : Math.round(0.2126 * rgba[offset] + 0.7152 * rgba[offset + 1] + 0.0722 * rgba[offset + 2]);
+    frame[index] = luma << 8;
+  }
+  return frame;
+}
+
 export async function rasterRequestWithBitmapSelection(
   req: RasterRequest,
   roi: ROIState,
@@ -47,6 +94,26 @@ export async function rasterRequestWithBitmapSelection(
     grayScaleSkipped?: boolean | null;
   } = {}
 ): Promise<RasterRequest> {
+  // A loaded bitmap is the explicit simulation source for an ordinary scan.
+  // With no ROI selection, treat the entire image as selected so it takes
+  // precedence over Configuration > Simulation (pattern/random/file).
+  if (options.allowBitmapSimulation && roi.imageDataUrl) {
+    const converted = await bitmapSelectionToVector(roiWithFullSelection(roi));
+    if (converted.simulationBitmap.pixels.length) {
+      return {
+        ...req,
+        roi: roi.selection && isPartialSelection(roi) ? converted.roi : null,
+        simulation_bitmap: options.isProduction
+          ? null
+          : decorateSimulationBitmap(
+              converted.simulationBitmap,
+              options.grayScaleSelection ?? null,
+              options.grayScaleSkipped,
+            ),
+      };
+    }
+  }
+
   // No selection at all → no ROI restriction, scan the full DAC range.
   if (!roi.selection) {
     return withoutBitmapROI(req);
@@ -110,6 +177,28 @@ export async function vectorRequestWithBitmapSelection(
     grayScaleSkipped?: boolean | null;
   } = {}
 ): Promise<VectorRequest> {
+  // A loaded bitmap is the explicit simulation source for an ordinary scan.
+  // With no ROI selection, treat the entire image as selected so it takes
+  // precedence over Configuration > Simulation (pattern/random/file).
+  if (options.allowBitmapSimulation && roi.imageDataUrl) {
+    const converted = await bitmapSelectionToVector(roiWithFullSelection(roi));
+    if (converted.simulationBitmap.pixels.length) {
+      return {
+        ...req,
+        pattern: "default",
+        points: null,
+        roi: roi.selection && isPartialSelection(roi) ? converted.roi : null,
+        simulation_bitmap: options.isProduction
+          ? null
+          : decorateSimulationBitmap(
+              converted.simulationBitmap,
+              options.grayScaleSelection ?? null,
+              options.grayScaleSkipped,
+            ),
+      };
+    }
+  }
+
   // No selection → no ROI; the macro sweeps the full DAC range.
   if (!roi.selection) {
     return withoutBitmapROI(req);

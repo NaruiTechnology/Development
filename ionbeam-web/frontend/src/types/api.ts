@@ -78,9 +78,6 @@ export interface RasterRequest {
    *  OBI's live scan. Samples wrap at the frame end; `done` arrives only
    *  after Stop. */
   continuous?: boolean;
-  /** Repeat N (with continuous): the session ends by itself after this many
-   *  frames, holding external control from the first to the last. */
-  frames?: number | null;
   roi?: ROIRequest | null;
   /** Browser-provided grayscale crop for simulation-only raster scans.
    *  Production hardware ignores it and uses the DAC ROI normally. */
@@ -121,10 +118,6 @@ export interface VectorRequest {
    *  list pass after pass on one FPGA command stream until Stop. Samples
    *  wrap at the pass end; `done` arrives only after Stop. */
   continuous?: boolean;
-  /** Repeat N (with continuous): the session ends by itself after this many
-   *  passes, holding external control from the first to the last. Adaptive
-   *  gray feedback runs that many host-decided passes on one stream. */
-  frames?: number | null;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */

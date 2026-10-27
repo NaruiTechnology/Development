@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { ROIRequest, VectorPoint, VectorPointTuple, VectorScanPath } from "../types/api";
-import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
+import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath.js";
+import { mapScanPixelIndexToFrame, scanRegionPixelBounds } from "../lib/scanRegions.js";
 
 /**
  * Image / pixel buffers, kept here (outside the serialisability check)
@@ -37,6 +38,8 @@ interface ImageState {
   rasterContinuous: boolean;
   /** Completed frames in the current live scan. */
   rasterFrames: number;
+  rasterROI: ROIRequest | null;
+  rasterPreserveZeroSamples: boolean;
   frame: Uint16Array;
 
   // ---------- vector -----------------------------------------------------
@@ -49,6 +52,8 @@ interface ImageState {
   /** edge*edge uint16 grayscale image written sparsely in custom mode and
    *  densely in default mode. */
   vectorImage: Uint16Array;
+  /** Marks cells written by the current vector scan, distinct from a loaded-image underlay. */
+  vectorSampledMask: Uint8Array;
   /** For custom pattern only: flat (x, y) pairs, length 2*N. */
   vectorCustomPoints: Float32Array | null;
   /** For custom pattern only: flat render-space (x, y) pairs, length 2*N. */
@@ -68,6 +73,8 @@ interface ImageState {
   vectorContinuous: boolean;
   /** Completed passes in the current live scan. */
   vectorPasses: number;
+  vectorROI: ROIRequest | null;
+  vectorPreserveZeroSamples: boolean;
   /** Whether ROI gray feedback should be composited after this cycle completes. */
   retainVectorFeedbackOnComplete: boolean;
 
@@ -84,6 +91,8 @@ const initialState: ImageState = {
   filled: 0,
   rasterContinuous: false,
   rasterFrames: 0,
+  rasterROI: null,
+  rasterPreserveZeroSamples: false,
   frame: new Uint16Array(RES * RES),
 
   vectorPattern: "default",
@@ -91,6 +100,7 @@ const initialState: ImageState = {
   vectorSource: "vector",
   vectorEdge: VEC_EDGE,
   vectorImage: new Uint16Array(VEC_EDGE * VEC_EDGE),
+  vectorSampledMask: new Uint8Array(VEC_EDGE * VEC_EDGE),
   vectorCustomPoints: null,
   vectorCustomRenderPoints: null,
   vectorCustomBlankMask: null,
@@ -100,6 +110,8 @@ const initialState: ImageState = {
   vectorFilled: 0,
   vectorContinuous: false,
   vectorPasses: 0,
+  vectorROI: null,
+  vectorPreserveZeroSamples: false,
   retainVectorFeedbackOnComplete: true,
 
   revision: 0,
@@ -114,6 +126,10 @@ interface SetupVectorPayload {
   edge?: number;
   /** Active ROI in 14-bit DAC coordinates. Used to map custom points to pixels. */
   roi?: ROIRequest | null;
+  /** Unmagnified destination rectangle. The scanned ROI may be narrower when Zoom > 1. */
+  displayROI?: ROIRequest | null;
+  /** Loaded image used as the untouched background for a partial ROI scan. */
+  initialImage?: Uint16Array | null;
   simulationBitmap?: { width: number; height: number } | null;
   /** Live scan: wrap at the pass end instead of stopping. */
   continuous?: boolean;
@@ -121,6 +137,8 @@ interface SetupVectorPayload {
    *  unchanged, like OBI's FrameBuffer._set_current_frame: only the write
    *  position returns to the start, the previous pixels stay on screen. */
   preserveImage?: boolean;
+  /** Simulation ROI scans use zero-valued blank samples; keep the loaded image beneath them. */
+  preserveZeroSamples?: boolean;
 }
 
 const slice = createSlice({
@@ -139,7 +157,14 @@ const slice = createSlice({
 
     resetRaster(
       state,
-      a: PayloadAction<{ resolution: number; preserveFrame?: boolean; continuous?: boolean }>,
+      a: PayloadAction<{
+        resolution: number;
+        preserveFrame?: boolean;
+        continuous?: boolean;
+        roi?: ROIRequest | null;
+        initialFrame?: Uint16Array | null;
+        preserveZeroSamples?: boolean;
+      }>,
     ) {
       const keepExistingFrame =
         a.payload.preserveFrame === true &&
@@ -147,14 +172,20 @@ const slice = createSlice({
         state.frame.length === a.payload.resolution * a.payload.resolution;
       state.resolution = a.payload.resolution;
       if (!keepExistingFrame) {
-        state.frame = new Uint16Array(a.payload.resolution * a.payload.resolution);
-        state.filled = 0;
+        const length = a.payload.resolution * a.payload.resolution;
+        const initialFrame = a.payload.initialFrame;
+        state.frame = initialFrame?.length === length
+          ? initialFrame.slice()
+          : new Uint16Array(length);
+        state.filled = initialFrame?.length === length ? length : 0;
       }
       // A preserved frame keeps its `filled` count, so the previous image
       // stays on screen while the new pass overwrites it from the top.
       state.cursor = 0;
       state.rasterContinuous = a.payload.continuous === true;
       state.rasterFrames = 0;
+      state.rasterROI = a.payload.roi ?? null;
+      state.rasterPreserveZeroSamples = a.payload.preserveZeroSamples === true;
       state.revision++;
     },
     appendRaster(state, a: PayloadAction<{ pixels: Uint16Array }>) {
@@ -162,10 +193,44 @@ const slice = createSlice({
       const length = state.frame.length;
       if (length === 0) return;
       let offset = 0;
+      if (state.rasterROI) {
+        const bounds = scanRegionPixelBounds(state.rasterROI, state.resolution);
+        while (offset < pixels.length) {
+          const remaining = length - state.cursor;
+          const n = Math.min(pixels.length - offset, remaining);
+          for (let i = 0; i < n; i++) {
+            const localIndex = state.cursor + i;
+            const destinationIndex = mapScanPixelIndexToFrame(
+              bounds,
+              state.resolution,
+              localIndex % state.resolution,
+              Math.floor(localIndex / state.resolution),
+            );
+            const sample = pixels[offset + i];
+            if (!state.rasterPreserveZeroSamples || sample !== 0) state.frame[destinationIndex] = sample;
+          }
+          state.cursor += n;
+          offset += n;
+          state.filled = length;
+          if (state.cursor < length) break;
+          if (!state.rasterContinuous) break;
+          state.cursor = 0;
+          state.rasterFrames++;
+        }
+        state.revision++;
+        return;
+      }
       while (offset < pixels.length) {
         const remaining = length - state.cursor;
         const n = Math.min(pixels.length - offset, remaining);
-        state.frame.set(pixels.subarray(offset, offset + n), state.cursor);
+        if (!state.rasterPreserveZeroSamples) {
+          state.frame.set(pixels.subarray(offset, offset + n), state.cursor);
+        } else {
+          for (let i = 0; i < n; i++) {
+            const sample = pixels[offset + i];
+            if (sample !== 0) state.frame[state.cursor + i] = sample;
+          }
+        }
         state.cursor += n;
         offset += n;
         if (state.cursor > state.filled) state.filled = state.cursor;
@@ -211,12 +276,20 @@ const slice = createSlice({
       state.vectorSource = source;
       state.vectorEdge = edge;
       if (!keepImage) {
-        state.vectorImage = new Uint16Array(edge * edge);
-        state.vectorFilled = 0;
+        const initialImage = a.payload.initialImage;
+        state.vectorImage = initialImage?.length === edge * edge
+          ? initialImage.slice()
+          : new Uint16Array(edge * edge);
+        state.vectorFilled = initialImage?.length === edge * edge ? edge * edge : 0;
+        state.vectorSampledMask = new Uint8Array(edge * edge);
       }
       state.vectorCursor = 0;
       state.vectorContinuous = a.payload.continuous === true;
       state.vectorPasses = 0;
+      state.vectorROI = a.payload.displayROI === undefined
+        ? a.payload.roi ?? null
+        : a.payload.displayROI;
+      state.vectorPreserveZeroSamples = a.payload.preserveZeroSamples === true;
 
       if (pattern === "custom" && a.payload.points && a.payload.points.length) {
         const pts = a.payload.points;
@@ -296,6 +369,9 @@ const slice = createSlice({
       const edge = state.vectorEdge;
       const isDefault = state.vectorPattern === "default";
       const pts = state.vectorCustomRenderPoints;
+      const roiBounds = state.vectorROI
+        ? scanRegionPixelBounds(state.vectorROI, edge)
+        : null;
       // Samples in one pass: the default sweep covers edge x edge, custom
       // replays its point list.
       const passLength = isDefault
@@ -311,7 +387,12 @@ const slice = createSlice({
           for (let m = 0; m < n; m++) {
             const pixel = vectorScanSamplePixel(cur + m, edge, state.vectorScanPath);
             if (pixel) {
-              state.vectorImage[pixel.y * edge + pixel.x] = values[k + m];
+              const destinationIndex = roiBounds
+                ? mapScanPixelIndexToFrame(roiBounds, edge, pixel.x, pixel.y)
+                : pixel.y * edge + pixel.x;
+              const sample = values[k + m];
+              if (!state.vectorPreserveZeroSamples || sample !== 0) state.vectorImage[destinationIndex] = sample;
+              if (!state.vectorPreserveZeroSamples || sample !== 0) state.vectorSampledMask[destinationIndex] = 1;
             }
           }
         } else if (pts) {
@@ -320,7 +401,12 @@ const slice = createSlice({
             const x = pts[2 * i] | 0;
             const y = pts[2 * i + 1] | 0;
             if (x >= 0 && x < edge && y >= 0 && y < edge) {
-              state.vectorImage[y * edge + x] = values[k + m];
+              const destinationIndex = roiBounds
+                ? mapScanPixelIndexToFrame(roiBounds, edge, x, y)
+                : y * edge + x;
+              const sample = values[k + m];
+              if (!state.vectorPreserveZeroSamples || sample !== 0) state.vectorImage[destinationIndex] = sample;
+              if (!state.vectorPreserveZeroSamples || sample !== 0) state.vectorSampledMask[destinationIndex] = 1;
             }
           }
         }

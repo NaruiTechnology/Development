@@ -62,8 +62,8 @@ DEFAULT_RASTER_PADDING_DWELL           = 2        # used to be literally =2 in t
 
 # Vector
 DEFAULT_VECTOR_PATTERN                 = "default"
-DEFAULT_VECTOR_RESOLUTION              = 2048
-DEFAULT_VECTOR_DWELL                   = 1
+DEFAULT_VECTOR_RESOLUTION              = 1024
+DEFAULT_VECTOR_DWELL                   = 7
 DEFAULT_VECTOR_LATENCY_BYTES           = 8196
 DEFAULT_VECTOR_OUTPUT_MODE             = "SixteenBit"
 DEFAULT_VECTOR_ADC_VALID               = True

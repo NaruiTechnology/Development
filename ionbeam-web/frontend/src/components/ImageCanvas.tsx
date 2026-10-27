@@ -39,7 +39,9 @@ import { grayScaleSelectionContains, type GrayScaleSelection } from "../lib/gray
 import { Icon } from "./Icon";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { CanvasViewHelp } from "./CanvasViewHelp";
+import { ScanRegionOverlay } from "./ScanRegionOverlay";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
+import { scanRegionPixelBounds } from "../lib/scanRegions.js";
 import { scaleScanSample } from "../lib/scanSamples";
 import {
   AUTO_LEVELS,
@@ -53,6 +55,7 @@ import {
 import { LevelWedge } from "./LevelWedge";
 import { selectGlobalPixelSize } from "../store/selectors";
 import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize } from "../lib/pixelSize";
+import { ROI_CANVAS_EDGE } from "../lib/roiGeometry";
 
 const DAC_RANGE = 2048;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
@@ -89,6 +92,8 @@ type PaintSnapshot =
       graySelection: GrayScaleSelection;
       graySkipped: boolean | null;
       grayColor: GrayColor;
+      grayROI: ROIRequest | null;
+      sampledMask: Uint8Array;
       transforms: StreamTransforms;
     }
   | {
@@ -214,6 +219,7 @@ export function ImageCanvas({
   scanTargetPane: requestedScanTargetPane,
   onSelectedPaneChange,
   ignoreTransforms = false,
+  onTargetGrayPick,
 }: {
   kind: ScanKind;
   /** `scanId` is the same for every image of one scan run and changes when a new scan starts. */
@@ -232,12 +238,16 @@ export function ImageCanvas({
   onSelectedPaneChange?: (kind: Extract<ScanKind, "raster" | "vector">, pane: number) => void;
   /** Paint in source orientation, ignoring the transform settings (ROI scans). */
   ignoreTransforms?: boolean;
+  onTargetGrayPick?: (gray: number, point: { x: number; y: number }) => void;
 }) {
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
+  const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
+  const selectedTargetGrayPoint = useAppSelector((s) => s.scan.selectedTargetGrayPoint);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const rawTargetImageRef = useRef<HTMLImageElement | null>(null);
   const archivedPaneFramesRef = useRef<Map<number, HTMLDivElement>>(new Map());
   const liveSnapshotRef = useRef<PaintSnapshot | null>(null);
   const annotationSeqRef = useRef(0);
@@ -307,6 +317,7 @@ export function ImageCanvas({
   const [acknowledgedAnnotationsByPane, setAcknowledgedAnnotationsByPane] = useState<Record<number, CanvasAnnotation[]>>({});
   const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
+  const [grayTooltip, setGrayTooltip] = useState<{ x: number; y: number; value: number; color: string } | null>(null);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
   // The image panel header (raster / vector) has a spot on its first row for
   // the vector View selector; without it (e.g. ROI) the selector stays inline.
@@ -344,6 +355,7 @@ export function ImageCanvas({
   // Vector fields
   const vectorEdge = useAppSelector((s) => s.image.vectorEdge);
   const vectorImage = useAppSelector((s) => s.image.vectorImage);
+  const vectorSampledMask = useAppSelector((s) => s.image.vectorSampledMask);
   const vectorCustomPoints = useAppSelector((s) => s.image.vectorCustomPoints);
   const vectorCustomRenderPoints = useAppSelector((s) => s.image.vectorCustomRenderPoints);
   const vectorCustomBlankMask = useAppSelector((s) => s.image.vectorCustomBlankMask);
@@ -354,12 +366,27 @@ export function ImageCanvas({
   const vectorPattern = useAppSelector((s) => s.image.vectorPattern);
   const vectorScanPath = useAppSelector((s) => s.image.vectorScanPath);
   const vectorSource = useAppSelector((s) => s.image.vectorSource);
+  const vectorROI = useAppSelector((s) => s.image.vectorROI);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const configuredVectorResolution = useAppSelector(
     (s) => s.scan.vector.vector_resolution
   );
   const renderMode = useAppSelector((s) => s.scan.vectorRenderMode);
   const roi = useAppSelector((s) => s.scan.roi);
+  useEffect(() => {
+    rawTargetImageRef.current = null;
+    if (roi.imageKind !== "file" || !roi.imageDataUrl) return;
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (!cancelled) rawTargetImageRef.current = image;
+    };
+    image.src = roi.imageDataUrl;
+    return () => {
+      cancelled = true;
+      rawTargetImageRef.current = null;
+    };
+  }, [roi.imageDataUrl, roi.imageKind]);
   const globalPixelSize = useAppSelector(selectGlobalPixelSize);
   const theme = useAppSelector((s) => s.theme.theme);
   const configuredStreamTransforms = useAppSelector((s) => s.scan.streamTransforms);
@@ -519,6 +546,8 @@ export function ImageCanvas({
         graySelection: vectorGraySpotSelection,
         graySkipped: vectorGraySpotSkipped,
         grayColor: vectorGraySpotColor,
+        grayROI: vectorROI,
+        sampledMask: vectorSampledMask,
         transforms: paintTransforms,
       };
     } else if (kind === "vector" && vectorCustomRenderPoints) {
@@ -889,6 +918,90 @@ export function ImageCanvas({
       y: Math.min(rect.height - 8, Math.max(8, event.clientY - rect.top)),
       annotationId,
     });
+  }
+
+  function sampleTargetGrayPixel(clientX: number, clientY: number) {
+    const frame = frameRef.current;
+    if (!frame) return null;
+    const source = Array.from(frame.querySelectorAll<HTMLCanvasElement | HTMLImageElement>("canvas:not(.image-target-gray-overlay), img"))
+      .find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 &&
+          clientX >= rect.left && clientX <= rect.right &&
+          clientY >= rect.top && clientY <= rect.bottom;
+      });
+    if (!source) return null;
+    const rect = source.getBoundingClientRect();
+    const width = source instanceof HTMLCanvasElement ? source.width : source.naturalWidth;
+    const height = source instanceof HTMLCanvasElement ? source.height : source.naturalHeight;
+    if (width <= 0 || height <= 0) return null;
+    const x = Math.max(0, Math.min(width - 1, Math.floor(((clientX - rect.left) / rect.width) * width)));
+    const y = Math.max(0, Math.min(height - 1, Math.floor(((clientY - rect.top) / rect.height) * height)));
+    try {
+      let pixel: Uint8ClampedArray;
+      const rawImage = rawTargetImageRef.current;
+      let sampleX = x;
+      let sampleY = y;
+      let sampleWidth = width;
+      let sampleHeight = height;
+      if (roi.imageKind === "file" && rawImage?.naturalWidth && rawImage.naturalHeight) {
+        sampleWidth = rawImage.naturalWidth;
+        sampleHeight = rawImage.naturalHeight;
+        sampleX = Math.min(sampleWidth - 1, Math.floor(((clientX - rect.left) / rect.width) * sampleWidth));
+        sampleY = Math.min(sampleHeight - 1, Math.floor(((clientY - rect.top) / rect.height) * sampleHeight));
+        const sampler = document.createElement("canvas");
+        sampler.width = sampler.height = 1;
+        const context = sampler.getContext("2d", { willReadFrequently: true });
+        if (!context) return null;
+        context.drawImage(rawImage, sampleX, sampleY, 1, 1, 0, 0, 1, 1);
+        pixel = context.getImageData(0, 0, 1, 1).data;
+      } else if (source instanceof HTMLCanvasElement) {
+        const context = source.getContext("2d", { willReadFrequently: true });
+        if (!context) return null;
+        pixel = context.getImageData(x, y, 1, 1).data;
+      } else {
+        const sampler = document.createElement("canvas");
+        sampler.width = sampler.height = 1;
+        const context = sampler.getContext("2d", { willReadFrequently: true });
+        if (!context) return null;
+        context.drawImage(source, x, y, 1, 1, 0, 0, 1, 1);
+        pixel = context.getImageData(0, 0, 1, 1).data;
+      }
+      if (pixel.length < 4 || pixel[3] === 0) return null;
+      return {
+        value: Math.round(0.2126 * pixel[0] + 0.7152 * pixel[1] + 0.0722 * pixel[2]),
+        color: `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`,
+        point: {
+          x: Math.round((sampleX / Math.max(1, sampleWidth - 1)) * (ROI_CANVAS_EDGE - 1)),
+          y: Math.round((sampleY / Math.max(1, sampleHeight - 1)) * (ROI_CANVAS_EDGE - 1)),
+        },
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function handleTargetGrayPointerMove(event: React.PointerEvent<HTMLElement>) {
+    if (!onTargetGrayPick || event.pointerType === "touch") {
+      setGrayTooltip(null);
+      return;
+    }
+    const sample = sampleTargetGrayPixel(event.clientX, event.clientY);
+    setGrayTooltip(sample
+      ? { x: event.clientX, y: event.clientY, value: sample.value, color: sample.color }
+      : null);
+  }
+
+  function handleTargetGrayContextMenu(event: React.MouseEvent<HTMLElement>) {
+    if (event.defaultPrevented || !onTargetGrayPick) return;
+    if (!onTargetGrayPick) return;
+    if ((event.target as HTMLElement).closest("button, input, select, label")) return;
+    const sample = sampleTargetGrayPixel(event.clientX, event.clientY);
+    if (!sample) return;
+    onTargetGrayPick(sample.value, sample.point);
+    setGrayTooltip({ x: event.clientX, y: event.clientY, value: sample.value, color: sample.color });
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function handleEditorSurfaceClick(event: React.MouseEvent<HTMLDivElement>) {
@@ -1447,6 +1560,7 @@ export function ImageCanvas({
                 showGrid={paneGridVisibility[index]}
                 showAxes={showCalibratedAxes}
                 transforms={paneTransforms[index]}
+                targetGrayValue={selectedPane === index ? selectedTargetGray : null}
                 t={t}
                 onFrameRef={(node) => {
                   if (node) archivedPaneFramesRef.current.set(index, node);
@@ -1475,6 +1589,9 @@ export function ImageCanvas({
         data-selected={selectedPane === scanTargetPane ? "true" : "false"}
         style={{ order: scanTargetPane }}
         onClick={() => selectPane(scanTargetPane)}
+        onPointerMove={handleTargetGrayPointerMove}
+        onPointerLeave={() => setGrayTooltip(null)}
+        onContextMenu={handleTargetGrayContextMenu}
       >
         {imageLayout > 1 && <div className="image-panel-grid__label">
           <span />
@@ -1485,7 +1602,7 @@ export function ImageCanvas({
           </label>}
           {recyclePaneButton(scanTargetPane)}
         </div>}
-          {singlePaneImage && imageLayout === 1 ? (
+          {singlePaneImage ? (
             <ArchivedScanDisplay
               kind={kind}
               imageUrl={singlePaneImage}
@@ -1494,9 +1611,27 @@ export function ImageCanvas({
               roi={roi}
               showGrid={paneGridVisibility[singlePaneSourceIndex]}
               showAxes={showCalibratedAxes}
+              targetGrayValue={selectedTargetGray}
               t={t}
               onFrameRef={(node) => { frameRef.current = node; }}
-              editorLayer={null}
+              editorLayer={
+                kind === "raster" || kind === "vector"
+                  ? <>
+                      {imageLayout === 1 && <ScanRegionOverlay disabled={phase === "running" || phase === "stopping"} />}
+                      {onTargetGrayPick && selectedTargetGrayPoint && (
+                        <span
+                          className="roi-target-gray-mark image-target-gray-mark"
+                          style={{
+                            left: `${((selectedTargetGrayPoint.x + 0.5) / ROI_CANVAS_EDGE) * 100}%`,
+                            top: `${((selectedTargetGrayPoint.y + 0.5) / ROI_CANVAS_EDGE) * 100}%`,
+                          }}
+                          title={selectedTargetGray === null ? undefined : t("roi.targetGray.tooltip", { value: selectedTargetGray })}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </>
+                  : null
+              }
             />
           ) : (
           <div className={`canvas-stage${targetParked ? " canvas-stage--parked" : ""}`}>
@@ -1504,6 +1639,8 @@ export function ImageCanvas({
         ref={frameRef}
         className="canvas-frame"
         onContextMenu={(event) => {
+          handleTargetGrayContextMenu(event);
+          if (event.defaultPrevented) return;
           if (editorEnabled && selectedPane === scanTargetPane) openContextMenu(event, null);
         }}
       >
@@ -1517,6 +1654,9 @@ export function ImageCanvas({
             }}
           />
           {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} transforms={streamTransforms} />}
+          {imageLayout === 1 && (kind === "raster" || kind === "vector") && (
+            <ScanRegionOverlay disabled={phase === "running" || phase === "stopping"} />
+          )}
           {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}
           {displayedFigureUrl && (
             <img
@@ -1527,13 +1667,24 @@ export function ImageCanvas({
               onDragStart={(e) => e.preventDefault()}
             />
           )}
-          {showScanPath && (
+          {showScanPath && !targetParked && (
             <canvas
               ref={scanPathCanvasRef}
               className="canvas-scan-path-overlay"
               width={Math.min(256, Math.max(1, vectorEdge))}
               height={Math.min(256, Math.max(1, vectorEdge))}
               aria-label={t("vector.displayScanPath")}
+            />
+          )}
+          {!targetParked && onTargetGrayPick && selectedTargetGrayPoint && (
+            <span
+              className="roi-target-gray-mark image-target-gray-mark"
+              style={{
+                left: `${((selectedTargetGrayPoint.x + 0.5) / ROI_CANVAS_EDGE) * 100}%`,
+                top: `${((selectedTargetGrayPoint.y + 0.5) / ROI_CANVAS_EDGE) * 100}%`,
+              }}
+              title={selectedTargetGray === null ? undefined : t("roi.targetGray.tooltip", { value: selectedTargetGray })}
+              aria-hidden="true"
             />
           )}
           {editorEnabled && selectedPane === scanTargetPane && (
@@ -1749,12 +1900,24 @@ export function ImageCanvas({
             : t("canvas.serverFigure.livePreview")}
         </div>
       )}
+      {grayTooltip && createPortal(
+        <div
+          className="roi-gray-tooltip image-target-gray-tooltip"
+          style={{ left: grayTooltip.x, top: grayTooltip.y }}
+          role="tooltip"
+        >
+          <span className="roi-gray-tooltip__swatch" style={{ background: grayTooltip.color }} />
+          {t("roi.targetGray.tooltip", { value: grayTooltip.value })}
+        </div>,
+        document.body,
+      )}
       {editorError && (
         <div style={{ color: "var(--c-danger)", fontSize: 11, marginTop: 6 }}>
           {editorError}
         </div>
       )}
 
+      {!targetParked && <>
       <div className="progress" style={{ marginTop: 10 }}>
         <span style={{ width: `${pct}%` }} />
       </div>
@@ -1827,6 +1990,7 @@ export function ImageCanvas({
           </span>
         )}
       </div>
+      </>}
     </div>
   );
 }
@@ -2198,6 +2362,7 @@ function ArchivedScanDisplay({
   roi,
   showGrid,
   showAxes,
+  targetGrayValue = null,
   t,
   transforms,
   onFrameRef,
@@ -2209,6 +2374,7 @@ function ArchivedScanDisplay({
   roi: ROIState;
   showGrid: boolean;
   showAxes: boolean;
+  targetGrayValue?: number | null;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   transforms?: StreamTransforms;
   onFrameRef: (node: HTMLDivElement | null) => void;
@@ -2218,6 +2384,7 @@ function ArchivedScanDisplay({
   const snapshot = archivedPaints.get(imageUrl) ?? decodedSnapshot;
   const scanParams = archivedScanParams.get(imageUrl) ?? null;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const grayOverlayRef = useRef<HTMLCanvasElement | null>(null);
   // Start from the levels the live image was shown with, then keep this
   // pane's own levels: adjusting it never touches the live wedge.
   const [levelSetting, setLevelSetting] = useState<LevelSetting>(() => levelMemory[kind] ?? AUTO_LEVELS);
@@ -2243,13 +2410,50 @@ function ArchivedScanDisplay({
     const canvas = canvasRef.current;
     if (!canvas || !snapshot) return;
     setStats(paintSnapshot(canvas, { ...snapshot, transforms: transforms ?? snapshot.transforms }, levelSetting));
-  }, [snapshot, levelSetting, transforms]);
+    const overlay = grayOverlayRef.current;
+    const context = overlay?.getContext("2d");
+    const source = canvas.getContext("2d", { willReadFrequently: true });
+    if (!overlay || !context || !source) return;
+    if (overlay.width !== canvas.width || overlay.height !== canvas.height) {
+      overlay.width = canvas.width;
+      overlay.height = canvas.height;
+    }
+    context.clearRect(0, 0, overlay.width, overlay.height);
+    if (targetGrayValue === null || targetGrayValue === undefined) return;
+    try {
+      const sourcePixels = source.getImageData(0, 0, canvas.width, canvas.height).data;
+      const highlight = context.createImageData(canvas.width, canvas.height);
+      const pixels = highlight.data;
+      const targetDisplayGray = levelGray(
+        Math.round((targetGrayValue * 0xfffc) / 255),
+        stats.low ?? 0,
+        stats.high ?? 0xfffc,
+      );
+      for (let offset = 0; offset < sourcePixels.length; offset += 4) {
+        if (sourcePixels[offset + 3] === 0) continue;
+        const gray = Math.round(
+          0.2126 * sourcePixels[offset] +
+          0.7152 * sourcePixels[offset + 1] +
+          0.0722 * sourcePixels[offset + 2],
+        );
+        if (gray !== targetDisplayGray) continue;
+        pixels[offset] = 255;
+        pixels[offset + 1] = 35;
+        pixels[offset + 2] = 35;
+        pixels[offset + 3] = 235;
+      }
+      context.putImageData(highlight, 0, 0);
+    } catch {
+      context.clearRect(0, 0, overlay.width, overlay.height);
+    }
+  }, [snapshot, levelSetting, transforms, targetGrayValue, stats.low, stats.high]);
 
   if (snapshot) {
     return (
       <div className="canvas-stage image-panel-grid__archived-stage">
         <div className="canvas-frame" ref={onFrameRef}>
           <canvas ref={canvasRef} aria-label={alt} onDragStart={(event) => event.preventDefault()} />
+          <canvas ref={grayOverlayRef} className="image-target-gray-overlay" aria-hidden="true" />
           {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} transforms={transforms ?? snapshot?.transforms ?? NO_STREAM_TRANSFORMS} />}
           {scanParams && <ScanParamChip items={scanParams} t={t} />}
           {editorLayer}
@@ -2296,6 +2500,7 @@ function ArchivedScanDisplay({
             }
           }}
         />
+        <canvas ref={grayOverlayRef} className="image-target-gray-overlay" aria-hidden="true" />
         {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} transforms={transforms ?? NO_STREAM_TRANSFORMS} />}
         {scanParams && <ScanParamChip items={scanParams} t={t} />}
         {editorLayer}
@@ -2555,6 +2760,8 @@ function paintSnapshot(canvas: HTMLCanvasElement, snapshot: PaintSnapshot, setti
         snapshot.graySelection,
         snapshot.graySkipped,
         snapshot.grayColor,
+        snapshot.grayROI,
+        snapshot.sampledMask,
         setting,
       );
       break;
@@ -2568,6 +2775,8 @@ function paintSnapshot(canvas: HTMLCanvasElement, snapshot: PaintSnapshot, setti
         snapshot.graySelection,
         snapshot.graySkipped,
         snapshot.grayColor,
+        snapshot.grayROI,
+        snapshot.sampledMask,
         setting,
       );
       break;
@@ -2595,9 +2804,10 @@ function copyPaintSnapshot(snapshot: PaintSnapshot): PaintSnapshot {
     case "clear":
       return { ...snapshot };
     case "grayscale":
+      return { ...snapshot, buf: snapshot.buf.slice() };
     case "vectorDefault":
     case "vectorBlock":
-      return { ...snapshot, buf: snapshot.buf.slice() };
+      return { ...snapshot, buf: snapshot.buf.slice(), sampledMask: snapshot.sampledMask.slice() };
     case "vectorCustom":
       return {
         ...snapshot,
@@ -2675,6 +2885,8 @@ function paintVectorDefault(
   graySpotSelection: GrayScaleSelection = null,
   graySpotSkipped: boolean | null = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
+  grayROI: ROIRequest | null = null,
+  sampledMask: Uint8Array | null = null,
   setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
   if (canvas.width !== edge || canvas.height !== edge) {
@@ -2685,6 +2897,7 @@ function paintVectorDefault(
   if (!ctx) return { min: 0, max: 0, populated: 0 };
 
   const limit = Math.min(populated, buf.length);
+  const grayBounds = grayROI ? scanRegionPixelBounds(grayROI, edge) : null;
   const range = vectorDefaultRange(buf, edge, limit, scanPath, setting);
   const img = ctx.createImageData(edge, edge);
   const data = img.data;
@@ -2696,7 +2909,8 @@ function paintVectorDefault(
     const sample = buf[idx];
     const g = levelGray(sample, range.low ?? 0, range.high ?? 0xfffc);
     const p = idx * 4;
-    if (sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped)) {
+    const insideROI = !grayBounds || (pixel.x >= grayBounds.x0 && pixel.x < grayBounds.x1 && pixel.y >= grayBounds.y0 && pixel.y < grayBounds.y1);
+    if (insideROI && (!sampledMask || sampledMask[idx] === 1) && sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped)) {
       paintSpotPixel(data, p, graySpotColor);
     } else {
       data[p + 0] = g;
@@ -2806,6 +3020,8 @@ function paintVectorDefaultBlockFill(
   graySpotSelection: GrayScaleSelection = null,
   graySpotSkipped: boolean | null = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
+  grayROI: ROIRequest | null = null,
+  sampledMask: Uint8Array | null = null,
   setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
   const nativeSize = DAC_RANGE;
@@ -2817,6 +3033,7 @@ function paintVectorDefaultBlockFill(
   if (!ctx) return { min: 0, max: 0, populated: 0 };
 
   const limit = Math.min(populated, buf.length);
+  const grayBounds = grayROI ? scanRegionPixelBounds(grayROI, edge) : null;
 
   const range = vectorDefaultRange(buf, edge, limit, scanPath, setting);
 
@@ -2838,7 +3055,8 @@ function paintVectorDefaultBlockFill(
     const cellIdx = cellRow * edge + cellCol;
     const sample = buf[cellIdx];
     const g = levelGray(sample, range.low ?? 0, range.high ?? 0xfffc);
-    const isSpot = sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped);
+    const insideROI = !grayBounds || (cellCol >= grayBounds.x0 && cellCol < grayBounds.x1 && cellRow >= grayBounds.y0 && cellRow < grayBounds.y1);
+    const isSpot = insideROI && (!sampledMask || sampledMask[cellIdx] === 1) && sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped);
     const baseY = Math.floor((cellRow * nativeSize) / edge);
     const nextY = Math.floor(((cellRow + 1) * nativeSize) / edge);
     const baseX = Math.floor((cellCol * nativeSize) / edge);
@@ -2906,7 +3124,9 @@ function sampleInGraySelectionToFilter(
 ): boolean {
   if (!selection) return false;
   const selected = grayScaleSelectionContains(selection, scaleScanSample(sample));
-  return skipped === false ? !selected : selected;
+  // Spot means values inside the selected range remain active. Skip means
+  // values outside the selected range remain active.
+  return skipped === true ? !selected : selected;
 }
 
 function paintSpotPixel(

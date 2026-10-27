@@ -517,7 +517,7 @@ export async function streamMockVector(
     const ts = shortTimestampSuffix();
     const edge = p.pattern === "custom"
       ? Math.max(1, p.points?.length ?? 0)
-      : Math.max(1, p.vector_resolution ?? 2048);
+      : Math.max(1, p.vector_resolution ?? 1024);
     const base = `vector_latency_${p.latency_bytes || edge}`;
     ws.send(
       JSON.stringify({
@@ -645,7 +645,7 @@ export async function streamMockBeamHold(
 }
 
 function vectorScanPoints(p: VectorParams): VectorPointTuple[] {
-  const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 2048));
+  const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 1024));
   const path = p.scan_path ?? "vertical_raster";
   const x0 = Math.min(p.roi?.x_start ?? 0, p.roi?.x_end ?? ADC_MAX);
   const x1 = Math.max(p.roi?.x_start ?? 0, p.roi?.x_end ?? ADC_MAX);
@@ -713,8 +713,8 @@ export const mockRest = {
       },
       vector: {
         ...vector,
-        dwell: finiteNumber(vector.dwell, 16),
-        vectorResolution: finiteNumber(vector.vectorResolution, 2048),
+        dwell: finiteNumber(vector.dwell, 7),
+        vectorResolution: finiteNumber(vector.vectorResolution, 1024),
         voltage,
         latency: finiteNumber(vector.latency, 8196),
         outputMode: vector.outputMode ?? "EightBit",
@@ -728,8 +728,8 @@ export const mockRest = {
         output_mode: raster.outputMode ?? "EightBit",
       },
       vector_params: {
-        vector_resolution: finiteNumber(vector.vectorResolution, 2048),
-        dwell: finiteNumber(vector.dwell, 16),
+        vector_resolution: finiteNumber(vector.vectorResolution, 1024),
+        dwell: finiteNumber(vector.dwell, 7),
         latency_bytes: finiteNumber(vector.latency, 8196),
         cookie: finiteNumber(vector.cookie, 123),
         output_mode: vector.outputMode ?? "EightBit",

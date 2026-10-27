@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
-  clearROIImage,
-  clearROIScanImage,
   clearROISelection,
   clearSelectedTargetGrayPoint,
   finishROITargetGrayRun,
@@ -93,11 +91,11 @@ export function ROIEditor({
   lastScanImageUrl = null,
   grayScaleSelection = null,
   grayScaleSkipped = null,
-  allowClearRegionWhileDisabled = false,
   liveVectorPreview = false,
   hideSelectionOverlay = false,
   graySelectionResetToken = 0,
   onLoadLastScan,
+  onImageChange,
 }: {
   disabled: boolean;
   variant?: "controls" | "canvas" | "all" | "actions";
@@ -105,11 +103,11 @@ export function ROIEditor({
   lastScanImageUrl?: string | null;
   grayScaleSelection?: GrayScaleSelection;
   grayScaleSkipped?: boolean | null;
-  allowClearRegionWhileDisabled?: boolean;
   liveVectorPreview?: boolean;
   hideSelectionOverlay?: boolean;
   graySelectionResetToken?: number;
   onLoadLastScan?: () => void;
+  onImageChange?: (imageUrl: string | null) => void;
 }) {
   const dispatch = useAppDispatch();
   const tr = useTranslation();
@@ -279,7 +277,6 @@ export function ROIEditor({
         )
       : 0;
   const hasLoadedImage = Boolean(roi.imageDataUrl);
-  const hasPartialRegion = Boolean(roi.selection);
   const roiSelectionKey = roi.selection
     ? `${roi.selection.x_start}:${roi.selection.x_end}:${roi.selection.y_start}:${roi.selection.y_end}`
     : "";
@@ -619,22 +616,52 @@ export function ROIEditor({
   }, [activeHandle, roi]);
 
   function loadFile(file: File) {
+    clearBitmapSelectionCache();
+    stopAllScanActions();
+    setDraft(null);
+    imageRef.current = null;
+    promotedBackgroundRef.current = null;
+    setSuppressedBackgroundUrl(backgroundImageUrl);
+    setImageNaturalSize(null);
+    setCanvasResetToken((token) => token + 1);
+    dispatch(clearROISelection());
+    dispatch(clearSelectedTargetGrayPoint());
+    dispatch(
+      updateROI({
+        imageName: "No image selected",
+        imageDataUrl: null,
+        imageKind: "none",
+        imageBounds: null,
+        scanImageDataUrl: null,
+        roiScanResultUrl: null,
+        selection: null,
+        scan_regions: [],
+        active_scan_region: null,
+        roi_scan_enabled: false,
+      })
+    );
+    onImageChange?.(null);
+
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
+        const imageUrl = reader.result;
         clearBitmapSelectionCache();
         setDraft(null);
         setSuppressedBackgroundUrl(null);
-        dispatch(clearROISelection());
-        dispatch(clearSelectedTargetGrayPoint());
         dispatch(
           updateROI({
             imageName: file.name,
-            imageDataUrl: reader.result,
+            imageDataUrl: imageUrl,
             imageKind: "file",
             imageBounds: null,
+            scan_regions: [],
+            active_scan_region: null,
+            roi_scan_enabled: false,
+            roiScanResultUrl: null,
           })
         );
+        onImageChange?.(imageUrl);
       }
     };
     reader.readAsDataURL(file);
@@ -1310,32 +1337,6 @@ export function ROIEditor({
     );
   }
 
-  function clearLoadedImage() {
-    clearBitmapSelectionCache();
-    stopAllScanActions();
-    setDraft(null);
-    imageRef.current = null;
-    promotedBackgroundRef.current = null;
-    setSuppressedBackgroundUrl(backgroundImageUrl);
-    if (fileRef.current) {
-      fileRef.current.value = "";
-    }
-    setCanvasResetToken((n) => n + 1);
-    dispatch(clearROIImage());
-    dispatch(clearROIScanImage());
-    dispatch(clearROISelection());
-    dispatch(streamReset());
-  }
-
-  function clearPartialRegion() {
-    clearBitmapSelectionCache();
-    stopAllScanActions();
-    setDraft(null);
-    dispatch(clearROIScanImage());
-    dispatch(clearROISelection());
-    dispatch(streamReset());
-  }
-
   const imageActionRow = (
     <div className="button-row" style={{ marginBottom: 10 }}>
       <button className="btn" disabled={disabled} onClick={() => fileRef.current?.click()}>
@@ -1357,22 +1358,6 @@ export function ROIEditor({
           {t("roi.loadLastScan")}
         </button>
       )}
-      <button
-        className="btn btn--ghost"
-        disabled={disabled || !hasLoadedImage}
-        onClick={clearLoadedImage}
-      >
-        <Icon name="trash" tone="danger" />
-        {t("roi.clearImage")}
-      </button>
-      <button
-        className="btn btn--ghost"
-        disabled={(disabled && !allowClearRegionWhileDisabled) || roi.calibration_enabled || !hasPartialRegion}
-        onClick={clearPartialRegion}
-      >
-        <Icon name="crop" tone="warn" />
-        {t("roi.clearRegion")}
-      </button>
       <span className="muted" style={{ fontSize: 12 }}>{roi.imageName}</span>
       <input
         ref={fileRef}
@@ -1381,6 +1366,7 @@ export function ROIEditor({
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
+          e.currentTarget.value = "";
           if (file) loadFile(file);
         }}
       />

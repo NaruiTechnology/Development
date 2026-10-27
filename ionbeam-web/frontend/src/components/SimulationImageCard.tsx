@@ -11,14 +11,14 @@ import { useScansUseHardware } from "./TakeoverEstimate";
  */
 export function SimulationImageCard({
   disabled,
-  allowClearRegionWhileDisabled = false,
   lastScanImageUrl = null,
   onLoadLastScan,
+  onImageChange,
 }: {
   disabled: boolean;
-  allowClearRegionWhileDisabled?: boolean;
   lastScanImageUrl?: string | null;
   onLoadLastScan?: () => void;
+  onImageChange?: (imageUrl: string | null) => void;
 }) {
   const { t } = useTranslation();
   const usesHardware = useScansUseHardware();
@@ -42,9 +42,9 @@ export function SimulationImageCard({
         <ROIEditor
           disabled={disabled}
           variant="actions"
-          allowClearRegionWhileDisabled={allowClearRegionWhileDisabled}
           lastScanImageUrl={lastScanImageUrl}
           onLoadLastScan={onLoadLastScan}
+          onImageChange={onImageChange}
         />
         <p className="muted simulation-image-card__hint">
           {t(usesHardware ? "simulation.image.hintHardware" : "simulation.image.hintSimulation")}
