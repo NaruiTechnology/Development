@@ -76,9 +76,9 @@ export interface SaveResponse {
 
 function normalizeSettingsDwell(config: unknown): unknown {
   return writePath(
-    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 16),
+    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 8),
     [...ACTION_DATA_PATH, "vectorScan", "dwell"],
-    16,
+    8,
   );
 }
 

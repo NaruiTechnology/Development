@@ -673,22 +673,45 @@ def _bitmap_pixel_at(bitmap, x_norm: float, y_norm: float):
 
 
 def _interleave_roi_chunks(parts, samples_per_chunk: int):
-    iterators = [iter(itertools.chain.from_iterable(part)) for part in parts]
     sample_counts = [sum(len(chunk) for chunk in part) for part in parts]
     if len(set(sample_counts)) > 1:
         raise ValueError("parallel simulation bitmaps must produce equal sample counts")
+    if not parts or not sample_counts[0]:
+        return []
+    # Fill columns in native code instead of creating one Python tuple per
+    # matching ROI pixel. Row-major flattening preserves the wire order.
+    samples = np.empty((sample_counts[0], len(parts)), dtype=np.uint16)
+    for region, chunks in enumerate(parts):
+        offset = 0
+        for chunk in chunks:
+            samples[offset:offset + len(chunk), region] = np.asarray(chunk)
+            offset += len(chunk)
+    flat = samples.reshape(-1)
+    chunk_size = max(len(parts), math.ceil(max(1, samples_per_chunk) / len(parts)) * len(parts))
+    return [array.array("H", flat[start:start + chunk_size].tobytes())
+            for start in range(0, len(flat), chunk_size)]
 
-    chunk_size = max(1, int(samples_per_chunk))
-    chunks: List[array.array] = []
-    samples = array.array("H")
-    for group in zip(*iterators):
-        samples.extend(group)
-        if len(samples) >= chunk_size:
-            chunks.append(samples)
-            samples = array.array("H")
-    if samples:
-        chunks.append(samples)
-    return chunks
+
+def _bitmap_sample_grid(bitmap, mode=None):
+    """Convert bitmap flags and intensity once, rather than for every visit."""
+    return np.fromiter(
+        (_obi_aligned_int(_bitmap_pixel_sample(pixel, mode)) for pixel in bitmap.pixels),
+        dtype=np.uint16, count=len(bitmap.pixels),
+    ).reshape(bitmap.height, bitmap.width)
+
+
+def _regular_vector_coordinates(edge, roi, scan_path, indices):
+    x0, x1, y0, y1 = _roi_bounds(roi) or (0, 16383, 0, 16383)
+    xr = _dac_range_for_bounds(x0, x1, edge)
+    yr = _dac_range_for_bounds(y0, y1, edge)
+    slow, fast = indices // edge, indices % edge
+    if scan_path in (VectorScanPath.horizontal_triangle, VectorScanPath.vertical_serpentine):
+        fast = np.where(slow % 2, edge - 1 - fast, fast)
+    if scan_path in (VectorScanPath.horizontal_sawtooth, VectorScanPath.horizontal_triangle):
+        xi, yi = fast, slow
+    else:
+        xi, yi = slow, fast
+    return xr.start + ((xi * xr.step) >> 8), yr.start + ((yi * yr.step) >> 8)
 
 
 def _bitmap_raster_chunks(req: RasterRequest, transforms=None) -> Optional[List[array.array]]:
@@ -711,20 +734,16 @@ def _bitmap_raster_chunks(req: RasterRequest, transforms=None) -> Optional[List[
         return None
 
     bitmap_mode = _infer_bitmap_mode(bitmap)
+    grid = _bitmap_sample_grid(bitmap, bitmap_mode)
 
     pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
     total = req.resolution * req.resolution
     chunks: List[array.array] = []
     for start in range(0, total, pixels_per_chunk):
-        samples = array.array("H")
-        for idx in range(start, min(start + pixels_per_chunk, total)):
-            x = idx % req.resolution
-            y = idx // req.resolution
-            x_norm = 0.0 if req.resolution <= 1 else x / (req.resolution - 1)
-            y_norm = 0.0 if req.resolution <= 1 else y / (req.resolution - 1)
-            px = _bitmap_pixel_at(bitmap, x_norm, y_norm)
-            samples.append(_obi_aligned_int(_bitmap_pixel_sample(px, bitmap_mode)))
-        chunks.append(samples)
+        idx = np.arange(start, min(start + pixels_per_chunk, total), dtype=np.int64)
+        xs = np.rint((idx % req.resolution) / max(1, req.resolution - 1) * (bitmap.width - 1)).astype(np.int64)
+        ys = np.rint((idx // req.resolution) / max(1, req.resolution - 1) * (bitmap.height - 1)).astype(np.int64)
+        chunks.append(array.array("H", grid[ys, xs].tobytes()))
     return chunks
 
 
@@ -842,6 +861,23 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
     """Vector stream for the configured simulation source: one sample per point."""
     import numpy as np
     sampler = await asyncio.to_thread(_simulation_sampler, simulation)
+    if req.pattern is not VectorPattern.custom:
+        regions = req.parallel_rois or [req.roi]
+        count = req.vector_resolution ** 2 * len(regions)
+        size = min(65536, max(1, math.ceil(req.latency_bytes / req.dwell)))
+        for emitted, start in enumerate(range(0, count, size)):
+            await asyncio.sleep(interval if emitted else 0)
+            if abort.is_set():
+                return
+            indices = np.arange(start, min(start + size, count), dtype=np.int64)
+            values = np.empty(len(indices), dtype=np.uint16)
+            for region_index, region in enumerate(regions):
+                mask = indices % len(regions) == region_index
+                xs, ys = _regular_vector_coordinates(
+                    req.vector_resolution, region, req.scan_path, indices[mask] // len(regions))
+                values[mask] = _obi_aligned_np(sampler(np.clip(xs, 0, 0x3FFF), np.clip(ys, 0, 0x3FFF)))
+            yield array.array("H", values.tobytes())
+        return
     if req.pattern is VectorPattern.custom and req.points is not None:
         iter_points = iter(req.points)
     elif req.parallel_rois:
@@ -902,6 +938,21 @@ def _bitmap_vector_chunks(req: VectorRequest, transforms=None) -> Optional[List[
     bitmap = getattr(req, "simulation_bitmap", None)
     if bitmap is None or not bitmap.pixels:
         return None
+
+    if req.pattern is not VectorPattern.custom:
+        grid = _bitmap_sample_grid(bitmap)
+        x0, x1, y0, y1 = _roi_bounds(req.roi) or (0, 16383, 0, 16383)
+        size = min(65536, max(1, math.ceil(req.latency_bytes / req.dwell)))
+        total = req.vector_resolution ** 2
+        chunks = []
+        for start in range(0, total, size):
+            xs, ys = _regular_vector_coordinates(
+                req.vector_resolution, req.roi, req.scan_path,
+                np.arange(start, min(start + size, total), dtype=np.int64))
+            bx = np.rint(np.clip((xs - x0) / max(1, x1 - x0), 0, 1) * (bitmap.width - 1)).astype(np.int64)
+            by = np.rint(np.clip((ys - y0) / max(1, y1 - y0), 0, 1) * (bitmap.height - 1)).astype(np.int64)
+            chunks.append(array.array("H", grid[by, bx].tobytes()))
+        return chunks
 
     chunks: List[array.array] = []
     samples = array.array("H")
@@ -1210,6 +1261,13 @@ class DeviceService:
             })
         simulation = self._simulation_settings(req)
         interval = _simulation_chunk_interval(simulation) if pace else 0.0
+        if pace and req.parallel_rois:
+            # Transport packets are not acquisition steps. A small hardware
+            # latency must not add 20 ms of artificial delay per ~500 pixels
+            # across millions of interleaved simulation samples.
+            req = req.model_copy(update={
+                "latency_bytes": max(req.latency_bytes, req.dwell * 16384),
+            })
         build_bitmap = _bitmap_raster_chunks if kind == "raster" else _bitmap_vector_chunks
         # Building a bitmap frame is pure Python; keep it off the event loop.
         transforms = self._action_defaults.get("transforms", {}) or {}

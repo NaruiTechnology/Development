@@ -151,7 +151,7 @@ export interface ROIState {
 
 const defaultRaster: RasterRequest = {
   resolution: 512,
-  dwell: 16,
+  dwell: 8,
   latency_bytes: 16384,
   frame_blank: true,
   cookie: 123,
@@ -170,7 +170,7 @@ const defaultVector: VectorRequest = {
   scan_path: "horizontal_sawtooth",
   points: null,
   vector_resolution: 1024,
-  dwell: 7,
+  dwell: 8,
   latency_bytes: 8196,
   output_mode: "SixteenBit",
   adc_valid: true,
@@ -528,7 +528,7 @@ const slice = createSlice({
     },
     setScanZoom(s, a: PayloadAction<number>) {
       const zoom = Number(a.payload);
-      s.roi.scan_zoom = Number.isFinite(zoom) ? Math.max(1, Math.min(1000, zoom)) : 1;
+      s.roi.scan_zoom = Number.isFinite(zoom) ? Math.max(1, Math.min(20000, zoom)) : 1;
     },
     setROIScanEnabled(s, a: PayloadAction<boolean>) {
       s.roi.roi_scan_enabled = Boolean(a.payload);

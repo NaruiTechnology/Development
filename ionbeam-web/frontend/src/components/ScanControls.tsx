@@ -230,11 +230,28 @@ export function ScanControls({
   const preview = useAppSelector((s) => s.scan.preview);
   const roiState = useAppSelector((s) => s.scan.roi);
   const [parallelRegions, setParallelRegions] = useState(false);
-  const [roiControlsCollapsed, setROIControlsCollapsed] = useState(false);
+  const [roiControlsCollapsed, setROIControlsCollapsed] = useState(true);
   const [pendingQueue, setPendingQueue] = useState<ScanQueueSummary | null>(null);
   useEffect(() => {
-    void latestScanQueue().then(setPendingQueue).catch(() => {});
-  }, []);
+    let active = true;
+    const refresh = async () => {
+      try {
+        const queue = await latestScanQueue();
+        if (active) setPendingQueue(queue && queue.status === "interrupted" &&
+          queue.next_index >= 0 && queue.next_index < queue.total ? queue : null);
+      } catch {
+        if (active) setPendingQueue(null);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [phase]);
   const canParallelRegions = roiState.scan_regions.length > 1;
   useEffect(() => {
     if (!canParallelRegions) setParallelRegions(false);
@@ -514,11 +531,16 @@ export function ScanControls({
     try {
       const allowed = await refreshScanPrivilege();
       if (!allowed) return;
-      const entries = await loadScanQueue(pendingQueue);
-      const remaining = entries.slice(pendingQueue.next_index);
+      const queue = await latestScanQueue();
+      if (!queue || queue.status !== "interrupted" || queue.next_index < 0 || queue.next_index >= queue.total) {
+        setPendingQueue(null);
+        return;
+      }
+      const entries = await loadScanQueue(queue);
+      const remaining = entries.slice(queue.next_index);
       if (!remaining.length || remaining[0].kind !== kind) return;
       startRegionScanSequence(remaining.map((entry) => ({ ...entry, initialFrame: null })) as RegionScanEntry[], true);
-      setPendingQueue({ ...pendingQueue, status: "running" });
+      setPendingQueue({ ...queue, status: "running" });
     } catch (err) {
       dispatch(streamErrored(err instanceof Error ? err.message : String(err)));
     }
@@ -983,6 +1005,7 @@ export function ScanControls({
           </select>
         </label>
       </div>
+      <div className="scan-preview-zoom-row">
           <label
             className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
             title={t("scan.preview.title")}
@@ -1000,6 +1023,23 @@ export function ScanControls({
           <HelpPopover title={t("scan.preview.help.title")} ariaLabel={t("scan.preview.help.aria")}>
             {t("scan.preview.help.body")}
           </HelpPopover>
+          {(kind === "raster" || kind === "vector") && (
+            <label className="scan-equipment-field scan-zoom-field">
+              <span className="scan-zoom-label"><Icon name="zoomIn" />{t("scan.zoom")}</span>
+              <NumberStepperInput
+                value={roiState.scan_zoom}
+                disabled={controlsDisabled}
+                min={1}
+                max={20000}
+                step={1}
+                inputMode="numeric"
+                ariaLabel={t("scan.zoom")}
+                title={t("scan.zoom.title")}
+                onValueChange={(value) => dispatch(setScanZoom(Number(value)))}
+              />
+            </label>
+          )}
+      </div>
           {kind === "vector" && (
             <span
               className="scan-busy"
@@ -1014,7 +1054,7 @@ export function ScanControls({
       {(kind === "raster" || kind === "vector") && (
         <div className="card scan-roi-controls-card">
           <div className="card__header">
-            <span className="card__title">{t("tabs.roi")}</span>
+            <span className="card__title"><Icon name="target" />{t("tabs.roi")}</span>
             <button
               type="button"
               className="card__collapse-btn"
@@ -1031,20 +1071,6 @@ export function ScanControls({
             </button>
           </div>
           <div className="card__body scan-region-controls" hidden={roiControlsCollapsed}>
-            <label className="scan-equipment-field scan-zoom-field">
-              <span>{t("scan.zoom")}</span>
-              <NumberStepperInput
-                value={roiState.scan_zoom}
-                disabled={controlsDisabled}
-                min={1}
-                max={1000}
-                step={1}
-                inputMode="numeric"
-                ariaLabel={t("scan.zoom")}
-                title={t("scan.zoom.title")}
-                onValueChange={(value) => dispatch(setScanZoom(Number(value)))}
-              />
-            </label>
             <label
               className={`checkbox vacuum-switch app-switch scan-roi-toggle${roiState.roi_scan_enabled ? " scan-roi-toggle--active" : ""}`}
               title={t("scan.roi.edit")}
@@ -1083,15 +1109,14 @@ export function ScanControls({
           <Icon name="play" tone="success" />
           {t("scan.run")}
         </button>
-        {pendingQueue && pendingQueue.status !== "running" && pendingQueue.next_index < pendingQueue.total && (
+        {!runDisabled && kind !== "roi" && pendingQueue && pendingQueue.status === "interrupted" && pendingQueue.next_index >= 0 && pendingQueue.next_index < pendingQueue.total && (
           <button
             type="button"
             className="btn btn--primary"
-            disabled={runDisabled || kind === "roi"}
             onClick={() => void resumeScanQueue()}
             title={t("scan.resumeQueue.title")}
           >
-            {t("scan.resumeQueue")} ({pendingQueue.next_index + 1}/{pendingQueue.total})
+            {t("scan.resume")}
           </button>
         )}
         <button

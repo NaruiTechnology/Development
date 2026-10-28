@@ -47,7 +47,7 @@ export function mapScanPixelIndexToFrame(
 
 export function clampScanZoom(value: unknown): number {
   const zoom = Number(value);
-  return Number.isFinite(zoom) ? Math.max(1, Math.min(1000, Math.trunc(zoom))) : 1;
+  return Number.isFinite(zoom) ? Math.max(1, Math.min(20000, Math.trunc(zoom))) : 1;
 }
 
 /** Apply magnification around the centre of a scan area or selected ROI. */

@@ -2227,6 +2227,10 @@ body {
   visibility: visible;
 }
 
+.scan-preview-zoom-row + .scan-busy[data-visible="false"] {
+  display: none;
+}
+
 /* The busy indicator inside .scan-busy is the shared <LoadingSpinner> (assets/spinner.gif), the same animation the
    CONFIGURATION > Admin tab uses while loading. */
 .scan-busy .loading-spinner { gap: 0; }
@@ -3942,8 +3946,37 @@ body {
   padding-top: 2px;
 }
 
-.scan-zoom-field {
-  flex: 0 0 72px;
+.scan-preview-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 0 100%;
+  min-width: 0;
+}
+
+.scan-preview-zoom-row .scan-zoom-field {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.scan-zoom-label,
+.scan-transform-card .card__title,
+.scan-roi-controls-card .card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.scan-zoom-field .number-stepper {
+  width: 92px;
+}
+
+.scan-preview-zoom-row .scan-preview-toggle {
+  flex: 0 0 auto;
 }
 
 .scan-roi-toggle,

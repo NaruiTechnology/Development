@@ -69,9 +69,12 @@ export function latestScanQueue(owner: string): ScanQueue | null {
     .map((name) => {
       try { return readScanQueue(name.slice(0, -5), owner); } catch { return null; }
     })
-    .filter((queue): queue is ScanQueue => queue !== null && queue.status !== "completed")
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  return queues[0] ?? null;
+    .filter((queue): queue is ScanQueue => queue !== null)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.updated_at.localeCompare(a.updated_at));
+  // A newer run supersedes older recovery candidates, including after it completes.
+  const latest = queues[0];
+  return latest && latest.status !== "completed" && latest.next_index < latest.entries.length
+    ? latest : null;
 }
 
 export function queuePage(id: string, owner: string, page: number, pageSize: number) {

@@ -45,7 +45,7 @@
                         "externalControl": true,
                         "resolution": 1024,
                         "adcLatency": 8,
-                        "dwell": 16
+                        "dwell": 8
                     },
                     "vectorScan": {
                         "vectorResolution": 1024,
@@ -55,7 +55,7 @@
                         "adcLatency": 8,
                         "beamType": "Ion",
                         "externalControl": true,
-                        "dwell": 16,
+                        "dwell": 8,
                         "PixelFallbackBlank": true,
                         "adaptiveFeedbackWindowPoints": 1,
                         "adaptiveFeedbackPipelineDelayPoints": 0,
@@ -195,7 +195,7 @@
     ],
     "LogName": "PatternScan",
     "Verbose": true,
-    "IsProduction": true,
+    "IsProduction": false,
     "DumpData": true,
     "AdcTest": true,
     "transforms": {
