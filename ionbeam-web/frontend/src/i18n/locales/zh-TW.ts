@@ -265,6 +265,8 @@ export const zhTW: Partial<TranslationTable> = {
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "執行",
+  "scan.resumeQueue": "繼續佇列",
+  "scan.resumeQueue.title": "從第一個未完成的掃描繼續已儲存的 ROI 佇列",
   "scan.pause": "暫停",
   "scan.pausing": "正在暫停…",
   "scan.resume": "繼續",
@@ -302,6 +304,12 @@ export const zhTW: Partial<TranslationTable> = {
   "scan.repeat.title": "設定 Action run 循環重複的次數",
   "common.custom": "自訂",
   "common.invalidNumber": "無效數字。",
+  "scan.zoom": "縮放",
+  "scan.zoom.title": "OBI 式放大：沒有局部 ROI 時套用至完整影像，否則套用至每個選定 ROI。",
+  "scan.roi.remove": "清除選定的 ROI",
+  "scan.roi.edit": "ROI 掃描",
+  "scan.parallel": "並行",
+  "scan.parallel.title": "在一條路徑中掃描所有選定的 ROI 區域",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "解析度",
@@ -385,6 +393,11 @@ export const zhTW: Partial<TranslationTable> = {
   /* ===== ROI editor =============================================== */
   "roi.select": "選擇檔案",
   "roi.loadLastScan": "載入上次掃描",
+  "card.simulationImage": "載入影像",
+  "simulation.mode.simulation": "模擬",
+  "simulation.mode.hardware": "硬體",
+  "simulation.image.hintSimulation": "掃描會以此影像作為模擬來源。",
+  "simulation.image.hintHardware": "掃描在儀器上執行;影像僅用於 ROI 選取。",
   "roi.clearImage": "清除影像",
   "roi.clearRegion": "清除區域",
   "roi.calibrate": "校準",
@@ -396,11 +409,11 @@ export const zhTW: Partial<TranslationTable> = {
   "roi.end": "終點 (x, y)",
   "roi.showGrid": "顯示格線",
   "roi.targetGray": "目標灰階",
-  "roi.targetGray.hint": "按右鍵選取",
-  "roi.targetGray.title": "在 ROI 影像上按右鍵選取像素，以設定目標灰階",
+  "roi.targetGray.hint": "按右鍵取樣影像",
+  "roi.targetGray.title": "在目前掃描影像上按右鍵選取像素，以設定目標灰階",
   "roi.targetGray.help.title": "目標灰階",
   "roi.targetGray.help.aria": "了解目標灰階選取與執行操作",
-  "roi.targetGray.help.body": "在 ROI 影像上按右鍵點選像素，將其灰階值（0–255）設為目標；按 × 可清除目標。在模擬模式下，選取 ROI 區域且未啟用灰階範圍篩選時，按「執行」會逐步降低高於目標值的像素。低於或等於目標值的像素，以及區域外的像素都保持不變。在正式模式下，「執行」會執行正常的硬體掃描與 ADC 驗證。",
+  "roi.targetGray.help.body": "在目前 Raster 或 Vector 影像上按右鍵取樣灰階（0–255），也可直接輸入數值；按 × 可清除。設定後，掃描會在每個選定區域套用目標灰階閾值。Raster 模擬與 Vector 掃描會套用此閾值；Raster 硬體掃描目前仍以一般模式執行。",
   "roi.targetGray.clear": "清除目標灰階",
   "roi.targetGray.empty": "右鍵點選影像",
   "roi.targetGray.invalid": "請輸入灰階篩選範圍內的整數。",

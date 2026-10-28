@@ -974,7 +974,7 @@ function RasterTab({ draft }: { draft: unknown }) {
   const pixels = numberField(draft, [...RASTER_PATH, "pixels"], 0);
   const resolution = numberField(draft, [...RASTER_PATH, "resolution"], 512);
   const adcLatency = numberField(draft, [...RASTER_PATH, "adcLatency"], 8);
-  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 16);
+  const dwell = numberField(draft, [...RASTER_PATH, "dwell"], 8);
 
   function set(p: ReadonlyArray<string | number>, v: unknown) {
     dispatch(setDraft(writePath(draft, p, v)));
@@ -1029,8 +1029,8 @@ function VectorTab({ draft }: { draft: unknown }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
 
-  const vectorResolution = numberField(draft, [...VECTOR_PATH, "vectorResolution"], 2048);
-  const dwell = numberField(draft, [...VECTOR_PATH, "dwell"], 16);
+  const vectorResolution = numberField(draft, [...VECTOR_PATH, "vectorResolution"], 1024);
+  const dwell = numberField(draft, [...VECTOR_PATH, "dwell"], 8);
   const latency = numberField(draft, [...VECTOR_PATH, "latency"], 0);
   const adcLatency = numberField(draft, [...VECTOR_PATH, "adcLatency"], 0);
   const lineShift = numberField(draft, [...VECTOR_PATH, "lineShiftPerXRow"], 0);
@@ -1607,9 +1607,9 @@ async function saveStreamConfig(data: unknown): Promise<void> {
 
 function normalizeStreamConfigDwell(config: unknown): unknown {
   return writePath(
-    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 16),
+    writePath(config, [...ACTION_DATA_PATH, "rasterScan", "dwell"], 8),
     [...ACTION_DATA_PATH, "vectorScan", "dwell"],
-    16,
+    8,
   );
 }
 

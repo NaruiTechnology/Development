@@ -14,14 +14,26 @@ import {
   grayScaleSelectionContains,
   normalizeGrayScaleSelection,
   type GrayScaleSelection,
-} from "./grayScaleSelection";
-import { imageWorldBounds, ROI_CANVAS_EDGE, viewportBounds } from "./roiGeometry";
-import { worldSelectionToDacROI } from "./roiDac";
-import { bitmapScanCoordinates } from "./vectorScanPath";
+} from "./grayScaleSelection.js";
+import { imageWorldBounds, ROI_CANVAS_EDGE, viewportBounds } from "./roiGeometry.js";
+import { worldSelectionToDacROI } from "./roiDac.js";
+import { bitmapScanCoordinates } from "./vectorScanPath.js";
+import { scanRegionPixelBounds } from "./scanRegions.js";
 
-export { worldSelectionToDacROI } from "./roiDac";
+export { worldSelectionToDacROI } from "./roiDac.js";
 
 const MAX_POINTS = 250_000;
+
+export function interleaveParallelPoints<T>(groups: readonly (readonly T[])[]): T[] {
+  const result: T[] = [];
+  const maxLength = Math.max(0, ...groups.map((group) => group.length));
+  for (let index = 0; index < maxLength; index += 1) {
+    for (const group of groups) {
+      if (index < group.length) result.push(group[index]);
+    }
+  }
+  return result;
+}
 
 let cachedExtraction:
   | {
@@ -37,6 +49,52 @@ export function clearBitmapSelectionCache(): void {
   cachedExtraction = null;
 }
 
+/** Decode the loaded source image into the same OBI-aligned 16-bit values
+ * used by streamed scan samples. This seeds an ROI scan's untouched area so
+ * partial updates are composited over the image the operator selected. */
+export async function bitmapImageFrame(
+  roi: ROIState,
+  edgeValue: number,
+  zoom?: { sourceSelection: ROIRequest | null; displayROI: ROIRequest | null },
+): Promise<Uint16Array | null> {
+  if (!roi.imageDataUrl) return null;
+  const edge = Math.max(1, Math.trunc(edgeValue));
+  const img = await loadImage(roi.imageDataUrl);
+  const sourceW = img.naturalWidth || img.width;
+  const sourceH = img.naturalHeight || img.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = edge;
+  canvas.height = edge;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, edge, edge);
+  if (zoom) {
+    const sourceSelection = zoom.sourceSelection ?? {
+      x_start: roi.x_origin,
+      x_end: roi.x_end,
+      y_start: roi.y_origin,
+      y_end: roi.y_end,
+    };
+    const crop = selectionCrop({ ...roi, selection: sourceSelection }, sourceW, sourceH);
+    const bounds = scanRegionPixelBounds(zoom.displayROI, edge);
+    const width = bounds.x1 - bounds.x0;
+    const height = bounds.y1 - bounds.y0;
+    if (crop.w > 0 && crop.h > 0 && width > 0 && height > 0) {
+      ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, bounds.x0, bounds.y0, width, height);
+    }
+  }
+  const rgba = ctx.getImageData(0, 0, edge, edge).data;
+  const frame = new Uint16Array(edge * edge);
+  for (let index = 0; index < frame.length; index += 1) {
+    const offset = index * 4;
+    const luma = rgba[offset + 3] === 0
+      ? 255
+      : Math.round(0.2126 * rgba[offset] + 0.7152 * rgba[offset + 1] + 0.0722 * rgba[offset + 2]);
+    frame[index] = luma << 8;
+  }
+  return frame;
+}
+
 export async function rasterRequestWithBitmapSelection(
   req: RasterRequest,
   roi: ROIState,
@@ -47,6 +105,26 @@ export async function rasterRequestWithBitmapSelection(
     grayScaleSkipped?: boolean | null;
   } = {}
 ): Promise<RasterRequest> {
+  // A loaded bitmap is the explicit simulation source for an ordinary scan.
+  // With no ROI selection, treat the entire image as selected so it takes
+  // precedence over Configuration > Simulation (pattern/random/file).
+  if (options.allowBitmapSimulation && roi.imageDataUrl) {
+    const converted = await bitmapSelectionToVector(roiWithFullSelection(roi));
+    if (converted.simulationBitmap.pixels.length) {
+      return {
+        ...req,
+        roi: roi.selection && isPartialSelection(roi) ? converted.roi : null,
+        simulation_bitmap: options.isProduction
+          ? null
+          : decorateSimulationBitmap(
+              converted.simulationBitmap,
+              options.grayScaleSelection ?? null,
+              options.grayScaleSkipped,
+            ),
+      };
+    }
+  }
+
   // No selection at all → no ROI restriction, scan the full DAC range.
   if (!roi.selection) {
     return withoutBitmapROI(req);
@@ -110,6 +188,28 @@ export async function vectorRequestWithBitmapSelection(
     grayScaleSkipped?: boolean | null;
   } = {}
 ): Promise<VectorRequest> {
+  // A loaded bitmap is the explicit simulation source for an ordinary scan.
+  // With no ROI selection, treat the entire image as selected so it takes
+  // precedence over Configuration > Simulation (pattern/random/file).
+  if (options.allowBitmapSimulation && roi.imageDataUrl) {
+    const converted = await bitmapSelectionToVector(roiWithFullSelection(roi));
+    if (converted.simulationBitmap.pixels.length) {
+      return {
+        ...req,
+        pattern: "default",
+        points: null,
+        roi: roi.selection && isPartialSelection(roi) ? converted.roi : null,
+        simulation_bitmap: options.isProduction
+          ? null
+          : decorateSimulationBitmap(
+              converted.simulationBitmap,
+              options.grayScaleSelection ?? null,
+              options.grayScaleSkipped,
+            ),
+      };
+    }
+  }
+
   // No selection → no ROI; the macro sweeps the full DAC range.
   if (!roi.selection) {
     return withoutBitmapROI(req);
@@ -355,14 +455,14 @@ async function bitmapSelectionToVector(
   );
 
   const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
-  const pixels: SimulationBitmapPixel[] = [];
+  const pixels: number[] = [];
   for (let y = 0; y < sampleH; y++) {
     for (let x = 0; x < sampleW; x++) {
       const i = (y * sampleW + x) * 4;
       const alpha = data[i + 3];
       const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
       const pixel = alpha === 0 ? 255 : Math.round(luma);
-      pixels.push({ value: pixel, isHighlighted: false, isSkipped: null, blank: null });
+      pixels.push(pixel);
     }
   }
 
@@ -378,7 +478,7 @@ async function bitmapSelectionToVector(
   return value;
 }
 
-function decorateSimulationBitmap(
+export function decorateSimulationBitmap(
   bitmap: SimulationBitmap,
   selection: GrayScaleSelection,
   skipped: boolean | null | undefined,
@@ -389,15 +489,7 @@ function decorateSimulationBitmap(
     : Boolean(skipped);
 
   if (normalizedSelection === null) {
-    return {
-      ...bitmap,
-      pixels: bitmap.pixels.map((pixel) => ({
-        value: pixelValue(pixel),
-        isHighlighted: false,
-        isSkipped: null,
-        blank: null,
-      })),
-    };
+    return { ...bitmap, pixels: bitmap.pixels.map(pixelValue) };
   }
 
   return {
@@ -405,15 +497,16 @@ function decorateSimulationBitmap(
     pixels: bitmap.pixels.map((pixel) => {
       const value = pixelValue(pixel);
       const highlighted = grayScaleSelectionContains(normalizedSelection, value);
+      if (!highlighted) return value;
       return {
         value,
-        isHighlighted: highlighted,
-        isSkipped: highlighted ? normalizedSkipped : null,
+        isHighlighted: true,
+        isSkipped: normalizedSkipped,
         blank:
           normalizedSkipped === true
-            ? highlighted
+            ? true
             : normalizedSkipped === false
-            ? !highlighted
+            ? false
             : null,
       };
     }),
@@ -448,7 +541,7 @@ function bitmapToCustomPoints(
   for (const [x, y] of bitmapScanCoordinates(bitmap.width, bitmap.height, scanPath)) {
     const sampleY = y0 + Math.round((y / yDiv) * ySpan);
     const pixel = bitmap.pixels[y * bitmap.width + x];
-    const highlighted = Boolean(pixel?.isHighlighted);
+    const highlighted = typeof pixel === "number" ? false : Boolean(pixel?.isHighlighted);
     const sampleX = x0 + Math.round((x / xDiv) * xSpan);
     const blank = normalizedSkipped === true
       ? highlighted

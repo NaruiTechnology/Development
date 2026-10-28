@@ -78,10 +78,14 @@ export interface RasterRequest {
    *  OBI's live scan. Samples wrap at the frame end; `done` arrives only
    *  after Stop. */
   continuous?: boolean;
-  /** Repeat N (with continuous): the session ends by itself after this many
-   *  frames, holding external control from the first to the last. */
-  frames?: number | null;
   roi?: ROIRequest | null;
+  /** DAC regions traversed in one scan command, in display order. */
+  parallel_rois?: ROIRequest[] | null;
+  parallel_simulation_bitmaps?: SimulationBitmap[] | null;
+  parallel_simulation_bitmap_ids?: string[] | null;
+  simulation_bitmap_id?: string | null;
+  queue_id?: string;
+  queue_index?: number;
   /** Browser-provided grayscale crop for simulation-only raster scans.
    *  Production hardware ignores it and uses the DAC ROI normally. */
   simulation_bitmap?: SimulationBitmap | null;
@@ -121,10 +125,6 @@ export interface VectorRequest {
    *  list pass after pass on one FPGA command stream until Stop. Samples
    *  wrap at the pass end; `done` arrives only after Stop. */
   continuous?: boolean;
-  /** Repeat N (with continuous): the session ends by itself after this many
-   *  passes, holding external control from the first to the last. Adaptive
-   *  gray feedback runs that many host-decided passes on one stream. */
-  frames?: number | null;
   /** Default-pattern density on each axis. Valid range: 1..2048.
    *  Coverage stays the full DAC range; smaller values just sample
    *  sparser. Ignored when pattern=custom. */
@@ -144,6 +144,13 @@ export interface VectorRequest {
   pre_process: boolean;
   do_validate: boolean;
   roi?: ROIRequest | null;
+  /** DAC regions traversed in one scan command, in display order. */
+  parallel_rois?: ROIRequest[] | null;
+  parallel_simulation_bitmaps?: SimulationBitmap[] | null;
+  parallel_simulation_bitmap_ids?: string[] | null;
+  simulation_bitmap_id?: string | null;
+  queue_id?: string;
+  queue_index?: number;
   /** Browser-provided grayscale crop for simulation-only vector scans.
    *  Production hardware ignores it and uses the DAC points normally. */
   simulation_bitmap?: SimulationBitmap | null;
@@ -202,7 +209,7 @@ export interface BeamHoldRequest {
 export interface SimulationBitmap {
   width: number;
   height: number;
-  pixels: SimulationBitmapPixel[];
+  pixels: Array<number | SimulationBitmapPixel>;
 }
 
 export interface SimulationBitmapPixel {

@@ -41,6 +41,8 @@ interface RasterParams {
   cookie?: number;
   frame_blank?: boolean;
   simulation_bitmap?: SimulationBitmapPayload | null;
+  parallel_rois?: Array<{ x_start: number; x_end: number; y_start: number; y_end: number }> | null;
+  parallel_simulation_bitmaps?: SimulationBitmapPayload[] | null;
   simulation?: Record<string, unknown>;
   /** Live (Infinite) scan: repeat frames until the client closes. */
   continuous?: boolean;
@@ -59,6 +61,8 @@ interface VectorParams {
    *  Total samples = edge². Coverage is always the full DAC range. */
   vector_resolution?: number;
   roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
+  parallel_rois?: Array<{ x_start: number; x_end: number; y_start: number; y_end: number }> | null;
+  parallel_simulation_bitmaps?: SimulationBitmapPayload[] | null;
   simulation_bitmap?: SimulationBitmapPayload | null;
   simulation?: Record<string, unknown>;
   /** Live (Infinite) scan: replay the pass until the client closes. */
@@ -406,7 +410,9 @@ export async function streamMockRaster(
   ws: WebSocket,
   p: RasterParams
 ): Promise<void> {
-  const total = p.resolution * p.resolution;
+  const regionLength = p.resolution * p.resolution;
+  const regionCount = p.parallel_rois?.length ?? 1;
+  const total = regionLength * regionCount;
   const pixelsPerChunk = Math.max(
     1,
     Math.floor(p.latency_bytes / Math.max(1, p.dwell))
@@ -416,7 +422,6 @@ export async function streamMockRaster(
   let chunks = 0;
   const simulation = p.simulation ?? loadActionData().simulation ?? {};
   const simulationImage = loadSimulationImage(p.simulation);
-  const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
   const frameLimit = p.continuous === true && p.frames ? Math.max(1, Math.trunc(p.frames)) : null;
   let framesDone = 0;
@@ -433,16 +438,26 @@ export async function streamMockRaster(
     const buf = Buffer.alloc(n * 2);
     for (let k = 0; k < n; k++) {
       const idx = sent + k;
-      const x = idx % p.resolution;
-      const y = Math.floor(idx / p.resolution);
-      const dacX = Math.floor((x * (1 << DAC_BITS)) / p.resolution);
-      const dacY = Math.floor((y * (1 << DAC_BITS)) / p.resolution);
-      const sample = p.simulation_bitmap
+      // Hardware visits one sample from every ROI in turn. Keep simulated
+      // streams in that order so the renderer routes samples to matching ROIs.
+      const regionIndex = idx % regionCount;
+      const localIndex = Math.floor(idx / regionCount);
+      const x = localIndex % p.resolution;
+      const y = Math.floor(localIndex / p.resolution);
+      const roi = p.parallel_rois?.[regionIndex];
+      const dacX = roi
+        ? Math.round(roi.x_start + (x / Math.max(1, p.resolution - 1)) * (roi.x_end - roi.x_start))
+        : Math.floor((x * (1 << DAC_BITS)) / p.resolution);
+      const dacY = roi
+        ? Math.round(roi.y_start + (y / Math.max(1, p.resolution - 1)) * (roi.y_end - roi.y_start))
+        : Math.floor((y * (1 << DAC_BITS)) / p.resolution);
+      const bitmap = p.parallel_simulation_bitmaps?.[regionIndex] ?? p.simulation_bitmap;
+      const sample = bitmap
         ? sampleSimulationBitmap(
-            p.simulation_bitmap,
+            bitmap,
             p.resolution <= 1 ? 0 : x / (p.resolution - 1),
             p.resolution <= 1 ? 0 : y / (p.resolution - 1),
-            bitmapMode
+            inferBitmapMode(bitmap)
           )
         : sampleFakeAdc(dacX, dacY, simulation, simulationImage);
       writeSampleBE(buf, k, sample);
@@ -476,19 +491,27 @@ export async function streamMockVector(
   // Default pattern: synthesise edge² 14-bit DAC points in the same
   // (x, y) order the real FPGA emits. Custom replays the client's
   // already-14-bit DAC tuples.
-  let pts: Array<VectorPointTuple | VectorPointObject>;
+  let pts: Array<VectorPointTuple | VectorPointObject> | null = null;
+  let pointCount: number;
+  let makePointIterator: () => Iterator<VectorPointTuple | VectorPointObject>;
   if (p.pattern === "custom" && p.points && p.points.length) {
     pts = p.points;
+    pointCount = pts.length;
+    makePointIterator = () => pts![Symbol.iterator]();
   } else if (p.pattern === "custom" && p.simulation_bitmap) {
     const bitmap = p.simulation_bitmap;
-    pts = new Array(bitmap.width * bitmap.height);
-    for (let x = 0; x < bitmap.width; x++) {
-      for (let y = 0; y < bitmap.height; y++) {
-        pts[x * bitmap.height + y] = [x, y, 1];
+    pointCount = bitmap.width * bitmap.height;
+    makePointIterator = function* () {
+      for (let x = 0; x < bitmap.width; x++) {
+        for (let y = 0; y < bitmap.height; y++) yield [x, y, 1] as VectorPointTuple;
       }
-    }
+    };
   } else {
-    pts = vectorScanPoints(p);
+    const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 1024));
+    pointCount = edge * edge * (p.parallel_rois?.length ?? 1);
+    makePointIterator = p.parallel_rois?.length
+      ? () => interleaveVectorScanPoints(p, p.parallel_rois!)
+      : () => vectorScanPointIterator(p);
   }
 
   const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
@@ -496,19 +519,22 @@ export async function streamMockVector(
   let chunks = 0;
   const simulation = p.simulation ?? loadActionData().simulation ?? {};
   const simulationImage = loadSimulationImage(p.simulation);
-  const bitmapMode = p.simulation_bitmap ? inferBitmapMode(p.simulation_bitmap) : null;
 
   const passLimit = p.continuous === true && p.frames ? Math.max(1, Math.trunc(p.frames)) : null;
   let passesDone = 0;
-  while (i < pts.length || (p.continuous === true && pts.length > 0)) {
+  let pointIterator = makePointIterator();
+  while (i < pointCount || (p.continuous === true && pointCount > 0)) {
     if (ws.readyState !== ws.OPEN) return;
     // Live scan: wrap to the next pass on the same socket (Stop closes it).
-    if (i >= pts.length) {
+    if (i >= pointCount) {
       passesDone++;
       if (passLimit !== null && passesDone >= passLimit) break;
       i = 0;
+      pointIterator = makePointIterator();
     }
-    const slice = pts.slice(i, i + valuesPerChunk);
+    const count = Math.min(valuesPerChunk, pointCount - i);
+    const slice = new Array<VectorPointTuple | VectorPointObject>(count);
+    for (let k = 0; k < count; k++) slice[k] = pointIterator.next().value!;
     const buf = Buffer.alloc(slice.length * 2);
     for (let k = 0; k < slice.length; k++) {
       const [x, y, , blank, passIndex] = normalizeVectorPoint(slice[k] as any);
@@ -516,16 +542,18 @@ export async function streamMockVector(
         // Explicit pass markers are preserved in the payload for debugging,
         // but they do not affect the generated sample values.
       }
-      const sample = p.simulation_bitmap
+      const regionIndex = p.parallel_rois?.length ? (i + k) % p.parallel_rois.length : 0;
+      const bitmap = p.parallel_simulation_bitmaps?.[regionIndex] ?? p.simulation_bitmap;
+      const sample = bitmap
         ? p.pattern !== "custom" || (p.points && p.points.length)
           ? blank === true
             ? 0
-            : sampleSimulationBitmapPoint(p.simulation_bitmap, p.roi, x, y, bitmapMode)
+            : sampleSimulationBitmapPoint(bitmap, p.parallel_rois?.[regionIndex] ?? p.roi, x, y, inferBitmapMode(bitmap))
           : sampleSimulationBitmap(
-              p.simulation_bitmap,
-              p.simulation_bitmap.width <= 1 ? 0 : x / (p.simulation_bitmap.width - 1),
-              p.simulation_bitmap.height <= 1 ? 0 : y / (p.simulation_bitmap.height - 1),
-              bitmapMode
+              bitmap,
+              bitmap.width <= 1 ? 0 : x / (bitmap.width - 1),
+              bitmap.height <= 1 ? 0 : y / (bitmap.height - 1),
+              inferBitmapMode(bitmap)
             )
         : sampleFakeAdc(x, y, simulation, simulationImage);
       writeSampleBE(buf, k, sample);
@@ -540,7 +568,7 @@ export async function streamMockVector(
     const ts = shortTimestampSuffix();
     const edge = p.pattern === "custom"
       ? Math.max(1, p.points?.length ?? 0)
-      : Math.max(1, p.vector_resolution ?? 2048);
+      : Math.max(1, p.vector_resolution ?? 1024);
     const base = `vector_latency_${p.latency_bytes || edge}`;
     ws.send(
       JSON.stringify({
@@ -668,7 +696,25 @@ export async function streamMockBeamHold(
 }
 
 function vectorScanPoints(p: VectorParams): VectorPointTuple[] {
-  const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 2048));
+  return Array.from(vectorScanPointIterator(p));
+}
+
+function* interleaveVectorScanPoints(
+  p: VectorParams,
+  rois: NonNullable<VectorParams["parallel_rois"]>,
+): Generator<VectorPointTuple> {
+  const iterators = rois.map((roi) => vectorScanPointIterator({ ...p, roi }));
+  while (true) {
+    for (const iterator of iterators) {
+      const next = iterator.next();
+      if (next.done) return;
+      yield next.value;
+    }
+  }
+}
+
+function* vectorScanPointIterator(p: VectorParams): Generator<VectorPointTuple> {
+  const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 1024));
   const path = p.scan_path ?? "vertical_raster";
   const x0 = Math.min(p.roi?.x_start ?? 0, p.roi?.x_end ?? ADC_MAX);
   const x1 = Math.max(p.roi?.x_start ?? 0, p.roi?.x_end ?? ADC_MAX);
@@ -680,21 +726,20 @@ function vectorScanPoints(p: VectorParams): VectorPointTuple[] {
   const ys = Array.from({ length: edge }, (_, index) =>
     Math.round(y0 + ((y1 - y0) * index) / Math.max(1, edge - 1)),
   );
-  const points: VectorPointTuple[] = [];
-
   if (path === "horizontal_sawtooth" || path === "horizontal_triangle") {
-    ys.forEach((y, row) => {
+    for (let row = 0; row < ys.length; row++) {
+      const y = ys[row];
       const rowXs = path === "horizontal_triangle" && row % 2 ? [...xs].reverse() : xs;
-      for (const x of rowXs) points.push([x, y, p.dwell]);
-    });
-    return points;
+      for (const x of rowXs) yield [x, y, p.dwell];
+    }
+    return;
   }
 
-  xs.forEach((x, column) => {
+  for (let column = 0; column < xs.length; column++) {
+    const x = xs[column];
     const columnYs = path === "vertical_serpentine" && column % 2 ? [...ys].reverse() : ys;
-    for (const y of columnYs) points.push([x, y, p.dwell]);
-  });
-  return points;
+    for (const y of columnYs) yield [x, y, p.dwell];
+  }
 }
 
 /** Synthetic responses for the REST endpoints, when MOCK=1. */
@@ -736,8 +781,8 @@ export const mockRest = {
       },
       vector: {
         ...vector,
-        dwell: finiteNumber(vector.dwell, 16),
-        vectorResolution: finiteNumber(vector.vectorResolution, 2048),
+        dwell: finiteNumber(vector.dwell, 7),
+        vectorResolution: finiteNumber(vector.vectorResolution, 1024),
         voltage,
         latency: finiteNumber(vector.latency, 8196),
         outputMode: vector.outputMode ?? "EightBit",
@@ -751,8 +796,8 @@ export const mockRest = {
         output_mode: raster.outputMode ?? "EightBit",
       },
       vector_params: {
-        vector_resolution: finiteNumber(vector.vectorResolution, 2048),
-        dwell: finiteNumber(vector.dwell, 16),
+        vector_resolution: finiteNumber(vector.vectorResolution, 1024),
+        dwell: finiteNumber(vector.dwell, 7),
         latency_bytes: finiteNumber(vector.latency, 8196),
         cookie: finiteNumber(vector.cookie, 123),
         output_mode: vector.outputMode ?? "EightBit",
@@ -764,7 +809,7 @@ export const mockRest = {
     };
   },
   runRaster(req: RasterParams & { do_validate?: boolean }) {
-    const total = req.resolution * req.resolution;
+    const total = req.resolution * req.resolution * (req.parallel_rois?.length ?? 1);
     const pixelsPerChunk = Math.max(1, Math.floor(req.latency_bytes / Math.max(1, req.dwell)));
     const expected = Math.ceil(total / pixelsPerChunk);
     const ts = shortTimestampSuffix();
@@ -811,7 +856,7 @@ export const mockRest = {
     if (req.pattern === "custom" && req.points) {
       totalSamples = req.points.length;
     } else {
-      totalSamples = vectorScanPoints(req).length;
+      totalSamples = vectorScanPoints(req).length * (req.parallel_rois?.length ?? 1);
     }
     const valuesPerChunk = Math.max(64, Math.floor(req.latency_bytes / 2));
     const chunks = Math.max(1, Math.ceil(totalSamples / valuesPerChunk));

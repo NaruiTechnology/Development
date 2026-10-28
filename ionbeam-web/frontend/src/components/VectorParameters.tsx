@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 
-import { updateVector, updateROI } from "../store/scanSlice";
+import { updateVector } from "../store/scanSlice";
 import { useAppDispatch, useAppSelector } from "../store";
 import { useTranslation } from "../i18n";
 import { LatencyHelp } from "./LatencyHelp";
@@ -50,7 +50,6 @@ export function VectorParameters({
   const dispatch = useAppDispatch();
   const { t, fmt } = useTranslation();
   const v = useAppSelector((s) => s.scan.vector);
-  const roi = useAppSelector((s) => s.scan.roi);
   const [pointsText, setPointsText] = useState<string>(
     v.points ? v.points.map((p) => formatPoint(p)).join("\n") : ""
   );

@@ -39,17 +39,15 @@ import { ScanModeHelp } from "./components/ScanModeHelp";
 import { VectorParameters } from "./components/VectorParameters";
 import { VectorScanExecutionSettings } from "./components/VectorScanExecutionSettings";
 import { RasterScanExecutionSettings } from "./components/RasterScanExecutionSettings";
-import { VectorScanPathField } from "./components/VectorScanPathField";
 import { ImageCanvas } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
-import { ROISelectHelp } from "./components/ROISelectHelp";
 import { ROIScanPreview } from "./components/ROIScanPreview";
 import { ROICalibrationCard } from "./components/ROICalibrationCard";
+import { SimulationImageCard } from "./components/SimulationImageCard";
 import { MagCalibrationChart, MagCalibrationControls } from "./components/MagCalibration";
 import { GrayScaleHelp } from "./components/GrayScaleHelp";
 import { VectorGrayLevelHelp } from "./components/VectorGrayLevelHelp";
-import { ErrorWedge } from "./components/ErrorWedge";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ManagementReport } from "./components/ManagementReport";
@@ -69,13 +67,9 @@ import {
 import {
   grayScaleScopeNoteForKind,
   grayScaleSourceLabelForKind,
-  resolveROIActionKind,
   shouldShowROIGrayScaleClear,
-  shouldShowROIActionControls,
-  shouldShowROIActionVectorCanvas,
   resolveGrayScaleSourceKind,
 } from "./lib/grayScaleUI";
-import { completedROIImagePatch } from "./lib/roiWorkflow";
 
 import {
   beginDimensionCalibration,
@@ -111,7 +105,7 @@ const SPLITTER_SPACE = 32;
 const LAST_ADMIN_LOGIN_STORAGE_KEY = "ionbeam:lastAdminLogin";
 type AppRoute = "control" | "report" | "vacuum";
 type LeftTopTab = "scan" | "calibrate";
-type ScanSubTab = "roi" | "raster" | "vector";
+type ScanSubTab = "raster" | "vector";
 type CalibrateSubTab = "dimension" | "mag";
 
 function CollapsibleScanParameters({ children }: { children: ReactNode }) {
@@ -205,6 +199,7 @@ export function App() {
     selectedTargetGray === null ? "" : String(selectedTargetGray)
   );
   const [targetGrayDraftInvalid, setTargetGrayDraftInvalid] = useState(false);
+  const [targetGraySkipped, setTargetGraySkipped] = useState(false);
   const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const dimensionCalibration = useAppSelector((s) => s.dimensionCalibration.values);
   const hasPersistedDimensionCalibration = useAppSelector(
@@ -277,16 +272,12 @@ export function App() {
   const [pendingGrayScaleSkipped, setPendingGrayScaleSkipped] = useState<boolean | null>(committedGrayScaleSkipped);
   const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
-  const [grayScaleConfirmTarget, setGrayScaleConfirmTarget] = useState<"roi" | "vector">("roi");
+  const [grayScaleConfirmTarget, setGrayScaleConfirmTarget] = useState<"roi" | "vector" | "target">("roi");
   const [grayScaleCommitCount, setGrayScaleCommitCount] = useState(0);
   const [vectorGrayLevelsEnabled, setVectorGrayLevelsEnabled] = useState(false);
   const [vectorGrayRange, setVectorGrayRange] = useState<[number, number]>([0, 255]);
   const [vectorGrayScaleSkipped, setVectorGrayScaleSkipped] = useState<boolean | null>(null);
   const [vectorGrayRangeCommitCount, setVectorGrayRangeCommitCount] = useState(0);
-  const [repeat, setRepeat] = useState(1);
-  const [roiActionLocked, setROIActionLocked] = useState(false);
-  const [roiActionCanvasVisible, setROIActionCanvasVisible] = useState(false);
-  const [roiGraySelectionResetToken, setROIGraySelectionResetToken] = useState(0);
   const [activeScanType, setActiveScanType] = useState<ScanType | null>(null);
   const [mergedFigureByKind, setMergedFigureByKind] = useState<{
     raster: string | null;
@@ -614,7 +605,8 @@ export function App() {
     if (scanActive) setAdcTestCollapsed(true);
   }, [scanActive]);
   const vacuumControlsLocked = serviceStatus === null || (vacuumEnabled && !isVacuumSystemReady);
-  const rasterVectorTabsDisabled = panelDisabled || roiActionLocked;
+  const rasterVectorTabsDisabled = panelDisabled;
+  const vectorGrayFilterActive = vectorGrayLevelsEnabled && selectedTargetGray === null;
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
     (lastScanKind === "vector" && vectorCursor > 0) ||
@@ -653,86 +645,67 @@ export function App() {
   });
   const grayScaleSourceLabel = grayScaleSourceLabelForKind(grayScaleSourceKind, t);
   const grayScaleScopeNote = grayScaleScopeNoteForKind(grayScaleSourceKind, isProduction, t);
-  const roiActionGrayFilterActive =
+  const roiGrayFilterActive =
     committedGrayScaleSelection !== null && committedGrayScaleSkipped !== null;
-  const showROIActionVectorCanvas = shouldShowROIActionVectorCanvas({
-    roiActionCanvasVisible,
-    roiActionGrayFilterActive,
-    scanImageDataUrl: roiState.scanImageDataUrl,
-  });
   const displayedROIGrayScaleSelection = pendingGrayScaleSelection ?? committedGrayScaleSelection;
   const displayedROIGrayScaleSkipped = pendingGrayScaleSkipped ?? committedGrayScaleSkipped;
-  const actionScanKind =
-    kind === "roi"
-      ? "vector"
-      : resolveROIActionKind(kind, lastScanKind) ?? lastScanKind;
-  const showROIActionControls = shouldShowROIActionControls({
-    kind,
-    hasPartialROI,
-  });
+  const targetGrayControl = (
+    <div className="canvas-target-gray scan-target-gray">
+      <span className="canvas-target-gray__label">
+        {t("roi.targetGray")}<br />
+        <small>{t("roi.targetGray.hint")}</small>
+      </span>
+      <HelpPopover title={t("roi.targetGray.help.title")} ariaLabel={t("roi.targetGray.help.aria")}>
+        <p>{t("roi.targetGray.help.body")}</p>
+      </HelpPopover>
+      <span className="canvas-target-gray__value">
+        <input
+          type="text"
+          className={`input canvas-target-gray__input${targetGrayDraftInvalid ? " input--invalid" : ""}`}
+          inputMode="numeric"
+          value={targetGrayDraft}
+          placeholder={t("roi.targetGray.empty")}
+          aria-label={t("roi.targetGray")}
+          aria-invalid={targetGrayDraftInvalid}
+          title={targetGrayDraftInvalid ? t("roi.targetGray.invalid") : t("roi.targetGray.title")}
+          disabled={panelDisabled || targetGrayRunning}
+          onChange={(event) => {
+            setTargetGrayDraft(event.target.value);
+            setTargetGrayDraftInvalid(false);
+          }}
+          onBlur={commitTargetGrayDraft}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          data-empty={selectedTargetGray === null ? "true" : "false"}
+        />
+        {selectedTargetGray !== null && (
+          <button
+            type="button"
+            className="canvas-target-gray__clear"
+            aria-label={t("roi.targetGray.clear")}
+            title={t("roi.targetGray.clear")}
+            disabled={panelDisabled || targetGrayRunning}
+            onClick={() => dispatch(setSelectedTargetGray({ value: null }))}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
+          </button>
+        )}
+      </span>
+    </div>
+  );
   const gridLineToggle =
     kind === "roi" ? (
-      // The grid switch and the read-only Target gray level box share the
-      // grid switch's header slot, so every ROI header layout keeps them
-      // side by side; the box flows to the centre of the free space.
-      <div className="canvas-grid-toggle canvas-grid-toggle--grid canvas-target-gray-group">
-        <label className="checkbox vacuum-switch app-switch canvas-grid-toggle">
-          <input
-            type="checkbox"
-            checked={roiState.show_grid}
-            disabled={panelDisabled}
-            onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
-          />
-          <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-          {t("roi.showGrid")}
-        </label>
-        <div className="canvas-target-gray">
-          <span className="canvas-target-gray__label">
-            {t("roi.targetGray")}
-            <br />
-            {t("roi.targetGray.hint")}
-          </span>
-          <HelpPopover
-            title={t("roi.targetGray.help.title")}
-            ariaLabel={t("roi.targetGray.help.aria")}
-          >
-            <p>{t("roi.targetGray.help.body")}</p>
-          </HelpPopover>
-          <span className="canvas-target-gray__value">
-            <input
-              type="text"
-              className={`input canvas-target-gray__input${targetGrayDraftInvalid ? " input--invalid" : ""}`}
-              inputMode="numeric"
-              value={targetGrayDraft}
-              placeholder={t("roi.targetGray.empty")}
-              aria-label={t("roi.targetGray")}
-              aria-invalid={targetGrayDraftInvalid}
-              title={targetGrayDraftInvalid ? t("roi.targetGray.invalid") : undefined}
-              onChange={(event) => {
-                setTargetGrayDraft(event.target.value);
-                setTargetGrayDraftInvalid(false);
-              }}
-              onBlur={commitTargetGrayDraft}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-              }}
-              data-empty={selectedTargetGray === null ? "true" : "false"}
-            />
-            {selectedTargetGray !== null && <button
-              type="button"
-              className="canvas-target-gray__clear"
-              aria-label={t("roi.targetGray.clear")}
-              title={t("roi.targetGray.clear")}
-              disabled={panelDisabled || targetGrayRunning || roiState.calibration_enabled}
-              onClick={() => dispatch(setSelectedTargetGray({ value: null }))}
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="m4 4 8 8M12 4l-8 8" />
-              </svg>
-            </button>}
-          </span>
-        </div>
-      </div>
+      <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
+        <input
+          type="checkbox"
+          checked={roiState.show_grid}
+          disabled={panelDisabled}
+          onChange={(e) => dispatch(updateROI({ show_grid: e.target.checked }))}
+        />
+        <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+        {t("roi.showGrid")}
+      </label>
     ) : kind === "vector" ? (
       <label className="checkbox vacuum-switch app-switch canvas-grid-toggle canvas-grid-toggle--grid">
         <input
@@ -751,7 +724,6 @@ export function App() {
       <input
         type="checkbox"
         checked={kind === "raster" ? roiState.raster_show_scan_path : roiState.vector_show_scan_path}
-        disabled={panelDisabled}
         onChange={(e) =>
           dispatch(updateROI(kind === "raster"
             ? { raster_show_scan_path: e.target.checked }
@@ -772,15 +744,6 @@ export function App() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (!roiState.selection || phase === "completed" || phase === "error" || phase === "idle") {
-      setROIActionLocked(false);
-    }
-    if (!roiState.selection || phase === "idle" || phase === "error") {
-      setROIActionCanvasVisible(false);
-    }
-  }, [phase, roiSelectionKey]);
-
-  useEffect(() => {
     if (phase === "running" || phase === "stopping") return;
     setActiveScanType(null);
   }, [phase]);
@@ -795,7 +758,7 @@ export function App() {
     }
   }, [kind, showGraySpectrum]);
 
-  const resetROIActionContext = useCallback(
+  const resetROIContext = useCallback(
     (options?: { clearSelection?: boolean; preserveScanImage?: boolean; preserveGraySelection?: boolean }) => {
       clearBitmapSelectionCache();
       if (!options?.preserveScanImage) {
@@ -813,8 +776,6 @@ export function App() {
       setGrayScaleLevels([]);
       setGrayScaleConfirmOpen(false);
       setGrayScaleCommitCount(0);
-      setROIActionLocked(false);
-      setROIActionCanvasVisible(false);
     },
     [clearCommittedGrayScaleSelection, dispatch]
   );
@@ -826,8 +787,6 @@ export function App() {
     setPendingGrayScaleSkipped(null);
     setGrayScaleConfirmOpen(false);
     setGrayScaleCommitCount(0);
-    setROIActionLocked(false);
-    setROIActionCanvasVisible(false);
   }, [clearCommittedGrayScaleSelection]);
 
   useEffect(() => {
@@ -840,6 +799,12 @@ export function App() {
     setTargetGrayDraftInvalid(false);
   }, [selectedTargetGray]);
 
+  useEffect(() => {
+    if (selectedTargetGray === null) return;
+    setVectorGrayLevelsEnabled(false);
+    setVectorGrayRangeCommitCount(0);
+  }, [selectedTargetGray]);
+
   function commitTargetGrayDraft() {
     const text = targetGrayDraft.trim();
     if (text === "") {
@@ -848,13 +813,7 @@ export function App() {
       return;
     }
     const value = /^\d+$/.test(text) ? Number(text) : Number.NaN;
-    const filterMin = committedGrayScaleSelection === null
-      ? 0
-      : Math.min(committedGrayScaleSelection[0], committedGrayScaleSelection[1]);
-    const filterMax = committedGrayScaleSelection === null
-      ? 255
-      : Math.max(committedGrayScaleSelection[0], committedGrayScaleSelection[1]);
-    if (!Number.isInteger(value) || value < filterMin || value > filterMax) {
+    if (!Number.isInteger(value) || value < 0 || value > 255) {
       setTargetGrayDraftInvalid(true);
       return;
     }
@@ -937,11 +896,11 @@ export function App() {
           scanImageDataUrl: null,
         })
       );
-      resetROIActionContext({ preserveScanImage: true });
+      resetROIContext({ preserveScanImage: true });
       return;
     }
-    resetROIActionContext();
-  }, [dispatch, resetROIActionContext, roiSelectionKey, roiState.scanImageDataUrl, t]);
+    resetROIContext();
+  }, [dispatch, resetROIContext, roiSelectionKey, roiState.scanImageDataUrl, t]);
 
   useEffect(() => {
     if (kind !== "roi") return;
@@ -965,33 +924,6 @@ export function App() {
 
   const handleRenderedImageChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null, scanId: number) => {
-      if (
-        kind === "roi" &&
-        scanKind === "vector" &&
-        roiActionCanvasVisible &&
-        !roiActionGrayFilterActive
-      ) {
-        if (imageUrl) {
-          dispatch(
-            updateROI(
-              completedROIImagePatch(
-                roiStateRef.current,
-                imageUrl,
-                t("roi.imageName.lastScan"),
-              ),
-            )
-          );
-          // Keep the completed vector buffer and its canvas mounted. The
-          // phase/chunk/resolution message panel belongs to ImageCanvas, so
-          // clearing the buffer or switching back to ROIEditor here made that
-          // panel disappear as soon as the scan completed. Manual Stop still
-          // performs the pre-scan rollback and clears this buffer.
-          setROIActionLocked(false);
-          setLastLiveScanImage(null);
-          setMergedFigureByKind({ raster: null, vector: null });
-        }
-        return;
-      }
       if (imageUrl) {
         // A later image of the same scan (final chunks, a re-render) replaces
         // that scan's entry; only a new scan pushes the previous result into
@@ -1064,8 +996,6 @@ export function App() {
     [
       dispatch,
       kind,
-      roiActionCanvasVisible,
-      roiActionGrayFilterActive,
       imagePanelLayoutByKind,
       imagePanelLocked,
       imagePanelSlots,
@@ -1154,9 +1084,44 @@ export function App() {
     []
   );
 
+  const handleSimulationImageChange = useCallback(
+    (imageUrl: string | null) => {
+      if (kind !== "raster" && kind !== "vector") return;
+      const scanKind = kind;
+      const pane = selectedImagePane[scanKind];
+
+      // The picker also supplies the bitmap used by simulated scans through
+      // ROI state. Mirror it into the active scan pane so selecting a source
+      // never sends the operator to the ROI view to see what they just chose.
+      setSinglePaneImages((current) => ({ ...current, [scanKind]: imageUrl }));
+      setLastLiveScanImage((current) => current?.kind === scanKind ? null : current);
+      if (imagePanelLayoutByKind[scanKind] > 1) {
+        setImagePanelSlots((current) => {
+          const slots = [...current[scanKind]];
+          slots[pane] = imageUrl;
+          return { ...current, [scanKind]: slots };
+        });
+        setScanTargetImagePane((current) => ({ ...current, [scanKind]: pane }));
+      }
+    },
+    [imagePanelLayoutByKind, kind, selectedImagePane],
+  );
+
+  const handleTargetGrayPick = useCallback((gray: number, point: { x: number; y: number }) => {
+    setTargetGrayDraft(String(gray));
+    setTargetGrayDraftInvalid(false);
+    setTargetGraySkipped(false);
+    dispatch(setSelectedTargetGray({ value: gray, point }));
+    setGrayScaleConfirmTarget("target");
+    setPendingGrayScaleSelection([gray, gray]);
+    setPendingGrayScaleAnchor(null);
+    setPendingGrayScaleSkipped(false);
+    setGrayScaleConfirmOpen(true);
+  }, [dispatch]);
+
   const handleGrayScaleSelect = useCallback((grayScale: number) => {
     setGrayScaleConfirmTarget("roi");
-    setPendingGrayScaleSkipped((current) => current ?? committedGrayScaleSkipped ?? false);
+    setPendingGrayScaleSkipped(false);
     if (grayScaleCommitCount === 0) {
       setPendingGrayScaleAnchor(grayScale);
       setPendingGrayScaleSelection([grayScale, grayScale]);
@@ -1172,18 +1137,21 @@ export function App() {
     setPendingGrayScaleSelection((next ?? [grayScale, grayScale]) as GrayScaleSelection);
     setGrayScaleCommitCount(0);
     setGrayScaleConfirmOpen(true);
-  }, [committedGrayScaleSkipped, grayScaleCommitCount, pendingGrayScaleAnchor, pendingGrayScaleSelection]);
+  }, [grayScaleCommitCount, pendingGrayScaleAnchor, pendingGrayScaleSelection]);
 
   const handleGrayScaleConfirm = useCallback(() => {
     if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
+    setPendingGrayScaleSkipped(false);
     setGrayScaleConfirmOpen(true);
   }, [pendingGrayScaleAnchor, pendingGrayScaleSelection]);
 
   const handleGrayScaleConfirmAccept = useCallback(() => {
     if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
     dispatch(updateVector({ dwell: 2 }));
-    if (grayScaleConfirmTarget === "vector") {
-      setVectorGrayScaleSkipped(true);
+    if (grayScaleConfirmTarget === "target") {
+      setTargetGraySkipped(pendingGrayScaleSkipped ?? false);
+    } else if (grayScaleConfirmTarget === "vector") {
+      setVectorGrayScaleSkipped(pendingGrayScaleSkipped ?? false);
     } else {
       if (roiState.scanImageDataUrl !== null && roiState.imageKind === "lastScan") {
         dispatch(
@@ -1197,8 +1165,6 @@ export function App() {
       }
       dispatch(clearROIScanImage());
       dispatch(resetVector());
-      setROIActionCanvasVisible(false);
-      setROIGraySelectionResetToken((n) => n + 1);
       dispatch(
         setROIGrayScaleSelection({
           selection: pendingGrayScaleSelection,
@@ -1224,13 +1190,8 @@ export function App() {
     // so nothing is reset here. Skip is only the default for a first use.
     if (checked) {
       setVectorGrayScaleSkipped((current) => current ?? true);
-      // Adaptive feedback visits each coordinate twice (probe + action), so
-      // starting it at the normal 2048 edge can leave the live canvas showing
-      // only its first scan line for a long time. Initialize the filtered
-      // sweep at 128x128 so both dimensions become visible promptly; the
-      // resolution control remains editable after the filter is enabled.
+      // Enabling a filter must preserve the operator's selected resolution.
       dispatch(updateVector({
-        vector_resolution: 128,
         pattern: "default",
         points: null,
       }));
@@ -1238,14 +1199,15 @@ export function App() {
   }, [dispatch]);
 
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
+    if (checked && selectedTargetGray !== null) return;
     setVectorGrayRangeCommitCount(0);
     applyVectorGrayLevelsToggle(checked);
-  }, [applyVectorGrayLevelsToggle]);
+  }, [applyVectorGrayLevelsToggle, selectedTargetGray]);
 
   useEffect(() => {
-    if (!vectorGrayLevelsEnabled || vectorLatencyBytes >= 8196) return;
+    if (!vectorGrayFilterActive || vectorLatencyBytes >= 8196) return;
     dispatch(updateVector({ latency_bytes: 8196 }));
-  }, [dispatch, vectorGrayLevelsEnabled, vectorLatencyBytes]);
+  }, [dispatch, vectorGrayFilterActive, vectorLatencyBytes]);
 
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
     const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
@@ -1253,24 +1215,24 @@ export function App() {
   }, []);
 
   const handleVectorGrayRangeSelect = useCallback(() => {
-    if (!vectorGrayLevelsEnabled) return;
+    if (!vectorGrayFilterActive) return;
     setGrayScaleConfirmTarget("vector");
     setPendingGrayScaleSelection(vectorGrayRange);
     setPendingGrayScaleAnchor(null);
-    setPendingGrayScaleSkipped(true);
     if (vectorGrayRangeCommitCount === 0) {
       setVectorGrayRangeCommitCount(1);
       return;
     }
     setVectorGrayRangeCommitCount(0);
+    setPendingGrayScaleSkipped(false);
     setGrayScaleConfirmOpen(true);
-  }, [committedGrayScaleSkipped, vectorGrayLevelsEnabled, vectorGrayRange, vectorGrayRangeCommitCount]);
+  }, [vectorGrayFilterActive, vectorGrayRange, vectorGrayRangeCommitCount]);
 
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
     suppressedROIScanImageUrlRef.current = null;
     setSuppressedROIScanImageUrl(null);
-    resetROIActionContext({ clearSelection: true });
+    resetROIContext({ clearSelection: true });
     dispatch(
       updateROI({
         imageName: t("roi.imageName.lastScan"),
@@ -1279,7 +1241,7 @@ export function App() {
         imageBounds: null,
       })
     );
-  }, [dispatch, resetROIActionContext, roiScanImageUrl, t]);
+  }, [dispatch, resetROIContext, roiScanImageUrl, t]);
 
   function selectKind(nextKind: ScanKind) {
     if (nextKind === kind) return;
@@ -1288,7 +1250,7 @@ export function App() {
     const nextScanKind = nextKind === "raster" || nextKind === "vector" ? nextKind : null;
     const currentScanKind = kind === "raster" || kind === "vector" ? kind : null;
 
-    resetROIActionContext({ preserveScanImage: true, preserveGraySelection: true });
+    resetROIContext({ preserveScanImage: true, preserveGraySelection: true });
 
     if (nextScanKind && (currentScanKind === null || currentScanKind !== nextScanKind)) {
       dispatch(streamReset());
@@ -1308,12 +1270,7 @@ export function App() {
   function activateScanSubTab(nextTab: ScanSubTab) {
     setActiveTopTab("scan");
     setScanSubTab(nextTab);
-    setRepeat(1);
     dispatch(updateROI({ calibration_enabled: false }));
-    if (nextTab === "roi") {
-      selectKind("roi");
-      return;
-    }
     selectKind(nextTab);
   }
 
@@ -1436,17 +1393,35 @@ export function App() {
       id="image-panel-toolbar-slot"
       className={`card__header-toolbar-slot image-panel-card__toolbar-slot${kind === "vector" ? " image-panel-card__toolbar-slot--vector" : ""}`}
     >
+      {(kind === "raster" || kind === "vector") && (
+        <div className="scan-header-feature-panel scan-header-feature-panel--target-gray">
+          {targetGrayControl}
+        </div>
+      )}
       {kind === "vector" ? (
-        // Always shown on the vector tab; disabled while the Gray level
-        // filter switch is off.
-        <VectorGrayLevelSelector
-          enabled={vectorGrayLevelsEnabled}
-          range={vectorGrayRange}
-          disabled={panelDisabled || !vectorGrayLevelsEnabled}
-          onRangeChange={handleVectorGrayRangeChange}
-          onRangeCommit={handleVectorGrayRangeSelect}
-          onSelect={handleVectorGrayRangeSelect}
-        />
+        <section className={`scan-header-feature-panel scan-header-feature-panel--gray-range${selectedTargetGray !== null ? " scan-header-feature-panel--inactive" : ""}`}>
+          <div className="scan-header-feature-panel__heading">
+            <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">
+              <input
+                type="checkbox"
+                checked={vectorGrayFilterActive}
+                disabled={panelDisabled || selectedTargetGray !== null}
+                onChange={(event) => handleVectorGrayLevelsToggle(event.target.checked)}
+              />
+              <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
+              {t("vector.grayLevels")}
+            </label>
+            <VectorGrayLevelHelp />
+          </div>
+          <VectorGrayLevelSelector
+            enabled={vectorGrayFilterActive}
+            range={vectorGrayRange}
+            disabled={panelDisabled || !vectorGrayFilterActive || selectedTargetGray !== null}
+            onRangeChange={handleVectorGrayRangeChange}
+            onRangeCommit={handleVectorGrayRangeSelect}
+            onSelect={handleVectorGrayRangeSelect}
+          />
+        </section>
       ) : showGraySpectrum ? (
         <GrayScaleSpectrum
           selectedGrayScale={displayedROIGrayScaleSelection}
@@ -1457,7 +1432,7 @@ export function App() {
           onSelect={handleGrayScaleSelect}
         />
       ) : null}
-      {shouldShowROIGrayScaleClear({ kind, grayFilterActive: roiActionGrayFilterActive }) && (
+      {shouldShowROIGrayScaleClear({ kind, grayFilterActive: roiGrayFilterActive }) && (
         <button
           type="button"
           className="btn btn--accent-solid image-panel-card__header-action"
@@ -1576,19 +1551,6 @@ export function App() {
             </div>
             {activeTopTab === "scan" ? (
               <div className="tabs tabs--sub" role="tablist" aria-label={t("tabs.scan.aria")}>
-                <div className="tab-group tab-group--roi">
-                  <button
-                    role="tab"
-                    className="tab tab--sub"
-                    aria-selected={scanSubTab === "roi"}
-                    disabled={panelDisabled}
-                    onClick={() => activateScanSubTab("roi")}
-                  >
-                    <Icon name="target" tone="tab" />
-                    {t("tabs.roi")}
-                  </button>
-                  <ROISelectHelp />
-                </div>
                 <button
                   role="tab"
                   className="tab tab--sub"
@@ -1643,72 +1605,40 @@ export function App() {
             <div className="card__body">
               {activeTopTab === "scan" ? (
                 scanSubTab === "raster" ? (
-                  <CollapsibleScanParameters>
-                    <div className="card__body">
-                      <RasterParameters disabled={panelDisabled} />
-                      <div ref={setValidatedActionsHost} className="validated-run-actions" />
-                      <div ref={setValidationSummaryHost} className="validated-run-summary" />
-                    </div>
-                  </CollapsibleScanParameters>
-                ) : scanSubTab === "vector" ? (
-                  <CollapsibleScanParameters>
-                    <div className="card__body">
-                      <VectorParameters
-                        disabled={panelDisabled}
-                        grayLevelFilterActive={vectorGrayLevelsEnabled}
-                        showScanPathSettings={false}
-                      />
-                      <div ref={setValidatedActionsHost} className="validated-run-actions" />
-                      <div ref={setValidationSummaryHost} className="validated-run-summary" />
-                    </div>
-                  </CollapsibleScanParameters>
-                ) : (
                   <>
-                    <ROIEditor
+                    <SimulationImageCard
                       disabled={panelDisabled}
-                      variant="controls"
-                      allowClearRegionWhileDisabled={roiActionLocked}
                       lastScanImageUrl={roiScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
+                      onImageChange={handleSimulationImageChange}
                     />
-                    {hasPartialROI && (
-                      <VectorScanPathField
-                        id="roi-vector-scan-path"
-                        disabled={panelDisabled}
-                      />
-                    )}
-                    {showROIActionControls && kind === "roi" && (
-                      <div className="roi-action-controls">
-                    <ScanControls
-                          kind={actionScanKind}
-                          disabled={panelDisabled}
-                          scanActive={scanActive}
-                          repeat={repeat}
-                          onRepeatChange={setRepeat}
-                          showRepeatControl={roiActionGrayFilterActive}
-                          vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
-                          vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
-                          roiAction
-                          onScanRunStart={setActiveScanType}
-                          onActionRunStart={() => {
-                            setROIActionLocked(true);
-                            setROIActionCanvasVisible(true);
-                          }}
-                          onActionRunStop={() => {
-                            setROIActionLocked(false);
-                            setROIActionCanvasVisible(false);
-                            setActiveScanType(null);
-                          }}
-                        />
+                    <CollapsibleScanParameters>
+                      <div className="card__body">
+                        <RasterParameters disabled={panelDisabled} />
+                        <div ref={setValidatedActionsHost} className="validated-run-actions" />
+                        <div ref={setValidationSummaryHost} className="validated-run-summary" />
                       </div>
-                    )}
-                    {showROICalibrationInControls && (
-                      <ROICalibrationCard
-                        disabled={panelDisabled}
-                        lastScanImageUrl={roiScanImageUrl}
-                        onLoadLastScan={handleLoadLastScan}
-                      />
-                    )}
+                    </CollapsibleScanParameters>
+                  </>
+                ) : (
+                  <>
+                    <SimulationImageCard
+                      disabled={panelDisabled}
+                      lastScanImageUrl={roiScanImageUrl}
+                      onLoadLastScan={handleLoadLastScan}
+                      onImageChange={handleSimulationImageChange}
+                    />
+                    <CollapsibleScanParameters>
+                      <div className="card__body">
+                        <VectorParameters
+                          disabled={panelDisabled}
+                          grayLevelFilterActive={vectorGrayFilterActive}
+                          showScanPathSettings={false}
+                        />
+                        <div ref={setValidatedActionsHost} className="validated-run-actions" />
+                        <div ref={setValidationSummaryHost} className="validated-run-summary" />
+                      </div>
+                    </CollapsibleScanParameters>
                   </>
                 )
               ) : (
@@ -1719,7 +1649,6 @@ export function App() {
                     <ROIEditor
                       disabled={panelDisabled}
                       variant="controls"
-                      allowClearRegionWhileDisabled={roiActionLocked}
                       lastScanImageUrl={roiScanImageUrl}
                       onLoadLastScan={handleLoadLastScan}
                     />
@@ -1733,10 +1662,9 @@ export function App() {
                   </>
                 )
               )}
-              {(showROIActionControls || (activeTopTab === "scan" && scanSubTab === "roi")) && (
+              {activeTopTab === "scan" && (
                 <>
-                  {kind !== "roi" && (
-                    <div className={`card scan-controls-card${activeScanColor ? " scan-controls-card--active" : ""}`}>
+                  <div className={`card scan-controls-card${activeScanColor ? " scan-controls-card--active" : ""}`}>
                       <div className="card__header">
                         <span className="card__title">{t("card.controls")}</span>
                         <button
@@ -1753,28 +1681,27 @@ export function App() {
                       {/* hidden, not unmounted: ScanControls owns the live scan stream */}
                       <div className="card__body" hidden={controlsCollapsed}>
                         <ScanControls
-                          kind={actionScanKind}
+                          kind={scanSubTab}
                           disabled={panelDisabled}
                           scanActive={scanActive}
-                          repeat={repeat}
-                          onRepeatChange={setRepeat}
-                          showRepeatControl={actionScanKind === "vector" && vectorGrayLevelsEnabled}
-                          vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
-                          vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
-                          firstRowContent={scanSubTab === "vector" ? (
-                            <VectorScanExecutionSettings
-                              disabled={panelDisabled}
-                              grayLevelFilterActive={vectorGrayLevelsEnabled}
-                            />
-                          ) : scanSubTab === "raster" ? (
-                            <RasterScanExecutionSettings disabled={panelDisabled} />
-                          ) : null}
+                          vectorGrayScaleSelection={selectedTargetGray !== null
+                            ? [selectedTargetGray, selectedTargetGray]
+                            : vectorGrayFilterActive ? vectorGrayRange : null}
+                          vectorGrayScaleSkipped={selectedTargetGray !== null
+                            ? targetGraySkipped
+                            : vectorGrayFilterActive ? vectorGrayScaleSkipped : null}
+                          firstRowContent={(
+                            <>
+                              {scanSubTab === "vector" ? (
+                                <VectorScanExecutionSettings disabled={panelDisabled} grayLevelFilterActive={vectorGrayFilterActive} />
+                              ) : <RasterScanExecutionSettings disabled={panelDisabled} />}
+                            </>
+                          )}
                           onScanRunStart={setActiveScanType}
                           validatedActionsHost={validatedActionsHost}
                         />
                       </div>
                     </div>
-                  )}
                   <div className="card save-results-card">
                     <div className="card__header">
                       <span className="card__title">{t("card.runReport")}</span>
@@ -1795,14 +1722,14 @@ export function App() {
                         disabled={panelDisabled}
                         previewMode={previewMode}
                         mergedFigureUrl={
-                          actionScanKind === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
+                          scanSubTab === "vector" ? mergedFigureByKind.vector : mergedFigureByKind.raster
                         }
                         liveFigureUrl={
-                          lastLiveScanImage && lastLiveScanImage.kind === actionScanKind
+                          lastLiveScanImage && lastLiveScanImage.kind === scanSubTab
                             ? lastLiveScanImage.imageUrl
                             : null
                         }
-                        kindOverride={actionScanKind}
+                        kindOverride={scanSubTab}
                         validationSummaryHost={validationSummaryHost}
                       />
                     </div>
@@ -1838,63 +1765,9 @@ export function App() {
                   )}
                 </div>
               )}
-              {showROIActionControls && kind !== "roi" && (
-                <>
-                  {kind === "vector" && (
-                    <div className="card dac-check-card">
-                      <div className="card__header">
-                        <span className="card__title">
-                          {t("card.dacCheck")}
-                          <DacCheckHelp />
-                        </span>
-                        <button
-                          type="button"
-                          className="card__collapse-btn"
-                          aria-expanded={!dacCheckCollapsed}
-                          aria-label={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
-                          title={dacCheckCollapsed ? t("dacRamp.expand") : t("dacRamp.collapse")}
-                          onClick={() => setDacCheckCollapsed((collapsed) => !collapsed)}
-                        >
-                          <Icon name="chevronDown" />
-                        </button>
-                      </div>
-                      {!dacCheckCollapsed && (
-                        <div className="card__body">
-                          <DacRampPanel disabled={panelDisabled} />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <div className="card beam-hold-card">
-                    <div className="card__header">
-                      <span className="card__title">{t("card.beamHold")}</span>
-                      <button
-                        type="button"
-                        className="card__collapse-btn"
-                        aria-expanded={!beamHoldCollapsed}
-                        aria-label={beamHoldCollapsed ? t("beamHold.expand") : t("beamHold.collapse")}
-                        title={beamHoldCollapsed ? t("beamHold.expand") : t("beamHold.collapse")}
-                        onClick={() => setBeamHoldCollapsed((collapsed) => !collapsed)}
-                      >
-                        <Icon name="chevronDown" />
-                      </button>
-                    </div>
-                    {!beamHoldCollapsed && (
-                      <div className="card__body">
-                        <BeamHoldPanel
-                          disabled={panelDisabled}
-                          kind={kind === "raster" ? "raster" : "vector"}
-                          repeat={repeat}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
             </div>
           </div>
 
-          {showROIActionControls && <ErrorWedge signedInUser={signedInUser} />}
         </section>
 
         <div
@@ -1933,8 +1806,6 @@ export function App() {
                   <span className="card__title">{t(
                     adcView
                       ? "card.adcTimeline"
-                      : kind === "roi" && showROIActionVectorCanvas
-                      ? "card.vectorPattern"
                       : imagePanelTitleKey
                   )}</span>
                   {headerSecondRow && (
@@ -1955,19 +1826,6 @@ export function App() {
                     </HelpPopover>
                   )}
                   {!adcView && scanPathToggle}
-                  {!adcView && kind === "vector" && (
-                    <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">
-                      <input
-                        type="checkbox"
-                        checked={vectorGrayLevelsEnabled}
-                        disabled={panelDisabled}
-                        onChange={(event) => handleVectorGrayLevelsToggle(event.target.checked)}
-                      />
-                      <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
-                      {t("vector.grayLevels")}
-                      <VectorGrayLevelHelp />
-                    </label>
-                  )}
                   {!adcView && !headerSecondRow && toolbarSlot}
                 </div>
                 {headerSecondRow && (
@@ -2009,38 +1867,35 @@ export function App() {
             <div className="card__body">
                 {adcView ? (
                   <AdcTimelineCanvas state={adcTest.state} />
-                ) : kind === "roi" ? (
-                  showROIActionVectorCanvas ? (
-                    <ImageCanvas
-                      kind="vector"
-                      onRenderedImageChange={handleRenderedImageChange}
-                      onMergedFigureChange={handleMergedFigureChange}
-                      ignoreTransforms
-                    />
-                  ) : (
-                    <ROIEditor
-                      disabled={panelDisabled}
-                      variant="canvas"
-                      backgroundImageUrl={activeROIScanImageUrl}
-                      grayScaleSelection={displayedROIGrayScaleSelection}
-                      grayScaleSkipped={displayedROIGrayScaleSkipped}
-                      liveVectorPreview={roiActionCanvasVisible && roiActionGrayFilterActive}
-                      hideSelectionOverlay={showROIActionVectorCanvas}
-                      graySelectionResetToken={roiGraySelectionResetToken}
-                    />
-                  )
+              ) : kind === "roi" ? (
+                  <ROIEditor
+                    disabled={panelDisabled}
+                    variant="canvas"
+                    backgroundImageUrl={activeROIScanImageUrl}
+                    grayScaleSelection={displayedROIGrayScaleSelection}
+                    grayScaleSkipped={displayedROIGrayScaleSkipped}
+                  />
               ) : kind === "mag" ? (
                 <MagCalibrationChart />
               ) : (
                   <ImageCanvas
                     kind={kind as ScanKind}
+                    onTargetGrayPick={kind === "raster" || kind === "vector" ? handleTargetGrayPick : undefined}
                     onRenderedImageChange={handleRenderedImageChange}
                     onMergedFigureChange={handleMergedFigureChange}
                     onPaneImageChange={handleImagePaneChange}
                     onPaneRecycle={handleImagePaneRecycle}
-                  vectorGrayScaleSelection={vectorGrayLevelsEnabled ? vectorGrayRange : null}
-                  vectorGrayScaleSkipped={vectorGrayLevelsEnabled ? vectorGrayScaleSkipped : null}
-                  singlePaneSourceIndex={savedSplitRef.current?.selected[kind as "raster" | "vector"] ?? 0}
+                  vectorGrayScaleSelection={selectedTargetGray !== null
+                    ? [selectedTargetGray, selectedTargetGray]
+                    : vectorGrayFilterActive ? vectorGrayRange : null}
+                  vectorGrayScaleSkipped={selectedTargetGray !== null
+                    ? targetGraySkipped
+                    : vectorGrayFilterActive ? vectorGrayScaleSkipped : null}
+                  singlePaneSourceIndex={
+                    imagePanelLayout > 1
+                      ? scanTargetImagePane[kind as "raster" | "vector"]
+                      : savedSplitRef.current?.selected[kind as "raster" | "vector"] ?? 0
+                  }
                   singlePaneImage={singlePaneImages[kind as "raster" | "vector"]}
                   imageLayout={imagePanelLayout}
                   imageSlots={imagePanelSlots[kind as "raster" | "vector"]}
@@ -2088,7 +1943,7 @@ export function App() {
       <SettingsDialog
         targetAccountId={settingsTarget.accountId}
         targetLogin={settingsTarget.login}
-        vectorGrayLevelsEnabled={vectorGrayLevelsEnabled}
+        vectorGrayLevelsEnabled={vectorGrayFilterActive}
       />
       {vacuumEnabled && (
         <VacuumDashboard

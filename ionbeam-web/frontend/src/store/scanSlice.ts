@@ -125,6 +125,13 @@ export interface ROIState {
   vector_show_grid: boolean;
   raster_show_scan_path: boolean;
   vector_show_scan_path: boolean;
+  /** Multiple scan regions used by ordinary Raster and Vector runs. */
+  scan_regions: ROIRequest[];
+  active_scan_region: number | null;
+  /** Whether the ROI Scan tool is active on the live scan canvas. */
+  roi_scan_enabled: boolean;
+  /** OBI-style magnification applied to the full FOV or every scan region. */
+  scan_zoom: number;
   selection: ROIRequest | null;
   imageName: string;
   imageDataUrl: string | null;
@@ -144,7 +151,7 @@ export interface ROIState {
 
 const defaultRaster: RasterRequest = {
   resolution: 512,
-  dwell: 16,
+  dwell: 8,
   latency_bytes: 16384,
   frame_blank: true,
   cookie: 123,
@@ -162,8 +169,8 @@ const defaultVector: VectorRequest = {
   // dedicated single-axis linearity check.
   scan_path: "horizontal_sawtooth",
   points: null,
-  vector_resolution: 2048,
-  dwell: 16,
+  vector_resolution: 1024,
+  dwell: 8,
   latency_bytes: 8196,
   output_mode: "SixteenBit",
   adc_valid: true,
@@ -208,8 +215,12 @@ const initialState: ScanState = {
     show_grid: true,
     raster_show_grid: true,
     vector_show_grid: true,
-    raster_show_scan_path: false,
-    vector_show_scan_path: false,
+    raster_show_scan_path: true,
+    vector_show_scan_path: true,
+    scan_regions: [],
+    active_scan_region: null,
+    roi_scan_enabled: false,
+    scan_zoom: 1,
     selection: null,
     imageName: "No image selected",
     imageDataUrl: null,
@@ -513,10 +524,36 @@ const slice = createSlice({
       if ("selection" in a.payload) {
         s.raster.roi = a.payload.selection ?? null;
         s.vector.roi = a.payload.selection ?? null;
-        if (a.payload.selection) {
-          s.roi.vector_show_scan_path = true;
-        }
       }
+    },
+    setScanZoom(s, a: PayloadAction<number>) {
+      const zoom = Number(a.payload);
+      s.roi.scan_zoom = Number.isFinite(zoom) ? Math.max(1, Math.min(20000, zoom)) : 1;
+    },
+    setROIScanEnabled(s, a: PayloadAction<boolean>) {
+      s.roi.roi_scan_enabled = Boolean(a.payload);
+    },
+    addScanRegion(s, a: PayloadAction<ROIRequest>) {
+      s.roi.scan_regions.push(a.payload);
+      s.roi.active_scan_region = s.roi.scan_regions.length - 1;
+    },
+    updateScanRegion(s, a: PayloadAction<{ index: number; region: ROIRequest }>) {
+      if (a.payload.index < 0 || a.payload.index >= s.roi.scan_regions.length) return;
+      s.roi.scan_regions[a.payload.index] = a.payload.region;
+      s.roi.active_scan_region = a.payload.index;
+    },
+    removeScanRegion(s, a: PayloadAction<number>) {
+      if (a.payload < 0 || a.payload >= s.roi.scan_regions.length) return;
+      s.roi.scan_regions.splice(a.payload, 1);
+      s.roi.active_scan_region = s.roi.scan_regions.length
+        ? Math.min(a.payload, s.roi.scan_regions.length - 1)
+        : null;
+    },
+    setActiveScanRegion(s, a: PayloadAction<number | null>) {
+      const index = a.payload;
+      s.roi.active_scan_region = index !== null && index >= 0 && index < s.roi.scan_regions.length
+        ? index
+        : null;
     },
     setScanGeometry(s, a: PayloadAction<AppliedScanGeometry | null>) {
       s.roi.scanGeometry = a.payload && a.payload.enabled ? a.payload : null;
@@ -813,6 +850,12 @@ export const {
   updateBeamEnergyEv,
   setStreamTransforms,
   updateROI,
+  setScanZoom,
+  setROIScanEnabled,
+  addScanRegion,
+  updateScanRegion,
+  removeScanRegion,
+  setActiveScanRegion,
   beginROICalibration,
   beginDimensionCalibration,
   setScanGeometry,

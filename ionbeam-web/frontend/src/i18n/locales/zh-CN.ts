@@ -256,6 +256,8 @@ export const zhCN: Partial<TranslationTable> = {
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "运行",
+  "scan.resumeQueue": "继续队列",
+  "scan.resumeQueue.title": "从第一个未完成的扫描继续已保存的 ROI 队列",
   "scan.pause": "暂停",
   "scan.pausing": "正在暂停…",
   "scan.resume": "继续",
@@ -293,6 +295,12 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.repeat.title": "设置 Action run 循环重复的次数",
   "common.custom": "自定义",
   "common.invalidNumber": "无效数字。",
+  "scan.zoom": "缩放",
+  "scan.zoom.title": "OBI 式放大：没有局部 ROI 时应用于完整图像，否则应用于每个选定 ROI。",
+  "scan.roi.remove": "清除选定的 ROI",
+  "scan.roi.edit": "ROI 扫描",
+  "scan.parallel": "并行",
+  "scan.parallel.title": "在一条路径中扫描所有选定的 ROI 区域",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "分辨率",
@@ -376,6 +384,11 @@ export const zhCN: Partial<TranslationTable> = {
   /* ===== ROI editor =============================================== */
   "roi.select": "选择文件",
   "roi.loadLastScan": "加载上次扫描",
+  "card.simulationImage": "加载图像",
+  "simulation.mode.simulation": "模拟",
+  "simulation.mode.hardware": "硬件",
+  "simulation.image.hintSimulation": "扫描将以此图像作为模拟来源。",
+  "simulation.image.hintHardware": "扫描在仪器上执行;图像仅用于 ROI 选取。",
   "roi.clearImage": "清除图像",
   "roi.clearRegion": "清除区域",
   "roi.calibrate": "校准",
@@ -387,11 +400,11 @@ export const zhCN: Partial<TranslationTable> = {
   "roi.end": "终点 (x, y)",
   "roi.showGrid": "显示网格线",
   "roi.targetGray": "目标灰度",
-  "roi.targetGray.hint": "右键点选",
-  "roi.targetGray.title": "在 ROI 图像上右键选取像素，以设置目标灰度",
+  "roi.targetGray.hint": "右键采样图像",
+  "roi.targetGray.title": "在当前扫描图像上右键选取像素，以设置目标灰度",
   "roi.targetGray.help.title": "目标灰度",
   "roi.targetGray.help.aria": "了解目标灰度选择和运行操作",
-  "roi.targetGray.help.body": "在 ROI 图像上右键点击一个像素，将其灰度值（0–255）设为目标；点击 × 可清除目标。在仿真模式下，选中 ROI 区域且未启用灰度范围筛选时，点击“运行”会逐步降低高于目标值的像素。低于或等于目标值的像素以及区域外的像素均保持不变。在生产模式下，“运行”会执行正常的硬件扫描和 ADC 验证。",
+  "roi.targetGray.help.body": "在当前 Raster 或 Vector 图像上右键采样灰度（0–255），也可直接输入数值；点击 × 可清除。设置后，扫描会在每个选定区域应用目标灰度阈值。Raster 仿真和 Vector 扫描会应用该阈值；Raster 硬件扫描目前仍按普通模式运行。",
   "roi.targetGray.clear": "清除目标灰度",
   "roi.targetGray.empty": "右键点选图像",
   "roi.targetGray.invalid": "请输入灰度筛选范围内的整数。",

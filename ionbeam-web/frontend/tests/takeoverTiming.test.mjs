@@ -42,18 +42,16 @@ test("the plan follows the scan Run would start", async () => {
   const base = {
     raster: { resolution: 512, dwell: 3, frame_blank: false },
     vector: { pattern: "default", vector_resolution: 256, scan_path: "horizontal_sawtooth", points: null, dwell: 16 },
-    repeat: 4,
     defaultFrameBlank: true,
     switchDelayMs: 20,
   };
   const raster = takeoverPlanForScan({ ...base, kind: "raster" });
   assert.deepEqual([raster.framePixels, raster.dwell, raster.frames, raster.frameBlank], [512 * 512, 3, 1, false]);
   const vector = takeoverPlanForScan({ ...base, kind: "vector" });
-  assert.deepEqual([vector.framePixels, vector.dwell, vector.frames, vector.frameBlank], [256 * 256, 16, 4, true]);
+  assert.deepEqual([vector.framePixels, vector.dwell, vector.frames, vector.frameBlank], [256 * 256, 16, 1, true]);
   const custom = takeoverPlanForScan({ ...base, kind: "vector", vector: { ...base.vector, pattern: "custom", points: new Array(1234) } });
   assert.equal(custom.framePixels, 1234);
   assert.equal(takeoverPlanForScan({ ...base, kind: "vector", infinite: true }).frames, null);
-  assert.equal(takeoverPlanForScan({ ...base, kind: "vector", repeat: 999 }).frames, 50);
 });
 
 test("takeover happens exactly when scans use the hardware (service rule)", async () => {

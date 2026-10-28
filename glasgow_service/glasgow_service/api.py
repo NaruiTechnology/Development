@@ -12,7 +12,7 @@ import logging
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from typing import Literal
 
 from .service import DeviceService, DeviceBusy, DeviceNotReady
@@ -21,6 +21,7 @@ from .models  import (
     BeamHoldRequest, ScanResult, ServiceStatus,
 )
 from .auth    import require_token
+from . import scan_assets
 from .config  import find_config_path
 from .service import LOG_NAME
 from AutomationPy.buildingblocks.automation_log import AutomationLog
@@ -81,6 +82,35 @@ async def get_defaults():
 
 
 # ---------- raster ---------------------------------------------------------
+
+@app.post("/scan/assets/prepare", dependencies=[Depends(require_token)], tags=["scan"])
+async def prepare_scan_asset(body: dict):
+    try:
+        return await asyncio.to_thread(
+            scan_assets.prepare, str(body.get("asset_id", "")), int(body.get("total_bytes", 0)))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.put("/scan/assets/{asset_id}/chunk", dependencies=[Depends(require_token)], tags=["scan"])
+async def append_scan_asset(asset_id: str, request: Request, offset: int = Query(..., ge=0)):
+    data = bytearray()
+    async for part in request.stream():
+        if len(part) > scan_assets.MAX_CHUNK_BYTES - len(data):
+            raise HTTPException(413, f"chunk must be at most {scan_assets.MAX_CHUNK_BYTES} bytes")
+        data.extend(part)
+    try:
+        return await asyncio.to_thread(scan_assets.append, asset_id, offset, bytes(data))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/scan/assets/{asset_id}/complete", dependencies=[Depends(require_token)], tags=["scan"])
+async def complete_scan_asset(asset_id: str):
+    try:
+        return await asyncio.to_thread(scan_assets.complete_upload, asset_id)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 @app.post(
     "/scan/raster/run",

@@ -277,6 +277,8 @@ export const en = {
 
   /* ===== scan controls (buttons) ================================== */
   "scan.run": "Run",
+  "scan.resumeQueue": "Resume queue",
+  "scan.resumeQueue.title": "Resume the saved ROI queue from its first unfinished scan",
   "scan.pause": "Pause",
   "scan.pausing": "Pausing...",
   "scan.resume": "Resume",
@@ -320,6 +322,12 @@ export const en = {
   "roi.actionRun.selectionRequired": "Confirm a gray-level Skip or Spot selection before running the ROI action.",
   "common.custom": "Custom",
   "common.invalidNumber": "Invalid number.",
+  "scan.zoom": "Zoom",
+  "scan.zoom.title": "OBI-style magnification: applies to the full image when no partial ROI exists, otherwise to every selected ROI.",
+  "scan.roi.remove": "Clear selected ROI",
+  "scan.roi.edit": "ROI Scan",
+  "scan.parallel": "Parallel",
+  "scan.parallel.title": "Scan all selected ROI areas in one path",
 
   /* ===== raster parameter form ==================================== */
   "raster.resolution": "Resolution",
@@ -403,6 +411,11 @@ export const en = {
   /* ===== ROI editor =============================================== */
   "roi.select": "SELECT",
   "roi.loadLastScan": "Load last scan",
+  "card.simulationImage": "Load image",
+  "simulation.mode.simulation": "Simulation",
+  "simulation.mode.hardware": "Hardware",
+  "simulation.image.hintSimulation": "Scans use this image as the simulated source.",
+  "simulation.image.hintHardware": "Scans run on the instrument; the image is only used for ROI selection.",
   "roi.clearImage": "Clear image",
   "roi.clearRegion": "Clear region",
   "roi.calibrate": "Calibrate",
@@ -414,11 +427,11 @@ export const en = {
   "roi.end": "End (x, y)",
   "roi.showGrid": "Display grid line",
   "roi.targetGray": "Target gray level",
-  "roi.targetGray.hint": "Right-click to select",
-  "roi.targetGray.title": "Right-click a pixel on the ROI image to set the target gray level",
+  "roi.targetGray.hint": "Right-click image to sample",
+  "roi.targetGray.title": "Right-click a pixel on the active scan image to set the target gray level",
   "roi.targetGray.help.title": "Target gray level",
   "roi.targetGray.help.aria": "How target gray selection and Action Run work",
-  "roi.targetGray.help.body": "Right-click a pixel in the ROI image to set its gray value (0–255) as the target; use the × button to clear it. In simulation mode, with an ROI area selected and no gray-level range filter active, Action Run lowers pixels brighter than the target in small steps. Pixels at or below the target, and pixels outside the area, remain unchanged. In production mode, Action Run performs the normal hardware scan and ADC validation instead.",
+  "roi.targetGray.help.body": "Right-click a pixel in the active Raster or Vector image to sample its gray value (0–255), or enter a value directly; hold Alt while right-clicking when annotation tools are open. Use × to clear it. When set, scans apply the target as a gray threshold to each selected scan region. Raster simulation and Vector scans honor the threshold. Raster hardware scans currently run normally.",
   "roi.targetGray.clear": "Clear target gray level",
   "roi.targetGray.empty": "Right-click image",
   "roi.targetGray.invalid": "Enter a whole number within the active gray-level filter range.",

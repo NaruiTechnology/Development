@@ -19,7 +19,7 @@ const VECTOR_RESOLUTIONS: PresetNumberOption[] = [128, 256, 512, 1024, 2048].map
 const VECTOR_DWELLS: PresetNumberOption[] = [1, 2, 4, 8, 16, 32, 64].map((value) => ({ value }));
 
 const VECTOR_SETTINGS = {
-  vector_resolution: 128,
+  vector_resolution: 1024,
   latency_bytes: 8196,
   output_mode: "SixteenBit" as const,
   cookie: 123,

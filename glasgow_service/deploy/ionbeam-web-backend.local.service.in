@@ -6,6 +6,7 @@ After=network-online.target
 Type=exec
 WorkingDirectory=@BACKEND_ROOT@
 Environment=GLASGOW_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/streamData.json
+Environment=IONBEAM_SCAN_QUEUE_DIR=%h/.local/share/ionbeam-web/scan-queues
 Environment=SBC_VACUUM_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/vacuumSystem.json
 # The SBC owns the vacuum system; read its data straight from it.
 Environment=VACUUM_CONTROLLER_URL=http://127.0.0.1:8766

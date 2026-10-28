@@ -30,6 +30,8 @@ import { URL } from "node:url";
 import { Buffer } from "node:buffer";
 import { config } from "./config";
 import { streamMockRaster, streamMockVector, streamMockDacRamp, streamMockBeamHold } from "./mockHardware";
+import { getMockScanAsset } from "./mockScanAssets";
+import { setScanQueueStep } from "./scanQueueStore";
 import { recordActivityInDb } from "./adminDbRepository";
 import type { AdminUser } from "./adminDbRepository";
 import { recordInputSetupInDb, recordOutputDataInDb } from "./operationDataRepository";
@@ -145,6 +147,20 @@ function handleProxy(
   let activityIdPromise: Promise<number | null> | null = null;
   let completionHandled = false;
   let adcMockMode = false;
+  let queueId: string | null = null;
+  let queueIndex = -1;
+  let queueClaimed = false;
+  const queueStep = (status: "running" | "interrupted" | "completed"): boolean => {
+    if (!queueId || queueIndex < 0) return true;
+    try {
+      setScanQueueStep(queueId, queueIndex, status, actor?.login_name ?? "");
+      if (status === "running") queueClaimed = true;
+      return true;
+    } catch (err) {
+      console.warn("[scan-queue] status update failed:", err);
+      return false;
+    }
+  };
 
   // Buffer client frames sent before upstream is open. Almost always this
   // is just the first JSON request; bufferless drop loses scan params.
@@ -157,6 +173,15 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed) {
         scanRequest = parsed;
+        if (typeof parsed.queue_id === "string" && Number.isInteger(parsed.queue_index)) {
+          queueId = parsed.queue_id;
+          queueIndex = Number(parsed.queue_index);
+          if (!queueStep("running")) {
+            client.send(JSON.stringify({ event: "error", code: "queue_entry_unavailable", detail: "This queue entry is already running or no longer current." }), { binary: false });
+            client.close(1008, "queue entry unavailable");
+            return;
+          }
+        }
         previewScan = isPreviewScan(parsed);
         // Simulation is intentionally self-contained: do not require the
         // Glasgow service or build/program an FPGA image for test data.
@@ -202,6 +227,7 @@ function handleProxy(
   });
 
   client.on("close", (code, reason) => {
+    if (!completionHandled && queueClaimed) queueStep("interrupted");
     if (
       upstream.readyState === WebSocket.OPEN ||
       upstream.readyState === WebSocket.CONNECTING
@@ -225,6 +251,7 @@ function handleProxy(
       const parsed = parseJsonMessage(data);
       if (parsed?.event === "done") {
         completionHandled = true;
+        queueStep("completed");
         if (isDiagnostic(kind)) {
           // Diagnostic streams: relay "done" as-is, no activity/FTP
           // enrichment (same treatment as "adc" — see the ScanKind note
@@ -323,6 +350,22 @@ function handleMock(
   let activityIdPromise: Promise<number | null> | null = null;
   let scanRequest: Record<string, unknown> | null = null;
   let previewScan = false;
+  let queueId: string | null = null;
+  let queueIndex = -1;
+  let queueClaimed = false;
+  let completed = false;
+  const queueStep = (status: "running" | "interrupted" | "completed"): boolean => {
+    if (!queueId || queueIndex < 0) return true;
+    try {
+      setScanQueueStep(queueId, queueIndex, status, actor?.login_name ?? "");
+      if (status === "running") queueClaimed = true;
+      return true;
+    } catch (err) {
+      console.warn("[scan-queue] status update failed:", err);
+      return false;
+    }
+  };
+  client.on("close", () => { if (!completed && queueClaimed) queueStep("interrupted"); });
   client.once("message", async (raw: RawData) => {
     let body: any;
     try {
@@ -334,6 +377,15 @@ function handleMock(
       return;
     }
     scanRequest = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+    if (typeof body?.queue_id === "string" && Number.isInteger(body.queue_index)) {
+      queueId = body.queue_id;
+      queueIndex = body.queue_index;
+      if (!queueStep("running")) {
+        client.send(JSON.stringify({ event: "error", code: "queue_entry_unavailable", detail: "This queue entry is already running or no longer current." }));
+        client.close(1008, "queue entry unavailable");
+        return;
+      }
+    }
     if (scanRequest) {
       previewScan = isPreviewScan(scanRequest);
       if (!isDiagnostic(kind) && actor && !previewScan) {
@@ -344,6 +396,10 @@ function handleMock(
       }
     }
     try {
+      if (body.simulation_bitmap_id) body.simulation_bitmap = getMockScanAsset(body.simulation_bitmap_id);
+      if (Array.isArray(body.parallel_simulation_bitmap_ids)) {
+        body.parallel_simulation_bitmaps = body.parallel_simulation_bitmap_ids.map(getMockScanAsset);
+      }
       if (kind === "adc") {
         await streamMockAdc(client, body);
       } else if (kind === "dac_ramp") {
@@ -367,6 +423,8 @@ function handleMock(
           dwell: Number(body.dwell ?? 16),
           latency_bytes: Number(body.latency_bytes ?? 16384),
           simulation_bitmap: body.simulation_bitmap ?? undefined,
+          parallel_rois: Array.isArray(body.parallel_rois) ? body.parallel_rois : undefined,
+          parallel_simulation_bitmaps: Array.isArray(body.parallel_simulation_bitmaps) ? body.parallel_simulation_bitmaps : undefined,
           simulation: body.simulation && typeof body.simulation === "object" ? body.simulation : undefined,
           continuous: body.continuous === true,
           frames: Number.isFinite(Number(body.frames)) && Number(body.frames) > 0 ? Number(body.frames) : null,
@@ -380,6 +438,8 @@ function handleMock(
           latency_bytes: Number(body.latency_bytes ?? 8196),
           roi: body.roi ?? undefined,
           simulation_bitmap: body.simulation_bitmap ?? undefined,
+          parallel_rois: Array.isArray(body.parallel_rois) ? body.parallel_rois : undefined,
+          parallel_simulation_bitmaps: Array.isArray(body.parallel_simulation_bitmaps) ? body.parallel_simulation_bitmaps : undefined,
           simulation: body.simulation && typeof body.simulation === "object" ? body.simulation : undefined,
           vector_resolution: body.vector_resolution
             ? Number(body.vector_resolution)
@@ -387,6 +447,10 @@ function handleMock(
           continuous: body.continuous === true,
           frames: Number.isFinite(Number(body.frames)) && Number(body.frames) > 0 ? Number(body.frames) : null,
         });
+      }
+      if (client.readyState === WebSocket.OPEN) {
+        completed = true;
+        queueStep("completed");
       }
     } catch (e: any) {
       if (client.readyState === WebSocket.OPEN) {

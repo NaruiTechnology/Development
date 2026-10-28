@@ -14,7 +14,7 @@ export function TransformCard() {
   return (
     <div className="card scan-transform-card">
       <div className="card__header">
-        <span className="card__title">{t("scan.transform")}</span>
+        <span className="card__title"><Icon name="refresh" />{t("scan.transform")}</span>
         <button
           type="button"
           className="card__collapse-btn"

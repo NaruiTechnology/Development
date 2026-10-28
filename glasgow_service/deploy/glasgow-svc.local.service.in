@@ -8,10 +8,13 @@ User=@ADMIN_USER@
 WorkingDirectory=@SERVICE_ROOT@
 Environment=PYTHONPATH=@OPERATIONS_ROOT@/Development:@SERVICE_ROOT@
 Environment=GLASGOW_CONFIG=@OPERATIONS_ROOT@/Development/GlasgowDataIO/Json/streamData.json
+Environment=GLASGOW_SCAN_ASSET_DIR=/var/lib/glasgow-service/scan-assets
 EnvironmentFile=-/etc/glasgow-svc.env
 # Credentials (GLASGOW_TOKEN, DB, FTP): owner-only file outside the deploy root.
 EnvironmentFile=-@SECRETS_FILE@
 ExecStart=@UVICORN_BIN@ glasgow_service.api:app --host 127.0.0.1 --port 8765
+StateDirectory=glasgow-service
+StateDirectoryMode=0700
 StandardOutput=append:@LOG_DIR@/glasgow-svc.log
 StandardError=append:@LOG_DIR@/glasgow-svc.log
 Restart=on-failure

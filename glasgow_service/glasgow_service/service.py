@@ -31,6 +31,7 @@ import asyncio
 import array
 import csv
 import io
+import itertools
 import math
 import sys
 import time
@@ -149,13 +150,13 @@ def _collect_first_distinct(values: "np.ndarray", seen: set, limit: int) -> None
 def _simulated_pass_samples(kind: str, req) -> int:
     """Samples in one simulated frame (raster) or pass (vector)."""
     if kind == "raster":
-        return req.resolution * req.resolution
+        return req.resolution * req.resolution * len(req.parallel_rois or [None])
     if req.pattern is VectorPattern.custom and req.points is not None:
         return len(req.points)
     bitmap = getattr(req, "simulation_bitmap", None)
     if req.pattern is VectorPattern.custom and bitmap is not None:
         return int(bitmap.width) * int(bitmap.height)
-    return req.vector_resolution * req.vector_resolution
+    return req.vector_resolution * req.vector_resolution * len(req.parallel_rois or [None])
 
 
 class _FrameRing:
@@ -417,6 +418,15 @@ def _roi_vector_iter(
             yield x, y, dwell
 
 
+def _parallel_roi_iter(edge, regions, dwell, scan_path):
+    """Round-robin matching scan-path positions across selected ROIs."""
+    paths = [
+        _roi_vector_iter(edge, region, dwell=dwell, scan_path=scan_path)
+        for region in regions
+    ]
+    return itertools.chain.from_iterable(zip(*paths))
+
+
 def _normalize_vector_point(
     point,
 ) -> Tuple[int, int, int, Optional[bool], Optional[int]]:
@@ -662,26 +672,78 @@ def _bitmap_pixel_at(bitmap, x_norm: float, y_norm: float):
     return bitmap.pixels[y * bitmap.width + x]
 
 
+def _interleave_roi_chunks(parts, samples_per_chunk: int):
+    sample_counts = [sum(len(chunk) for chunk in part) for part in parts]
+    if len(set(sample_counts)) > 1:
+        raise ValueError("parallel simulation bitmaps must produce equal sample counts")
+    if not parts or not sample_counts[0]:
+        return []
+    # Fill columns in native code instead of creating one Python tuple per
+    # matching ROI pixel. Row-major flattening preserves the wire order.
+    samples = np.empty((sample_counts[0], len(parts)), dtype=np.uint16)
+    for region, chunks in enumerate(parts):
+        offset = 0
+        for chunk in chunks:
+            samples[offset:offset + len(chunk), region] = np.asarray(chunk)
+            offset += len(chunk)
+    flat = samples.reshape(-1)
+    chunk_size = max(len(parts), math.ceil(max(1, samples_per_chunk) / len(parts)) * len(parts))
+    return [array.array("H", flat[start:start + chunk_size].tobytes())
+            for start in range(0, len(flat), chunk_size)]
+
+
+def _bitmap_sample_grid(bitmap, mode=None):
+    """Convert bitmap flags and intensity once, rather than for every visit."""
+    return np.fromiter(
+        (_obi_aligned_int(_bitmap_pixel_sample(pixel, mode)) for pixel in bitmap.pixels),
+        dtype=np.uint16, count=len(bitmap.pixels),
+    ).reshape(bitmap.height, bitmap.width)
+
+
+def _regular_vector_coordinates(edge, roi, scan_path, indices):
+    x0, x1, y0, y1 = _roi_bounds(roi) or (0, 16383, 0, 16383)
+    xr = _dac_range_for_bounds(x0, x1, edge)
+    yr = _dac_range_for_bounds(y0, y1, edge)
+    slow, fast = indices // edge, indices % edge
+    if scan_path in (VectorScanPath.horizontal_triangle, VectorScanPath.vertical_serpentine):
+        fast = np.where(slow % 2, edge - 1 - fast, fast)
+    if scan_path in (VectorScanPath.horizontal_sawtooth, VectorScanPath.horizontal_triangle):
+        xi, yi = fast, slow
+    else:
+        xi, yi = slow, fast
+    return xr.start + ((xi * xr.step) >> 8), yr.start + ((yi * yr.step) >> 8)
+
+
 def _bitmap_raster_chunks(req: RasterRequest, transforms=None) -> Optional[List[array.array]]:
+    if req.parallel_rois and req.parallel_simulation_bitmaps:
+        if len(req.parallel_rois) != len(req.parallel_simulation_bitmaps):
+            raise ValueError("parallel_simulation_bitmaps must match parallel_rois")
+        parts = []
+        for region, bitmap in zip(req.parallel_rois, req.parallel_simulation_bitmaps):
+            part = _bitmap_raster_chunks(req.model_copy(update={
+                "roi": region, "parallel_rois": None,
+                "simulation_bitmap": bitmap, "parallel_simulation_bitmaps": None,
+            }), transforms)
+            if part is None:
+                return None
+            parts.append(part)
+        return _interleave_roi_chunks(
+            parts, math.ceil(req.latency_bytes / max(1, req.dwell)))
     bitmap = getattr(req, "simulation_bitmap", None)
     if bitmap is None or not bitmap.pixels:
         return None
 
     bitmap_mode = _infer_bitmap_mode(bitmap)
+    grid = _bitmap_sample_grid(bitmap, bitmap_mode)
 
     pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
     total = req.resolution * req.resolution
     chunks: List[array.array] = []
     for start in range(0, total, pixels_per_chunk):
-        samples = array.array("H")
-        for idx in range(start, min(start + pixels_per_chunk, total)):
-            x = idx % req.resolution
-            y = idx // req.resolution
-            x_norm = 0.0 if req.resolution <= 1 else x / (req.resolution - 1)
-            y_norm = 0.0 if req.resolution <= 1 else y / (req.resolution - 1)
-            px = _bitmap_pixel_at(bitmap, x_norm, y_norm)
-            samples.append(_obi_aligned_int(_bitmap_pixel_sample(px, bitmap_mode)))
-        chunks.append(samples)
+        idx = np.arange(start, min(start + pixels_per_chunk, total), dtype=np.int64)
+        xs = np.rint((idx % req.resolution) / max(1, req.resolution - 1) * (bitmap.width - 1)).astype(np.int64)
+        ys = np.rint((idx // req.resolution) / max(1, req.resolution - 1) * (bitmap.height - 1)).astype(np.int64)
+        chunks.append(array.array("H", grid[ys, xs].tobytes()))
     return chunks
 
 
@@ -764,22 +826,33 @@ async def _paced_chunks(chunks, *, abort, interval: float):
 
 async def _simulated_raster_chunks(req: RasterRequest, simulation: dict, *,
                                    abort, interval: float, transforms=None):
-    """Raster stream for the configured simulation source: X fast, one row per line."""
+    """Raster stream for the configured source, matching the hardware ROI order."""
     import numpy as np
     sampler = await asyncio.to_thread(_simulation_sampler, simulation)
-    bounds = _roi_bounds(req.roi)
-    x0, x1, y0, y1 = bounds if bounds is not None else (0, 0x3FFF, 0, 0x3FFF)
     width = height = req.resolution
-    xs = _dac_codes(x0, x1 - x0 + 1, width)
-    ys = _dac_codes(y0, y1 - y0 + 1, height)
-    total = width * height
+    regions = req.parallel_rois or [req.roi]
+    coordinates = []
+    for region in regions:
+        bounds = _roi_bounds(region)
+        x0, x1, y0, y1 = bounds if bounds is not None else (0, 0x3FFF, 0, 0x3FFF)
+        coordinates.append((
+            _dac_codes(x0, x1 - x0 + 1, width),
+            _dac_codes(y0, y1 - y0 + 1, height),
+        ))
+    total = width * height * len(regions)
     pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
     for n, start in enumerate(range(0, total, pixels_per_chunk)):
         await asyncio.sleep(interval if n else 0)
         if abort.is_set():
             return
         idx = np.arange(start, min(start + pixels_per_chunk, total), dtype=np.int64)
-        samples = _obi_aligned_np(sampler(xs[idx % width], ys[idx // width]))
+        region_indices = idx % len(regions)
+        local_indices = idx // len(regions)
+        samples = np.empty(len(idx), dtype=np.uint16)
+        for region_index, (xs, ys) in enumerate(coordinates):
+            mask = region_indices == region_index
+            local = local_indices[mask]
+            samples[mask] = _obi_aligned_np(sampler(xs[local % width], ys[local // width]))
         yield array.array("H", samples.tobytes())
 
 
@@ -788,8 +861,28 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
     """Vector stream for the configured simulation source: one sample per point."""
     import numpy as np
     sampler = await asyncio.to_thread(_simulation_sampler, simulation)
+    if req.pattern is not VectorPattern.custom:
+        regions = req.parallel_rois or [req.roi]
+        count = req.vector_resolution ** 2 * len(regions)
+        size = min(65536, max(1, math.ceil(req.latency_bytes / req.dwell)))
+        for emitted, start in enumerate(range(0, count, size)):
+            await asyncio.sleep(interval if emitted else 0)
+            if abort.is_set():
+                return
+            indices = np.arange(start, min(start + size, count), dtype=np.int64)
+            values = np.empty(len(indices), dtype=np.uint16)
+            for region_index, region in enumerate(regions):
+                mask = indices % len(regions) == region_index
+                xs, ys = _regular_vector_coordinates(
+                    req.vector_resolution, region, req.scan_path, indices[mask] // len(regions))
+                values[mask] = _obi_aligned_np(sampler(np.clip(xs, 0, 0x3FFF), np.clip(ys, 0, 0x3FFF)))
+            yield array.array("H", values.tobytes())
+        return
     if req.pattern is VectorPattern.custom and req.points is not None:
         iter_points = iter(req.points)
+    elif req.parallel_rois:
+        iter_points = _parallel_roi_iter(
+            req.vector_resolution, req.parallel_rois, req.dwell, req.scan_path)
     else:
         iter_points = _roi_vector_iter(
             req.vector_resolution, req.roi, dwell=req.dwell, scan_path=req.scan_path)
@@ -828,9 +921,38 @@ async def _simulated_vector_chunks(req: VectorRequest, simulation: dict, *,
 
 
 def _bitmap_vector_chunks(req: VectorRequest, transforms=None) -> Optional[List[array.array]]:
+    if req.parallel_rois and req.parallel_simulation_bitmaps:
+        if len(req.parallel_rois) != len(req.parallel_simulation_bitmaps):
+            raise ValueError("parallel_simulation_bitmaps must match parallel_rois")
+        parts = []
+        for region, bitmap in zip(req.parallel_rois, req.parallel_simulation_bitmaps):
+            part = _bitmap_vector_chunks(req.model_copy(update={
+                "roi": region, "parallel_rois": None,
+                "simulation_bitmap": bitmap, "parallel_simulation_bitmaps": None,
+            }), transforms)
+            if part is None:
+                return None
+            parts.append(part)
+        return _interleave_roi_chunks(
+            parts, math.ceil(req.latency_bytes / max(1, req.dwell)))
     bitmap = getattr(req, "simulation_bitmap", None)
     if bitmap is None or not bitmap.pixels:
         return None
+
+    if req.pattern is not VectorPattern.custom:
+        grid = _bitmap_sample_grid(bitmap)
+        x0, x1, y0, y1 = _roi_bounds(req.roi) or (0, 16383, 0, 16383)
+        size = min(65536, max(1, math.ceil(req.latency_bytes / req.dwell)))
+        total = req.vector_resolution ** 2
+        chunks = []
+        for start in range(0, total, size):
+            xs, ys = _regular_vector_coordinates(
+                req.vector_resolution, req.roi, req.scan_path,
+                np.arange(start, min(start + size, total), dtype=np.int64))
+            bx = np.rint(np.clip((xs - x0) / max(1, x1 - x0), 0, 1) * (bitmap.width - 1)).astype(np.int64)
+            by = np.rint(np.clip((ys - y0) / max(1, y1 - y0), 0, 1) * (bitmap.height - 1)).astype(np.int64)
+            chunks.append(array.array("H", grid[by, bx].tobytes()))
+        return chunks
 
     chunks: List[array.array] = []
     samples = array.array("H")
@@ -1107,7 +1229,12 @@ class DeviceService:
         """
         if not _simulation_enabled(self._config):
             return False
-        if getattr(req, "simulation_bitmap", None) is not None:
+        if (
+            getattr(req, "simulation_bitmap", None) is not None
+            or getattr(req, "simulation_bitmap_id", None)
+            or getattr(req, "parallel_simulation_bitmaps", None)
+            or getattr(req, "parallel_simulation_bitmap_ids", None)
+        ):
             return True
         return bool(self._simulation_settings(req).get("enabled", True))
 
@@ -1118,8 +1245,29 @@ class DeviceService:
 
     async def _simulated_chunks(self, kind: str, req, command, *, pace: bool):
         """Stand-in for ``conn.transfer_multiple(cmd)`` that needs no device."""
+        bitmap_id = getattr(req, "simulation_bitmap_id", None)
+        bitmap_ids = getattr(req, "parallel_simulation_bitmap_ids", None)
+        if bitmap_id or bitmap_ids:
+            from . import scan_assets
+            if bitmap_ids and len(bitmap_ids) != len(req.parallel_rois or []):
+                raise ValueError("parallel bitmap asset IDs must match parallel ROIs")
+            req = req.model_copy(update={
+                "simulation_bitmap": await asyncio.to_thread(scan_assets.load, bitmap_id) if bitmap_id else req.simulation_bitmap,
+                "parallel_simulation_bitmaps": await asyncio.to_thread(
+                    lambda: [scan_assets.load(asset_id) for asset_id in bitmap_ids]
+                ) if bitmap_ids else req.parallel_simulation_bitmaps,
+                "simulation_bitmap_id": None,
+                "parallel_simulation_bitmap_ids": None,
+            })
         simulation = self._simulation_settings(req)
         interval = _simulation_chunk_interval(simulation) if pace else 0.0
+        if pace and req.parallel_rois:
+            # Transport packets are not acquisition steps. A small hardware
+            # latency must not add 20 ms of artificial delay per ~500 pixels
+            # across millions of interleaved simulation samples.
+            req = req.model_copy(update={
+                "latency_bytes": max(req.latency_bytes, req.dwell * 16384),
+            })
         build_bitmap = _bitmap_raster_chunks if kind == "raster" else _bitmap_vector_chunks
         # Building a bitmap frame is pure Python; keep it off the event loop.
         transforms = self._action_defaults.get("transforms", {}) or {}
@@ -1432,9 +1580,10 @@ class DeviceService:
             if continuous:
                 # Live scan: keep only the most recent frame for /scan/last/*
                 # instead of every chunk of an unbounded stream.
-                captured = _FrameRing(cmd.frame_pixels)
+                captured = _FrameRing(getattr(cmd, "pass_pixels", req.resolution * req.resolution))
                 logger.info("[raster] continuous live scan: %d px/frame, %d chunks/frame",
-                            cmd.frame_pixels, cmd.frame_chunk_count(latency))
+                            captured.frame_pixels,
+                            cmd.frame_chunk_count(latency) if hasattr(cmd, "frame_chunk_count") else -1)
             self._activate_command(cmd)
             adc_monitor = _AdcPresenceMonitor(
                 enabled=_production_adc_monitor_enabled(self._config, req.adc_valid))
@@ -1782,7 +1931,7 @@ class DeviceService:
             async with self._acquire("raster"):
                 simulated_chunks = await self._simulated_run_chunks("raster", req)
                 pixels_per_chunk = math.ceil(req.latency_bytes / req.dwell)
-                total_pixels = req.resolution * req.resolution
+                total_pixels = req.resolution * req.resolution * len(req.parallel_rois or [None])
                 expected_chunks = math.ceil(total_pixels / pixels_per_chunk)
                 self._set_last_scan(req, {
                     "kind": "raster",
@@ -1845,7 +1994,7 @@ class DeviceService:
             send_time = time.perf_counter() - t0
 
         pixels_per_chunk = math.ceil(latency / _command_dwell(cmd))
-        total_pixels     = req.resolution * req.resolution
+        total_pixels     = req.resolution * req.resolution * len(req.parallel_rois or [None])
         expected_chunks  = math.ceil(total_pixels / pixels_per_chunk)
         total_bytes      = sum(len(c) * 2 for c in chunks)
 
@@ -2053,7 +2202,7 @@ class DeviceService:
     # -------- command construction ---------------------------------------
 
     def _build_raster_cmd(self, req: RasterRequest, *,
-                          continuous: bool = False) -> RasterScanCommand:
+                          continuous: bool = False):
         """Build the macro command from JSON defaults overridden by the
         request. Every field the macro accepts is passed explicitly â€”
         nothing falls through to a hardcoded macro default.
@@ -2061,6 +2210,32 @@ class DeviceService:
         ``continuous`` is passed only by the streaming path (raster_scan);
         blocking /scan/raster/run always scans exactly one frame."""
         params = self._effective_raster_params(req)
+
+        if req.parallel_rois:
+            vector = self._vector_params_defaults
+            points_factory = lambda: _parallel_roi_iter(
+                params.resolution, req.parallel_rois, params.dwell,
+                VectorScanPath.horizontal_sawtooth,
+            )
+            cmd = VectorScanCommand(
+                cookie=params.cookie,
+                output_mode=self._parse_output_mode(params.output_mode),
+                beam_type=self._parse_beam_type(params.beam_type),
+                external_control=params.external_control,
+                iter_points=points_factory(),
+                frame_blank=params.frame_blank,
+                drain_floor_pixels=vector.effective_drain_floor_pixels,
+                max_pipeline=vector.max_pipeline,
+                fpga_pipeline_depth_pixels=vector.fpga_pipeline_depth_pixels,
+                drain_safety_factor=vector.drain_safety_factor,
+                sender_drain_timeout_s=vector.sender_drain_timeout_s,
+                continuous=continuous,
+                points_factory=points_factory if continuous else None,
+                max_passes=_session_frames(req, continuous),
+            )
+            cmd.link_dwell = params.dwell
+            cmd.pass_pixels = params.resolution * params.resolution * len(req.parallel_rois)
+            return cmd
 
         bounds = _roi_bounds(req.roi)
         if bounds is None:
@@ -2152,7 +2327,9 @@ class DeviceService:
             params = params.override(dwell=16)
 
         ranges = None
-        if self._vector_runs_on_raster_generator(req, adaptive_feedback):
+        if req.parallel_rois and req.points is not None:
+            raise ValueError("parallel_rois cannot be combined with custom points")
+        if not req.parallel_rois and self._vector_runs_on_raster_generator(req, adaptive_feedback):
             x0, x1, y0, y1 = _roi_bounds(req.roi) or (0, 16383, 0, 16383)
             try:
                 ranges = (_dac_range_for_bounds(x0, x1, params.vector_resolution),
@@ -2203,10 +2380,15 @@ class DeviceService:
                 )
                 pass_pixels = params.vector_resolution * params.vector_resolution
         else:
-            points_factory = lambda: _roi_vector_iter(
-                params.vector_resolution, req.roi, dwell=params.dwell, scan_path=req.scan_path
-            )
-            pass_pixels = params.vector_resolution * params.vector_resolution
+            if req.parallel_rois:
+                points_factory = lambda: _parallel_roi_iter(
+                    params.vector_resolution, req.parallel_rois, params.dwell, req.scan_path)
+                pass_pixels = params.vector_resolution * params.vector_resolution * len(req.parallel_rois)
+            else:
+                points_factory = lambda: _roi_vector_iter(
+                    params.vector_resolution, req.roi, dwell=params.dwell, scan_path=req.scan_path
+                )
+                pass_pixels = params.vector_resolution * params.vector_resolution
         iter_points = points_factory()
         # Repeat N: a live session of N passes. Adaptive feedback cannot
         # stream passes blindly (each point is decided on the host), but it
@@ -2282,6 +2464,7 @@ class DeviceService:
         # Record the parameters this scan actually ran with, so the DumpData
         # files can carry them in their header (see last_dump_csv_bytes).
         last.setdefault("scan_params", self._scan_param_header(req, last))
+        last.setdefault("parallel_rois", getattr(req, "parallel_rois", None))
         self._last = last
         self._maybe_dump_last_outputs()
 
@@ -2313,6 +2496,12 @@ class DeviceService:
         elif kind == "dac_ramp":
             params.append(("axis", enum_text(getattr(req, "axis", ""))))
             params.append(("fixed_code", str(getattr(req, "fixed_code", ""))))
+
+        parallel_rois = getattr(req, "parallel_rois", None)
+        if parallel_rois:
+            params.append(("parallel_regions", str(len(parallel_rois))))
+            for index, region in enumerate(parallel_rois, 1):
+                params.append((f"region_{index}_dac", str(_roi_bounds(region))))
 
         dwell = getattr(req, "dwell", None)
         if dwell is not None:
@@ -2560,7 +2749,26 @@ class DeviceService:
             res = last["resolution"]
             dwell = int(last.get("dwell") or self._raster_defaults.get("dwell") or 0)
             adc_latency = int(self._raster_defaults.get("adcLatency", 8))
-            img = _raster_image_from_chunks(last["chunks"], res, dwell, adc_latency)
+            regions = last.get("parallel_rois")
+            if regions:
+                flat = np.fromiter((v for chunk in last["chunks"] for v in chunk), dtype=np.uint16)
+                img = np.zeros((res, res), dtype=np.uint16)
+                region_size = res * res
+                for index, region in enumerate(regions):
+                    part = flat[index * region_size:(index + 1) * region_size]
+                    if part.size < region_size:
+                        part = np.pad(part, (0, region_size - part.size))
+                    source = _raster_image_from_chunks([part], res, dwell, adc_latency)
+                    x0, x1, y0, y1 = _roi_bounds(region)
+                    left = max(0, min(res - 1, math.floor(x0 / 16383 * res)))
+                    top = max(0, min(res - 1, math.floor(y0 / 16383 * res)))
+                    right = max(left + 1, min(res, math.ceil(x1 / 16383 * res)))
+                    bottom = max(top + 1, min(res, math.ceil(y1 / 16383 * res)))
+                    xs = (np.arange(right - left) * res // (right - left)).astype(int)
+                    ys = (np.arange(bottom - top) * res // (bottom - top)).astype(int)
+                    img[top:bottom, left:right] = source[np.ix_(ys, xs)]
+            else:
+                img = _raster_image_from_chunks(last["chunks"], res, dwell, adc_latency)
             img = orient_image(img)
 
             fig, ax = plt.subplots(figsize=(6, 6))
@@ -2599,7 +2807,8 @@ class DeviceService:
                     )
                 ]
             else:
-                iter_list = list(_roi_vector_iter(edge, last.get("roi"), scan_path=scan_path))
+                regions = last.get("parallel_rois")
+                iter_list = list(_parallel_roi_iter(edge, regions, 1, scan_path)) if regions else list(_roi_vector_iter(edge, last.get("roi"), scan_path=scan_path))
                 if len(iter_list) < samples.size and edge != DEFAULT_EDGE:
                     iter_list = list(_roi_vector_iter(DEFAULT_EDGE, last.get("roi"), scan_path=scan_path))
 

@@ -14,7 +14,6 @@
  * It changes what the beam does between frames, not how long control is held.
  */
 import { GLASGOW_REVC3_ADC_HALF_PERIOD_CYCLES, GLASGOW_REVC3_CLOCK_HZ } from "./scanTiming.js";
-import { MAX_REPEAT_FRAMES } from "./scanRepeat.js";
 import { vectorScanSampleCount } from "./vectorScanPath.js";
 import type { VectorScanPath } from "../types/api.js";
 
@@ -85,8 +84,6 @@ export interface ScanTakeoverSettings {
     points: ArrayLike<unknown> | null;
     dwell: number;
   };
-  /** Repeat N (Vector only; Raster runs one frame per Run). */
-  repeat: number;
   /** Infinite: control is held until Stop. */
   infinite?: boolean;
   /** Frame blank the service applies to vector scans (raster_params). */
@@ -97,7 +94,6 @@ export interface ScanTakeoverSettings {
 
 /** The takeover plan of the scan Run would start with these settings. */
 export function takeoverPlanForScan(s: ScanTakeoverSettings): TakeoverPlan {
-  const repeat = Math.max(1, Math.min(MAX_REPEAT_FRAMES, Math.trunc(Number(s.repeat) || 1)));
   if (s.kind === "raster") {
     const edge = Math.max(1, Math.trunc(s.raster.resolution));
     return {
@@ -116,7 +112,7 @@ export function takeoverPlanForScan(s: ScanTakeoverSettings): TakeoverPlan {
   return {
     framePixels,
     dwell: s.vector.dwell,
-    frames: s.infinite ? null : repeat,
+    frames: s.infinite ? null : 1,
     frameBlank: s.defaultFrameBlank,
     switchDelayMs: s.switchDelayMs,
     adcHalfPeriod: s.adcHalfPeriod,

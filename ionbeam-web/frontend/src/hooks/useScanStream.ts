@@ -47,7 +47,7 @@ import {
   resetRaster,
   setupVector,
 } from "../store/imageSlice";
-import type { RasterRequest, VectorRequest } from "../types/api";
+import type { RasterRequest, ROIRequest, VectorRequest } from "../types/api";
 import type { RootState } from "../store";
 import { registerScanActionStop } from "./scanActionRegistry";
 import { withScanAuthQuery } from "../lib/authIdentity";
@@ -63,6 +63,7 @@ import { apiUrl } from "../lib/backendUrl";
 import { wsUrl } from "../lib/backendUrl";
 import { estimateRevC3ScanTiming } from "../lib/scanTiming";
 import { summarizeScanParams } from "../lib/scanParamChip";
+import { prepareScanAssets } from "../lib/scanAssets";
 
 const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
 
@@ -76,6 +77,12 @@ type PendingSamples = {
   chunkCount: number;
   animationFrame: number | null;
 };
+type PendingCompletion = {
+  chunks: number;
+  kind: "raster" | "vector";
+  csv_filename: string | null;
+  image_filename: string | null;
+};
 
 export function useScanStream() {
   const dispatch = useAppDispatch();
@@ -84,6 +91,10 @@ export function useScanStream() {
   // Captures whether the server delivered a clean "done" event before
   // the socket closed; if so, we don't downgrade to "error" on close.
   const sawDoneRef = useRef<boolean>(false);
+  // A done control message can arrive just before the service releases its
+  // scan slot. Publish completion only after the websocket close handshake so
+  // queued ROI scans cannot race the preceding hardware request.
+  const pendingCompletionRef = useRef<PendingCompletion | null>(null);
   const activeScanRef = useRef<ActiveScan | null>(null);
   const autoReconnectAttemptedRef = useRef(false);
   const reconnectInFlightRef = useRef<Promise<boolean> | null>(null);
@@ -135,8 +146,24 @@ export function useScanStream() {
   }, [dispatch]);
 
   const startRaster = useCallback(
-    (req: RasterRequest, options?: { preserveFrame?: boolean; continuous?: boolean }) => {
-      if (sessionSimulation) req = { ...req, simulation: sessionSimulation };
+    (req: RasterRequest, options?: {
+      onComplete?: () => void;
+      preserveFrame?: boolean;
+      continuous?: boolean;
+      displayROI?: ROIRequest | null;
+      displayROIs?: ROIRequest[] | null;
+      simulationBitmapInfo?: { width: number; height: number } | null;
+      hasSimulationBitmap?: boolean;
+      initialFrame?: Uint16Array | null;
+    }) => {
+      const hasBitmapSource = Boolean(
+        req.simulation_bitmap || req.simulation_bitmap_id ||
+        req.parallel_simulation_bitmaps?.length || req.parallel_simulation_bitmap_ids?.length ||
+        options?.hasSimulationBitmap,
+      );
+      if (sessionSimulation && !hasBitmapSource) {
+        req = { ...req, simulation: sessionSimulation };
+      }
       // Live scan (Infinite): one WebSocket for the whole session; samples
       // arrive frame after frame and appendRaster wraps at the frame end.
       const continuous = options?.continuous === true || req.continuous === true;
@@ -150,20 +177,35 @@ export function useScanStream() {
         // A live scan always overwrites the current frame in place (OBI).
         preserveFrame: options?.preserveFrame === true || continuous,
         continuous,
+        roi: options?.displayROI === undefined ? req.roi : options.displayROI,
+        parallelROIs: options?.displayROIs ?? req.parallel_rois,
+        initialFrame: options?.initialFrame,
+        preserveZeroSamples: Boolean(hasBitmapSource && options?.initialFrame),
       }));
       dispatch(streamStarted());
       dispatch(scanParamsCaptured(summarizeScanParams("raster", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS })));
       beginScanPerformance("raster", req as unknown as Record<string, unknown>, "websocket");
       const ws = openWs("/ws/scan/raster/stream");
+      let controlFailed = false;
       wsRef.current = ws;
       closureKindRef.current = null;
       sawDoneRef.current = false;
+      pendingCompletionRef.current = null;
 
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => {
+      ws.onopen = async () => {
         if (wsRef.current !== ws) return;
         markScanPerformanceConnected();
-        ws.send(JSON.stringify(req));
+        try {
+          const prepared = await prepareScanAssets(req);
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(prepared));
+        } catch (err) {
+          if (wsRef.current !== ws) return;
+          controlFailed = true;
+          activeScanRef.current = null;
+          dispatch(streamErrored(err instanceof Error ? err.message : String(err)));
+          ws.close(1000, "asset upload failed");
+        }
       };
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;
@@ -180,9 +222,10 @@ export function useScanStream() {
         }
         flushRasterSamples();
         markScanPerformanceControl(ev.data);
-        if (!handleRasterControlMessage(ev.data, dispatch, sawDoneRef)) {
+        if (!handleRasterControlMessage(ev.data, dispatch, sawDoneRef, pendingCompletionRef)) {
+          controlFailed = true;
           activeScanRef.current = null;
-          ws.close(1002, "malformed control message");
+          ws.close(1002, "scan control error");
         }
       };
       ws.onerror = () => {
@@ -193,7 +236,11 @@ export function useScanStream() {
         if (wsRef.current !== ws) return;
         flushRasterSamples();
         markScanPerformanceClosed(ev.code);
-        finalize(
+        if (pendingCompletionRef.current) {
+          dispatch(streamCompleted(pendingCompletionRef.current));
+          pendingCompletionRef.current = null;
+        }
+        if (!controlFailed) finalize(
           closureKindRef.current,
           sawDoneRef.current,
           phaseRef.current,
@@ -202,22 +249,36 @@ export function useScanStream() {
           dispatch,
         );
         wsRef.current = null;
+        if (!controlFailed && closureKindRef.current !== "stop" &&
+            (sawDoneRef.current || ev.code === 1000)) options?.onComplete?.();
       };
     },
     [dispatch, flushRasterSamples, sessionSimulation]
   );
 
   const startVector = useCallback(
-    (req: VectorRequest, options?: { preserveFrame?: boolean; continuous?: boolean }) => {
-      if (sessionSimulation) req = { ...req, simulation: sessionSimulation };
+    (req: VectorRequest, options?: {
+      onComplete?: () => void;
+      preserveFrame?: boolean;
+      continuous?: boolean;
+      displayROI?: ROIRequest | null;
+      displayROIs?: ROIRequest[] | null;
+      simulationBitmapInfo?: { width: number; height: number } | null;
+      hasSimulationBitmap?: boolean;
+      initialFrame?: Uint16Array | null;
+    }) => {
+      const hasBitmapSource = Boolean(
+        req.simulation_bitmap || req.simulation_bitmap_id ||
+        req.parallel_simulation_bitmaps?.length || req.parallel_simulation_bitmap_ids?.length ||
+        options?.hasSimulationBitmap,
+      );
+      if (sessionSimulation && !hasBitmapSource) {
+        req = { ...req, simulation: sessionSimulation };
+      }
       // Live scan (Infinite): one WebSocket for the whole session; the
       // service replays the pass and the image wraps at the pass end.
       const continuous = options?.continuous === true || req.continuous === true;
       if (continuous) req = { ...req, continuous: true };
-      // A live scan always overwrites the current image in place (OBI). A
-      // Repeat N session (finite `frames`) starts clean like a single run
-      // unless the caller asks to keep the image.
-      const finiteSession = continuous && req.frames != null;
       const preserveImage = options?.preserveFrame ?? continuous;
       stopExisting(wsRef);
       discardPendingSamples(pendingVectorRef.current);
@@ -227,8 +288,9 @@ export function useScanStream() {
       // custom bitmap simulations render in compact bitmap space, but a
       // default-pattern request with simulation_bitmap still scans at the
       // configured vector resolution.
-      const edge = req.pattern === "custom" && req.simulation_bitmap
-        ? Math.max(req.simulation_bitmap.width, req.simulation_bitmap.height)
+      const bitmapInfo = req.simulation_bitmap ?? options?.simulationBitmapInfo;
+      const edge = req.pattern === "custom" && bitmapInfo
+        ? Math.max(bitmapInfo.width, bitmapInfo.height)
         : req.pattern === "custom"
         ? 2048
         : req.vector_resolution;
@@ -239,26 +301,32 @@ export function useScanStream() {
           points: req.points,
           edge,
           roi: req.roi,
+          displayROI: options?.displayROI,
+          parallelROIs: options?.displayROIs ?? req.parallel_rois,
+          initialImage: options?.initialFrame,
           simulationBitmap: req.simulation_bitmap
             ? {
                 width: req.simulation_bitmap.width,
                 height: req.simulation_bitmap.height,
               }
-            : undefined,
+            : bitmapInfo ?? undefined,
           continuous,
           preserveImage,
+        preserveZeroSamples: Boolean(hasBitmapSource && options?.initialFrame),
         })
       );
       dispatch(streamStarted());
       dispatch(scanParamsCaptured(summarizeScanParams("vector", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS })));
       beginScanPerformance("vector", req as unknown as Record<string, unknown>, "websocket");
       const ws = openWs("/ws/scan/vector/stream");
+      let controlFailed = false;
       wsRef.current = ws;
       closureKindRef.current = null;
       sawDoneRef.current = false;
+      pendingCompletionRef.current = null;
 
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => {
+      ws.onopen = async () => {
         if (wsRef.current !== ws) return;
         markScanPerformanceConnected();
         console.info("[scan/vector] ws-send", {
@@ -271,7 +339,16 @@ export function useScanStream() {
           roi: req.roi != null,
           simulation_bitmap: req.simulation_bitmap != null,
         });
-        ws.send(JSON.stringify(req));
+        try {
+          const prepared = await prepareScanAssets(req);
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(prepared));
+        } catch (err) {
+          if (wsRef.current !== ws) return;
+          controlFailed = true;
+          activeScanRef.current = null;
+          dispatch(streamErrored(err instanceof Error ? err.message : String(err)));
+          ws.close(1000, "asset upload failed");
+        }
       };
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;
@@ -292,14 +369,15 @@ export function useScanStream() {
           ev.data,
           dispatch,
           sawDoneRef,
+          pendingCompletionRef,
           // A live scan keeps painting in raw scan order across passes;
-          // rolling the image at Stop would misalign the next live run. A
-          // finite Repeat session ends like a single run, so it is rolled.
-          continuous && !finiteSession ? 0 : vectorLineShiftPerXRow,
+          // rolling the image at Stop would misalign the next live run.
+          continuous ? 0 : vectorLineShiftPerXRow,
         );
         if (!valid) {
+          controlFailed = true;
           activeScanRef.current = null;
-          ws.close(1002, "malformed control message");
+          ws.close(1002, "scan control error");
         }
       };
       ws.onerror = () => {
@@ -309,7 +387,11 @@ export function useScanStream() {
         if (wsRef.current !== ws) return;
         flushVectorSamples();
         markScanPerformanceClosed(ev.code);
-        void handleClose(
+        if (pendingCompletionRef.current) {
+          dispatch(streamCompleted(pendingCompletionRef.current));
+          pendingCompletionRef.current = null;
+        }
+        if (!controlFailed) void handleClose(
           ev,
           closureKindRef.current,
           sawDoneRef.current,
@@ -324,6 +406,8 @@ export function useScanStream() {
           startVector,
         );
         wsRef.current = null;
+        if (!controlFailed && closureKindRef.current !== "stop" &&
+            (sawDoneRef.current || ev.code === 1000)) options?.onComplete?.();
       };
     },
     [dispatch, flushVectorSamples, sessionSimulation, vectorLineShiftPerXRow]
@@ -396,21 +480,21 @@ function handleRasterControlMessage(
   data: string,
   dispatch: ReturnType<typeof useAppDispatch>,
   sawDoneRef: React.MutableRefObject<boolean>,
+  pendingCompletionRef: React.MutableRefObject<PendingCompletion | null>,
 ): boolean {
   try {
     const msg = JSON.parse(data);
     if (msg.event === "done") {
       sawDoneRef.current = true;
-      dispatch(
-        streamCompleted({
-          chunks: msg.chunks,
-          kind: "raster",
-          csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
-          image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
-        }),
-      );
+      pendingCompletionRef.current = {
+        chunks: Number(msg.chunks) || 0,
+        kind: "raster",
+        csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
+        image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
+      };
     } else if (msg.event === "error") {
       dispatch(streamErrored(controlErrorMessage(msg)));
+      return false;
     }
   } catch {
     dispatch(streamErrored("Malformed raster stream control message"));
@@ -423,6 +507,7 @@ function handleVectorControlMessage(
   data: string,
   dispatch: ReturnType<typeof useAppDispatch>,
   sawDoneRef: React.MutableRefObject<boolean>,
+  pendingCompletionRef: React.MutableRefObject<PendingCompletion | null>,
   lineShiftPerXRow: number,
 ): boolean {
   try {
@@ -430,16 +515,15 @@ function handleVectorControlMessage(
     if (msg.event === "done") {
       sawDoneRef.current = true;
       dispatch(correctVectorLineShift({ lineShiftPerXRow }));
-      dispatch(
-        streamCompleted({
-          chunks: msg.chunks,
-          kind: "vector",
-          csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
-          image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
-        }),
-      );
+      pendingCompletionRef.current = {
+        chunks: Number(msg.chunks) || 0,
+        kind: "vector",
+        csv_filename: typeof msg.csv_filename === "string" ? msg.csv_filename : null,
+        image_filename: typeof msg.image_filename === "string" ? msg.image_filename : null,
+      };
     } else if (msg.event === "error") {
       dispatch(streamErrored(controlErrorMessage(msg)));
+      return false;
     }
   } catch {
     dispatch(streamErrored("Malformed vector stream control message"));
