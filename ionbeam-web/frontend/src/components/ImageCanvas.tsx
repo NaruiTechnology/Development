@@ -59,6 +59,7 @@ import { selectGlobalPixelSize } from "../store/selectors";
 import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize } from "../lib/pixelSize";
 import { ROI_CANVAS_EDGE } from "../lib/roiGeometry";
 import { clipPixelRect, stepTowardTargetGray } from "../lib/roiTargetGray";
+import { selectionCrop } from "../lib/bitmapVector";
 
 const DAC_RANGE = 2048;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
@@ -399,6 +400,97 @@ export function ImageCanvas({
       rawTargetImageRef.current = null;
     };
   }, [roi.imageDataUrl, roi.imageKind]);
+
+  // Target gray run (aligned with the former ROI tab). Each pass compares every
+  // pixel inside the scan regions with the target: pixels at or below it are
+  // skipped, brighter pixels step down toward it. The real gray level is drawn
+  // on the progress canvas pass by pass (no red marking) until every pixel
+  // matches; the result then becomes the simulated source image.
+  const [targetProgressVisible, setTargetProgressVisible] = useState(false);
+  useEffect(() => {
+    if (!targetRunRunning || (kind !== "raster" && kind !== "vector")) return;
+    const target = selectedTargetGray;
+    const source = rawTargetImageRef.current;
+    const width = source?.naturalWidth ?? 0;
+    const height = source?.naturalHeight ?? 0;
+    if (target === null || !source || width <= 0 || height <= 0 || roi.scan_regions.length === 0) {
+      dispatch(finishROITargetGrayRun("idle"));
+      return;
+    }
+    // Same source-pixel mapping the simulated vector scan uses for a region.
+    const rects = roi.scan_regions
+      .map((region) => {
+        const crop = selectionCrop({ ...roi, selection: region }, width, height);
+        return clipPixelRect({ left: crop.x, top: crop.y, width: crop.w, height: crop.h }, width, height);
+      })
+      .filter((rect): rect is NonNullable<typeof rect> => rect !== null);
+    const work = document.createElement("canvas");
+    work.width = width;
+    work.height = height;
+    const workCtx = work.getContext("2d", { willReadFrequently: true });
+    if (!workCtx || rects.length === 0) {
+      dispatch(finishROITargetGrayRun("idle"));
+      return;
+    }
+    workCtx.drawImage(source, 0, 0);
+    const working = workCtx.getImageData(0, 0, width, height);
+    const progress = targetProgressCanvasRef.current;
+    if (progress) {
+      progress.width = width;
+      progress.height = height;
+    }
+    const progressCtx = progress?.getContext("2d") ?? null;
+    // Draw the whole source once; each pass then redraws only the regions.
+    progressCtx?.putImageData(working, 0, 0);
+    setTargetProgressVisible(true);
+
+    let passes = 0;
+    let frame: number | null = null;
+    let finished = false;
+    const finish = (status: "completed" | "stopped") => {
+      if (finished) return;
+      finished = true;
+      if (status === "completed") {
+        workCtx.putImageData(working, 0, 0);
+        const dataUrl = work.toDataURL("image/png");
+        dispatch(updateROI({ imageDataUrl: dataUrl }));
+        onTargetGrayImageChange?.(dataUrl);
+      } else {
+        // Stopped before converging: drop the partial update.
+        setTargetProgressVisible(false);
+      }
+      dispatch(finishROITargetGrayRun(status));
+    };
+    const runPass = () => {
+      frame = null;
+      let spot = 0;
+      let skip = 0;
+      let remaining = 0;
+      for (const rect of rects) {
+        const pass = stepTowardTargetGray(working.data, width, rect, target);
+        spot += pass.spot;
+        skip += pass.skip;
+        remaining += pass.remaining;
+      }
+      passes += 1;
+      for (const rect of rects) {
+        progressCtx?.putImageData(working, 0, 0, rect.left, rect.top, rect.width, rect.height);
+      }
+      dispatch(roiTargetGrayRunProgress({ passes, spot, skip }));
+      if (remaining === 0) {
+        finish("completed");
+        return;
+      }
+      frame = window.requestAnimationFrame(runPass);
+    };
+    frame = window.requestAnimationFrame(runPass);
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      if (!finished) finish("stopped");
+    };
+    // Restart only for a new run request; the loop reads the rest once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetRunToken, targetRunRunning]);
   const globalPixelSize = useAppSelector(selectGlobalPixelSize);
   const theme = useAppSelector((s) => s.theme.theme);
   const configuredStreamTransforms = useAppSelector((s) => s.scan.streamTransforms);
@@ -425,6 +517,12 @@ export function ImageCanvas({
       : paneTransforms[scanTargetPane] ?? configuredStreamTransforms;
 
   const phase = useAppSelector((s) => s.scan.phase);
+  useEffect(() => {
+    if (phase === "running") setTargetProgressVisible(false);
+  }, [phase]);
+  useEffect(() => {
+    setTargetProgressVisible(false);
+  }, [roi.imageName]);
   const infiniteActive = useAppSelector((s) => s.scan.infiniteActive);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const lastOutput = useAppSelector((s) => s.scan.lastOutput);
@@ -571,8 +669,9 @@ export function ImageCanvas({
         edge: vectorEdge,
         points: vectorCustomRenderPoints,
         populated: vectorFilled,
-        blankMask: vectorCustomBlankMask,
-        spotMask: vectorCustomSpotMask,
+        // Target gray shows the real pixel gray level, never red marking.
+        blankMask: selectedTargetGray !== null ? null : vectorCustomBlankMask,
+        spotMask: selectedTargetGray !== null ? null : vectorCustomSpotMask,
         grayColor: vectorGraySpotColor,
         transforms: paintTransforms,
       };
@@ -589,6 +688,7 @@ export function ImageCanvas({
     theme,
     vectorGraySpotSelection,
     vectorGraySpotSkipped,
+    selectedTargetGray,
     levelSetting,
     streamTransforms,
     singlePaneImage,
@@ -1630,6 +1730,9 @@ export function ImageCanvas({
               editorLayer={
                 kind === "raster" || kind === "vector"
                   ? <>
+                      {(targetRunRunning || targetProgressVisible) && (
+                        <canvas ref={targetProgressCanvasRef} className="canvas-target-progress" aria-hidden="true" />
+                      )}
                       {imageLayout === 1 && <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} moveOnly={infiniteActive} />}
                       {onTargetGrayPick && selectedTargetGrayPoint && (
                         <span
@@ -1666,6 +1769,9 @@ export function ImageCanvas({
               display: displayedFigureUrl ? "none" : undefined,
             }}
           />
+          {(targetRunRunning || targetProgressVisible) && !targetParked && (
+            <canvas ref={targetProgressCanvasRef} className="canvas-target-progress" aria-hidden="true" />
+          )}
           {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} transforms={streamTransforms} />}
           {imageLayout === 1 && (kind === "raster" || kind === "vector") && (
             <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} moveOnly={infiniteActive} />

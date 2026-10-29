@@ -362,7 +362,10 @@ export function useScanStream() {
             : bitmapInfo ?? undefined,
           continuous,
           preserveImage,
-        preserveZeroSamples: Boolean(hasBitmapSource && options?.initialFrame),
+        // Blanked points return no reading; keep the pixel's last gray level.
+        preserveZeroSamples: Boolean(
+          (hasBitmapSource && options?.initialFrame) || req.target_gray_level != null,
+        ),
         })
       );
       dispatch(streamStarted());

@@ -7830,3 +7830,10 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Target gray run: real pixel gray level stepping toward the target. */
+.canvas-frame .canvas-target-progress {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}

@@ -630,7 +630,7 @@ function bitmapToROIActionPoints(
   return points;
 }
 
-function selectionCrop(
+export function selectionCrop(
   roi: ROIState,
   sourceW: number,
   sourceH: number
