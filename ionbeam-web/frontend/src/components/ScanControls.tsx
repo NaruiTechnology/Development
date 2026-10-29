@@ -1521,7 +1521,6 @@ export function ScanControls({
                 step={1}
                 inputMode="numeric"
                 ariaLabel={t("scan.zoom")}
-                title={t("scan.zoom.title")}
                 warning={zoomError}
                 onValueChange={onZoomChange}
               />
