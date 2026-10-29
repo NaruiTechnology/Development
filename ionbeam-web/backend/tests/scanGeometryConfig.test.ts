@@ -21,6 +21,16 @@ test("normalize: accepts a valid body and stamps actor and time", () => {
   assert.deepEqual(out.correction.dacOffset, [12, -4]);
 });
 
+test("normalize: preserves the applied magnification calibration snapshot", () => {
+  const points = { 1000: 100e-6, 2000: 40e-6 };
+  const saved = normalizeScanGeometry({ ...body, magnification_calibration: points }, "root");
+  assert.deepEqual(saved.magnification_calibration, points);
+  assert.throws(
+    () => normalizeScanGeometry({ ...body, magnification_calibration: { 1000: -1 } }, "root"),
+    (error: { status?: number }) => error.status === 422,
+  );
+});
+
 test("normalize: rejects malformed or unsafe bodies with 422", () => {
   const bad = [
     null,

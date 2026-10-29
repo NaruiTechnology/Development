@@ -1,10 +1,12 @@
-import type { ROIRequest } from "../types/api";
+import type { ROIRequest, VectorPoint, VectorPointTuple } from "../types/api";
+import { interpolateHfovM, type AppliedScanGeometry } from "./scanGeometry.js";
 
 export interface ScanRegionFov {
   x_origin: number;
   x_end: number;
   y_origin: number;
   y_end: number;
+  scanGeometry?: AppliedScanGeometry | null;
 }
 
 export interface ScanPixelBounds {
@@ -50,13 +52,35 @@ export function clampScanZoom(value: unknown): number {
   return Number.isFinite(zoom) ? Math.max(1, Math.min(20000, Math.trunc(zoom))) : 1;
 }
 
+/** Convert a relative magnification into the physical FOV ratio measured by
+ * the calibration table. Older configurations without a saved table retain
+ * the ideal 1/magnification relationship. */
+export function calibratedScanZoom(zoomValue: number, geometry?: AppliedScanGeometry | null): number {
+  const zoom = clampScanZoom(zoomValue);
+  const points = geometry?.magnificationCalibration;
+  const mag = geometry?.magnification;
+  if (!geometry?.enabled || !points || !mag || !Number.isFinite(mag)) return zoom;
+  const baseFov = interpolateHfovM(points, mag);
+  const zoomedFov = interpolateHfovM(points, mag * zoom);
+  const ratio = baseFov && zoomedFov ? baseFov / zoomedFov : zoom;
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : zoom;
+}
+
+/** Convert a requested physical ROI width (µm) to scan magnification. */
+export function physicalZoomCoefficient(calibratedSpan: number, unit: string, requestedUm: number): number {
+  const metresPerUnit: Record<string, number> = { m: 1, mm: 1e-3, um: 1e-6, "µm": 1e-6, "μm": 1e-6, nm: 1e-9 };
+  const scale = metresPerUnit[unit];
+  if (!Number.isFinite(calibratedSpan) || calibratedSpan <= 0 || !scale || !Number.isFinite(requestedUm) || requestedUm <= 0) return 1;
+  return calibratedSpan * scale / (requestedUm * 1e-6);
+}
+
 /** Apply magnification around the centre of a scan area or selected ROI. */
 export function zoomScanRegion(
   region: ROIRequest | null,
   zoomValue: number,
   fov: ScanRegionFov,
 ): ROIRequest | null {
-  const zoom = clampScanZoom(zoomValue);
+  const zoom = calibratedScanZoom(zoomValue, fov.scanGeometry);
   if (!region && zoom === 1) return null;
   const base = region ?? {
     x_start: Math.min(fov.x_origin, fov.x_end),
@@ -84,5 +108,57 @@ export function effectiveScanRegions(
 ): Array<ROIRequest | null> {
   const source: Array<ROIRequest | null> = regions.length ? regions : [null];
   return source.map((region) => zoomScanRegion(region, zoom, fov));
+}
+
+/** Move a live custom path into new DAC bounds, retaining its point order,
+ * dwell, blank flags and pass markers. The sample count stays fixed. */
+export function zoomVectorPoints(
+  points: Array<VectorPointTuple | VectorPoint>,
+  from: ROIRequest | null,
+  to: ROIRequest | null,
+): Array<VectorPointTuple | VectorPoint> {
+  return points.map((point) => zoomVectorPoint(point, from, to));
+}
+
+function zoomVectorPoint(
+  point: VectorPointTuple | VectorPoint,
+  from: ROIRequest | null,
+  to: ROIRequest | null,
+): VectorPointTuple | VectorPoint {
+  const source = from ?? { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+  const target = to ?? { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+  const map = (value: number, a: number, b: number, c: number, d: number) => {
+    const span = b - a;
+    return Math.max(0, Math.min(16383, Math.round(c + ((value - a) / (Math.abs(span) > 1e-9 ? span : 1)) * (d - c))));
+  };
+  const x = Array.isArray(point) ? point[0] : point.x;
+  const y = Array.isArray(point) ? point[1] : point.y;
+  const nextX = map(x, source.x_start, source.x_end, target.x_start, target.x_end);
+  const nextY = map(y, source.y_start, source.y_end, target.y_start, target.y_end);
+  return Array.isArray(point)
+    ? [nextX, nextY, ...point.slice(2)] as VectorPointTuple
+    : { ...point, x: nextX, y: nextY };
+}
+
+/** Preserve the round-robin sample order of parallel custom paths. */
+export function zoomInterleavedVectorPoints(
+  points: Array<VectorPointTuple | VectorPoint>,
+  groupLengths: number[],
+  from: Array<ROIRequest | null>,
+  to: Array<ROIRequest | null>,
+): Array<VectorPointTuple | VectorPoint> {
+  if (groupLengths.length !== from.length || from.length !== to.length ||
+      groupLengths.reduce((sum, length) => sum + length, 0) !== points.length) {
+    throw new Error("parallel custom point layout changed");
+  }
+  const result: Array<VectorPointTuple | VectorPoint> = [];
+  let cursor = 0;
+  for (let index = 0; index < Math.max(0, ...groupLengths); index += 1) {
+    for (let group = 0; group < groupLengths.length; group += 1) {
+      if (index >= groupLengths[group]) continue;
+      result.push(zoomVectorPoint(points[cursor++], from[group], to[group]));
+    }
+  }
+  return result;
 }
 

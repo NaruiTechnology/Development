@@ -13,9 +13,10 @@ import { useTranslation } from "../i18n";
 type Point = { x: number; y: number };
 type Interaction =
   | { kind: "create"; start: Point }
-  | { kind: "move"; index: number; start: Point; original: ROIRequest };
+  | { kind: "move"; index: number; start: Point; original: ROIRequest }
+  | { kind: "resize"; index: number; corner: "nw" | "ne" | "sw" | "se"; original: ROIRequest };
 
-export function ScanRegionOverlay({ disabled }: { disabled: boolean }) {
+export function ScanRegionOverlay({ disabled, moveOnly = false }: { disabled: boolean; moveOnly?: boolean }) {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const roi = useAppSelector((state) => state.scan.roi);
@@ -32,7 +33,7 @@ export function ScanRegionOverlay({ disabled }: { disabled: boolean }) {
 
   const displayed = useMemo(
     () => regions.map((region, index) =>
-      interaction?.kind === "move" && interaction.index === index && draft ? draft : region,
+      interaction?.kind !== "create" && interaction?.index === index && draft ? draft : region,
     ),
     [draft, interaction, regions],
   );
@@ -80,6 +81,14 @@ export function ScanRegionOverlay({ disabled }: { disabled: boolean }) {
     };
   }
 
+  function resizedRegion(original: ROIRequest, corner: "nw" | "ne" | "sw" | "se", current: Point): ROIRequest {
+    const anchor: Point = {
+      x: corner.endsWith("w") ? original.x_end : original.x_start,
+      y: corner.startsWith("n") ? original.y_end : original.y_start,
+    };
+    return rectFromPoints(anchor, current);
+  }
+
   function styleFor(region: ROIRequest) {
     return {
       left: `${((Math.min(region.x_start, region.x_end) - xMin) / Math.max(Number.EPSILON, xMax - xMin)) * 100}%`,
@@ -100,13 +109,19 @@ export function ScanRegionOverlay({ disabled }: { disabled: boolean }) {
         event.preventDefault();
         setMenu(null);
         const point = pointFromEvent(event);
-        const index = regionAt(point);
+        const handle = (event.target as HTMLElement).closest<HTMLElement>("[data-roi-handle]");
+        const handleIndex = handle ? Number(handle.dataset.roiIndex) : null;
+        const index = handleIndex !== null && Number.isInteger(handleIndex) ? handleIndex : regionAt(point);
         if (index === null) {
+          if (moveOnly) return;
           setInteraction({ kind: "create", start: point });
           setDraft(rectFromPoints(point, point));
         } else {
           dispatch(setActiveScanRegion(index));
-          setInteraction({ kind: "move", index, start: point, original: regions[index] });
+          const corner = handle?.dataset.roiHandle as "nw" | "ne" | "sw" | "se" | undefined;
+          setInteraction(corner
+            ? { kind: "resize", index, corner, original: regions[index] }
+            : { kind: "move", index, start: point, original: regions[index] });
           setDraft(regions[index]);
         }
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -116,7 +131,9 @@ export function ScanRegionOverlay({ disabled }: { disabled: boolean }) {
         const point = pointFromEvent(event);
         setDraft(interaction.kind === "create"
           ? rectFromPoints(interaction.start, point)
-          : movedRegion(interaction.original, interaction.start, point));
+          : interaction.kind === "move"
+          ? movedRegion(interaction.original, interaction.start, point)
+          : resizedRegion(interaction.original, interaction.corner, point));
       }}
       onPointerUp={(event) => {
         if (!interaction || !draft) return;
@@ -124,16 +141,22 @@ export function ScanRegionOverlay({ disabled }: { disabled: boolean }) {
         const rect = layerRef.current!.getBoundingClientRect();
         const minWorldX = ((xMax - xMin) / Math.max(1, rect.width)) * 6;
         const minWorldY = ((yMax - yMin) / Math.max(1, rect.height)) * 6;
-        if (interaction.kind === "move") {
-          dispatch(updateScanRegion({ index: interaction.index, region: draft }));
+        if (interaction.kind !== "create") {
+          if (Math.abs(draft.x_end - draft.x_start) >= minWorldX && Math.abs(draft.y_end - draft.y_start) >= minWorldY) {
+            dispatch(updateScanRegion({ index: interaction.index, region: draft }));
+          }
         } else if (Math.abs(draft.x_end - draft.x_start) >= minWorldX && Math.abs(draft.y_end - draft.y_start) >= minWorldY) {
           dispatch(addScanRegion(draft));
         }
         setInteraction(null);
         setDraft(null);
       }}
+      onPointerCancel={() => {
+        setInteraction(null);
+        setDraft(null);
+      }}
       onContextMenu={(event) => {
-        if (!roi.roi_scan_enabled || disabled) return;
+        if (!roi.roi_scan_enabled || disabled || moveOnly) return;
         const index = regionAt(pointFromEvent(event));
         if (index === null) return;
         event.preventDefault();
@@ -150,6 +173,10 @@ export function ScanRegionOverlay({ disabled }: { disabled: boolean }) {
           style={styleFor(region)}
         >
           <span>{index + 1}</span>
+          {!disabled && active === index && (["nw", "ne", "sw", "se"] as const).map((corner) => (
+            <i key={corner} className={`scan-roi-layer__handle scan-roi-layer__handle--${corner}`}
+              data-roi-handle={corner} data-roi-index={index} />
+          ))}
         </div>
       ))}
       {interaction?.kind === "create" && draft && (

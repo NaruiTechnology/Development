@@ -140,6 +140,8 @@ export interface VectorRequest {
   gray_level_range?: [number, number] | null;
   /** True blanks values inside the range; false blanks values outside it. */
   gray_level_skipped?: boolean | null;
+  /** ROI target-gray simulation: lower brighter pixels toward this value after each pass. */
+  target_gray_level?: number | null;
   cookie: number;
   pre_process: boolean;
   do_validate: boolean;
@@ -210,6 +212,8 @@ export interface SimulationBitmap {
   width: number;
   height: number;
   pixels: Array<number | SimulationBitmapPixel>;
+  /** DAC area represented by the pixels; enables live ROI zoom over one source image. */
+  source_roi?: ROIRequest | null;
 }
 
 export interface SimulationBitmapPixel {

@@ -312,6 +312,7 @@ class SimulationBitmap(BaseModel):
     width:  int = Field(..., ge=1, le=4096)
     height: int = Field(..., ge=1, le=4096)
     pixels: List[Union[int, "SimulationBitmapPixel"]] = Field(..., max_length=1_000_000)
+    source_roi: Optional["ROIRequest"] = None
 
     @field_validator("pixels")
     @classmethod
@@ -388,6 +389,10 @@ class VectorRequest(BaseModel):
     gray_level_skipped: Optional[bool] = Field(
         default=None,
         description="True blanks values inside the range; false blanks values outside it.",
+    )
+    target_gray_level: Optional[int] = Field(
+        default=None, ge=0, le=255,
+        description="Simulation-only ROI target: lower brighter source pixels toward this level after each pass.",
     )
     beam_type:      str  = Field("Ion", description="NoBeam, Electron, or Ion.")
     external_control: bool = Field(True, description="Drive external beam control pins during the scan.")
@@ -537,5 +542,6 @@ class ROIRequest(BaseModel):
         return v
 
 
+SimulationBitmap.model_rebuild()
 RasterRequest.model_rebuild()
 VectorRequest.model_rebuild()

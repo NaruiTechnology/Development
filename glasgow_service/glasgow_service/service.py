@@ -64,7 +64,7 @@ from .roi_scaling import dac_step, roi_zoom
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
     DacRampRequest, DacRampAxis, BeamHoldRequest, BeamHoldState,
-    VectorPattern, VectorScanPath,
+    VectorPattern, VectorScanPath, ROIRequest,
     ScanResult, ScanValidation, ValidationCheck,
 )
 
@@ -700,6 +700,34 @@ def _bitmap_sample_grid(bitmap, mode=None):
     ).reshape(bitmap.height, bitmap.width)
 
 
+def _target_gray_step_bitmap(bitmap, roi, target: int) -> None:
+    """Advance one simulated ROI pass using the old ROI tab's two-level step."""
+    source = _roi_bounds(bitmap.source_roi) or (0, 16383, 0, 16383)
+    selected = _roi_bounds(roi) or source
+    sx0, sx1, sy0, sy1 = source
+    rx0, rx1, ry0, ry1 = selected
+    x0 = max(0, min(bitmap.width, math.floor((rx0 - sx0) * bitmap.width / max(1, sx1 - sx0))))
+    x1 = max(x0, min(bitmap.width, math.ceil((rx1 - sx0) * bitmap.width / max(1, sx1 - sx0))))
+    y0 = max(0, min(bitmap.height, math.floor((ry0 - sy0) * bitmap.height / max(1, sy1 - sy0))))
+    y1 = max(y0, min(bitmap.height, math.ceil((ry1 - sy0) * bitmap.height / max(1, sy1 - sy0))))
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            index = y * bitmap.width + x
+            pixel = bitmap.pixels[index]
+            value = _bitmap_pixel_value(pixel)
+            if value <= target:
+                continue
+            next_value = max(target, value - 2)
+            if isinstance(pixel, int):
+                bitmap.pixels[index] = next_value
+            else:
+                pixel.value = next_value
+                if next_value <= target:
+                    pixel.isHighlighted = True
+                    pixel.isSkipped = True
+                    pixel.blank = True
+
+
 def _regular_vector_coordinates(edge, roi, scan_path, indices):
     x0, x1, y0, y1 = _roi_bounds(roi) or (0, 16383, 0, 16383)
     xr = _dac_range_for_bounds(x0, x1, edge)
@@ -739,10 +767,20 @@ def _bitmap_raster_chunks(req: RasterRequest, transforms=None) -> Optional[List[
     pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
     total = req.resolution * req.resolution
     chunks: List[array.array] = []
+    source_bounds = _roi_bounds(bitmap.source_roi) if bitmap.source_roi else None
+    scan_bounds = _roi_bounds(req.roi) if req.roi else None
     for start in range(0, total, pixels_per_chunk):
         idx = np.arange(start, min(start + pixels_per_chunk, total), dtype=np.int64)
-        xs = np.rint((idx % req.resolution) / max(1, req.resolution - 1) * (bitmap.width - 1)).astype(np.int64)
-        ys = np.rint((idx // req.resolution) / max(1, req.resolution - 1) * (bitmap.height - 1)).astype(np.int64)
+        if source_bounds:
+            scan_x0, scan_x1, scan_y0, scan_y1 = scan_bounds or (0, 16383, 0, 16383)
+            source_x0, source_x1, source_y0, source_y1 = source_bounds
+            scan_x = scan_x0 + (idx % req.resolution) * (scan_x1 - scan_x0) / max(1, req.resolution - 1)
+            scan_y = scan_y0 + (idx // req.resolution) * (scan_y1 - scan_y0) / max(1, req.resolution - 1)
+            xs = np.rint(np.clip((scan_x - source_x0) / max(1, source_x1 - source_x0), 0, 1) * (bitmap.width - 1)).astype(np.int64)
+            ys = np.rint(np.clip((scan_y - source_y0) / max(1, source_y1 - source_y0), 0, 1) * (bitmap.height - 1)).astype(np.int64)
+        else:
+            xs = np.rint((idx % req.resolution) / max(1, req.resolution - 1) * (bitmap.width - 1)).astype(np.int64)
+            ys = np.rint((idx // req.resolution) / max(1, req.resolution - 1) * (bitmap.height - 1)).astype(np.int64)
         chunks.append(array.array("H", grid[ys, xs].tobytes()))
     return chunks
 
@@ -768,6 +806,7 @@ class _SimulatedCommand:
 
     def __init__(self) -> None:
         self.abort = asyncio.Event()
+        self.continuous = False
 
 
 def _simulation_chunk_interval(simulation: dict) -> float:
@@ -940,8 +979,12 @@ def _bitmap_vector_chunks(req: VectorRequest, transforms=None) -> Optional[List[
         return None
 
     if req.pattern is not VectorPattern.custom:
-        grid = _bitmap_sample_grid(bitmap)
-        x0, x1, y0, y1 = _roi_bounds(req.roi) or (0, 16383, 0, 16383)
+        grid = (np.fromiter(
+            (_obi_aligned_int(min(_bitmap_pixel_value(pixel) * 64, 0x3FFF)) for pixel in bitmap.pixels),
+            dtype=np.uint16, count=len(bitmap.pixels),
+        ).reshape(bitmap.height, bitmap.width)
+            if req.target_gray_level is not None else _bitmap_sample_grid(bitmap))
+        x0, x1, y0, y1 = _roi_bounds(bitmap.source_roi or req.roi) or (0, 16383, 0, 16383)
         size = min(65536, max(1, math.ceil(req.latency_bytes / req.dwell)))
         total = req.vector_resolution ** 2
         chunks = []
@@ -1150,6 +1193,60 @@ class DeviceService:
                     else "connection still initialising; applied when the command starts")
         return True
 
+    def update_live_scan_geometry(self, kind: str, geometry: dict, *, owner=None) -> None:
+        """Change only DAC coordinates in the running continuous command."""
+        active = getattr(self, "_active_scan", None)
+        req = getattr(self, "_active_live_request", None)
+        cmd = self._active_command
+        if (active is None or active.get("kind") != kind or
+                (owner is not None and active.get("owner") is not owner) or
+                req is None or cmd is None or not getattr(cmd, "continuous", False)):
+            raise ValueError("no matching continuous scan is active")
+        if set(geometry) - {"roi", "parallel_rois", "points"}:
+            raise ValueError("only scan geometry can be updated")
+        if "roi" not in geometry or "parallel_rois" not in geometry:
+            raise ValueError("roi and parallel_rois are required")
+        updates = {
+            "roi": ROIRequest.model_validate(geometry["roi"]) if geometry["roi"] is not None else None,
+            "parallel_rois": ([ROIRequest.model_validate(item) for item in geometry["parallel_rois"]]
+                              if geometry["parallel_rois"] is not None else None),
+        }
+        if "points" in geometry:
+            if kind != "vector" or req.pattern is not VectorPattern.custom or req.points is None:
+                raise ValueError("point updates require a custom vector scan")
+            updated_points = VectorRequest.model_validate({
+                **req.model_dump(), **updates, "points": geometry["points"],
+            }).points
+            if updated_points is None or len(updated_points) != len(req.points):
+                raise ValueError("live point update must preserve the sample count")
+            def metadata(point):
+                return tuple(point[2:]) if isinstance(point, (tuple, list)) else (
+                    point.dwell, point.blank, point.passIndex)
+            if any(metadata(before) != metadata(after)
+                   for before, after in zip(req.points, updated_points)):
+                raise ValueError("live point update cannot change dwell, blanking or pass markers")
+            updates["points"] = updated_points
+        elif kind == "vector" and req.pattern is VectorPattern.custom and req.points is not None:
+            raise ValueError("custom vector zoom requires updated points")
+        updated = req.model_copy(update=updates)
+        old_count = len(req.parallel_rois or [])
+        if len(updated.parallel_rois or []) != old_count:
+            raise ValueError("live geometry update cannot change the region count")
+        if isinstance(cmd, _SimulatedCommand):
+            self._active_live_request = updated
+            return
+        replacement = (self._build_raster_cmd(updated, continuous=True) if kind == "raster"
+                       else self._build_vector_cmd(updated, continuous=True))
+        if type(replacement) is not type(cmd):
+            raise ValueError("live geometry update cannot change the scan mode")
+        if isinstance(cmd, RasterScanCommand):
+            cmd.update_geometry(replacement._x_range, replacement._y_range)
+        elif isinstance(cmd, VectorScanCommand):
+            cmd.update_geometry(replacement._points_factory, replacement.pass_pixels)
+        else:
+            raise ValueError("live geometry update is unsupported for this scan")
+        self._active_live_request = updated
+
     def _busy_detail(self) -> str:
         """Human-readable reason for DeviceBusy: who holds the device."""
         active = getattr(self, "_active_scan", None)
@@ -1243,6 +1340,21 @@ class DeviceService:
         override = getattr(req, "simulation", None)
         return dict(override) if isinstance(override, dict) else self._simulation_defaults
 
+    def _prepare_simulated_stream_request(self, req, *, pace: bool):
+        if pace and req.parallel_rois:
+            # Transport packets are not acquisition steps. A small hardware
+            # latency must not add 20 ms of artificial delay per ~500 pixels
+            # across millions of interleaved simulation samples.
+            req = req.model_copy(update={
+                "latency_bytes": max(req.latency_bytes, req.dwell * 16384),
+            })
+        if pace and getattr(req, "continuous", False):
+            # Keep the effective request as the live baseline. Otherwise the
+            # first loop iteration sees the original object as a geometry
+            # update and rebuilds thousands of tiny chunks per pass.
+            self._active_live_request = req
+        return req
+
     async def _simulated_chunks(self, kind: str, req, command, *, pace: bool):
         """Stand-in for ``conn.transfer_multiple(cmd)`` that needs no device."""
         bitmap_id = getattr(req, "simulation_bitmap_id", None)
@@ -1261,13 +1373,7 @@ class DeviceService:
             })
         simulation = self._simulation_settings(req)
         interval = _simulation_chunk_interval(simulation) if pace else 0.0
-        if pace and req.parallel_rois:
-            # Transport packets are not acquisition steps. A small hardware
-            # latency must not add 20 ms of artificial delay per ~500 pixels
-            # across millions of interleaved simulation samples.
-            req = req.model_copy(update={
-                "latency_bytes": max(req.latency_bytes, req.dwell * 16384),
-            })
+        req = self._prepare_simulated_stream_request(req, pace=pace)
         build_bitmap = _bitmap_raster_chunks if kind == "raster" else _bitmap_vector_chunks
         # Building a bitmap frame is pure Python; keep it off the event loop.
         transforms = self._action_defaults.get("transforms", {}) or {}
@@ -1277,6 +1383,10 @@ class DeviceService:
         continuous = pace and bool(getattr(req, "continuous", False))
         frames_left = _session_frames(req, continuous)
         while True:
+            live_req = getattr(self, "_active_live_request", None)
+            if continuous and live_req is not None and live_req is not req:
+                req = live_req
+                bitmap_chunks = await asyncio.to_thread(build_bitmap, req, transforms)
             if bitmap_chunks is not None:
                 source = _paced_chunks(bitmap_chunks, abort=command.abort, interval=interval)
             elif kind == "raster":
@@ -1293,6 +1403,18 @@ class DeviceService:
                 frames_left -= 1
             if not continuous or command.abort.is_set() or frames_left == 0:
                 return
+            if kind == "vector" and req.target_gray_level is not None and bitmap_chunks is not None:
+                def advance_target() -> None:
+                    if req.parallel_rois and req.parallel_simulation_bitmaps:
+                        for index, (region, bitmap) in enumerate(zip(req.parallel_rois, req.parallel_simulation_bitmaps)):
+                            if index == 0 and len(req.parallel_rois) > 1 and _roi_bounds(region) == (0, 16383, 0, 16383):
+                                continue  # normal full-field background is never processed
+                            _target_gray_step_bitmap(bitmap, region, req.target_gray_level)
+                    elif req.simulation_bitmap is not None:
+                        _target_gray_step_bitmap(req.simulation_bitmap, req.roi, req.target_gray_level)
+                    return None
+                await asyncio.to_thread(advance_target)
+                bitmap_chunks = await asyncio.to_thread(build_bitmap, req, transforms)
             # Keep the chunk cadence across the frame boundary.
             await asyncio.sleep(interval)
 
@@ -1328,6 +1450,8 @@ class DeviceService:
             captured = _FrameRing(_simulated_pass_samples(kind, req))
         async with self._acquire(kind):
             command = _SimulatedCommand()
+            command.continuous = bool(getattr(req, "continuous", False))
+            self._active_live_request = req if command.continuous else None
             self._activate_command(command)
             try:
                 async for chunk in self._simulated_chunks(kind, req, command, pace=True):
@@ -1336,6 +1460,7 @@ class DeviceService:
                     yield chunk if native_samples else _sample_chunk_to_wire_bytes(chunk)
             finally:
                 self._deactivate_command(command)
+                self._active_live_request = None
                 # Like a real scan: keep whatever was captured, even if stopped.
                 if isinstance(captured, _FrameRing):
                     captured = captured.frame()
@@ -1575,6 +1700,7 @@ class DeviceService:
         async with self._acquire("raster", transport=transport):
             conn = await self._ensure_conn()
             cmd = self._build_raster_cmd(req, continuous=continuous)
+            self._active_live_request = req if continuous else None
             latency = self._chunk_latency("raster", req.latency_bytes, cmd)
             if continuous:
                 # Live scan: keep only the most recent frame for /scan/last/*
@@ -1617,6 +1743,7 @@ class DeviceService:
                 raise
             finally:
                 self._deactivate_command(cmd)
+                self._active_live_request = None
                 summary = adc_monitor.summary()
                 if summary is not None:
                     logger.info("%s", summary)
@@ -1648,6 +1775,7 @@ class DeviceService:
             conn = await self._ensure_conn()
             cmd = self._build_vector_cmd(
                 req, continuous=bool(getattr(req, "continuous", False)))
+            self._active_live_request = req if getattr(cmd, "continuous", False) else None
             latency = self._chunk_latency("vector", req.latency_bytes, cmd)
             multi_pass_adaptive = getattr(cmd, "_adaptive_passes", 1) > 1
             if getattr(cmd, "continuous", False) or multi_pass_adaptive:
@@ -1697,6 +1825,7 @@ class DeviceService:
                 raise
             finally:
                 self._deactivate_command(cmd)
+                self._active_live_request = None
                 try:
                     # Ensure Stop/disconnect reaches Connection's cleanup
                     # before the service releases this scan generator.

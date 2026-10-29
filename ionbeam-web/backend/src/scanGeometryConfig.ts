@@ -16,6 +16,7 @@ export interface StoredScanGeometry {
   equipment_type: "FIB" | "SEM";
   profile_revision: number | null;
   inputs: Record<string, unknown>;
+  magnification_calibration?: Record<string, number>;
   correction: { matrix: [number, number, number, number]; dacOffset: [number, number] };
   fit: Record<string, unknown> | null;
   applied_at: string;
@@ -38,6 +39,16 @@ export function normalizeScanGeometry(body: unknown, actor: string, now: Date = 
   const inputs = r.inputs;
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) fail("inputs missing");
   const i = inputs as Record<string, unknown>;
+  let magnificationCalibration: Record<string, number> | undefined;
+  if (r.magnification_calibration !== undefined) {
+    const points = r.magnification_calibration;
+    if (!points || typeof points !== "object" || Array.isArray(points)) fail("magnification_calibration must be a table");
+    const entries = Object.entries(points);
+    if (entries.length > 200 || entries.some(([mag, fov]) => !(Number(mag) > 0) || !finite(fov) || fov <= 0)) {
+      fail("magnification_calibration needs positive magnifications and FOV values");
+    }
+    magnificationCalibration = points as Record<string, number>;
+  }
 
   const positive = ["magnification", "hfovUm", "pixelsX", "pixelsY", "yxAspect", "adcHalfPeriod"];
   for (const key of positive) if (!finite(i[key]) || (i[key] as number) <= 0) fail(`inputs.${key} must be a positive number`);
@@ -74,6 +85,7 @@ export function normalizeScanGeometry(body: unknown, actor: string, now: Date = 
     equipment_type: r.equipment_type === "SEM" ? "SEM" : "FIB",
     profile_revision: finite(r.profile_revision) ? r.profile_revision : null,
     inputs: i,
+    magnification_calibration: magnificationCalibration,
     correction: { matrix: c.matrix as StoredScanGeometry["correction"]["matrix"], dacOffset: c.dacOffset as [number, number] },
     fit,
     applied_at: now.toISOString(),

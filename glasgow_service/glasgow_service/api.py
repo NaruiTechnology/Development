@@ -170,8 +170,10 @@ async def stream_raster(ws: WebSocket):
     With `continuous: true` (Infinite / live scan) the service keeps one
     FPGA command stream open and scans frame after frame until
     POST /scan/abort; pixels stream without a gap at frame boundaries and
-    `done` is sent only after Stop (the last complete frame is cached)."""
-    await _stream_scan(ws, lambda p: svc.raster_scan(RasterRequest(**p)))
+    `done` is sent only after Stop (the last complete frame is cached).
+    An `update_geometry` JSON control frame changes ROI coordinates on a
+    following frame without closing the WebSocket or releasing the scan."""
+    await _stream_scan(ws, lambda p: svc.raster_scan(RasterRequest(**p)), kind="raster")
 
 
 # ---------- vector ---------------------------------------------------------
@@ -207,7 +209,8 @@ async def run_vector(req: VectorRequest):
 
 @app.websocket("/scan/vector/stream")
 async def stream_vector(ws: WebSocket):
-    await _stream_scan(ws, lambda p: svc.vector_scan(VectorRequest(**p)))
+    """Stream vector samples; continuous scans accept in-band ROI updates."""
+    await _stream_scan(ws, lambda p: svc.vector_scan(VectorRequest(**p)), kind="vector")
 
 
 @app.websocket("/scan/dac_ramp/stream")
@@ -370,7 +373,7 @@ async def get_last_figure(
 
 # ---------- shared WS plumbing --------------------------------------------
 
-async def _watch_client_disconnect(ws: WebSocket, owner) -> None:
+async def _watch_client_disconnect(ws: WebSocket, owner, kind: str | None = None) -> None:
     """Stop this stream's scan as soon as its client goes away.
 
     The scan generator only notices a closed socket on its next send, and
@@ -383,13 +386,23 @@ async def _watch_client_disconnect(ws: WebSocket, owner) -> None:
             message = await ws.receive()
             if message.get("type") == "websocket.disconnect":
                 break
+            if kind and message.get("text"):
+                control = None
+                try:
+                    import json
+                    control = json.loads(message["text"])
+                    if control.get("event") == "update_geometry":
+                        svc.update_live_scan_geometry(kind, control.get("geometry", {}), owner=owner)
+                        await ws.send_json({"event": "geometry_updated", "id": control.get("id")})
+                except (ValueError, TypeError, AttributeError) as exc:
+                    await ws.send_json({"event": "geometry_update_error", "id": control.get("id") if isinstance(control, dict) else None, "detail": str(exc)})
     except (WebSocketDisconnect, RuntimeError):
         pass
     if svc.abort_active_scan(owner=owner):
         logger.info("scan stream client disconnected; stopping its scan")
 
 
-async def _stream_scan(ws: WebSocket, make_gen):
+async def _stream_scan(ws: WebSocket, make_gen, *, kind: str | None = None):
     await ws.accept()
     gen = None
     watcher = None
@@ -397,7 +410,7 @@ async def _stream_scan(ws: WebSocket, make_gen):
     try:
         payload = await ws.receive_json()
         watcher = asyncio.create_task(
-            _watch_client_disconnect(ws, asyncio.current_task()))
+            _watch_client_disconnect(ws, asyncio.current_task(), kind))
         gen = make_gen(payload)
         if isinstance(gen, tuple):
             # (generator, metadata): a stream that announces its timing first.

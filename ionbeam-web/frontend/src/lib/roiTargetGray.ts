@@ -1,10 +1,9 @@
 /**
  * Target gray level helpers for the ROI image canvas.
  *
- * The operator right-clicks a pixel to pick a target gray level. Action run
- * (with an ROI area and no gray level filter range) then steps brighter pixels
- * down toward that target. Pixels at or below the target are skipped, and
- * pixels outside the ROI area are never touched.
+ * The operator right-clicks a pixel to pick a target gray level. Pixels at
+ * or below the target are skipped; brighter pixels are exposed and move down
+ * toward it over repeated simulated passes.
  */
 
 /** Gray levels a pixel may move toward the target in one pass. */
@@ -69,8 +68,8 @@ export function targetGrayDecision(gray: number, target: number): TargetGrayDeci
 }
 
 /**
- * The gray level filter for the scan request: skip the complete range from
- * black through the target so only brighter pixels are scanned.
+ * Blank the complete range from black through the target, so only brighter
+ * pixels remain eligible for beam dwell. The upper bound is inclusive.
  */
 export function targetGrayFilter(target: number): { selection: [number, number]; skipped: true } {
   const level = Math.max(0, Math.min(255, Math.round(target)));

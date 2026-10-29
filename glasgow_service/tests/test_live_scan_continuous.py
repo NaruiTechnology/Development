@@ -7,6 +7,7 @@ pipeline drain only after Stop.
 """
 import asyncio
 from pathlib import Path
+import pytest
 
 from GlasgowDataIO.IobeamControl.commands import DACCodeRange
 from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
@@ -15,8 +16,9 @@ from GlasgowDataIO.IobeamControl.commands.low_level_commands import (
 )
 from GlasgowDataIO.IobeamControl.commands.structs import OutputMode
 from GlasgowDataIO.IobeamControl.macros.raster import RasterScanCommand
-from glasgow_service.models import RasterRequest
-from glasgow_service.service import DeviceService, _FrameRing
+from GlasgowDataIO.IobeamControl.macros.vector import VectorScanCommand
+from glasgow_service.models import ROIRequest, RasterRequest, SimulationBitmap, VectorRequest
+from glasgow_service.service import DeviceService, _FrameRing, _SimulatedCommand, _bitmap_vector_chunks, _target_gray_step_bitmap
 
 
 CONFIG_PATH = Path(__file__).parents[2] / "GlasgowDataIO" / "Json" / "streamData.json"
@@ -72,6 +74,140 @@ def test_continuous_rearms_region_in_band_at_every_frame_start():
     for i, (commands, _) in enumerate(chunks):
         starts_frame = i % 4 == 0 and i > 0
         assert bytes(commands).startswith(region) is starts_frame
+
+
+def test_live_raster_zoom_rearms_new_region_without_new_sync():
+    cmd = _cmd(True)
+    it = cmd._iter_chunks(LATENCY)
+    for _ in range(4):
+        next(it)
+    small = DACCodeRange(start=4096, count=RES, step=8 * 256)
+    cmd.update_geometry(small, small)
+    commands, _ = next(it)
+    assert bytes(commands).startswith(bytes(RasterRegionCommand(x_range=small, y_range=small)))
+
+
+def test_live_vector_zoom_uses_new_points_on_next_pass():
+    original = lambda: iter([(100, 100, 2), (200, 200, 2)])
+    cmd = VectorScanCommand(cookie=9, iter_points=original(), continuous=True,
+                            points_factory=original)
+    cmd.pass_pixels = 2
+    passes = cmd._iter_passes()
+    assert list(next(passes)) == [(100, 100, 2), (200, 200, 2)]
+    updated = lambda: iter([(300, 300, 2), (400, 400, 2)])
+    cmd.update_geometry(updated, 2)
+    assert list(next(passes)) == [(300, 300, 2), (400, 400, 2)]
+
+
+def test_loaded_image_is_shared_by_background_and_zoomed_roi():
+    bitmap = {
+        "width": 16, "height": 16,
+        "pixels": [x * 16 for _y in range(16) for x in range(16)],
+        "source_roi": {"x_start": 0, "x_end": 16383, "y_start": 0, "y_end": 16383},
+    }
+    full = VectorRequest(vector_resolution=RES, simulation_bitmap=bitmap)
+    roi = full.model_copy(update={"roi": ROIRequest(x_start=2000, x_end=12000, y_start=2000, y_end=12000)})
+    zoomed = full.model_copy(update={"roi": ROIRequest(x_start=7000, x_end=9000, y_start=7000, y_end=9000)})
+    first = lambda req: _bitmap_vector_chunks(req)[0][0]
+    background = first(full)
+    assert background != first(roi)
+    assert first(roi) != first(zoomed)
+    assert first(full) == background
+
+
+def test_target_gray_pass_changes_only_brighter_roi_pixels():
+    background = SimulationBitmap(width=4, height=1, pixels=[120, 102, 80, 200])
+    roi_bitmap = background.model_copy(deep=True)
+    roi = ROIRequest(x_start=0, x_end=8191, y_start=0, y_end=16383)
+    _target_gray_step_bitmap(roi_bitmap, roi, 100)
+    assert roi_bitmap.pixels == [118, 100, 80, 200]
+    assert background.pixels == [120, 102, 80, 200]
+    _target_gray_step_bitmap(roi_bitmap, roi, 100)
+    assert roi_bitmap.pixels == [116, 100, 80, 200]
+
+
+def test_simulated_target_gray_updates_the_roi_on_the_next_pass():
+    full = ROIRequest(x_start=0, x_end=16383, y_start=0, y_end=16383)
+    roi = ROIRequest(x_start=0, x_end=8191, y_start=0, y_end=16383)
+    background = SimulationBitmap(width=2, height=2, pixels=[120] * 4, source_roi=full)
+    selected = background.model_copy(deep=True)
+    req = VectorRequest(
+        pattern="default", vector_resolution=128, dwell=2, latency_bytes=8196,
+        continuous=True, frames=2, target_gray_level=100,
+        parallel_rois=[full, roi], parallel_simulation_bitmaps=[background, selected],
+    )
+    first = list(_bitmap_vector_chunks(req)[0])
+    _target_gray_step_bitmap(selected, roi, 100)
+    second = list(_bitmap_vector_chunks(req)[0])
+    assert first[0] == second[0], "full-field background must stay unchanged"
+    assert second[1] < first[1], "the second ROI pass uses a stepped gray value"
+
+
+def test_parallel_live_simulation_keeps_paced_request_as_update_baseline():
+    service = DeviceService(str(CONFIG_PATH))
+    full = ROIRequest(x_start=0, x_end=16383, y_start=0, y_end=16383)
+    roi = ROIRequest(x_start=2000, x_end=12000, y_start=2000, y_end=12000)
+    req = VectorRequest(
+        vector_resolution=1024, dwell=8, latency_bytes=8196,
+        continuous=True, parallel_rois=[full, roi],
+    )
+    effective = service._prepare_simulated_stream_request(req, pace=True)
+    assert effective.latency_bytes == 8 * 16384
+    assert service._active_live_request is effective
+    assert req.latency_bytes == 8196
+
+
+def test_simulated_live_geometry_update_keeps_active_command():
+    service = DeviceService(str(CONFIG_PATH))
+    owner = object()
+    command = _SimulatedCommand()
+    command.continuous = True
+    service._active_scan = {"kind": "raster", "owner": owner}
+    service._active_command = command
+    service._active_live_request = RasterRequest(resolution=RES, continuous=True)
+    roi = {"x_start": 4096, "x_end": 8192, "y_start": 4096, "y_end": 8192}
+    service.update_live_scan_geometry("raster", {"roi": roi, "parallel_rois": None}, owner=owner)
+    assert service._active_command is command
+    assert service._active_live_request.roi.x_start == 4096
+    assert not command.abort.is_set()
+
+
+def test_hardware_live_geometry_update_preserves_raster_command():
+    service = DeviceService(str(CONFIG_PATH))
+    owner = object()
+    req = RasterRequest(resolution=RES, dwell=DWELL, continuous=True)
+    command = service._build_raster_cmd(req, continuous=True)
+    service._active_scan = {"kind": "raster", "owner": owner}
+    service._active_command = command
+    service._active_live_request = req
+    roi = {"x_start": 4096, "x_end": 8192, "y_start": 4096, "y_end": 8192}
+    service.update_live_scan_geometry("raster", {"roi": roi, "parallel_rois": None}, owner=owner)
+    assert service._active_command is command
+    assert command._x_range.start == 4096
+    assert command._y_range.start == 4096
+    assert not command.abort.is_set()
+
+
+def test_custom_vector_zoom_preserves_flags_and_command_session():
+    service = DeviceService(str(CONFIG_PATH))
+    owner = object()
+    req = VectorRequest(pattern="custom", points=[(100, 200, 3, True, 1), (300, 400, 5, False, 2)], continuous=True)
+    command = service._build_vector_cmd(req, continuous=True)
+    service._active_scan = {"kind": "vector", "owner": owner}
+    service._active_command = command
+    service._active_live_request = req
+    roi = {"x_start": 1000, "x_end": 8000, "y_start": 1000, "y_end": 8000}
+    points = [(1100, 1200, 3, True, 1), (1300, 1400, 5, False, 2)]
+    service.update_live_scan_geometry("vector", {"roi": roi, "parallel_rois": None, "points": points}, owner=owner)
+    assert service._active_command is command
+    assert list(command._points_factory()) == points
+    assert not command.abort.is_set()
+    with pytest.raises(ValueError, match="blanking"):
+        service.update_live_scan_geometry("vector", {
+            "roi": roi, "parallel_rois": None,
+            "points": [(1100, 1200, 3, False, 1), (1300, 1400, 5, False, 2)],
+        }, owner=owner)
+    assert list(command._points_factory()) == points
 
 
 def test_continuous_transfer_streams_frames_until_abort():

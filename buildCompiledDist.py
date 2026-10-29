@@ -129,6 +129,7 @@ REQUIRED_DIST_MODULES = (
     'Development/GlasgowDataIO/IobeamControl/macros/raster',
     'Development/GlasgowDataIO/IobeamControl/macros/vector',
     'Development/GlasgowDataIO/IobeamControl/transfer/linkStats',
+    'Development/glasgow_service/glasgow_service/api',
     'Development/glasgow_service/glasgow_service/service',
     'Development/glasgow_service/glasgow_service/device_lock',
     # Native desktop client (ionbeam-native): entry point, persistent Glasgow

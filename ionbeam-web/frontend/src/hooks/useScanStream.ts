@@ -100,6 +100,23 @@ export function useScanStream() {
   const reconnectInFlightRef = useRef<Promise<boolean> | null>(null);
   const pendingRasterRef = useRef<PendingSamples>(createPendingSamples());
   const pendingVectorRef = useRef<PendingSamples>(createPendingSamples());
+  const geometryUpdateCallbacksRef = useRef(new Map<number, { onError: (detail: string) => void; onApplied?: () => void }>());
+  const nextGeometryUpdateIdRef = useRef(1);
+  const geometryReadyRef = useRef(false);
+  const pendingGeometryUpdatesRef = useRef<Array<{ id: number; geometry: {
+    roi: ROIRequest | null;
+    parallel_rois: ROIRequest[] | null;
+    points?: VectorRequest["points"];
+  } }>>([]);
+
+  const flushPendingGeometryUpdates = useCallback(() => {
+    const ws = wsRef.current;
+    if (!geometryReadyRef.current || !ws || ws.readyState !== WebSocket.OPEN) return;
+    for (const update of pendingGeometryUpdatesRef.current) {
+      ws.send(JSON.stringify({ event: "update_geometry", ...update }));
+    }
+    pendingGeometryUpdatesRef.current = [];
+  }, []);
 
   // Read current phase reactively so the close handler can decide whether
   // to transition to error. Reading from store at close time avoids a
@@ -152,6 +169,7 @@ export function useScanStream() {
       continuous?: boolean;
       displayROI?: ROIRequest | null;
       displayROIs?: ROIRequest[] | null;
+      compositeROIs?: ROIRequest[] | null;
       simulationBitmapInfo?: { width: number; height: number } | null;
       hasSimulationBitmap?: boolean;
       initialFrame?: Uint16Array | null;
@@ -171,6 +189,8 @@ export function useScanStream() {
       stopExisting(wsRef);
       discardPendingSamples(pendingRasterRef.current);
       activeScanRef.current = { kind: "raster", req };
+      geometryReadyRef.current = false;
+      pendingGeometryUpdatesRef.current = [];
       autoReconnectAttemptedRef.current = false;
       dispatch(resetRaster({
         resolution: req.resolution,
@@ -179,6 +199,7 @@ export function useScanStream() {
         continuous,
         roi: options?.displayROI === undefined ? req.roi : options.displayROI,
         parallelROIs: options?.displayROIs ?? req.parallel_rois,
+        compositeROIs: options?.compositeROIs,
         initialFrame: options?.initialFrame,
         preserveZeroSamples: Boolean(hasBitmapSource && options?.initialFrame),
       }));
@@ -198,7 +219,9 @@ export function useScanStream() {
         markScanPerformanceConnected();
         try {
           const prepared = await prepareScanAssets(req);
-          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(prepared));
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(prepared));
+          }
         } catch (err) {
           if (wsRef.current !== ws) return;
           controlFailed = true;
@@ -210,6 +233,10 @@ export function useScanStream() {
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;
         if (typeof ev.data !== "string") {
+          if (!geometryReadyRef.current) {
+            geometryReadyRef.current = true;
+            flushPendingGeometryUpdates();
+          }
           const buf = ev.data as ArrayBuffer;
           markScanPerformanceChunk(buf.byteLength);
           queuePendingSamples(
@@ -222,6 +249,22 @@ export function useScanStream() {
         }
         flushRasterSamples();
         markScanPerformanceControl(ev.data);
+        try {
+          const control = JSON.parse(ev.data);
+          if (control.event === "geometry_updated") {
+            const callback = geometryUpdateCallbacksRef.current.get(control.id);
+            geometryUpdateCallbacksRef.current.delete(control.id);
+            callback?.onApplied?.();
+            return;
+          }
+          if (control.event === "geometry_update_error") {
+            console.warn("[scan/raster] live geometry update failed:", control.detail);
+            const callback = geometryUpdateCallbacksRef.current.get(control.id);
+            geometryUpdateCallbacksRef.current.delete(control.id);
+            callback?.onError(String(control.detail ?? "Live zoom update was rejected"));
+            return;
+          }
+        } catch { /* regular control handler reports malformed messages */ }
         if (!handleRasterControlMessage(ev.data, dispatch, sawDoneRef, pendingCompletionRef)) {
           controlFailed = true;
           activeScanRef.current = null;
@@ -249,6 +292,9 @@ export function useScanStream() {
           dispatch,
         );
         wsRef.current = null;
+        geometryUpdateCallbacksRef.current.clear();
+        pendingGeometryUpdatesRef.current = [];
+        geometryReadyRef.current = false;
         if (!controlFailed && closureKindRef.current !== "stop" &&
             (sawDoneRef.current || ev.code === 1000)) options?.onComplete?.();
       };
@@ -263,6 +309,7 @@ export function useScanStream() {
       continuous?: boolean;
       displayROI?: ROIRequest | null;
       displayROIs?: ROIRequest[] | null;
+      compositeROIs?: ROIRequest[] | null;
       simulationBitmapInfo?: { width: number; height: number } | null;
       hasSimulationBitmap?: boolean;
       initialFrame?: Uint16Array | null;
@@ -283,6 +330,8 @@ export function useScanStream() {
       stopExisting(wsRef);
       discardPendingSamples(pendingVectorRef.current);
       activeScanRef.current = { kind: "vector", req };
+      geometryReadyRef.current = false;
+      pendingGeometryUpdatesRef.current = [];
       autoReconnectAttemptedRef.current = false;
       // Default-pattern scans store an edge x edge dense buffer. Explicit
       // custom bitmap simulations render in compact bitmap space, but a
@@ -303,6 +352,7 @@ export function useScanStream() {
           roi: req.roi,
           displayROI: options?.displayROI,
           parallelROIs: options?.displayROIs ?? req.parallel_rois,
+          compositeROIs: options?.compositeROIs,
           initialImage: options?.initialFrame,
           simulationBitmap: req.simulation_bitmap
             ? {
@@ -341,7 +391,9 @@ export function useScanStream() {
         });
         try {
           const prepared = await prepareScanAssets(req);
-          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(prepared));
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(prepared));
+          }
         } catch (err) {
           if (wsRef.current !== ws) return;
           controlFailed = true;
@@ -353,6 +405,10 @@ export function useScanStream() {
       ws.onmessage = (ev) => {
         if (wsRef.current !== ws) return;
         if (typeof ev.data !== "string") {
+          if (!geometryReadyRef.current) {
+            geometryReadyRef.current = true;
+            flushPendingGeometryUpdates();
+          }
           const buf = ev.data as ArrayBuffer;
           markScanPerformanceChunk(buf.byteLength);
           queuePendingSamples(
@@ -365,6 +421,22 @@ export function useScanStream() {
         }
         flushVectorSamples();
         markScanPerformanceControl(ev.data);
+        try {
+          const control = JSON.parse(ev.data);
+          if (control.event === "geometry_updated") {
+            const callback = geometryUpdateCallbacksRef.current.get(control.id);
+            geometryUpdateCallbacksRef.current.delete(control.id);
+            callback?.onApplied?.();
+            return;
+          }
+          if (control.event === "geometry_update_error") {
+            console.warn("[scan/vector] live geometry update failed:", control.detail);
+            const callback = geometryUpdateCallbacksRef.current.get(control.id);
+            geometryUpdateCallbacksRef.current.delete(control.id);
+            callback?.onError(String(control.detail ?? "Live zoom update was rejected"));
+            return;
+          }
+        } catch { /* regular control handler reports malformed messages */ }
         const valid = handleVectorControlMessage(
           ev.data,
           dispatch,
@@ -406,6 +478,9 @@ export function useScanStream() {
           startVector,
         );
         wsRef.current = null;
+        geometryUpdateCallbacksRef.current.clear();
+        pendingGeometryUpdatesRef.current = [];
+        geometryReadyRef.current = false;
         if (!controlFailed && closureKindRef.current !== "stop" &&
             (sawDoneRef.current || ev.code === 1000)) options?.onComplete?.();
       };
@@ -414,8 +489,6 @@ export function useScanStream() {
   );
 
   const stop = useCallback(() => {
-    flushRasterSamples();
-    flushVectorSamples();
     const ws = wsRef.current;
     const hadActiveScan = activeScanRef.current !== null;
     closureKindRef.current = "stop";
@@ -450,15 +523,35 @@ export function useScanStream() {
     }).catch((error) => {
       dispatch(streamErrored(error instanceof Error ? error.message : String(error)));
     });
+    // Flush the last buffered pixels after the abort request has been sent.
+    flushRasterSamples();
+    flushVectorSamples();
   }, [dispatch, flushRasterSamples, flushVectorSamples]);
+
+  const hasActiveStream = useCallback(() =>
+    activeScanRef.current !== null && wsRef.current !== null, []);
+
+  const updateGeometry = useCallback((geometry: {
+    roi: ROIRequest | null;
+    parallel_rois: ROIRequest[] | null;
+    points?: VectorRequest["points"];
+  }, onError: (detail: string) => void, onApplied?: () => void): boolean => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState === WebSocket.CLOSING || ws.readyState === WebSocket.CLOSED || !activeScanRef.current) return false;
+    const id = nextGeometryUpdateIdRef.current++;
+    geometryUpdateCallbacksRef.current.set(id, { onError, onApplied });
+    pendingGeometryUpdatesRef.current.push({ id, geometry });
+    flushPendingGeometryUpdates();
+    return true;
+  }, [flushPendingGeometryUpdates]);
 
   useEffect(() => {
     return registerScanActionStop(stop);
   }, [stop]);
 
   return useMemo(
-    () => ({ startRaster, startVector, stop }),
-    [startRaster, startVector, stop]
+    () => ({ startRaster, startVector, stop, hasActiveStream, updateGeometry }),
+    [startRaster, startVector, stop, hasActiveStream, updateGeometry]
   );
 }
 

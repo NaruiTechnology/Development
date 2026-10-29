@@ -263,6 +263,7 @@ export const zhCN: Partial<TranslationTable> = {
   "scan.resume": "继续",
   "scan.resume.title": "当前运行结束后继续剩余的 ROI 动作循环",
   "scan.stop": "停止",
+  "scan.stopping": "正在停止…",
   "scan.transform": "变换",
   "scan.infinite": "无限",
   "scan.runValidated": "验证运行",
@@ -296,10 +297,11 @@ export const zhCN: Partial<TranslationTable> = {
   "common.custom": "自定义",
   "common.invalidNumber": "无效数字。",
   "scan.zoom": "缩放",
-  "scan.zoom.title": "OBI 式放大：没有局部 ROI 时应用于完整图像，否则应用于每个选定 ROI。",
+  "scan.zoom.title": "OBI 式放大：没有 ROI 时应用于完整图像，否则只应用于选定的 ROI 内部。ROI 外部正常扫描。无限扫描期间更改缩放值会在后续帧生效，无需停止扫描。",
   "scan.roi.remove": "清除选定的 ROI",
   "scan.roi.edit": "ROI 扫描",
   "scan.parallel": "并行",
+  "scan.parallel.composite": "完整视野与放大的 ROI 同时采集，使 ROI 外部区域保持更新。",
   "scan.parallel.title": "在一条路径中扫描所有选定的 ROI 区域",
 
   /* ===== raster parameter form ==================================== */

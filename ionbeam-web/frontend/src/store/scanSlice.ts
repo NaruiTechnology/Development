@@ -41,6 +41,7 @@ export interface StreamTransforms {
 interface ScanState {
   kind: ScanKind;
   phase: ScanPhase;
+  infiniteActive: boolean;
   /** Bytes received in the active stream so far. */
   bytesReceived: number;
   chunksReceived: number;
@@ -182,6 +183,7 @@ const defaultVector: VectorRequest = {
 const initialState: ScanState = {
   kind: "vector",
   phase: "idle",
+  infiniteActive: false,
   bytesReceived: 0,
   chunksReceived: 0,
   lastResult: null,
@@ -727,6 +729,9 @@ const slice = createSlice({
     setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
       s.vectorRenderMode = a.payload;
     },
+    setInfiniteActive(s, a: PayloadAction<boolean>) {
+      s.infiniteActive = a.payload;
+    },
     /** Live-stream lifecycle markers. The actual WS lives in a hook. */
     streamStarted(s) {
       s.phase = "running";
@@ -844,6 +849,7 @@ const slice = createSlice({
 
 export const {
   setKind,
+  setInfiniteActive,
   updateRaster,
   updateVector,
   setPreview,

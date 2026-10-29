@@ -59,6 +59,7 @@ import { BeamHoldPanel } from "./components/BeamHoldPanel";
 import { DacCheckHelp } from "./components/DacCheckHelp";
 import { useAdcTestStream } from "./hooks/useAdcTestStream";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
+import { targetGrayFilter } from "./lib/roiTargetGray";
 import {
   formatGrayScaleSelection,
   normalizeGrayScaleSelection,
@@ -199,7 +200,7 @@ export function App() {
     selectedTargetGray === null ? "" : String(selectedTargetGray)
   );
   const [targetGrayDraftInvalid, setTargetGrayDraftInvalid] = useState(false);
-  const [targetGraySkipped, setTargetGraySkipped] = useState(false);
+  const [targetGraySkipped, setTargetGraySkipped] = useState(true);
   const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const dimensionCalibration = useAppSelector((s) => s.dimensionCalibration.values);
   const hasPersistedDimensionCalibration = useAppSelector(
@@ -386,7 +387,7 @@ export function App() {
         if (!config?.enabled) return;
         const geometry = geometryFromConfig(config);
         clearBitmapSelectionCache();
-        dispatch(setScanGeometry(toAppliedGeometry(geometry, config.profile_revision)));
+        dispatch(setScanGeometry(toAppliedGeometry(geometry, config.profile_revision, config.magnification_calibration)));
         dispatch(applyPersistedDimensionCalibration({ ...dimensionCalibration, ...dimensionBoundsFromGeometry(geometry) }));
       })
       .catch((err) => console.warn(`[scan-geometry] not loaded: ${err instanceof Error ? err.message : String(err)}`));
@@ -589,12 +590,13 @@ export function App() {
   }, [isResizing, showROIThirdColumn]);
 
   const scanActive = phase === "running" || phase === "stopping";
-  const panelDisabled = shouldDisableScanPanel({
-    scanActive: scanActive || adcActive,
+  const scanControlsSafetyDisabled = shouldDisableScanPanel({
+    scanActive: adcActive,
     signedIn: isSignedIn,
     vacuumEnabled: serviceStatus === null ? null : vacuumEnabled,
     vacuumReady: isVacuumSystemReady,
   });
+  const panelDisabled = scanActive || scanControlsSafetyDisabled;
   // A scan started while the ADC test card is open would draw behind the
   // ADC timeline, so collapse the card to bring the scan canvas back.
   useEffect(() => {
@@ -1104,16 +1106,18 @@ export function App() {
   );
 
   const handleTargetGrayPick = useCallback((gray: number, point: { x: number; y: number }) => {
+    const confirmSelection = selectedTargetGray !== null || vectorGrayFilterActive;
     setTargetGrayDraft(String(gray));
     setTargetGrayDraftInvalid(false);
-    setTargetGraySkipped(false);
+    setTargetGraySkipped(true);
     dispatch(setSelectedTargetGray({ value: gray, point }));
+    if (!confirmSelection) return;
     setGrayScaleConfirmTarget("target");
     setPendingGrayScaleSelection([gray, gray]);
     setPendingGrayScaleAnchor(null);
-    setPendingGrayScaleSkipped(false);
+    setPendingGrayScaleSkipped(true);
     setGrayScaleConfirmOpen(true);
-  }, [dispatch]);
+  }, [dispatch, selectedTargetGray, vectorGrayFilterActive]);
 
   const handleGrayScaleSelect = useCallback((grayScale: number) => {
     setGrayScaleConfirmTarget("roi");
@@ -1680,8 +1684,9 @@ export function App() {
                           kind={scanSubTab}
                           disabled={panelDisabled}
                           scanActive={scanActive}
+                          zoomDisabled={scanControlsSafetyDisabled}
                           vectorGrayScaleSelection={selectedTargetGray !== null
-                            ? [selectedTargetGray, selectedTargetGray]
+                            ? targetGrayFilter(selectedTargetGray).selection
                             : vectorGrayFilterActive ? vectorGrayRange : null}
                           vectorGrayScaleSkipped={selectedTargetGray !== null
                             ? targetGraySkipped
@@ -1882,7 +1887,7 @@ export function App() {
                     onPaneImageChange={handleImagePaneChange}
                     onPaneRecycle={handleImagePaneRecycle}
                   vectorGrayScaleSelection={selectedTargetGray !== null
-                    ? [selectedTargetGray, selectedTargetGray]
+                    ? targetGrayFilter(selectedTargetGray).selection
                     : vectorGrayFilterActive ? vectorGrayRange : null}
                   vectorGrayScaleSkipped={selectedTargetGray !== null
                     ? targetGraySkipped

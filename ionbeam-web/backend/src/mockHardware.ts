@@ -42,6 +42,8 @@ interface RasterParams {
   frame_blank?: boolean;
   simulation_bitmap?: SimulationBitmapPayload | null;
   parallel_rois?: Array<{ x_start: number; x_end: number; y_start: number; y_end: number }> | null;
+  roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
+  getGeometry?: () => Pick<RasterParams, "roi" | "parallel_rois">;
   parallel_simulation_bitmaps?: SimulationBitmapPayload[] | null;
   simulation?: Record<string, unknown>;
   /** Live (Infinite) scan: repeat frames until the client closes. */
@@ -62,8 +64,10 @@ interface VectorParams {
   vector_resolution?: number;
   roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
   parallel_rois?: Array<{ x_start: number; x_end: number; y_start: number; y_end: number }> | null;
+  getGeometry?: () => Pick<VectorParams, "roi" | "parallel_rois" | "points">;
   parallel_simulation_bitmaps?: SimulationBitmapPayload[] | null;
   simulation_bitmap?: SimulationBitmapPayload | null;
+  target_gray_level?: number | null;
   simulation?: Record<string, unknown>;
   /** Live (Infinite) scan: replay the pass until the client closes. */
   continuous?: boolean;
@@ -81,12 +85,38 @@ interface SimulationBitmapPayload {
   width: number;
   height: number;
   pixels: Array<number | SimulationBitmapPixel>;
+  source_roi?: { x_start: number; x_end: number; y_start: number; y_end: number } | null;
 }
 
 interface SimulationBitmapPixel {
   value: number;
   isHighlighted?: boolean | null;
   isSkipped?: boolean | null;
+  blank?: boolean | null;
+}
+
+function stepTargetBitmap(
+  bitmap: SimulationBitmapPayload,
+  region: VectorParams["roi"],
+  target: number,
+): void {
+  const source = bitmap.source_roi ?? { x_start: 0, x_end: ADC_MAX, y_start: 0, y_end: ADC_MAX };
+  const selected = region ?? source;
+  const x0 = Math.max(0, Math.floor(((Math.min(selected.x_start, selected.x_end) - source.x_start) / Math.max(1, source.x_end - source.x_start)) * bitmap.width));
+  const x1 = Math.min(bitmap.width, Math.ceil(((Math.max(selected.x_start, selected.x_end) - source.x_start) / Math.max(1, source.x_end - source.x_start)) * bitmap.width));
+  const y0 = Math.max(0, Math.floor(((Math.min(selected.y_start, selected.y_end) - source.y_start) / Math.max(1, source.y_end - source.y_start)) * bitmap.height));
+  const y1 = Math.min(bitmap.height, Math.ceil(((Math.max(selected.y_start, selected.y_end) - source.y_start) / Math.max(1, source.y_end - source.y_start)) * bitmap.height));
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const index = y * bitmap.width + x;
+    const pixel = bitmap.pixels[index];
+    const value = typeof pixel === "number" ? pixel : pixel.value;
+    if (value <= target) continue;
+    const next = Math.max(target, value - 2);
+    bitmap.pixels[index] = typeof pixel === "number" ? next : {
+      ...pixel, value: next,
+      ...(next <= target ? { isHighlighted: true, isSkipped: true, blank: true } : {}),
+    };
+  }
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -276,12 +306,13 @@ function sampleSimulationBitmap(
   bitmap: SimulationBitmapPayload,
   xNorm: number,
   yNorm: number,
-  mode: "skip" | "spot" | null
+  mode: "skip" | "spot" | null,
+  rawTarget = false,
 ): number {
   const x = Math.max(0, Math.min(bitmap.width - 1, Math.round(xNorm * (bitmap.width - 1))));
   const y = Math.max(0, Math.min(bitmap.height - 1, Math.round(yNorm * (bitmap.height - 1))));
   const px = bitmap.pixels[y * bitmap.width + x];
-  return sampleBitmapPixel(px, mode);
+  return rawTarget ? Math.min(Math.max(0, pixelValue(px) & 0xff) * 64, ADC_MAX) : sampleBitmapPixel(px, mode);
 }
 
 function sampleSimulationBitmapPoint(
@@ -289,9 +320,11 @@ function sampleSimulationBitmapPoint(
   roi: VectorParams["roi"],
   x: number,
   y: number,
-  mode: "skip" | "spot" | null
+  mode: "skip" | "spot" | null,
+  rawTarget = false,
 ): number {
-  if (!roi) return sampleSimulationBitmap(bitmap, x / ADC_MAX, y / ADC_MAX, mode);
+  roi = bitmap.source_roi ?? roi;
+  if (!roi) return sampleSimulationBitmap(bitmap, x / ADC_MAX, y / ADC_MAX, mode, rawTarget);
   const x0 = Math.min(roi.x_start, roi.x_end);
   const x1 = Math.max(roi.x_start, roi.x_end);
   const y0 = Math.min(roi.y_start, roi.y_end);
@@ -300,7 +333,8 @@ function sampleSimulationBitmapPoint(
     bitmap,
     (x - x0) / Math.max(1, x1 - x0),
     (y - y0) / Math.max(1, y1 - y0),
-    mode
+    mode,
+    rawTarget,
   );
 }
 
@@ -402,6 +436,7 @@ export async function streamMockRaster(
 
   const frameLimit = p.continuous === true && p.frames ? Math.max(1, Math.trunc(p.frames)) : null;
   let framesDone = 0;
+  let activeGeometry = p.getGeometry?.() ?? p;
   while (sent < total || p.continuous === true) {
     if (ws.readyState !== ws.OPEN) return;
     // Live scan: wrap to the next frame on the same socket (Stop closes it).
@@ -409,6 +444,7 @@ export async function streamMockRaster(
       framesDone++;
       if (frameLimit !== null && framesDone >= frameLimit) break;
       sent = 0;
+      activeGeometry = p.getGeometry?.() ?? p;
     }
 
     const n = Math.min(pixelsPerChunk, total - sent);
@@ -421,7 +457,7 @@ export async function streamMockRaster(
       const localIndex = Math.floor(idx / regionCount);
       const x = localIndex % p.resolution;
       const y = Math.floor(localIndex / p.resolution);
-      const roi = p.parallel_rois?.[regionIndex];
+      const roi = activeGeometry.parallel_rois?.[regionIndex] ?? activeGeometry.roi;
       const dacX = roi
         ? Math.round(roi.x_start + (x / Math.max(1, p.resolution - 1)) * (roi.x_end - roi.x_start))
         : Math.floor((x * (1 << DAC_BITS)) / p.resolution);
@@ -474,7 +510,7 @@ export async function streamMockVector(
   if (p.pattern === "custom" && p.points && p.points.length) {
     pts = p.points;
     pointCount = pts.length;
-    makePointIterator = () => pts![Symbol.iterator]();
+    makePointIterator = () => (p.getGeometry?.().points ?? pts!)[Symbol.iterator]();
   } else if (p.pattern === "custom" && p.simulation_bitmap) {
     const bitmap = p.simulation_bitmap;
     pointCount = bitmap.width * bitmap.height;
@@ -486,9 +522,13 @@ export async function streamMockVector(
   } else {
     const edge = Math.max(1, Math.trunc(p.vector_resolution ?? 1024));
     pointCount = edge * edge * (p.parallel_rois?.length ?? 1);
-    makePointIterator = p.parallel_rois?.length
-      ? () => interleaveVectorScanPoints(p, p.parallel_rois!)
-      : () => vectorScanPointIterator(p);
+    makePointIterator = () => {
+      const geometry = p.getGeometry?.() ?? p;
+      const updated = { ...p, ...geometry };
+      return geometry.parallel_rois?.length
+        ? interleaveVectorScanPoints(updated, geometry.parallel_rois)
+        : vectorScanPointIterator(updated);
+    };
   }
 
   const valuesPerChunk = Math.max(64, Math.floor(p.latency_bytes / 2));
@@ -500,14 +540,27 @@ export async function streamMockVector(
   const passLimit = p.continuous === true && p.frames ? Math.max(1, Math.trunc(p.frames)) : null;
   let passesDone = 0;
   let pointIterator = makePointIterator();
+  let activeGeometry = p.getGeometry?.() ?? p;
   while (i < pointCount || (p.continuous === true && pointCount > 0)) {
     if (ws.readyState !== ws.OPEN) return;
     // Live scan: wrap to the next pass on the same socket (Stop closes it).
     if (i >= pointCount) {
       passesDone++;
       if (passLimit !== null && passesDone >= passLimit) break;
+      if (p.target_gray_level !== null && p.target_gray_level !== undefined) {
+        if (p.parallel_rois?.length && p.parallel_simulation_bitmaps?.length) {
+          p.parallel_simulation_bitmaps.forEach((bitmap, index) => {
+            const region = p.parallel_rois?.[index];
+            if (index === 0 && p.parallel_rois!.length > 1 && region?.x_start === 0 && region.x_end === ADC_MAX && region.y_start === 0 && region.y_end === ADC_MAX) return;
+            stepTargetBitmap(bitmap, region, p.target_gray_level!);
+          });
+        } else if (p.simulation_bitmap) {
+          stepTargetBitmap(p.simulation_bitmap, p.roi, p.target_gray_level);
+        }
+      }
       i = 0;
       pointIterator = makePointIterator();
+      activeGeometry = p.getGeometry?.() ?? p;
     }
     const count = Math.min(valuesPerChunk, pointCount - i);
     const slice = new Array<VectorPointTuple | VectorPointObject>(count);
@@ -519,18 +572,19 @@ export async function streamMockVector(
         // Explicit pass markers are preserved in the payload for debugging,
         // but they do not affect the generated sample values.
       }
-      const regionIndex = p.parallel_rois?.length ? (i + k) % p.parallel_rois.length : 0;
+      const regionIndex = activeGeometry.parallel_rois?.length ? (i + k) % activeGeometry.parallel_rois.length : 0;
       const bitmap = p.parallel_simulation_bitmaps?.[regionIndex] ?? p.simulation_bitmap;
       const sample = bitmap
         ? p.pattern !== "custom" || (p.points && p.points.length)
-          ? blank === true
+            ? blank === true && p.target_gray_level == null
             ? 0
-            : sampleSimulationBitmapPoint(bitmap, p.parallel_rois?.[regionIndex] ?? p.roi, x, y, inferBitmapMode(bitmap))
+            : sampleSimulationBitmapPoint(bitmap, activeGeometry.parallel_rois?.[regionIndex] ?? activeGeometry.roi, x, y, inferBitmapMode(bitmap), p.target_gray_level !== null && p.target_gray_level !== undefined)
           : sampleSimulationBitmap(
               bitmap,
               bitmap.width <= 1 ? 0 : x / (bitmap.width - 1),
               bitmap.height <= 1 ? 0 : y / (bitmap.height - 1),
-              inferBitmapMode(bitmap)
+              inferBitmapMode(bitmap),
+              p.target_gray_level !== null && p.target_gray_level !== undefined,
             )
         : sampleFakeAdc(x, y, simulation, simulationImage);
       writeSampleBE(buf, k, sample);

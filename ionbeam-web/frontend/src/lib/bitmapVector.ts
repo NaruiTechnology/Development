@@ -23,6 +23,9 @@ import { scanRegionPixelBounds } from "./scanRegions.js";
 export { worldSelectionToDacROI } from "./roiDac.js";
 
 const MAX_POINTS = 250_000;
+const FULL_DAC_BOUNDS: ROIRequest = {
+  x_start: 0, x_end: 16383, y_start: 0, y_end: 16383,
+};
 
 export function interleaveParallelPoints<T>(groups: readonly (readonly T[])[]): T[] {
   const result: T[] = [];
@@ -109,18 +112,23 @@ export async function rasterRequestWithBitmapSelection(
   // With no ROI selection, treat the entire image as selected so it takes
   // precedence over Configuration > Simulation (pattern/random/file).
   if (options.allowBitmapSimulation && roi.imageDataUrl) {
-    const converted = await bitmapSelectionToVector(roiWithFullSelection(roi));
+    const converted = await bitmapSelectionToVector(
+      roi.selection && isPartialSelection(roi) ? roi : roiWithFullSelection(roi),
+    );
     if (converted.simulationBitmap.pixels.length) {
       return {
         ...req,
         roi: roi.selection && isPartialSelection(roi) ? converted.roi : null,
         simulation_bitmap: options.isProduction
           ? null
-          : decorateSimulationBitmap(
-              converted.simulationBitmap,
-              options.grayScaleSelection ?? null,
-              options.grayScaleSkipped,
-            ),
+          : {
+              ...decorateSimulationBitmap(
+                converted.simulationBitmap,
+                options.grayScaleSelection ?? null,
+                options.grayScaleSkipped,
+              ),
+              source_roi: roi.selection && isPartialSelection(roi) ? converted.roi : FULL_DAC_BOUNDS,
+            },
       };
     }
   }
@@ -192,7 +200,9 @@ export async function vectorRequestWithBitmapSelection(
   // With no ROI selection, treat the entire image as selected so it takes
   // precedence over Configuration > Simulation (pattern/random/file).
   if (options.allowBitmapSimulation && roi.imageDataUrl) {
-    const converted = await bitmapSelectionToVector(roiWithFullSelection(roi));
+    const converted = await bitmapSelectionToVector(
+      roi.selection && isPartialSelection(roi) ? roi : roiWithFullSelection(roi),
+    );
     if (converted.simulationBitmap.pixels.length) {
       return {
         ...req,
@@ -201,11 +211,14 @@ export async function vectorRequestWithBitmapSelection(
         roi: roi.selection && isPartialSelection(roi) ? converted.roi : null,
         simulation_bitmap: options.isProduction
           ? null
-          : decorateSimulationBitmap(
-              converted.simulationBitmap,
-              options.grayScaleSelection ?? null,
-              options.grayScaleSkipped,
-            ),
+          : {
+              ...decorateSimulationBitmap(
+                converted.simulationBitmap,
+                options.grayScaleSelection ?? null,
+                options.grayScaleSkipped,
+              ),
+              source_roi: roi.selection && isPartialSelection(roi) ? converted.roi : FULL_DAC_BOUNDS,
+            },
       };
     }
   }
@@ -472,6 +485,7 @@ async function bitmapSelectionToVector(
       width: sampleW,
       height: sampleH,
       pixels,
+      source_roi: worldSelectionToDacROI(roi.selection, roi),
     },
   };
   cachedExtraction = { key, value };

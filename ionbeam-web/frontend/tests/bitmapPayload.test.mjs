@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { decorateSimulationBitmap, interleaveParallelPoints } from "../.test-dist/lib/bitmapVector.js";
 import { prepareScanAssets } from "../.test-dist/lib/scanAssets.js";
+import { targetGrayFilter } from "../.test-dist/lib/roiTargetGray.js";
 
 test("scan asset preparation preserves IDs loaded from a persisted queue", async () => {
   const originalFetch = globalThis.fetch;
@@ -51,4 +52,16 @@ test("gray selection keeps metadata only on highlighted pixels", () => {
     { value: 20, isHighlighted: true, isSkipped: false, blank: false },
     30,
   ]);
+});
+
+test("target Skip blanks pixels at or below the threshold inside the ROI bitmap", () => {
+  const source = { width: 3, height: 1, pixels: [38, 39, 40] };
+  const { selection, skipped } = targetGrayFilter(39);
+  const roi = decorateSimulationBitmap(source, selection, skipped);
+  assert.deepEqual(roi.pixels, [
+    { value: 38, isHighlighted: true, isSkipped: true, blank: true },
+    { value: 39, isHighlighted: true, isSkipped: true, blank: true },
+    40,
+  ]);
+  assert.deepEqual(source.pixels, [38, 39, 40], "the full-field source remains unfiltered");
 });

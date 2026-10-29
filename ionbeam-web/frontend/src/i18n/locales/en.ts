@@ -282,6 +282,7 @@ export const en = {
   "scan.resume": "Resume",
   "scan.resume.title": "Resume the remaining ROI action loops after the current run finishes",
   "scan.stop": "Stop",
+  "scan.stopping": "Stopping…",
   "scan.transform": "Transform",
   "scan.infinite": "Infinite",
   "scan.runValidated": "Run validated",
@@ -321,10 +322,11 @@ export const en = {
   "common.custom": "Custom",
   "common.invalidNumber": "Invalid number.",
   "scan.zoom": "Zoom",
-  "scan.zoom.title": "OBI-style magnification: applies to the full image when no partial ROI exists, otherwise to every selected ROI.",
+  "scan.zoom.title": "OBI-style magnification: applies to the full image when no ROI exists, otherwise only inside selected ROIs. The area outside the ROIs is scanned normally. During Infinite, Zoom takes effect on a following frame without stopping the scan.",
   "scan.roi.remove": "Clear selected ROI",
   "scan.roi.edit": "ROI Scan",
   "scan.parallel": "Parallel",
+  "scan.parallel.composite": "Full field and zoomed ROIs are acquired together so the area outside the ROIs stays current.",
   "scan.parallel.title": "Scan all selected ROI areas in one path",
 
   /* ===== raster parameter form ==================================== */
