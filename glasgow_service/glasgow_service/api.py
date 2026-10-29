@@ -209,7 +209,11 @@ async def run_vector(req: VectorRequest):
 
 @app.websocket("/scan/vector/stream")
 async def stream_vector(ws: WebSocket):
-    """Stream vector samples; continuous scans accept in-band ROI updates."""
+    """Stream vector samples; continuous scans accept in-band ROI updates.
+
+    An `update_geometry` control frame can carry `geometry.gray_rule` to update
+    bitmap simulation between passes without reconnecting.
+    """
     await _stream_scan(ws, lambda p: svc.vector_scan(VectorRequest(**p)), kind="vector")
 
 
@@ -392,7 +396,11 @@ async def _watch_client_disconnect(ws: WebSocket, owner, kind: str | None = None
                     import json
                     control = json.loads(message["text"])
                     if control.get("event") == "update_geometry":
-                        svc.update_live_scan_geometry(kind, control.get("geometry", {}), owner=owner)
+                        geometry = control.get("geometry", {})
+                        if isinstance(geometry, dict) and "gray_rule" in geometry:
+                            await asyncio.to_thread(svc.update_live_scan_geometry, kind, geometry, owner=owner)
+                        else:
+                            svc.update_live_scan_geometry(kind, geometry, owner=owner)
                         await ws.send_json({"event": "geometry_updated", "id": control.get("id")})
                 except (ValueError, TypeError, AttributeError) as exc:
                     await ws.send_json({"event": "geometry_update_error", "id": control.get("id") if isinstance(control, dict) else None, "detail": str(exc)})

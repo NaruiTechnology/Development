@@ -64,7 +64,7 @@ from .roi_scaling import dac_step, roi_zoom
 from .models import (
     DeviceState, ServiceStatus, RasterRequest, VectorRequest, AdcTestRequest,
     DacRampRequest, DacRampAxis, BeamHoldRequest, BeamHoldState,
-    VectorPattern, VectorScanPath, ROIRequest,
+    VectorPattern, VectorScanPath, ROIRequest, SimulationBitmapPixel,
     ScanResult, ScanValidation, ValidationCheck,
 )
 
@@ -694,13 +694,15 @@ def _interleave_roi_chunks(parts, samples_per_chunk: int):
 
 def _bitmap_sample_grid(bitmap, mode=None):
     """Convert bitmap flags and intensity once, rather than for every visit."""
+    if mode is None:
+        mode = _infer_bitmap_mode(bitmap)
     return np.fromiter(
         (_obi_aligned_int(_bitmap_pixel_sample(pixel, mode)) for pixel in bitmap.pixels),
         dtype=np.uint16, count=len(bitmap.pixels),
     ).reshape(bitmap.height, bitmap.width)
 
 
-def _target_gray_step_bitmap(bitmap, roi, target: int) -> None:
+def _target_gray_step_bitmap(bitmap, roi, target: int, steps: int = 1) -> None:
     """Advance one simulated ROI pass using the old ROI tab's two-level step."""
     source = _roi_bounds(bitmap.source_roi) or (0, 16383, 0, 16383)
     selected = _roi_bounds(roi) or source
@@ -717,7 +719,7 @@ def _target_gray_step_bitmap(bitmap, roi, target: int) -> None:
             value = _bitmap_pixel_value(pixel)
             if value <= target:
                 continue
-            next_value = max(target, value - 2)
+            next_value = max(target, value - 2 * max(1, steps))
             if isinstance(pixel, int):
                 bitmap.pixels[index] = next_value
             else:
@@ -726,6 +728,21 @@ def _target_gray_step_bitmap(bitmap, roi, target: int) -> None:
                     pixel.isHighlighted = True
                     pixel.isSkipped = True
                     pixel.blank = True
+
+
+def _target_gray_chunk(chunk, req, offset: int, steps: int):
+    """Fade acquired ROI samples at the preview's 60 Hz, two-level cadence."""
+    if steps <= 0 or req.target_gray_level is None:
+        return chunk
+    values = np.asarray(chunk, dtype=np.uint16).astype(np.int32)
+    target = req.target_gray_level * 256
+    processed = np.where(values > target, np.maximum(target, values - 512 * min(128, steps)), values)
+    regions = req.parallel_rois or [req.roi]
+    if len(regions) > 1 and _roi_bounds(regions[0]) == (0, 16383, 0, 16383):
+        # Composite scans interleave the untouched background with the ROI(s).
+        background = (np.arange(len(values)) + offset) % len(regions) == 0
+        processed[background] = values[background]
+    return array.array("H", processed.astype(np.uint16).tobytes())
 
 
 def _regular_vector_coordinates(edge, roi, scan_path, indices):
@@ -964,10 +981,13 @@ def _bitmap_vector_chunks(req: VectorRequest, transforms=None) -> Optional[List[
         if len(req.parallel_rois) != len(req.parallel_simulation_bitmaps):
             raise ValueError("parallel_simulation_bitmaps must match parallel_rois")
         parts = []
-        for region, bitmap in zip(req.parallel_rois, req.parallel_simulation_bitmaps):
+        for index, (region, bitmap) in enumerate(zip(req.parallel_rois, req.parallel_simulation_bitmaps)):
+            background = index == 0 and len(req.parallel_rois) > 1 and _roi_bounds(region) == (0, 16383, 0, 16383)
             part = _bitmap_vector_chunks(req.model_copy(update={
                 "roi": region, "parallel_rois": None,
                 "simulation_bitmap": bitmap, "parallel_simulation_bitmaps": None,
+                "gray_level_range": None if background else req.gray_level_range,
+                "gray_level_skipped": None if background else req.gray_level_skipped,
             }), transforms)
             if part is None:
                 return None
@@ -983,7 +1003,9 @@ def _bitmap_vector_chunks(req: VectorRequest, transforms=None) -> Optional[List[
             (_obi_aligned_int(min(_bitmap_pixel_value(pixel) * 64, 0x3FFF)) for pixel in bitmap.pixels),
             dtype=np.uint16, count=len(bitmap.pixels),
         ).reshape(bitmap.height, bitmap.width)
-            if req.target_gray_level is not None else _bitmap_sample_grid(bitmap))
+            if req.target_gray_level is not None else _bitmap_sample_grid(
+                bitmap, ("skip" if req.gray_level_skipped else "splash")
+                if req.gray_level_range is not None and req.gray_level_skipped is not None else None))
         x0, x1, y0, y1 = _roi_bounds(bitmap.source_roi or req.roi) or (0, 16383, 0, 16383)
         size = min(65536, max(1, math.ceil(req.latency_bytes / req.dwell)))
         total = req.vector_resolution ** 2
@@ -1193,8 +1215,54 @@ class DeviceService:
                     else "connection still initialising; applied when the command starts")
         return True
 
+    def update_live_gray_rule(self, kind: str, rule: dict, *, owner=None) -> None:
+        """Publish a validated rule for the next pass without replacing the command."""
+        active = getattr(self, "_active_scan", None)
+        req = getattr(self, "_active_live_request", None)
+        cmd = self._active_command
+        if (kind != "vector" or active is None or active.get("kind") != kind or
+                (owner is not None and active.get("owner") is not owner) or
+                req is None or cmd is None or not getattr(cmd, "continuous", False)):
+            raise ValueError("no matching continuous vector scan is active")
+        fields = {"target_gray_level", "gray_level_range", "gray_level_skipped"}
+        if not isinstance(rule, dict) or set(rule) != fields:
+            raise ValueError("target_gray_level, gray_level_range and gray_level_skipped are required")
+        validated = VectorRequest.model_validate(rule)
+        if not isinstance(cmd, _SimulatedCommand):
+            raise ValueError("this hardware scan cannot change its gray rule in-band")
+        updates = {name: getattr(validated, name) for name in fields}
+        selection = validated.gray_level_range
+        skipped = validated.gray_level_skipped
+
+        def decorate(bitmap, *, background=False):
+            if bitmap is None or background:
+                return bitmap
+            pixels = []
+            for pixel in bitmap.pixels:
+                value = _bitmap_pixel_value(pixel)
+                if selection is not None and selection[0] <= value <= selection[1]:
+                    pixels.append(SimulationBitmapPixel.model_construct(
+                        value=value, isHighlighted=True, isSkipped=skipped, blank=skipped))
+                else:
+                    pixels.append(value)
+            return bitmap.model_copy(update={"pixels": pixels})
+
+        updates["simulation_bitmap"] = decorate(req.simulation_bitmap)
+        if req.parallel_simulation_bitmaps:
+            updates["parallel_simulation_bitmaps"] = [
+                decorate(bitmap, background=(index == 0 and len(req.parallel_rois or []) > 1
+                         and _roi_bounds(req.parallel_rois[0]) == (0, 16383, 0, 16383)))
+                for index, bitmap in enumerate(req.parallel_simulation_bitmaps)
+            ]
+        if self._active_live_request is not req or self._active_command is not cmd:
+            raise ValueError("live scan changed before the gray rule could be applied")
+        self._active_live_request = req.model_copy(update=updates)
+
     def update_live_scan_geometry(self, kind: str, geometry: dict, *, owner=None) -> None:
-        """Change only DAC coordinates in the running continuous command."""
+        """Update DAC geometry or a gray rule on the current continuous stream."""
+        if set(geometry) == {"gray_rule"}:
+            self.update_live_gray_rule(kind, geometry["gray_rule"], owner=owner)
+            return
         active = getattr(self, "_active_scan", None)
         req = getattr(self, "_active_live_request", None)
         cmd = self._active_command
@@ -1364,9 +1432,10 @@ class DeviceService:
             if bitmap_ids and len(bitmap_ids) != len(req.parallel_rois or []):
                 raise ValueError("parallel bitmap asset IDs must match parallel ROIs")
             req = req.model_copy(update={
-                "simulation_bitmap": await asyncio.to_thread(scan_assets.load, bitmap_id) if bitmap_id else req.simulation_bitmap,
+                "simulation_bitmap": await asyncio.to_thread(
+                    lambda: scan_assets.load(bitmap_id).model_copy(deep=True)) if bitmap_id else req.simulation_bitmap,
                 "parallel_simulation_bitmaps": await asyncio.to_thread(
-                    lambda: [scan_assets.load(asset_id) for asset_id in bitmap_ids]
+                    lambda: [scan_assets.load(asset_id).model_copy(deep=True) for asset_id in bitmap_ids]
                 ) if bitmap_ids else req.parallel_simulation_bitmaps,
                 "simulation_bitmap_id": None,
                 "parallel_simulation_bitmap_ids": None,
@@ -1397,21 +1466,29 @@ class DeviceService:
                 source = _simulated_vector_chunks(
                     req, simulation, abort=command.abort, interval=interval,
                     transforms=transforms)
+            frame_started = time.monotonic()
+            sample_offset = 0
             async for chunk in source:
-                yield chunk
+                if kind == "vector" and req.target_gray_level is not None and bitmap_chunks is not None:
+                    steps = int((time.monotonic() - frame_started) * 60)
+                    yield _target_gray_chunk(chunk, req, sample_offset, steps)
+                else:
+                    yield chunk
+                sample_offset += len(chunk)
             if frames_left is not None:
                 frames_left -= 1
             if not continuous or command.abort.is_set() or frames_left == 0:
                 return
             if kind == "vector" and req.target_gray_level is not None and bitmap_chunks is not None:
+                steps = max(1, int((time.monotonic() - frame_started) * 60))
                 def advance_target() -> None:
                     if req.parallel_rois and req.parallel_simulation_bitmaps:
                         for index, (region, bitmap) in enumerate(zip(req.parallel_rois, req.parallel_simulation_bitmaps)):
                             if index == 0 and len(req.parallel_rois) > 1 and _roi_bounds(region) == (0, 16383, 0, 16383):
                                 continue  # normal full-field background is never processed
-                            _target_gray_step_bitmap(bitmap, region, req.target_gray_level)
+                            _target_gray_step_bitmap(bitmap, region, req.target_gray_level, steps)
                     elif req.simulation_bitmap is not None:
-                        _target_gray_step_bitmap(req.simulation_bitmap, req.roi, req.target_gray_level)
+                        _target_gray_step_bitmap(req.simulation_bitmap, req.roi, req.target_gray_level, steps)
                     return None
                 await asyncio.to_thread(advance_target)
                 bitmap_chunks = await asyncio.to_thread(build_bitmap, req, transforms)

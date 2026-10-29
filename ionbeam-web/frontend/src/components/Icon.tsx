@@ -23,6 +23,7 @@ type IconName =
   | "grid"
   | "gridSvg"
   | "help"
+  | "hand"
   | "alertTriangle"
   | "adcTest"
   | "waveform"
@@ -116,6 +117,11 @@ const imageSources: Partial<Record<IconName, string>> = {
 };
 
 const paths: Partial<Record<IconName, JSX.Element>> = {
+  hand: (
+    <>
+      <path d="M18 11V7a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v6M10 6a2 2 0 0 0-4 0v9l-2.4-3.2a2 2 0 0 0-3.2 2.4L4 19c1.5 2.1 3.2 3 6 3h2a8 8 0 0 0 8-8V9a2 2 0 0 0-2-2" />
+    </>
+  ),
   triangleUp: <path d="M5 17 12 7l7 10z" fill="currentColor" stroke="none" />,
   dock: (
     <>

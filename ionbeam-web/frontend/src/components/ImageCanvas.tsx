@@ -57,6 +57,7 @@ import {
 import { LevelWedge } from "./LevelWedge";
 import { selectGlobalPixelSize } from "../store/selectors";
 import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize } from "../lib/pixelSize";
+import { imageScale, type ImageExtent } from "../lib/imageScale";
 import { ROI_CANVAS_EDGE } from "../lib/roiGeometry";
 import { clipPixelRect, stepTowardTargetGray } from "../lib/roiTargetGray";
 import { selectionCrop } from "../lib/bitmapVector";
@@ -132,6 +133,18 @@ function rememberArchivedPaint(imageUrl: string, snapshot: PaintSnapshot): void 
 // Scan settings of each completed image, keyed like archivedPaints, so a
 // "Previous scan" pane keeps showing the parameter chip of its own scan.
 const archivedScanParams = new Map<string, ScanParamItem[]>();
+const archivedImageExtents = new Map<string, ImageExtent>();
+
+function rememberImageExtent(imageUrl: string, extent: ImageExtent | null): void {
+  if (!extent) return;
+  archivedImageExtents.delete(imageUrl);
+  archivedImageExtents.set(imageUrl, { ...extent });
+  while (archivedImageExtents.size > ARCHIVED_PAINT_LIMIT) {
+    const oldest = archivedImageExtents.keys().next().value;
+    if (oldest === undefined) break;
+    archivedImageExtents.delete(oldest);
+  }
+}
 
 function rememberScanParams(imageUrl: string, items: ScanParamItem[]): void {
   archivedScanParams.delete(imageUrl);
@@ -253,6 +266,9 @@ export function ImageCanvas({
   const selectedTargetGrayPoint = useAppSelector((s) => s.scan.selectedTargetGrayPoint);
   const targetRunToken = useAppSelector((s) => s.scan.roiTargetGrayRun.token);
   const targetRunRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
+  const imageExtentRef = useRef<ImageExtent | null>(null);
+  const targetAutoLevelsRef = useRef<{ source: string; setting: LevelSetting } | null>(null);
+  const simulationMode = useAppSelector((s) => s.status.defaults?.is_production === false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const targetProgressCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -328,6 +344,37 @@ export function ImageCanvas({
   const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [grayTooltip, setGrayTooltip] = useState<{ x: number; y: number; value: number; color: string } | null>(null);
+  const [grayPickPrompt, setGrayPickPrompt] = useState<{ x: number; y: number } | null>(null);
+  const grayPromptGestureRef = useRef(false);
+  useEffect(() => {
+    const release = (event: MouseEvent) => { if (event.button === 2) setGrayPickPrompt(null); };
+    const cancel = () => setGrayPickPrompt(null);
+    window.addEventListener("pointerup", release, true);
+    window.addEventListener("mouseup", release, true);
+    window.addEventListener("pointercancel", cancel, true);
+    window.addEventListener("blur", cancel);
+    return () => {
+      window.removeEventListener("pointerup", release, true);
+      window.removeEventListener("mouseup", release, true);
+      window.removeEventListener("pointercancel", cancel, true);
+      window.removeEventListener("blur", cancel);
+    };
+  }, []);
+  useEffect(() => {
+    if (!grayPickPrompt) return;
+    const dismiss = () => setGrayPickPrompt(null);
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
+    window.addEventListener("pointerdown", dismiss, true);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", dismiss, true);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [grayPickPrompt]);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
   // The image panel header (raster / vector) has a spot on its first row for
   // the vector View selector; without it (e.g. ROI) the selector stays inline.
@@ -679,7 +726,21 @@ export function ImageCanvas({
       snapshot = { mode: "grayscale", buf: vectorImage, edge: vectorEdge, populated: vectorFilled, transforms: paintTransforms };
     }
     liveSnapshotRef.current = snapshot;
-    setStats(paintSnapshot(canvas, snapshot, levelSetting));
+    // A fading ROI must not change the brightness of the untouched background.
+    // Keep the first automatic levels for this simulated target session;
+    // explicit operator level changes still take effect immediately.
+    const holdAutoLevels = kind === "vector" && simulationMode && infiniteActive &&
+      (selectedTargetGray !== null || targetAutoLevelsRef.current !== null) &&
+      roi.imageDataUrl && levelSetting.mode === "auto";
+    if (!holdAutoLevels || targetAutoLevelsRef.current?.source !== roi.imageDataUrl) {
+      targetAutoLevelsRef.current = null;
+    }
+    const nextStats = paintSnapshot(canvas, snapshot, targetAutoLevelsRef.current?.setting ?? levelSetting);
+    if (holdAutoLevels && !targetAutoLevelsRef.current && nextStats.populated > 0 &&
+        nextStats.low !== undefined && nextStats.high !== undefined) {
+      targetAutoLevelsRef.current = { source: roi.imageDataUrl!, setting: { mode: "manual", low: nextStats.low, high: nextStats.high } };
+    }
+    setStats(nextStats);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     revision,
@@ -688,10 +749,13 @@ export function ImageCanvas({
     theme,
     vectorGraySpotSelection,
     vectorGraySpotSkipped,
-    selectedTargetGray,
     levelSetting,
     streamTransforms,
     singlePaneImage,
+    simulationMode,
+    infiniteActive,
+    selectedTargetGray,
+    roi.imageDataUrl,
   ]);
 
   useEffect(() => {
@@ -725,6 +789,7 @@ export function ImageCanvas({
         markScanPerformanceCanvasReady(kind);
         const snapshot = liveSnapshotRef.current;
         if (snapshot) rememberArchivedPaint(image, snapshot);
+        rememberImageExtent(image, imageExtentRef.current);
         const scanParams = lastScanParamsRef.current;
         if (scanParams?.kind === kind) rememberScanParams(image, scanParams.items);
         emit(image);
@@ -912,6 +977,12 @@ export function ImageCanvas({
     (kind === "vector" || kind === "raster")
       ? selectionPixelSize(scanBasePixelSize, activeRegion, roi, scanEdge)
       : scanBasePixelSize;
+  // ROI scans are composited into the full field of view, so the scale must
+  // describe the whole canvas rather than the denser samples inside the ROI.
+  const imageExtent: ImageExtent = globalPixelSize?.source === "scanGeometry" && roi.scanGeometry?.enabled
+    ? { x: globalPixelSize.x * roi.scanGeometry.pixels[0], y: globalPixelSize.y * roi.scanGeometry.pixels[1], unit: globalPixelSize.unit }
+    : { x: Math.abs(roi.x_end - roi.x_origin), y: Math.abs(roi.y_end - roi.y_origin), unit: roi.scale_unit };
+  imageExtentRef.current = imageExtent;
   const current = currentBeamPosition({
     kind,
     roi,
@@ -1097,6 +1168,7 @@ export function ImageCanvas({
   }
 
   function handleTargetGrayPointerMove(event: React.PointerEvent<HTMLElement>) {
+    if (grayPickPrompt) return;
     if (!onTargetGrayPick || event.pointerType === "touch") {
       setGrayTooltip(null);
       return;
@@ -1107,12 +1179,42 @@ export function ImageCanvas({
       : null);
   }
 
-  function handleTargetGrayContextMenu(event: React.MouseEvent<HTMLElement>) {
-    if (event.defaultPrevented || !onTargetGrayPick) return;
-    if (!onTargetGrayPick) return;
-    if ((event.target as HTMLElement).closest("button, input, select, label")) return;
+  function handleTargetGrayContextMenu(event: React.MouseEvent<HTMLElement>, pointerDown = false) {
+    if (event.defaultPrevented || !onTargetGrayPick || event.button !== 2) return;
+    // Some browsers fire contextmenu on release. Never reopen a released hint.
+    if (!pointerDown && grayPromptGestureRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest("button, input, select, label") && !target.closest(".canvas-editor__annotation")) return;
     const sample = sampleTargetGrayPixel(event.clientX, event.clientY);
     if (!sample) return;
+    if (!event.ctrlKey) {
+      if (target.closest(".canvas-editor__annotation, .canvas-editor__shape, .canvas-editor__menu")) return;
+      // Match the visible ROI rectangles, including their current pane layout.
+      const insideROI = roi.roi_scan_enabled && Array.from(
+        frameRef.current?.querySelectorAll<HTMLElement>(".scan-roi-layer__region") ?? [],
+      ).some((region) => {
+        const rect = region.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && event.clientX >= rect.left &&
+          event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      });
+      if (insideROI) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!pointerDown) return;
+      grayPromptGestureRef.current = true;
+      setContextMenu(null);
+      setGrayTooltip(null);
+      setGrayPickPrompt({
+        x: Math.max(12, Math.min(event.clientX + 12, window.innerWidth - 352)),
+        y: Math.max(12, Math.min(event.clientY + 12, window.innerHeight - 112)),
+      });
+      return;
+    }
+    setGrayPickPrompt(null);
     onTargetGrayPick(sample.value, sample.point);
     setGrayTooltip({ x: event.clientX, y: event.clientY, value: sample.value, color: sample.color });
     event.preventDefault();
@@ -1304,6 +1406,7 @@ export function ImageCanvas({
         );
       }
       const mergedUrl = exportCanvas.toDataURL("image/png");
+      rememberImageExtent(mergedUrl, archivedImageUrl ? archivedImageExtents.get(archivedImageUrl) ?? null : imageExtent);
       if (archivedImageUrl && (kind === "raster" || kind === "vector")) {
         // The chip is now part of the merged pixels; do not register it for
         // the merged URL or the overlay would be drawn on top of it again.
@@ -1705,7 +1808,12 @@ export function ImageCanvas({
         onClick={() => selectPane(scanTargetPane)}
         onPointerMove={handleTargetGrayPointerMove}
         onPointerLeave={() => setGrayTooltip(null)}
-        onContextMenu={handleTargetGrayContextMenu}
+        onPointerDownCapture={(event) => {
+          if (event.button !== 2) return;
+          grayPromptGestureRef.current = false;
+          if (!event.ctrlKey) handleTargetGrayContextMenu(event, true);
+        }}
+        onContextMenuCapture={(event) => handleTargetGrayContextMenu(event)}
       >
         {imageLayout > 1 && <div className="image-panel-grid__label">
           <span />
@@ -1777,6 +1885,7 @@ export function ImageCanvas({
             <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} moveOnly={infiniteActive} />
           )}
           {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}
+          {!targetParked && hasRenderedCanvasImage && <ImageScaleChip extent={imageExtent} rotate90={streamTransforms.rotate90} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
@@ -2019,7 +2128,13 @@ export function ImageCanvas({
             : t("canvas.serverFigure.livePreview")}
         </div>
       )}
-      {grayTooltip && createPortal(
+      {grayPickPrompt && createPortal(
+        <div className="roi-gray-tooltip image-target-gray-prompt" role="status" style={{ left: grayPickPrompt.x, top: grayPickPrompt.y }}>
+          {t("roi.targetGray.gesturePrompt")}
+        </div>,
+        document.body,
+      )}
+      {grayTooltip && !grayPickPrompt && createPortal(
         <div
           className="roi-gray-tooltip image-target-gray-tooltip"
           style={{ left: grayTooltip.x, top: grayTooltip.y }}
@@ -2446,6 +2561,17 @@ function LiveAxisOverlay({
   );
 }
 
+function ImageScaleChip({ extent, rotate90 = false }: { extent: ImageExtent | null; rotate90?: boolean }) {
+  const scale = imageScale(extent, rotate90);
+  if (!scale) return null;
+  return (
+    <div className="canvas-image-scale" role="img" aria-label={scale.label} style={{ width: `calc(${scale.fraction * 100}% + 22px)` }}>
+      <span className="canvas-image-scale__label">{scale.label}</span>
+      <span className="canvas-image-scale__bar" aria-hidden="true" />
+    </div>
+  );
+}
+
 /**
  * Low-opacity summary of the settings a scan ran with, drawn over the image
  * in the annotation layer. It never takes pointer events, so the editor
@@ -2501,6 +2627,7 @@ function ArchivedScanDisplay({
   const [decodedSnapshot, setDecodedSnapshot] = useState<PaintSnapshot | null>(null);
   const snapshot = archivedPaints.get(imageUrl) ?? decodedSnapshot;
   const scanParams = archivedScanParams.get(imageUrl) ?? null;
+  const imageExtent = archivedImageExtents.get(imageUrl) ?? null;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Start from the levels the live image was shown with, then keep this
   // pane's own levels: adjusting it never touches the live wedge.
@@ -2536,6 +2663,7 @@ function ArchivedScanDisplay({
           <canvas ref={canvasRef} aria-label={alt} onDragStart={(event) => event.preventDefault()} />
           {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} transforms={transforms ?? snapshot?.transforms ?? NO_STREAM_TRANSFORMS} />}
           {scanParams && <ScanParamChip items={scanParams} t={t} />}
+          <ImageScaleChip extent={imageExtent} rotate90={(transforms ?? snapshot.transforms).rotate90} />
           {editorLayer}
         </div>
         <LevelWedge
@@ -2582,6 +2710,7 @@ function ArchivedScanDisplay({
         />
         {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} transforms={transforms ?? NO_STREAM_TRANSFORMS} />}
         {scanParams && <ScanParamChip items={scanParams} t={t} />}
+        <ImageScaleChip extent={imageExtent} rotate90={transforms?.rotate90} />
         {editorLayer}
       </div>
       <LevelWedge

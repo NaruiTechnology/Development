@@ -29,7 +29,7 @@ import {
   queueLiveScanDisplay,
 } from "../store/imageSlice";
 import { registerScanActionStop, stopAllScanActions } from "../hooks/scanActionRegistry";
-import { useScanStream } from "../hooks/useScanStream";
+import { useScanStream, type LiveGrayRule } from "../hooks/useScanStream";
 import {
   clearBitmapSelectionCache,
   bitmapImageFrame,
@@ -140,6 +140,8 @@ function combineVectorRegions(requests: VectorRequest[]): VectorRequest {
     return {
       ...requests[0],
       target_gray_level: requests.find((request) => request.target_gray_level != null)?.target_gray_level ?? null,
+      gray_level_range: requests.find((request) => request.gray_level_range != null)?.gray_level_range ?? null,
+      gray_level_skipped: requests.find((request) => request.gray_level_range != null)?.gray_level_skipped ?? null,
       roi: null,
       points,
       simulation_bitmap: null,
@@ -154,6 +156,8 @@ function combineVectorRegions(requests: VectorRequest[]): VectorRequest {
   return {
     ...requests[0],
     target_gray_level: requests.find((request) => request.target_gray_level != null)?.target_gray_level ?? null,
+    gray_level_range: requests.find((request) => request.gray_level_range != null)?.gray_level_range ?? null,
+    gray_level_skipped: requests.find((request) => request.gray_level_range != null)?.gray_level_skipped ?? null,
     roi: null,
     parallel_rois: rois,
     simulation_bitmap: null,
@@ -297,6 +301,7 @@ export function ScanControls({
   const [infiniteScanActive, setInfiniteScanActive] = useState(false);
   const [pendingZoomRestart, setPendingZoomRestart] = useState<"single" | "infinite" | null>(null);
   const [zoomError, setZoomError] = useState<string | null>(null);
+  const [grayRuleError, setGrayRuleError] = useState<string | null>(null);
   const zoomRestartTimerRef = useRef<number | null>(null);
   const zoomUpdateGenerationRef = useRef(0);
   const previousScanRegionsRef = useRef(roiState.scan_regions);
@@ -340,8 +345,13 @@ export function ScanControls({
   const scanGrayScaleSkipped = selectedTargetGray !== null
     ? vectorGrayScaleSkipped ?? true
     : activeVectorGrayScaleSkipped;
-  const targetRuleKey = `${selectedTargetGray ?? "none"}:${selectedTargetGray === null ? "none" : scanGrayScaleSkipped}`;
-  const previousTargetRuleRef = useRef(targetRuleKey);
+  const liveGrayRule: LiveGrayRule = {
+    target_gray_level: selectedTargetGray,
+    gray_level_range: scanGrayScaleSelection,
+    gray_level_skipped: scanGrayScaleSkipped,
+  };
+  const liveGrayRuleKey = JSON.stringify(liveGrayRule);
+  const previousLiveGrayRuleRef = useRef(liveGrayRuleKey);
   const vectorGrayFilterActive =
     kind === "vector" &&
     targetGraySelection === null &&
@@ -398,7 +408,8 @@ export function ScanControls({
           grayScaleSelection: scanGrayScaleSelection,
           grayScaleSkipped: scanGrayScaleSkipped,
         }
-      ), target_gray_level: scanRegion && selectedTargetGray !== null ? selectedTargetGray : null };
+      ), target_gray_level: scanRegion && selectedTargetGray !== null ? selectedTargetGray : null,
+      gray_level_range: scanGrayScaleSelection, gray_level_skipped: scanGrayScaleSkipped };
     }
     return { ...await vectorRequestWithBitmapSelection(
       { ...vector, roi: null },
@@ -409,7 +420,8 @@ export function ScanControls({
         grayScaleSelection: scanGrayScaleSelection,
         grayScaleSkipped: scanGrayScaleSkipped,
       }
-    ), target_gray_level: scanRegion && selectedTargetGray !== null ? selectedTargetGray : null };
+    ), target_gray_level: scanRegion && selectedTargetGray !== null ? selectedTargetGray : null,
+      gray_level_range: scanGrayScaleSelection, gray_level_skipped: scanGrayScaleSkipped };
   }, [
     allowBitmapSimulation,
     isProduction,
@@ -1159,6 +1171,7 @@ export function ScanControls({
   }, [roiState.scan_regions]);
 
   function scheduleZoomRestart(mode: "single" | "infinite") {
+    if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
     // The FPGA receives scan coordinates at stream start. Rebuild the request
     // only if the current scan cannot accept an in-band geometry update.
     zoomRestartTimerRef.current = window.setTimeout(() => {
@@ -1172,13 +1185,36 @@ export function ScanControls({
   }
 
   useEffect(() => {
-    const changed = previousTargetRuleRef.current !== targetRuleKey;
-    previousTargetRuleRef.current = targetRuleKey;
-    if (!changed || !infiniteScanActiveRef.current || !stream.hasActiveStream()) return;
-    // The active request has already fixed its feedback rule and simulation
-    // bitmap. Rebuild it automatically when the target or mode changes.
-    scheduleZoomRestart("infinite");
-  }, [targetRuleKey]);
+    const changed = previousLiveGrayRuleRef.current !== liveGrayRuleKey;
+    previousLiveGrayRuleRef.current = liveGrayRuleKey;
+    if (!changed || !infiniteScanActiveRef.current) return;
+    setGrayRuleError(null);
+    const liveEntry = infiniteScanRef.current;
+    const entries = liveEntry ? [liveEntry] : regionScanRepeatRef.current;
+    for (const [index, entry] of entries.entries()) {
+      if (entry.kind !== "vector") continue;
+      if (index === 0 && entries.length > 1 && entry.compositeROIs?.length) continue;
+      Object.assign(entry.req, liveGrayRule);
+      if (entry.req.simulation_bitmap) {
+        entry.req.simulation_bitmap = decorateSimulationBitmap(
+          entry.req.simulation_bitmap, scanGrayScaleSelection, scanGrayScaleSkipped);
+      }
+      if (entry.req.parallel_simulation_bitmaps) {
+        entry.req.parallel_simulation_bitmaps = entry.req.parallel_simulation_bitmaps.map((bitmap, regionIndex) =>
+          regionIndex === 0 && entry.compositeROIs?.length ? bitmap :
+            decorateSimulationBitmap(bitmap, scanGrayScaleSelection, scanGrayScaleSkipped));
+      }
+      // Finite adaptive passes and queued regions pick up the rule on their
+      // next natural pass; continuous sessions receive it over the same socket.
+      if (entry === liveEntry && entry.req.feedback_mode !== "adaptive_gray_feedback") {
+        if (!stream.updateGeometry({ gray_rule: liveGrayRule }, setGrayRuleError)) {
+          setGrayRuleError("Scan stream is not ready to accept a gray-level change yet.");
+        }
+      }
+    }
+    // Compare the rule's values, not the arrays recreated by each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveGrayRuleKey]);
 
   async function startValidatedRunRequest() {
     if (disabled || kind === "roi") return;
@@ -1612,7 +1648,7 @@ export function ScanControls({
           onClick={onStop}
           title={t(closing ? "scan.stopping" : "scan.stop.title")}
         >
-          <Icon name="square" tone="danger" />
+          <Icon name="hand" />
           {t(closing ? "scan.stopping" : "scan.stop")}
         </button>
         {(kind === "raster" || kind === "vector") && (
@@ -1630,6 +1666,7 @@ export function ScanControls({
         )}
       </div>
 
+      {grayRuleError && <div className="scan-inline-error" role="alert">{grayRuleError}</div>}
       {kind !== "raster" && <span className="spacer" />}
 
       {validatedActionsHost ? createPortal(validatedActions, validatedActionsHost) : validatedActions}

@@ -84,6 +84,17 @@ type PendingCompletion = {
   image_filename: string | null;
 };
 
+export type LiveGrayRule = {
+  target_gray_level: number | null;
+  gray_level_range: [number, number] | null;
+  gray_level_skipped: boolean | null;
+};
+type LiveScanUpdate = {
+  roi: ROIRequest | null;
+  parallel_rois: ROIRequest[] | null;
+  points?: VectorRequest["points"];
+} | { gray_rule: LiveGrayRule };
+
 export function useScanStream() {
   const dispatch = useAppDispatch();
   const wsRef = useRef<WebSocket | null>(null);
@@ -103,11 +114,7 @@ export function useScanStream() {
   const geometryUpdateCallbacksRef = useRef(new Map<number, { onError: (detail: string) => void; onApplied?: () => void }>());
   const nextGeometryUpdateIdRef = useRef(1);
   const geometryReadyRef = useRef(false);
-  const pendingGeometryUpdatesRef = useRef<Array<{ id: number; geometry: {
-    roi: ROIRequest | null;
-    parallel_rois: ROIRequest[] | null;
-    points?: VectorRequest["points"];
-  } }>>([]);
+  const pendingGeometryUpdatesRef = useRef<Array<{ id: number; geometry: LiveScanUpdate }>>([]);
 
   const flushPendingGeometryUpdates = useCallback(() => {
     const ws = wsRef.current;
@@ -534,11 +541,7 @@ export function useScanStream() {
   const hasActiveStream = useCallback(() =>
     activeScanRef.current !== null && wsRef.current !== null, []);
 
-  const updateGeometry = useCallback((geometry: {
-    roi: ROIRequest | null;
-    parallel_rois: ROIRequest[] | null;
-    points?: VectorRequest["points"];
-  }, onError: (detail: string) => void, onApplied?: () => void): boolean => {
+  const updateGeometry = useCallback((geometry: LiveScanUpdate, onError: (detail: string) => void, onApplied?: () => void): boolean => {
     const ws = wsRef.current;
     if (!ws || ws.readyState === WebSocket.CLOSING || ws.readyState === WebSocket.CLOSED || !activeScanRef.current) return false;
     const id = nextGeometryUpdateIdRef.current++;
