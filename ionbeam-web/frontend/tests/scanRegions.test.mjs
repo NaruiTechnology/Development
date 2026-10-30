@@ -138,6 +138,41 @@ test("live ROI display move waits for the next vector pass", () => {
   assert.deepEqual(state.vectorParallelROIs[1], nextROI);
 });
 
+test("filtered live zoom refreshes blanked pixels when returning from 2 to 1", () => {
+  const full = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+  const roi = { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 };
+  let state = imageReducer(undefined, setupVector({
+    pattern: "default", scanPath: "horizontal_sawtooth", edge: 4,
+    continuous: true, preserveZeroSamples: true,
+    parallelROIs: [full, roi], compositeROIs: [roi],
+    initialImage: new Uint16Array(16).fill(100),
+  }));
+  const pass = Uint16Array.from({ length: 32 }, (_, index) => index % 2 ? 0 : 100);
+  const display = { roi: null, parallelROIs: [full, roi], compositeROIs: [roi] };
+  // Begin a pass, then change zoom: the new underlay must wait for its end.
+  state = imageReducer(state, appendVectorSamples({ values: pass.slice(0, 2) }));
+  state = imageReducer(state, queueLiveScanDisplay({ kind: "vector", display: {
+    ...display, initialImage: new Uint16Array(16).fill(200),
+  } }));
+  assert.equal(state.vectorImage[0], 100);
+  state = imageReducer(state, appendVectorSamples({ values: pass.slice(2) }));
+  assert.equal(state.vectorImage[0], 200);
+  state = imageReducer(state, appendVectorSamples({ values: pass }));
+  assert.equal(state.vectorImage[0], 200, "filtered samples retain the zoom-2 underlay");
+  state = imageReducer(state, queueLiveScanDisplay({ kind: "vector", display: {
+    ...display, initialImage: new Uint16Array(16).fill(50),
+  } }));
+  state = imageReducer(state, appendVectorSamples({ values: pass }));
+  state = imageReducer(state, appendVectorSamples({ values: pass }));
+  assert.deepEqual([...state.vectorImage], [
+    50, 50, 100, 100,
+    50, 50, 100, 100,
+    100, 100, 100, 100,
+    100, 100, 100, 100,
+  ]);
+  assert.equal(state.vectorPasses, 4);
+});
+
 test("successive raster ROIs composite into one preserved full-frame buffer", () => {
   let state = imageReducer(undefined, { type: "test/init" });
   state = imageReducer(state, resetRaster({

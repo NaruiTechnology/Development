@@ -92,6 +92,8 @@ interface LiveDisplayGeometry {
   roi: ROIRequest | null;
   parallelROIs: ROIRequest[] | null;
   compositeROIs: ROIRequest[] | null;
+  /** Fresh source pixels under blanked samples after a simulation zoom. */
+  initialImage?: Uint16Array | null;
 }
 
 const RES = 512;
@@ -522,6 +524,18 @@ const slice = createSlice({
           state.vectorROI = display.roi;
           state.vectorParallelROIs = display.parallelROIs;
           state.vectorCompositeMask = makeCompositeMask(display.compositeROIs, edge);
+          if (display.initialImage?.length === state.vectorImage.length) {
+            const regions = display.compositeROIs ?? display.parallelROIs ?? [display.roi];
+            for (const region of regions) {
+              const bounds = scanRegionPixelBounds(region, edge);
+              for (let y = bounds.y0; y < bounds.y1; y++) {
+                const start = y * edge + bounds.x0;
+                const end = y * edge + bounds.x1;
+                state.vectorImage.set(display.initialImage.subarray(start, end), start);
+                state.vectorSampledMask.fill(0, start, end);
+              }
+            }
+          }
           state.pendingVectorDisplay = null;
           roiBounds = state.vectorROI ? scanRegionPixelBounds(state.vectorROI, edge) : null;
           parallelBounds = state.vectorParallelROIs?.map((region) => scanRegionPixelBounds(region, edge));

@@ -58,7 +58,8 @@ export function clearBitmapSelectionCache(): void {
 export async function bitmapImageFrame(
   roi: ROIState,
   edgeValue: number,
-  zoom?: { sourceSelection: ROIRequest | null; displayROI: ROIRequest | null },
+  zoom?: { sourceSelection: ROIRequest | null; displayROI: ROIRequest | null } |
+    Array<{ sourceSelection: ROIRequest | null; displayROI: ROIRequest | null }>,
 ): Promise<Uint16Array | null> {
   if (!roi.imageDataUrl) return null;
   const edge = Math.max(1, Math.trunc(edgeValue));
@@ -71,15 +72,15 @@ export async function bitmapImageFrame(
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
   ctx.drawImage(img, 0, 0, edge, edge);
-  if (zoom) {
-    const sourceSelection = zoom.sourceSelection ?? {
+  for (const region of zoom ? (Array.isArray(zoom) ? zoom : [zoom]) : []) {
+    const sourceSelection = region.sourceSelection ?? {
       x_start: roi.x_origin,
       x_end: roi.x_end,
       y_start: roi.y_origin,
       y_end: roi.y_end,
     };
     const crop = selectionCrop({ ...roi, selection: sourceSelection }, sourceW, sourceH);
-    const bounds = scanRegionPixelBounds(zoom.displayROI, edge);
+    const bounds = scanRegionPixelBounds(region.displayROI, edge);
     const width = bounds.x1 - bounds.x0;
     const height = bounds.y1 - bounds.y0;
     if (crop.w > 0 && crop.h > 0 && width > 0 && height > 0) {

@@ -985,12 +985,13 @@ export function ScanControls({
     stopAllScanActions();
   }
 
-  function onZoomChange(value: string) {
+  async function onZoomChange(value: string) {
     setZoomError(null);
     if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
     zoomRestartTimerRef.current = null;
     const zoom = Number(value);
     if (!Number.isInteger(zoom) || zoom < 1 || zoom > 20000) return;
+    const generation = ++zoomUpdateGenerationRef.current;
     if (zoom === roiState.scan_zoom) return;
     if (!stream.hasActiveStream()) {
       dispatch(setScanZoom(zoom));
@@ -1039,7 +1040,6 @@ export function ScanControls({
       if (liveEntry.kind === "vector" && liveEntry.req.pattern === "custom" && liveEntry.req.points) {
         const target = dacRegions[0] ?? null;
         const points = zoomVectorPoints(liveEntry.req.points, liveEntry.req.roi ?? null, target);
-        const generation = ++zoomUpdateGenerationRef.current;
         if (stream.updateGeometry(
           { roi: target, parallel_rois: liveEntry.req.parallel_rois ?? null, points },
           (detail) => {
@@ -1065,11 +1065,39 @@ export function ScanControls({
             ...dacRegions.filter((region): region is ROIRequest => region !== null)]
         : null;
       const geometry = { roi: parallelROIs ? null : dacRegions[0] ?? null, parallel_rois: parallelROIs };
-      const generation = ++zoomUpdateGenerationRef.current;
+      // A blanked sample keeps its underlay. Rebuild that underlay from the
+      // original image, rather than retaining pixels acquired at the old zoom.
+      let initialImage: Uint16Array | null = null;
+      if (liveEntry.kind === "vector" && !isProduction && roiState.imageDataUrl && vectorGrayFilterActive) {
+        try {
+          initialImage = await bitmapImageFrame(roiState, vectorImageEdge, regions.map((region, index) => ({
+            sourceSelection: region,
+            displayROI: liveEntry.compositeROIs?.[index] ?? liveEntry.displayROIs?.[index] ?? liveEntry.displayROI ?? null,
+          })));
+        } catch (error) {
+          if (generation === zoomUpdateGenerationRef.current) {
+            setZoomError(error instanceof Error ? error.message : String(error));
+          }
+          return;
+        }
+      }
+      if (generation !== zoomUpdateGenerationRef.current || infiniteScanRef.current !== liveEntry ||
+          !infiniteScanActiveRef.current) return;
       if (stream.updateGeometry(geometry, (detail) => {
         if (zoomUpdateGenerationRef.current === generation) {
           dispatch(setScanZoom(roiState.scan_zoom));
           setZoomError(detail);
+        }
+      }, () => {
+        liveEntry.req.roi = geometry.roi;
+        liveEntry.req.parallel_rois = geometry.parallel_rois;
+        if (initialImage) {
+          dispatch(queueLiveScanDisplay({ kind: "vector", display: {
+            roi: liveEntry.displayROI ?? null,
+            parallelROIs: liveEntry.displayROIs ?? null,
+            compositeROIs: liveEntry.compositeROIs ?? null,
+            initialImage,
+          } }));
         }
       })) {
         dispatch(setScanZoom(zoom));

@@ -533,6 +533,10 @@ export function useScanStream() {
     }).catch((error) => {
       dispatch(streamErrored(error instanceof Error ? error.message : String(error)));
     });
+    // Close the client side immediately. The service observes the disconnect
+    // and the abort request together; waiting for FPGA cleanup before closing
+    // left Stop looking unresponsive on continuous scans.
+    if (ws.readyState < WebSocket.CLOSING) ws.close(1000, "operator-stop");
     // Flush the last buffered pixels after the abort request has been sent.
     flushRasterSamples();
     flushVectorSamples();
