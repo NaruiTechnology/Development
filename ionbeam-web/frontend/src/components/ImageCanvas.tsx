@@ -1841,7 +1841,7 @@ export function ImageCanvas({
                       {(targetRunRunning || targetProgressVisible) && (
                         <canvas ref={targetProgressCanvasRef} className="canvas-target-progress" aria-hidden="true" />
                       )}
-                      {imageLayout === 1 && <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} moveOnly={infiniteActive} />}
+                      {imageLayout === 1 && <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} />}
                       {onTargetGrayPick && selectedTargetGrayPoint && (
                         <span
                           className="roi-target-gray-mark image-target-gray-mark"
@@ -1882,7 +1882,7 @@ export function ImageCanvas({
           )}
           {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} transforms={streamTransforms} />}
           {imageLayout === 1 && (kind === "raster" || kind === "vector") && (
-            <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} moveOnly={infiniteActive} />
+            <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} />
           )}
           {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}
           {!targetParked && hasRenderedCanvasImage && <ImageScaleChip extent={imageExtent} rotate90={streamTransforms.rotate90} />}
