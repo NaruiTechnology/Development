@@ -4,14 +4,19 @@ export interface ImageExtent {
   unit: string;
 }
 
-/** A readable 1/2/5 scale occupying at most one quarter of the image width. */
+/** Round bar values per decade, largest first. Neighbouring steps differ by at
+ * most 1.5x, so a Zoom change of 2x or more always changes the label instead of
+ * snapping to the same coarse 1/2/5 value. */
+const SCALE_STEPS = [8, 6, 5, 4, 3, 2, 1.5, 1];
+
+/** A readable scale occupying at most one quarter of the image width. */
 export function imageScale(extent: ImageExtent | null, rotate90 = false) {
   if (!extent) return null;
   const span = rotate90 ? extent.y : extent.x;
   if (!Number.isFinite(span) || span <= 0) return null;
   const target = span / 4;
   const magnitude = 10 ** Math.floor(Math.log10(target));
-  const value = [5, 2, 1].map((step) => step * magnitude).find((step) => step <= target);
+  const value = SCALE_STEPS.map((step) => step * magnitude).find((step) => step <= target);
   if (!value || !Number.isFinite(value)) return null;
   const metres: Record<string, number> = { m: 1, mm: 1e-3, um: 1e-6, "µm": 1e-6, "μm": 1e-6, nm: 1e-9 };
   let displayValue = value;
@@ -23,5 +28,5 @@ export function imageScale(extent: ImageExtent | null, rotate90 = false) {
     unit = best[0];
     displayValue = length / best[1];
   }
-  return { fraction: value / span, label: `${Number(displayValue.toPrecision(4))} ${unit}` };
+  return { fraction: value / span, label: `${displayValue.toFixed(1)} ${unit}` };
 }

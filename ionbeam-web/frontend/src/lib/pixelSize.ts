@@ -160,3 +160,16 @@ export function selectionZoom(selection: ROIRequest | null | undefined, fov: Sel
   const spanY = Math.max(1, Math.abs(dac.y_end - dac.y_start) + 1);
   return Math.min(DAC_CODES / spanX, DAC_CODES / spanY);
 }
+
+/** Physical size of the canvas width/height at the scanned region's pixel
+ * pitch, so the scale bar follows the active region (and its Zoom) instead of
+ * the full field. Returns null when the pitch or edge is unusable. */
+export function scaleExtentFromPixelSize(
+  pixelSize: PixelSize | null | undefined,
+  edge: number,
+): { x: number; y: number; unit: string } | null {
+  if (!pixelSize || !Number.isFinite(edge) || edge <= 0) return null;
+  const x = pixelSize.x * edge;
+  const y = pixelSize.y * edge;
+  return validSize(x, y) ? { x, y, unit: pixelSize.unit } : null;
+}

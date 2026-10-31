@@ -25,7 +25,8 @@ kiwisolver==1.5.0
 libusb1==3.3.1
 MarkupSafe==3.0.3
 matplotlib==3.10.8
-numpy==2.4.4
+numpy==2.4.4; python_version < "3.15"
+numpy==2.5.4; python_version >= "3.15"
 packaging==26.1
 pg8000==1.31.5
 # pg8000 1.31.5 uses make_channel_binding, removed in scramp 1.5.0.
