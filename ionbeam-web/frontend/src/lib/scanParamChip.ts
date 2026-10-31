@@ -33,6 +33,8 @@ export interface ScanParamSource {
   feedback_mode?: string;
   gray_level_range?: [number, number] | null;
   gray_level_skipped?: boolean | null;
+  /** Present when several ROIs share one interleaved (Parallel) stream. */
+  parallel_rois?: unknown[] | null;
 }
 
 /** One ADC conversion on the current revC3 gateware (see lib/scanTiming). */
@@ -54,7 +56,13 @@ export function formatPixelDwell(dwell: number, samplePeriodNs = DEFAULT_SAMPLE_
 export function summarizeScanParams(
   kind: "raster" | "vector",
   req: ScanParamSource,
-  options: { beamEnergyEv?: number | null; samplePeriodNs?: number } = {},
+  options: {
+    beamEnergyEv?: number | null;
+    samplePeriodNs?: number;
+    /** Selected scan regions (ROIs) and the Zoom the scan was started with. */
+    regionCount?: number;
+    zoom?: number;
+  } = {},
 ): ScanParamSummary {
   const items: ScanParamItem[] = [];
   const beamEnergy = options.beamEnergyEv;
@@ -117,6 +125,22 @@ export function summarizeScanParams(
       items.push({ id: "feedback", labelKey: "canvas.scanParams.feedback", valueKey: "canvas.scanParams.feedback.adaptive" });
     }
   }
+
+  // Region settings: the scan's Parallel mode, how many ROIs it covered and
+  // the Zoom, so a split/archived pane shows the same setup as the live one.
+  const regionCount = Math.max(0, Math.trunc(options.regionCount ?? 0));
+  if (regionCount > 1) {
+    items.push({
+      id: "parallel",
+      labelKey: "canvas.scanParams.parallel",
+      valueKey: req.parallel_rois?.length ? "canvas.scanParams.on" : "canvas.scanParams.off",
+    });
+  }
+  if (regionCount > 0) {
+    items.push({ id: "regions", labelKey: "canvas.scanParams.regions", value: String(regionCount) });
+  }
+  const zoom = Math.trunc(options.zoom ?? 1);
+  if (zoom > 1) items.push({ id: "zoom", labelKey: "canvas.scanParams.zoom", value: `${zoom}×` });
 
   return { kind, items };
 }

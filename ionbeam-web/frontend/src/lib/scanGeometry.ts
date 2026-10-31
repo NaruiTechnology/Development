@@ -610,12 +610,14 @@ export interface AppliedScanGeometry {
   forward: Affine2;
   inverse: Affine2;
   magnification: number;
+  /** Magnification/FOV measurements frozen when this geometry was applied. */
+  magnificationCalibration?: Record<string, number>;
   pixels: Vec2;
   pixelSizeNm: Vec2;
   profileRevision: number | null;
 }
 
-export function toAppliedGeometry(g: ScanGeometry, profileRevision: number | null): AppliedScanGeometry {
+export function toAppliedGeometry(g: ScanGeometry, profileRevision: number | null, magnificationCalibration?: Record<string, number>): AppliedScanGeometry {
   const r = scanGeometryResults(g);
   return {
     enabled: true,
@@ -623,6 +625,7 @@ export function toAppliedGeometry(g: ScanGeometry, profileRevision: number | nul
     forward: g.forward,
     inverse: g.inverse,
     magnification: g.inputs.magnification,
+    magnificationCalibration,
     pixels: r.pixels,
     pixelSizeNm: r.pixelSizeNm,
     profileRevision,
@@ -647,6 +650,7 @@ export interface ScanGeometryConfig {
   profile_revision: number | null;
   /** snapshot of every resolved input, so scans do not change when the profile is edited later */
   inputs: ScanGeometryInputs;
+  magnification_calibration?: Record<string, number>;
   correction: GeometryCorrection;
   fit: {
     model: FitModel;
@@ -710,11 +714,19 @@ export function parseScanGeometryConfig(raw: unknown): ScanGeometryConfig | null
     equipment_type: r.equipment_type === "SEM" ? "SEM" : "FIB",
     profile_revision: typeof r.profile_revision === "number" ? r.profile_revision : null,
     inputs,
+    magnification_calibration: validMagnificationCalibration(r.magnification_calibration),
     correction: { matrix: c.matrix, dacOffset: c.dacOffset },
     fit: (r.fit as ScanGeometryConfig["fit"]) ?? null,
     applied_at: typeof r.applied_at === "string" ? r.applied_at : "",
     applied_by: typeof r.applied_by === "string" ? r.applied_by : "",
   };
+}
+
+function validMagnificationCalibration(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const entries = Object.entries(raw);
+  if (entries.length > 200 || entries.some(([mag, fov]) => !(Number(mag) > 0) || typeof fov !== "number" || !Number.isFinite(fov) || fov <= 0)) return undefined;
+  return Object.fromEntries(entries) as Record<string, number>;
 }
 
 export function geometryFromConfig(config: ScanGeometryConfig): ScanGeometry {

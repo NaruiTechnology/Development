@@ -250,6 +250,12 @@ class VectorScanCommand(BaseCommand):
 
         self.abort = asyncio.Event()
 
+    def update_geometry(self, points_factory, pass_pixels: int) -> None:
+        """Swap coordinates for later live passes, preserving sample layout."""
+        if not self.continuous or self._points_factory is None or pass_pixels != self.pass_pixels:
+            raise ValueError("live geometry update must preserve the pass dimensions")
+        self._points_factory = points_factory
+
     def __repr__(self):
         return (f"VectorScanCommand: cookie={self._cookie}, "
                 f"output_mode={self._output_mode}, "

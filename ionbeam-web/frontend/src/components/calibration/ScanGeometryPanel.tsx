@@ -234,13 +234,13 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
     try {
       let inputs = resolved.inputs;
       let corr = correction;
+      let appliedMagPoints = { ...magPoints };
       if (foldScale) {
         const folded = foldScaleIntoHfov(inputs, corr);
         inputs = { ...inputs, hfovUm: folded.hfovUm };
         corr = folded.correction;
-        await dispatch(
-          saveMagCalibration({ beam, points: { ...magPoints, [String(Math.trunc(inputs.magnification))]: inputs.hfovUm * 1e-6 }, path: magState.beams[beam]?.path }),
-        ).unwrap();
+        appliedMagPoints = { ...magPoints, [String(Math.trunc(inputs.magnification))]: inputs.hfovUm * 1e-6 };
+        await dispatch(saveMagCalibration({ beam, points: appliedMagPoints, path: magState.beams[beam]?.path })).unwrap();
       }
       const config: Omit<ScanGeometryConfig, "applied_at" | "applied_by"> = {
         version: SCAN_GEOMETRY_VERSION,
@@ -250,6 +250,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
         equipment_type: type,
         profile_revision: profileRevision,
         inputs,
+        magnification_calibration: appliedMagPoints,
         correction: corr,
         fit: fit
           ? { model: fit.model, rms_um: fit.rmsUm, max_um: fit.maxUm, points: fiducials.filter((f) => [f.u, f.v, f.worldX, f.worldY].every(Number.isFinite)), magnification: inputs.magnification, fitted_at: new Date().toISOString() }
@@ -264,7 +265,7 @@ export function ScanGeometryPanel({ equipmentId, type, role, profileRevision, on
       }
       const geometry = buildScanGeometry(inputs, corr);
       clearBitmapSelectionCache();
-      dispatch(setScanGeometry(toAppliedGeometry(geometry, profileRevision)));
+      dispatch(setScanGeometry(toAppliedGeometry(geometry, profileRevision, appliedMagPoints)));
       const bounds = dimensionBoundsFromGeometry(geometry);
       const values: DimensionCalibrationValues = {
         ...dimension,

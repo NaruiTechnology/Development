@@ -39,7 +39,7 @@ import { ScanModeHelp } from "./components/ScanModeHelp";
 import { VectorParameters } from "./components/VectorParameters";
 import { VectorScanExecutionSettings } from "./components/VectorScanExecutionSettings";
 import { RasterScanExecutionSettings } from "./components/RasterScanExecutionSettings";
-import { ImageCanvas } from "./components/ImageCanvas";
+import { ImageCanvas, type CapturedScanImage } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { ROIScanPreview } from "./components/ROIScanPreview";
@@ -59,6 +59,7 @@ import { BeamHoldPanel } from "./components/BeamHoldPanel";
 import { DacCheckHelp } from "./components/DacCheckHelp";
 import { useAdcTestStream } from "./hooks/useAdcTestStream";
 import { clearBitmapSelectionCache, grayScaleSpectrumLevelsForSelection } from "./lib/bitmapVector";
+import { targetGrayFilter } from "./lib/roiTargetGray";
 import {
   formatGrayScaleSelection,
   normalizeGrayScaleSelection,
@@ -67,6 +68,8 @@ import {
 import {
   grayScaleScopeNoteForKind,
   grayScaleSourceLabelForKind,
+  grayControlAvailability,
+  shouldConfirmVectorGrayRange,
   shouldShowROIGrayScaleClear,
   resolveGrayScaleSourceKind,
 } from "./lib/grayScaleUI";
@@ -176,6 +179,7 @@ export function App() {
   const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
+  const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
   const previewMode = useAppSelector((s) => s.scan.preview);
   useEffect(() => {
     setSaveResultsCollapsed(previewMode);
@@ -183,6 +187,9 @@ export function App() {
   // "<kind>:<scanId>" of the scan whose image currently occupies the target pane.
   const completedImageRecordedScanRef = useRef<string | null>(null);
   const completedImagePaneRef = useRef<Record<"raster" | "vector", number>>({ raster: 0, vector: 0 });
+  // Filled by ImageCanvas: snapshots the result shown in the live pane.
+  const captureTargetImageRef = useRef<(() => Promise<string | null>) | null>(null);
+  const splitInFlightRef = useRef(false);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const adcTestEnabled = useAppSelector((s) => s.status.defaults?.adc_test !== false);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
@@ -199,7 +206,7 @@ export function App() {
     selectedTargetGray === null ? "" : String(selectedTargetGray)
   );
   const [targetGrayDraftInvalid, setTargetGrayDraftInvalid] = useState(false);
-  const [targetGraySkipped, setTargetGraySkipped] = useState(false);
+  const [targetGraySkipped, setTargetGraySkipped] = useState(true);
   const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const dimensionCalibration = useAppSelector((s) => s.dimensionCalibration.values);
   const hasPersistedDimensionCalibration = useAppSelector(
@@ -218,6 +225,7 @@ export function App() {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
+  const captureScanImageRef = useRef<(() => CapturedScanImage | null) | null>(null);
   // Each scan kind keeps its own pane layout: splitting the vector view must not
   // open empty panes on the raster view (and vice versa). Once any view has
   // been split, the other one splits itself after its first completed scan.
@@ -251,6 +259,7 @@ export function App() {
   >({ raster: [], vector: [] });
 
   useEffect(() => {
+    if (streamRestarting) return;
     const scanStarted = phase === "running" && previousScanPhaseRef.current !== "running";
     previousScanPhaseRef.current = phase;
     if (scanStarted && (kind === "raster" || kind === "vector")) {
@@ -261,7 +270,7 @@ export function App() {
     setScanTargetImagePane((current) =>
       current[kind] === targetPane ? current : { ...current, [kind]: targetPane }
     );
-  }, [imagePanelLayout, imagePanelLocked, kind, phase, selectedImagePane]);
+  }, [imagePanelLayout, imagePanelLocked, kind, phase, selectedImagePane, streamRestarting]);
   const suppressedROIScanImageUrlRef = useRef<string | null>(null);
   const previousROIImageRef = useRef({
     imageDataUrl: roiState.imageDataUrl,
@@ -273,11 +282,14 @@ export function App() {
   const [grayScaleLevels, setGrayScaleLevels] = useState<number[]>([]);
   const [grayScaleConfirmOpen, setGrayScaleConfirmOpen] = useState(false);
   const [grayScaleConfirmTarget, setGrayScaleConfirmTarget] = useState<"roi" | "vector" | "target">("roi");
+  const [pendingTargetGrayPoint, setPendingTargetGrayPoint] = useState<{ x: number; y: number } | null>(null);
   const [grayScaleCommitCount, setGrayScaleCommitCount] = useState(0);
   const [vectorGrayLevelsEnabled, setVectorGrayLevelsEnabled] = useState(false);
+  const [vectorGrayFilterApplied, setVectorGrayFilterApplied] = useState(false);
   const [vectorGrayRange, setVectorGrayRange] = useState<[number, number]>([0, 255]);
   const [vectorGrayScaleSkipped, setVectorGrayScaleSkipped] = useState<boolean | null>(null);
-  const [vectorGrayRangeCommitCount, setVectorGrayRangeCommitCount] = useState(0);
+  const [appliedVectorGrayRange, setAppliedVectorGrayRange] = useState<[number, number]>([0, 255]);
+  const vectorGrayRangeEditedRef = useRef(false);
   const [activeScanType, setActiveScanType] = useState<ScanType | null>(null);
   const [mergedFigureByKind, setMergedFigureByKind] = useState<{
     raster: string | null;
@@ -386,7 +398,7 @@ export function App() {
         if (!config?.enabled) return;
         const geometry = geometryFromConfig(config);
         clearBitmapSelectionCache();
-        dispatch(setScanGeometry(toAppliedGeometry(geometry, config.profile_revision)));
+        dispatch(setScanGeometry(toAppliedGeometry(geometry, config.profile_revision, config.magnification_calibration)));
         dispatch(applyPersistedDimensionCalibration({ ...dimensionCalibration, ...dimensionBoundsFromGeometry(geometry) }));
       })
       .catch((err) => console.warn(`[scan-geometry] not loaded: ${err instanceof Error ? err.message : String(err)}`));
@@ -593,12 +605,13 @@ export function App() {
   }, [isResizing, showROIThirdColumn]);
 
   const scanActive = phase === "running" || phase === "stopping";
-  const panelDisabled = shouldDisableScanPanel({
-    scanActive: scanActive || adcActive,
+  const scanControlsSafetyDisabled = shouldDisableScanPanel({
+    scanActive: adcActive,
     signedIn: isSignedIn,
     vacuumEnabled: serviceStatus === null ? null : vacuumEnabled,
     vacuumReady: isVacuumSystemReady,
   });
+  const panelDisabled = scanActive || scanControlsSafetyDisabled;
   // A scan started while the ADC test card is open would draw behind the
   // ADC timeline, so collapse the card to bring the scan canvas back.
   useEffect(() => {
@@ -606,7 +619,12 @@ export function App() {
   }, [scanActive]);
   const vacuumControlsLocked = serviceStatus === null || (vacuumEnabled && !isVacuumSystemReady);
   const rasterVectorTabsDisabled = panelDisabled;
-  const vectorGrayFilterActive = vectorGrayLevelsEnabled && selectedTargetGray === null;
+  const vectorGrayFilterActive = vectorGrayFilterApplied && selectedTargetGray === null;
+  const grayControls = grayControlAvailability({
+    locked: scanControlsSafetyDisabled || targetGrayRunning || phase === "stopping",
+    scanActive,
+    hasTarget: selectedTargetGray !== null,
+  });
   const hasPriorScanImage =
     (lastScanKind === "raster" && rasterCursor > 0) ||
     (lastScanKind === "vector" && vectorCursor > 0) ||
@@ -668,7 +686,7 @@ export function App() {
           aria-label={t("roi.targetGray")}
           aria-invalid={targetGrayDraftInvalid}
           title={targetGrayDraftInvalid ? t("roi.targetGray.invalid") : t("roi.targetGray.title")}
-          disabled={panelDisabled || targetGrayRunning}
+          disabled={grayControls.targetDisabled}
           onChange={(event) => {
             setTargetGrayDraft(event.target.value);
             setTargetGrayDraftInvalid(false);
@@ -685,7 +703,7 @@ export function App() {
             className="canvas-target-gray__clear"
             aria-label={t("roi.targetGray.clear")}
             title={t("roi.targetGray.clear")}
-            disabled={panelDisabled || targetGrayRunning}
+            disabled={grayControls.targetDisabled}
             onClick={() => dispatch(setSelectedTargetGray({ value: null }))}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
@@ -802,7 +820,7 @@ export function App() {
   useEffect(() => {
     if (selectedTargetGray === null) return;
     setVectorGrayLevelsEnabled(false);
-    setVectorGrayRangeCommitCount(0);
+    setVectorGrayFilterApplied(false);
   }, [selectedTargetGray]);
 
   function commitTargetGrayDraft() {
@@ -1021,8 +1039,9 @@ export function App() {
   const showSplitButton = kind === "raster" || kind === "vector";
   const canSplitImagePanel = imagePanelLayout === 1;
 
-  const splitImagePanel = useCallback(() => {
+  const splitImagePanel = useCallback(async () => {
     if (!canSplitImagePanel || (kind !== "raster" && kind !== "vector")) return;
+    if (splitInFlightRef.current) return;
     setImagePanelLocked(true);
     const saved = savedSplitRef.current;
     if (saved) {
@@ -1035,13 +1054,33 @@ export function App() {
       return;
     }
     completedImagePaneRef.current[kind] = 0;
+    // Capture before moving the live canvas to the second pane. Acquisition
+    // continues there while the first pane keeps this snapshot.
+    const captured = captureScanImageRef.current?.();
+    let imageUrl = captured?.kind === kind ? captured.imageUrl : currentTargetImage;
+    splitInFlightRef.current = true;
+    try {
+      // The existing synchronous path preserves raw samples and scan identity.
+      // Server/blob figures also need the patch's persistent image conversion.
+      if (!captured || captured.kind !== kind || !captured.imageUrl.startsWith("data:")) {
+        imageUrl = (await captureTargetImageRef.current?.()) ?? imageUrl;
+      }
+    } catch {
+      // Keep the existing rendered result if a server figure cannot be read.
+    } finally {
+      splitInFlightRef.current = false;
+    }
+    if (captured?.kind === kind && !scanActive) {
+      completedImageRecordedScanRef.current = `${kind}:${captured.scanId}`;
+    }
+    if (imageUrl) setLastLiveScanImage({ kind, imageUrl });
     // Preserve an existing image when available; otherwise open two empty panes.
-    const targetPane = currentTargetImage === null ? 0 : 1;
-    setImagePanelSlots((current) => ({ ...current, [kind]: [currentTargetImage, null] }));
+    const targetPane = imageUrl === null ? 0 : 1;
+    setImagePanelSlots((current) => ({ ...current, [kind]: [imageUrl, null] }));
     setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
     setSelectedImagePane((current) => ({ ...current, [kind]: targetPane }));
     setScanTargetImagePane((current) => ({ ...current, [kind]: targetPane }));
-  }, [canSplitImagePanel, currentTargetImage, kind]);
+  }, [canSplitImagePanel, currentTargetImage, kind, scanActive]);
 
   const handleMergedFigureChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
@@ -1108,16 +1147,14 @@ export function App() {
   );
 
   const handleTargetGrayPick = useCallback((gray: number, point: { x: number; y: number }) => {
-    setTargetGrayDraft(String(gray));
-    setTargetGrayDraftInvalid(false);
-    setTargetGraySkipped(false);
-    dispatch(setSelectedTargetGray({ value: gray, point }));
+    if (scanControlsSafetyDisabled || targetGrayRunning || phase === "stopping") return;
+    setPendingTargetGrayPoint(point);
     setGrayScaleConfirmTarget("target");
     setPendingGrayScaleSelection([gray, gray]);
     setPendingGrayScaleAnchor(null);
     setPendingGrayScaleSkipped(false);
     setGrayScaleConfirmOpen(true);
-  }, [dispatch]);
+  }, [scanControlsSafetyDisabled, targetGrayRunning, phase]);
 
   const handleGrayScaleSelect = useCallback((grayScale: number) => {
     setGrayScaleConfirmTarget("roi");
@@ -1147,11 +1184,21 @@ export function App() {
 
   const handleGrayScaleConfirmAccept = useCallback(() => {
     if (pendingGrayScaleSelection === null || pendingGrayScaleAnchor !== null) return;
-    dispatch(updateVector({ dwell: 2 }));
+    if (!scanActive) {
+      dispatch(updateVector({ dwell: 2 }));
+    }
     if (grayScaleConfirmTarget === "target") {
+      dispatch(setSelectedTargetGray({ value: pendingGrayScaleSelection[0], point: pendingTargetGrayPoint }));
       setTargetGraySkipped(pendingGrayScaleSkipped ?? false);
+      setPendingTargetGrayPoint(null);
     } else if (grayScaleConfirmTarget === "vector") {
+      setVectorGrayLevelsEnabled(true);
+      setVectorGrayFilterApplied(true);
+      setAppliedVectorGrayRange([pendingGrayScaleSelection[0], pendingGrayScaleSelection[1]]);
       setVectorGrayScaleSkipped(pendingGrayScaleSkipped ?? false);
+      vectorGrayRangeEditedRef.current = false;
+      dispatch(setSelectedTargetGray({ value: null }));
+      dispatch(updateVector({ pattern: "default", points: null }));
     } else {
       if (roiState.scanImageDataUrl !== null && roiState.imageKind === "lastScan") {
         dispatch(
@@ -1179,30 +1226,20 @@ export function App() {
     pendingGrayScaleAnchor,
     pendingGrayScaleSelection,
     pendingGrayScaleSkipped,
+    pendingTargetGrayPoint,
+    scanActive,
     roiState.imageKind,
     roiState.scanImageDataUrl,
   ]);
 
-  const applyVectorGrayLevelsToggle = useCallback((checked: boolean) => {
-    setVectorGrayLevelsEnabled(checked);
-    // The operator's range and Spot/Skip choice survive toggling the filter
-    // off and on: scan requests only carry them while the filter is enabled,
-    // so nothing is reset here. Skip is only the default for a first use.
-    if (checked) {
-      setVectorGrayScaleSkipped((current) => current ?? true);
-      // Enabling a filter must preserve the operator's selected resolution.
-      dispatch(updateVector({
-        pattern: "default",
-        points: null,
-      }));
-    }
-  }, [dispatch]);
-
   const handleVectorGrayLevelsToggle = useCallback((checked: boolean) => {
-    if (checked && selectedTargetGray !== null) return;
-    setVectorGrayRangeCommitCount(0);
-    applyVectorGrayLevelsToggle(checked);
-  }, [applyVectorGrayLevelsToggle, selectedTargetGray]);
+    vectorGrayRangeEditedRef.current = false;
+    setVectorGrayRange(appliedVectorGrayRange);
+    setVectorGrayLevelsEnabled(checked);
+    // Switching on only arms the sliders. A range becomes active exclusively
+    // in the confirmation handler; switching off removes the current filter.
+    if (!checked) setVectorGrayFilterApplied(false);
+  }, [appliedVectorGrayRange]);
 
   useEffect(() => {
     if (!vectorGrayFilterActive || vectorLatencyBytes >= 8196) return;
@@ -1211,22 +1248,30 @@ export function App() {
 
   const handleVectorGrayRangeChange = useCallback((nextRange: [number, number]) => {
     const normalized = normalizeGrayScaleSelection(nextRange) ?? [0, 255];
-    setVectorGrayRange(normalized);
+    setVectorGrayRange((current) => {
+      if (current[0] !== normalized[0] || current[1] !== normalized[1]) {
+        vectorGrayRangeEditedRef.current = true;
+      }
+      return normalized;
+    });
   }, []);
 
-  const handleVectorGrayRangeSelect = useCallback(() => {
-    if (!vectorGrayFilterActive) return;
+  const handleVectorGrayRangeSelect = useCallback((explicit = false) => {
+    if (!shouldConfirmVectorGrayRange({
+      enabled: vectorGrayLevelsEnabled,
+      explicit,
+      edited: vectorGrayRangeEditedRef.current,
+      applied: vectorGrayFilterApplied,
+      range: vectorGrayRange,
+      appliedRange: appliedVectorGrayRange,
+    })) return;
+    vectorGrayRangeEditedRef.current = false;
     setGrayScaleConfirmTarget("vector");
     setPendingGrayScaleSelection(vectorGrayRange);
     setPendingGrayScaleAnchor(null);
-    if (vectorGrayRangeCommitCount === 0) {
-      setVectorGrayRangeCommitCount(1);
-      return;
-    }
-    setVectorGrayRangeCommitCount(0);
     setPendingGrayScaleSkipped(false);
     setGrayScaleConfirmOpen(true);
-  }, [vectorGrayFilterActive, vectorGrayRange, vectorGrayRangeCommitCount]);
+  }, [vectorGrayLevelsEnabled, vectorGrayFilterApplied, vectorGrayRange, appliedVectorGrayRange]);
 
   const handleLoadLastScan = useCallback(() => {
     if (!roiScanImageUrl) return;
@@ -1301,10 +1346,9 @@ export function App() {
       targets: scanTargetImagePane,
       completed: { ...completedImagePaneRef.current },
     };
-    setSinglePaneImages({
-      raster: imagePanelSlots.raster[selectedImagePane.raster] ?? null,
-      vector: imagePanelSlots.vector[selectedImagePane.vector] ?? null,
-    });
+    // Keep the live scan pane as the single-pane source. The selected pane
+    // may be an archived image, which has no live scan target for controls.
+    setSinglePaneImages({ raster: null, vector: null });
     setImagePanelLayoutByKind({ raster: 1, vector: 1 });
     setSelectedImagePane({ raster: 0, vector: 0 });
     setScanTargetImagePane({ raster: 0, vector: 0 });
@@ -1399,13 +1443,13 @@ export function App() {
         </div>
       )}
       {kind === "vector" ? (
-        <section className={`scan-header-feature-panel scan-header-feature-panel--gray-range${selectedTargetGray !== null ? " scan-header-feature-panel--inactive" : ""}`}>
+        <section className="scan-header-feature-panel scan-header-feature-panel--gray-range">
           <div className="scan-header-feature-panel__heading">
             <label className="checkbox vacuum-switch app-switch canvas-grid-toggle vector-gray-level-toggle">
               <input
                 type="checkbox"
-                checked={vectorGrayFilterActive}
-                disabled={panelDisabled || selectedTargetGray !== null}
+                checked={vectorGrayLevelsEnabled}
+                disabled={grayControls.filterDisabled}
                 onChange={(event) => handleVectorGrayLevelsToggle(event.target.checked)}
               />
               <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
@@ -1414,12 +1458,12 @@ export function App() {
             <VectorGrayLevelHelp />
           </div>
           <VectorGrayLevelSelector
-            enabled={vectorGrayFilterActive}
+            enabled={vectorGrayLevelsEnabled}
             range={vectorGrayRange}
-            disabled={panelDisabled || !vectorGrayFilterActive || selectedTargetGray !== null}
+            disabled={grayControls.filterDisabled || !vectorGrayLevelsEnabled}
             onRangeChange={handleVectorGrayRangeChange}
-            onRangeCommit={handleVectorGrayRangeSelect}
-            onSelect={handleVectorGrayRangeSelect}
+            onRangeCommit={() => handleVectorGrayRangeSelect(false)}
+            onSelect={() => handleVectorGrayRangeSelect(true)}
           />
         </section>
       ) : showGraySpectrum ? (
@@ -1491,8 +1535,10 @@ export function App() {
           onIsSkippedChange={setPendingGrayScaleSkipped}
           onClose={() => {
             setGrayScaleConfirmOpen(false);
+            setPendingTargetGrayPoint(null);
             setGrayScaleCommitCount(0);
-            setVectorGrayRangeCommitCount(0);
+            if (grayScaleConfirmTarget === "vector") setVectorGrayRange(appliedVectorGrayRange);
+            vectorGrayRangeEditedRef.current = false;
           }}
           onConfirm={handleGrayScaleConfirmAccept}
         />
@@ -1684,9 +1730,10 @@ export function App() {
                           kind={scanSubTab}
                           disabled={panelDisabled}
                           scanActive={scanActive}
+                          zoomDisabled={scanControlsSafetyDisabled}
                           vectorGrayScaleSelection={selectedTargetGray !== null
-                            ? [selectedTargetGray, selectedTargetGray]
-                            : vectorGrayFilterActive ? vectorGrayRange : null}
+                            ? targetGrayFilter(selectedTargetGray).selection
+                            : vectorGrayFilterActive ? appliedVectorGrayRange : null}
                           vectorGrayScaleSkipped={selectedTargetGray !== null
                             ? targetGraySkipped
                             : vectorGrayFilterActive ? vectorGrayScaleSkipped : null}
@@ -1839,7 +1886,6 @@ export function App() {
                         <input
                           type="checkbox"
                           checked={imagePanelLocked}
-                          disabled={scanActive}
                           onChange={(event) => handleImagePanelLockChange(event.target.checked)}
                         />
                         <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
@@ -1853,7 +1899,7 @@ export function App() {
                         aria-label={t("canvas.layout.cycle", { count: imagePanelLayout })}
                         aria-pressed={imagePanelLayout > 1}
                         aria-controls="image-panel-grid"
-                        disabled={scanActive || !canSplitImagePanel}
+                        disabled={!canSplitImagePanel}
                         title={t("canvas.layout.cycle", { count: imagePanelLayout })}
                         onClick={splitImagePanel}
                       >
@@ -1880,14 +1926,16 @@ export function App() {
               ) : (
                   <ImageCanvas
                     kind={kind as ScanKind}
+                    captureRef={captureScanImageRef}
                     onTargetGrayPick={kind === "raster" || kind === "vector" ? handleTargetGrayPick : undefined}
                     onRenderedImageChange={handleRenderedImageChange}
                     onMergedFigureChange={handleMergedFigureChange}
                     onPaneImageChange={handleImagePaneChange}
                     onPaneRecycle={handleImagePaneRecycle}
+                    captureTargetImageRef={captureTargetImageRef}
                   vectorGrayScaleSelection={selectedTargetGray !== null
-                    ? [selectedTargetGray, selectedTargetGray]
-                    : vectorGrayFilterActive ? vectorGrayRange : null}
+                    ? targetGrayFilter(selectedTargetGray).selection
+                    : vectorGrayFilterActive ? appliedVectorGrayRange : null}
                   vectorGrayScaleSkipped={selectedTargetGray !== null
                     ? targetGraySkipped
                     : vectorGrayFilterActive ? vectorGrayScaleSkipped : null}

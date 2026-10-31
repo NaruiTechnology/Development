@@ -211,3 +211,29 @@ Initialize the local Redis/Sentinel containers first with
 `deploy\setup-redis-sentinel.ps1`. Docker Desktop is used for this development
 configuration; production still requires replicated Redis and at least three
 independent Sentinel endpoints.
+
+After `start` or `restart`, open `http://127.0.0.1:5173`; do not run a second
+`npm run dev`, because the backend and frontend are already supervised.
+
+## Live gray-rule updates
+
+A continuous vector stream accepts an `update_geometry` control frame with
+`geometry: {"gray_rule": {"target_gray_level": 50, "gray_level_range": [0, 50],
+"gray_level_skipped": false}}`. All three rule fields are required; use nulls to
+clear them. The existing `geometry_updated` / `geometry_update_error` replies
+acknowledge the update ID. Bitmap simulation applies the validated rule between
+passes without replacing the active command or closing the socket. Full-field
+background regions and existing pixel intensities are preserved. Hardware modes
+that cannot change feedback in-band reject the update while keeping the scan
+running; adaptive hardware passes receive new rules at their natural boundary.
+
+Target-gray bitmap simulation uses the same two-gray-level, 60 Hz fade cadence
+as the single-scan preview. ROI samples approach the target while a live pass
+is being acquired, rather than waiting for a complete high-resolution frame
+for each two-level decrement. Values at or below the target remain unchanged;
+background regions and uploaded bitmap assets are never modified.
+
+Live range changes preserve Spot/Skip semantics, including Spot ranges with no
+matching pixels. Composite background regions remain unfiltered. Confirmed range
+updates and turning filtering off use the same control protocol and keep the
+active simulation command and socket intact.

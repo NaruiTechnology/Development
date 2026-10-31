@@ -104,6 +104,62 @@ cd ../backend && npm run build && npm start
 The Node server then serves `frontend/dist/` and proxies `/api` + `/ws` to
 the FastAPI process. Put it behind nginx/Caddy for TLS.
 
+The scan canvas includes a glass-style scale chip at the bottom-right. Its
+1/2/5 scale bar uses the full calibrated field of view, swaps X/Y calibration
+for a quarter-turn, and stays with captured images in previous-scan panes.
+Images without recorded scale metadata omit the chip. This display overlay
+is included by the existing frontend build and source-tree deployment copy;
+it needs no new runtime dependency or deployment setting.
+
+Live scan rendering keeps vector blocks at the acquired resolution and scales
+them with pixelated canvas rendering, avoiding a 16384-square RGBA preview.
+Canvas paint and orientation buffers are reused, pending stream samples are
+bounded to 1 MiB with a timer fallback for hidden tabs, and pixel buffers are
+excluded from Redux history and development middleware walks. Simulation asset
+uploads run sequentially; ordinary simulation scans share immutable bitmap
+assets while target-gray feedback uses private copies. These changes use the
+existing frontend/backend builds and compiled Glasgow service packaging.
+Gray-filtered parallel regions reuse one decorated full-image bitmap. Asset
+JSON encoding processes bounded pixel batches and yields to browser tasks
+before upload, keeping scan startup responsive. This frontend-only change is
+included by the existing frontend build and source-tree deployment copy.
+For `MOCK=1`, completed assets use a bounded memory cache backed by
+`~/.cache/ionbeam-web/mock-scan-assets` (override with
+`IONBEAM_MOCK_SCAN_ASSET_DIR`), so eviction does not invalidate queued scans.
+
+The ROI Parallel switch remains available during Live acquisition when two or
+more regions are selected. Changing it automatically hands over between the
+parallel stream and sequential ROI passes, preserving the current image.
+Changes during request preparation are applied after startup; Stop cancels any
+pending handover. Authentication, vacuum readiness, and configuration locks
+still apply. This uses the existing frontend build and deployment source copy.
+Parallel and Zoom transport handovers retain the current scan identity and
+pane; their temporary idle interval does not archive an image or add a window.
+
+Sequential simulation ROI passes use the same sample batching as Parallel
+acquisition, avoiding an artificial delay for every small transport packet.
+Repeating ROI sequences prepare bitmap assets once and reuse their IDs;
+changing a gray rule rebuilds those prepared assets. Standalone target-gray
+feedback retains the packet cadence that advances its within-pass updates.
+
+Split captures the displayed scan before changing the layout, including a
+stopped Live scan whose result notification has not yet run. Its image, raw
+paint snapshot, calibrated extent, and scan settings remain in the first pane;
+the second pane is the next scan target. These changes use the existing
+frontend build and compiled Glasgow service deployment packaging.
+Split also stays available during acquisition: the first pane keeps a snapshot
+and the running scan continues in the second pane without restarting.
+The current pane retains the ROI overlay after splitting, including existing
+regions and live creation, movement, and resizing controls.
+The layout Lock switch also remains available during acquisition, using the
+same layout save and restore behavior as when scanning is idle.
+The shared frontend entry point suppresses the browser's default right-click
+menu across desktop and mobility views while retaining application menus.
+Server and annotated figures use persistent data URLs when carried into a
+split pane, so revoking the original server blob URL does not erase the image.
+Repeated Split clicks share the pending capture instead of opening duplicate
+layouts while that conversion is in progress.
+
 For the managed local stack, use `Development/Scripts/manage-local-system.sh
 restart`. It verifies the locked AG Grid dependencies and clears Vite's
 optimized-dependency cache before starting the frontend, preventing stale
@@ -585,3 +641,40 @@ The implementation spans several toolchains:
 The web app intentionally keeps hardware-specific command construction in
 `glasgow_service` and `GlasgowDataIO`. The frontend owns operator workflow,
 request shaping, live decode, ROI image handling, and display/export controls.
+
+During scanning, an existing target gray value can be edited or cleared, and a
+previously selected gray range can be toggled on or off. Confirming, editing, or
+clearing gray selections never stops or restarts an active Live scan; the running
+stream accepts gray-rule updates between passes. Continuous bitmap simulation
+updates the target and Spot/Skip flags over the existing socket; queued and
+adaptive hardware passes use the new rule on their next natural pass. A hardware
+command that cannot change its feedback mode in-band reports an update error
+without stopping the active scan.
+Ctrl + right-click sampling always opens the
+Spot/Skip confirmation dialog; cancelling preserves the previous target. Other
+scan controls retain their normal locks. The frontend build and deployment tree
+include these controls and their translated help text without new dependencies.
+
+During simulated Live target processing, automatic image levels stay fixed at
+that session's initial levels, including after the target is cleared. This keeps
+the untouched background visually stable while ROI pixels darken. Manual level
+adjustments still apply immediately; stopping Live releases the held levels.
+
+A plain right-click on the scan image outside the displayed ROI rectangles
+shows a glass-style Ctrl + right-click sampling hint instead of the browser
+context menu. The ROI context menu remains available inside a region. The hint
+is translated in all supported locales, appears while the right mouse button is
+held, and dismisses immediately on release. Escape, scrolling, resizing, or losing
+window focus also dismiss it; release-triggered context-menu events do not reopen it.
+
+The gray-level filter switch remains available during scanning, including when a
+target gray value is selected. After the filter is enabled, its range sliders and
+Select button also remain available. Switching on enables range editing only;
+it does not apply a range or replace the current target. Switching off removes
+the active range filter. Neither switch action opens a dialog. The confirmation
+dialog opens automatically only after the sliders actually change the range
+(Spot by default); clicking a slider without changing it does nothing. The
+Select button always opens confirmation for the current range, even without a
+new drag. Only confirming applies the draft range. Cancel preserves the current
+rule. Live simulation applies confirmed range updates over its existing socket
+between passes.

@@ -104,3 +104,18 @@ test("small scans are upscaled by an integer factor before overlays are burned i
   assert.equal(exportScaleFactor(2048, 2048), 1);
   assert.equal(exportScaleFactor(0, 0), 1);
 });
+
+test("chip records Parallel mode, region count and zoom for split panes", () => {
+  const ids = (items) => items.map((item) => item.id);
+  const parallel = summarizeScanParams("raster", { resolution: 256, parallel_rois: [{}, {}, {}] }, { regionCount: 2, zoom: 4 });
+  assert.deepEqual(ids(parallel.items).filter((id) => ["parallel", "regions", "zoom"].includes(id)), ["parallel", "regions", "zoom"]);
+  assert.equal(parallel.items.find((item) => item.id === "parallel").valueKey, "canvas.scanParams.on");
+  assert.equal(parallel.items.find((item) => item.id === "regions").value, "2");
+  assert.equal(parallel.items.find((item) => item.id === "zoom").value, "4×");
+  const sequential = summarizeScanParams("raster", { resolution: 256 }, { regionCount: 3, zoom: 1 });
+  assert.equal(sequential.items.find((item) => item.id === "parallel").valueKey, "canvas.scanParams.off");
+  assert.equal(ids(sequential.items).includes("zoom"), false);
+  const single = summarizeScanParams("raster", { resolution: 256 }, { regionCount: 1, zoom: 1 });
+  assert.equal(ids(single.items).includes("parallel"), false);
+  assert.equal(ids(summarizeScanParams("raster", { resolution: 256 }).items).includes("regions"), false);
+});

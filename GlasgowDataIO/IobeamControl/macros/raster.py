@@ -172,6 +172,12 @@ class RasterScanCommand(BaseCommand):
         """Number of chunks (receiver yields) that make up one frame."""
         return sum(1 for _ in self._iter_frame_chunks(latency, last_frame=False))
 
+    def update_geometry(self, x_range: DACCodeRange, y_range: DACCodeRange) -> None:
+        """Use new DAC bounds at the next live frame without changing its size."""
+        if not self.continuous or x_range.count != self._x_range.count or y_range.count != self._y_range.count:
+            raise ValueError("live geometry update must preserve the frame dimensions")
+        self._x_range, self._y_range = x_range, y_range
+
     def _iter_chunks(self, latency):
         """Chunks for the whole command: one frame, N frames, or frames forever.
 
@@ -185,14 +191,14 @@ class RasterScanCommand(BaseCommand):
             yield from self._iter_frame_chunks(latency, last_frame=True)
             return
 
-        region = bytes(RasterRegionCommand(
-            x_range=self._x_range, y_range=self._y_range))
         first = True
         frames = 0
         while self._max_frames is None or frames < self._max_frames:
             for n, (commands, pixel_count) in enumerate(
                     self._iter_frame_chunks(latency, last_frame=self.frame_blank)):
                 if n == 0 and not first:
+                    region = bytes(RasterRegionCommand(
+                        x_range=self._x_range, y_range=self._y_range))
                     commands[:0] = region + (bytes(BlankCommand(enable=False, inline=True))
                                              if self.frame_blank else b"")
                 yield (commands, pixel_count)

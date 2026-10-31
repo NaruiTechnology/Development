@@ -7,22 +7,27 @@ import {
   mapScanPixelIndexToFrame,
   scanRegionPixelBounds,
   zoomScanRegion,
+  zoomVectorPoints,
+  zoomInterleavedVectorPoints,
 } from "../.test-dist/lib/scanRegions.js";
 import imageReducer, {
   appendRaster,
   appendVectorSamples,
+  queueLiveScanDisplay,
   resetRaster,
+  setLiveVectorCustomPoints,
   setupVector,
 } from "../.test-dist/store/imageSlice.js";
+import { decorateSimulationBitmap } from "../.test-dist/lib/bitmapVector.js";
 
 const fov = { x_origin: 0, x_end: 100, y_origin: -50, y_end: 50 };
 
 test("scan zoom is bounded and applies around the full-FOV centre", () => {
   assert.equal(clampScanZoom(0), 1);
   assert.equal(clampScanZoom(2.9), 2);
-  assert.equal(clampScanZoom(5000), 5000);
-  assert.equal(clampScanZoom(20000), 20000);
-  assert.equal(clampScanZoom(20001), 20000);
+  assert.equal(clampScanZoom(5000), 256);
+  assert.equal(clampScanZoom(20000), 256);
+  assert.equal(clampScanZoom(20001), 256);
   assert.deepEqual(zoomScanRegion(null, 2, fov), {
     x_start: 25,
     x_end: 75,
@@ -43,6 +48,66 @@ test("each selected region receives the same independent zoom", () => {
   assert.deepEqual(effectiveScanRegions([], 1, fov), [null]);
 });
 
+test("zoom uses the applied magnification table to map physical FOV", () => {
+  const calibratedFov = {
+    ...fov,
+    scanGeometry: {
+      enabled: true,
+      magnification: 1000,
+      magnificationCalibration: { 1000: 100e-6, 2000: 40e-6 },
+    },
+  };
+  assert.deepEqual(zoomScanRegion(null, 2, calibratedFov), {
+    x_start: 30,
+    x_end: 70,
+    y_start: -20,
+    y_end: 20,
+  });
+  assert.deepEqual(zoomScanRegion(null, 2, fov), {
+    x_start: 25,
+    x_end: 75,
+    y_start: -25,
+    y_end: 25,
+  });
+});
+
+test("live custom zoom changes only point coordinates", () => {
+  const from = { x_start: 0, x_end: 100, y_start: 0, y_end: 100 };
+  const to = { x_start: 25, x_end: 75, y_start: 25, y_end: 75 };
+  const points = [[0, 100, 2, true, 2], { x: 100, y: 0, dwell: 5, blank: false, passIndex: 1 }];
+  assert.deepEqual(zoomVectorPoints(points, from, to), [
+    [25, 75, 2, true, 2],
+    { x: 75, y: 25, dwell: 5, blank: false, passIndex: 1 },
+  ]);
+});
+
+test("parallel custom zoom keeps interleaved point order", () => {
+  const first = { x_start: 0, x_end: 100, y_start: 0, y_end: 100 };
+  const second = { x_start: 200, x_end: 300, y_start: 200, y_end: 300 };
+  const points = [[0, 0, 2], [200, 200, 3], [100, 100, 4]];
+  assert.deepEqual(zoomInterleavedVectorPoints(points, [2, 1], [first, second], [
+    { x_start: 25, x_end: 75, y_start: 25, y_end: 75 },
+    { x_start: 225, x_end: 275, y_start: 225, y_end: 275 },
+  ]), [[25, 25, 2], [225, 225, 3], [75, 75, 4]]);
+});
+
+test("live custom point update keeps image and blank flags", () => {
+  let state = imageReducer(undefined, { type: "test/init" });
+  state = imageReducer(state, setupVector({
+    pattern: "custom", edge: 4, continuous: true,
+    points: [[0, 0, 2, true], [100, 100, 3, false]],
+  }));
+  state = imageReducer(state, appendVectorSamples({ values: Uint16Array.of(10, 20) }));
+  const beforeImage = [...state.vectorImage];
+  const beforeRender = [...state.vectorCustomRenderPoints];
+  const beforeBlank = [...state.vectorCustomBlankMask];
+  state = imageReducer(state, setLiveVectorCustomPoints([[25, 25, 2, true], [75, 75, 3, false]]));
+  assert.deepEqual([...state.vectorImage], beforeImage);
+  assert.deepEqual([...state.vectorCustomRenderPoints], beforeRender);
+  assert.deepEqual([...state.vectorCustomBlankMask], beforeBlank);
+  assert.deepEqual([...state.vectorCustomPoints], [25, 25, 75, 75]);
+});
+
 test("DAC ROI samples map back into their full-frame rectangle", () => {
   const bounds = scanRegionPixelBounds(
     { x_start: 0, x_end: 8191, y_start: 8192, y_end: 16383 },
@@ -51,6 +116,61 @@ test("DAC ROI samples map back into their full-frame rectangle", () => {
   assert.deepEqual(bounds, { x0: 0, x1: 4, y0: 4, y1: 8 });
   assert.equal(mapScanPixelIndexToFrame(bounds, 8, 0, 0), 32);
   assert.equal(mapScanPixelIndexToFrame(bounds, 8, 7, 7), 59);
+});
+
+test("live ROI display move waits for the next vector pass", () => {
+  const full = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+  const oldROI = { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 };
+  const nextROI = { x_start: 8192, x_end: 16383, y_start: 8192, y_end: 16383 };
+  let state = imageReducer(undefined, { type: "test/init" });
+  state = imageReducer(state, setupVector({
+    pattern: "default", edge: 4, continuous: true,
+    parallelROIs: [full, oldROI], compositeROIs: [oldROI],
+  }));
+  state = imageReducer(state, appendVectorSamples({ values: Uint16Array.of(10, 20) }));
+  state = imageReducer(state, queueLiveScanDisplay({
+    kind: "vector",
+    display: { roi: null, parallelROIs: [full, nextROI], compositeROIs: [nextROI] },
+  }));
+  assert.deepEqual(state.vectorParallelROIs[1], oldROI);
+  state = imageReducer(state, appendVectorSamples({ values: new Uint16Array(30) }));
+  assert.equal(state.vectorPasses, 1);
+  assert.deepEqual(state.vectorParallelROIs[1], nextROI);
+});
+
+test("filtered live zoom refreshes blanked pixels when returning from 2 to 1", () => {
+  const full = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+  const roi = { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 };
+  let state = imageReducer(undefined, setupVector({
+    pattern: "default", scanPath: "horizontal_sawtooth", edge: 4,
+    continuous: true, preserveZeroSamples: true,
+    parallelROIs: [full, roi], compositeROIs: [roi],
+    initialImage: new Uint16Array(16).fill(100),
+  }));
+  const pass = Uint16Array.from({ length: 32 }, (_, index) => index % 2 ? 0 : 100);
+  const display = { roi: null, parallelROIs: [full, roi], compositeROIs: [roi] };
+  // Begin a pass, then change zoom: the new underlay must wait for its end.
+  state = imageReducer(state, appendVectorSamples({ values: pass.slice(0, 2) }));
+  state = imageReducer(state, queueLiveScanDisplay({ kind: "vector", display: {
+    ...display, initialImage: new Uint16Array(16).fill(200),
+  } }));
+  assert.equal(state.vectorImage[0], 100);
+  state = imageReducer(state, appendVectorSamples({ values: pass.slice(2) }));
+  assert.equal(state.vectorImage[0], 200);
+  state = imageReducer(state, appendVectorSamples({ values: pass }));
+  assert.equal(state.vectorImage[0], 200, "filtered samples retain the zoom-2 underlay");
+  state = imageReducer(state, queueLiveScanDisplay({ kind: "vector", display: {
+    ...display, initialImage: new Uint16Array(16).fill(50),
+  } }));
+  state = imageReducer(state, appendVectorSamples({ values: pass }));
+  state = imageReducer(state, appendVectorSamples({ values: pass }));
+  assert.deepEqual([...state.vectorImage], [
+    50, 50, 100, 100,
+    50, 50, 100, 100,
+    100, 100, 100, 100,
+    100, 100, 100, 100,
+  ]);
+  assert.equal(state.vectorPasses, 4);
 });
 
 test("successive raster ROIs composite into one preserved full-frame buffer", () => {
@@ -102,6 +222,23 @@ test("one raster stream composites samples from two parallel ROIs", () => {
   ]);
 });
 
+test("composite raster keeps normal full-field samples outside a zoomed ROI", () => {
+  const full = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+  const roi = { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 };
+  let state = imageReducer(undefined, resetRaster({
+    resolution: 4, parallelROIs: [full, roi], compositeROIs: [roi],
+  }));
+  state = imageReducer(state, appendRaster({
+    pixels: Uint16Array.from({ length: 32 }, (_, index) => index % 2 === 0 ? 100 : 200),
+  }));
+  assert.deepEqual([...state.frame], [
+    200, 200, 100, 100,
+    200, 200, 100, 100,
+    100, 100, 100, 100,
+    100, 100, 100, 100,
+  ]);
+});
+
 test("one vector stream maps each parallel pass segment to its ROI", () => {
   const regions = [
     { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 },
@@ -120,6 +257,75 @@ test("one vector stream maps each parallel pass segment to its ROI", () => {
     100, 100, 9, 9,
     9, 9, 200, 200,
     9, 9, 200, 200,
+  ]);
+});
+
+test("composite vector keeps normal full-field samples outside a zoomed ROI", () => {
+  const full = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+  const roi = { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 };
+  let state = imageReducer(undefined, setupVector({
+    pattern: "default", scanPath: "horizontal_sawtooth", edge: 4,
+    parallelROIs: [full, roi], compositeROIs: [roi],
+  }));
+  state = imageReducer(state, appendVectorSamples({
+    values: Uint16Array.from({ length: 32 }, (_, index) => index % 2 === 0 ? 100 : 200),
+  }));
+  assert.deepEqual([...state.vectorImage], [
+    200, 200, 100, 100,
+    200, 200, 100, 100,
+    100, 100, 100, 100,
+    100, 100, 100, 100,
+  ]);
+});
+
+test("composite scan keeps the full field outside every selected ROI", () => {
+  const full = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+  const first = { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 };
+  const second = { x_start: 8192, x_end: 16383, y_start: 8192, y_end: 16383 };
+  const regions = [full, first, second];
+  const values = Uint16Array.from({ length: 48 }, (_, index) => [100, 200, 300][index % 3]);
+  let raster = imageReducer(undefined, resetRaster({ resolution: 4, parallelROIs: regions, compositeROIs: [first, second] }));
+  raster = imageReducer(raster, appendRaster({ pixels: values }));
+  let vector = imageReducer(undefined, setupVector({
+    pattern: "default", scanPath: "horizontal_sawtooth", edge: 4,
+    parallelROIs: regions, compositeROIs: [first, second],
+  }));
+  vector = imageReducer(vector, appendVectorSamples({ values }));
+  const expected = [
+    200, 200, 100, 100,
+    200, 200, 100, 100,
+    100, 100, 300, 300,
+    100, 100, 300, 300,
+  ];
+  assert.deepEqual([...raster.frame], expected);
+  assert.deepEqual([...vector.vectorImage], expected);
+  assert.deepEqual([...vector.vectorCompositeMask], [
+    1, 1, 0, 0,
+    1, 1, 0, 0,
+    0, 0, 1, 1,
+    0, 0, 1, 1,
+  ]);
+});
+
+test("ROI gray filtering keeps the full-field simulation source undecorated", () => {
+  const background = decorateSimulationBitmap({ width: 2, height: 1, pixels: [220, 240] }, null, null);
+  const filteredROI = decorateSimulationBitmap(background, [219, 255], false);
+  assert.deepEqual(background.pixels, [220, 240]);
+  assert.deepEqual(filteredROI.pixels.map((pixel) => pixel.isHighlighted), [true, true]);
+});
+
+test("sequential vector background refresh leaves the zoomed ROI untouched", () => {
+  const roi = { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 };
+  let state = imageReducer(undefined, setupVector({
+    pattern: "default", scanPath: "horizontal_sawtooth", edge: 4,
+    compositeROIs: [roi], initialImage: new Uint16Array(16).fill(200),
+  }));
+  state = imageReducer(state, appendVectorSamples({ values: new Uint16Array(16).fill(100) }));
+  assert.deepEqual([...state.vectorImage], [
+    200, 200, 100, 100,
+    200, 200, 100, 100,
+    100, 100, 100, 100,
+    100, 100, 100, 100,
   ]);
 });
 
@@ -169,4 +375,67 @@ test("three vector ROI scans retain every result and untouched background", () =
     }
   });
   assert.deepEqual(state.vectorImage, expected);
+});
+
+test("ROI streaming matches the reference per-sample mapping and stays fast", async () => {
+  const { vectorScanSamplePixel } = await import("../.test-dist/lib/vectorScanPath.js");
+  const edge = 96;
+  const roi = { x_start: 2000, x_end: 9000, y_start: 3000, y_end: 11000 };
+  const roi2 = { x_start: 9500, x_end: 15000, y_start: 500, y_end: 6000 };
+  const bounds = scanRegionPixelBounds(roi, edge);
+  const bounds2 = scanRegionPixelBounds(roi2, edge);
+  const samples = Uint16Array.from({ length: edge * edge * 2 }, (_, i) => (i * 7 + 1) % 65535 || 1);
+  const feed = (reducerState, action, data, key, chunk) => {
+    let state = reducerState;
+    for (let o = 0; o < data.length; o += chunk) state = imageReducer(state, action({ [key]: data.subarray(o, o + chunk) }));
+    return state;
+  };
+
+  // Sequential raster ROI (chunk size deliberately does not divide the frame).
+  let state = imageReducer(undefined, resetRaster({ resolution: edge, roi }));
+  state = feed(state, appendRaster, samples.subarray(0, edge * edge), "pixels", 1000);
+  const expectedRaster = new Uint16Array(edge * edge);
+  for (let i = 0; i < edge * edge; i++) {
+    expectedRaster[mapScanPixelIndexToFrame(bounds, edge, i % edge, Math.floor(i / edge))] = samples[i];
+  }
+  assert.deepEqual(Array.from(state.frame), Array.from(expectedRaster));
+
+  // Parallel raster keeps its round-robin sample order.
+  state = imageReducer(undefined, resetRaster({ resolution: edge, parallelROIs: [roi, roi2] }));
+  state = feed(state, appendRaster, samples, "pixels", 777);
+  const expectedParallel = new Uint16Array(edge * edge);
+  for (let index = 0; index < edge * edge * 2; index++) {
+    const region = index % 2;
+    const local = Math.floor(index / 2);
+    expectedParallel[mapScanPixelIndexToFrame(region ? bounds2 : bounds, edge, local % edge, Math.floor(local / edge))] = samples[index];
+  }
+  assert.deepEqual(Array.from(state.frame), Array.from(expectedParallel));
+
+  // Sequential vector ROI on every scan path.
+  for (const scanPath of ["horizontal_sawtooth", "horizontal_triangle", "vertical_raster", "vertical_serpentine"]) {
+    state = imageReducer(undefined, setupVector({ pattern: "default", edge, scanPath, roi, displayROI: roi }));
+    state = feed(state, appendVectorSamples, samples.subarray(0, edge * edge), "values", 1000);
+    const expected = new Uint16Array(edge * edge);
+    const expectedMask = new Uint8Array(edge * edge);
+    for (let i = 0; i < edge * edge; i++) {
+      const pixel = vectorScanSamplePixel(i, edge, scanPath);
+      const destination = mapScanPixelIndexToFrame(bounds, edge, pixel.x, pixel.y);
+      expected[destination] = samples[i];
+      expectedMask[destination] = 1;
+    }
+    assert.deepEqual(Array.from(state.vectorImage), Array.from(expected), scanPath);
+    assert.deepEqual(Array.from(state.vectorSampledMask), Array.from(expectedMask), scanPath);
+  }
+
+  // Partial-ROI rendering must not be dramatically slower than a full frame.
+  const bigEdge = 512;
+  const big = new Uint16Array(bigEdge * bigEdge).fill(9);
+  const time = (regions) => {
+    let s = imageReducer(undefined, resetRaster({ resolution: bigEdge, roi: regions }));
+    const start = performance.now();
+    for (let o = 0; o < big.length; o += 4096) s = imageReducer(s, appendRaster({ pixels: big.subarray(o, o + 4096) }));
+    return performance.now() - start;
+  };
+  time(roi); time(null);
+  assert.ok(time(roi) < Math.max(100, time(null) * 40), "ROI raster append regressed to per-sample proxy access");
 });

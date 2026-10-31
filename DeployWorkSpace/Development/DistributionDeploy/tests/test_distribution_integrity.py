@@ -88,6 +88,7 @@ def make_workspace(base):
         "GlasgowDataIO/IobeamControl/macros/raster.py": "SCAN_PATH = 1\n",
         "GlasgowDataIO/IobeamControl/macros/vector.py": "SCAN_PATH = 1\n",
         "GlasgowDataIO/IobeamControl/transfer/linkStats.py": "SCAN_PATH = 1\n",
+        "glasgow_service/glasgow_service/api.py": "API = 1\n",
         "glasgow_service/glasgow_service/service.py": "SERVICE = 1\n",
         "glasgow_service/scripts/vacuum_excursion_test.py": "# required diagnostic\n",
         "Scripts/manage-local-system.ps1": "# Windows manager\n",

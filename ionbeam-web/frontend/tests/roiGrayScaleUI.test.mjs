@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   grayScaleScopeNoteForKind,
+  grayControlAvailability,
+  shouldConfirmVectorGrayRange,
   grayScaleSourceLabelForKind,
   resolveROIActionKind,
   resolveGrayScaleSourceKind,
@@ -127,4 +129,34 @@ test("shows the ROI gray-range Clear action only for an active filter", () => {
     shouldShowROIGrayScaleClear({ kind: "raster", grayFilterActive: true }),
     false,
   );
+});
+
+test("selected gray controls remain available during scanning", () => {
+  const running = { locked: false, scanActive: true, hasTarget: false };
+  assert.deepEqual(grayControlAvailability(running), { targetDisabled: true, filterDisabled: false });
+  assert.deepEqual(grayControlAvailability({ ...running, hasTarget: true }), { targetDisabled: false, filterDisabled: false });
+  assert.deepEqual(grayControlAvailability({ ...running, scanActive: false }), { targetDisabled: false, filterDisabled: false });
+});
+
+test("gray controls retain authentication, stopping, ADC and action-run locks", () => {
+  for (const scanActive of [false, true]) {
+    for (const hasTarget of [false, true]) {
+      assert.deepEqual(grayControlAvailability({ locked: true, scanActive, hasTarget }), { targetDisabled: true, filterDisabled: true });
+    }
+  }
+});
+
+test("Select confirms the current range without requiring another drag", () => {
+  const range = { enabled: true, explicit: true, edited: false, applied: true, range: [192, 255], appliedRange: [192, 255] };
+  assert.equal(shouldConfirmVectorGrayRange(range), true);
+  assert.equal(shouldConfirmVectorGrayRange({ ...range, applied: false }), true);
+  assert.equal(shouldConfirmVectorGrayRange({ ...range, enabled: false }), false);
+});
+
+test("automatic gray confirmation still requires a changed slider range", () => {
+  const range = { enabled: true, explicit: false, edited: false, applied: true, range: [192, 255], appliedRange: [192, 255] };
+  assert.equal(shouldConfirmVectorGrayRange(range), false);
+  assert.equal(shouldConfirmVectorGrayRange({ ...range, edited: true }), false);
+  assert.equal(shouldConfirmVectorGrayRange({ ...range, edited: true, range: [190, 255] }), true);
+  assert.equal(shouldConfirmVectorGrayRange({ ...range, edited: true, applied: false }), true);
 });

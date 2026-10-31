@@ -256,10 +256,11 @@ test("dimension bounds and stored config round trip; invalid configs are rejecte
   close(b.x_end, 10 + (8191.5 * 100) / 16384, 1e-6);
   assert.equal(b.scale_unit, "um");
 
-  const cfg = { version: 1, enabled: true, beam: "ion", equipment_id: 3, equipment_type: "FIB", profile_revision: 4, inputs, correction: NO_CORRECTION, fit: null, applied_at: "", applied_by: "" };
+  const cfg = { version: 1, enabled: true, beam: "ion", equipment_id: 3, equipment_type: "FIB", profile_revision: 4, inputs, magnification_calibration: { 1000: 100e-6, 2000: 40e-6 }, correction: NO_CORRECTION, fit: null, applied_at: "", applied_by: "" };
   const parsed = parseScanGeometryConfig(JSON.parse(JSON.stringify(cfg)));
   assert.ok(parsed);
   assert.deepEqual(parsed.inputs, inputs);
+  assert.deepEqual(parsed.magnification_calibration, cfg.magnification_calibration);
   assert.equal(parseScanGeometryConfig(null), null);
   assert.equal(parseScanGeometryConfig({ ...cfg, correction: { matrix: [0, 0, 0, 0], dacOffset: [0, 0] } }), null);
   assert.equal(parseScanGeometryConfig({ ...cfg, inputs: { ...inputs, hfovUm: -1 } }), null);

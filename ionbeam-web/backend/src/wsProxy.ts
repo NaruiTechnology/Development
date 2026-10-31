@@ -400,6 +400,42 @@ function handleMock(
       if (Array.isArray(body.parallel_simulation_bitmap_ids)) {
         body.parallel_simulation_bitmaps = body.parallel_simulation_bitmap_ids.map(getMockScanAsset);
       }
+      let liveGeometry = {
+        roi: body.roi ?? null,
+        parallel_rois: Array.isArray(body.parallel_rois) ? body.parallel_rois : null,
+        points: Array.isArray(body.points) ? body.points : undefined,
+      };
+      if ((kind === "raster" || kind === "vector") && body.continuous === true) {
+        client.on("message", (rawUpdate: RawData) => {
+          const update = parseJsonMessage(rawUpdate);
+          if (update?.event !== "update_geometry") return;
+          const geometry = update.geometry as Record<string, unknown> | undefined;
+          const rois = geometry?.parallel_rois;
+          const points = geometry?.points;
+          const validROI = (roi: any) => roi === null ||
+            (roi && [roi.x_start, roi.x_end, roi.y_start, roi.y_end].every((n) => Number.isFinite(Number(n)) && n >= 0 && n <= 16383));
+          const pointMetadata = (point: any) => Array.isArray(point)
+            ? point.slice(2)
+            : [point?.dwell, point?.blank ?? null, point?.passIndex ?? null];
+          const samePointMetadata = Array.isArray(points) && liveGeometry.points &&
+            points.length === liveGeometry.points.length &&
+            points.every((point, index) => JSON.stringify(pointMetadata(point)) ===
+              JSON.stringify(pointMetadata(liveGeometry.points![index])));
+          if (!geometry || !validROI(geometry.roi) ||
+              !(rois === null || (Array.isArray(rois) && rois.every((roi) => roi !== null && validROI(roi)))) ||
+              (Array.isArray(rois) ? rois.length : 0) !== (liveGeometry.parallel_rois?.length ?? 0) ||
+              (kind === "vector" && body.pattern === "custom" &&
+                !samePointMetadata)) {
+            client.send(JSON.stringify({ event: "geometry_update_error", id: update.id ?? null, detail: "invalid live scan geometry" }));
+            return;
+          }
+          liveGeometry = {
+            roi: geometry.roi, parallel_rois: rois,
+            points: Array.isArray(points) ? points : liveGeometry.points,
+          } as typeof liveGeometry;
+          client.send(JSON.stringify({ event: "geometry_updated", id: update.id ?? null }));
+        });
+      }
       if (kind === "adc") {
         await streamMockAdc(client, body);
       } else if (kind === "dac_ramp") {
@@ -423,7 +459,9 @@ function handleMock(
           dwell: Number(body.dwell ?? 16),
           latency_bytes: Number(body.latency_bytes ?? 16384),
           simulation_bitmap: body.simulation_bitmap ?? undefined,
+          roi: body.roi ?? null,
           parallel_rois: Array.isArray(body.parallel_rois) ? body.parallel_rois : undefined,
+          getGeometry: () => liveGeometry,
           parallel_simulation_bitmaps: Array.isArray(body.parallel_simulation_bitmaps) ? body.parallel_simulation_bitmaps : undefined,
           simulation: body.simulation && typeof body.simulation === "object" ? body.simulation : undefined,
           continuous: body.continuous === true,
@@ -437,7 +475,10 @@ function handleMock(
           dwell: Number(body.dwell ?? 16),
           latency_bytes: Number(body.latency_bytes ?? 8196),
           roi: body.roi ?? undefined,
+          getGeometry: () => liveGeometry,
           simulation_bitmap: body.simulation_bitmap ?? undefined,
+          target_gray_level: Number.isInteger(body.target_gray_level) && body.target_gray_level >= 0 && body.target_gray_level <= 255
+            ? body.target_gray_level : null,
           parallel_rois: Array.isArray(body.parallel_rois) ? body.parallel_rois : undefined,
           parallel_simulation_bitmaps: Array.isArray(body.parallel_simulation_bitmaps) ? body.parallel_simulation_bitmaps : undefined,
           simulation: body.simulation && typeof body.simulation === "object" ? body.simulation : undefined,

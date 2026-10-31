@@ -1,7 +1,7 @@
 import type { RasterRequest, ROIRequest, VectorRequest } from "../types/api";
-import { apiUrl } from "./backendUrl";
-import { scanAuthHeaders } from "./authIdentity";
-import { prepareScanAssets } from "./scanAssets";
+import { apiUrl } from "./backendUrl.js";
+import { scanAuthHeaders } from "./authIdentity.js";
+import { prepareScanAssets } from "./scanAssets.js";
 import type { ScanType } from "../types/scanType";
 
 export type StoredScanEntry =
@@ -41,11 +41,13 @@ async function queueJson(path: string, init?: RequestInit) {
   return result;
 }
 
-export async function createScanQueue(entries: StoredScanEntry[]): Promise<{ summary: ScanQueueSummary; entries: StoredScanEntry[] }> {
-  const prepared = await Promise.all(entries.map(async (entry) => {
+/** Prepare once per sequence so repeating ROI passes reuse uploaded asset IDs. */
+export async function prepareScanSequence(entries: StoredScanEntry[]): Promise<StoredScanEntry[]> {
+  const prepared: StoredScanEntry[] = [];
+  for (const entry of entries) {
     const bitmap = entry.req.simulation_bitmap;
     const parallelBitmaps = entry.req.parallel_simulation_bitmaps;
-    return {
+    prepared.push({
       ...entry,
       simulationBitmapInfo: entry.simulationBitmapInfo ?? (bitmap
         ? { width: bitmap.width, height: bitmap.height }
@@ -55,8 +57,13 @@ export async function createScanQueue(entries: StoredScanEntry[]): Promise<{ sum
         entry.req.parallel_simulation_bitmap_ids?.length,
       ),
       req: await prepareScanAssets(entry.req),
-    };
-  })) as StoredScanEntry[];
+    } as StoredScanEntry);
+  }
+  return prepared;
+}
+
+export async function createScanQueue(entries: StoredScanEntry[]): Promise<{ summary: ScanQueueSummary; entries: StoredScanEntry[] }> {
+  const prepared = await prepareScanSequence(entries);
   const summary = await queueJson("/api/scan/queues", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

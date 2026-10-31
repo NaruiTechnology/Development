@@ -360,7 +360,7 @@ body {
 }
 
 .scan-controls-card--active {
-  border-color: color-mix(in srgb, var(--scan-panel-active-color) 80%, transparent);
+  border-color: var(--c-border);
 }
 
 .card + .card { margin-top: 16px; }
@@ -2005,6 +2005,10 @@ body {
   background: #912018;
   border-color: #912018;
 }
+.btn--stop .icon--hand {
+  width: 1.2em;
+  height: 1.2em;
+}
 .btn--cancel {
   background: var(--c-bg-elev-2);
   border-color: var(--c-bg-elev-2);
@@ -2225,6 +2229,12 @@ body {
 .scan-busy[data-visible="true"] {
   opacity: 1;
   visibility: visible;
+}
+
+/* Standalone busy indicator under the Preview / Zoom row: centre it in the controls column. */
+.scan-preview-zoom-row + .scan-busy {
+  display: flex;
+  margin-inline: auto;
 }
 
 .scan-preview-zoom-row + .scan-busy[data-visible="false"] {
@@ -3253,16 +3263,6 @@ body {
   -webkit-user-drag: none;
 }
 
-.canvas-frame > .image-target-gray-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 22;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  filter: none;
-}
-
 .canvas-frame > canvas:first-child,
 .canvas-frame > .server-figure {
   filter: brightness(1.15);
@@ -4016,8 +4016,13 @@ body {
   pointer-events: none;
 }
 
+.scan-roi-layer[data-editing="true"] .scan-roi-layer__region:not(.scan-roi-layer__region--draft) {
+  pointer-events: auto;
+  cursor: grab;
+}
+
 .scan-roi-layer__region[data-active="true"] {
-  border-width: 2px;
+  border-width: 1px;
   border-color: #7cff6b;
   background: rgb(124 255 107 / 9%);
 }
@@ -4030,6 +4035,28 @@ body {
   font: 10px/1 ui-monospace, monospace;
   text-shadow: 0 1px 2px #000;
 }
+
+.scan-roi-layer__handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: auto;
+}
+.scan-roi-layer__handle::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 4px;
+  height: 4px;
+  border: 1px solid #fff;
+  background: #7cff6b;
+  box-sizing: border-box;
+}
+.scan-roi-layer__handle--nw { left: -6px; top: -6px; cursor: nwse-resize; }
+.scan-roi-layer__handle--ne { right: -6px; top: -6px; cursor: nesw-resize; }
+.scan-roi-layer__handle--sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.scan-roi-layer__handle--se { right: -6px; bottom: -6px; cursor: nwse-resize; }
 
 .scan-roi-layer__region--draft {
   border-style: dashed;
@@ -7812,4 +7839,96 @@ body {
   .beam-hold-body__fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* Target gray run: real pixel gray level stepping toward the target. */
+.canvas-frame .canvas-target-progress {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Calibrated image scale: content width equals the represented image fraction. */
+.canvas-image-scale {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 16;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 7px 10px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(35, 51, 70, 0.62), rgba(9, 20, 36, 0.48));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22), inset 0 1px rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  pointer-events: none;
+  user-select: none;
+}
+.canvas-image-scale__label {
+  text-align: center;
+  white-space: nowrap;
+  font: 11px/1.2 var(--font-mono);
+  text-shadow: 0 1px 3px #000;
+}
+.canvas-image-scale__bar {
+  position: relative;
+  display: block;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.canvas-image-scale__bar::before,
+.canvas-image-scale__bar::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 2px;
+  height: 6px;
+  background: currentColor;
+}
+.canvas-image-scale__bar::before { left: 0; }
+.canvas-image-scale__bar::after { right: 0; }
+
+.image-target-gray-prompt {
+  z-index: 1001;
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 24px));
+  padding: 12px 15px;
+  border-color: rgba(94, 210, 255, 0.5);
+  border-radius: 10px;
+  background: rgba(15, 31, 54, 0.9);
+  line-height: 1.6;
+  white-space: pre-line;
+  transform: none;
+}
+
+/* Message row above the Zoom control: allowed maximum, or the reason a zoom is rejected. */
+.scan-zoom-status {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  gap: 2px;
+  margin: 4px 0 2px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.scan-zoom-status__max {
+  color: var(--c-warn);
+  text-align: right;
+}
+
+.scan-zoom-status__error {
+  color: var(--c-danger);
+}
+
+.scan-zoom-status__warning {
+  color: var(--c-warn);
 }

@@ -53,6 +53,7 @@ import {
   selectionPixelSize,
   selectionZoom,
 } from "../.test-dist/lib/pixelSize.js";
+import { effectiveScanRegions } from "../.test-dist/lib/scanRegions.js";
 
 const fov = { x_origin: 0, x_end: 100, y_origin: 0, y_end: 100, scanGeometry: null };
 
@@ -78,6 +79,25 @@ test("selection pixel size defaults to the global one and shrinks with the ROI",
   assert.ok(Math.abs(quarter.y - 25 / 1024) / (25 / 1024) < 0.01);
   assert.ok(quarter.x < half.x && half.x < global.x);
   assert.equal(half.unit, "um");
+});
+
+test("live Zoom readout follows the calibrated DAC scan region", () => {
+  const geometry = {
+    enabled: true,
+    pixels: [1024, 1024],
+    pixelSizeNm: [100, 100],
+    inverse: { a: [163.83, 0, 0, 163.83], b: [0, 0] },
+  };
+  const calibratedFov = { ...fov, scanGeometry: geometry };
+  const base = pixelSizeFromScanGeometry(geometry);
+  const roi = { x_start: 0, x_end: 100, y_start: 0, y_end: 100 };
+  const [atOne] = effectiveScanRegions([roi], 1, calibratedFov);
+  const [atTwo] = effectiveScanRegions([roi], 2, calibratedFov);
+  const first = selectionPixelSize(base, atOne, calibratedFov, 1024);
+  const second = selectionPixelSize(base, atTwo, calibratedFov, 1024);
+  assert.ok(Math.abs(first.x - 100) < 0.1);
+  assert.ok(Math.abs(second.x - 50) < 0.1);
+  assert.ok(Math.abs(second.y - 50) < 0.1);
 });
 
 test("zoom grows as the selected area shrinks and follows the longer side", () => {

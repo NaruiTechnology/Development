@@ -1,7 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { ROIRequest, VectorPoint, VectorPointTuple, VectorScanPath } from "../types/api";
-import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath.js";
-import { mapScanPixelIndexToFrame, scanRegionPixelBounds } from "../lib/scanRegions.js";
+import { vectorScanSampleCount, vectorScanSampleXY } from "../lib/vectorScanPath.js";
+import { fullFrameAxisMaps, scanPixelAxisMaps, scanRegionPixelBounds, type ScanPixelAxisMaps } from "../lib/scanRegions.js";
 
 /**
  * Image / pixel buffers, kept here (outside the serialisability check)
@@ -40,7 +40,9 @@ interface ImageState {
   rasterFrames: number;
   rasterROI: ROIRequest | null;
   rasterParallelROIs: ROIRequest[] | null;
+  rasterCompositeMask: Uint8Array | null;
   rasterPreserveZeroSamples: boolean;
+  pendingRasterDisplay: LiveDisplayGeometry | null;
   frame: Uint16Array;
 
   // ---------- vector -----------------------------------------------------
@@ -76,12 +78,22 @@ interface ImageState {
   vectorPasses: number;
   vectorROI: ROIRequest | null;
   vectorParallelROIs: ROIRequest[] | null;
+  vectorCompositeMask: Uint8Array | null;
   vectorPreserveZeroSamples: boolean;
+  pendingVectorDisplay: LiveDisplayGeometry | null;
   /** Whether ROI gray feedback should be composited after this cycle completes. */
   retainVectorFeedbackOnComplete: boolean;
 
   // ---------- repaint trigger -------------------------------------------
   revision: number;
+}
+
+interface LiveDisplayGeometry {
+  roi: ROIRequest | null;
+  parallelROIs: ROIRequest[] | null;
+  compositeROIs: ROIRequest[] | null;
+  /** Fresh source pixels under blanked samples after a simulation zoom. */
+  initialImage?: Uint16Array | null;
 }
 
 const RES = 512;
@@ -95,7 +107,9 @@ const initialState: ImageState = {
   rasterFrames: 0,
   rasterROI: null,
   rasterParallelROIs: null,
+  rasterCompositeMask: null,
   rasterPreserveZeroSamples: false,
+  pendingRasterDisplay: null,
   frame: new Uint16Array(RES * RES),
 
   vectorPattern: "default",
@@ -115,7 +129,9 @@ const initialState: ImageState = {
   vectorPasses: 0,
   vectorROI: null,
   vectorParallelROIs: null,
+  vectorCompositeMask: null,
   vectorPreserveZeroSamples: false,
+  pendingVectorDisplay: null,
   retainVectorFeedbackOnComplete: true,
 
   revision: 0,
@@ -133,6 +149,8 @@ interface SetupVectorPayload {
   /** Unmagnified destination rectangle. The scanned ROI may be narrower when Zoom > 1. */
   displayROI?: ROIRequest | null;
   parallelROIs?: ROIRequest[] | null;
+  /** Display ROIs that replace the full-field background in a composite scan. */
+  compositeROIs?: ROIRequest[] | null;
   /** Loaded image used as the untouched background for a partial ROI scan. */
   initialImage?: Uint16Array | null;
   simulationBitmap?: { width: number; height: number } | null;
@@ -168,6 +186,7 @@ const slice = createSlice({
         continuous?: boolean;
         roi?: ROIRequest | null;
         parallelROIs?: ROIRequest[] | null;
+        compositeROIs?: ROIRequest[] | null;
         initialFrame?: Uint16Array | null;
         preserveZeroSamples?: boolean;
       }>,
@@ -192,67 +211,81 @@ const slice = createSlice({
       state.rasterFrames = 0;
       state.rasterROI = a.payload.roi ?? null;
       state.rasterParallelROIs = a.payload.parallelROIs ?? null;
+      state.rasterCompositeMask = makeCompositeMask(a.payload.compositeROIs, state.resolution);
       state.rasterPreserveZeroSamples = a.payload.preserveZeroSamples === true;
+      state.pendingRasterDisplay = null;
       state.revision++;
+    },
+    queueLiveScanDisplay(state, a: PayloadAction<{ kind: "raster" | "vector"; display: LiveDisplayGeometry }>) {
+      if (a.payload.kind === "raster" && state.rasterContinuous) state.pendingRasterDisplay = a.payload.display;
+      if (a.payload.kind === "vector" && state.vectorContinuous) state.pendingVectorDisplay = a.payload.display;
     },
     appendRaster(state, a: PayloadAction<{ pixels: Uint16Array }>) {
       const { pixels } = a.payload;
       const length = state.frame.length;
       if (length === 0) return;
       let offset = 0;
-      if (state.rasterParallelROIs?.length) {
-        const regions = state.rasterParallelROIs;
-        const bounds = regions.map((region) => scanRegionPixelBounds(region, state.resolution));
-        const passLength = length * regions.length;
+      // The per-sample loops below run on plain locals: reading `state.*` goes
+      // through the Immer draft proxy and made partial-ROI scans ~60x slower
+      // than a full frame. Destination indices come from per-axis tables.
+      if (state.rasterParallelROIs?.length || state.rasterROI) {
+        const size = state.resolution;
+        const frame = state.frame;
+        const preserveZero = state.rasterPreserveZeroSamples;
+        const buildMaps = (regions: ROIRequest[]): ScanPixelAxisMaps[] =>
+          regions.map((region) => scanPixelAxisMaps(scanRegionPixelBounds(region, size), size));
+        // Only the parallel layout honours the composite mask and live display swaps.
+        const parallel = Boolean(state.rasterParallelROIs?.length);
+        let maps = parallel
+          ? buildMaps(state.rasterParallelROIs!)
+          : [scanPixelAxisMaps(scanRegionPixelBounds(state.rasterROI, size), size)];
+        let mask = parallel ? state.rasterCompositeMask : null;
+        let cursor = state.cursor;
+        let passLength = length * maps.length;
+        let rasterFrames = state.rasterFrames;
         while (offset < pixels.length) {
-          const remaining = passLength - state.cursor;
-          const n = Math.min(pixels.length - offset, remaining);
+          const regionCount = maps.length;
+          const n = Math.min(pixels.length - offset, passLength - cursor);
+          // cursor = localIndex * regionCount + regionIndex (round-robin).
+          let region = cursor % regionCount;
+          const local = (cursor - region) / regionCount;
+          let lx = local % size;
+          let ly = (local - lx) / size;
+          let m = maps[region];
           for (let i = 0; i < n; i++) {
-            const index = state.cursor + i;
-            const regionIndex = index % regions.length;
-            const localIndex = Math.floor(index / regions.length);
-            const destinationIndex = mapScanPixelIndexToFrame(
-              bounds[regionIndex], state.resolution,
-              localIndex % state.resolution, Math.floor(localIndex / state.resolution),
-            );
+            const destinationIndex = m.ys[ly] + m.xs[lx];
             const sample = pixels[offset + i];
-            if (!state.rasterPreserveZeroSamples || sample !== 0) state.frame[destinationIndex] = sample;
+            if ((preserveZero ? sample !== 0 : true) && !(region === 0 && mask !== null && mask[destinationIndex] !== 0)) {
+              frame[destinationIndex] = sample;
+            }
+            if (++region === regionCount) {
+              region = 0;
+              if (++lx === size) { lx = 0; ly++; }
+            }
+            m = maps[region];
           }
-          state.cursor += n;
+          cursor += n;
           offset += n;
           state.filled = length;
-          if (state.cursor < passLength) break;
+          if (cursor < passLength) break;
           if (!state.rasterContinuous) break;
-          state.cursor = 0;
-          state.rasterFrames++;
-        }
-        state.revision++;
-        return;
-      }
-      if (state.rasterROI) {
-        const bounds = scanRegionPixelBounds(state.rasterROI, state.resolution);
-        while (offset < pixels.length) {
-          const remaining = length - state.cursor;
-          const n = Math.min(pixels.length - offset, remaining);
-          for (let i = 0; i < n; i++) {
-            const localIndex = state.cursor + i;
-            const destinationIndex = mapScanPixelIndexToFrame(
-              bounds,
-              state.resolution,
-              localIndex % state.resolution,
-              Math.floor(localIndex / state.resolution),
-            );
-            const sample = pixels[offset + i];
-            if (!state.rasterPreserveZeroSamples || sample !== 0) state.frame[destinationIndex] = sample;
+          cursor = 0;
+          rasterFrames++;
+          if (parallel && state.pendingRasterDisplay) {
+            const display = state.pendingRasterDisplay;
+            state.rasterROI = display.roi;
+            state.rasterParallelROIs = display.parallelROIs;
+            state.rasterCompositeMask = makeCompositeMask(display.compositeROIs, size);
+            state.pendingRasterDisplay = null;
+            mask = state.rasterCompositeMask;
+            if (display.parallelROIs?.length) {
+              maps = buildMaps(display.parallelROIs);
+              passLength = length * maps.length;
+            }
           }
-          state.cursor += n;
-          offset += n;
-          state.filled = length;
-          if (state.cursor < length) break;
-          if (!state.rasterContinuous) break;
-          state.cursor = 0;
-          state.rasterFrames++;
         }
+        state.cursor = cursor;
+        state.rasterFrames = rasterFrames;
         state.revision++;
         return;
       }
@@ -326,7 +359,9 @@ const slice = createSlice({
         ? a.payload.roi ?? null
         : a.payload.displayROI;
       state.vectorParallelROIs = a.payload.parallelROIs ?? null;
+      state.vectorCompositeMask = makeCompositeMask(a.payload.compositeROIs, edge);
       state.vectorPreserveZeroSamples = a.payload.preserveZeroSamples === true;
+      state.pendingVectorDisplay = null;
 
       if (pattern === "custom" && a.payload.points && a.payload.points.length) {
         const pts = a.payload.points;
@@ -387,6 +422,18 @@ const slice = createSlice({
       state.revision++;
     },
 
+    setLiveVectorCustomPoints(state, a: PayloadAction<Array<VectorPointTuple | VectorPoint>>) {
+      if (state.vectorPattern !== "custom" || a.payload.length !== state.vectorCustomCount) return;
+      const flat = new Float32Array(a.payload.length * 2);
+      a.payload.forEach((point, index) => {
+        const [x, y] = pointCoords(point);
+        flat[2 * index] = x;
+        flat[2 * index + 1] = y;
+      });
+      state.vectorCustomPoints = flat;
+      state.revision++;
+    },
+
     /**
      * Append uint16 ADC samples in the order they arrive from the FPGA.
      * Each sample's pixel coordinate is derived from its sample index and
@@ -406,15 +453,29 @@ const slice = createSlice({
       const edge = state.vectorEdge;
       const isDefault = state.vectorPattern === "default";
       const pts = state.vectorCustomRenderPoints;
-      const roiBounds = state.vectorROI
-        ? scanRegionPixelBounds(state.vectorROI, edge)
+      // Hot loops use plain locals and per-axis lookup tables: reading `state.*`
+      // per sample goes through the Immer draft proxy and was the main cost of
+      // partial-ROI (sequential) rendering.
+      const buildMaps = (regions: ROIRequest[]): ScanPixelAxisMaps[] =>
+        regions.map((region) => scanPixelAxisMaps(scanRegionPixelBounds(region, edge), edge));
+      let roiMaps: ScanPixelAxisMaps | null = state.vectorROI
+        ? scanPixelAxisMaps(scanRegionPixelBounds(state.vectorROI, edge), edge)
         : null;
-      const parallelBounds = state.vectorParallelROIs?.map((region) => scanRegionPixelBounds(region, edge));
+      let parallelMaps: ScanPixelAxisMaps[] | null = state.vectorParallelROIs?.length
+        ? buildMaps(state.vectorParallelROIs)
+        : null;
+      const fullMaps = fullFrameAxisMaps(edge);
+      const image = state.vectorImage;
+      const sampledMask = state.vectorSampledMask;
+      const preserveZero = state.vectorPreserveZeroSamples;
+      const scanPath = state.vectorScanPath;
+      let compositeMask = state.vectorCompositeMask;
+      const xy = { x: 0, y: 0 };
       // Samples in one pass: the default sweep covers edge x edge, custom
       // replays its point list.
-      const regionSamples = vectorScanSampleCount(edge, state.vectorScanPath);
+      const regionSamples = vectorScanSampleCount(edge, scanPath);
       const passLength = isDefault
-        ? regionSamples * (parallelBounds?.length ?? 1)
+        ? regionSamples * (parallelMaps?.length ?? 1)
         : state.vectorCustomCount;
 
       let k = 0;
@@ -423,35 +484,39 @@ const slice = createSlice({
         const room = passLength > 0 ? passLength - cur : N - k;
         const n = Math.max(0, Math.min(N - k, room));
         if (isDefault) {
+          const regionCount = parallelMaps?.length ?? 1;
+          const sequentialMaps = roiMaps ?? fullMaps;
           for (let m = 0; m < n; m++) {
             const sampleIndex = cur + m;
-            const regionIndex = parallelBounds ? sampleIndex % parallelBounds.length : 0;
-            const localSampleIndex = parallelBounds
-              ? Math.floor(sampleIndex / parallelBounds.length)
-              : sampleIndex;
-            const pixel = vectorScanSamplePixel(localSampleIndex % regionSamples, edge, state.vectorScanPath);
-            if (pixel) {
-              const bounds = parallelBounds ? parallelBounds[regionIndex] : roiBounds;
-              const destinationIndex = bounds
-                ? mapScanPixelIndexToFrame(bounds, edge, pixel.x, pixel.y)
-                : pixel.y * edge + pixel.x;
-              const sample = values[k + m];
-              if (!state.vectorPreserveZeroSamples || sample !== 0) state.vectorImage[destinationIndex] = sample;
-              if (!state.vectorPreserveZeroSamples || sample !== 0) state.vectorSampledMask[destinationIndex] = 1;
+            let regionIndex = 0;
+            let localSampleIndex = sampleIndex;
+            if (parallelMaps) {
+              regionIndex = sampleIndex % regionCount;
+              localSampleIndex = (sampleIndex - regionIndex) / regionCount;
+            }
+            if (!vectorScanSampleXY(localSampleIndex % regionSamples, edge, scanPath, xy)) continue;
+            const maps = parallelMaps ? parallelMaps[regionIndex] : sequentialMaps;
+            const destinationIndex = maps.ys[xy.y] + maps.xs[xy.x];
+            if (regionIndex === 0 && compositeMask !== null && compositeMask[destinationIndex] !== 0) continue;
+            const sample = values[k + m];
+            if (!preserveZero || sample !== 0) {
+              image[destinationIndex] = sample;
+              sampledMask[destinationIndex] = 1;
             }
           }
         } else if (pts) {
+          const maps = roiMaps;
           for (let m = 0; m < n; m++) {
             const i = cur + m;
             const x = pts[2 * i] | 0;
             const y = pts[2 * i + 1] | 0;
             if (x >= 0 && x < edge && y >= 0 && y < edge) {
-              const destinationIndex = roiBounds
-                ? mapScanPixelIndexToFrame(roiBounds, edge, x, y)
-                : y * edge + x;
+              const destinationIndex = maps ? maps.ys[y] + maps.xs[x] : y * edge + x;
               const sample = values[k + m];
-              if (!state.vectorPreserveZeroSamples || sample !== 0) state.vectorImage[destinationIndex] = sample;
-              if (!state.vectorPreserveZeroSamples || sample !== 0) state.vectorSampledMask[destinationIndex] = 1;
+              if (!preserveZero || sample !== 0) {
+                image[destinationIndex] = sample;
+                sampledMask[destinationIndex] = 1;
+              }
             }
           }
         }
@@ -469,6 +534,30 @@ const slice = createSlice({
         state.vectorCursor = 0;
         state.vectorFilled = passLength;
         state.vectorPasses++;
+        if (state.pendingVectorDisplay) {
+          const display = state.pendingVectorDisplay;
+          state.vectorROI = display.roi;
+          state.vectorParallelROIs = display.parallelROIs;
+          state.vectorCompositeMask = makeCompositeMask(display.compositeROIs, edge);
+          compositeMask = state.vectorCompositeMask;
+          if (display.initialImage?.length === state.vectorImage.length) {
+            const regions = display.compositeROIs ?? display.parallelROIs ?? [display.roi];
+            for (const region of regions) {
+              const bounds = scanRegionPixelBounds(region, edge);
+              for (let y = bounds.y0; y < bounds.y1; y++) {
+                const start = y * edge + bounds.x0;
+                const end = y * edge + bounds.x1;
+                state.vectorImage.set(display.initialImage.subarray(start, end), start);
+                state.vectorSampledMask.fill(0, start, end);
+              }
+            }
+          }
+          state.pendingVectorDisplay = null;
+          roiMaps = state.vectorROI
+            ? scanPixelAxisMaps(scanRegionPixelBounds(state.vectorROI, edge), edge)
+            : null;
+          parallelMaps = state.vectorParallelROIs?.length ? buildMaps(state.vectorParallelROIs) : null;
+        }
       }
       state.revision++;
     },
@@ -526,7 +615,9 @@ export const {
   bumpRevision,
   resetRaster,
   appendRaster,
+  queueLiveScanDisplay,
   setupVector,
+  setLiveVectorCustomPoints,
   appendVectorSamples,
   correctVectorLineShift,
   resetVector,
@@ -534,6 +625,18 @@ export const {
 } = slice.actions;
 
 export default slice.reducer;
+
+function makeCompositeMask(regions: ROIRequest[] | null | undefined, edge: number): Uint8Array | null {
+  if (!regions?.length) return null;
+  const mask = new Uint8Array(edge * edge);
+  for (const region of regions) {
+    const bounds = scanRegionPixelBounds(region, edge);
+    for (let y = bounds.y0; y < bounds.y1; y++) {
+      mask.fill(1, y * edge + bounds.x0, y * edge + bounds.x1);
+    }
+  }
+  return mask;
+}
 
 function customPointBounds(
   points: Array<VectorPointTuple | VectorPoint>,

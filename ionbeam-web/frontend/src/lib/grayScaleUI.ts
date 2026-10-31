@@ -2,6 +2,33 @@ export type GrayScaleSourceKind = "raster" | "vector" | "loaded" | null;
 
 export type ROIActionKind = "raster" | "vector";
 
+/** Existing gray selections remain editable during a scan; other locks remain. */
+export function grayControlAvailability(options: {
+  locked: boolean;
+  scanActive: boolean;
+  hasTarget: boolean;
+}) {
+  return {
+    targetDisabled: options.locked || (options.scanActive && !options.hasTarget),
+    filterDisabled: options.locked,
+  };
+}
+
+/** Explicit Select always confirms; automatic prompts need an actual edit. */
+export function shouldConfirmVectorGrayRange(options: {
+  enabled: boolean;
+  explicit: boolean;
+  edited: boolean;
+  applied: boolean;
+  range: readonly [number, number];
+  appliedRange: readonly [number, number];
+}): boolean {
+  if (!options.enabled) return false;
+  if (options.explicit === true) return true;
+  return options.edited && (!options.applied ||
+    options.range[0] !== options.appliedRange[0] || options.range[1] !== options.appliedRange[1]);
+}
+
 export type GrayScaleCopyKey =
   | "roi.grayScale.source.raster"
   | "roi.grayScale.source.vector"

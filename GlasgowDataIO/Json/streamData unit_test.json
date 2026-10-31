@@ -91,7 +91,7 @@
                         "enabled": true,
                         "mode": "image",
                         "imageResolution": 64,
-                        "source": "pattern",
+                        "source": "file",
                         "patternKind": "bullseye",
                         "filePath": "Development/GlasgowDataIO/IobeamControl/unittest/testData/SampleImage.bmp",
                         "invert": false,

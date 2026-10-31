@@ -1557,11 +1557,12 @@ export function ROIEditor({
           <div
             className={`roi-canvas-layer roi-canvas-layer--base${disabled ? " is-disabled" : ""}${ctrlCursor ? " roi-canvas-layer--ctrl-cursor" : ""}`}
             onContextMenu={(e) => {
-              // Right-click picks the target gray level; no browser menu on the image.
-              if (imageRef.current) e.preventDefault();
+              // Reserve Ctrl + right-click for target sampling.
+              if (e.ctrlKey && imageRef.current) e.preventDefault();
             }}
             onPointerDown={(e) => {
               if (e.button === 2) {
+                if (!e.ctrlKey) return;
                 if (disabled || targetGrayRunning || roi.calibration_enabled) return;
                 const picked = rawGrayAtClient(e.clientX, e.clientY);
                 if (!picked) return;

@@ -19,6 +19,7 @@ import { readJsonResponse } from "../lib/readJsonResponse";
 import type { DimensionCalibrationValues } from "../lib/dimensionCalibrationPersistence";
 import type { AppliedScanGeometry } from "../lib/scanGeometry";
 import { estimateRevC3ScanTiming } from "../lib/scanTiming";
+import { clampScanZoom } from "../lib/scanRegions";
 import { summarizeScanParams, type ScanParamSummary } from "../lib/scanParamChip";
 
 const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
@@ -41,6 +42,9 @@ export interface StreamTransforms {
 interface ScanState {
   kind: ScanKind;
   phase: ScanPhase;
+  infiniteActive: boolean;
+  /** Transport handover within the current scan, not a completed image. */
+  streamRestarting: boolean;
   /** Bytes received in the active stream so far. */
   bytesReceived: number;
   chunksReceived: number;
@@ -182,6 +186,8 @@ const defaultVector: VectorRequest = {
 const initialState: ScanState = {
   kind: "vector",
   phase: "idle",
+  infiniteActive: false,
+  streamRestarting: false,
   bytesReceived: 0,
   chunksReceived: 0,
   lastResult: null,
@@ -528,7 +534,7 @@ const slice = createSlice({
     },
     setScanZoom(s, a: PayloadAction<number>) {
       const zoom = Number(a.payload);
-      s.roi.scan_zoom = Number.isFinite(zoom) ? Math.max(1, Math.min(20000, zoom)) : 1;
+      s.roi.scan_zoom = clampScanZoom(zoom);
     },
     setROIScanEnabled(s, a: PayloadAction<boolean>) {
       s.roi.roi_scan_enabled = Boolean(a.payload);
@@ -727,8 +733,15 @@ const slice = createSlice({
     setVectorRenderMode(s, a: PayloadAction<VectorRenderMode>) {
       s.vectorRenderMode = a.payload;
     },
+    setInfiniteActive(s, a: PayloadAction<boolean>) {
+      s.infiniteActive = a.payload;
+    },
     /** Live-stream lifecycle markers. The actual WS lives in a hook. */
+    setStreamRestarting(s, a: PayloadAction<boolean>) {
+      s.streamRestarting = a.payload;
+    },
     streamStarted(s) {
+      s.streamRestarting = false;
       s.phase = "running";
       s.bytesReceived = 0;
       s.chunksReceived = 0;
@@ -766,6 +779,7 @@ const slice = createSlice({
       }
     },
     streamErrored(s, a: PayloadAction<string>) {
+      s.streamRestarting = false;
       s.phase = "error";
       s.errorMessage = a.payload;
     },
@@ -844,6 +858,7 @@ const slice = createSlice({
 
 export const {
   setKind,
+  setInfiniteActive,
   updateRaster,
   updateVector,
   setPreview,
@@ -874,6 +889,7 @@ export const {
   clearLastResult,
   clearLastOutput,
   setVectorRenderMode,
+  setStreamRestarting,
   streamStarted,
   scanParamsCaptured,
   streamProgress,

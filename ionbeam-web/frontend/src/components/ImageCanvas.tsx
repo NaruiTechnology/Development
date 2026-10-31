@@ -15,7 +15,7 @@
  * to their actual populated cells. For vector custom, only requested
  * point coordinates are painted; unpopulated cells stay transparent.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
@@ -23,6 +23,8 @@ import { orientCanvas } from "../lib/canvasOrientation";
 import {
   setVectorRenderMode,
   updateROI,
+  roiTargetGrayRunProgress,
+  finishROITargetGrayRun,
   type ScanKind,
   type ROIState,
   type StreamTransforms,
@@ -41,7 +43,7 @@ import { LoadingSpinner } from "./LoadingSpinner";
 import { CanvasViewHelp } from "./CanvasViewHelp";
 import { ScanRegionOverlay } from "./ScanRegionOverlay";
 import { vectorScanSampleCount, vectorScanSamplePixel } from "../lib/vectorScanPath";
-import { scanRegionPixelBounds } from "../lib/scanRegions.js";
+import { effectiveScanRegions, scanRegionPixelBounds } from "../lib/scanRegions.js";
 import { scaleScanSample } from "../lib/scanSamples";
 import {
   AUTO_LEVELS,
@@ -55,7 +57,10 @@ import {
 import { LevelWedge } from "./LevelWedge";
 import { selectGlobalPixelSize } from "../store/selectors";
 import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize } from "../lib/pixelSize";
+import { imageScale, type ImageExtent } from "../lib/imageScale";
 import { ROI_CANVAS_EDGE } from "../lib/roiGeometry";
+import { clipPixelRect, stepTowardTargetGray } from "../lib/roiTargetGray";
+import { selectionCrop } from "../lib/bitmapVector";
 
 const DAC_RANGE = 2048;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
@@ -93,6 +98,7 @@ type PaintSnapshot =
       graySkipped: boolean | null;
       grayColor: GrayColor;
       grayROI: ROIRequest | null;
+      grayMask: Uint8Array | null;
       sampledMask: Uint8Array;
       transforms: StreamTransforms;
     }
@@ -127,6 +133,18 @@ function rememberArchivedPaint(imageUrl: string, snapshot: PaintSnapshot): void 
 // Scan settings of each completed image, keyed like archivedPaints, so a
 // "Previous scan" pane keeps showing the parameter chip of its own scan.
 const archivedScanParams = new Map<string, ScanParamItem[]>();
+const archivedImageExtents = new Map<string, ImageExtent>();
+
+function rememberImageExtent(imageUrl: string, extent: ImageExtent | null): void {
+  if (!extent) return;
+  archivedImageExtents.delete(imageUrl);
+  archivedImageExtents.set(imageUrl, { ...extent });
+  while (archivedImageExtents.size > ARCHIVED_PAINT_LIMIT) {
+    const oldest = archivedImageExtents.keys().next().value;
+    if (oldest === undefined) break;
+    archivedImageExtents.delete(oldest);
+  }
+}
 
 function rememberScanParams(imageUrl: string, items: ScanParamItem[]): void {
   archivedScanParams.delete(imageUrl);
@@ -203,12 +221,21 @@ const KIND_KEYS: Record<string, TranslationKey> = {
   roi: "tabs.roi",
 };
 
+export interface CapturedScanImage {
+  kind: "raster" | "vector";
+  imageUrl: string;
+  scanId: number;
+}
+
 export function ImageCanvas({
   kind,
+  captureRef,
   onRenderedImageChange,
   onMergedFigureChange,
   onPaneImageChange,
+  onTargetGrayImageChange,
   onPaneRecycle,
+  captureTargetImageRef,
   vectorGrayScaleSelection = null,
   vectorGrayScaleSkipped = null,
   imageLayout = 1,
@@ -222,11 +249,17 @@ export function ImageCanvas({
   onTargetGrayPick,
 }: {
   kind: ScanKind;
+  /** Capture the displayed result synchronously before changing pane layout. */
+  captureRef?: MutableRefObject<(() => CapturedScanImage | null) | null>;
   /** `scanId` is the same for every image of one scan run and changes when a new scan starts. */
   onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null, scanId: number) => void;
   onMergedFigureChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
   onPaneRecycle?: (kind: "raster" | "vector", pane: number) => void;
+  /** Filled with a function that snapshots the image currently shown in the
+   *  live pane (with its scan settings), so the Split button can carry it over. */
+  captureTargetImageRef?: MutableRefObject<(() => Promise<string | null>) | null>;
   onPaneImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, pane: number, imageUrl: string) => void;
+  onTargetGrayImageChange?: (imageUrl: string) => void;
   vectorGrayScaleSelection?: [number, number] | null;
   vectorGrayScaleSkipped?: boolean | null;
   imageLayout?: 1 | 2 | 3 | 4;
@@ -244,7 +277,13 @@ export function ImageCanvas({
   const { t, fmt } = useTranslation();
   const selectedTargetGray = useAppSelector((s) => s.scan.selectedTargetGray);
   const selectedTargetGrayPoint = useAppSelector((s) => s.scan.selectedTargetGrayPoint);
+  const targetRunToken = useAppSelector((s) => s.scan.roiTargetGrayRun.token);
+  const targetRunRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
+  const imageExtentRef = useRef<ImageExtent | null>(null);
+  const targetAutoLevelsRef = useRef<{ source: string; setting: LevelSetting } | null>(null);
+  const simulationMode = useAppSelector((s) => s.status.defaults?.is_production === false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const targetProgressCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanPathCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const rawTargetImageRef = useRef<HTMLImageElement | null>(null);
@@ -318,6 +357,37 @@ export function ImageCanvas({
   const [mergeBusy, setMergeBusy] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [grayTooltip, setGrayTooltip] = useState<{ x: number; y: number; value: number; color: string } | null>(null);
+  const [grayPickPrompt, setGrayPickPrompt] = useState<{ x: number; y: number } | null>(null);
+  const grayPromptGestureRef = useRef(false);
+  useEffect(() => {
+    const release = (event: MouseEvent) => { if (event.button === 2) setGrayPickPrompt(null); };
+    const cancel = () => setGrayPickPrompt(null);
+    window.addEventListener("pointerup", release, true);
+    window.addEventListener("mouseup", release, true);
+    window.addEventListener("pointercancel", cancel, true);
+    window.addEventListener("blur", cancel);
+    return () => {
+      window.removeEventListener("pointerup", release, true);
+      window.removeEventListener("mouseup", release, true);
+      window.removeEventListener("pointercancel", cancel, true);
+      window.removeEventListener("blur", cancel);
+    };
+  }, []);
+  useEffect(() => {
+    if (!grayPickPrompt) return;
+    const dismiss = () => setGrayPickPrompt(null);
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
+    window.addEventListener("pointerdown", dismiss, true);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", dismiss, true);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [grayPickPrompt]);
   const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
   // The image panel header (raster / vector) has a spot on its first row for
   // the vector View selector; without it (e.g. ROI) the selector stays inline.
@@ -369,6 +439,7 @@ export function ImageCanvas({
   const vectorSource = useAppSelector((s) => s.image.vectorSource);
   const vectorROI = useAppSelector((s) => s.image.vectorROI);
   const vectorParallelROIs = useAppSelector((s) => s.image.vectorParallelROIs);
+  const vectorCompositeMask = useAppSelector((s) => s.image.vectorCompositeMask);
   const vectorCustomCount = useAppSelector((s) => s.image.vectorCustomCount);
   const configuredVectorResolution = useAppSelector(
     (s) => s.scan.vector.vector_resolution
@@ -389,6 +460,97 @@ export function ImageCanvas({
       rawTargetImageRef.current = null;
     };
   }, [roi.imageDataUrl, roi.imageKind]);
+
+  // Target gray run (aligned with the former ROI tab). Each pass compares every
+  // pixel inside the scan regions with the target: pixels at or below it are
+  // skipped, brighter pixels step down toward it. The real gray level is drawn
+  // on the progress canvas pass by pass (no red marking) until every pixel
+  // matches; the result then becomes the simulated source image.
+  const [targetProgressVisible, setTargetProgressVisible] = useState(false);
+  useEffect(() => {
+    if (!targetRunRunning || (kind !== "raster" && kind !== "vector")) return;
+    const target = selectedTargetGray;
+    const source = rawTargetImageRef.current;
+    const width = source?.naturalWidth ?? 0;
+    const height = source?.naturalHeight ?? 0;
+    if (target === null || !source || width <= 0 || height <= 0 || roi.scan_regions.length === 0) {
+      dispatch(finishROITargetGrayRun("idle"));
+      return;
+    }
+    // Same source-pixel mapping the simulated vector scan uses for a region.
+    const rects = roi.scan_regions
+      .map((region) => {
+        const crop = selectionCrop({ ...roi, selection: region }, width, height);
+        return clipPixelRect({ left: crop.x, top: crop.y, width: crop.w, height: crop.h }, width, height);
+      })
+      .filter((rect): rect is NonNullable<typeof rect> => rect !== null);
+    const work = document.createElement("canvas");
+    work.width = width;
+    work.height = height;
+    const workCtx = work.getContext("2d", { willReadFrequently: true });
+    if (!workCtx || rects.length === 0) {
+      dispatch(finishROITargetGrayRun("idle"));
+      return;
+    }
+    workCtx.drawImage(source, 0, 0);
+    const working = workCtx.getImageData(0, 0, width, height);
+    const progress = targetProgressCanvasRef.current;
+    if (progress) {
+      progress.width = width;
+      progress.height = height;
+    }
+    const progressCtx = progress?.getContext("2d") ?? null;
+    // Draw the whole source once; each pass then redraws only the regions.
+    progressCtx?.putImageData(working, 0, 0);
+    setTargetProgressVisible(true);
+
+    let passes = 0;
+    let frame: number | null = null;
+    let finished = false;
+    const finish = (status: "completed" | "stopped") => {
+      if (finished) return;
+      finished = true;
+      if (status === "completed") {
+        workCtx.putImageData(working, 0, 0);
+        const dataUrl = work.toDataURL("image/png");
+        dispatch(updateROI({ imageDataUrl: dataUrl }));
+        onTargetGrayImageChange?.(dataUrl);
+      } else {
+        // Stopped before converging: drop the partial update.
+        setTargetProgressVisible(false);
+      }
+      dispatch(finishROITargetGrayRun(status));
+    };
+    const runPass = () => {
+      frame = null;
+      let spot = 0;
+      let skip = 0;
+      let remaining = 0;
+      for (const rect of rects) {
+        const pass = stepTowardTargetGray(working.data, width, rect, target);
+        spot += pass.spot;
+        skip += pass.skip;
+        remaining += pass.remaining;
+      }
+      passes += 1;
+      for (const rect of rects) {
+        progressCtx?.putImageData(working, 0, 0, rect.left, rect.top, rect.width, rect.height);
+      }
+      dispatch(roiTargetGrayRunProgress({ passes, spot, skip }));
+      if (remaining === 0) {
+        finish("completed");
+        return;
+      }
+      frame = window.requestAnimationFrame(runPass);
+    };
+    frame = window.requestAnimationFrame(runPass);
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      if (!finished) finish("stopped");
+    };
+    // Restart only for a new run request; the loop reads the rest once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetRunToken, targetRunRunning]);
   const globalPixelSize = useAppSelector(selectGlobalPixelSize);
   const theme = useAppSelector((s) => s.theme.theme);
   const configuredStreamTransforms = useAppSelector((s) => s.scan.streamTransforms);
@@ -415,6 +577,14 @@ export function ImageCanvas({
       : paneTransforms[scanTargetPane] ?? configuredStreamTransforms;
 
   const phase = useAppSelector((s) => s.scan.phase);
+  useEffect(() => {
+    if (phase === "running") setTargetProgressVisible(false);
+  }, [phase]);
+  useEffect(() => {
+    setTargetProgressVisible(false);
+  }, [roi.imageName]);
+  const infiniteActive = useAppSelector((s) => s.scan.infiniteActive);
+  const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const lastOutput = useAppSelector((s) => s.scan.lastOutput);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
@@ -428,7 +598,8 @@ export function ImageCanvas({
     !ignoreTransforms &&
     phase === "completed" &&
     completedKind === kind &&
-    (kind !== "vector" || vectorSource === "vector");
+    (kind !== "vector" || vectorSource === "vector") &&
+    !(kind === "raster" ? rasterFilled > 0 : vectorFilled > 0);
   const hasLiveCanvasData =
     kind === "raster" ? rasterFilled > 0 : kind === "vector" ? vectorSource === "vector" && vectorFilled > 0 : false;
   const visibleVectorCursor = kind === "vector" && vectorSource !== "vector" ? 0 : vectorCursor;
@@ -484,16 +655,19 @@ export function ImageCanvas({
     (kind === "raster" ? roi.raster_show_scan_path : roi.vector_show_scan_path);
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
+  // The dark-red marking of pixels matched by the Gray level filter is a
+  // simulation aid. In production (is_production === true, or not yet known)
+  // every pixel keeps the grayscale value read from the ADC.
   const vectorGraySpotSelection =
-    kind === "vector" && vectorGrayScaleSelection !== null
+    simulationMode && kind === "vector" && selectedTargetGray === null && vectorGrayScaleSelection !== null
       ? vectorGrayScaleSelection
       : null;
   const vectorGraySpotSkipped =
-    kind === "vector" && vectorGrayScaleSelection !== null
+    vectorGraySpotSelection !== null
       ? vectorGrayScaleSkipped
       : null;
   const vectorGraySpotColor =
-    kind === "vector" && vectorGrayScaleSelection !== null
+    vectorGraySpotSelection !== null
       ? ROI_ACTION_BLANK_COLOR
       : vectorGraySpotSkipped === false
       ? ROI_ACTION_HIGHLIGHT_COLOR
@@ -516,6 +690,7 @@ export function ImageCanvas({
   // Orientation follows the shared controls immediately, including during a run.
   const previousPhaseRef = useRef(phase);
   useEffect(() => {
+    if (streamRestarting) return;
     if (kind !== "raster" && kind !== "vector") return;
     if (phase === "running" || phase === "stopping") {
       const wasRunning = previousPhaseRef.current === "running" || previousPhaseRef.current === "stopping";
@@ -525,7 +700,7 @@ export function ImageCanvas({
       runBufferMemory[kind] = kind === "raster" ? frame : vectorImage;
     }
     previousPhaseRef.current = phase;
-  }, [kind, phase, revision, frame, vectorImage, streamTransforms]);
+  }, [kind, phase, revision, frame, vectorImage, streamTransforms, streamRestarting]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -549,6 +724,7 @@ export function ImageCanvas({
         graySkipped: vectorGraySpotSkipped,
         grayColor: vectorGraySpotColor,
         grayROI: vectorROI,
+        grayMask: vectorCompositeMask,
         sampledMask: vectorSampledMask,
         transforms: paintTransforms,
       };
@@ -559,8 +735,9 @@ export function ImageCanvas({
         edge: vectorEdge,
         points: vectorCustomRenderPoints,
         populated: vectorFilled,
-        blankMask: vectorCustomBlankMask,
-        spotMask: vectorCustomSpotMask,
+        // Target gray shows the real pixel gray level, never red marking.
+        blankMask: selectedTargetGray !== null || !simulationMode ? null : vectorCustomBlankMask,
+        spotMask: selectedTargetGray !== null || !simulationMode ? null : vectorCustomSpotMask,
         grayColor: vectorGraySpotColor,
         transforms: paintTransforms,
       };
@@ -568,7 +745,21 @@ export function ImageCanvas({
       snapshot = { mode: "grayscale", buf: vectorImage, edge: vectorEdge, populated: vectorFilled, transforms: paintTransforms };
     }
     liveSnapshotRef.current = snapshot;
-    setStats(paintSnapshot(canvas, snapshot, levelSetting));
+    // A fading ROI must not change the brightness of the untouched background.
+    // Keep the first automatic levels for this simulated target session;
+    // explicit operator level changes still take effect immediately.
+    const holdAutoLevels = kind === "vector" && simulationMode && infiniteActive &&
+      (selectedTargetGray !== null || targetAutoLevelsRef.current !== null) &&
+      roi.imageDataUrl && levelSetting.mode === "auto";
+    if (!holdAutoLevels || targetAutoLevelsRef.current?.source !== roi.imageDataUrl) {
+      targetAutoLevelsRef.current = null;
+    }
+    const nextStats = paintSnapshot(canvas, snapshot, targetAutoLevelsRef.current?.setting ?? levelSetting);
+    if (holdAutoLevels && !targetAutoLevelsRef.current && nextStats.populated > 0 &&
+        nextStats.low !== undefined && nextStats.high !== undefined) {
+      targetAutoLevelsRef.current = { source: roi.imageDataUrl!, setting: { mode: "manual", low: nextStats.low, high: nextStats.high } };
+    }
+    setStats(nextStats);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     revision,
@@ -580,10 +771,43 @@ export function ImageCanvas({
     levelSetting,
     streamTransforms,
     singlePaneImage,
+    simulationMode,
+    infiniteActive,
+    selectedTargetGray,
+    roi.imageDataUrl,
   ]);
 
+  const captureRenderedScan = useCallback((): CapturedScanImage | null => {
+    if (kind !== "raster" && kind !== "vector") return null;
+    const scanId = scanSequenceMemory[kind] ?? 0;
+    const savedImage = singlePaneImage ?? mergedFigureUrl;
+    if (savedImage) return { kind, imageUrl: savedImage, scanId };
+    if (!hasLiveCanvasData) return null;
+    const liveBuffer = kind === "raster" ? frame : vectorImage;
+    if (runBufferMemory[kind] !== liveBuffer) return null;
+    const canvas = canvasRef.current;
+    if (!canvas || canvas.width <= 0 || canvas.height <= 0) return null;
+    try {
+      const imageUrl = canvas.toDataURL("image/png");
+      const snapshot = liveSnapshotRef.current;
+      if (snapshot) rememberArchivedPaint(imageUrl, snapshot);
+      rememberImageExtent(imageUrl, imageExtentRef.current);
+      const params = lastScanParamsRef.current;
+      if (params?.kind === kind) rememberScanParams(imageUrl, params.items);
+      return { kind, imageUrl, scanId };
+    } catch {
+      return null;
+    }
+  }, [kind, singlePaneImage, mergedFigureUrl, hasLiveCanvasData, frame, vectorImage, revision]);
+
   useEffect(() => {
-    if (singlePaneImage || !onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
+    if (!captureRef) return;
+    captureRef.current = captureRenderedScan;
+    return () => { captureRef.current = null; };
+  }, [captureRef, captureRenderedScan]);
+
+  useEffect(() => {
+    if (streamRestarting || singlePaneImage || !onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
     const scanId = scanSequenceMemory[kind] ?? 0;
 
     const emit = (imageUrl: string | null) => {
@@ -599,7 +823,9 @@ export function ImageCanvas({
       emit(null);
       return;
     }
-    if (phase !== "completed") return;
+    // Stop leaves a Live scan's last pixels visible in idle. They are still
+    // a result and must be available to Split just like a completed scan.
+    if (phase !== "completed" && phase !== "idle") return;
     // Only a buffer the last scan actually ran into is a scan result.
     const liveBuffer = kind === "raster" ? frame : vectorImage;
     const runBuffer = runBufferMemory[kind];
@@ -609,12 +835,10 @@ export function ImageCanvas({
       const canvas = canvasRef.current;
       if (!canvas || canvas.width <= 0 || canvas.height <= 0) return;
       try {
-        const image = canvas.toDataURL("image/png");
+        const captured = captureRenderedScan();
+        if (!captured) return;
+        const image = captured.imageUrl;
         markScanPerformanceCanvasReady(kind);
-        const snapshot = liveSnapshotRef.current;
-        if (snapshot) rememberArchivedPaint(image, snapshot);
-        const scanParams = lastScanParamsRef.current;
-        if (scanParams?.kind === kind) rememberScanParams(image, scanParams.items);
         emit(image);
       } catch {
         emit(null);
@@ -635,6 +859,8 @@ export function ImageCanvas({
     vectorGraySpotSkipped,
     vectorGraySpotColor,
     singlePaneImage,
+    captureRenderedScan,
+    streamRestarting,
   ]);
 
   useEffect(() => {
@@ -737,7 +963,7 @@ export function ImageCanvas({
 
     const url =
       kind === "vector"
-        ? apiUrl(`/api/scan/last/figure?render=${encodeURIComponent(renderMode)}&view=texture`)
+        ? apiUrl("/api/scan/last/figure?render=decimated&view=texture")
         : apiUrl("/api/scan/last/figure?view=texture");
 
     fetch(url)
@@ -780,25 +1006,32 @@ export function ImageCanvas({
       ? vectorScanSampleCount(vectorEdge, vectorScanPath) * (vectorParallelROIs?.length ?? 1)
       : vectorCustomCount;
   const activeRegion = activeROIRegion(roi);
-  // Local pixel size: a partial-ROI vector scan spreads its pixels over the
-  // selection only; otherwise this is the global pixel size.
-  // Without a calibration the scanned region over the scan resolution gives it.
+  // Use the same effective region as the scan request. Its DAC pitch includes
+  // both the selected ROI and live Zoom, while the applied geometry supplies
+  // the calibrated physical size per DAC code.
+  const scanEdge = kind === "raster" ? resolution : vectorEdge;
   const scanBasePixelSize =
     globalPixelSize ??
-    (kind === "vector"
+    (kind === "vector" || kind === "raster"
       ? pixelSizeFromExtent(
           roi.x_end - roi.x_origin,
           roi.y_end - roi.y_origin,
-          vectorEdge,
-          vectorEdge,
+          scanEdge,
+          scanEdge,
           roi.scale_unit,
           "scanRegion",
         )
       : null);
   const pixelSize =
-    kind === "vector" && roi.selection
-      ? selectionPixelSize(scanBasePixelSize, roi.selection, roi, vectorEdge)
+    (kind === "vector" || kind === "raster")
+      ? selectionPixelSize(scanBasePixelSize, activeRegion, roi, scanEdge)
       : scanBasePixelSize;
+  // ROI scans are composited into the full field of view, so the scale must
+  // describe the whole canvas rather than the denser samples inside the ROI.
+  const imageExtent: ImageExtent = globalPixelSize?.source === "scanGeometry" && roi.scanGeometry?.enabled
+    ? { x: globalPixelSize.x * roi.scanGeometry.pixels[0], y: globalPixelSize.y * roi.scanGeometry.pixels[1], unit: globalPixelSize.unit }
+    : { x: Math.abs(roi.x_end - roi.x_origin), y: Math.abs(roi.y_end - roi.y_origin), unit: roi.scale_unit };
+  imageExtentRef.current = imageExtent;
   const current = currentBeamPosition({
     kind,
     roi,
@@ -828,12 +1061,47 @@ export function ImageCanvas({
     phase === "completed" &&
     !hasLiveCanvasData;
   const displayedFigureUrl = mergedFigureUrl ?? (preferServerFigure ? serverFigureUrl : null);
+  // Snapshot of what the live pane shows right now, used by the Split button.
+  // It reads the visible result directly rather than a cached copy: a server
+  // figure or an annotated (merged) figure never reaches the completed-image
+  // cache, so without this the split opened with an empty first pane.
+  useEffect(() => {
+    if (!captureTargetImageRef || (kind !== "raster" && kind !== "vector")) return;
+    captureTargetImageRef.current = async () => {
+      const savedImage = singlePaneImage ?? mergedFigureUrl;
+      if (savedImage) {
+        const image = await persistentImageUrl(savedImage);
+        rememberImageExtent(image, archivedImageExtents.get(savedImage) ?? imageExtentRef.current);
+        const params = archivedScanParams.get(savedImage) ?? (lastScanParams?.kind === kind ? lastScanParams.items : null);
+        if (params) rememberScanParams(image, params);
+        return image;
+      }
+      const canvas = canvasRef.current;
+      if (hasLiveCanvasData && canvas && canvas.width > 0 && canvas.height > 0) {
+        const image = canvas.toDataURL("image/png");
+        const snapshot = liveSnapshotRef.current;
+        if (snapshot) rememberArchivedPaint(image, snapshot);
+        rememberImageExtent(image, imageExtentRef.current);
+        if (lastScanParams?.kind === kind) rememberScanParams(image, lastScanParams.items);
+        return image;
+      }
+      if (preferServerFigure && serverFigureUrl) {
+        const image = await persistentImageUrl(serverFigureUrl);
+        rememberImageExtent(image, imageExtentRef.current);
+        if (liveScanParamItems?.length) rememberScanParams(image, liveScanParamItems);
+        return image;
+      }
+      return null;
+    };
+    return () => { captureTargetImageRef.current = null; };
+  }, [captureTargetImageRef, kind, phase, singlePaneImage, mergedFigureUrl,
+    hasLiveCanvasData, preferServerFigure, serverFigureUrl, lastScanParams, liveScanParamItems]);
 
   let nativeEdge: number;
   if (kind === "raster") {
     nativeEdge = resolution;
   } else if (vectorPattern === "default" && renderMode === "native" && stride > 1) {
-    nativeEdge = DAC_RANGE;
+    nativeEdge = vectorEdge;
   } else {
     nativeEdge = vectorEdge;
   }
@@ -925,7 +1193,7 @@ export function ImageCanvas({
   function sampleTargetGrayPixel(clientX: number, clientY: number) {
     const frame = frameRef.current;
     if (!frame) return null;
-    const source = Array.from(frame.querySelectorAll<HTMLCanvasElement | HTMLImageElement>("canvas:not(.image-target-gray-overlay), img"))
+    const source = Array.from(frame.querySelectorAll<HTMLCanvasElement | HTMLImageElement>("canvas, img"))
       .find((candidate) => {
         const rect = candidate.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0 &&
@@ -984,6 +1252,7 @@ export function ImageCanvas({
   }
 
   function handleTargetGrayPointerMove(event: React.PointerEvent<HTMLElement>) {
+    if (grayPickPrompt) return;
     if (!onTargetGrayPick || event.pointerType === "touch") {
       setGrayTooltip(null);
       return;
@@ -994,12 +1263,42 @@ export function ImageCanvas({
       : null);
   }
 
-  function handleTargetGrayContextMenu(event: React.MouseEvent<HTMLElement>) {
-    if (event.defaultPrevented || !onTargetGrayPick) return;
-    if (!onTargetGrayPick) return;
-    if ((event.target as HTMLElement).closest("button, input, select, label")) return;
+  function handleTargetGrayContextMenu(event: React.MouseEvent<HTMLElement>, pointerDown = false) {
+    if (event.defaultPrevented || !onTargetGrayPick || event.button !== 2) return;
+    // Some browsers fire contextmenu on release. Never reopen a released hint.
+    if (!pointerDown && grayPromptGestureRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest("button, input, select, label") && !target.closest(".canvas-editor__annotation")) return;
     const sample = sampleTargetGrayPixel(event.clientX, event.clientY);
     if (!sample) return;
+    if (!event.ctrlKey) {
+      if (target.closest(".canvas-editor__annotation, .canvas-editor__shape, .canvas-editor__menu")) return;
+      // Match the visible ROI rectangles, including their current pane layout.
+      const insideROI = roi.roi_scan_enabled && Array.from(
+        frameRef.current?.querySelectorAll<HTMLElement>(".scan-roi-layer__region") ?? [],
+      ).some((region) => {
+        const rect = region.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && event.clientX >= rect.left &&
+          event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      });
+      if (insideROI) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!pointerDown) return;
+      grayPromptGestureRef.current = true;
+      setContextMenu(null);
+      setGrayTooltip(null);
+      setGrayPickPrompt({
+        x: Math.max(12, Math.min(event.clientX + 12, window.innerWidth - 352)),
+        y: Math.max(12, Math.min(event.clientY + 12, window.innerHeight - 112)),
+      });
+      return;
+    }
+    setGrayPickPrompt(null);
     onTargetGrayPick(sample.value, sample.point);
     setGrayTooltip({ x: event.clientX, y: event.clientY, value: sample.value, color: sample.color });
     event.preventDefault();
@@ -1191,6 +1490,7 @@ export function ImageCanvas({
         );
       }
       const mergedUrl = exportCanvas.toDataURL("image/png");
+      rememberImageExtent(mergedUrl, archivedImageUrl ? archivedImageExtents.get(archivedImageUrl) ?? null : imageExtent);
       if (archivedImageUrl && (kind === "raster" || kind === "vector")) {
         // The chip is now part of the merged pixels; do not register it for
         // the merged URL or the overlay would be drawn on top of it again.
@@ -1562,7 +1862,6 @@ export function ImageCanvas({
                 showGrid={paneGridVisibility[index]}
                 showAxes={showCalibratedAxes}
                 transforms={paneTransforms[index]}
-                targetGrayValue={selectedPane === index ? selectedTargetGray : null}
                 t={t}
                 onFrameRef={(node) => {
                   if (node) archivedPaneFramesRef.current.set(index, node);
@@ -1593,7 +1892,12 @@ export function ImageCanvas({
         onClick={() => selectPane(scanTargetPane)}
         onPointerMove={handleTargetGrayPointerMove}
         onPointerLeave={() => setGrayTooltip(null)}
-        onContextMenu={handleTargetGrayContextMenu}
+        onPointerDownCapture={(event) => {
+          if (event.button !== 2) return;
+          grayPromptGestureRef.current = false;
+          if (!event.ctrlKey) handleTargetGrayContextMenu(event, true);
+        }}
+        onContextMenuCapture={(event) => handleTargetGrayContextMenu(event)}
       >
         {imageLayout > 1 && <div className="image-panel-grid__label">
           <span />
@@ -1613,13 +1917,15 @@ export function ImageCanvas({
               roi={roi}
               showGrid={paneGridVisibility[singlePaneSourceIndex]}
               showAxes={showCalibratedAxes}
-              targetGrayValue={selectedTargetGray}
               t={t}
               onFrameRef={(node) => { frameRef.current = node; }}
               editorLayer={
                 kind === "raster" || kind === "vector"
                   ? <>
-                      {imageLayout === 1 && <ScanRegionOverlay disabled={phase === "running" || phase === "stopping"} />}
+                      {(targetRunRunning || targetProgressVisible) && (
+                        <canvas ref={targetProgressCanvasRef} className="canvas-target-progress" aria-hidden="true" />
+                      )}
+                      <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} />
                       {onTargetGrayPick && selectedTargetGrayPoint && (
                         <span
                           className="roi-target-gray-mark image-target-gray-mark"
@@ -1655,11 +1961,15 @@ export function ImageCanvas({
               display: displayedFigureUrl ? "none" : undefined,
             }}
           />
+          {(targetRunRunning || targetProgressVisible) && !targetParked && (
+            <canvas ref={targetProgressCanvasRef} className="canvas-target-progress" aria-hidden="true" />
+          )}
           {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} transforms={streamTransforms} />}
-          {imageLayout === 1 && (kind === "raster" || kind === "vector") && (
-            <ScanRegionOverlay disabled={phase === "running" || phase === "stopping"} />
+          {(kind === "raster" || kind === "vector") && (
+            <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} />
           )}
           {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}
+          {!targetParked && hasRenderedCanvasImage && <ImageScaleChip extent={imageExtent} rotate90={streamTransforms.rotate90} />}
           {displayedFigureUrl && (
             <img
               className="server-figure"
@@ -1902,7 +2212,13 @@ export function ImageCanvas({
             : t("canvas.serverFigure.livePreview")}
         </div>
       )}
-      {grayTooltip && createPortal(
+      {grayPickPrompt && createPortal(
+        <div className="roi-gray-tooltip image-target-gray-prompt" role="status" style={{ left: grayPickPrompt.x, top: grayPickPrompt.y }}>
+          {t("roi.targetGray.gesturePrompt")}
+        </div>,
+        document.body,
+      )}
+      {grayTooltip && !grayPickPrompt && createPortal(
         <div
           className="roi-gray-tooltip image-target-gray-tooltip"
           style={{ left: grayTooltip.x, top: grayTooltip.y }}
@@ -2090,7 +2406,8 @@ function paintVectorScanOrderOverlay(
 }
 
 function activeROIRegion(roi: ROIState): ROIRequest {
-  return roi.selection ?? {
+  const regions = effectiveScanRegions(roi.scan_regions, roi.scan_zoom, roi);
+  return regions[roi.active_scan_region ?? 0] ?? regions[0] ?? {
     x_start: roi.x_origin,
     x_end: roi.x_end,
     y_start: roi.y_origin,
@@ -2328,6 +2645,17 @@ function LiveAxisOverlay({
   );
 }
 
+function ImageScaleChip({ extent, rotate90 = false }: { extent: ImageExtent | null; rotate90?: boolean }) {
+  const scale = imageScale(extent, rotate90);
+  if (!scale) return null;
+  return (
+    <div className="canvas-image-scale" role="img" aria-label={scale.label} style={{ width: `calc(${scale.fraction * 100}% + 22px)` }}>
+      <span className="canvas-image-scale__label">{scale.label}</span>
+      <span className="canvas-image-scale__bar" aria-hidden="true" />
+    </div>
+  );
+}
+
 /**
  * Low-opacity summary of the settings a scan ran with, drawn over the image
  * in the annotation layer. It never takes pointer events, so the editor
@@ -2364,7 +2692,6 @@ function ArchivedScanDisplay({
   roi,
   showGrid,
   showAxes,
-  targetGrayValue = null,
   t,
   transforms,
   onFrameRef,
@@ -2376,7 +2703,6 @@ function ArchivedScanDisplay({
   roi: ROIState;
   showGrid: boolean;
   showAxes: boolean;
-  targetGrayValue?: number | null;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   transforms?: StreamTransforms;
   onFrameRef: (node: HTMLDivElement | null) => void;
@@ -2385,8 +2711,8 @@ function ArchivedScanDisplay({
   const [decodedSnapshot, setDecodedSnapshot] = useState<PaintSnapshot | null>(null);
   const snapshot = archivedPaints.get(imageUrl) ?? decodedSnapshot;
   const scanParams = archivedScanParams.get(imageUrl) ?? null;
+  const imageExtent = archivedImageExtents.get(imageUrl) ?? null;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const grayOverlayRef = useRef<HTMLCanvasElement | null>(null);
   // Start from the levels the live image was shown with, then keep this
   // pane's own levels: adjusting it never touches the live wedge.
   const [levelSetting, setLevelSetting] = useState<LevelSetting>(() => levelMemory[kind] ?? AUTO_LEVELS);
@@ -2412,52 +2738,16 @@ function ArchivedScanDisplay({
     const canvas = canvasRef.current;
     if (!canvas || !snapshot) return;
     setStats(paintSnapshot(canvas, { ...snapshot, transforms: transforms ?? snapshot.transforms }, levelSetting));
-    const overlay = grayOverlayRef.current;
-    const context = overlay?.getContext("2d");
-    const source = canvas.getContext("2d", { willReadFrequently: true });
-    if (!overlay || !context || !source) return;
-    if (overlay.width !== canvas.width || overlay.height !== canvas.height) {
-      overlay.width = canvas.width;
-      overlay.height = canvas.height;
-    }
-    context.clearRect(0, 0, overlay.width, overlay.height);
-    if (targetGrayValue === null || targetGrayValue === undefined) return;
-    try {
-      const sourcePixels = source.getImageData(0, 0, canvas.width, canvas.height).data;
-      const highlight = context.createImageData(canvas.width, canvas.height);
-      const pixels = highlight.data;
-      const targetDisplayGray = levelGray(
-        Math.round((targetGrayValue * 0xfffc) / 255),
-        stats.low ?? 0,
-        stats.high ?? 0xfffc,
-      );
-      for (let offset = 0; offset < sourcePixels.length; offset += 4) {
-        if (sourcePixels[offset + 3] === 0) continue;
-        const gray = Math.round(
-          0.2126 * sourcePixels[offset] +
-          0.7152 * sourcePixels[offset + 1] +
-          0.0722 * sourcePixels[offset + 2],
-        );
-        if (gray !== targetDisplayGray) continue;
-        pixels[offset] = 255;
-        pixels[offset + 1] = 35;
-        pixels[offset + 2] = 35;
-        pixels[offset + 3] = 235;
-      }
-      context.putImageData(highlight, 0, 0);
-    } catch {
-      context.clearRect(0, 0, overlay.width, overlay.height);
-    }
-  }, [snapshot, levelSetting, transforms, targetGrayValue, stats.low, stats.high]);
+  }, [snapshot, levelSetting, transforms]);
 
   if (snapshot) {
     return (
       <div className="canvas-stage image-panel-grid__archived-stage">
         <div className="canvas-frame" ref={onFrameRef}>
           <canvas ref={canvasRef} aria-label={alt} onDragStart={(event) => event.preventDefault()} />
-          <canvas ref={grayOverlayRef} className="image-target-gray-overlay" aria-hidden="true" />
           {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} transforms={transforms ?? snapshot?.transforms ?? NO_STREAM_TRANSFORMS} />}
           {scanParams && <ScanParamChip items={scanParams} t={t} />}
+          <ImageScaleChip extent={imageExtent} rotate90={(transforms ?? snapshot.transforms).rotate90} />
           {editorLayer}
         </div>
         <LevelWedge
@@ -2502,9 +2792,9 @@ function ArchivedScanDisplay({
             }
           }}
         />
-        <canvas ref={grayOverlayRef} className="image-target-gray-overlay" aria-hidden="true" />
         {showAxes && <LiveAxisOverlay roi={roi} showGrid={showGrid} t={t} transforms={transforms ?? NO_STREAM_TRANSFORMS} />}
         {scanParams && <ScanParamChip items={scanParams} t={t} />}
+        <ImageScaleChip extent={imageExtent} rotate90={transforms?.rotate90} />
         {editorLayer}
       </div>
       <LevelWedge
@@ -2763,6 +3053,7 @@ function paintSnapshot(canvas: HTMLCanvasElement, snapshot: PaintSnapshot, setti
         snapshot.graySkipped,
         snapshot.grayColor,
         snapshot.grayROI,
+        snapshot.grayMask,
         snapshot.sampledMask,
         setting,
       );
@@ -2778,6 +3069,7 @@ function paintSnapshot(canvas: HTMLCanvasElement, snapshot: PaintSnapshot, setti
         snapshot.graySkipped,
         snapshot.grayColor,
         snapshot.grayROI,
+        snapshot.grayMask,
         snapshot.sampledMask,
         setting,
       );
@@ -2809,7 +3101,7 @@ function copyPaintSnapshot(snapshot: PaintSnapshot): PaintSnapshot {
       return { ...snapshot, buf: snapshot.buf.slice() };
     case "vectorDefault":
     case "vectorBlock":
-      return { ...snapshot, buf: snapshot.buf.slice(), sampledMask: snapshot.sampledMask.slice() };
+      return { ...snapshot, buf: snapshot.buf.slice(), grayMask: snapshot.grayMask?.slice() ?? null, sampledMask: snapshot.sampledMask.slice() };
     case "vectorCustom":
       return {
         ...snapshot,
@@ -2819,6 +3111,34 @@ function copyPaintSnapshot(snapshot: PaintSnapshot): PaintSnapshot {
         spotMask: snapshot.spotMask ? snapshot.spotMask.slice() : null,
       };
   }
+}
+
+// Blob URLs of server figures are revoked when the live pane changes, so an
+// archived pane needs a self-contained data URL instead.
+async function persistentImageUrl(url: string): Promise<string> {
+  if (url.startsWith("data:")) return url;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`image capture: HTTP ${response.status}`);
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// A canvas owns one reusable RGBA buffer, released when the canvas is collected.
+const paintImages = new WeakMap<HTMLCanvasElement, ImageData>();
+function reusablePaintImage(ctx: CanvasRenderingContext2D, width: number, height: number): ImageData {
+  let image = paintImages.get(ctx.canvas);
+  if (!image || image.width !== width || image.height !== height) {
+    image = ctx.createImageData(width, height);
+    paintImages.set(ctx.canvas, image);
+  } else {
+    image.data.fill(0);
+  }
+  return image;
 }
 
 function paintGrayscale(
@@ -2854,7 +3174,7 @@ function paintGrayscale(
   });
   const { low, high } = resolveLevels(histogram, setting);
 
-  const img = ctx.createImageData(edge, edge);
+  const img = reusablePaintImage(ctx, edge, edge);
   const data = img.data;
 
   const totalPx = edge * edge;
@@ -2888,6 +3208,7 @@ function paintVectorDefault(
   graySpotSkipped: boolean | null = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
   grayROI: ROIRequest | null = null,
+  grayMask: Uint8Array | null = null,
   sampledMask: Uint8Array | null = null,
   setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
@@ -2901,7 +3222,7 @@ function paintVectorDefault(
   const limit = Math.min(populated, buf.length);
   const grayBounds = grayROI ? scanRegionPixelBounds(grayROI, edge) : null;
   const range = vectorDefaultRange(buf, edge, limit, scanPath, setting);
-  const img = ctx.createImageData(edge, edge);
+  const img = reusablePaintImage(ctx, edge, edge);
   const data = img.data;
 
   for (let i = 0; i < limit; i++) {
@@ -2911,7 +3232,9 @@ function paintVectorDefault(
     const sample = buf[idx];
     const g = levelGray(sample, range.low ?? 0, range.high ?? 0xfffc);
     const p = idx * 4;
-    const insideROI = !grayBounds || (pixel.x >= grayBounds.x0 && pixel.x < grayBounds.x1 && pixel.y >= grayBounds.y0 && pixel.y < grayBounds.y1);
+    const insideROI = grayMask
+      ? grayMask[idx] === 1
+      : !grayBounds || (pixel.x >= grayBounds.x0 && pixel.x < grayBounds.x1 && pixel.y >= grayBounds.y0 && pixel.y < grayBounds.y1);
     if (insideROI && (!sampledMask || sampledMask[idx] === 1) && sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped)) {
       paintSpotPixel(data, p, graySpotColor);
     } else {
@@ -2973,7 +3296,7 @@ function paintVectorCustom(
   });
   const { low, high } = resolveLevels(histogram, setting);
 
-  const img = ctx.createImageData(edge, edge);
+  const img = reusablePaintImage(ctx, edge, edge);
   const data = img.data;
   for (let i = 0; i < limit; i++) {
     const x = points[2 * i] | 0;
@@ -3023,67 +3346,15 @@ function paintVectorDefaultBlockFill(
   graySpotSkipped: boolean | null = null,
   graySpotColor: { r: number; g: number; b: number } = ROI_ACTION_BLANK_COLOR,
   grayROI: ROIRequest | null = null,
+  grayMask: Uint8Array | null = null,
   sampledMask: Uint8Array | null = null,
   setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
-  const nativeSize = DAC_RANGE;
-  if (canvas.width !== nativeSize || canvas.height !== nativeSize) {
-    canvas.width = nativeSize;
-    canvas.height = nativeSize;
-  }
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { min: 0, max: 0, populated: 0 };
-
-  const limit = Math.min(populated, buf.length);
-  const grayBounds = grayROI ? scanRegionPixelBounds(grayROI, edge) : null;
-
-  const range = vectorDefaultRange(buf, edge, limit, scanPath, setting);
-
-  const img = ctx.createImageData(nativeSize, nativeSize);
-  const data = img.data;
-
-  for (let p = 0; p < data.length; p += 4) {
-    data[p + 0] = 0;
-    data[p + 1] = 0;
-    data[p + 2] = 0;
-    data[p + 3] = 0;
-  }
-
-  for (let i = 0; i < limit; i++) {
-    const pixel = vectorScanSamplePixel(i, edge, scanPath);
-    if (!pixel) break;
-    const cellCol = pixel.x;
-    const cellRow = pixel.y;
-    const cellIdx = cellRow * edge + cellCol;
-    const sample = buf[cellIdx];
-    const g = levelGray(sample, range.low ?? 0, range.high ?? 0xfffc);
-    const insideROI = !grayBounds || (cellCol >= grayBounds.x0 && cellCol < grayBounds.x1 && cellRow >= grayBounds.y0 && cellRow < grayBounds.y1);
-    const isSpot = insideROI && (!sampledMask || sampledMask[cellIdx] === 1) && sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped);
-    const baseY = Math.floor((cellRow * nativeSize) / edge);
-    const nextY = Math.floor(((cellRow + 1) * nativeSize) / edge);
-    const baseX = Math.floor((cellCol * nativeSize) / edge);
-    const nextX = Math.floor(((cellCol + 1) * nativeSize) / edge);
-    const blockHeight = Math.max(1, nextY - baseY);
-    const blockWidth = Math.max(1, nextX - baseX);
-
-    for (let dy = 0; dy < blockHeight; dy++) {
-      let p = ((baseY + dy) * nativeSize + baseX) * 4;
-      for (let dx = 0; dx < blockWidth; dx++) {
-        if (isSpot) {
-          paintSpotPixel(data, p, graySpotColor);
-        } else {
-          data[p + 0] = g;
-          data[p + 1] = g;
-          data[p + 2] = g;
-        }
-        data[p + 3] = 255;
-        p += 4;
-      }
-    }
-  }
-
-  ctx.putImageData(img, 0, 0);
-  return range;
+  // Each acquired sample already represents one constant DAC block. Keep
+  // its compact texture and let pixelated canvas scaling display the blocks;
+  // expanding to 16384 squared allocates over 1 GiB per repaint.
+  return paintVectorDefault(canvas, buf, edge, populated, scanPath,
+    graySpotSelection, graySpotSkipped, graySpotColor, grayROI, grayMask, sampledMask, setting);
 }
 
 function vectorDefaultRange(

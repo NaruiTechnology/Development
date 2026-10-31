@@ -7,6 +7,10 @@ import { applyLocaleToDocument } from "./i18n";
 import { TooltipLayer } from "./components/TooltipLayer";
 import "./styles/theme.css";
 
+// Run after component handlers so custom scan/image menus keep their normal
+// event handling while the browser's default menu stays hidden app-wide.
+document.addEventListener("contextmenu", (event) => event.preventDefault());
+
 // Apply <html lang> and document.title before the first render so the
 // page is correctly tagged at first paint (matters for screen readers,
 // browser dictionary lookups, and anything that snapshots the DOM
