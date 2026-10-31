@@ -1342,10 +1342,9 @@ export function App() {
       targets: scanTargetImagePane,
       completed: { ...completedImagePaneRef.current },
     };
-    setSinglePaneImages({
-      raster: imagePanelSlots.raster[selectedImagePane.raster] ?? null,
-      vector: imagePanelSlots.vector[selectedImagePane.vector] ?? null,
-    });
+    // Keep the live scan pane as the single-pane source. The selected pane
+    // may be an archived image, which has no live scan target for controls.
+    setSinglePaneImages({ raster: null, vector: null });
     setImagePanelLayoutByKind({ raster: 1, vector: 1 });
     setSelectedImagePane({ raster: 0, vector: 0 });
     setScanTargetImagePane({ raster: 0, vector: 0 });
