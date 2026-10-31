@@ -161,3 +161,40 @@ def test_compile_failure_stops_archive_instead_of_shipping_old_bytecode(monkeypa
     with pytest.raises(py_compile.PyCompileError):
         builder.build_compiled_dist(str(source), str(tmp_path / "dist"))
     assert not (tmp_path / "dist_app.zip").exists()
+
+
+@pytest.mark.parametrize("zip_name", ["dist_app", "dist_app_raw"])
+def test_handoff_embeds_current_manager_and_removes_staged_payload(tmp_path, monkeypatch, zip_name):
+    builder = load_distribution_builder()
+    monkeypatch.chdir(tmp_path)
+    workspace = tmp_path / "DeployWorkSpace"
+    deploy = workspace / "Development" / "DistributionDeploy"
+    deploy.mkdir(parents=True)
+    manager_key = "Development/Scripts/manage-local-system.ps1"
+    manager = (DEVELOPMENT_ROOT / manager_key.removeprefix("Development/")).read_bytes()
+    with zipfile.ZipFile(zip_name + ".zip", "w") as payload:
+        payload.writestr(manager_key, manager)
+    final = builder.post_build_deploy(zip_name, str(deploy), str(workspace), "installer")
+    assert not (deploy / (zip_name + ".zip")).exists()
+    assert not (tmp_path / (zip_name + ".zip")).exists()
+    with zipfile.ZipFile(final) as handoff:
+        embedded = handoff.read("DeployWorkSpace/Development/DistributionDeploy/" + zip_name + ".zip")
+    import io
+    with zipfile.ZipFile(io.BytesIO(embedded)) as payload:
+        assert payload.read(manager_key) == manager
+
+
+def test_handoff_preserves_staged_payload_when_packaging_fails(tmp_path, monkeypatch):
+    builder = load_distribution_builder()
+    monkeypatch.chdir(tmp_path)
+    workspace = tmp_path / "DeployWorkSpace"
+    deploy = workspace / "Development" / "DistributionDeploy"
+    deploy.mkdir(parents=True)
+    original = b"recoverable payload"
+    (tmp_path / "dist_app.zip").write_bytes(original)
+    def fail_packaging(*args, **kwargs):
+        raise OSError("packaging failed")
+    monkeypatch.setattr(builder, "zip_folder", fail_packaging)
+    with pytest.raises(OSError, match="packaging failed"):
+        builder.post_build_deploy("dist_app", str(deploy), str(workspace), "installer")
+    assert (deploy / "dist_app.zip").read_bytes() == original

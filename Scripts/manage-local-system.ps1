@@ -170,8 +170,15 @@ function Stop-Managed {
         # A recycled PID belongs to another process and must not be stopped.
         if ($current -and $current.StartTime -eq $member.StartTime) {
             Stop-Process -Id $member.Id -Force -ErrorAction SilentlyContinue
+            # Termination is asynchronous. Give the same process time to exit
+            # before treating it as a survivor; keep the PID-reuse guard below.
+            try { [void]$current.WaitForExit(5000) } catch {
+                # Recheck process identity even if its handle closed meanwhile.
+            }
             $current = Get-Process -Id $member.Id -ErrorAction SilentlyContinue
-            if ($current -and $current.StartTime -eq $member.StartTime) { $survivors += $member.Id }
+            if ($current -and -not $current.HasExited -and $current.StartTime -eq $member.StartTime) {
+                $survivors += $member.Id
+            }
         }
     }
     if ($survivors.Count) {
