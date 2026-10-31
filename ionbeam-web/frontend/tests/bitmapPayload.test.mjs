@@ -2,9 +2,37 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { decorateSimulationBitmap, interleaveParallelPoints } from "../.test-dist/lib/bitmapVector.js";
-import { prepareScanAssets } from "../.test-dist/lib/scanAssets.js";
+import { encodeSimulationBitmap, prepareScanAssets } from "../.test-dist/lib/scanAssets.js";
 import { prepareScanSequence } from "../.test-dist/lib/scanQueues.js";
 import { targetGrayFilter } from "../.test-dist/lib/roiTargetGray.js";
+
+test("dense gray-filtered asset encoding yields to UI tasks and preserves pixels", async () => {
+  const bitmap = decorateSimulationBitmap({ width: 500, height: 500,
+    pixels: Array(250_000).fill(140), source_roi: { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 },
+  }, [0, 140], true);
+  let responsive = false;
+  const heartbeat = setTimeout(() => { responsive = true; }, 0);
+  try {
+    const encoded = await encodeSimulationBitmap(bitmap);
+    assert.equal(responsive, true, "UI tasks must run before the asset finishes encoding");
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(encoded)), bitmap);
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(await encodeSimulationBitmap({ width: 0, height: 0, pixels: [] }))),
+      { width: 0, height: 0, pixels: [] });
+  } finally {
+    clearTimeout(heartbeat);
+  }
+});
+
+test("parallel regions reuse one immutable gray-filtered full-image bitmap", () => {
+  const source = { width: 2, height: 1, pixels: [100, 200] };
+  assert.equal(decorateSimulationBitmap(source, null, null), source);
+  const filtered = decorateSimulationBitmap(source, [0, 140], true);
+  assert.equal(decorateSimulationBitmap(source, [0, 140], true), filtered);
+  const changed = decorateSimulationBitmap(source, [0, 210], false);
+  assert.notEqual(changed, filtered);
+  assert.equal(changed.pixels[1].blank, false);
+  assert.deepEqual(source.pixels, [100, 200]);
+});
 
 test("identical parallel assets upload once with only one preparation in flight", async () => {
   const originalFetch = globalThis.fetch;

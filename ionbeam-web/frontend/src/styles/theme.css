@@ -2231,6 +2231,12 @@ body {
   visibility: visible;
 }
 
+/* Standalone busy indicator under the Preview / Zoom row: centre it in the controls column. */
+.scan-preview-zoom-row + .scan-busy {
+  display: flex;
+  margin-inline: auto;
+}
+
 .scan-preview-zoom-row + .scan-busy[data-visible="false"] {
   display: none;
 }

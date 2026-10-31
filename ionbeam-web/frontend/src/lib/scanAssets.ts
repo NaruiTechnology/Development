@@ -6,6 +6,30 @@ const CHUNK_BYTES = 1024 * 1024;
 const MAX_ASSET_BYTES = 64 * 1024 * 1024;
 const MAX_WS_REQUEST_BYTES = 16 * 1024 * 1024;
 
+/** Bound each JSON conversion so Firefox can paint and handle Stop while
+ * preparing gray-filtered images. Never build one multi-megabyte JSON string. */
+export async function encodeSimulationBitmap(bitmap: SimulationBitmap): Promise<Uint8Array<ArrayBuffer>> {
+  const { pixels, ...metadata } = bitmap;
+  const encoder = new TextEncoder();
+  const header = JSON.stringify(metadata);
+  const parts = [encoder.encode(`${header.slice(0, -1)},"pixels":[`)];
+  let total = parts[0].byteLength;
+  let deadline = performance.now() + 8;
+  for (let offset = 0; offset < pixels.length; offset += 2048) {
+    const json = JSON.stringify(pixels.slice(offset, offset + 2048));
+    const part = encoder.encode(`${offset ? "," : ""}${json.slice(1, -1)}`);
+    total += part.byteLength;
+    if (total + 2 > MAX_ASSET_BYTES) throw new Error("simulation bitmap exceeds the 64 MiB asset limit");
+    parts.push(part);
+    if (performance.now() >= deadline) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      deadline = performance.now() + 8;
+    }
+  }
+  // Blob concatenation avoids a second full-sized intermediate JSON string.
+  return new Uint8Array(await new Blob([...parts, encoder.encode("]}")]).arrayBuffer());
+}
+
 async function requestJson(path: string, method: "POST" | "PUT", body?: BodyInit, contentType?: string) {
   const response = await fetch(apiUrl(path), {
     method,
@@ -47,7 +71,7 @@ export async function prepareScanAssets<T extends RasterRequest | VectorRequest>
   const upload = async (bitmap: SimulationBitmap) => {
     const existing = identities.get(bitmap);
     if (existing) return existing;
-    const bytes = new TextEncoder().encode(JSON.stringify(bitmap));
+    const bytes = await encodeSimulationBitmap(bitmap);
     if (bytes.byteLength > MAX_ASSET_BYTES) throw new Error("simulation bitmap exceeds the 64 MiB asset limit");
     const digest = await crypto.subtle.digest("SHA-256", bytes);
     const key = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");

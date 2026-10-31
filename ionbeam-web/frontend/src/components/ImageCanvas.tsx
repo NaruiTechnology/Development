@@ -584,6 +584,7 @@ export function ImageCanvas({
     setTargetProgressVisible(false);
   }, [roi.imageName]);
   const infiniteActive = useAppSelector((s) => s.scan.infiniteActive);
+  const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
   const lastResult = useAppSelector((s) => s.scan.lastResult);
   const lastOutput = useAppSelector((s) => s.scan.lastOutput);
   const bytesReceived = useAppSelector((s) => s.scan.bytesReceived);
@@ -654,8 +655,11 @@ export function ImageCanvas({
     (kind === "raster" ? roi.raster_show_scan_path : roi.vector_show_scan_path);
 
   const showModeToggle = kind === "vector" && vectorPattern === "default";
+  // The dark-red marking of pixels matched by the Gray level filter is a
+  // simulation aid. In production (is_production === true, or not yet known)
+  // every pixel keeps the grayscale value read from the ADC.
   const vectorGraySpotSelection =
-    kind === "vector" && selectedTargetGray === null && vectorGrayScaleSelection !== null
+    simulationMode && kind === "vector" && selectedTargetGray === null && vectorGrayScaleSelection !== null
       ? vectorGrayScaleSelection
       : null;
   const vectorGraySpotSkipped =
@@ -686,6 +690,7 @@ export function ImageCanvas({
   // Orientation follows the shared controls immediately, including during a run.
   const previousPhaseRef = useRef(phase);
   useEffect(() => {
+    if (streamRestarting) return;
     if (kind !== "raster" && kind !== "vector") return;
     if (phase === "running" || phase === "stopping") {
       const wasRunning = previousPhaseRef.current === "running" || previousPhaseRef.current === "stopping";
@@ -695,7 +700,7 @@ export function ImageCanvas({
       runBufferMemory[kind] = kind === "raster" ? frame : vectorImage;
     }
     previousPhaseRef.current = phase;
-  }, [kind, phase, revision, frame, vectorImage, streamTransforms]);
+  }, [kind, phase, revision, frame, vectorImage, streamTransforms, streamRestarting]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -731,8 +736,8 @@ export function ImageCanvas({
         points: vectorCustomRenderPoints,
         populated: vectorFilled,
         // Target gray shows the real pixel gray level, never red marking.
-        blankMask: selectedTargetGray !== null ? null : vectorCustomBlankMask,
-        spotMask: selectedTargetGray !== null ? null : vectorCustomSpotMask,
+        blankMask: selectedTargetGray !== null || !simulationMode ? null : vectorCustomBlankMask,
+        spotMask: selectedTargetGray !== null || !simulationMode ? null : vectorCustomSpotMask,
         grayColor: vectorGraySpotColor,
         transforms: paintTransforms,
       };
@@ -802,7 +807,7 @@ export function ImageCanvas({
   }, [captureRef, captureRenderedScan]);
 
   useEffect(() => {
-    if (singlePaneImage || !onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
+    if (streamRestarting || singlePaneImage || !onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
     const scanId = scanSequenceMemory[kind] ?? 0;
 
     const emit = (imageUrl: string | null) => {
@@ -855,6 +860,7 @@ export function ImageCanvas({
     vectorGraySpotColor,
     singlePaneImage,
     captureRenderedScan,
+    streamRestarting,
   ]);
 
   useEffect(() => {
@@ -1062,7 +1068,6 @@ export function ImageCanvas({
   useEffect(() => {
     if (!captureTargetImageRef || (kind !== "raster" && kind !== "vector")) return;
     captureTargetImageRef.current = async () => {
-      if (phase === "running" || phase === "stopping") return null;
       const savedImage = singlePaneImage ?? mergedFigureUrl;
       if (savedImage) {
         const image = await persistentImageUrl(savedImage);
@@ -1920,7 +1925,7 @@ export function ImageCanvas({
                       {(targetRunRunning || targetProgressVisible) && (
                         <canvas ref={targetProgressCanvasRef} className="canvas-target-progress" aria-hidden="true" />
                       )}
-                      {imageLayout === 1 && <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} />}
+                      <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} />
                       {onTargetGrayPick && selectedTargetGrayPoint && (
                         <span
                           className="roi-target-gray-mark image-target-gray-mark"
@@ -1960,7 +1965,7 @@ export function ImageCanvas({
             <canvas ref={targetProgressCanvasRef} className="canvas-target-progress" aria-hidden="true" />
           )}
           {showCalibratedAxes && <LiveAxisOverlay roi={roi} showGrid={paneGridVisibility[scanTargetPane]} t={t} ignoreTransforms={ignoreTransforms} transforms={streamTransforms} />}
-          {imageLayout === 1 && (kind === "raster" || kind === "vector") && (
+          {(kind === "raster" || kind === "vector") && (
             <ScanRegionOverlay disabled={phase === "stopping" || (phase === "running" && !infiniteActive)} />
           )}
           {liveScanParamItems && !mergedFigureUrl && <ScanParamChip items={liveScanParamItems} t={t} />}

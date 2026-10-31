@@ -13,6 +13,7 @@ import {
   runVectorValidated,
   setPreview,
   setInfiniteActive,
+  setStreamRestarting,
   setROIScanEnabled,
   setScanZoom,
   updateScanRegion,
@@ -1010,6 +1011,7 @@ export function ScanControls({
     if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
     zoomRestartTimerRef.current = null;
     setPendingZoomRestart(null);
+    dispatch(setStreamRestarting(false));
     // Like OBI, stopping a live session leaves the last image on the canvas:
     // Infinite (a single live session until Stop).
     // Only single runs clear it.
@@ -1291,18 +1293,21 @@ export function ScanControls({
     scheduleZoomRestart("infinite");
   }, [liveFramesDone]);
 
-  function scheduleZoomRestart(mode: "single" | "infinite") {
+  // `delayMs` debounces rapid Zoom edits; a discrete switch such as Parallel
+  // passes 0 so the new layout starts as soon as the running stream is stopped.
+  function scheduleZoomRestart(mode: "single" | "infinite", delayMs = 350) {
     if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
     // The FPGA receives scan coordinates at stream start. Rebuild the request
     // only if the current scan cannot accept an in-band geometry update.
     zoomRestartTimerRef.current = window.setTimeout(() => {
       zoomRestartTimerRef.current = null;
       if (phaseRef.current !== "running" || !stream.hasActiveStream()) return;
+      dispatch(setStreamRestarting(true));
       clearInfiniteScanState();
       regionScanQueueRef.current = [];
       setPendingZoomRestart(mode);
       stream.stop();
-    }, 350);
+    }, delayMs);
   }
 
   // A mode change alters the stream layout (interleaved samples versus a
@@ -1312,7 +1317,7 @@ export function ScanControls({
   useEffect(() => {
     if (!infiniteScanActiveRef.current || phase !== "running" ||
         runningParallelRegionsRef.current === parallelRegions) return;
-    scheduleZoomRestart("infinite");
+    scheduleZoomRestart("infinite", 0);
   }, [parallelRegions, phase, infiniteScanActive]);
 
   useEffect(() => {
@@ -1598,9 +1603,12 @@ export function ScanControls({
     if (!pendingZoomRestart || (phase !== "idle" && phase !== "error")) return;
     if (phase === "idle" && disabled && !zoomDisabled) return;
     setPendingZoomRestart(null);
-    if (phase === "error" || zoomDisabled) return;
-    if (pendingZoomRestart === "infinite") void startInfiniteRequest(true);
-    else void startRunRequest();
+    if (phase === "error" || zoomDisabled) {
+      dispatch(setStreamRestarting(false));
+      return;
+    }
+    const restart = pendingZoomRestart === "infinite" ? startInfiniteRequest(true) : startRunRequest();
+    void restart.finally(() => dispatch(setStreamRestarting(false)));
   }, [disabled, pendingZoomRestart, phase, zoomDisabled]);
 
   useEffect(() => {
@@ -1611,6 +1619,7 @@ export function ScanControls({
   useEffect(() => {
     return () => {
       if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
+      dispatch(setStreamRestarting(false));
       clearInfiniteScanState();
     };
   }, [clearInfiniteScanState]);

@@ -179,6 +179,7 @@ export function App() {
   const [highVoltageError, setHighVoltageError] = useState<string | null>(null);
   const kind = useAppSelector((s) => s.scan.kind);
   const phase = useAppSelector((s) => s.scan.phase);
+  const streamRestarting = useAppSelector((s) => s.scan.streamRestarting);
   const previewMode = useAppSelector((s) => s.scan.preview);
   useEffect(() => {
     setSaveResultsCollapsed(previewMode);
@@ -258,6 +259,7 @@ export function App() {
   >({ raster: [], vector: [] });
 
   useEffect(() => {
+    if (streamRestarting) return;
     const scanStarted = phase === "running" && previousScanPhaseRef.current !== "running";
     previousScanPhaseRef.current = phase;
     if (scanStarted && (kind === "raster" || kind === "vector")) {
@@ -268,7 +270,7 @@ export function App() {
     setScanTargetImagePane((current) =>
       current[kind] === targetPane ? current : { ...current, [kind]: targetPane }
     );
-  }, [imagePanelLayout, imagePanelLocked, kind, phase, selectedImagePane]);
+  }, [imagePanelLayout, imagePanelLocked, kind, phase, selectedImagePane, streamRestarting]);
   const suppressedROIScanImageUrlRef = useRef<string | null>(null);
   const previousROIImageRef = useRef({
     imageDataUrl: roiState.imageDataUrl,
@@ -1048,8 +1050,8 @@ export function App() {
       return;
     }
     completedImagePaneRef.current[kind] = 0;
-    // Capture before the pane layout changes. A stopped Live scan may still
-    // be waiting for its asynchronous result notification.
+    // Capture before moving the live canvas to the second pane. Acquisition
+    // continues there while the first pane keeps this snapshot.
     const captured = captureScanImageRef.current?.();
     let imageUrl = captured?.kind === kind ? captured.imageUrl : currentTargetImage;
     splitInFlightRef.current = true;
@@ -1064,7 +1066,7 @@ export function App() {
     } finally {
       splitInFlightRef.current = false;
     }
-    if (captured?.kind === kind) {
+    if (captured?.kind === kind && !scanActive) {
       completedImageRecordedScanRef.current = `${kind}:${captured.scanId}`;
     }
     if (imageUrl) setLastLiveScanImage({ kind, imageUrl });
@@ -1074,7 +1076,7 @@ export function App() {
     setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
     setSelectedImagePane((current) => ({ ...current, [kind]: targetPane }));
     setScanTargetImagePane((current) => ({ ...current, [kind]: targetPane }));
-  }, [canSplitImagePanel, currentTargetImage, kind]);
+  }, [canSplitImagePanel, currentTargetImage, kind, scanActive]);
 
   const handleMergedFigureChange = useCallback(
     (scanKind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => {
@@ -1881,7 +1883,6 @@ export function App() {
                         <input
                           type="checkbox"
                           checked={imagePanelLocked}
-                          disabled={scanActive}
                           onChange={(event) => handleImagePanelLockChange(event.target.checked)}
                         />
                         <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>
@@ -1895,7 +1896,7 @@ export function App() {
                         aria-label={t("canvas.layout.cycle", { count: imagePanelLayout })}
                         aria-pressed={imagePanelLayout > 1}
                         aria-controls="image-panel-grid"
-                        disabled={scanActive || !canSplitImagePanel}
+                        disabled={!canSplitImagePanel}
                         title={t("canvas.layout.cycle", { count: imagePanelLayout })}
                         onClick={splitImagePanel}
                       >

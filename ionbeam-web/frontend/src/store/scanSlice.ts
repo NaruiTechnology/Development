@@ -43,6 +43,8 @@ interface ScanState {
   kind: ScanKind;
   phase: ScanPhase;
   infiniteActive: boolean;
+  /** Transport handover within the current scan, not a completed image. */
+  streamRestarting: boolean;
   /** Bytes received in the active stream so far. */
   bytesReceived: number;
   chunksReceived: number;
@@ -185,6 +187,7 @@ const initialState: ScanState = {
   kind: "vector",
   phase: "idle",
   infiniteActive: false,
+  streamRestarting: false,
   bytesReceived: 0,
   chunksReceived: 0,
   lastResult: null,
@@ -734,7 +737,11 @@ const slice = createSlice({
       s.infiniteActive = a.payload;
     },
     /** Live-stream lifecycle markers. The actual WS lives in a hook. */
+    setStreamRestarting(s, a: PayloadAction<boolean>) {
+      s.streamRestarting = a.payload;
+    },
     streamStarted(s) {
+      s.streamRestarting = false;
       s.phase = "running";
       s.bytesReceived = 0;
       s.chunksReceived = 0;
@@ -772,6 +779,7 @@ const slice = createSlice({
       }
     },
     streamErrored(s, a: PayloadAction<string>) {
+      s.streamRestarting = false;
       s.phase = "error";
       s.errorMessage = a.payload;
     },
@@ -881,6 +889,7 @@ export const {
   clearLastResult,
   clearLastOutput,
   setVectorRenderMode,
+  setStreamRestarting,
   streamStarted,
   scanParamsCaptured,
   streamProgress,

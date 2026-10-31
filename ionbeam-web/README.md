@@ -119,6 +119,10 @@ excluded from Redux history and development middleware walks. Simulation asset
 uploads run sequentially; ordinary simulation scans share immutable bitmap
 assets while target-gray feedback uses private copies. These changes use the
 existing frontend/backend builds and compiled Glasgow service packaging.
+Gray-filtered parallel regions reuse one decorated full-image bitmap. Asset
+JSON encoding processes bounded pixel batches and yields to browser tasks
+before upload, keeping scan startup responsive. This frontend-only change is
+included by the existing frontend build and source-tree deployment copy.
 For `MOCK=1`, completed assets use a bounded memory cache backed by
 `~/.cache/ionbeam-web/mock-scan-assets` (override with
 `IONBEAM_MOCK_SCAN_ASSET_DIR`), so eviction does not invalidate queued scans.
@@ -129,6 +133,8 @@ parallel stream and sequential ROI passes, preserving the current image.
 Changes during request preparation are applied after startup; Stop cancels any
 pending handover. Authentication, vacuum readiness, and configuration locks
 still apply. This uses the existing frontend build and deployment source copy.
+Parallel and Zoom transport handovers retain the current scan identity and
+pane; their temporary idle interval does not archive an image or add a window.
 
 Sequential simulation ROI passes use the same sample batching as Parallel
 acquisition, avoiding an artificial delay for every small transport packet.
@@ -141,6 +147,14 @@ stopped Live scan whose result notification has not yet run. Its image, raw
 paint snapshot, calibrated extent, and scan settings remain in the first pane;
 the second pane is the next scan target. These changes use the existing
 frontend build and compiled Glasgow service deployment packaging.
+Split also stays available during acquisition: the first pane keeps a snapshot
+and the running scan continues in the second pane without restarting.
+The current pane retains the ROI overlay after splitting, including existing
+regions and live creation, movement, and resizing controls.
+The layout Lock switch also remains available during acquisition, using the
+same layout save and restore behavior as when scanning is idle.
+The shared frontend entry point suppresses the browser's default right-click
+menu across desktop and mobility views while retaining application menus.
 Server and annotated figures use persistent data URLs when carried into a
 split pane, so revoking the original server blob URL does not erase the image.
 Repeated Split clicks share the pending capture instead of opening duplicate

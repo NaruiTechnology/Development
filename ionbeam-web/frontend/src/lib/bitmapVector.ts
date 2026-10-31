@@ -493,6 +493,8 @@ async function bitmapSelectionToVector(
   return value;
 }
 
+const decoratedBitmaps = new WeakMap<SimulationBitmap, { key: string; value: SimulationBitmap }>();
+
 export function decorateSimulationBitmap(
   bitmap: SimulationBitmap,
   selection: GrayScaleSelection,
@@ -503,11 +505,19 @@ export function decorateSimulationBitmap(
     ? null
     : Boolean(skipped);
 
+  const key = `${normalizedSelection?.join(":") ?? "none"}:${normalizedSkipped}`;
+  const cached = decoratedBitmaps.get(bitmap);
+  if (cached?.key === key) return cached.value;
+
   if (normalizedSelection === null) {
-    return { ...bitmap, pixels: bitmap.pixels.map(pixelValue) };
+    const value = bitmap.pixels.every((pixel) => typeof pixel === "number")
+      ? bitmap
+      : { ...bitmap, pixels: bitmap.pixels.map(pixelValue) };
+    decoratedBitmaps.set(bitmap, { key, value });
+    return value;
   }
 
-  return {
+  const value = {
     ...bitmap,
     pixels: bitmap.pixels.map((pixel) => {
       const value = pixelValue(pixel);
@@ -526,6 +536,8 @@ export function decorateSimulationBitmap(
       };
     }),
   };
+  decoratedBitmaps.set(bitmap, { key, value });
+  return value;
 }
 
 function bitmapToCustomPoints(

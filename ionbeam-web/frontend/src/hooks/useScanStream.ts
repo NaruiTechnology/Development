@@ -135,6 +135,10 @@ export function useScanStream() {
   const beamEnergyEv = useAppSelector((s: RootState) => s.scan.beamEnergyEv);
   const beamEnergyEvRef = useRef(beamEnergyEv);
   beamEnergyEvRef.current = beamEnergyEv;
+  const scanRegionCount = useAppSelector((s: RootState) => s.scan.roi.scan_regions.length);
+  const scanZoom = useAppSelector((s: RootState) => s.scan.roi.scan_zoom);
+  const scanRegionsRef = useRef({ regionCount: scanRegionCount, zoom: scanZoom });
+  scanRegionsRef.current = { regionCount: scanRegionCount, zoom: scanZoom };
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const chunksReceivedRef = useRef(chunksReceived);
@@ -210,7 +214,7 @@ export function useScanStream() {
         preserveZeroSamples: Boolean(hasBitmapSource && options?.initialFrame),
       }));
       dispatch(streamStarted());
-      dispatch(scanParamsCaptured(summarizeScanParams("raster", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS })));
+      dispatch(scanParamsCaptured(summarizeScanParams("raster", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS, ...scanRegionsRef.current })));
       beginScanPerformance("raster", req as unknown as Record<string, unknown>, "websocket");
       const ws = openWs("/ws/scan/raster/stream");
       let controlFailed = false;
@@ -377,7 +381,7 @@ export function useScanStream() {
         })
       );
       dispatch(streamStarted());
-      dispatch(scanParamsCaptured(summarizeScanParams("vector", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS })));
+      dispatch(scanParamsCaptured(summarizeScanParams("vector", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS, ...scanRegionsRef.current })));
       beginScanPerformance("vector", req as unknown as Record<string, unknown>, "websocket");
       const ws = openWs("/ws/scan/vector/stream");
       let controlFailed = false;
