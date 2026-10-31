@@ -15,7 +15,7 @@
  * to their actual populated cells. For vector custom, only requested
  * point coordinates are painted; unpopulated cells stay transparent.
  */
-import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
@@ -60,7 +60,7 @@ import { formatPixelSize, pixelSizeFromExtent, scaleExtentFromPixelSize, selecti
 import { imageScale, type ImageExtent } from "../lib/imageScale";
 import { ROI_CANVAS_EDGE } from "../lib/roiGeometry";
 import { clipPixelRect, stepTowardTargetGray } from "../lib/roiTargetGray";
-import { selectionCrop } from "../lib/bitmapVector";
+import { selectionCrop, worldSelectionToDacROI } from "../lib/bitmapVector";
 
 const DAC_RANGE = 2048;
 // Match the dark red used by ROI's beam-hit/filtered-pixel overlay.
@@ -666,6 +666,20 @@ export function ImageCanvas({
     vectorGraySpotSelection !== null
       ? vectorGrayScaleSkipped
       : null;
+  // The filter belongs to the whole ROI plan. Sequential transport changes
+  // vectorROI on each pass; using that rectangle hides earlier regions' dots.
+  const vectorGraySpotMask = useMemo(() => {
+    if (!vectorGraySpotSelection || !roi.roi_scan_enabled || !roi.scan_regions.length) return null;
+    const mask = new Uint8Array(vectorEdge * vectorEdge);
+    for (const region of roi.scan_regions) {
+      const bounds = scanRegionPixelBounds(worldSelectionToDacROI(region, roi), vectorEdge);
+      for (let y = bounds.y0; y < bounds.y1; y++) {
+        mask.fill(1, y * vectorEdge + bounds.x0, y * vectorEdge + bounds.x1);
+      }
+    }
+    return mask;
+  }, [vectorGraySpotSelection, roi.roi_scan_enabled, roi.scan_regions,
+    roi.x_origin, roi.x_end, roi.y_origin, roi.y_end, vectorEdge]);
   const vectorGraySpotColor =
     vectorGraySpotSelection !== null
       ? ROI_ACTION_BLANK_COLOR
@@ -724,7 +738,7 @@ export function ImageCanvas({
         graySkipped: vectorGraySpotSkipped,
         grayColor: vectorGraySpotColor,
         grayROI: vectorROI,
-        grayMask: vectorCompositeMask,
+        grayMask: vectorGraySpotMask ?? vectorCompositeMask,
         sampledMask: vectorSampledMask,
         transforms: paintTransforms,
       };
@@ -768,6 +782,7 @@ export function ImageCanvas({
     theme,
     vectorGraySpotSelection,
     vectorGraySpotSkipped,
+    vectorGraySpotMask,
     levelSetting,
     streamTransforms,
     singlePaneImage,

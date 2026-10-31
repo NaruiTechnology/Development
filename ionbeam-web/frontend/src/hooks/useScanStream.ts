@@ -211,7 +211,7 @@ export function useScanStream() {
         parallelROIs: options?.displayROIs ?? req.parallel_rois,
         compositeROIs: options?.compositeROIs,
         initialFrame: options?.initialFrame,
-        preserveZeroSamples: Boolean(hasBitmapSource && options?.initialFrame),
+        preserveZeroSamples: Boolean(hasBitmapSource && (options?.initialFrame || options?.preserveFrame || continuous)),
       }));
       dispatch(streamStarted());
       dispatch(scanParamsCaptured(summarizeScanParams("raster", req, { beamEnergyEv: beamEnergyEvRef.current, samplePeriodNs: SAMPLE_PERIOD_NS, ...scanRegionsRef.current })));
@@ -376,7 +376,7 @@ export function useScanStream() {
           preserveImage,
         // Blanked points return no reading; keep the pixel's last gray level.
         preserveZeroSamples: Boolean(
-          (hasBitmapSource && options?.initialFrame) || req.target_gray_level != null,
+          (hasBitmapSource && (options?.initialFrame || preserveImage)) || req.target_gray_level != null,
         ),
         })
       );
