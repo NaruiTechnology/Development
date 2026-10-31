@@ -841,6 +841,11 @@ export function ImageCanvas({
     // Stop leaves a Live scan's last pixels visible in idle. They are still
     // a result and must be available to Split just like a completed scan.
     if (phase !== "completed" && phase !== "idle") return;
+    // A Live session is one scan until Stop. Sequential/Parallel ROI passes
+    // each end in "completed", but they are not results: archiving them
+    // PNG-encoded the whole canvas and cascaded state updates after every pass,
+    // starving the main thread until the browser stopped responding.
+    if (infiniteActive) return;
     // Only a buffer the last scan actually ran into is a scan result.
     const liveBuffer = kind === "raster" ? frame : vectorImage;
     const runBuffer = runBufferMemory[kind];
@@ -876,6 +881,7 @@ export function ImageCanvas({
     singlePaneImage,
     captureRenderedScan,
     streamRestarting,
+    infiniteActive,
   ]);
 
   useEffect(() => {
