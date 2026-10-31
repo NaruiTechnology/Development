@@ -109,3 +109,14 @@ test("zoom grows as the selected area shrinks and follows the longer side", () =
   const strip = selectionZoom({ x_start: 0, x_end: 100, y_start: 0, y_end: 25 }, fov);
   assert.ok(strip < 1.1);
 });
+
+test("scale extent follows the scanned region's pixel pitch", async () => {
+  const { scaleExtentFromPixelSize } = await import("../.test-dist/lib/pixelSize.js");
+  const base = { x: 0.2, y: 0.1, unit: "um", source: "scanRegion" };
+  assert.deepEqual(scaleExtentFromPixelSize(base, 1024), { x: 204.8, y: 102.4, unit: "um" });
+  // Zoom 2 halves the pitch, so the same canvas width spans half the distance.
+  const zoomed = scaleExtentFromPixelSize({ ...base, x: base.x / 2, y: base.y / 2 }, 1024);
+  assert.equal(zoomed.x, 102.4);
+  assert.equal(scaleExtentFromPixelSize(null, 1024), null);
+  assert.equal(scaleExtentFromPixelSize(base, 0), null);
+});

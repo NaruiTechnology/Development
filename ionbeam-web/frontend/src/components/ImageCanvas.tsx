@@ -56,7 +56,7 @@ import {
 } from "../lib/displayLevels";
 import { LevelWedge } from "./LevelWedge";
 import { selectGlobalPixelSize } from "../store/selectors";
-import { formatPixelSize, pixelSizeFromExtent, selectionPixelSize } from "../lib/pixelSize";
+import { formatPixelSize, pixelSizeFromExtent, scaleExtentFromPixelSize, selectionPixelSize } from "../lib/pixelSize";
 import { imageScale, type ImageExtent } from "../lib/imageScale";
 import { ROI_CANVAS_EDGE } from "../lib/roiGeometry";
 import { clipPixelRect, stepTowardTargetGray } from "../lib/roiTargetGray";
@@ -1026,11 +1026,14 @@ export function ImageCanvas({
     (kind === "vector" || kind === "raster")
       ? selectionPixelSize(scanBasePixelSize, activeRegion, roi, scanEdge)
       : scanBasePixelSize;
-  // ROI scans are composited into the full field of view, so the scale must
-  // describe the whole canvas rather than the denser samples inside the ROI.
-  const imageExtent: ImageExtent = globalPixelSize?.source === "scanGeometry" && roi.scanGeometry?.enabled
+  // The scale follows the scanned area: the entire canvas when there is no ROI,
+  // otherwise the active ROI. Zoom shrinks that area in both cases, so the bar
+  // tracks it and matches the pixel size reported for the scan.
+  const fullFieldExtent: ImageExtent = globalPixelSize?.source === "scanGeometry" && roi.scanGeometry?.enabled
     ? { x: globalPixelSize.x * roi.scanGeometry.pixels[0], y: globalPixelSize.y * roi.scanGeometry.pixels[1], unit: globalPixelSize.unit }
     : { x: Math.abs(roi.x_end - roi.x_origin), y: Math.abs(roi.y_end - roi.y_origin), unit: roi.scale_unit };
+  const regionScaled = (kind === "vector" || kind === "raster") && (roi.scan_regions.length > 0 || roi.scan_zoom > 1);
+  const imageExtent: ImageExtent = (regionScaled ? scaleExtentFromPixelSize(pixelSize, scanEdge) : null) ?? fullFieldExtent;
   imageExtentRef.current = imageExtent;
   const current = currentBeamPosition({
     kind,
