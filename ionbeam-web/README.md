@@ -96,9 +96,19 @@ demonstrating the workflow.
 
 ### Production build
 
-```bash
-cd frontend && npm ci && rm -rf -- node_modules/.vite && npm run build  # emits frontend/dist/
-cd ../backend && npm run build && npm start
+```powershell
+cd frontend
+npm ci
+if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+if (Test-Path -LiteralPath node_modules/.vite) {
+    Remove-Item -LiteralPath node_modules/.vite -Recurse -Force
+}
+npm run build  # emits frontend/dist/
+if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
+cd ../backend
+npm run build
+if ($LASTEXITCODE -ne 0) { throw "Backend build failed" }
+npm start
 ```
 
 The Node server then serves `frontend/dist/` and proxies `/api` + `/ws` to
@@ -124,7 +134,7 @@ JSON encoding processes bounded pixel batches and yields to browser tasks
 before upload, keeping scan startup responsive. This frontend-only change is
 included by the existing frontend build and source-tree deployment copy.
 For `MOCK=1`, completed assets use a bounded memory cache backed by
-`~/.cache/ionbeam-web/mock-scan-assets` (override with
+`%LOCALAPPDATA%\ionbeam-web\mock-scan-assets` on Windows (override with
 `IONBEAM_MOCK_SCAN_ASSET_DIR`), so eviction does not invalidate queued scans.
 
 The ROI Parallel switch remains available during Live acquisition when two or
@@ -160,8 +170,9 @@ split pane, so revoking the original server blob URL does not erase the image.
 Repeated Split clicks share the pending capture instead of opening duplicate
 layouts while that conversion is in progress.
 
-For the managed local stack, use `Development/Scripts/manage-local-system.sh
-restart`. It verifies the locked AG Grid dependencies and clears Vite's
+For the managed local stack on Windows, run
+`& .\Development\Scripts\manage-local-system.ps1 restart` from the operations
+root. It verifies the locked AG Grid dependencies and clears Vite's
 optimized-dependency cache before starting the frontend, preventing stale
 `ag-grid-react` resolution errors after dependency changes.
 
@@ -172,7 +183,7 @@ The existing JSON-driven deploy workflow lives in
 Ionbeam-web exposes convenience npm scripts that delegate to that workflow for
 both local and production runs:
 
-```bash
+```powershell
 cd backend
 npm run deploy:local
 npm run deploy:production
@@ -201,7 +212,7 @@ when connecting to a remote database during deployment readiness checks.
 To reapply the current admin and operation schemas to an existing PostgreSQL
 deployment, run:
 
-```bash
+```powershell
 cd backend
 npm run db:migrate:update-date
 ```
@@ -215,14 +226,14 @@ You can verify the mobility surface locally without pushing to a remote host:
 
 1. Start the backend in mobility mode:
 
-   ```bash
+   ```powershell
    cd backend
    npm run dev:mobility
    ```
 
 2. Start the frontend mobility shell:
 
-   ```bash
+   ```powershell
    cd frontend
    npm run dev:mobility
    ```

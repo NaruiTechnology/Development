@@ -16,7 +16,11 @@ function validId(id: string): boolean {
 
 function assetPath(id: string): string {
   if (!validId(id)) throw new Error("invalid scan asset ID");
-  const directory = process.env.IONBEAM_MOCK_SCAN_ASSET_DIR ?? path.join(homedir(), ".cache", "ionbeam-web", "mock-scan-assets");
+  const cacheRoot = process.platform === "win32"
+    ? process.env.LOCALAPPDATA || path.join(homedir(), "AppData", "Local")
+    : path.join(homedir(), ".cache");
+  const directory = process.env.IONBEAM_MOCK_SCAN_ASSET_DIR ??
+    path.join(cacheRoot, "ionbeam-web", "mock-scan-assets");
   mkdirSync(directory, { recursive: true });
   return path.join(directory, `${id}.json`);
 }

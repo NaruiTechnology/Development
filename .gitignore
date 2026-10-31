@@ -2,3 +2,6 @@ __pycache__/
 *.py[cod]
 *.log
 *.log.err
+
+# KiCad local snapshots (managed separately by KiCad).
+/GlasgowDataIO/Hardware/VacuumController/RPi5VacuumIO/.history/

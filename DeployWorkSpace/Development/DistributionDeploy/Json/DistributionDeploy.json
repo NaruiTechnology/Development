@@ -257,7 +257,7 @@
         },
         {
             "programFpgaRam": {
-                "skip": true,
+                "skip": false,
                 "transactionComplete": false,
                 "actionData": {},
                 "timeout": 900.0

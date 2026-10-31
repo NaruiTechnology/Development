@@ -196,8 +196,18 @@ class WindowsMergeTests(unittest.IsolatedAsyncioTestCase):
                                      _localSystemStopped=True, GetStateConfig=lambda _: {})
             state = programFpgaRam_state(thread)
             state.runArguments = AsyncMock(return_value=False)
+            state._stdout = b"FPGA build started"
+            state._stderr = b"GatewareBuildError: synthesis failed"
+            state._returncode = 1
+            state.info = Mock()
+            state.error = Mock()
             await state.DoWork()
             self.assertFalse(state._success)
+            state.error.assert_called_once()
+            self.assertIn("synthesis failed", state.error.call_args.args[0])
+            self.assertIn("exit 1", state.error.call_args.args[0])
+            self.assertTrue(any("FPGA build started" in call.args[0]
+                                for call in state.info.call_args_list))
             self.assertEqual(state.runArguments.call_args.args[0], [str(root / ".venv/Scripts/python.exe"),
                 str(root / "Development/Scripts/program-fpga-ram.py"), "--config", str(root / "scan.json")])
 

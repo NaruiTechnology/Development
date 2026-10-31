@@ -23,8 +23,19 @@ class programFpgaRam_state(distributionDeploy_state):
             # Do not use Python's isolated mode (-I) here: it hides the venv
             # site-packages and caused ModuleNotFoundError for amaranth.
             if os.name == "nt":
+                arguments = [python, script, "--config", scan_config]
+                self.info("[programFpgaRam] >> {}".format(arguments))
                 self._success = await self.runArguments(
-                    [python, script, "--config", scan_config], float(config.get("timeout", 900)))
+                    arguments, float(config.get("timeout", 900)))
+                stdout = (self._stdout or b"").decode(errors="replace")
+                stderr = (self._stderr or b"").decode(errors="replace")
+                if stdout:
+                    self.info("[programFpgaRam] output:\n{}".format(stdout))
+                if not self._success:
+                    self.error("[programFpgaRam] download/verification failed (exit {}):\n{}".format(
+                        self._returncode, stderr or stdout or "No subprocess output captured"))
+                elif stderr:
+                    self.info("[programFpgaRam] diagnostics:\n{}".format(stderr))
                 return
             command = "{} {} --config {}".format(
                 shlex.quote(python), shlex.quote(script), shlex.quote(scan_config))

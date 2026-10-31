@@ -26,7 +26,7 @@ class AutomationConfig(object):
     def __init__(self, source):
         self.__dict__ = OrderedDict()
         if os.path.isfile(source):
-            with open(source, 'r') as f:
+            with open(source, 'r', encoding='utf-8-sig') as f:
                 jsonString = f.read()
         else:
             jsonString = source
@@ -87,6 +87,6 @@ class AutomationConfig(object):
 
     def Save(self):
         if self._jsonFile is not None:
-            with open(self._jsonFile, 'w') as f:
+            with open(self._jsonFile, 'w', encoding='utf-8') as f:
                 f.write(str(self))
 
