@@ -156,8 +156,8 @@ interface SetupVectorPayload {
   simulationBitmap?: { width: number; height: number } | null;
   /** Live scan: wrap at the pass end instead of stopping. */
   continuous?: boolean;
-  /** Keep the current image (and its filled count) when the layout is
-   *  unchanged, like OBI's FrameBuffer._set_current_frame: only the write
+  /** Keep the current image (and its filled count) at the same display size,
+   *  like OBI's FrameBuffer._set_current_frame: only the write
    *  position returns to the start, the previous pixels stay on screen. */
   preserveImage?: boolean;
   /** Simulation ROI scans use zero-valued blank samples; keep the loaded image beneath them. */
@@ -214,6 +214,25 @@ const slice = createSlice({
       state.rasterCompositeMask = makeCompositeMask(a.payload.compositeROIs, state.resolution);
       state.rasterPreserveZeroSamples = a.payload.preserveZeroSamples === true;
       state.pendingRasterDisplay = null;
+      state.revision++;
+    },
+    /** Re-seed the underlay of the given display regions from `image` (the
+     *  source picture drawn at the current Zoom). Sequential ROI passes keep
+     *  one shared buffer, so after a Zoom change the pixels a blanked sample
+     *  would keep must come from the new zoom, not the one already acquired. */
+    seedVectorRegions(state, a: PayloadAction<{ image: Uint16Array; regions: ROIRequest[] }>) {
+      const edge = state.vectorEdge;
+      const { image, regions } = a.payload;
+      if (image.length !== edge * edge || state.vectorImage.length !== edge * edge) return;
+      for (const region of regions) {
+        const bounds = scanRegionPixelBounds(region, edge);
+        for (let y = bounds.y0; y < bounds.y1; y++) {
+          const start = y * edge + bounds.x0;
+          const end = y * edge + bounds.x1;
+          state.vectorImage.set(image.subarray(start, end), start);
+          state.vectorSampledMask.fill(0, start, end);
+        }
+      }
       state.revision++;
     },
     queueLiveScanDisplay(state, a: PayloadAction<{ kind: "raster" | "vector"; display: LiveDisplayGeometry }>) {
@@ -325,21 +344,13 @@ const slice = createSlice({
       const edge = a.payload.edge ?? VEC_EDGE;
       const scanPath = a.payload.scanPath ?? "vertical_raster";
       const source: VectorSource = pattern === "custom" && a.payload.roi ? "roi" : "vector";
-      const customCount = pattern === "custom"
-        ? a.payload.points?.length ??
-          (a.payload.simulationBitmap
-            ? Math.max(1, a.payload.simulationBitmap.width | 0) *
-              Math.max(1, a.payload.simulationBitmap.height | 0)
-            : 0)
-        : 0;
       const keepImage =
         a.payload.preserveImage === true &&
-        state.vectorPattern === pattern &&
-        state.vectorScanPath === scanPath &&
-        state.vectorSource === source &&
         state.vectorEdge === edge &&
-        state.vectorImage.length === edge * edge &&
-        (pattern !== "custom" || state.vectorCustomCount === customCount);
+        state.vectorImage.length === edge * edge;
+      // Sequential regions can have different point counts and alternate
+      // between a default background sweep and custom ROI passes. These
+      // change sample mapping, not the shared display buffer's dimensions.
       state.vectorPattern = pattern;
       state.vectorScanPath = scanPath;
       state.vectorSource = source;
@@ -616,6 +627,7 @@ export const {
   resetRaster,
   appendRaster,
   queueLiveScanDisplay,
+  seedVectorRegions,
   setupVector,
   setLiveVectorCustomPoints,
   appendVectorSamples,

@@ -120,6 +120,40 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
     assert.equal(sockets.at(-1).requests[0].parallel_rois ?? null, null);
     assert.equal(toggle().props.checked, false);
     await act(async () => { buttonByTitle("scan.stop.title").props.onClick(); });
+    await act(async () => { renderer.unmount(); });
+    renderer = null;
+
+    // Sequential ROI entries reuse an asset ID and the preceding frame;
+    // unlike parallel entries they do not carry an initialFrame per pass.
+    const { useScanStream } = await vite.ssrLoadModule("/src/hooks/useScanStream.ts");
+    let stream;
+    function StreamHarness() { stream = useScanStream(); return null; }
+    await act(async () => { renderer = create(React.createElement(Provider, { store }, React.createElement(StreamHarness))); });
+    const roi = { x_start: 0, x_end: 16383, y_start: 0, y_end: 16383 };
+    for (const kind of ["raster", "vector"]) {
+      const seed = Uint16Array.of(100, 200, 300, 400);
+      await act(async () => {
+        if (kind === "vector") store.dispatch(image.setupVector({ pattern: "default", edge: 2, initialImage: seed }));
+        else store.dispatch(image.resetRaster({ resolution: 2, initialFrame: seed }));
+      });
+      for (let pass = 0; pass < 3; pass++) {
+        await act(async () => {
+          const req = { roi, simulation_bitmap_id: "prepared-bitmap", output_mode: "SixteenBit" };
+          const options = { preserveFrame: true, initialFrame: null };
+          if (kind === "vector") stream.startVector({ ...req, pattern: "default", vector_resolution: 2 }, options);
+          else stream.startRaster({ ...req, resolution: 2 }, options);
+        });
+        await act(async () => {
+          const bytes = Uint8Array.of(0, 0, 0, 0, 0, 0, 0, 0).buffer;
+          sockets.at(-1).onmessage({ data: bytes });
+          sockets.at(-1).onmessage({ data: JSON.stringify({ event: "done", chunks: 1 }) });
+          sockets.at(-1).close();
+        });
+        const state = store.getState().image;
+        assert.deepEqual(kind === "vector" ? state.vectorImage : state.frame, seed,
+          `${kind} sequential pass ${pass} must preserve blanked pixels from the existing frame`);
+      }
+    }
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });
     await vite.close();

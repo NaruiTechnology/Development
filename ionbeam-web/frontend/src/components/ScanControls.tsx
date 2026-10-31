@@ -28,6 +28,7 @@ import {
   resetVector,
   setLiveVectorCustomPoints,
   queueLiveScanDisplay,
+  seedVectorRegions,
 } from "../store/imageSlice";
 import { registerScanActionStop, stopAllScanActions } from "../hooks/scanActionRegistry";
 import { useScanStream, type LiveGrayRule } from "../hooks/useScanStream";
@@ -52,6 +53,7 @@ import { ScanTakeoverEstimate } from "./TakeoverEstimate";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { SITE_OPTIONS } from "../lib/sites";
+import { prepareScanAssets } from "../lib/scanAssets";
 import { createScanQueue, latestScanQueue, loadScanQueue, prepareScanSequence, type ScanQueueSummary, type StoredScanEntry } from "../lib/scanQueues";
 import type { RasterRequest, ROIRequest, VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
@@ -108,6 +110,8 @@ type RegionScanEntry =
       simulationBitmapInfo?: { width: number; height: number } | null;
       hasSimulationBitmap?: boolean;
       initialFrame: Uint16Array | null;
+      /** Zoomed source picture to seed under this entry's display ROI before its next pass. */
+      pendingUnderlay?: Uint16Array | null;
     };
 
 const FULL_DAC_ROI: ROIRequest = {
@@ -554,13 +558,20 @@ export function ScanControls({
     // Advance from the stream event, not React phase renders: a fast stream
     // may start and complete before React renders the intermediate phase.
     const onComplete = () => {
-      void latestScanQueue().then(setPendingQueue).catch(() => {});
+      // Live sequences have no persisted queue to refresh on every ROI pass.
+      if (!regionScanRepeatRef.current.length) {
+        void latestScanQueue().then(setPendingQueue).catch(() => {});
+      }
       if (!regionScanQueueRef.current.length && regionScanRepeatRef.current.length) {
         regionScanQueueRef.current = [...regionScanRepeatRef.current];
       }
       const next = regionScanQueueRef.current.shift();
       if (next) startEntry(next, true);
     };
+    if (entry.kind === "vector" && entry.pendingUnderlay && preserveFrame && entry.displayROI) {
+      dispatch(seedVectorRegions({ image: entry.pendingUnderlay, regions: [entry.displayROI] }));
+      entry.pendingUnderlay = null;
+    }
     if (entry.kind === "raster") {
       stream.startRaster({ ...entry.req, preview }, {
         preserveFrame,
@@ -578,7 +589,7 @@ export function ScanControls({
         entry.initialFrame, onComplete, entry.simulationBitmapInfo, entry.hasSimulationBitmap,
       );
     }
-  }, [preview, startVectorRun, stream]);
+  }, [dispatch, preview, startVectorRun, stream]);
 
   const startRegionScanSequence = useCallback((entries: RegionScanEntry[], preserveFirst = false, repeat = false) => {
     const [first, ...rest] = entries;
@@ -714,8 +725,11 @@ export function ScanControls({
         const vectorBackground = roiAreaDefined && vectorImageFilled > 0
           ? resizeImageFrame(vectorImageFrame, vectorImageEdge, vector.vector_resolution)
           : null;
+        // Composite scans seed the background once. ROI passes preserve that
+        // frame, so allocating another full-size underlay for each ROI wastes
+        // memory and image decoding work, especially on sequential Live scans.
         const initialFrames = !isProduction && roiState.imageDataUrl
-          ? await Promise.all(regions.map((region, index) => bitmapImageFrame(roiState, vector.vector_resolution, {
+          ? await Promise.all(regions.map((region, index) => compositeROIs && index > 0 ? null : bitmapImageFrame(roiState, vector.vector_resolution, {
               sourceSelection: region,
               displayROI: displayRegions[index] ?? null,
             })))
@@ -734,7 +748,8 @@ export function ScanControls({
         if (backgroundRequest?.simulation_bitmap) {
           for (const request of requests) {
             if (request.pattern === "default" && !request.points) {
-              request.simulation_bitmap = backgroundRequest.simulation_bitmap;
+              request.simulation_bitmap = decorateSimulationBitmap(
+                backgroundRequest.simulation_bitmap, scanGrayScaleSelection, scanGrayScaleSkipped);
             }
           }
         }
@@ -1051,6 +1066,7 @@ export function ScanControls({
     if (infiniteScanActiveRef.current) {
       const regions = effectiveScanRegions(roiState.scan_regions, zoom, roiState);
       const dacRegions = regions.map((region) => region ? worldSelectionToDacROI(region, roiState) : null);
+      const displayRegionsForZoom = roiState.scan_regions.map((region) => worldSelectionToDacROI(region, roiState));
       // Sequential Infinite scans already end each region before starting the
       // next one. Replace their queued DAC bounds without cancelling the
       // region currently on the wire.
@@ -1072,6 +1088,45 @@ export function ScanControls({
         }
         const backgroundEntries = entries.length === dacRegions.length + 1 && entries[0]?.compositeROIs ? 1 : 0;
         if (entries.length !== dacRegions.length + backgroundEntries) return;
+        // Simulation entries carry a bitmap cropped to the zoomed region (and
+        // an uploaded asset ID for it). Swapping only `req.roi` pairs the new
+        // ROI with the old crop, so the pass paints stale, magnified pixels.
+        // Rebuild each region's request and underlay for the new zoom.
+        if (!isProduction && roiState.imageDataUrl) {
+          const roiEntries = entries.slice(backgroundEntries);
+          try {
+            const rebuilt = await Promise.all(roiEntries.map(async (entry, index) => {
+              if (!entry.hasSimulationBitmap && !hasBitmapSimulation(entry.req)) return null;
+              if (entry.kind === "vector" && entry.req.pattern === "custom" && entry.req.points) return null;
+              const region = regions[index] ?? null;
+              const built = entry.kind === "raster"
+                ? await rasterRequestWithBitmapSelection(
+                    { ...raster, roi: region }, { ...roiState, selection: region },
+                    { isProduction, allowBitmapSimulation, grayScaleSelection: scanGrayScaleSelection,
+                      grayScaleSkipped: scanGrayScaleSkipped })
+                : await buildVectorRequest(region);
+              return await prepareScanAssets(built);
+            }));
+            const underlays = kind === "vector"
+              ? await Promise.all(roiEntries.map((entry, index) => bitmapImageFrame(
+                  roiState, vectorImageEdge, [{ sourceSelection: regions[index] ?? null, displayROI: displayRegionsForZoom[index] ?? null }])))
+              : [];
+            if (generation !== zoomUpdateGenerationRef.current || regionScanRepeatRef.current !== entries) return;
+            roiEntries.forEach((entry, index) => {
+              const req = rebuilt[index];
+              if (!req) return;
+              (entry as { req: typeof req }).req = req;
+              entry.simulationBitmapInfo = null;
+              entry.hasSimulationBitmap = true;
+              if (entry.kind === "vector") entry.pendingUnderlay = underlays[index] ?? null;
+            });
+          } catch (error) {
+            if (generation === zoomUpdateGenerationRef.current) {
+              setZoomError(error instanceof Error ? error.message : String(error));
+            }
+            return;
+          }
+        }
         entries.slice(backgroundEntries).forEach((entry, index) => {
           const target = dacRegions[index] ?? null;
           if (entry.kind === "vector" && entry.req.pattern === "custom" && entry.req.points) {

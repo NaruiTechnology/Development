@@ -13,6 +13,7 @@ import {
 import imageReducer, {
   appendRaster,
   appendVectorSamples,
+  seedVectorRegions,
   queueLiveScanDisplay,
   resetRaster,
   setLiveVectorCustomPoints,
@@ -375,6 +376,61 @@ test("three vector ROI scans retain every result and untouched background", () =
     }
   });
   assert.deepEqual(state.vectorImage, expected);
+});
+
+test("sequential custom ROI updates retain other regions across point-count and background changes", () => {
+  const edge = 8;
+  const first = { x_start: 0, x_end: 4095, y_start: 0, y_end: 4095 };
+  const second = { x_start: 12288, x_end: 16383, y_start: 12288, y_end: 16383 };
+  let state = imageReducer(undefined, setupVector({
+    pattern: "default", edge, initialImage: new Uint16Array(edge * edge).fill(77),
+  }));
+  state = imageReducer(state, setupVector({
+    pattern: "custom", edge, roi: first, points: [[0, 0, 1], [4095, 4095, 1]], preserveImage: true,
+  }));
+  state = imageReducer(state, appendVectorSamples({ values: Uint16Array.of(1000, 1001) }));
+  const firstPass = state.vectorImage.slice();
+  assert.ok(firstPass.includes(1000));
+  assert.ok(firstPass.includes(1001));
+  assert.ok(firstPass.includes(77));
+  state = imageReducer(state, setupVector({
+    pattern: "custom", edge, roi: second,
+    points: [[12288, 12288, 1], [14000, 14000, 1], [16383, 16383, 1]], preserveImage: true,
+  }));
+  assert.deepEqual(state.vectorImage, firstPass, "starting a different ROI must retain all prior samples");
+  state = imageReducer(state, appendVectorSamples({ values: Uint16Array.of(2000, 2001, 2002) }));
+  const expected = state.vectorImage.slice();
+  assert.ok(expected.includes(1000));
+  assert.ok(expected.includes(2002));
+  state = imageReducer(state, setupVector({
+    pattern: "default", scanPath: "horizontal_sawtooth", edge,
+    compositeROIs: [first, second], preserveImage: true,
+  }));
+  assert.deepEqual(state.vectorImage, expected, "returning to the background pass must retain ROI data");
+  state = imageReducer(state, appendVectorSamples({ values: new Uint16Array(edge * edge).fill(88) }));
+  for (const roi of [first, second]) {
+    const bounds = scanRegionPixelBounds(roi, edge);
+    for (let y = bounds.y0; y < bounds.y1; y++) {
+      for (let x = bounds.x0; x < bounds.x1; x++) assert.equal(state.vectorImage[y * edge + x], expected[y * edge + x]);
+    }
+  }
+});
+
+test("zoom change re-seeds only the target ROI underlay in the shared sequential buffer", () => {
+  const edge = 8;
+  const first = { x_start: 0, x_end: 4095, y_start: 0, y_end: 4095 };
+  const second = { x_start: 12288, x_end: 16383, y_start: 12288, y_end: 16383 };
+  let state = imageReducer(undefined, setupVector({
+    pattern: "default", edge, initialImage: new Uint16Array(edge * edge).fill(500),
+  }));
+  const zoomed = new Uint16Array(edge * edge).fill(900);
+  state = imageReducer(state, seedVectorRegions({ image: zoomed, regions: [second] }));
+  const secondBounds = scanRegionPixelBounds(second, edge);
+  const firstBounds = scanRegionPixelBounds(first, edge);
+  assert.equal(state.vectorImage[secondBounds.y0 * edge + secondBounds.x0], 900);
+  assert.equal(state.vectorImage[firstBounds.y0 * edge + firstBounds.x0], 500, "other regions keep their pixels");
+  const wrongEdge = imageReducer(state, seedVectorRegions({ image: new Uint16Array(4), regions: [first] }));
+  assert.deepEqual(wrongEdge.vectorImage, state.vectorImage, "mismatched underlay size is ignored");
 });
 
 test("ROI streaming matches the reference per-sample mapping and stays fast", async () => {

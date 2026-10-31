@@ -164,6 +164,46 @@ test("Split captures running and stopped scans, preserves snapshots, and retains
       allowServerFigure = false;
       frames.clear();
     }
+    // Sequential passes change the active ROI, but red filter marks belong
+    // to all acquired regions and must survive the next loop's background.
+    store.dispatch({ type: "status/defaults/fulfilled", payload: { is_production: false, vector: {} } });
+    store.dispatch(scan.updateVector({ vector_resolution: 4 }));
+    store.dispatch(scan.setInfiniteActive(true));
+    store.dispatch(scan.updateROI({ roi_scan_enabled: true,
+      x_origin: 0, x_end: 16383, y_origin: 0, y_end: 16383,
+      scan_regions: [
+        { x_start: 0, x_end: 8191, y_start: 0, y_end: 8191 },
+        { x_start: 8192, x_end: 16383, y_start: 8192, y_end: 16383 },
+      ] }));
+    store.dispatch(scan.streamStarted());
+    const regions = store.getState().scan.roi.scan_regions;
+    await act(async () => {
+      renderer = create(React.createElement(Provider, { store }, React.createElement(ImageCanvas, {
+        kind: "vector", vectorGrayScaleSelection: [90, 110], vectorGrayScaleSkipped: false,
+      })), { createNodeMock: canvasMock });
+    });
+    const redCount = () => {
+      const pixels = paintedCanvases.at(-1).pixels;
+      let count = 0;
+      for (let i = 0; i < pixels.length; i += 4) if (pixels[i] > pixels[i + 1] && pixels[i] > pixels[i + 2]) count++;
+      return count;
+    };
+    for (let loop = 0; loop < 2; loop++) {
+      for (const [index, roi] of regions.entries()) {
+        await act(async () => {
+          store.dispatch(image.setupVector({ pattern: "default", scanPath: "horizontal_sawtooth", edge: 4,
+            roi, preserveImage: loop > 0 || index > 0 }));
+          store.dispatch(image.appendVectorSamples({ values: new Uint16Array(16).fill(100 * 256) }));
+        });
+        assert.equal(redCount(), loop === 0 && index === 0 ? 4 : 8);
+      }
+      await act(async () => {
+        store.dispatch(image.setupVector({ pattern: "default", scanPath: "horizontal_sawtooth", edge: 4,
+          compositeROIs: regions, preserveImage: true }));
+        store.dispatch(image.appendVectorSamples({ values: new Uint16Array(16).fill(50 * 256) }));
+      });
+      assert.equal(redCount(), 8, "background pass must retain dots from both ROIs");
+    }
   } finally {
     if (renderer) await act(async () => renderer.unmount());
     await vite.close();
