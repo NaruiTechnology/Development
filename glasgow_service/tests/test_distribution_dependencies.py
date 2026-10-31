@@ -198,3 +198,14 @@ def test_handoff_preserves_staged_payload_when_packaging_fails(tmp_path, monkeyp
     with pytest.raises(OSError, match="packaging failed"):
         builder.post_build_deploy("dist_app", str(deploy), str(workspace), "installer")
     assert (deploy / "dist_app.zip").read_bytes() == original
+
+
+@pytest.mark.parametrize("python_version, expected", [("3.14", "2.4.4"), ("3.15", "2.5.4")])
+def test_numpy_pins_agree_across_installer_and_native_app(python_version, expected):
+    from packaging.requirements import Requirement
+    for rel in ("requirements.txt", "ionbeam-native/requirements.txt", "DeployWorkSpace/Development/requirements.txt"):
+        requirements = [Requirement(line.strip()) for line in (DEVELOPMENT_ROOT / rel).read_text().splitlines()
+                        if line.strip().lower().startswith("numpy")]
+        active = [req for req in requirements if req.marker is None or req.marker.evaluate({"python_version": python_version})]
+        assert len(active) == 1, rel
+        assert str(active[0].specifier) == "==" + expected, rel
