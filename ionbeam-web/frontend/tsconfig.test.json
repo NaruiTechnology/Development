@@ -33,6 +33,7 @@
     "src/lib/beamHoldAnalysis.ts",
     "src/lib/bitmapVector.ts",
     "src/lib/scanAssets.ts",
+    "src/lib/scanQueues.ts",
     "src/lib/scanRepeat.ts",
     "src/lib/takeoverTiming.ts",
     "src/lib/vectorScanPath.ts",

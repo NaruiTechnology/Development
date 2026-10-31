@@ -15,7 +15,7 @@
  * to their actual populated cells. For vector custom, only requested
  * point coordinates are painted; unpopulated cells stay transparent.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
@@ -221,13 +221,21 @@ const KIND_KEYS: Record<string, TranslationKey> = {
   roi: "tabs.roi",
 };
 
+export interface CapturedScanImage {
+  kind: "raster" | "vector";
+  imageUrl: string;
+  scanId: number;
+}
+
 export function ImageCanvas({
   kind,
+  captureRef,
   onRenderedImageChange,
   onMergedFigureChange,
   onPaneImageChange,
   onTargetGrayImageChange,
   onPaneRecycle,
+  captureTargetImageRef,
   vectorGrayScaleSelection = null,
   vectorGrayScaleSkipped = null,
   imageLayout = 1,
@@ -241,10 +249,15 @@ export function ImageCanvas({
   onTargetGrayPick,
 }: {
   kind: ScanKind;
+  /** Capture the displayed result synchronously before changing pane layout. */
+  captureRef?: MutableRefObject<(() => CapturedScanImage | null) | null>;
   /** `scanId` is the same for every image of one scan run and changes when a new scan starts. */
   onRenderedImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null, scanId: number) => void;
   onMergedFigureChange?: (kind: Extract<ScanKind, "raster" | "vector">, imageUrl: string | null) => void;
   onPaneRecycle?: (kind: "raster" | "vector", pane: number) => void;
+  /** Filled with a function that snapshots the image currently shown in the
+   *  live pane (with its scan settings), so the Split button can carry it over. */
+  captureTargetImageRef?: MutableRefObject<(() => Promise<string | null>) | null>;
   onPaneImageChange?: (kind: Extract<ScanKind, "raster" | "vector">, pane: number, imageUrl: string) => void;
   onTargetGrayImageChange?: (imageUrl: string) => void;
   vectorGrayScaleSelection?: [number, number] | null;
@@ -759,6 +772,35 @@ export function ImageCanvas({
     roi.imageDataUrl,
   ]);
 
+  const captureRenderedScan = useCallback((): CapturedScanImage | null => {
+    if (kind !== "raster" && kind !== "vector") return null;
+    const scanId = scanSequenceMemory[kind] ?? 0;
+    const savedImage = singlePaneImage ?? mergedFigureUrl;
+    if (savedImage) return { kind, imageUrl: savedImage, scanId };
+    if (!hasLiveCanvasData) return null;
+    const liveBuffer = kind === "raster" ? frame : vectorImage;
+    if (runBufferMemory[kind] !== liveBuffer) return null;
+    const canvas = canvasRef.current;
+    if (!canvas || canvas.width <= 0 || canvas.height <= 0) return null;
+    try {
+      const imageUrl = canvas.toDataURL("image/png");
+      const snapshot = liveSnapshotRef.current;
+      if (snapshot) rememberArchivedPaint(imageUrl, snapshot);
+      rememberImageExtent(imageUrl, imageExtentRef.current);
+      const params = lastScanParamsRef.current;
+      if (params?.kind === kind) rememberScanParams(imageUrl, params.items);
+      return { kind, imageUrl, scanId };
+    } catch {
+      return null;
+    }
+  }, [kind, singlePaneImage, mergedFigureUrl, hasLiveCanvasData, frame, vectorImage, revision]);
+
+  useEffect(() => {
+    if (!captureRef) return;
+    captureRef.current = captureRenderedScan;
+    return () => { captureRef.current = null; };
+  }, [captureRef, captureRenderedScan]);
+
   useEffect(() => {
     if (singlePaneImage || !onRenderedImageChangeRef.current || (kind !== "raster" && kind !== "vector")) return;
     const scanId = scanSequenceMemory[kind] ?? 0;
@@ -776,7 +818,9 @@ export function ImageCanvas({
       emit(null);
       return;
     }
-    if (phase !== "completed") return;
+    // Stop leaves a Live scan's last pixels visible in idle. They are still
+    // a result and must be available to Split just like a completed scan.
+    if (phase !== "completed" && phase !== "idle") return;
     // Only a buffer the last scan actually ran into is a scan result.
     const liveBuffer = kind === "raster" ? frame : vectorImage;
     const runBuffer = runBufferMemory[kind];
@@ -786,13 +830,10 @@ export function ImageCanvas({
       const canvas = canvasRef.current;
       if (!canvas || canvas.width <= 0 || canvas.height <= 0) return;
       try {
-        const image = canvas.toDataURL("image/png");
+        const captured = captureRenderedScan();
+        if (!captured) return;
+        const image = captured.imageUrl;
         markScanPerformanceCanvasReady(kind);
-        const snapshot = liveSnapshotRef.current;
-        if (snapshot) rememberArchivedPaint(image, snapshot);
-        rememberImageExtent(image, imageExtentRef.current);
-        const scanParams = lastScanParamsRef.current;
-        if (scanParams?.kind === kind) rememberScanParams(image, scanParams.items);
         emit(image);
       } catch {
         emit(null);
@@ -813,6 +854,7 @@ export function ImageCanvas({
     vectorGraySpotSkipped,
     vectorGraySpotColor,
     singlePaneImage,
+    captureRenderedScan,
   ]);
 
   useEffect(() => {
@@ -1013,6 +1055,42 @@ export function ImageCanvas({
     phase === "completed" &&
     !hasLiveCanvasData;
   const displayedFigureUrl = mergedFigureUrl ?? (preferServerFigure ? serverFigureUrl : null);
+  // Snapshot of what the live pane shows right now, used by the Split button.
+  // It reads the visible result directly rather than a cached copy: a server
+  // figure or an annotated (merged) figure never reaches the completed-image
+  // cache, so without this the split opened with an empty first pane.
+  useEffect(() => {
+    if (!captureTargetImageRef || (kind !== "raster" && kind !== "vector")) return;
+    captureTargetImageRef.current = async () => {
+      if (phase === "running" || phase === "stopping") return null;
+      const savedImage = singlePaneImage ?? mergedFigureUrl;
+      if (savedImage) {
+        const image = await persistentImageUrl(savedImage);
+        rememberImageExtent(image, archivedImageExtents.get(savedImage) ?? imageExtentRef.current);
+        const params = archivedScanParams.get(savedImage) ?? (lastScanParams?.kind === kind ? lastScanParams.items : null);
+        if (params) rememberScanParams(image, params);
+        return image;
+      }
+      const canvas = canvasRef.current;
+      if (hasLiveCanvasData && canvas && canvas.width > 0 && canvas.height > 0) {
+        const image = canvas.toDataURL("image/png");
+        const snapshot = liveSnapshotRef.current;
+        if (snapshot) rememberArchivedPaint(image, snapshot);
+        rememberImageExtent(image, imageExtentRef.current);
+        if (lastScanParams?.kind === kind) rememberScanParams(image, lastScanParams.items);
+        return image;
+      }
+      if (preferServerFigure && serverFigureUrl) {
+        const image = await persistentImageUrl(serverFigureUrl);
+        rememberImageExtent(image, imageExtentRef.current);
+        if (liveScanParamItems?.length) rememberScanParams(image, liveScanParamItems);
+        return image;
+      }
+      return null;
+    };
+    return () => { captureTargetImageRef.current = null; };
+  }, [captureTargetImageRef, kind, phase, singlePaneImage, mergedFigureUrl,
+    hasLiveCanvasData, preferServerFigure, serverFigureUrl, lastScanParams, liveScanParamItems]);
 
   let nativeEdge: number;
   if (kind === "raster") {
@@ -3028,6 +3106,21 @@ function copyPaintSnapshot(snapshot: PaintSnapshot): PaintSnapshot {
         spotMask: snapshot.spotMask ? snapshot.spotMask.slice() : null,
       };
   }
+}
+
+// Blob URLs of server figures are revoked when the live pane changes, so an
+// archived pane needs a self-contained data URL instead.
+async function persistentImageUrl(url: string): Promise<string> {
+  if (url.startsWith("data:")) return url;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`image capture: HTTP ${response.status}`);
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
 // A canvas owns one reusable RGBA buffer, released when the canvas is collected.

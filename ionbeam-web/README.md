@@ -130,6 +130,22 @@ Changes during request preparation are applied after startup; Stop cancels any
 pending handover. Authentication, vacuum readiness, and configuration locks
 still apply. This uses the existing frontend build and deployment source copy.
 
+Sequential simulation ROI passes use the same sample batching as Parallel
+acquisition, avoiding an artificial delay for every small transport packet.
+Repeating ROI sequences prepare bitmap assets once and reuse their IDs;
+changing a gray rule rebuilds those prepared assets. Standalone target-gray
+feedback retains the packet cadence that advances its within-pass updates.
+
+Split captures the displayed scan before changing the layout, including a
+stopped Live scan whose result notification has not yet run. Its image, raw
+paint snapshot, calibrated extent, and scan settings remain in the first pane;
+the second pane is the next scan target. These changes use the existing
+frontend build and compiled Glasgow service deployment packaging.
+Server and annotated figures use persistent data URLs when carried into a
+split pane, so revoking the original server blob URL does not erase the image.
+Repeated Split clicks share the pending capture instead of opening duplicate
+layouts while that conversion is in progress.
+
 For the managed local stack, use `Development/Scripts/manage-local-system.sh
 restart`. It verifies the locked AG Grid dependencies and clears Vite's
 optimized-dependency cache before starting the frontend, preventing stale

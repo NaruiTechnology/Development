@@ -1412,10 +1412,13 @@ class DeviceService:
         return dict(override) if isinstance(override, dict) else self._simulation_defaults
 
     def _prepare_simulated_stream_request(self, req, *, pace: bool):
-        if pace and req.parallel_rois:
+        if pace and (req.parallel_rois or getattr(req, "target_gray_level", None) is None):
             # Transport packets are not acquisition steps. A small hardware
             # latency must not add 20 ms of artificial delay per ~500 pixels
-            # across millions of interleaved simulation samples.
+            # across millions of simulation samples. Use the same batching
+            # for sequential ROI passes and parallel acquisition.
+            # A standalone target-gray pass retains its smaller packets: their
+            # cadence drives the feedback steps within that pass.
             req = req.model_copy(update={
                 "latency_bytes": max(req.latency_bytes, req.dwell * 16384),
             })

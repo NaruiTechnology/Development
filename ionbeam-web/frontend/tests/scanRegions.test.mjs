@@ -376,3 +376,66 @@ test("three vector ROI scans retain every result and untouched background", () =
   });
   assert.deepEqual(state.vectorImage, expected);
 });
+
+test("ROI streaming matches the reference per-sample mapping and stays fast", async () => {
+  const { vectorScanSamplePixel } = await import("../.test-dist/lib/vectorScanPath.js");
+  const edge = 96;
+  const roi = { x_start: 2000, x_end: 9000, y_start: 3000, y_end: 11000 };
+  const roi2 = { x_start: 9500, x_end: 15000, y_start: 500, y_end: 6000 };
+  const bounds = scanRegionPixelBounds(roi, edge);
+  const bounds2 = scanRegionPixelBounds(roi2, edge);
+  const samples = Uint16Array.from({ length: edge * edge * 2 }, (_, i) => (i * 7 + 1) % 65535 || 1);
+  const feed = (reducerState, action, data, key, chunk) => {
+    let state = reducerState;
+    for (let o = 0; o < data.length; o += chunk) state = imageReducer(state, action({ [key]: data.subarray(o, o + chunk) }));
+    return state;
+  };
+
+  // Sequential raster ROI (chunk size deliberately does not divide the frame).
+  let state = imageReducer(undefined, resetRaster({ resolution: edge, roi }));
+  state = feed(state, appendRaster, samples.subarray(0, edge * edge), "pixels", 1000);
+  const expectedRaster = new Uint16Array(edge * edge);
+  for (let i = 0; i < edge * edge; i++) {
+    expectedRaster[mapScanPixelIndexToFrame(bounds, edge, i % edge, Math.floor(i / edge))] = samples[i];
+  }
+  assert.deepEqual(Array.from(state.frame), Array.from(expectedRaster));
+
+  // Parallel raster keeps its round-robin sample order.
+  state = imageReducer(undefined, resetRaster({ resolution: edge, parallelROIs: [roi, roi2] }));
+  state = feed(state, appendRaster, samples, "pixels", 777);
+  const expectedParallel = new Uint16Array(edge * edge);
+  for (let index = 0; index < edge * edge * 2; index++) {
+    const region = index % 2;
+    const local = Math.floor(index / 2);
+    expectedParallel[mapScanPixelIndexToFrame(region ? bounds2 : bounds, edge, local % edge, Math.floor(local / edge))] = samples[index];
+  }
+  assert.deepEqual(Array.from(state.frame), Array.from(expectedParallel));
+
+  // Sequential vector ROI on every scan path.
+  for (const scanPath of ["horizontal_sawtooth", "horizontal_triangle", "vertical_raster", "vertical_serpentine"]) {
+    state = imageReducer(undefined, setupVector({ pattern: "default", edge, scanPath, roi, displayROI: roi }));
+    state = feed(state, appendVectorSamples, samples.subarray(0, edge * edge), "values", 1000);
+    const expected = new Uint16Array(edge * edge);
+    const expectedMask = new Uint8Array(edge * edge);
+    for (let i = 0; i < edge * edge; i++) {
+      const pixel = vectorScanSamplePixel(i, edge, scanPath);
+      const destination = mapScanPixelIndexToFrame(bounds, edge, pixel.x, pixel.y);
+      expected[destination] = samples[i];
+      expectedMask[destination] = 1;
+    }
+    assert.deepEqual(Array.from(state.vectorImage), Array.from(expected), scanPath);
+    assert.deepEqual(Array.from(state.vectorSampledMask), Array.from(expectedMask), scanPath);
+  }
+
+  // Partial-ROI rendering must not be dramatically slower than a full frame.
+  const bigEdge = 512;
+  const big = new Uint16Array(bigEdge * bigEdge).fill(9);
+  const time = (regions) => {
+    let s = imageReducer(undefined, resetRaster({ resolution: bigEdge, roi: regions }));
+    const start = performance.now();
+    for (let o = 0; o < big.length; o += 4096) s = imageReducer(s, appendRaster({ pixels: big.subarray(o, o + 4096) }));
+    return performance.now() - start;
+  };
+  time(roi); time(null);
+  assert.ok(time(roi) < Math.max(100, time(null) * 40), "ROI raster append regressed to per-sample proxy access");
+});

@@ -45,6 +45,29 @@ export function vectorScanSamplePixel(
   };
 }
 
+/** Allocation-free `vectorScanSamplePixel` for per-sample hot loops. Writes the
+ * pixel into `out` and returns false past the end of the pass. */
+export function vectorScanSampleXY(
+  sampleIndex: number,
+  size: number,
+  path: VectorScanPath,
+  out: { x: number; y: number },
+): boolean {
+  if (sampleIndex < 0 || sampleIndex >= size * size) return false;
+  if (path === "horizontal_sawtooth" || path === "horizontal_triangle") {
+    const y = Math.floor(sampleIndex / size);
+    const offset = sampleIndex - y * size;
+    out.x = path === "horizontal_triangle" && (y & 1) === 1 ? size - 1 - offset : offset;
+    out.y = y;
+    return true;
+  }
+  const x = Math.floor(sampleIndex / size);
+  const offset = sampleIndex - x * size;
+  out.x = x;
+  out.y = path === "vertical_serpentine" && (x & 1) === 1 ? size - 1 - offset : offset;
+  return true;
+}
+
 export function* bitmapScanCoordinates(
   width: number,
   height: number,

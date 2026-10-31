@@ -51,7 +51,7 @@ import { ScanTakeoverEstimate } from "./TakeoverEstimate";
 import { selectedEquipmentId, setSelectedEquipmentId } from "../lib/adminActivity";
 import { scanAuthHeaders } from "../lib/authIdentity";
 import { SITE_OPTIONS } from "../lib/sites";
-import { createScanQueue, latestScanQueue, loadScanQueue, type ScanQueueSummary, type StoredScanEntry } from "../lib/scanQueues";
+import { createScanQueue, latestScanQueue, loadScanQueue, prepareScanSequence, type ScanQueueSummary, type StoredScanEntry } from "../lib/scanQueues";
 import type { RasterRequest, ROIRequest, VectorRequest } from "../types/api";
 import { ScanType } from "../types/scanType";
 
@@ -594,7 +594,10 @@ export function ScanControls({
   }, [dispatch, startRegionScanEntry]);
 
   async function persistScanSequence(entries: RegionScanEntry[], repeat: boolean): Promise<RegionScanEntry[]> {
-    if (repeat) return entries;
+    if (repeat) {
+      const prepared = await prepareScanSequence(entries);
+      return entries.map((entry, index) => ({ ...entry, ...prepared[index] })) as RegionScanEntry[];
+    }
     const stored = entries.map(({ initialFrame: _initialFrame, ...entry }) => entry) as StoredScanEntry[];
     const created = await createScanQueue(stored);
     setPendingQueue(created.summary);
@@ -1318,6 +1321,12 @@ export function ScanControls({
     if (!changed || !infiniteScanActiveRef.current) return;
     setGrayRuleError(null);
     const liveEntry = infiniteScanRef.current;
+    if (!liveEntry) {
+      // Rebuild prepared bitmap IDs when their pixel flags change. Ordinary
+      // repeats reuse the IDs instead of serializing/uploading every ROI again.
+      scheduleZoomRestart("infinite");
+      return;
+    }
     const entries = liveEntry ? [liveEntry] : regionScanRepeatRef.current;
     for (const [index, entry] of entries.entries()) {
       if (entry.kind !== "vector") continue;

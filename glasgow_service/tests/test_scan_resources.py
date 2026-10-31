@@ -60,3 +60,22 @@ def test_parallel_raster_converts_a_shared_bitmap_only_once(monkeypatch):
     samples = [value for chunk in module._bitmap_raster_chunks(req) for value in chunk]
     assert calls == 1
     assert samples[::2] == samples[1::2]
+
+
+@pytest.mark.parametrize("kind", ["raster", "vector"])
+def test_sequential_and_parallel_simulation_have_equal_pacing_per_sample(kind):
+    service = DeviceService(str(CONFIG))
+    region = ROIRequest(x_start=0, x_end=8191, y_start=0, y_end=8191)
+    request = RasterRequest if kind == "raster" else VectorRequest
+    size = {"resolution": 1024} if kind == "raster" else {"vector_resolution": 1024}
+    sequential = request(**size, dwell=8, latency_bytes=4096, roi=region)
+    parallel = request(**size, dwell=8, latency_bytes=4096, parallel_rois=[region, region])
+    single = service._prepare_simulated_stream_request(sequential, pace=True)
+    combined = service._prepare_simulated_stream_request(parallel, pace=True)
+    # Two sequential ROI passes take the same transport delays as one
+    # interleaved pass of two ROIs: 128 packets, instead of 4096 packets.
+    chunk_samples = single.latency_bytes // single.dwell
+    assert chunk_samples == combined.latency_bytes // combined.dwell == 16384
+    assert (1024 * 1024 // chunk_samples) * 2 == 128
+    assert sequential.latency_bytes == parallel.latency_bytes == 4096
+    assert service._prepare_simulated_stream_request(sequential, pace=False) is sequential

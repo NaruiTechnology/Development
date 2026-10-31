@@ -39,7 +39,7 @@ import { ScanModeHelp } from "./components/ScanModeHelp";
 import { VectorParameters } from "./components/VectorParameters";
 import { VectorScanExecutionSettings } from "./components/VectorScanExecutionSettings";
 import { RasterScanExecutionSettings } from "./components/RasterScanExecutionSettings";
-import { ImageCanvas } from "./components/ImageCanvas";
+import { ImageCanvas, type CapturedScanImage } from "./components/ImageCanvas";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { ROIEditor } from "./components/ROIEditor";
 import { ROIScanPreview } from "./components/ROIScanPreview";
@@ -186,6 +186,9 @@ export function App() {
   // "<kind>:<scanId>" of the scan whose image currently occupies the target pane.
   const completedImageRecordedScanRef = useRef<string | null>(null);
   const completedImagePaneRef = useRef<Record<"raster" | "vector", number>>({ raster: 0, vector: 0 });
+  // Filled by ImageCanvas: snapshots the result shown in the live pane.
+  const captureTargetImageRef = useRef<(() => Promise<string | null>) | null>(null);
+  const splitInFlightRef = useRef(false);
   const isProduction = useAppSelector((s) => s.status.defaults?.is_production === true);
   const adcTestEnabled = useAppSelector((s) => s.status.defaults?.adc_test !== false);
   const rasterResolution = useAppSelector((s) => s.scan.raster.resolution);
@@ -221,6 +224,7 @@ export function App() {
     kind: Extract<ScanKind, "raster" | "vector">;
     imageUrl: string;
   } | null>(null);
+  const captureScanImageRef = useRef<(() => CapturedScanImage | null) | null>(null);
   // Each scan kind keeps its own pane layout: splitting the vector view must not
   // open empty panes on the raster view (and vice versa). Once any view has
   // been split, the other one splits itself after its first completed scan.
@@ -1029,8 +1033,9 @@ export function App() {
   const showSplitButton = kind === "raster" || kind === "vector";
   const canSplitImagePanel = imagePanelLayout === 1;
 
-  const splitImagePanel = useCallback(() => {
+  const splitImagePanel = useCallback(async () => {
     if (!canSplitImagePanel || (kind !== "raster" && kind !== "vector")) return;
+    if (splitInFlightRef.current) return;
     setImagePanelLocked(true);
     const saved = savedSplitRef.current;
     if (saved) {
@@ -1043,9 +1048,29 @@ export function App() {
       return;
     }
     completedImagePaneRef.current[kind] = 0;
+    // Capture before the pane layout changes. A stopped Live scan may still
+    // be waiting for its asynchronous result notification.
+    const captured = captureScanImageRef.current?.();
+    let imageUrl = captured?.kind === kind ? captured.imageUrl : currentTargetImage;
+    splitInFlightRef.current = true;
+    try {
+      // The existing synchronous path preserves raw samples and scan identity.
+      // Server/blob figures also need the patch's persistent image conversion.
+      if (!captured || captured.kind !== kind || !captured.imageUrl.startsWith("data:")) {
+        imageUrl = (await captureTargetImageRef.current?.()) ?? imageUrl;
+      }
+    } catch {
+      // Keep the existing rendered result if a server figure cannot be read.
+    } finally {
+      splitInFlightRef.current = false;
+    }
+    if (captured?.kind === kind) {
+      completedImageRecordedScanRef.current = `${kind}:${captured.scanId}`;
+    }
+    if (imageUrl) setLastLiveScanImage({ kind, imageUrl });
     // Preserve an existing image when available; otherwise open two empty panes.
-    const targetPane = currentTargetImage === null ? 0 : 1;
-    setImagePanelSlots((current) => ({ ...current, [kind]: [currentTargetImage, null] }));
+    const targetPane = imageUrl === null ? 0 : 1;
+    setImagePanelSlots((current) => ({ ...current, [kind]: [imageUrl, null] }));
     setImagePanelLayoutByKind((current) => ({ ...current, [kind]: 2 }));
     setSelectedImagePane((current) => ({ ...current, [kind]: targetPane }));
     setScanTargetImagePane((current) => ({ ...current, [kind]: targetPane }));
@@ -1897,11 +1922,13 @@ export function App() {
               ) : (
                   <ImageCanvas
                     kind={kind as ScanKind}
+                    captureRef={captureScanImageRef}
                     onTargetGrayPick={kind === "raster" || kind === "vector" ? handleTargetGrayPick : undefined}
                     onRenderedImageChange={handleRenderedImageChange}
                     onMergedFigureChange={handleMergedFigureChange}
                     onPaneImageChange={handleImagePaneChange}
                     onPaneRecycle={handleImagePaneRecycle}
+                    captureTargetImageRef={captureTargetImageRef}
                   vectorGrayScaleSelection={selectedTargetGray !== null
                     ? targetGrayFilter(selectedTargetGray).selection
                     : vectorGrayFilterActive ? appliedVectorGrayRange : null}

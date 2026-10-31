@@ -47,6 +47,40 @@ export function mapScanPixelIndexToFrame(
   return targetY * size + targetX;
 }
 
+/** Per-axis lookup tables equivalent to `mapScanPixelIndexToFrame`, so the
+ * streaming reducers map a sample with two array reads and one add instead of
+ * a function call with clamping per sample: `ys[y] + xs[x]` is the frame index. */
+export interface ScanPixelAxisMaps {
+  xs: Int32Array;
+  /** Already multiplied by the frame edge. */
+  ys: Int32Array;
+}
+
+export function scanPixelAxisMaps(bounds: ScanPixelBounds, edge: number): ScanPixelAxisMaps {
+  const size = Math.max(1, Math.trunc(edge));
+  const width = bounds.x1 - bounds.x0;
+  const height = bounds.y1 - bounds.y0;
+  const xs = new Int32Array(size);
+  const ys = new Int32Array(size);
+  for (let i = 0; i < size; i++) {
+    xs[i] = bounds.x0 + Math.min(width - 1, Math.floor((i * width) / size));
+    ys[i] = (bounds.y0 + Math.min(height - 1, Math.floor((i * height) / size))) * size;
+  }
+  return { xs, ys };
+}
+
+/** Identity mapping (full frame). */
+export function fullFrameAxisMaps(edge: number): ScanPixelAxisMaps {
+  const size = Math.max(1, Math.trunc(edge));
+  const xs = new Int32Array(size);
+  const ys = new Int32Array(size);
+  for (let i = 0; i < size; i++) {
+    xs[i] = i;
+    ys[i] = i * size;
+  }
+  return { xs, ys };
+}
+
 /** Absolute zoom ceiling: the 14-bit DAC has 16384 codes and the lowest scan
  * resolution is 64 samples per axis, so 16384 / 64 = 256. The usable maximum
  * for a given resolution and ROI set is lower (see scanValidation.ts). */
