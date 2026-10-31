@@ -204,6 +204,43 @@ test("Split captures running and stopped scans, preserves snapshots, and retains
       });
       assert.equal(redCount(), 8, "background pass must retain dots from both ROIs");
     }
+    // Each Sequential ROI pass ends in "completed", but only Stop produces a
+    // result. Encoding and archiving the canvas after every pass froze the
+    // browser on long Live runs.
+    await act(async () => { renderer.unmount(); });
+    renderer = null;
+    store.dispatch(scan.streamReset());
+    store.dispatch(scan.setInfiniteActive(true));
+    store.dispatch(scan.streamStarted());
+    const liveNotifications = [];
+    let encodes = 0;
+    const countingCanvas = (element) => {
+      const canvas = canvasMock(element);
+      if (canvas?.toDataURL) { const encode = canvas.toDataURL; canvas.toDataURL = () => { encodes++; return encode(); }; }
+      return canvas;
+    };
+    await act(async () => {
+      renderer = create(React.createElement(Provider, { store }, React.createElement(ImageCanvas, {
+        kind: "vector", onRenderedImageChange: (...args) => liveNotifications.push(args),
+      })), { createNodeMock: countingCanvas });
+    });
+    const runFrames = async () => act(async () => { for (const callback of [...frames.values()]) callback(0); frames.clear(); });
+    for (let pass = 0; pass < 3; pass++) {
+      await act(async () => {
+        store.dispatch(image.appendVectorSamples({ values: new Uint16Array(16).fill(100 * 256) }));
+        store.dispatch(scan.streamCompleted({ kind: "vector", chunks: 1, image_filename: null, csv_filename: null }));
+      });
+      await runFrames();
+      await act(async () => { store.dispatch(scan.streamStarted()); });
+    }
+    assert.equal(encodes, 0, "intermediate Live passes must not encode the canvas");
+    assert.equal(liveNotifications.filter(([, url]) => url).length, 0, "intermediate Live passes are not results");
+    await act(async () => {
+      store.dispatch(scan.setInfiniteActive(false));
+      store.dispatch(scan.streamReset());
+    });
+    await runFrames();
+    assert.equal(liveNotifications.filter(([, url]) => url).length, 1, "Stop archives the final image once");
   } finally {
     if (renderer) await act(async () => renderer.unmount());
     await vite.close();
