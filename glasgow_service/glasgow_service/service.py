@@ -759,7 +759,8 @@ def _regular_vector_coordinates(edge, roi, scan_path, indices):
     return xr.start + ((xi * xr.step) >> 8), yr.start + ((yi * yr.step) >> 8)
 
 
-def _bitmap_raster_chunks(req: RasterRequest, transforms=None) -> Optional[List[array.array]]:
+def _bitmap_raster_chunks(req: RasterRequest, transforms=None, _grids=None) -> Optional[List[array.array]]:
+    _grids = {} if _grids is None else _grids
     if req.parallel_rois and req.parallel_simulation_bitmaps:
         if len(req.parallel_rois) != len(req.parallel_simulation_bitmaps):
             raise ValueError("parallel_simulation_bitmaps must match parallel_rois")
@@ -768,7 +769,7 @@ def _bitmap_raster_chunks(req: RasterRequest, transforms=None) -> Optional[List[
             part = _bitmap_raster_chunks(req.model_copy(update={
                 "roi": region, "parallel_rois": None,
                 "simulation_bitmap": bitmap, "parallel_simulation_bitmaps": None,
-            }), transforms)
+            }), transforms, _grids)
             if part is None:
                 return None
             parts.append(part)
@@ -778,8 +779,10 @@ def _bitmap_raster_chunks(req: RasterRequest, transforms=None) -> Optional[List[
     if bitmap is None or not bitmap.pixels:
         return None
 
-    bitmap_mode = _infer_bitmap_mode(bitmap)
-    grid = _bitmap_sample_grid(bitmap, bitmap_mode)
+    key = id(bitmap)
+    if key not in _grids:
+        _grids[key] = _bitmap_sample_grid(bitmap)
+    grid = _grids[key]
 
     pixels_per_chunk = max(1, math.ceil(req.latency_bytes / req.dwell))
     total = req.resolution * req.resolution
@@ -1431,11 +1434,17 @@ class DeviceService:
             from . import scan_assets
             if bitmap_ids and len(bitmap_ids) != len(req.parallel_rois or []):
                 raise ValueError("parallel bitmap asset IDs must match parallel ROIs")
+            def load_bitmap(asset_id):
+                bitmap = scan_assets.load(asset_id)
+                # Normal acquisition only reads immutable assets. Target-gray
+                # feedback mutates pixels, so only that path needs a private copy.
+                return bitmap.model_copy(deep=True) if kind == "vector" and req.target_gray_level is not None else bitmap
+
             req = req.model_copy(update={
                 "simulation_bitmap": await asyncio.to_thread(
-                    lambda: scan_assets.load(bitmap_id).model_copy(deep=True)) if bitmap_id else req.simulation_bitmap,
+                    load_bitmap, bitmap_id) if bitmap_id else req.simulation_bitmap,
                 "parallel_simulation_bitmaps": await asyncio.to_thread(
-                    lambda: [scan_assets.load(asset_id).model_copy(deep=True) for asset_id in bitmap_ids]
+                    lambda: [load_bitmap(asset_id) for asset_id in bitmap_ids]
                 ) if bitmap_ids else req.parallel_simulation_bitmaps,
                 "simulation_bitmap_id": None,
                 "parallel_simulation_bitmap_ids": None,

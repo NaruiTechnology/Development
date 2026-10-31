@@ -14,6 +14,9 @@ import { persistDimensionCalibration } from "../lib/dimensionCalibrationPersiste
 const calibrationPersistence = createListenerMiddleware();
 
 export const store = configureStore({
+  // Streaming actions carry large pixel/point buffers. Retaining an action
+  // history duplicates those buffers throughout a continuous scan.
+  devTools: false,
   reducer: {
     status: statusReducer,
     scan: scanReducer,
@@ -40,6 +43,7 @@ export const store = configureStore({
       },
       serializableCheck: {
         ignoredPaths: [
+          "image",
           "image.frame",
           "image.vectorImage",
           "image.vectorCustomPoints",
@@ -48,6 +52,8 @@ export const store = configureStore({
           "image.vectorCustomSpotMask",
         ],
         ignoredActions: [
+          "image/queueLiveScanDisplay",
+          "image/setLiveVectorCustomPoints",
           "image/resetRaster",
           "image/appendRaster",
           "image/setupVector",

@@ -370,6 +370,19 @@ function inferBitmapMode(bitmap: SimulationBitmapPayload): "skip" | "spot" | nul
   return null;
 }
 
+function bitmapModeCache() {
+  const modes = new WeakMap<SimulationBitmapPayload, ReturnType<typeof inferBitmapMode>>();
+  return (bitmap: SimulationBitmapPayload) => {
+    if (!modes.has(bitmap)) modes.set(bitmap, inferBitmapMode(bitmap));
+    return modes.get(bitmap)!;
+  };
+}
+
+async function waitForScanConsumer(ws: WebSocket): Promise<boolean> {
+  while (ws.readyState === ws.OPEN && ws.bufferedAmount > 1024 * 1024) await sleep(10);
+  return ws.readyState === ws.OPEN;
+}
+
 function sampleBitmapPixel(
   pixel: number | SimulationBitmapPixel | undefined,
   mode: "skip" | "spot" | null
@@ -421,6 +434,7 @@ export async function streamMockRaster(
   ws: WebSocket,
   p: RasterParams
 ): Promise<void> {
+  const bitmapMode = bitmapModeCache();
   const regionLength = p.resolution * p.resolution;
   const regionCount = p.parallel_rois?.length ?? 1;
   const total = regionLength * regionCount;
@@ -438,7 +452,7 @@ export async function streamMockRaster(
   let framesDone = 0;
   let activeGeometry = p.getGeometry?.() ?? p;
   while (sent < total || p.continuous === true) {
-    if (ws.readyState !== ws.OPEN) return;
+    if (!await waitForScanConsumer(ws)) return;
     // Live scan: wrap to the next frame on the same socket (Stop closes it).
     if (sent >= total) {
       framesDone++;
@@ -470,7 +484,7 @@ export async function streamMockRaster(
             bitmap,
             p.resolution <= 1 ? 0 : x / (p.resolution - 1),
             p.resolution <= 1 ? 0 : y / (p.resolution - 1),
-            inferBitmapMode(bitmap)
+            bitmapMode(bitmap)
           )
         : sampleFakeAdc(dacX, dacY, simulation, simulationImage);
       writeSampleBE(buf, k, sample);
@@ -501,6 +515,7 @@ export async function streamMockVector(
   ws: WebSocket,
   p: VectorParams
 ): Promise<void> {
+  const bitmapMode = bitmapModeCache();
   // Default pattern: synthesise edge² 14-bit DAC points in the same
   // (x, y) order the real FPGA emits. Custom replays the client's
   // already-14-bit DAC tuples.
@@ -542,7 +557,7 @@ export async function streamMockVector(
   let pointIterator = makePointIterator();
   let activeGeometry = p.getGeometry?.() ?? p;
   while (i < pointCount || (p.continuous === true && pointCount > 0)) {
-    if (ws.readyState !== ws.OPEN) return;
+    if (!await waitForScanConsumer(ws)) return;
     // Live scan: wrap to the next pass on the same socket (Stop closes it).
     if (i >= pointCount) {
       passesDone++;
@@ -578,12 +593,12 @@ export async function streamMockVector(
         ? p.pattern !== "custom" || (p.points && p.points.length)
             ? blank === true && p.target_gray_level == null
             ? 0
-            : sampleSimulationBitmapPoint(bitmap, activeGeometry.parallel_rois?.[regionIndex] ?? activeGeometry.roi, x, y, inferBitmapMode(bitmap), p.target_gray_level !== null && p.target_gray_level !== undefined)
+            : sampleSimulationBitmapPoint(bitmap, activeGeometry.parallel_rois?.[regionIndex] ?? activeGeometry.roi, x, y, bitmapMode(bitmap), p.target_gray_level !== null && p.target_gray_level !== undefined)
           : sampleSimulationBitmap(
               bitmap,
               bitmap.width <= 1 ? 0 : x / (bitmap.width - 1),
               bitmap.height <= 1 ? 0 : y / (bitmap.height - 1),
-              inferBitmapMode(bitmap),
+              bitmapMode(bitmap),
               p.target_gray_level !== null && p.target_gray_level !== undefined,
             )
         : sampleFakeAdc(x, y, simulation, simulationImage);

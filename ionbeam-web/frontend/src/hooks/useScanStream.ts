@@ -64,6 +64,7 @@ import { wsUrl } from "../lib/backendUrl";
 import { estimateRevC3ScanTiming } from "../lib/scanTiming";
 import { summarizeScanParams } from "../lib/scanParamChip";
 import { prepareScanAssets } from "../lib/scanAssets";
+import { createPendingSamples, queuePendingSamples, flushPendingSamples, discardPendingSamples, type PendingSamples } from "../lib/scanSampleQueue";
 
 const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
 
@@ -71,12 +72,6 @@ type Closure = "stop";
 type ActiveScan =
   | { kind: "raster"; req: RasterRequest }
   | { kind: "vector"; req: VectorRequest };
-type PendingSamples = {
-  chunks: Uint16Array[];
-  bytes: number;
-  chunkCount: number;
-  animationFrame: number | null;
-};
 type PendingCompletion = {
   chunks: number;
   kind: "raster" | "vector";
@@ -154,19 +149,22 @@ export function useScanStream() {
       const ws = wsRef.current;
       if (ws && ws.readyState <= WebSocket.OPEN) ws.close(1000);
       wsRef.current = null;
+      activeScanRef.current = null;
+      geometryUpdateCallbacksRef.current.clear();
+      pendingGeometryUpdatesRef.current = [];
     };
   }, []);
 
   const flushRasterSamples = useCallback(() => {
     flushPendingSamples(pendingRasterRef.current, (pixels) => {
       dispatch(appendRaster({ pixels }));
-    }, dispatch);
+    }, (counts) => dispatch(streamProgress(counts)));
   }, [dispatch]);
 
   const flushVectorSamples = useCallback(() => {
     flushPendingSamples(pendingVectorRef.current, (values) => {
       dispatch(appendVectorSamples({ values }));
-    }, dispatch);
+    }, (counts) => dispatch(streamProgress(counts)));
   }, [dispatch]);
 
   const startRaster = useCallback(
@@ -197,6 +195,7 @@ export function useScanStream() {
       discardPendingSamples(pendingRasterRef.current);
       activeScanRef.current = { kind: "raster", req };
       geometryReadyRef.current = false;
+      geometryUpdateCallbacksRef.current.clear();
       pendingGeometryUpdatesRef.current = [];
       autoReconnectAttemptedRef.current = false;
       dispatch(resetRaster({
@@ -299,6 +298,7 @@ export function useScanStream() {
           dispatch,
         );
         wsRef.current = null;
+        activeScanRef.current = null;
         geometryUpdateCallbacksRef.current.clear();
         pendingGeometryUpdatesRef.current = [];
         geometryReadyRef.current = false;
@@ -338,6 +338,7 @@ export function useScanStream() {
       discardPendingSamples(pendingVectorRef.current);
       activeScanRef.current = { kind: "vector", req };
       geometryReadyRef.current = false;
+      geometryUpdateCallbacksRef.current.clear();
       pendingGeometryUpdatesRef.current = [];
       autoReconnectAttemptedRef.current = false;
       // Default-pattern scans store an edge x edge dense buffer. Explicit
@@ -488,6 +489,7 @@ export function useScanStream() {
           startVector,
         );
         wsRef.current = null;
+        activeScanRef.current = null;
         geometryUpdateCallbacksRef.current.clear();
         pendingGeometryUpdatesRef.current = [];
         geometryReadyRef.current = false;
@@ -649,67 +651,6 @@ function controlErrorMessage(msg: any): string {
       .join("\n");
   }
   return msg?.detail ?? msg?.message ?? msg?.code ?? "stream error";
-}
-
-function createPendingSamples(): PendingSamples {
-  return { chunks: [], bytes: 0, chunkCount: 0, animationFrame: null };
-}
-
-function queuePendingSamples(
-  pending: PendingSamples,
-  samples: Uint16Array,
-  bytes: number,
-  flush: () => void,
-): void {
-  pending.chunks.push(samples);
-  pending.bytes += bytes;
-  pending.chunkCount += 1;
-  if (pending.animationFrame === null) {
-    pending.animationFrame = window.requestAnimationFrame(flush);
-  }
-}
-
-function flushPendingSamples(
-  pending: PendingSamples,
-  append: (samples: Uint16Array) => void,
-  dispatch: ReturnType<typeof useAppDispatch>,
-): void {
-  if (pending.animationFrame !== null) {
-    window.cancelAnimationFrame(pending.animationFrame);
-    pending.animationFrame = null;
-  }
-  if (pending.chunkCount === 0) return;
-
-  const samples = concatenateSamples(pending.chunks);
-  const bytes = pending.bytes;
-  const chunks = pending.chunkCount;
-  pending.chunks = [];
-  pending.bytes = 0;
-  pending.chunkCount = 0;
-  append(samples);
-  dispatch(streamProgress({ bytes, chunks }));
-}
-
-function discardPendingSamples(pending: PendingSamples): void {
-  if (pending.animationFrame !== null) {
-    window.cancelAnimationFrame(pending.animationFrame);
-  }
-  pending.chunks = [];
-  pending.bytes = 0;
-  pending.chunkCount = 0;
-  pending.animationFrame = null;
-}
-
-function concatenateSamples(chunks: Uint16Array[]): Uint16Array {
-  if (chunks.length === 1) return chunks[0];
-  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
-  const merged = new Uint16Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return merged;
 }
 
 function finalize(

@@ -360,7 +360,7 @@ body {
 }
 
 .scan-controls-card--active {
-  border-color: color-mix(in srgb, var(--scan-panel-active-color) 80%, transparent);
+  border-color: var(--c-border);
 }
 
 .card + .card { margin-top: 16px; }
@@ -7899,4 +7899,30 @@ body {
   line-height: 1.6;
   white-space: pre-line;
   transform: none;
+}
+
+/* Message row above the Zoom control: allowed maximum, or the reason a zoom is rejected. */
+.scan-zoom-status {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  gap: 2px;
+  margin: 4px 0 2px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.scan-zoom-status__max {
+  color: var(--c-warn);
+  text-align: right;
+}
+
+.scan-zoom-status__error {
+  color: var(--c-danger);
+}
+
+.scan-zoom-status__warning {
+  color: var(--c-warn);
 }

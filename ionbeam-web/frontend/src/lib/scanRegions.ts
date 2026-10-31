@@ -47,9 +47,14 @@ export function mapScanPixelIndexToFrame(
   return targetY * size + targetX;
 }
 
+/** Absolute zoom ceiling: the 14-bit DAC has 16384 codes and the lowest scan
+ * resolution is 64 samples per axis, so 16384 / 64 = 256. The usable maximum
+ * for a given resolution and ROI set is lower (see scanValidation.ts). */
+export const MAX_SCAN_ZOOM = 16384 / 64;
+
 export function clampScanZoom(value: unknown): number {
   const zoom = Number(value);
-  return Number.isFinite(zoom) ? Math.max(1, Math.min(20000, Math.trunc(zoom))) : 1;
+  return Number.isFinite(zoom) ? Math.max(1, Math.min(MAX_SCAN_ZOOM, Math.trunc(zoom))) : 1;
 }
 
 /** Convert a relative magnification into the physical FOV ratio measured by

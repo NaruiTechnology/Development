@@ -5,6 +5,36 @@ import { decorateSimulationBitmap, interleaveParallelPoints } from "../.test-dis
 import { prepareScanAssets } from "../.test-dist/lib/scanAssets.js";
 import { targetGrayFilter } from "../.test-dist/lib/roiTargetGray.js";
 
+test("identical parallel assets upload once with only one preparation in flight", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  globalThis.window = { location: { hostname: "example.test", port: "" }, localStorage: { getItem: () => null } };
+  let calls = 0;
+  let active = 0;
+  let peak = 0;
+  globalThis.fetch = async (_url, options) => {
+    calls++;
+    peak = Math.max(peak, ++active);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    active--;
+    const { asset_id } = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ asset_id, cached: true }) };
+  };
+  try {
+    const bitmap = { width: 2, height: 1, pixels: [10, 20] };
+    const result = await prepareScanAssets({ simulation_bitmap: bitmap,
+      parallel_simulation_bitmaps: [bitmap, { ...bitmap, pixels: [10, 20] }, { ...bitmap, pixels: [30, 40] }] });
+    assert.equal(calls, 2);
+    assert.equal(peak, 1);
+    assert.equal(result.simulation_bitmap_id, result.parallel_simulation_bitmap_ids[0]);
+    assert.equal(result.parallel_simulation_bitmap_ids[0], result.parallel_simulation_bitmap_ids[1]);
+    assert.notEqual(result.parallel_simulation_bitmap_ids[1], result.parallel_simulation_bitmap_ids[2]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.window = originalWindow;
+  }
+});
+
 test("scan asset preparation preserves IDs loaded from a persisted queue", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error("existing IDs must not trigger an upload"); };

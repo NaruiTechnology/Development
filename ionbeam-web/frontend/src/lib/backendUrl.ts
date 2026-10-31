@@ -12,7 +12,7 @@ function isLocalViteHost(): boolean {
 }
 
 export function apiOrigin(): string {
-  const explicit = import.meta.env.VITE_API_BASE_URL?.trim();
+  const explicit = import.meta.env?.VITE_API_BASE_URL?.trim();
   if (explicit) return normalizeOrigin(explicit);
   if (isLocalViteHost()) return "http://127.0.0.1:4000";
   return "";

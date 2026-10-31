@@ -3,7 +3,7 @@
  * uses the blocking REST endpoint (returns a ScanResult with timing,
  * validation report, and CSV path).
  */
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAppDispatch, useAppSelector } from "../store";
@@ -81,6 +81,8 @@ import type { ROIState } from "../store/scanSlice";
 import { effectiveScanRegions, zoomInterleavedVectorPoints, zoomVectorPoints } from "../lib/scanRegions";
 import { worldSelectionToDacROI } from "../lib/roiDac";
 import { targetGrayFilter } from "../lib/roiTargetGray";
+import { assessScan, assessTypedZoom, hasScanErrors, type ScanIssue } from "../lib/scanValidation";
+import { ScanZoomStatus } from "./ScanZoomStatus";
 
 type RegionScanEntry =
   | {
@@ -250,6 +252,7 @@ export function ScanControls({
   const preview = useAppSelector((s) => s.scan.preview);
   const roiState = useAppSelector((s) => s.scan.roi);
   const [parallelRegions, setParallelRegions] = useState(false);
+  const runningParallelRegionsRef = useRef(false);
   const [roiControlsCollapsed, setROIControlsCollapsed] = useState(true);
   const [pendingQueue, setPendingQueue] = useState<ScanQueueSummary | null>(null);
   useEffect(() => {
@@ -323,6 +326,20 @@ export function ScanControls({
   );
   const regionEquipment = equipment.filter((row) => row.site === region);
   const isProduction = defaults?.is_production !== false;
+  // Allowed maximum zoom and validation for the selected resolution, the
+  // current ROIs and the DAC capacity. Recomputed whenever any of them change.
+  const scanResolution = kind === "raster" ? raster.resolution : vector.vector_resolution;
+  const scanAssessment = useMemo(
+    () => assessScan(roiState.scan_regions, roiState.scan_zoom, roiState, scanResolution),
+    [roiState.scan_regions, roiState.scan_zoom, roiState.x_origin, roiState.x_end, roiState.y_origin, roiState.y_end,
+      roiState.scanGeometry, scanResolution],
+  );
+  const zoomMaximum = scanAssessment.maxZoom;
+  const scanHasErrors = (kind === "raster" || kind === "vector") && hasScanErrors(scanAssessment.issues);
+  const [typedZoomIssue, setTypedZoomIssue] = useState<ScanIssue | null>(null);
+  useEffect(() => {
+    setTypedZoomIssue(null);
+  }, [scanResolution, roiState.scan_regions]);
   const targetGrayRunning = useAppSelector((s) => s.scan.roiTargetGrayRun.status === "running");
   const vectorPixelFallbackBlank = (() => {
     const vectorParams = defaults?.vector_params;
@@ -604,8 +621,9 @@ export function ScanControls({
     }
   }
 
-  async function startRunRequest(repeatRegions = false) {
-    if (disabled) return;
+  async function startRunRequest(repeatRegions = false, preserveCurrentFrame = false) {
+    if (disabled || scanHasErrors) return;
+    if (repeatRegions) runningParallelRegionsRef.current = parallelRegions;
     const allowed = await refreshScanPrivilege();
     if (!allowed) return;
     if (!repeatRegions && !isProduction && selectedTargetGray !== null && roiState.imageDataUrl) {
@@ -678,7 +696,7 @@ export function ScanControls({
               initialFrame: initialFrames[0] ?? null,
             }, ...entries]
           : entries;
-        startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), roiAreaDefined && rasterBackground !== null && (isProduction || !roiState.imageDataUrl), repeatRegions);
+        startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), preserveCurrentFrame || (roiAreaDefined && rasterBackground !== null && (isProduction || !roiState.imageDataUrl)), repeatRegions);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
@@ -769,15 +787,16 @@ export function ScanControls({
           : compositeROIs
           ? [backgroundEntry, ...entries.map((entry) => ({ ...entry, initialFrame: null }))]
           : entries;
-        startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), roiAreaDefined && vectorBackground !== null && (isProduction || !roiState.imageDataUrl), repeatRegions);
+        startRegionScanSequence(await persistScanSequence(scanEntries, repeatRegions), preserveCurrentFrame || (roiAreaDefined && vectorBackground !== null && (isProduction || !roiState.imageDataUrl)), repeatRegions);
       } catch (e: any) {
         dispatch(streamErrored(e?.message ?? String(e)));
       }
     }
   }
 
-  async function startInfiniteRequest() {
-    if ((kind !== "raster" && kind !== "vector") || disabled || infiniteScanActiveRef.current) return;
+  async function startInfiniteRequest(preserveCurrentFrame = false) {
+    if ((kind !== "raster" && kind !== "vector") || disabled || infiniteScanActiveRef.current || scanHasErrors) return;
+    runningParallelRegionsRef.current = parallelRegions;
     // Production: a Live scan started with an ROI first scans the full frame.
     // The ROI is applied once that frame has been rendered (see the watcher
     // effect below), so the operator never sees an empty canvas around the ROI.
@@ -789,7 +808,7 @@ export function ScanControls({
     const scanRegionsNow = deferRegions ? [] : roiState.scan_regions;
     const compositeNow = scanRegionsNow.length > 0;
     if (scanRegionsNow.length > 1 && !parallelRegions) {
-      await startRunRequest(true);
+      await startRunRequest(true, preserveCurrentFrame);
       return;
     }
     const allowed = await refreshScanPrivilege();
@@ -839,7 +858,7 @@ export function ScanControls({
               : null;
           const requests = await Promise.all(regions.map((region) => buildVectorRequest(region)));
           if (requests.some((request) => request.pattern !== "default" || request.points || request.feedback_mode === "adaptive_gray_feedback")) {
-            await startRunRequest(true);
+            await startRunRequest(true, preserveCurrentFrame);
             return;
           }
           const fullRequest = await vectorRequestWithBitmapSelection(
@@ -868,7 +887,7 @@ export function ScanControls({
         infiniteScanActiveRef.current = true;
         setInfiniteScanActive(true);
         dispatch(setInfiniteActive(true));
-        startInfiniteScanRun(parallelEntry, isProduction || parallelEntry.initialFrame === null);
+        startInfiniteScanRun(parallelEntry, preserveCurrentFrame || isProduction || parallelEntry.initialFrame === null);
         return;
       }
       const regions = effectiveScanRegions(scanRegionsNow, roiState.scan_zoom, roiState);
@@ -929,7 +948,7 @@ export function ScanControls({
             : null;
         const req = await buildVectorRequest(region);
         if (compositeNow && (req.feedback_mode === "adaptive_gray_feedback" || req.pattern === "custom")) {
-          await startRunRequest(true);
+          await startRunRequest(true, preserveCurrentFrame);
           return;
         }
         logVectorRequestContext(
@@ -972,7 +991,7 @@ export function ScanControls({
       infiniteScanActiveRef.current = true;
       setInfiniteScanActive(true);
       dispatch(setInfiniteActive(true));
-      startInfiniteScanRun(entry, isProduction || entry.initialFrame === null);
+      startInfiniteScanRun(entry, preserveCurrentFrame || isProduction || entry.initialFrame === null);
     } catch (e: any) {
       clearInfiniteScanState();
       dispatch(streamErrored(e?.message ?? String(e)));
@@ -1009,7 +1028,14 @@ export function ScanControls({
     if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
     zoomRestartTimerRef.current = null;
     const zoom = Number(value);
-    if (!Number.isInteger(zoom) || zoom < 1 || zoom > 20000) return;
+    if (!Number.isInteger(zoom) || zoom < 1) return;
+    // A zoom above the allowed maximum is not applied: the technical reason
+    // replaces the "Max zoom" message above the Zoom control.
+    const typed = zoom > zoomMaximum
+      ? assessTypedZoom(roiState.scan_regions, zoom, roiState, scanResolution)
+      : null;
+    setTypedZoomIssue(typed);
+    if (typed) return;
     const generation = ++zoomUpdateGenerationRef.current;
     if (zoom === roiState.scan_zoom) return;
     if (!stream.hasActiveStream()) {
@@ -1158,6 +1184,8 @@ export function ScanControls({
       return;
     }
     if (!infiniteScanActiveRef.current) return;
+    // An invalid plan (see the message above Zoom) is never sent to a running scan.
+    if (scanHasErrors) return;
     // Regions are applied after the full-frame pass (watcher effect).
     if (deferredRegionsRef.current) return;
     // The service cannot change the region count of a running continuous
@@ -1274,6 +1302,16 @@ export function ScanControls({
     }, 350);
   }
 
+  // A mode change alters the stream layout (interleaved samples versus a
+  // sequence of ROI passes). Hand over through the existing live restart path.
+  // Also compare after startup so a toggle during async request preparation
+  // cannot leave the switch showing a different mode from the active stream.
+  useEffect(() => {
+    if (!infiniteScanActiveRef.current || phase !== "running" ||
+        runningParallelRegionsRef.current === parallelRegions) return;
+    scheduleZoomRestart("infinite");
+  }, [parallelRegions, phase, infiniteScanActive]);
+
   useEffect(() => {
     const changed = previousLiveGrayRuleRef.current !== liveGrayRuleKey;
     previousLiveGrayRuleRef.current = liveGrayRuleKey;
@@ -1307,7 +1345,7 @@ export function ScanControls({
   }, [liveGrayRuleKey]);
 
   async function startValidatedRunRequest() {
-    if (disabled || kind === "roi") return;
+    if (disabled || kind === "roi" || scanHasErrors) return;
     const allowed = await refreshScanPrivilege();
     if (!allowed) {
       return;
@@ -1426,7 +1464,8 @@ export function ScanControls({
     streaming ||
     closing ||
     runStarting ||
-    targetGrayRunning;
+    targetGrayRunning ||
+    scanHasErrors;
   const stopDisabled = !stopAvailable || closing;
   const infiniteDisabled =
     (kind !== "raster" && kind !== "vector") || runDisabled || infiniteScanActive;
@@ -1551,7 +1590,7 @@ export function ScanControls({
     if (phase === "idle" && disabled && !zoomDisabled) return;
     setPendingZoomRestart(null);
     if (phase === "error" || zoomDisabled) return;
-    if (pendingZoomRestart === "infinite") void startInfiniteRequest();
+    if (pendingZoomRestart === "infinite") void startInfiniteRequest(true);
     else void startRunRequest();
   }, [disabled, pendingZoomRestart, phase, zoomDisabled]);
 
@@ -1634,6 +1673,15 @@ export function ScanControls({
           </select>
         </label>
       </div>
+      {(kind === "raster" || kind === "vector") && (
+        <ScanZoomStatus
+          maxZoom={zoomMaximum}
+          resolution={scanResolution}
+          issues={scanAssessment.issues}
+          typedIssue={typedZoomIssue}
+          extraError={zoomError}
+        />
+      )}
       <div className="scan-preview-zoom-row">
           <label
             className={`checkbox vacuum-switch app-switch scan-preview-toggle${preview ? " scan-preview-toggle--active" : ""}`}
@@ -1659,11 +1707,11 @@ export function ScanControls({
                 value={roiState.scan_zoom}
                 disabled={zoomDisabled || settingsSaving || backendRestarting}
                 min={1}
-                max={20000}
+                max={zoomMaximum}
                 step={1}
                 inputMode="numeric"
                 ariaLabel={t("scan.zoom")}
-                warning={zoomError}
+                invalid={Boolean(typedZoomIssue) || scanHasErrors || Boolean(zoomError)}
                 onValueChange={onZoomChange}
               />
             </label>
@@ -1716,7 +1764,7 @@ export function ScanControls({
               <input
                 type="checkbox"
                 checked={parallelRegions && canParallelRegions}
-                disabled={controlsDisabled || !canParallelRegions}
+                disabled={zoomDisabled || settingsSaving || backendRestarting || !canParallelRegions}
                 onChange={(event) => setParallelRegions(event.target.checked)}
               />
               <span className="vacuum-switch__track"><span className="vacuum-switch__thumb" /></span>

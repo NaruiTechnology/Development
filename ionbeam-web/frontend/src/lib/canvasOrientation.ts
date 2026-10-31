@@ -4,14 +4,21 @@ export interface CanvasOrientation {
   rotate90: boolean;
 }
 
+const orientationBuffers = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
 /** Apply the configured clockwise quarter-turn, then horizontal/vertical flips. */
 export function orientCanvas(canvas: HTMLCanvasElement, transforms: CanvasOrientation): void {
   if (!transforms.xflip && !transforms.yflip && !transforms.rotate90) return;
-  const source = document.createElement("canvas");
-  source.width = canvas.width;
-  source.height = canvas.height;
+  let source = orientationBuffers.get(canvas);
+  if (!source) {
+    source = document.createElement("canvas");
+    orientationBuffers.set(canvas, source);
+  }
+  if (source.width !== canvas.width) source.width = canvas.width;
+  if (source.height !== canvas.height) source.height = canvas.height;
   const sourceContext = source.getContext("2d");
   if (!sourceContext) return;
+  sourceContext.clearRect(0, 0, source.width, source.height);
   sourceContext.drawImage(canvas, 0, 0);
 
   const width = source.width;

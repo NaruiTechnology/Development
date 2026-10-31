@@ -111,6 +111,25 @@ Images without recorded scale metadata omit the chip. This display overlay
 is included by the existing frontend build and source-tree deployment copy;
 it needs no new runtime dependency or deployment setting.
 
+Live scan rendering keeps vector blocks at the acquired resolution and scales
+them with pixelated canvas rendering, avoiding a 16384-square RGBA preview.
+Canvas paint and orientation buffers are reused, pending stream samples are
+bounded to 1 MiB with a timer fallback for hidden tabs, and pixel buffers are
+excluded from Redux history and development middleware walks. Simulation asset
+uploads run sequentially; ordinary simulation scans share immutable bitmap
+assets while target-gray feedback uses private copies. These changes use the
+existing frontend/backend builds and compiled Glasgow service packaging.
+For `MOCK=1`, completed assets use a bounded memory cache backed by
+`~/.cache/ionbeam-web/mock-scan-assets` (override with
+`IONBEAM_MOCK_SCAN_ASSET_DIR`), so eviction does not invalidate queued scans.
+
+The ROI Parallel switch remains available during Live acquisition when two or
+more regions are selected. Changing it automatically hands over between the
+parallel stream and sequential ROI passes, preserving the current image.
+Changes during request preparation are applied after startup; Stop cancels any
+pending handover. Authentication, vacuum readiness, and configuration locks
+still apply. This uses the existing frontend build and deployment source copy.
+
 For the managed local stack, use `Development/Scripts/manage-local-system.sh
 restart`. It verifies the locked AG Grid dependencies and clears Vite's
 optimized-dependency cache before starting the frontend, preventing stale

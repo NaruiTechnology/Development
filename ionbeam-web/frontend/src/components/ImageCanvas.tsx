@@ -584,7 +584,8 @@ export function ImageCanvas({
     !ignoreTransforms &&
     phase === "completed" &&
     completedKind === kind &&
-    (kind !== "vector" || vectorSource === "vector");
+    (kind !== "vector" || vectorSource === "vector") &&
+    !(kind === "raster" ? rasterFilled > 0 : vectorFilled > 0);
   const hasLiveCanvasData =
     kind === "raster" ? rasterFilled > 0 : kind === "vector" ? vectorSource === "vector" && vectorFilled > 0 : false;
   const visibleVectorCursor = kind === "vector" && vectorSource !== "vector" ? 0 : vectorCursor;
@@ -914,7 +915,7 @@ export function ImageCanvas({
 
     const url =
       kind === "vector"
-        ? apiUrl(`/api/scan/last/figure?render=${encodeURIComponent(renderMode)}&view=texture`)
+        ? apiUrl("/api/scan/last/figure?render=decimated&view=texture")
         : apiUrl("/api/scan/last/figure?view=texture");
 
     fetch(url)
@@ -1017,7 +1018,7 @@ export function ImageCanvas({
   if (kind === "raster") {
     nativeEdge = resolution;
   } else if (vectorPattern === "default" && renderMode === "native" && stride > 1) {
-    nativeEdge = DAC_RANGE;
+    nativeEdge = vectorEdge;
   } else {
     nativeEdge = vectorEdge;
   }
@@ -3029,6 +3030,19 @@ function copyPaintSnapshot(snapshot: PaintSnapshot): PaintSnapshot {
   }
 }
 
+// A canvas owns one reusable RGBA buffer, released when the canvas is collected.
+const paintImages = new WeakMap<HTMLCanvasElement, ImageData>();
+function reusablePaintImage(ctx: CanvasRenderingContext2D, width: number, height: number): ImageData {
+  let image = paintImages.get(ctx.canvas);
+  if (!image || image.width !== width || image.height !== height) {
+    image = ctx.createImageData(width, height);
+    paintImages.set(ctx.canvas, image);
+  } else {
+    image.data.fill(0);
+  }
+  return image;
+}
+
 function paintGrayscale(
   canvas: HTMLCanvasElement,
   buf: Uint16Array,
@@ -3062,7 +3076,7 @@ function paintGrayscale(
   });
   const { low, high } = resolveLevels(histogram, setting);
 
-  const img = ctx.createImageData(edge, edge);
+  const img = reusablePaintImage(ctx, edge, edge);
   const data = img.data;
 
   const totalPx = edge * edge;
@@ -3110,7 +3124,7 @@ function paintVectorDefault(
   const limit = Math.min(populated, buf.length);
   const grayBounds = grayROI ? scanRegionPixelBounds(grayROI, edge) : null;
   const range = vectorDefaultRange(buf, edge, limit, scanPath, setting);
-  const img = ctx.createImageData(edge, edge);
+  const img = reusablePaintImage(ctx, edge, edge);
   const data = img.data;
 
   for (let i = 0; i < limit; i++) {
@@ -3184,7 +3198,7 @@ function paintVectorCustom(
   });
   const { low, high } = resolveLevels(histogram, setting);
 
-  const img = ctx.createImageData(edge, edge);
+  const img = reusablePaintImage(ctx, edge, edge);
   const data = img.data;
   for (let i = 0; i < limit; i++) {
     const x = points[2 * i] | 0;
@@ -3238,66 +3252,11 @@ function paintVectorDefaultBlockFill(
   sampledMask: Uint8Array | null = null,
   setting: LevelSetting = AUTO_LEVELS,
 ): PaintStats {
-  const nativeSize = DAC_RANGE;
-  if (canvas.width !== nativeSize || canvas.height !== nativeSize) {
-    canvas.width = nativeSize;
-    canvas.height = nativeSize;
-  }
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { min: 0, max: 0, populated: 0 };
-
-  const limit = Math.min(populated, buf.length);
-  const grayBounds = grayROI ? scanRegionPixelBounds(grayROI, edge) : null;
-
-  const range = vectorDefaultRange(buf, edge, limit, scanPath, setting);
-
-  const img = ctx.createImageData(nativeSize, nativeSize);
-  const data = img.data;
-
-  for (let p = 0; p < data.length; p += 4) {
-    data[p + 0] = 0;
-    data[p + 1] = 0;
-    data[p + 2] = 0;
-    data[p + 3] = 0;
-  }
-
-  for (let i = 0; i < limit; i++) {
-    const pixel = vectorScanSamplePixel(i, edge, scanPath);
-    if (!pixel) break;
-    const cellCol = pixel.x;
-    const cellRow = pixel.y;
-    const cellIdx = cellRow * edge + cellCol;
-    const sample = buf[cellIdx];
-    const g = levelGray(sample, range.low ?? 0, range.high ?? 0xfffc);
-    const insideROI = grayMask
-      ? grayMask[cellIdx] === 1
-      : !grayBounds || (cellCol >= grayBounds.x0 && cellCol < grayBounds.x1 && cellRow >= grayBounds.y0 && cellRow < grayBounds.y1);
-    const isSpot = insideROI && (!sampledMask || sampledMask[cellIdx] === 1) && sampleInGraySelectionToFilter(sample, graySpotSelection, graySpotSkipped);
-    const baseY = Math.floor((cellRow * nativeSize) / edge);
-    const nextY = Math.floor(((cellRow + 1) * nativeSize) / edge);
-    const baseX = Math.floor((cellCol * nativeSize) / edge);
-    const nextX = Math.floor(((cellCol + 1) * nativeSize) / edge);
-    const blockHeight = Math.max(1, nextY - baseY);
-    const blockWidth = Math.max(1, nextX - baseX);
-
-    for (let dy = 0; dy < blockHeight; dy++) {
-      let p = ((baseY + dy) * nativeSize + baseX) * 4;
-      for (let dx = 0; dx < blockWidth; dx++) {
-        if (isSpot) {
-          paintSpotPixel(data, p, graySpotColor);
-        } else {
-          data[p + 0] = g;
-          data[p + 1] = g;
-          data[p + 2] = g;
-        }
-        data[p + 3] = 255;
-        p += 4;
-      }
-    }
-  }
-
-  ctx.putImageData(img, 0, 0);
-  return range;
+  // Each acquired sample already represents one constant DAC block. Keep
+  // its compact texture and let pixelated canvas scaling display the blocks;
+  // expanding to 16384 squared allocates over 1 GiB per repaint.
+  return paintVectorDefault(canvas, buf, edge, populated, scanPath,
+    graySpotSelection, graySpotSkipped, graySpotColor, grayROI, grayMask, sampledMask, setting);
 }
 
 function vectorDefaultRange(

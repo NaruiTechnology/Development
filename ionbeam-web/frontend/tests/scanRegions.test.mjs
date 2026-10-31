@@ -25,9 +25,9 @@ const fov = { x_origin: 0, x_end: 100, y_origin: -50, y_end: 50 };
 test("scan zoom is bounded and applies around the full-FOV centre", () => {
   assert.equal(clampScanZoom(0), 1);
   assert.equal(clampScanZoom(2.9), 2);
-  assert.equal(clampScanZoom(5000), 5000);
-  assert.equal(clampScanZoom(20000), 20000);
-  assert.equal(clampScanZoom(20001), 20000);
+  assert.equal(clampScanZoom(5000), 256);
+  assert.equal(clampScanZoom(20000), 256);
+  assert.equal(clampScanZoom(20001), 256);
   assert.deepEqual(zoomScanRegion(null, 2, fov), {
     x_start: 25,
     x_end: 75,

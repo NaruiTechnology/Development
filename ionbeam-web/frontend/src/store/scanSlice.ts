@@ -19,6 +19,7 @@ import { readJsonResponse } from "../lib/readJsonResponse";
 import type { DimensionCalibrationValues } from "../lib/dimensionCalibrationPersistence";
 import type { AppliedScanGeometry } from "../lib/scanGeometry";
 import { estimateRevC3ScanTiming } from "../lib/scanTiming";
+import { clampScanZoom } from "../lib/scanRegions";
 import { summarizeScanParams, type ScanParamSummary } from "../lib/scanParamChip";
 
 const SAMPLE_PERIOD_NS = estimateRevC3ScanTiming(1, 0).samplePeriodNs;
@@ -530,7 +531,7 @@ const slice = createSlice({
     },
     setScanZoom(s, a: PayloadAction<number>) {
       const zoom = Number(a.payload);
-      s.roi.scan_zoom = Number.isFinite(zoom) ? Math.max(1, Math.min(20000, zoom)) : 1;
+      s.roi.scan_zoom = clampScanZoom(zoom);
     },
     setROIScanEnabled(s, a: PayloadAction<boolean>) {
       s.roi.roi_scan_enabled = Boolean(a.payload);
