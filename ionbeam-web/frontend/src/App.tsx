@@ -600,7 +600,10 @@ export function App() {
     };
   }, [isResizing, showROIThirdColumn]);
 
-  const scanActive = phase === "running" || phase === "stopping";
+  // A live-scan handover (for example switching Parallel/Sequential) briefly
+  // stops one stream and starts the next. Keep the panel in its live-scan state
+  // across that gap so wedge borders and enable/disable colors do not change.
+  const scanActive = phase === "running" || phase === "stopping" || streamRestarting;
   const scanControlsSafetyDisabled = shouldDisableScanPanel({
     scanActive: adcActive,
     signedIn: isSignedIn,
@@ -617,7 +620,7 @@ export function App() {
   const rasterVectorTabsDisabled = panelDisabled;
   const vectorGrayFilterActive = vectorGrayFilterApplied && selectedTargetGray === null;
   const grayControls = grayControlAvailability({
-    locked: scanControlsSafetyDisabled || targetGrayRunning || phase === "stopping",
+    locked: scanControlsSafetyDisabled || targetGrayRunning || (phase === "stopping" && !streamRestarting),
     scanActive,
     hasTarget: selectedTargetGray !== null,
   });
@@ -758,9 +761,9 @@ export function App() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (phase === "running" || phase === "stopping") return;
+    if (phase === "running" || phase === "stopping" || streamRestarting) return;
     setActiveScanType(null);
-  }, [phase]);
+  }, [phase, streamRestarting]);
 
   useEffect(() => {
     if (kind !== "roi") return;
