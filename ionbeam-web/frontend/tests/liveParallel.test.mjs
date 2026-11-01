@@ -20,7 +20,9 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
   };
   globalThis.requestAnimationFrame = window.requestAnimationFrame;
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame;
+  const abortCalls = [];
   globalThis.fetch = async (url) => {
+    if (String(url).includes("/api/scan/abort")) abortCalls.push(String(url));
     let body = null;
     if (String(url).includes("current-account")) {
       if (delayPrivilege) await delayPrivilege;
@@ -154,6 +156,26 @@ test("live Parallel changes rebuild both scan layouts, preserve pixels, and hono
           `${kind} sequential pass ${pass} must preserve blanked pixels from the existing frame`);
       }
     }
+    // Stop between two sequential passes: the next socket is still CONNECTING,
+    // so there is nothing to abort on the service (it would answer 409).
+    abortCalls.length = 0;
+    await act(async () => {
+      stream.startVector({ roi, simulation_bitmap_id: "prepared-bitmap", output_mode: "SixteenBit",
+        pattern: "default", vector_resolution: 2 }, { preserveFrame: true, initialFrame: null });
+      const pending = sockets.at(-1);
+      assert.equal(pending.readyState, 0);
+      stream.stop();
+      assert.notEqual(pending.readyState, 1, "a connecting socket must be closed, not opened");
+    });
+    assert.equal(abortCalls.length, 0, "no abort request for a socket that never connected");
+    assert.equal(store.getState().scan.phase, "idle");
+    // Stop on an open socket still aborts the service.
+    await act(async () => {
+      stream.startVector({ roi, simulation_bitmap_id: "prepared-bitmap", output_mode: "SixteenBit",
+        pattern: "default", vector_resolution: 2 }, { preserveFrame: true, initialFrame: null });
+    });
+    await act(async () => { stream.stop(); });
+    assert.equal(abortCalls.length, 1);
   } finally {
     if (renderer) await act(async () => { renderer.unmount(); });
     await vite.close();

@@ -130,6 +130,11 @@ function combineRasterRegions(requests: RasterRequest[]): RasterRequest {
   };
 }
 
+/** Diagnostic trace for Zoom/gray-level interaction; filter the console on "[zoom]". */
+function zoomTrace(event: string, detail: Record<string, unknown> = {}): void {
+  console.info(`[zoom] ${event}`, { t: Math.round(performance.now()), ...detail });
+}
+
 function hasBitmapSimulation(request: RasterRequest | VectorRequest): boolean {
   return Boolean(
     request.simulation_bitmap || request.simulation_bitmap_id ||
@@ -311,6 +316,9 @@ export function ScanControls({
   const [zoomError, setZoomError] = useState<string | null>(null);
   const [grayRuleError, setGrayRuleError] = useState<string | null>(null);
   const zoomRestartTimerRef = useRef<number | null>(null);
+  // Debounces the in-place rebuild of queued sequential entries after a Zoom edit.
+  const sequentialZoomTimerRef = useRef<number | null>(null);
+  const sequentialBaseZoomRef = useRef<number | null>(null);
   const zoomUpdateGenerationRef = useRef(0);
   const previousScanRegionsRef = useRef(roiState.scan_regions);
   // Production Live: regions are held back until one full frame has rendered.
@@ -474,6 +482,8 @@ export function ScanControls({
   const controlsDisabled = disabled || scanActive || settingsSaving || backendRestarting;
 
   const clearInfiniteScanState = useCallback(() => {
+    if (sequentialZoomTimerRef.current !== null) window.clearTimeout(sequentialZoomTimerRef.current);
+    sequentialZoomTimerRef.current = null;
     regionScanRepeatRef.current = [];
     infiniteScanRef.current = null;
     infiniteScanActiveRef.current = false;
@@ -1045,6 +1055,18 @@ export function ScanControls({
 
   async function onZoomChange(value: string) {
     setZoomError(null);
+    // A restart can already be queued by something else, e.g. a gray-level
+    // change that needs the prepared bitmaps rebuilt. Cancelling it here would
+    // silently drop that change, so it is re-armed for the new zoom below.
+    const restartWasPending = zoomRestartTimerRef.current !== null;
+    zoomTrace("edit", {
+      value, current: roiState.scan_zoom, restartWasPending, infinite: infiniteScanActiveRef.current,
+      streamActive: stream.hasActiveStream(), liveEntry: infiniteScanRef.current
+        ? { kind: infiniteScanRef.current.kind, parallel: infiniteScanRef.current.req.parallel_rois?.length ?? 0 }
+        : null,
+      sequentialEntries: regionScanRepeatRef.current.length, grayFilter: vectorGrayFilterActive,
+      generation: zoomUpdateGenerationRef.current + 1,
+    });
     if (zoomRestartTimerRef.current !== null) window.clearTimeout(zoomRestartTimerRef.current);
     zoomRestartTimerRef.current = null;
     const zoom = Number(value);
@@ -1055,10 +1077,11 @@ export function ScanControls({
       ? assessTypedZoom(roiState.scan_regions, zoom, roiState, scanResolution)
       : null;
     setTypedZoomIssue(typed);
-    if (typed) return;
+    if (typed) { zoomTrace("exit: above max zoom", { zoom, zoomMaximum }); return; }
     const generation = ++zoomUpdateGenerationRef.current;
-    if (zoom === roiState.scan_zoom) return;
+    if (zoom === roiState.scan_zoom) { zoomTrace("exit: unchanged", { zoom, generation }); return; }
     if (!stream.hasActiveStream()) {
+      zoomTrace("exit: no active stream, value stored only", { zoom });
       dispatch(setScanZoom(zoom));
       return;
     }
@@ -1071,6 +1094,17 @@ export function ScanControls({
       // next one. Replace their queued DAC bounds without cancelling the
       // region currently on the wire.
       if (!liveEntry) {
+        // Commit the zoom before anything is awaited. A gray-level change
+        // restarts the sequence from `roiState.scan_zoom`; if that restart
+        // lands while the entries are being rebuilt below, it must already see
+        // the new zoom, otherwise the edit is lost until the filter is turned off.
+        dispatch(setScanZoom(zoom));
+        zoomTrace("sequential: zoom committed", { zoom, restartWasPending });
+        if (restartWasPending) {
+          zoomTrace("sequential: re-arming pending restart");
+          scheduleZoomRestart("infinite");
+          return;
+        }
         const entries = regionScanRepeatRef.current;
         const customEntryIndex = entries.length === 2 && entries[0].compositeROIs ? 1 : 0;
         const combined = entries[customEntryIndex];
@@ -1087,53 +1121,93 @@ export function ScanControls({
           return;
         }
         const backgroundEntries = entries.length === dacRegions.length + 1 && entries[0]?.compositeROIs ? 1 : 0;
-        if (entries.length !== dacRegions.length + backgroundEntries) return;
-        // Simulation entries carry a bitmap cropped to the zoomed region (and
-        // an uploaded asset ID for it). Swapping only `req.roi` pairs the new
-        // ROI with the old crop, so the pass paints stale, magnified pixels.
-        // Rebuild each region's request and underlay for the new zoom.
-        if (!isProduction && roiState.imageDataUrl) {
-          const roiEntries = entries.slice(backgroundEntries);
-          try {
-            const rebuilt = await Promise.all(roiEntries.map(async (entry, index) => {
-              if (!entry.hasSimulationBitmap && !hasBitmapSimulation(entry.req)) return null;
-              if (entry.kind === "vector" && entry.req.pattern === "custom" && entry.req.points) return null;
-              const region = regions[index] ?? null;
-              const built = entry.kind === "raster"
-                ? await rasterRequestWithBitmapSelection(
-                    { ...raster, roi: region }, { ...roiState, selection: region },
-                    { isProduction, allowBitmapSimulation, grayScaleSelection: scanGrayScaleSelection,
-                      grayScaleSkipped: scanGrayScaleSkipped })
-                : await buildVectorRequest(region);
-              return await prepareScanAssets(built);
-            }));
-            const underlays = kind === "vector"
-              ? await Promise.all(roiEntries.map((entry, index) => bitmapImageFrame(
-                  roiState, vectorImageEdge, [{ sourceSelection: regions[index] ?? null, displayROI: displayRegionsForZoom[index] ?? null }])))
-              : [];
-            if (generation !== zoomUpdateGenerationRef.current || regionScanRepeatRef.current !== entries) return;
-            roiEntries.forEach((entry, index) => {
-              const req = rebuilt[index];
-              if (!req) return;
-              (entry as { req: typeof req }).req = req;
-              entry.simulationBitmapInfo = null;
-              entry.hasSimulationBitmap = true;
-              if (entry.kind === "vector") entry.pendingUnderlay = underlays[index] ?? null;
-            });
-          } catch (error) {
-            if (generation === zoomUpdateGenerationRef.current) {
-              setZoomError(error instanceof Error ? error.message : String(error));
-            }
-            return;
-          }
+        if (entries.length !== dacRegions.length + backgroundEntries) {
+          zoomTrace("sequential: entry/region mismatch, restarting", { entries: entries.length, regions: dacRegions.length, backgroundEntries });
+          scheduleZoomRestart("infinite");
+          return;
         }
-        entries.slice(backgroundEntries).forEach((entry, index) => {
+        const applyRegionBounds = () => entries.slice(backgroundEntries).forEach((entry, index) => {
           const target = dacRegions[index] ?? null;
           if (entry.kind === "vector" && entry.req.pattern === "custom" && entry.req.points) {
             entry.req.points = zoomVectorPoints(entry.req.points, entry.req.roi ?? null, target);
           }
           entry.req.roi = target;
         });
+        // Simulation entries carry a bitmap cropped to the zoomed region (and
+        // an uploaded asset ID for it). Swapping only `req.roi` pairs the new
+        // ROI with the old crop, so the pass paints stale, magnified pixels.
+        // Rebuilding is heavy (re-crop, gray-flag every pixel, encode, upload),
+        // so it is debounced across a burst of edits, done one ROI at a time,
+        // and abandoned between steps once a newer edit or a restart owns the
+        // entries. Until it lands the running passes keep a consistent old zoom.
+        if (!isProduction && roiState.imageDataUrl) {
+          if (sequentialZoomTimerRef.current === null) sequentialBaseZoomRef.current = roiState.scan_zoom;
+          else window.clearTimeout(sequentialZoomTimerRef.current);
+          const baseZoom = sequentialBaseZoomRef.current ?? roiState.scan_zoom;
+          zoomTrace("sequential: rebuild scheduled", { zoom, generation });
+          sequentialZoomTimerRef.current = window.setTimeout(() => {
+            sequentialZoomTimerRef.current = null;
+            const stale = () => {
+              const reason = generation !== zoomUpdateGenerationRef.current ? "newer zoom edit"
+                : regionScanRepeatRef.current !== entries ? "entries replaced (restart)"
+                : !infiniteScanActiveRef.current ? "live scan stopped" : null;
+              if (reason) zoomTrace("sequential: rebuild abandoned", { reason, generation });
+              return reason !== null;
+            };
+            zoomTrace("sequential: rebuild started", { generation });
+            void (async () => {
+              const roiEntries = entries.slice(backgroundEntries);
+              try {
+                const rebuilt: Array<RasterRequest | VectorRequest | null> = [];
+                for (const [index, entry] of roiEntries.entries()) {
+                  if (stale()) return;
+                  if ((!entry.hasSimulationBitmap && !hasBitmapSimulation(entry.req)) ||
+                      (entry.kind === "vector" && entry.req.pattern === "custom" && entry.req.points)) {
+                    rebuilt.push(null);
+                    continue;
+                  }
+                  const region = regions[index] ?? null;
+                  const built = entry.kind === "raster"
+                    ? await rasterRequestWithBitmapSelection(
+                        { ...raster, roi: region }, { ...roiState, selection: region },
+                        { isProduction, allowBitmapSimulation, grayScaleSelection: scanGrayScaleSelection,
+                          grayScaleSkipped: scanGrayScaleSkipped })
+                    : await buildVectorRequest(region);
+                  rebuilt.push(await prepareScanAssets(built));
+                  // Let the page paint and handle Stop between regions.
+                  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+                }
+                // One underlay frame for every region, not one full frame each.
+                const underlay = kind === "vector" && !stale()
+                  ? await bitmapImageFrame(roiState, vectorImageEdge, roiEntries.map((_, index) => ({
+                      sourceSelection: regions[index] ?? null,
+                      displayROI: displayRegionsForZoom[index] ?? null,
+                    })))
+                  : null;
+                if (stale()) return;
+                roiEntries.forEach((entry, index) => {
+                  const req = rebuilt[index];
+                  if (!req) return;
+                  (entry as { req: typeof req }).req = req;
+                  entry.simulationBitmapInfo = null;
+                  entry.hasSimulationBitmap = true;
+                  if (entry.kind === "vector") entry.pendingUnderlay = underlay;
+                });
+                applyRegionBounds();
+                zoomTrace("sequential: rebuild applied", { generation, zoom });
+              } catch (error) {
+                zoomTrace("sequential: rebuild failed", { message: error instanceof Error ? error.message : String(error) });
+                if (!stale()) {
+                  dispatch(setScanZoom(baseZoom));
+                  setZoomError(error instanceof Error ? error.message : String(error));
+                }
+              }
+            })();
+          }, 350);
+          return;
+        }
+        applyRegionBounds();
+        zoomTrace("sequential: bounds applied without rebuild", { zoom });
         dispatch(setScanZoom(zoom));
         return;
       }
@@ -1145,6 +1219,7 @@ export function ScanControls({
         ? (liveEntry.compositeROIs ? 1 : 0) + dacRegions.length
         : 0;
       if (runningCount !== targetCount) {
+        zoomTrace("live: region count differs, restarting", { runningCount, targetCount });
         dispatch(setScanZoom(zoom));
         scheduleZoomRestart("infinite");
         return;
@@ -1190,6 +1265,7 @@ export function ScanControls({
       // original image, rather than retaining pixels acquired at the old zoom.
       let initialImage: Uint16Array | null = null;
       if (liveEntry.kind === "vector" && !isProduction && roiState.imageDataUrl && vectorGrayFilterActive) {
+        zoomTrace("live: building underlay for gray filter", { generation });
         try {
           initialImage = await bitmapImageFrame(roiState, vectorImageEdge, regions.map((region, index) => ({
             sourceSelection: region,
@@ -1203,8 +1279,16 @@ export function ScanControls({
         }
       }
       if (generation !== zoomUpdateGenerationRef.current || infiniteScanRef.current !== liveEntry ||
-          !infiniteScanActiveRef.current) return;
+          !infiniteScanActiveRef.current) {
+        zoomTrace("live: update abandoned after underlay", {
+          generation, latest: zoomUpdateGenerationRef.current,
+          sameEntry: infiniteScanRef.current === liveEntry, infinite: infiniteScanActiveRef.current,
+        });
+        return;
+      }
+      zoomTrace("live: sending geometry update", { generation, parallelRois: geometry.parallel_rois?.length ?? 0, hasUnderlay: initialImage !== null });
       if (stream.updateGeometry(geometry, (detail) => {
+        zoomTrace("live: service rejected geometry update", { generation, detail, latest: zoomUpdateGenerationRef.current });
         if (zoomUpdateGenerationRef.current !== generation) return;
         if (/region count/i.test(detail)) {
           dispatch(setScanZoom(zoom));
@@ -1214,6 +1298,7 @@ export function ScanControls({
         dispatch(setScanZoom(roiState.scan_zoom));
         setZoomError(detail);
       }, () => {
+        zoomTrace("live: service applied geometry update", { generation, zoom });
         liveEntry.req.roi = geometry.roi;
         liveEntry.req.parallel_rois = geometry.parallel_rois;
         if (initialImage) {
@@ -1227,6 +1312,7 @@ export function ScanControls({
       })) {
         dispatch(setScanZoom(zoom));
       } else {
+        zoomTrace("live: stream not ready for geometry update", { generation });
         setZoomError("Scan stream is not ready to accept a zoom change yet.");
       }
       return;
@@ -1356,7 +1442,11 @@ export function ScanControls({
     // only if the current scan cannot accept an in-band geometry update.
     zoomRestartTimerRef.current = window.setTimeout(() => {
       zoomRestartTimerRef.current = null;
-      if (phaseRef.current !== "running" || !stream.hasActiveStream()) return;
+      if (phaseRef.current !== "running" || !stream.hasActiveStream()) {
+        zoomTrace("restart dropped: not running", { mode, phase: phaseRef.current, streamActive: stream.hasActiveStream() });
+        return;
+      }
+      zoomTrace("restart firing", { mode, zoomInStore: roiState.scan_zoom });
       dispatch(setStreamRestarting(true));
       clearInfiniteScanState();
       regionScanQueueRef.current = [];
@@ -1379,6 +1469,7 @@ export function ScanControls({
     const changed = previousLiveGrayRuleRef.current !== liveGrayRuleKey;
     previousLiveGrayRuleRef.current = liveGrayRuleKey;
     if (!changed || !infiniteScanActiveRef.current) return;
+    zoomTrace("gray rule changed during live scan", { rule: liveGrayRuleKey, liveEntry: Boolean(infiniteScanRef.current) });
     setGrayRuleError(null);
     const liveEntry = infiniteScanRef.current;
     if (!liveEntry) {

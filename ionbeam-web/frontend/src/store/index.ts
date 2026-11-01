@@ -53,6 +53,7 @@ export const store = configureStore({
         ],
         ignoredActions: [
           "image/queueLiveScanDisplay",
+          "image/seedVectorRegions",
           "image/setLiveVectorCustomPoints",
           "image/resetRaster",
           "image/appendRaster",
