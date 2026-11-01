@@ -515,7 +515,11 @@ export function useScanStream() {
       return;
     }
     dispatch(streamStopping());
-    void fetch(apiUrl("/api/scan/abort"), {
+    // Sequential passes reconnect back to back, so Stop can land while the
+    // next socket is still CONNECTING. The service has no scan for it yet, so
+    // an abort request would only come back 409; closing the socket is enough.
+    const connecting = ws.readyState === WebSocket.CONNECTING;
+    if (!connecting) void fetch(apiUrl("/api/scan/abort"), {
       method: "POST",
       headers: scanAuthHeaders(),
     }).then(async (response) => {
