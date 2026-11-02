@@ -386,8 +386,22 @@ class GlasgowDevice:
         logger.info("USB: CONTROL OUT type=%#04x request=%#04x "
                      "value=%#06x index=%#06x data=<%s> (submit)",
                      request_type, request, value, index, dump_hex(data))
-        await self._do_transfer(is_read=False, setup=lambda transfer:
-            transfer.setControl(request_type|usb1.ENDPOINT_OUT, request, value, index, data))
+        if sys.platform == "win32" and request in (REQ_FPGA_CFG, REQ_BITSTREAM_ID):
+            # The asynchronous libusb control path can complete configuration
+            # writes on Windows without producing a working FPGA image. Use
+            # the verified synchronous path in a worker for these writes only.
+            actual = await asyncio.to_thread(
+                self.usb_handle.controlWrite,
+                request_type | usb1.ENDPOINT_OUT, request, value, index, data,
+                timeout=10000)
+            if actual != len(data):
+                raise GlasgowDeviceError(
+                    f"Incomplete FPGA configuration USB write: "
+                    f"request=0x{request:02x}, chunk={index}, "
+                    f"expected={len(data)}, transferred={actual}")
+        else:
+            await self._do_transfer(is_read=False, setup=lambda transfer:
+                transfer.setControl(request_type|usb1.ENDPOINT_OUT, request, value, index, data))
         logger.info("USB: CONTROL OUT (completed)")
 
     async def bulk_read(self, endpoint, length):
@@ -518,17 +532,24 @@ class GlasgowDevice:
                 
             # Complete configuration by setting bitstream ID. This starts the FPGA.
             try:
-                await asyncio.sleep(1.5)
+                # Finalize immediately after the last configuration chunk, as
+                # upstream does, before waiting for readiness.
                 await self.control_write(usb1.REQUEST_TYPE_VENDOR, REQ_BITSTREAM_ID,
                                         0, 0, bitstream_id)
-                await asyncio.sleep(0.2)
-                status = await self._status()
-                if not (status & ST_FPGA_RDY):
-                    raise GlasgowDeviceError("FPGA did not become ready after configuration")
+                # Configuration readiness may lag the completed USB write.
+                # Wait up to five seconds rather than checking only once.
+                for _ in range(50):
+                    await asyncio.sleep(0.1)
+                    status = await self._status()
+                    if status & ST_FPGA_RDY:
+                        break
+                else:
+                    raise GlasgowDeviceError(
+                        f"FPGA did not become ready within 5 seconds after configuration "
+                        f"(last status=0x{status:02x})")
             #except usb1.USBErrorPipe as e:
             except Exception as e:
-                print(f"Error during FPGA configuration: {e}")
-                raise GlasgowDeviceError("FPGA configuration failed")
+                raise GlasgowDeviceError(f"FPGA configuration failed: {e}") from e
             
             #return
 
